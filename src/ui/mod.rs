@@ -1,10 +1,14 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use iced::{
-    Application, Command, Element, Settings,
-    executor, Subscription, Theme, Column, Container, Row, Text, Button, Scrollable, Space, Length
+    Application, Element, Settings,
+    executor, Subscription, Theme, Length, widget::{
+Column, Container, Row, Text, Button, Scrollable, Space,
+    }
 };
-use iced_native::keyboard;
+use iced_native::{
+    Command, keyboard,  
+};
 
 use crate::{AppState, apple_music::{AppleMusicService, Artist, Album, Song}};
 

@@ -1,0 +1,11 @@
+[package]
+name = "nostalgia"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+iced = "0.14.0"
+iced_native = "0.10.3"
+reqwest = "0.12.28"
+serde = "1.0.228"
+tokio = {version = "1.48.0", features = ["sync"]}
