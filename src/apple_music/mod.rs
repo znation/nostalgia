@@ -3,7 +3,7 @@ use tokio::sync::Mutex;
 use reqwest::{Client, Error};
 use serde::{Deserialize, Serialize};
 
-use crate::AppState;
+use crate::state::AppState;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct AppleMusicToken {

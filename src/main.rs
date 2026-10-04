@@ -2,13 +2,10 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 mod apple_music;
+mod state;
 mod ui;
 
-struct AppState {
-    current_track: Option<String>,
-    is_playing: bool,
-    volume: f32,
-}
+use crate::state::AppState;
 
 #[tokio::main]
 async fn main() {

@@ -10,7 +10,7 @@ use iced_native::{
     Command, keyboard,  
 };
 
-use crate::{AppState, apple_music::{AppleMusicService, Artist, Album, Song}};
+use crate::{state::AppState, apple_music::{AppleMusicService, Artist, Album, Song}};
 
 pub fn init_ui(state: Arc<Mutex<AppState>>) {
     WinampPlayer::run(Settings::default()).expect("Failed to start UI");
