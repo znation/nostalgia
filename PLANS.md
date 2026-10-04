@@ -55,13 +55,16 @@ auth/API is a later, larger plan), port the UI to iced 0.14, and get
     `service.clone()` and the id `String`s into `async move { ... }` blocks
     so the future satisfies `Task::perform`'s `'static + Send` bound.
   - Replace `Length::Units(20)` with `Length::Pixels(20)` (renamed in 0.14).
-  - Keep the `Message` enum and `view_artists` / `view_albums` /
-    `view_songs` helpers; adjust `Text::new(...).size(..)` to iced 0.14's
+  - Keep the `Message` enum and the `view_artists` / `view_albums` /
+    `view_songs` helpers, which now live in `src/ui/views.rs` as free
+    functions taking `&[Artist]` / `&[Album]` / `&[Song]` (organize
+    2026-10-04); adjust `Text::new(...).size(..)` to iced 0.14's
     text widget API only as the compiler requires.
 - `src/main.rs`: drop the `.await` on the synchronous `ui::init_ui(...)`
   call so `main` compiles.
 
-**Files touched.** `src/apple_music/mod.rs`, `src/ui/mod.rs`, `src/main.rs`.
+**Files touched.** `src/apple_music/mod.rs`, `src/ui/mod.rs`, `src/ui/views.rs`,
+`src/main.rs`.
 
 **Acceptance criteria.**
 - `cargo build` succeeds.

@@ -1,10 +1,12 @@
 use iced::{
     Application, Element, Length, Settings, executor,
-    widget::{Button, Column, Row, Scrollable, Space, Text},
+    widget::{Button, Column, Row, Space, Text},
 };
 use iced_native::Command;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+
+mod views;
 
 use crate::{
     apple_music::{Album, AppleMusicService, Artist, Song},
@@ -147,9 +149,9 @@ impl Application for WinampPlayer {
         let state = self.state.lock().unwrap();
 
         let main_content = match &self.current_view {
-            CurrentView::Artists => self.view_artists(),
-            CurrentView::Albums(artist_id) => self.view_albums(artist_id),
-            CurrentView::Songs(artist_id, album_id) => self.view_songs(artist_id, album_id),
+            CurrentView::Artists => views::view_artists(&self.artists),
+            CurrentView::Albums(_) => views::view_albums(&self.albums),
+            CurrentView::Songs(_, _) => views::view_songs(&self.songs),
         };
 
         Column::new()
@@ -175,61 +177,3 @@ impl Application for WinampPlayer {
     }
 }
 
-impl WinampPlayer {
-    /// Builds a scrollable list where each item is a button showing a title
-    /// followed by a secondary label. Shared by the artists, albums, and songs
-    /// views.
-    fn scrollable_list(
-        &self,
-        items: impl IntoIterator<Item = (String, &'static str, Message)>,
-    ) -> Element<Message> {
-        let mut column = Column::new().padding(20);
-
-        for (title, label, message) in items {
-            column = column.push(
-                Button::new(
-                    Row::new()
-                        .push(Text::new(title).size(18))
-                        .push(Space::with_width(Length::Units(10)))
-                        .push(Text::new(label).size(14)),
-                )
-                .on_press(message),
-            );
-        }
-
-        Scrollable::new(column)
-            .width(Length::Fill)
-            .height(Length::FillPortion(3))
-            .into()
-    }
-
-    fn view_artists(&self) -> Element<Message> {
-        self.scrollable_list(self.artists.iter().map(|artist| {
-            (
-                artist.name.clone(),
-                "View Albums",
-                Message::ArtistSelected(artist.id.clone()),
-            )
-        }))
-    }
-
-    fn view_albums(&self, _artist_id: &str) -> Element<Message> {
-        self.scrollable_list(self.albums.iter().map(|album| {
-            (
-                album.title.clone(),
-                "View Songs",
-                Message::AlbumSelected(album.id.clone()),
-            )
-        }))
-    }
-
-    fn view_songs(&self, _artist_id: &str, _album_id: &str) -> Element<Message> {
-        self.scrollable_list(self.songs.iter().map(|song| {
-            (
-                song.title.clone(),
-                "Play",
-                Message::TrackSelected(song.id.clone()),
-            )
-        }))
-    }
-}
