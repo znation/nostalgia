@@ -28,8 +28,6 @@ impl AppleMusicService {
     }
 
     pub async fn init_service(state: Arc<Mutex<AppState>>) {
-        let service = AppleMusicService::new(state.clone());
-
         // In a real implementation, you would:
         // 1. Authenticate with Apple Music
         // 2. Get user's library
