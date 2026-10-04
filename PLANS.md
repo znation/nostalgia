@@ -76,6 +76,52 @@ auth/API is a later, larger plan), port the UI to iced 0.14, and get
   album lists its songs (manual check — the build + tests are the primary
   gate).
 
+### Add a working volume slider to the transport controls
+
+Found by plan 2026-10-04.
+
+**Goal.** The transport row renders Play/Pause, Previous, and Next, and
+`WinampPlayer::update` already handles `Message::VolumeChange(f32)` (clamps
+and stores into `state.volume`) — but no widget ever emits it, so the volume
+control is dead code and playback volume cannot actually be changed. Land the
+classic Winamp-style volume slider: add iced's `Slider` widget to the transport
+row in `WinampPlayer::view`, wired to `Message::VolumeChange`, and move the
+clamping logic into a pure, tested helper. Assumes the iced 0.14 port above has
+landed first — this touches the same `src/ui/mod.rs` and the crate must compile
+for any of this to run.
+
+**Approach.**
+
+- `src/state.rs`: add `pub fn clamp_volume(volume: f32) -> f32` returning
+  `volume.clamp(0.0, 1.0)`, plus a `#[cfg(test)] mod tests` covering the three
+  cases: below 0 → 0.0, above 1 → 1.0, in-range value unchanged. Volume is
+  shared state, so the helper lives beside `AppState` rather than in the UI
+  module.
+- `src/ui/mod.rs`:
+  - Extend the `iced::widget` import (`Button, Column, Row, Space, Text`) to
+    include `Slider`.
+  - In `WinampPlayer::view`, append `Slider::new(0.0..=1.0, state.volume,
+    Message::VolumeChange)` with a fixed width (`Length::Pixels(100)` or
+    similar) to the transport `Row` that currently holds the Play/Pause,
+    Previous, and Next buttons.
+  - In the `Message::VolumeChange(volume)` arm of `WinampPlayer::update`,
+    replace the inline `volume.clamp(0.0, 1.0)` with
+    `state::clamp_volume(volume)`.
+  - Use iced 0.14's `Length::Pixels` spelling near the slider, per the port
+    plan above.
+
+**Files touched.** `src/state.rs`, `src/ui/mod.rs`.
+
+**Acceptance criteria.**
+- `cargo build` succeeds.
+- `cargo test` passes, including the new `clamp_volume` tests (clamp below 0,
+  above 1, pass through in-range).
+- `cargo run` shows a volume slider in the transport row; dragging it changes
+  the volume (manual check — build + tests are the primary gate).
+- `Message::VolumeChange` is no longer dead: a `grep -n 'VolumeChange' src`
+  shows both the emitter (`Slider` `on_changed` in `view`) and the handler in
+  `update`.
+
 ## Done
 
 _None yet._
