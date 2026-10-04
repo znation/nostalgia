@@ -2,13 +2,11 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use iced::{
     Application, Element, Settings,
-    executor, Subscription, Theme, Length, widget::{
-Column, Container, Row, Text, Button, Scrollable, Space,
+    executor, Length, widget::{
+Column, Row, Text, Button, Scrollable, Space,
     }
 };
-use iced_native::{
-    Command, keyboard,  
-};
+use iced_native::Command;
 
 use crate::{state::AppState, apple_music::{AppleMusicService, Artist, Album, Song}};
 
