@@ -1,10 +1,8 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use iced::{
-    Application, Element, Settings,
-    executor, Length, widget::{
-Column, Row, Text, Button, Scrollable, Space,
-    }
+    Application, Element, Length, Settings, executor,
+    widget::{Button, Column, Row, Scrollable, Space, Text},
 };
 use iced_native::Command;
 
