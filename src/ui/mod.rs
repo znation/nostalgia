@@ -46,6 +46,19 @@ enum CurrentView {
     Songs(String, String),
 }
 
+/// Maps a library-fetch `Result` to its matching `*Loaded` message, falling
+/// back to an empty list on error. Shared by the artists, albums, and songs
+/// load paths so the error fallback stays identical in all three.
+fn loaded_or_empty<T, E>(
+    result: Result<Vec<T>, E>,
+    loaded: impl Fn(Vec<T>) -> Message,
+) -> Message {
+    match result {
+        Ok(items) => loaded(items),
+        Err(_) => loaded(Vec::new()),
+    }
+}
+
 impl Application for WinampPlayer {
     type Executor = executor::Default;
     type Message = Message;
@@ -93,10 +106,7 @@ impl Application for WinampPlayer {
                 self.current_view = CurrentView::Albums(artist_id);
                 return Command::perform(
                     self.apple_music_service.get_albums_by_artist(&artist_id),
-                    |result| match result {
-                        Ok(albums) => Message::AlbumsLoaded(albums),
-                        Err(_) => Message::AlbumsLoaded(vec![]),
-                    },
+                    |result| loaded_or_empty(result, Message::AlbumsLoaded),
                 );
             }
             Message::AlbumSelected(album_id) => {
@@ -105,19 +115,13 @@ impl Application for WinampPlayer {
                 self.current_view = CurrentView::Songs(artist_id.clone(), album_id);
                 return Command::perform(
                     self.apple_music_service.get_songs_from_album(&album_id),
-                    |result| match result {
-                        Ok(songs) => Message::SongsLoaded(songs),
-                        Err(_) => Message::SongsLoaded(vec![]),
-                    },
+                    |result| loaded_or_empty(result, Message::SongsLoaded),
                 );
             }
             Message::LoadArtists => {
                 return Command::perform(
                     self.apple_music_service.get_favorite_artists(),
-                    |result| match result {
-                        Ok(artists) => Message::ArtistsLoaded(artists),
-                        Err(_) => Message::ArtistsLoaded(vec![]),
-                    },
+                    |result| loaded_or_empty(result, Message::ArtistsLoaded),
                 );
             }
             Message::ArtistsLoaded(artists) => {
