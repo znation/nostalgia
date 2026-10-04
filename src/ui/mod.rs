@@ -74,11 +74,6 @@ impl Application for WinampPlayer {
             Message::PlayPause => {
                 let mut state = self.state.lock().await;
                 state.is_playing = !state.is_playing;
-                if state.is_playing {
-                    // Start playback
-                } else {
-                    // Pause playback
-                }
             }
             Message::NextTrack => {
                 // Handle next track
