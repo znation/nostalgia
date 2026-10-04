@@ -8,3 +8,17 @@ pub struct AppState {
     pub is_playing: bool,
     pub volume: f32,
 }
+
+impl Default for AppState {
+    /// Initial state: nothing loaded, stopped, at 50% volume. Keeping the
+    /// initial values in one place (rather than repeating the struct literal
+    /// at each construction site) means a new field has only one spot to be
+    /// given its startup value.
+    fn default() -> Self {
+        Self {
+            current_track: None,
+            is_playing: false,
+            volume: 0.5,
+        }
+    }
+}

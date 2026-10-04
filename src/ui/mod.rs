@@ -55,11 +55,7 @@ impl Application for WinampPlayer {
     type Flags = ();
 
     fn new(_flags: ()) -> (Self, Command<Message>) {
-        let state = Arc::new(Mutex::new(AppState {
-            current_track: None,
-            is_playing: false,
-            volume: 0.5,
-        }));
+        let state = Arc::new(Mutex::new(AppState::default()));
 
         (
             Self {

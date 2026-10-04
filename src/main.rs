@@ -9,11 +9,7 @@ use crate::state::AppState;
 
 #[tokio::main]
 async fn main() {
-    let state = Arc::new(Mutex::new(AppState {
-        current_track: None,
-        is_playing: false,
-        volume: 0.5,
-    }));
+    let state = Arc::new(Mutex::new(AppState::default()));
 
     // Initialize UI
     ui::init_ui(state.clone()).await;
