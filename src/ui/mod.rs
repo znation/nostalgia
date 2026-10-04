@@ -1,12 +1,15 @@
-use std::sync::Arc;
-use tokio::sync::Mutex;
 use iced::{
     Application, Element, Length, Settings, executor,
     widget::{Button, Column, Row, Scrollable, Space, Text},
 };
 use iced_native::Command;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
-use crate::{state::AppState, apple_music::{AppleMusicService, Artist, Album, Song}};
+use crate::{
+    apple_music::{Album, AppleMusicService, Artist, Song},
+    state::AppState,
+};
 
 pub fn init_ui(state: Arc<Mutex<AppState>>) {
     WinampPlayer::run(Settings::default()).expect("Failed to start UI");
@@ -103,7 +106,7 @@ impl Application for WinampPlayer {
                     |result| match result {
                         Ok(albums) => Message::AlbumsLoaded(albums),
                         Err(_) => Message::AlbumsLoaded(vec![]),
-                    }
+                    },
                 );
             }
             Message::AlbumSelected(album_id) => {
@@ -115,7 +118,7 @@ impl Application for WinampPlayer {
                     |result| match result {
                         Ok(songs) => Message::SongsLoaded(songs),
                         Err(_) => Message::SongsLoaded(vec![]),
-                    }
+                    },
                 );
             }
             Message::LoadArtists => {
@@ -124,7 +127,7 @@ impl Application for WinampPlayer {
                     |result| match result {
                         Ok(artists) => Message::ArtistsLoaded(artists),
                         Err(_) => Message::ArtistsLoaded(vec![]),
-                    }
+                    },
                 );
             }
             Message::ArtistsLoaded(artists) => {
@@ -150,24 +153,22 @@ impl Application for WinampPlayer {
         };
 
         Column::new()
+            .push(Row::new().push(Text::new("Now Playing: ").size(20)).push(
+                match &state.current_track {
+                    Some(track) => Text::new(track).size(20),
+                    None => Text::new("Nothing").size(20),
+                },
+            ))
             .push(
                 Row::new()
-                    .push(Text::new("Now Playing: ").size(20))
-                    .push(match &state.current_track {
-                        Some(track) => Text::new(track).size(20),
-                        None => Text::new("Nothing").size(20),
-                    })
-            )
-            .push(
-                Row::new()
-                    .push(Button::new(Text::new(if state.is_playing { "Pause" } else { "Play" }))
-                        .on_press(Message::PlayPause))
+                    .push(
+                        Button::new(Text::new(if state.is_playing { "Pause" } else { "Play" }))
+                            .on_press(Message::PlayPause),
+                    )
                     .push(Space::with_width(Length::Units(20)))
-                    .push(Button::new(Text::new("Previous"))
-                        .on_press(Message::PreviousTrack))
+                    .push(Button::new(Text::new("Previous")).on_press(Message::PreviousTrack))
                     .push(Space::with_width(Length::Units(20)))
-                    .push(Button::new(Text::new("Next"))
-                        .on_press(Message::NextTrack))
+                    .push(Button::new(Text::new("Next")).on_press(Message::NextTrack)),
             )
             .push(main_content)
             .into()
@@ -190,9 +191,9 @@ impl WinampPlayer {
                     Row::new()
                         .push(Text::new(title).size(18))
                         .push(Space::with_width(Length::Units(10)))
-                        .push(Text::new(label).size(14))
+                        .push(Text::new(label).size(14)),
                 )
-                .on_press(message)
+                .on_press(message),
             );
         }
 
@@ -203,26 +204,32 @@ impl WinampPlayer {
     }
 
     fn view_artists(&self) -> Element<Message> {
-        self.scrollable_list(
-            self.artists.iter().map(|artist| {
-                (artist.name.clone(), "View Albums", Message::ArtistSelected(artist.id.clone()))
-            }),
-        )
+        self.scrollable_list(self.artists.iter().map(|artist| {
+            (
+                artist.name.clone(),
+                "View Albums",
+                Message::ArtistSelected(artist.id.clone()),
+            )
+        }))
     }
 
     fn view_albums(&self, _artist_id: &str) -> Element<Message> {
-        self.scrollable_list(
-            self.albums.iter().map(|album| {
-                (album.title.clone(), "View Songs", Message::AlbumSelected(album.id.clone()))
-            }),
-        )
+        self.scrollable_list(self.albums.iter().map(|album| {
+            (
+                album.title.clone(),
+                "View Songs",
+                Message::AlbumSelected(album.id.clone()),
+            )
+        }))
     }
 
     fn view_songs(&self, _artist_id: &str, _album_id: &str) -> Element<Message> {
-        self.scrollable_list(
-            self.songs.iter().map(|song| {
-                (song.title.clone(), "Play", Message::TrackSelected(song.id.clone()))
-            }),
-        )
+        self.scrollable_list(self.songs.iter().map(|song| {
+            (
+                song.title.clone(),
+                "Play",
+                Message::TrackSelected(song.id.clone()),
+            )
+        }))
     }
 }
