@@ -7,15 +7,14 @@ mod ui;
 
 use crate::state::AppState;
 
-#[tokio::main]
-async fn main() {
+fn main() -> iced::Result {
     let state = Arc::new(Mutex::new(AppState::default()));
 
-    // Initialize UI
-    ui::init_ui(state.clone()).await;
-
-    // Initialize Apple Music service
-    apple_music::init_service(state.clone()).await;
+    // Initialize the (stub) Apple Music service.
+    apple_music::init_service(state.clone());
 
     println!("WinAmp-style Apple Music Player started!");
+
+    // Run the UI; blocks until the window is closed.
+    ui::init_ui(state)
 }
