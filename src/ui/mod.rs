@@ -1,7 +1,4 @@
-use iced::{
-    Application, Element, Length, Settings, executor,
-    widget::{Button, Column, Row, Space, Text},
-};
+use iced::{Application, Element, Settings, executor, widget::Column};
 use iced_native::Command;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -151,25 +148,9 @@ impl Application for WinampPlayer {
         };
 
         Column::new()
-            .push(Row::new().push(Text::new("Now Playing: ").size(20)).push(
-                match &state.current_track {
-                    Some(track) => Text::new(track).size(20),
-                    None => Text::new("Nothing").size(20),
-                },
-            ))
-            .push(
-                Row::new()
-                    .push(
-                        Button::new(Text::new(if state.is_playing { "Pause" } else { "Play" }))
-                            .on_press(Message::PlayPause),
-                    )
-                    .push(Space::with_width(Length::Units(20)))
-                    .push(Button::new(Text::new("Previous")).on_press(Message::PreviousTrack))
-                    .push(Space::with_width(Length::Units(20)))
-                    .push(Button::new(Text::new("Next")).on_press(Message::NextTrack)),
-            )
+            .push(views::view_now_playing(state.current_track.as_deref()))
+            .push(views::view_transport_controls(state.is_playing))
             .push(main_content)
             .into()
     }
 }
-
