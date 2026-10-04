@@ -10,3 +10,4 @@ and will tune it to this project.
 - Keep each file focused on one responsibility, and small enough to read in one sitting.
 - Every behavior change ships with a test.
 - Small, complete, and correct beats big and half-done: one focused change per tick.
+- Keep external integrations behind a narrow seam so a stub can stand in until the real service lands.
