@@ -174,7 +174,8 @@ fn lookup<T: Clone>(index: &HashMap<String, Vec<T>>, id: &str) -> Vec<T> {
 mod tests {
     use super::*;
     use crate::test_support::{
-        assert_every_field_required, assert_serializes_as, assert_unknown_fields_tolerated,
+        assert_every_field_required, assert_ids, assert_serializes_as,
+        assert_unknown_fields_tolerated,
     };
     use serde_json::json;
 
@@ -219,17 +220,6 @@ mod tests {
         // `String` as readily as a `&str`; both must format identically.
         let error = AppleMusicError::new(format!("album {} not found", "album-1"));
         assert_eq!(error.to_string(), "album album-1 not found");
-    }
-
-    /// Asserts that `items` yield exactly the expected ids, in order. Five
-    /// browse-query tests — the artists, the multi- and single-group albums,
-    /// and the multi- and single-song albums — each used to repeat the same
-    /// map-to-ids-then-compare chain over the fetched list; only the id
-    /// closure and the expected ids differ, so the chain lives here once and
-    /// each test only names its list and expectation.
-    fn assert_ids<T>(items: &[T], id: impl Fn(&T) -> &str, expected: &[&str]) {
-        let ids: Vec<&str> = items.iter().map(id).collect();
-        assert_eq!(ids, expected);
     }
 
     // "All favorite artists" is the service's content contract, not just a

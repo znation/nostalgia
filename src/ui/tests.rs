@@ -1,7 +1,7 @@
 use super::*;
 use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB};
 use crate::test_support::{
-    sample_album, sample_artist, sample_song, second_album_songs, stepping_songs,
+    assert_ids, sample_album, sample_artist, sample_song, second_album_songs, stepping_songs,
 };
 
 /// A fresh player over its own shared state, so a test can inspect the
@@ -101,8 +101,7 @@ async fn drive_fetch_and_assert_loaded<T, Buffer, Key>(
 
     let message = output.expect("browse task must yield a *Loaded message");
     let _ = update(player, message);
-    let ids: Vec<&str> = buffer(player).iter().map(key).collect();
-    assert_eq!(ids, expected_ids);
+    assert_ids(buffer(player).as_slice(), key, expected_ids);
 }
 
 // The three toggle arms share one shape: read the flag, update, read it
@@ -633,8 +632,7 @@ fn songs_loaded_replaces_the_previous_albums_songs() {
     let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
     let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
 
-    let ids: Vec<&str> = player.songs.iter().map(|song| song.id.as_str()).collect();
-    assert_eq!(ids, vec!["song-4"]);
+    assert_ids(&player.songs, |song| song.id.as_str(), &["song-4"]);
 }
 
 // The Now Playing bar must keep naming the playing track, not its raw id,

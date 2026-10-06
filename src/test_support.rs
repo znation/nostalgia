@@ -162,3 +162,19 @@ where
     let parsed: T = serde_json::from_value(payload).expect("unknown fields must be tolerated");
     assert_eq!(parsed, expected);
 }
+
+/// Asserts that `items` yield exactly the expected ids, in order.
+///
+/// The browse-query tests in the `apple_music` and `ui` suites each fetch a
+/// list and pin its exact contents by mapping the list to its ids and
+/// comparing; only the id projection and the expected ids differ, so the
+/// map-to-ids-then-compare chain lives here once and each call site only
+/// names its list and expectation. Comparing the ids *in order* is what
+/// catches a dropped or reordered element that a bare non-empty assertion
+/// would miss. The `sample_library` suite's `assert_id_label_pairs` is a
+/// distinct helper — it pins each item's secondary label alongside its id,
+/// not the id alone — so it stays local to that suite.
+pub(crate) fn assert_ids<T>(items: &[T], id: impl Fn(&T) -> &str, expected: &[&str]) {
+    let ids: Vec<&str> = items.iter().map(id).collect();
+    assert_eq!(ids, expected);
+}
