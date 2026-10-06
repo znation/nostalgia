@@ -1,6 +1,6 @@
 use reqwest::{Client, Error};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
 
 use crate::state::AppState;
@@ -135,15 +135,16 @@ impl AppleMusicService {
 
     /// All favorite artists (every artist in the sample library).
     pub async fn get_favorite_artists(&self) -> Result<Vec<Artist>, Error> {
-        Ok(sample_library().artists)
+        Ok(sample_library().artists.clone())
     }
 
     /// Albums by the given artist; unknown artists yield an empty list.
     pub async fn get_albums_by_artist(&self, artist_id: &str) -> Result<Vec<Album>, Error> {
         Ok(sample_library()
             .albums
-            .into_iter()
+            .iter()
             .filter(|album| album.artist_id == artist_id)
+            .cloned()
             .collect())
     }
 
@@ -151,8 +152,9 @@ impl AppleMusicService {
     pub async fn get_songs_from_album(&self, album_id: &str) -> Result<Vec<Song>, Error> {
         Ok(sample_library()
             .songs
-            .into_iter()
+            .iter()
             .filter(|song| song.album_id == album_id)
+            .cloned()
             .collect())
     }
 }
@@ -165,69 +167,83 @@ struct SampleLibrary {
     songs: Vec<Song>,
 }
 
-/// Builds the sample library: three artists, each with one or two albums,
-/// each album with a couple of songs.
-fn sample_library() -> SampleLibrary {
-    SampleLibrary {
-        artists: vec![
-            Artist {
-                id: "artist-1".to_string(),
-                name: "The Sample Band".to_string(),
-            },
-            Artist {
-                id: "artist-2".to_string(),
-                name: "Echo Chamber".to_string(),
-            },
-            Artist {
-                id: "artist-3".to_string(),
-                name: "Mono Tones".to_string(),
-            },
-        ],
-        albums: vec![
-            Album {
-                id: "album-1".to_string(),
-                title: "First Record".to_string(),
-                artist_id: "artist-1".to_string(),
-            },
-            Album {
-                id: "album-2".to_string(),
-                title: "Second Record".to_string(),
-                artist_id: "artist-1".to_string(),
-            },
-            Album {
-                id: "album-3".to_string(),
-                title: "Debut".to_string(),
-                artist_id: "artist-2".to_string(),
-            },
-        ],
-        songs: vec![
-            Song {
-                id: "song-1".to_string(),
-                title: "Opening".to_string(),
-                album_id: "album-1".to_string(),
-            },
-            Song {
-                id: "song-2".to_string(),
-                title: "Middle".to_string(),
-                album_id: "album-1".to_string(),
-            },
-            Song {
-                id: "song-3".to_string(),
-                title: "Ending".to_string(),
-                album_id: "album-1".to_string(),
-            },
-            Song {
-                id: "song-4".to_string(),
-                title: "B-side".to_string(),
-                album_id: "album-2".to_string(),
-            },
-            Song {
-                id: "song-5".to_string(),
-                title: "Headliner".to_string(),
-                album_id: "album-3".to_string(),
-            },
-        ],
+impl SampleLibrary {
+    /// Builds the sample library: three artists, each with one or two albums,
+    /// each album with a couple of songs.
+    fn new() -> Self {
+        SampleLibrary {
+            artists: vec![
+                Artist {
+                    id: "artist-1".to_string(),
+                    name: "The Sample Band".to_string(),
+                },
+                Artist {
+                    id: "artist-2".to_string(),
+                    name: "Echo Chamber".to_string(),
+                },
+                Artist {
+                    id: "artist-3".to_string(),
+                    name: "Mono Tones".to_string(),
+                },
+            ],
+            albums: vec![
+                Album {
+                    id: "album-1".to_string(),
+                    title: "First Record".to_string(),
+                    artist_id: "artist-1".to_string(),
+                },
+                Album {
+                    id: "album-2".to_string(),
+                    title: "Second Record".to_string(),
+                    artist_id: "artist-1".to_string(),
+                },
+                Album {
+                    id: "album-3".to_string(),
+                    title: "Debut".to_string(),
+                    artist_id: "artist-2".to_string(),
+                },
+            ],
+            songs: vec![
+                Song {
+                    id: "song-1".to_string(),
+                    title: "Opening".to_string(),
+                    album_id: "album-1".to_string(),
+                },
+                Song {
+                    id: "song-2".to_string(),
+                    title: "Middle".to_string(),
+                    album_id: "album-1".to_string(),
+                },
+                Song {
+                    id: "song-3".to_string(),
+                    title: "Ending".to_string(),
+                    album_id: "album-1".to_string(),
+                },
+                Song {
+                    id: "song-4".to_string(),
+                    title: "B-side".to_string(),
+                    album_id: "album-2".to_string(),
+                },
+                Song {
+                    id: "song-5".to_string(),
+                    title: "Headliner".to_string(),
+                    album_id: "album-3".to_string(),
+                },
+            ],
+        }
     }
+}
+
+/// Returns the shared sample library, building it at most once.
+///
+/// Every browse query (favorite artists, albums by artist, songs from album)
+/// reads this on navigation, so it is cached in a [`OnceLock`] instead of
+/// being reconstructed per call — building the library allocates every
+/// artist, album, and song `String`, and the data never changes.
+static SAMPLE_LIBRARY: OnceLock<SampleLibrary> = OnceLock::new();
+
+fn sample_library() -> &'static SampleLibrary {
+    SAMPLE_LIBRARY.get_or_init(SampleLibrary::new)
 }
 
 #[cfg(test)]
