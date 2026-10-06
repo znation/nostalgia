@@ -2,7 +2,7 @@ use iced::{
     Element, Length, Task,
     widget::{Button, Column, Row, Slider, Space, Text},
 };
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 use tokio::sync::Mutex;
 
 mod transport;
@@ -92,6 +92,27 @@ fn loaded_or_empty<T, E>(result: Result<Vec<T>, E>, loaded: impl Fn(Vec<T>) -> M
     }
 }
 
+/// Runs a library-fetch future through iced's runtime, mapping its `Result`
+/// onto the matching `*Loaded` message (empty list on error, via
+/// [`loaded_or_empty`]). Shared by the artists, albums, and songs load arms
+/// so none of them repeats the clone-the-service-then-`Task::perform`
+/// boilerplate.
+fn fetch_into<T, E, Fut>(
+    service: &AppleMusicService,
+    fetch: impl FnOnce(AppleMusicService) -> Fut + Send + 'static,
+    loaded: impl Fn(Vec<T>) -> Message + Send + 'static,
+) -> Task<Message>
+where
+    T: Send + 'static,
+    E: Send + 'static,
+    Fut: Future<Output = Result<Vec<T>, E>> + Send + 'static,
+{
+    let service = service.clone();
+    Task::perform(async move { fetch(service).await }, move |result| {
+        loaded_or_empty(result, loaded)
+    })
+}
+
 fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
     match message {
         Message::PlayPause => {
@@ -129,27 +150,25 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         }
         Message::ArtistSelected(artist_id) => {
             player.current_view = CurrentView::Albums;
-            let service = player.apple_music_service.clone();
-            Task::perform(
-                async move { service.get_albums_by_artist(&artist_id).await },
-                |result| loaded_or_empty(result, Message::AlbumsLoaded),
+            fetch_into(
+                &player.apple_music_service,
+                move |service| async move { service.get_albums_by_artist(&artist_id).await },
+                Message::AlbumsLoaded,
             )
         }
         Message::AlbumSelected(album_id) => {
             player.current_view = CurrentView::Songs;
-            let service = player.apple_music_service.clone();
-            Task::perform(
-                async move { service.get_songs_from_album(&album_id).await },
-                |result| loaded_or_empty(result, Message::SongsLoaded),
+            fetch_into(
+                &player.apple_music_service,
+                move |service| async move { service.get_songs_from_album(&album_id).await },
+                Message::SongsLoaded,
             )
         }
-        Message::LoadArtists => {
-            let service = player.apple_music_service.clone();
-            Task::perform(
-                async move { service.get_favorite_artists().await },
-                |result| loaded_or_empty(result, Message::ArtistsLoaded),
-            )
-        }
+        Message::LoadArtists => fetch_into(
+            &player.apple_music_service,
+            |service| async move { service.get_favorite_artists().await },
+            Message::ArtistsLoaded,
+        ),
         Message::ArtistsLoaded(artists) => {
             player.artists = artists;
             Task::none()
@@ -287,8 +306,8 @@ mod tests {
         let (mut player, state) = test_player();
 
         let task = update(&mut player, Message::TrackSelected("song-1".to_string()));
-        let mut stream = iced_runtime::task::into_stream(task)
-            .expect("track selection must schedule playback");
+        let mut stream =
+            iced_runtime::task::into_stream(task).expect("track selection must schedule playback");
 
         let action = stream
             .next()
@@ -360,6 +379,35 @@ mod tests {
         let err_message =
             loaded_or_empty::<Album, String>(Err("boom".to_string()), Message::AlbumsLoaded);
         assert!(matches!(err_message, Message::AlbumsLoaded(v) if v.is_empty()));
+    }
+
+    // `fetch_into` schedules the fetch as an iced `Task`; the arm itself only
+    // builds it, so the real behavior lives in the returned task. Drive that
+    // task to completion and assert the mapped `*Loaded` message, as the
+    // load-path arms would produce it.
+    #[tokio::test]
+    async fn fetch_into_schedules_fetch_and_maps_result_to_loaded_message() {
+        use futures::StreamExt;
+
+        let (player, _state) = test_player();
+
+        let task = fetch_into(
+            &player.apple_music_service,
+            |service| async move { service.get_favorite_artists().await },
+            Message::ArtistsLoaded,
+        );
+        let mut stream = iced_runtime::task::into_stream(task).expect("fetch must schedule a task");
+
+        let action = stream
+            .next()
+            .await
+            .expect("fetch task must yield a completion message");
+        match action {
+            iced_runtime::Action::Output(Message::ArtistsLoaded(artists)) => {
+                assert!(!artists.is_empty());
+            }
+            other => panic!("unexpected fetch task output: {other:?}"),
+        }
     }
 
     #[test]
