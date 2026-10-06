@@ -57,15 +57,6 @@ impl AppleMusicService {
         }
     }
 
-    async fn authenticate(&mut self, _username: &str, _password: &str) -> Result<(), Error> {
-        // In a real implementation, this would:
-        // 1. Exchange credentials for an access token
-        // 2. Store the token for future requests
-
-        println!("Authenticating with Apple Music...");
-        Ok(())
-    }
-
     pub async fn play_track(&self, track_id: &str) -> Result<(), Error> {
         // In a real implementation, this would:
         // 1. Make API call to start playback
