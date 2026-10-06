@@ -27,7 +27,92 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Add a Winamp two-tone bevel layer and frame the Now Playing and equalizer panels (found 2026-10-06)
+
+Found by plan 2026-10-06, following the steward drift note's call for custom
+widget styling. The palette landed (previous Done entry), but every panel is
+still flat: iced 0.14's `Border` is a single colour of uniform width
+(`iced_core/src/border.rs`: `color`, `width`, `radius` only), so no view draws
+the base skin's defining 3D edge — light top/left, dark bottom/right on raised
+chrome, reversed in a sunken LCD well.
+
+**Goal.** Add a small `src/ui/style.rs` that composes the bevel from 1px `Rule`
+edges and wrap the two panels with intrinsic height: the Now Playing bar as a
+sunken dark LCD well and the equalizer panel as a raised chrome panel. This is
+the reusable styling layer the drift note asks for; transport button and slider
+chrome is a separate, later plan that styles against these same edge colours.
+
+**Approach.**
+
+- `src/ui/theme.rs`: add three public `Color` constants beside the existing
+  base-skin colours, each `Color::from_rgb`, in the module's existing
+  doc-comment style:
+  - `PANEL_EDGE_LIGHT` — the light top/left bevel edge,
+    `Color::from_rgb(0.55, 0.55, 0.55)`.
+  - `PANEL_EDGE_DARK` — the dark bottom/right bevel edge,
+    `Color::from_rgb(0.05, 0.05, 0.05)`.
+  - `LCD_BACKGROUND` — the near-black LCD recess behind the green title,
+    `Color::from_rgb(0.05, 0.05, 0.05)`.
+- `src/ui/style.rs` (new file, declared `mod style;` beside `mod theme;` in
+  `src/ui/mod.rs`), with `//!` module docs and a doc comment on every public
+  item (the `docs` stage denies rustdoc warnings):
+  - `pub fn bevel_edges(raised: bool) -> (Color, Color)` — pure, returns the
+    `(top_left, bottom_right)` edge colours: `raised` → `(PANEL_EDGE_LIGHT,
+    PANEL_EDGE_DARK)`, sunken → `(PANEL_EDGE_DARK, PANEL_EDGE_LIGHT)`. This is
+    the testable heart of the bevel; the widget composition only consumes it.
+  - `fn horizontal_edge<'a>(color: Color) -> Element<'a, Message>` and
+    `fn vertical_edge<'a>(color: Color) -> Element<'a, Message>` — a 1px `Rule`
+    (`Rule::horizontal(1.0)` / `Rule::vertical(1.0)`) styled with
+    `rule::Style { color, radius: 0.0.into(), fill_mode: rule::FillMode::Full,
+    snap: true }`. `Rule`'s own layout makes the horizontal rule fill width at
+    1px tall and the vertical rule fill height at 1px wide, so the edges track
+    the panel without manual sizing.
+  - `fn beveled<'a>(content: impl Into<Element<'a, Message>>, raised: bool) ->
+    Element<'a, Message>` — a `Column` of top edge, a `Length::Fill` `Row` of
+    left edge + content + right edge, and bottom edge, coloured from
+    `bevel_edges`; the `Fill` row puts the vertical edges on the panel's outer
+    edges.
+  - `pub fn lcd_well<'a>(content: impl Into<Element<'a, Message>>) ->
+    Element<'a, Message>` — wraps `content` in a `Container` with
+    `background: LCD_BACKGROUND` and a few px of padding, then
+    `beveled(.., false)`. No `text_color` is set, so the `"Now Playing: "`
+    caption keeps the theme text colour and only the title's explicit
+    `LCD_GREEN` stays green.
+  - `pub fn raised_panel<'a>(content: impl Into<Element<'a, Message>>) ->
+    Element<'a, Message>` — `beveled(.., true)` around content on the window
+    face (no extra background, so it composes with the existing theme).
+  - `#[cfg(test)] mod tests`: `bevel_edges(true)` equals
+    `(theme::PANEL_EDGE_LIGHT, theme::PANEL_EDGE_DARK)` and `bevel_edges(false)`
+    equals the reverse; `lcd_well(Text::new("x"))` and
+    `raised_panel(Text::new("x"))` construct without panicking (the same
+    "builders construct" contract the `views` tests use, since iced `Element`s
+    expose no tree introspection).
+- `src/ui/views.rs`:
+  - In `view_now_playing`, wrap the existing `Row` in
+    `super::style::lcd_well(..)`.
+  - In `view_equalizer`, wrap the existing `Column` in
+    `super::style::raised_panel(..)`.
+  - Add `use super::style;`; no signature changes, so the existing view
+    construction tests compile and pass unchanged.
+- `README.md`: refresh the Status sentence to say the Now Playing bar and
+  equalizer are framed with Winamp's raised/sunken bevels; leave the
+  `tumwater:prompt` block untouched.
+
+**Files touched.** `src/ui/style.rs` (new), `src/ui/theme.rs`, `src/ui/mod.rs`,
+`src/ui/views.rs`, `README.md`.
+
+**Acceptance criteria.**
+
+- `make check` passes (`cargo fmt --check`,
+  `cargo clippy --all-targets -- -D warnings`, `cargo doc` with rustdoc
+  warnings denied, `cargo test`).
+- The new `style` unit tests pass; the existing `views` construction tests
+  (`now_playing_bar_and_back_button_construct`,
+  `equalizer_panel_constructs_for_both_states_and_gain_endpoints`) still pass
+  with the wrapped panels.
+- `cargo run`: the Now Playing bar reads as a dark sunken LCD well (light
+  top/left, dark bottom/right edges) and the equalizer as a raised panel (the
+  reverse); manual check — the build and tests are the primary gate.
 
 ## Done
 
