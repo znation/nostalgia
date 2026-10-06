@@ -91,6 +91,8 @@ pub fn init_service(_state: Arc<Mutex<AppState>>) {
 }
 
 impl AppleMusicService {
+    /// Wraps the shared [`AppState`] in a new service; the token field starts
+    /// unset (authentication is stubbed until a real Apple Music API lands).
     pub fn new(state: Arc<Mutex<AppState>>) -> Self {
         Self { token: None, state }
     }
