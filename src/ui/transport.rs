@@ -209,4 +209,25 @@ mod tests {
             Some("song-1".to_string())
         );
     }
+
+    // The documented no-current contract is direction-only — the first song
+    // going forward, the last going backward — with the shared Repeat flag
+    // irrelevant because there is no boundary to wrap. Every no-current test
+    // above passes Repeat off, so a regression that made the no-current
+    // branch consult Repeat (e.g. returning the last song going forward when
+    // Repeat is on) would clear them all. Pin the on half too, for both a
+    // missing and an unknown current.
+    #[test]
+    fn no_current_step_ignores_repeat() {
+        for current in [None, Some("nope")] {
+            assert_eq!(
+                next_track_id(&stepping_songs(), current, true),
+                Some("song-1".to_string())
+            );
+            assert_eq!(
+                previous_track_id(&stepping_songs(), current, true),
+                Some("song-3".to_string())
+            );
+        }
+    }
 }
