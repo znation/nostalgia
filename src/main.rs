@@ -15,7 +15,7 @@ fn main() -> iced::Result {
     // Initialize the (stub) Apple Music service.
     apple_music::init_service(state.clone());
 
-    println!("WinAmp-style Apple Music Player started!");
+    println!("Winamp-style Apple Music Player started!");
 
     // Run the UI; blocks until the window is closed.
     ui::init_ui(state)
