@@ -1,3 +1,10 @@
+//! The iced application: the `WinampPlayer` app struct, its `Message` event
+//! type, and the `update`/`view` loop `init_ui` hands to iced. Widget
+//! construction lives in the `views` submodule (browse lists, Now Playing bar,
+//! transport controls) and the Previous/Next stepping arithmetic in
+//! `transport`; this module wires those to the shared `AppState` and the
+//! `AppleMusicService` seam.
+
 use iced::{Element, Task, widget::Column};
 use std::{future::Future, sync::Arc};
 use tokio::sync::Mutex;
