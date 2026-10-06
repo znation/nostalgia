@@ -77,7 +77,7 @@ pub fn previous_track_id(songs: &[Song], current: Option<&str>, repeat: bool) ->
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::library::{single_song_album, stepping_songs};
+    use crate::test_support::{single_song_album, stepping_songs};
 
     #[test]
     fn empty_list_is_a_noop_for_both_directions() {

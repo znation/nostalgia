@@ -15,6 +15,8 @@ mod equalizer;
 mod library;
 mod sample_library;
 mod state;
+#[cfg(test)]
+mod test_support;
 mod ui;
 
 use crate::state::AppState;

@@ -155,7 +155,7 @@ fn lookup<T: Clone>(index: &HashMap<String, Vec<T>>, id: &str) -> Vec<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::library::{
+    use crate::test_support::{
         assert_every_field_required, assert_round_trips, assert_unknown_fields_tolerated,
     };
     use serde_json::json;

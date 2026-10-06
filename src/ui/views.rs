@@ -316,8 +316,8 @@ mod tests {
         view_back_button, view_equalizer, view_now_playing, view_songs, view_transport_controls,
     };
     use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB};
-    use crate::library::{sample_album, sample_artist, sample_song};
     use crate::sample_library::sample_library;
+    use crate::test_support::{sample_album, sample_artist, sample_song};
     use std::collections::HashMap;
 
     // Each row maps one library entry to the (title, secondary label, press
