@@ -172,9 +172,9 @@ mod tests {
         assert_eq!(error.to_string(), "track not found");
     }
 
-    /// Asserts that `items` yield exactly the expected ids, in order. Four
-    /// browse-query tests — the multi- and single-group albums and the multi-
-    /// and single-song albums — each used to repeat the same
+    /// Asserts that `items` yield exactly the expected ids, in order. Five
+    /// browse-query tests — the artists, the multi- and single-group albums,
+    /// and the multi- and single-song albums — each used to repeat the same
     /// map-to-ids-then-compare chain over the fetched list; only the id
     /// closure and the expected ids differ, so the chain lives here once and
     /// each test only names its list and expectation.
