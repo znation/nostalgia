@@ -1,5 +1,6 @@
 use reqwest::{Client, Error};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
 
@@ -34,18 +35,6 @@ pub struct AppleMusicService {
 /// handle a real implementation will use.
 pub fn init_service(_state: Arc<Mutex<AppState>>) {
     println!("Apple Music service initialized");
-}
-
-/// The elements of `items` whose key — read from each element by `key` —
-/// equals `id`, in their original order. Used by the browse queries to pick
-/// the albums of an artist and the songs of an album without repeating the
-/// filter-then-clone dance.
-fn matching<T: Clone>(items: &[T], key: impl Fn(&T) -> &str, id: &str) -> Vec<T> {
-    items
-        .iter()
-        .filter(|item| key(item) == id)
-        .cloned()
-        .collect()
 }
 
 impl AppleMusicService {
@@ -107,20 +96,20 @@ impl AppleMusicService {
 
     /// Albums by the given artist; unknown artists yield an empty list.
     pub async fn get_albums_by_artist(&self, artist_id: &str) -> Result<Vec<Album>, Error> {
-        Ok(matching(
-            &sample_library().albums,
-            |album| &album.artist_id,
-            artist_id,
-        ))
+        Ok(sample_library()
+            .albums_by_artist
+            .get(artist_id)
+            .cloned()
+            .unwrap_or_default())
     }
 
     /// Songs on the given album; unknown albums yield an empty list.
     pub async fn get_songs_from_album(&self, album_id: &str) -> Result<Vec<Song>, Error> {
-        Ok(matching(
-            &sample_library().songs,
-            |song| &song.album_id,
-            album_id,
-        ))
+        Ok(sample_library()
+            .songs_by_album
+            .get(album_id)
+            .cloned()
+            .unwrap_or_default())
     }
 }
 
@@ -128,73 +117,95 @@ impl AppleMusicService {
 /// so the browse flow and its tests agree on the data.
 struct SampleLibrary {
     artists: Vec<Artist>,
-    albums: Vec<Album>,
-    songs: Vec<Song>,
+    /// Albums of each artist, keyed by [`Album::artist_id`] — built once here
+    /// so a browse query is an O(matches) lookup instead of rescanning the
+    /// whole album list on every navigation.
+    albums_by_artist: HashMap<String, Vec<Album>>,
+    /// Songs of each album, keyed by [`Song::album_id`], as above.
+    songs_by_album: HashMap<String, Vec<Song>>,
+}
+
+/// Groups `items` by the key each element yields, keeping each group in its
+/// original order — the album-per-artist and song-per-album lookup tables,
+/// built once at library construction so a browse query looks up its matches
+/// rather than rescanning the whole list per query.
+fn index_by<T: Clone>(items: &[T], key: impl Fn(&T) -> &str) -> HashMap<String, Vec<T>> {
+    let mut index: HashMap<String, Vec<T>> = HashMap::new();
+    for item in items {
+        index
+            .entry(key(item).to_string())
+            .or_default()
+            .push(item.clone());
+    }
+    index
 }
 
 impl SampleLibrary {
     /// Builds the sample library: three artists — two with one or two albums
     /// each, one with none — and one to three songs per album.
     fn new() -> Self {
+        let artists = vec![
+            Artist {
+                id: "artist-1".to_string(),
+                name: "The Sample Band".to_string(),
+            },
+            Artist {
+                id: "artist-2".to_string(),
+                name: "Echo Chamber".to_string(),
+            },
+            Artist {
+                id: "artist-3".to_string(),
+                name: "Mono Tones".to_string(),
+            },
+        ];
+        let albums = vec![
+            Album {
+                id: "album-1".to_string(),
+                title: "First Record".to_string(),
+                artist_id: "artist-1".to_string(),
+            },
+            Album {
+                id: "album-2".to_string(),
+                title: "Second Record".to_string(),
+                artist_id: "artist-1".to_string(),
+            },
+            Album {
+                id: "album-3".to_string(),
+                title: "Debut".to_string(),
+                artist_id: "artist-2".to_string(),
+            },
+        ];
+        let songs = vec![
+            Song {
+                id: "song-1".to_string(),
+                title: "Opening".to_string(),
+                album_id: "album-1".to_string(),
+            },
+            Song {
+                id: "song-2".to_string(),
+                title: "Middle".to_string(),
+                album_id: "album-1".to_string(),
+            },
+            Song {
+                id: "song-3".to_string(),
+                title: "Ending".to_string(),
+                album_id: "album-1".to_string(),
+            },
+            Song {
+                id: "song-4".to_string(),
+                title: "B-side".to_string(),
+                album_id: "album-2".to_string(),
+            },
+            Song {
+                id: "song-5".to_string(),
+                title: "Headliner".to_string(),
+                album_id: "album-3".to_string(),
+            },
+        ];
         SampleLibrary {
-            artists: vec![
-                Artist {
-                    id: "artist-1".to_string(),
-                    name: "The Sample Band".to_string(),
-                },
-                Artist {
-                    id: "artist-2".to_string(),
-                    name: "Echo Chamber".to_string(),
-                },
-                Artist {
-                    id: "artist-3".to_string(),
-                    name: "Mono Tones".to_string(),
-                },
-            ],
-            albums: vec![
-                Album {
-                    id: "album-1".to_string(),
-                    title: "First Record".to_string(),
-                    artist_id: "artist-1".to_string(),
-                },
-                Album {
-                    id: "album-2".to_string(),
-                    title: "Second Record".to_string(),
-                    artist_id: "artist-1".to_string(),
-                },
-                Album {
-                    id: "album-3".to_string(),
-                    title: "Debut".to_string(),
-                    artist_id: "artist-2".to_string(),
-                },
-            ],
-            songs: vec![
-                Song {
-                    id: "song-1".to_string(),
-                    title: "Opening".to_string(),
-                    album_id: "album-1".to_string(),
-                },
-                Song {
-                    id: "song-2".to_string(),
-                    title: "Middle".to_string(),
-                    album_id: "album-1".to_string(),
-                },
-                Song {
-                    id: "song-3".to_string(),
-                    title: "Ending".to_string(),
-                    album_id: "album-1".to_string(),
-                },
-                Song {
-                    id: "song-4".to_string(),
-                    title: "B-side".to_string(),
-                    album_id: "album-2".to_string(),
-                },
-                Song {
-                    id: "song-5".to_string(),
-                    title: "Headliner".to_string(),
-                    album_id: "album-3".to_string(),
-                },
-            ],
+            artists,
+            albums_by_artist: index_by(&albums, |album| &album.artist_id),
+            songs_by_album: index_by(&songs, |song| &song.album_id),
         }
     }
 }
@@ -223,8 +234,8 @@ mod tests {
     fn sample_library_is_non_empty() {
         let library = sample_library();
         assert!(!library.artists.is_empty());
-        assert!(!library.albums.is_empty());
-        assert!(!library.songs.is_empty());
+        assert!(!library.albums_by_artist.is_empty());
+        assert!(!library.songs_by_album.is_empty());
     }
 
     #[tokio::test]
