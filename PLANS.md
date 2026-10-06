@@ -5,7 +5,66 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Highlight the currently playing song in the Songs browse view (planned 2026-10-06)
+
+Found by plan 2026-10-06.
+
+**Goal.** Winamp's playlist editor draws a highlighted bar on the track that is
+currently playing, so you can see where in the list the music is and watch it
+move as you step. This player has no such cue: the Songs view renders every row
+identically, so after clicking a song (or pressing Next/Previous) there is no
+way to tell which song in the album is current. Mark the row whose id equals the
+shared `current_track` — a `▶` prefix on its title and a highlighted button
+background — so the album list reads as a playlist. The marker is pure data
+derived state (current id vs. the displayed songs), so it stays in the view
+layer like the rest of `views.rs` and never touches the service seam.
+
+**Approach.** All changes are in the view layer; `AppleMusicService`, `state`,
+`library`, and the transport stepping arithmetic are untouched.
+
+- `src/ui/views.rs`:
+  - Extend the browse-row tuple from `(String, &'static str, Message)` to
+    `(String, &'static str, Message, bool)` — the new bool is whether this row
+    is the currently playing track. `scrollable_list` reads it: when true, it
+    prefixes the title with `"▶ "` and gives the button a highlighted
+    background (a `Button::style` closure returning a
+    `iced::widget::button::Style` with a `Background::Color`); when false, the
+    plain button as today. `artist_row` and `album_row` return `false` — the
+    marker only ever applies inside an album's song list.
+  - `song_row(song: &Song, current_track: Option<&str>)` computes the flag as
+    `Some(&song.id) == current_track`.
+  - `view_songs(songs: &[Song], current_track: Option<&str>)` takes the current
+    track id and passes it to `song_row`. `view_artists`/`view_albums`
+    signatures are unchanged.
+  - Tests: update `song_row_uses_title_and_selects_the_song` (and the
+    `artist_row`/`album_row` tests) for the 4-tuple, and add a
+    `song_row_marks_the_current_track` test pinning the flag for `Some(id)`
+    matching the song, a different `Some`, and `None`. Update the two
+    `browse_views_construct_*` construction tests for the new `view_songs`
+    signature and add a construction case passing a current track, following
+    the existing pattern (iced `Element`s are not introspectable, so the
+    row-tuple flag is the testable contract and construction tests cover
+    rendering without panicking).
+- `src/ui/mod.rs` `view()`: the current-track id must reach `view_songs`. The
+    Songs arm acquires the shared-state lock briefly and passes
+    `state.current_track.as_deref()` — a second short `blocking_lock` rather
+    than a per-frame `Option<String>` clone, consistent with the earlier
+    commit that removed the per-frame `current_track` clone (4d7a585). The
+    label tuple block above stays as is.
+
+**Files touched.** `src/ui/views.rs`, `src/ui/mod.rs`.
+
+**Acceptance criteria.**
+- `cargo build` succeeds.
+- `cargo test` passes, including the new `song_row_marks_the_current_track`
+  row-flag test and the updated construction tests.
+- `cargo fmt --check` and `cargo clippy --all-targets` are clean.
+- `cargo run`: in a Songs view, clicking a song marks it (`▶` + highlighted
+  background); Next/Previous move the marker through the list; browsing to
+  another album shows no marker (its songs do not contain the current track);
+  stepping works with the marker following along. Build + tests are the
+  primary gate; the visual check confirms the marker renders.
+
 
 ## Done
 
