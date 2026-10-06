@@ -8,7 +8,7 @@
 //! tested) independently of how the app is booted.
 
 use iced::{
-    Element, Length,
+    Background, Color, Element, Length,
     widget::{Button, Column, Row, Scrollable, Slider, Space, Text},
 };
 
@@ -26,24 +26,45 @@ fn spacer(width: f32) -> Space {
     Space::new().width(Length::Fixed(width))
 }
 
+/// The highlight colour behind the currently playing row in a Songs list,
+/// echoing Winamp's playlist selection bar (a saturated blue).
+const PLAYING_ROW_HIGHLIGHT: Color = Color::from_rgb(0.25, 0.5, 1.0);
+
 /// Builds a scrollable list where each item is a button showing a title
 /// followed by a secondary label, emitting the given message on press.
-/// Shared by the artists, albums, and songs views.
+/// Shared by the artists, albums, and songs views. The last tuple element
+/// marks the currently playing row: such a row gets a `▶` prefix and a
+/// highlighted background so the list reads as a playlist. Only `song_row`
+/// ever sets the flag to true.
 fn scrollable_list(
-    items: impl IntoIterator<Item = (String, &'static str, Message)>,
+    items: impl IntoIterator<Item = (String, &'static str, Message, bool)>,
 ) -> Element<'static, Message> {
     let mut column = Column::new().padding(20);
 
-    for (title, label, message) in items {
-        column = column.push(
-            Button::new(
-                Row::new()
-                    .push(Text::new(title).size(18))
-                    .push(spacer(10.0))
-                    .push(Text::new(label).size(14)),
-            )
-            .on_press(message),
-        );
+    for (title, label, message, is_current) in items {
+        let title = if is_current {
+            format!("▶ {title}")
+        } else {
+            title
+        };
+        let button = Button::new(
+            Row::new()
+                .push(Text::new(title).size(18))
+                .push(spacer(10.0))
+                .push(Text::new(label).size(14)),
+        )
+        .on_press(message);
+        // The current row keeps the theme's hover/pressed/text styling and
+        // only swaps the background for the highlight colour.
+        column = column.push(if is_current {
+            button.style(|theme, status| {
+                let mut style = iced::widget::button::background(theme, status);
+                style.background = Some(Background::Color(PLAYING_ROW_HIGHLIGHT));
+                style
+            })
+        } else {
+            button
+        });
     }
 
     Scrollable::new(column)
@@ -52,34 +73,43 @@ fn scrollable_list(
         .into()
 }
 
-/// The browse row an artist becomes: its name, the "View Albums" hint, and
-/// the message emitted when it is pressed. Kept out of `view_artists` so the
-/// title/label/selection contract is testable without an iced renderer.
-fn artist_row(artist: &Artist) -> (String, &'static str, Message) {
+/// The browse row an artist becomes: its name, the "View Albums" hint, the
+/// message emitted when it is pressed, and the current-track flag. Kept out
+/// of `view_artists` so the title/label/selection contract is testable
+/// without an iced renderer. Artists are never the currently playing row, so
+/// the flag is always false.
+fn artist_row(artist: &Artist) -> (String, &'static str, Message, bool) {
     (
         artist.name.clone(),
         "View Albums",
         Message::ArtistSelected(artist.id.clone()),
+        false,
     )
 }
 
-/// The browse row an album becomes: its title, the "View Songs" hint, and
-/// the message emitted when it is pressed.
-fn album_row(album: &Album) -> (String, &'static str, Message) {
+/// The browse row an album becomes: its title, the "View Songs" hint, the
+/// message emitted when it is pressed, and the current-track flag. Albums
+/// are never the currently playing row, so the flag is always false.
+fn album_row(album: &Album) -> (String, &'static str, Message, bool) {
     (
         album.title.clone(),
         "View Songs",
         Message::AlbumSelected(album.id.clone()),
+        false,
     )
 }
 
-/// The browse row a song becomes: its title, the "Play" hint, and the
-/// message emitted when it is pressed.
-fn song_row(song: &Song) -> (String, &'static str, Message) {
+/// The browse row a song becomes: its title, the "Play" hint, the message
+/// emitted when it is pressed, and whether it is the currently playing track
+/// (true only when `current_track` names this song). The flag feeds
+/// `scrollable_list`'s `▶` + highlight marker, so the album list reads as a
+/// playlist.
+fn song_row(song: &Song, current_track: Option<&str>) -> (String, &'static str, Message, bool) {
     (
         song.title.clone(),
         "Play",
         Message::TrackSelected(song.id.clone()),
+        Some(song.id.as_str()) == current_track,
     )
 }
 
@@ -91,8 +121,8 @@ pub fn view_albums(albums: &[Album]) -> Element<'_, Message> {
     scrollable_list(albums.iter().map(album_row))
 }
 
-pub fn view_songs(songs: &[Song]) -> Element<'_, Message> {
-    scrollable_list(songs.iter().map(song_row))
+pub fn view_songs<'a>(songs: &'a [Song], current_track: Option<&str>) -> Element<'a, Message> {
+    scrollable_list(songs.iter().map(|song| song_row(song, current_track)))
 }
 
 /// Whether the browse view has a level above it to return to. The Albums and
@@ -177,32 +207,52 @@ mod tests {
     use crate::sample_library::sample_library;
 
     // Each row maps one library entry to the (title, secondary label, press
-    // message) tuple that `scrollable_list` renders as a button. Wrong label
-    // text or a swapped selection message would silently break the browse UI,
-    // so the mapping is the contract these tests pin down.
+    // message, current-track flag) tuple that `scrollable_list` renders as a
+    // button. Wrong label text or a swapped selection message would silently
+    // break the browse UI, so the mapping is the contract these tests pin
+    // down — the flag is pinned too, since it drives the `▶`/highlight
+    // marker.
 
     #[test]
     fn artist_row_uses_name_and_selects_the_artist() {
-        let (title, label, message) = artist_row(&sample_artist());
+        let (title, label, message, is_current) = artist_row(&sample_artist());
         assert_eq!(title, "The Sample Band");
         assert_eq!(label, "View Albums");
         assert!(matches!(message, Message::ArtistSelected(id) if id == "artist-1"));
+        assert!(!is_current);
     }
 
     #[test]
     fn album_row_uses_title_and_selects_the_album() {
-        let (title, label, message) = album_row(&sample_album());
+        let (title, label, message, is_current) = album_row(&sample_album());
         assert_eq!(title, "First Record");
         assert_eq!(label, "View Songs");
         assert!(matches!(message, Message::AlbumSelected(id) if id == "album-1"));
+        assert!(!is_current);
     }
 
     #[test]
     fn song_row_uses_title_and_selects_the_song() {
-        let (title, label, message) = song_row(&sample_song());
+        let (title, label, message, is_current) = song_row(&sample_song(), None);
         assert_eq!(title, "Opening");
         assert_eq!(label, "Play");
         assert!(matches!(message, Message::TrackSelected(id) if id == "song-1"));
+        assert!(!is_current);
+    }
+
+    #[test]
+    fn song_row_marks_the_current_track() {
+        // The flag is true only when `current_track` names exactly this
+        // song; a different id — or no track at all — leaves the row
+        // unmarked, so the `▶`/highlight marker follows the playback state.
+        let (_, _, _, is_current) = song_row(&sample_song(), Some("song-1"));
+        assert!(is_current);
+
+        let (_, _, _, is_current) = song_row(&sample_song(), Some("other-song"));
+        assert!(!is_current);
+
+        let (_, _, _, is_current) = song_row(&sample_song(), None);
+        assert!(!is_current);
     }
 
     // The Back button is a browse-navigation control: it must exist only
@@ -267,21 +317,24 @@ mod tests {
     fn browse_views_construct_over_the_loaded_library() {
         // The populated branch of `scrollable_list`, built from the real
         // sample library so each row maps actual titles and selection
-        // messages into buttons.
+        // messages into buttons. Rendered both with no current track (no
+        // marker) and with one set (the `▶`/highlight marker builds).
         let library = sample_library();
         let _artists = view_artists(&library.artists);
         let _albums = view_albums(&library.albums_by_artist["artist-1"]);
-        let _songs = view_songs(&library.songs_by_album["album-1"]);
+        let _songs = view_songs(&library.songs_by_album["album-1"], None);
+        let _songs_marked = view_songs(&library.songs_by_album["album-1"], Some("song-1"));
     }
 
     #[test]
     fn browse_views_construct_over_an_empty_list() {
         // Every browse view renders its pre-load state — an empty buffer —
         // before the first fetch lands, so `scrollable_list` must build a
-        // scrollable over zero rows.
+        // scrollable over zero rows, with or without a current track set.
         let _artists = view_artists(&[]);
         let _albums = view_albums(&[]);
-        let _songs = view_songs(&[]);
+        let _songs = view_songs(&[], None);
+        let _songs_marked = view_songs(&[], Some("song-1"));
     }
 
     #[test]

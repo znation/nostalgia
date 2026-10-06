@@ -5,7 +5,12 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Highlight the currently playing song in the Songs browse view (planned 2026-10-06)
+_None yet._
+
+
+## Done
+
+### Highlight the currently playing song in the Songs browse view (done 2026-10-06)
 
 Found by plan 2026-10-06.
 
@@ -65,8 +70,10 @@ layer like the rest of `views.rs` and never touches the service seam.
   stepping works with the marker following along. Build + tests are the
   primary gate; the visual check confirms the marker renders.
 
-
-## Done
+Note: the acceptance criteria require `cargo fmt --check` clean, and the only
+line failing it was a pre-existing over-long `assert_ids` call in
+`src/apple_music.rs` (added by c9cb1cb) — this change reformats that one call
+so the gate passes; no other line in the integration seam is touched.
 
 ### Add a Stop button to the transport controls (done 2026-10-06)
 

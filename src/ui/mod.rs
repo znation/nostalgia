@@ -337,7 +337,15 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     let main_content = match &player.current_view {
         CurrentView::Artists => views::view_artists(&player.artists),
         CurrentView::Albums => views::view_albums(&player.albums),
-        CurrentView::Songs => views::view_songs(&player.songs),
+        // A second short lock (like the label block above) hands the current
+        // track's id to the Songs view so it can mark the playing row. The
+        // borrowed id is compared inside `song_row` and the guard drops at
+        // the end of this arm, so no per-frame `Option<String>` clone is
+        // needed.
+        CurrentView::Songs => {
+            let state = player.state.blocking_lock();
+            views::view_songs(&player.songs, state.current_track.as_deref())
+        }
     };
 
     let mut column = Column::new()
