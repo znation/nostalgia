@@ -723,10 +723,6 @@ fn played_or_reported_reports_a_failed_play_and_still_completes() {
     assert!(matches!(ok_message, Message::TrackPlayed));
 }
 
-// `fetch_into` schedules the fetch as an iced `Task`; the arm itself only
-// builds it, so the real behavior lives in the returned task. Drive that
-// task to completion and assert the mapped `*Loaded` message, as the
-// load-path arms would produce it.
 #[test]
 fn fetch_failure_report_names_the_fetch_and_includes_the_error() {
     // The browse error report must identify the failing query (the fetch
@@ -752,6 +748,10 @@ fn play_failure_report_names_the_track_and_includes_the_error() {
     assert_eq!(report, "failed to play track \"track-1\": boom");
 }
 
+// `fetch_into` schedules the fetch as an iced `Task`; the arm itself only
+// builds it, so the real behavior lives in the returned task. Drive that
+// task to completion and assert the mapped `*Loaded` message, as the
+// load-path arms would produce it.
 #[tokio::test]
 async fn fetch_into_schedules_fetch_and_maps_result_to_loaded_message() {
     let (player, _state) = test_player();
