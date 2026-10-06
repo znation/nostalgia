@@ -124,6 +124,22 @@ pub fn sample_library() -> &'static SampleLibrary {
 mod tests {
     use super::*;
 
+    /// Asserts that `items` yield exactly the expected `(id, label)` pairs, in
+    /// order. The content-contract tests each pin one browse list's (id, label)
+    /// pairs — the top-level artists and every album- and song-group in the
+    /// indexed library — and all used to repeat the same map-to-pairs-then-
+    /// compare chain, so it lives here once and each test only names its items
+    /// and expected pairs.
+    fn assert_id_label_pairs<T>(
+        items: &[T],
+        id: impl Fn(&T) -> &str,
+        label: impl Fn(&T) -> &str,
+        expected: &[(&str, &str)],
+    ) {
+        let pairs: Vec<(&str, &str)> = items.iter().map(|item| (id(item), label(item))).collect();
+        assert_eq!(pairs, expected);
+    }
+
     #[test]
     fn sample_library_is_non_empty() {
         let library = sample_library();
@@ -139,18 +155,15 @@ mod tests {
     // names on screen. Pin the ids and names together, in order.
     #[test]
     fn sample_library_exposes_the_expected_artists_in_order() {
-        let artists: Vec<(&str, &str)> = sample_library()
-            .artists
-            .iter()
-            .map(|artist| (artist.id.as_str(), artist.name.as_str()))
-            .collect();
-        assert_eq!(
-            artists,
-            vec![
+        assert_id_label_pairs(
+            &sample_library().artists,
+            |artist| artist.id.as_str(),
+            |artist| artist.name.as_str(),
+            &[
                 ("artist-1", "The Sample Band"),
                 ("artist-2", "Echo Chamber"),
                 ("artist-3", "Mono Tones"),
-            ]
+            ],
         );
     }
 
@@ -166,20 +179,19 @@ mod tests {
         assert_eq!(library.albums_by_artist.len(), 2);
         assert!(!library.albums_by_artist.contains_key("artist-3"));
 
-        let artist_1_albums: Vec<(&str, &str)> = library.albums_by_artist["artist-1"]
-            .iter()
-            .map(|album| (album.id.as_str(), album.title.as_str()))
-            .collect();
-        assert_eq!(
-            artist_1_albums,
-            vec![("album-1", "First Record"), ("album-2", "Second Record"),]
+        assert_id_label_pairs(
+            &library.albums_by_artist["artist-1"],
+            |album| album.id.as_str(),
+            |album| album.title.as_str(),
+            &[("album-1", "First Record"), ("album-2", "Second Record")],
         );
 
-        let artist_2_albums: Vec<(&str, &str)> = library.albums_by_artist["artist-2"]
-            .iter()
-            .map(|album| (album.id.as_str(), album.title.as_str()))
-            .collect();
-        assert_eq!(artist_2_albums, vec![("album-3", "Debut")]);
+        assert_id_label_pairs(
+            &library.albums_by_artist["artist-2"],
+            |album| album.id.as_str(),
+            |album| album.title.as_str(),
+            &[("album-3", "Debut")],
+        );
     }
 
     // As with albums: every album with songs gets exactly one group keyed by
@@ -191,30 +203,30 @@ mod tests {
 
         assert_eq!(library.songs_by_album.len(), 3);
 
-        let album_1_songs: Vec<(&str, &str)> = library.songs_by_album["album-1"]
-            .iter()
-            .map(|song| (song.id.as_str(), song.title.as_str()))
-            .collect();
-        assert_eq!(
-            album_1_songs,
-            vec![
+        assert_id_label_pairs(
+            &library.songs_by_album["album-1"],
+            |song| song.id.as_str(),
+            |song| song.title.as_str(),
+            &[
                 ("song-1", "Opening"),
                 ("song-2", "Middle"),
                 ("song-3", "Ending"),
-            ]
+            ],
         );
 
-        let album_2_songs: Vec<(&str, &str)> = library.songs_by_album["album-2"]
-            .iter()
-            .map(|song| (song.id.as_str(), song.title.as_str()))
-            .collect();
-        assert_eq!(album_2_songs, vec![("song-4", "B-side")]);
+        assert_id_label_pairs(
+            &library.songs_by_album["album-2"],
+            |song| song.id.as_str(),
+            |song| song.title.as_str(),
+            &[("song-4", "B-side")],
+        );
 
-        let album_3_songs: Vec<(&str, &str)> = library.songs_by_album["album-3"]
-            .iter()
-            .map(|song| (song.id.as_str(), song.title.as_str()))
-            .collect();
-        assert_eq!(album_3_songs, vec![("song-5", "Headliner")]);
+        assert_id_label_pairs(
+            &library.songs_by_album["album-3"],
+            |song| song.id.as_str(),
+            |song| song.title.as_str(),
+            &[("song-5", "Headliner")],
+        );
     }
 
     // `sample_library` is cached in a `OnceLock` so every browse query reads
