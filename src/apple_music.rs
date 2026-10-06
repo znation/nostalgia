@@ -137,6 +137,7 @@ fn lookup<T: Clone>(index: &HashMap<String, Vec<T>>, id: &str) -> Vec<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::json;
 
     fn test_service() -> AppleMusicService {
         AppleMusicService::new(Arc::new(Mutex::new(AppState::default())))
@@ -270,5 +271,45 @@ mod tests {
         let state = state.lock().await;
         assert!(!state.is_playing);
         assert_eq!(state.current_track.as_deref(), Some("song-1"));
+    }
+
+    // `AppleMusicToken` is the one serde-derived type the real Apple Music
+    // API will exchange that no test covers: the model types in `library.rs`
+    // all have their wire contract pinned (round-trip plus field names and
+    // missing-field rejection) so a live service can replace the stub without
+    // touching the model, but the auth token — the first payload a real
+    // implementation would deserialize — has none. A renamed or re-typed
+    // field here would only fail once real auth lands, so pin the declared
+    // contract now, the same way the model types are pinned.
+
+    // The token's JSON shape is the contract: field names serialize as-is and
+    // the value survives an out-and-back trip through `serde_json` unchanged.
+    #[test]
+    fn apple_music_token_round_trips_through_json() {
+        let token = AppleMusicToken {
+            access_token: "abc123".to_string(),
+            expires_in: 3600,
+            refresh_token: "refresh-me".to_string(),
+        };
+
+        let value = serde_json::to_value(&token).unwrap();
+        assert_eq!(
+            value,
+            json!({ "access_token": "abc123", "expires_in": 3600, "refresh_token": "refresh-me" })
+        );
+
+        let back: AppleMusicToken = serde_json::from_value(value).unwrap();
+        assert_eq!(back.access_token, "abc123");
+        assert_eq!(back.expires_in, 3600);
+        assert_eq!(back.refresh_token, "refresh-me");
+    }
+
+    // As with the model types: a payload missing a required field must error,
+    // not silently yield a half-populated token.
+    #[test]
+    fn apple_music_token_deserialization_rejects_missing_required_fields() {
+        let result: Result<AppleMusicToken, _> =
+            serde_json::from_value(json!({ "access_token": "abc123", "expires_in": 3600 }));
+        assert!(result.is_err());
     }
 }
