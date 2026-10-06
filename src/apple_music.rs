@@ -42,9 +42,8 @@ impl std::error::Error for AppleMusicError {}
 // queries to reject a blank id, and stays public for a real Apple Music
 // backend that will report failures from another module, so it is live and
 // needs no `dead_code` allowance. The transport stubs and token field below
-// still carry theirs; a
-// *newly* dead item elsewhere still triggers the warning the clean loop
-// relies on to find removable code.
+// still carry theirs; a *newly* dead item elsewhere still triggers the
+// warning the clean loop relies on to find removable code.
 impl AppleMusicError {
     /// Builds a failure whose [`Display`](std::fmt::Display) output is
     /// `message` — the human-readable cause. The wrapped message is private,
