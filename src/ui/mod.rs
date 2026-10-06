@@ -113,6 +113,25 @@ where
     })
 }
 
+/// The task the Next/Previous buttons schedule: step the current track
+/// through the player's loaded songs in the given direction — via the
+/// `transport::next_track_id`/`previous_track_id` stepping function passed
+/// in — and schedule the landed song as `TrackSelected`, or no task when
+/// there is nothing to step through. Both transport update arms used to
+/// repeat this lock-then-dispatch block; the direction comes in as a function
+/// so the stepping arithmetic stays in `transport` and the wiring lives here
+/// once.
+fn step_track(
+    player: &WinampPlayer,
+    step: fn(&[Song], Option<&str>) -> Option<String>,
+) -> Task<Message> {
+    let current = player.state.blocking_lock().current_track.clone();
+    match step(&player.songs, current.as_deref()) {
+        Some(track_id) => Task::done(Message::TrackSelected(track_id)),
+        None => Task::none(),
+    }
+}
+
 fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
     match message {
         Message::PlayPause => {
@@ -125,20 +144,8 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             state.volume = state::clamp_volume(volume);
             Task::none()
         }
-        Message::NextTrack => {
-            let current = player.state.blocking_lock().current_track.clone();
-            match transport::next_track_id(&player.songs, current.as_deref()) {
-                Some(track_id) => Task::done(Message::TrackSelected(track_id)),
-                None => Task::none(),
-            }
-        }
-        Message::PreviousTrack => {
-            let current = player.state.blocking_lock().current_track.clone();
-            match transport::previous_track_id(&player.songs, current.as_deref()) {
-                Some(track_id) => Task::done(Message::TrackSelected(track_id)),
-                None => Task::none(),
-            }
-        }
+        Message::NextTrack => step_track(player, transport::next_track_id),
+        Message::PreviousTrack => step_track(player, transport::previous_track_id),
         Message::TrackSelected(track_id) => {
             let service = player.apple_music_service.clone();
             Task::perform(
