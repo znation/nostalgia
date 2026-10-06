@@ -6,7 +6,7 @@
 //! `AppleMusicService` seam.
 
 use iced::{Element, Task, widget::Column};
-use std::{future::Future, sync::Arc};
+use std::{collections::HashSet, future::Future, sync::Arc};
 use tokio::sync::Mutex;
 
 mod transport;
@@ -58,6 +58,12 @@ struct WinampPlayer {
     /// Playing bar can still name the playing track after the user browses to
     /// a different album (whose list replaces `songs`).
     known_songs: Vec<Song>,
+    /// The ids of [`Self::known_songs`] as a membership set, so `store_songs`
+    /// can dedup a freshly loaded album in O(1) per song instead of rescanning
+    /// the whole accumulated list. Insertion order lives in `known_songs`;
+    /// this is only a look-up index, kept in step by the same code that pushes
+    /// to the list.
+    known_ids: HashSet<String>,
 }
 
 /// Which browse screen is showing. Payload-free: the albums and songs the
@@ -85,6 +91,7 @@ impl WinampPlayer {
             albums: Vec::new(),
             songs: Vec::new(),
             known_songs: Vec::new(),
+            known_ids: HashSet::new(),
         }
     }
 
@@ -151,11 +158,14 @@ fn store_loaded<T>(buffer: &mut Vec<T>, items: Vec<T>) -> Task<Message> {
 /// Stores a freshly fetched song list into the player's current-album buffer
 /// and folds it into the accumulated [`WinampPlayer::known_songs`], so a later
 /// browse to a different album (which replaces `songs`) can't lose the title
-/// of the playing track. Only `SongsLoaded` needs the extra fold — artists
-/// and albums never appear in the Now Playing bar.
+/// of the playing track. The dedup is O(1) per song via the parallel
+/// [`WinampPlayer::known_ids`] index rather than a linear scan of everything
+/// the player has ever loaded — a list that grows with every album browsed.
+/// Only `SongsLoaded` needs the extra fold — artists and albums never appear
+/// in the Now Playing bar.
 fn store_songs(player: &mut WinampPlayer, songs: Vec<Song>) -> Task<Message> {
     for song in &songs {
-        if !player.known_songs.iter().any(|known| known.id == song.id) {
+        if player.known_ids.insert(song.id.clone()) {
             player.known_songs.push(song.clone());
         }
     }
@@ -819,7 +829,7 @@ mod tests {
     // `songs_loaded_populates_list` fills an empty buffer and the browse-away
     // test loads two disjoint albums, so the dedup branch (a song arriving
     // that `known_songs` already contains) is reachable only by loading the
-    // same album twice — which this does. A regression that dropped the `any`
+    // same album twice — which this does. A regression that dropped the dedup
     // guard would pass every other test while duplicating songs here.
     #[test]
     fn songs_loaded_does_not_duplicate_already_known_songs() {
