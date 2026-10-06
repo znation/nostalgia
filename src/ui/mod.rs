@@ -109,6 +109,21 @@ fn loaded_or_empty<T, E>(
     }
 }
 
+/// Maps a playback `Result` to the `TrackPlayed` completion message, handing
+/// any error to `report_error` first so a failed play is never dropped
+/// silently — a backend that rejects a track would otherwise look like the
+/// button did nothing. The playback twin of [`loaded_or_empty`], which
+/// cannot serve here: it maps `Result<Vec<T>, _>` onto a `*Loaded` message,
+/// while a play has no payload to load, only a completion. `report_error`
+/// is injected rather than hardcoded so the reporting contract is testable
+/// without capturing stderr.
+fn played_or_reported<E>(result: Result<(), E>, report_error: impl FnOnce(&E)) -> Message {
+    if let Err(err) = result {
+        report_error(&err);
+    }
+    Message::TrackPlayed
+}
+
 /// Stores a freshly fetched list into the player's matching buffer, with no
 /// further work. The three `*Loaded` update arms used to repeat
 /// `buffer = items; Task::none()`; the store-and-noop shape lives here once.
@@ -187,11 +202,14 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::PreviousTrack => step_track(player, transport::previous_track_id),
         Message::TrackSelected(track_id) => {
             let service = player.apple_music_service.clone();
+            let id_for_report = track_id.clone();
             Task::perform(
-                async move {
-                    let _ = service.play_track(&track_id).await;
+                async move { service.play_track(&track_id).await },
+                move |result| {
+                    played_or_reported(result, |err| {
+                        eprintln!("failed to play track {id_for_report:?}: {err:?}")
+                    })
                 },
-                |_| Message::TrackPlayed,
             )
         }
         Message::ArtistSelected(artist_id) => {
@@ -769,6 +787,30 @@ mod tests {
 
         assert_eq!(reported.as_deref(), Some("boom"));
         assert!(matches!(message, Message::AlbumsLoaded(v) if v.is_empty()));
+    }
+
+    #[test]
+    fn played_or_reported_reports_a_failed_play_and_still_completes() {
+        // A failed play must not vanish silently: the playback path reports
+        // the error (to stderr in production; here to a recording closure)
+        // and still emits the `TrackPlayed` completion so the UI's handoff
+        // stays intact. `played_or_reported` takes the reporter as a
+        // parameter so this contract is testable without capturing stderr.
+        let mut reported: Option<String> = None;
+        let message = played_or_reported::<String>(Err("boom".to_string()), |err| {
+            reported = Some(err.clone());
+        });
+
+        assert_eq!(reported.as_deref(), Some("boom"));
+        assert!(matches!(message, Message::TrackPlayed));
+
+        // The Ok path completes with the same message and reports nothing.
+        let mut reported_ok: Option<String> = None;
+        let ok_message = played_or_reported::<String>(Ok(()), |err| {
+            reported_ok = Some(err.clone());
+        });
+        assert!(reported_ok.is_none());
+        assert!(matches!(ok_message, Message::TrackPlayed));
     }
 
     // `fetch_into` schedules the fetch as an iced `Task`; the arm itself only
