@@ -14,6 +14,8 @@ use crate::library::{Album, Artist, Song};
 /// The in-memory stand-in for a real Apple Music library, kept in one place
 /// so the browse flow and its tests agree on the data.
 pub struct SampleLibrary {
+    /// Every artist in the library, in the order the Artists view renders
+    /// them.
     pub artists: Vec<Artist>,
     /// Albums of each artist, keyed by [`Album::artist_id`] — built once here
     /// so a browse query is an O(matches) lookup instead of rescanning the
