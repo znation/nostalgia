@@ -139,8 +139,9 @@ where
 /// Asserts that `value` survives an out-and-back trip through `serde_json`
 /// unchanged: serialize it, deserialize the result, and compare. The
 /// round-trip half of [`assert_serializes_as`], kept separate so the chain has
-/// one named implementation.
-pub(crate) fn assert_round_trips<T>(value: T)
+/// one named implementation. Private to this module: [`assert_serializes_as`]
+/// is the only entry point, so no caller can pin the round trip alone.
+fn assert_round_trips<T>(value: T)
 where
     T: PartialEq + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned,
 {
