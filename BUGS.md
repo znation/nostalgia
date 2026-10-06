@@ -5,7 +5,43 @@ reproduce, suspected cause. Move fixed bugs to Fixed.
 
 ## Open
 
-_None yet._
+### Review gate demanded a BUGS.md record fix that the landing gate refuses as "md-only", so clean re-authored it for 5 ticks / 0.3 h (found by telemetry 2026-10-06)
+
+Symptom: the Fixed "Now Playing bar falls back to the raw track id after
+browsing to a different album" record was left describing the removed
+`known_songs` buffer after perf moved the Now Playing lookup to a new
+`known_titles` map. The review gate then rejected a perf code change because
+that record was stale, but each attempt to correct the record on its own was
+blocked at landing as an "md-only BUGS.md edit". The digest prices the result:
+"0.3 h · $0.03 — 5 ticks: review-rejected authoring on clean — md-only BUGS.md
+edit moves 'Now Playing bar falls back …'", with the warning cluster "landing
+blocked: md-only BUGS.md edit moves …" logged 2× for clean. The clean role only
+landed the correction after pairing it with an unrelated `src/ui/mod.rs`
+doc-comment change, and the same perf code change later landed with the record
+still stale.
+
+How to reproduce (the two unmerged commits below are dangling; reach them with
+`git fsck --lost-found`):
+- `git show 5054f44` (perf #13, merged) added the `known_titles` map and moved
+the Now Playing lookup to it, leaving BUGS.md naming `known_songs`.
+- `git show b9cbdd0` (perf #16, unmerged) rewrote the record md-only; its WHY
+records "Review rejected the perf change because the Fixed entry still named
+known_songs as the live lookup mechanism". The landing gate blocked it as an
+md-only edit.
+- `git show bc455fc` (clean #36, unmerged) made the same md-only correction and
+was blocked the same way.
+- `git show dae1783` (perf #17, merged) then deleted `known_songs` without
+touching BUGS.md — the stated review reason did not gate the same code change
+on the next attempt.
+- `git show a47c3a5` (clean #37, merged) landed the record correction only by
+pairing it with a `src/ui/mod.rs` doc-comment edit.
+
+Suspected cause: the review gate treats a stale BUGS.md ledger entry as a defect
+in the change under review, while the landing gate rejects a BUGS.md-only diff
+from an authoring role — two verdicts with no common solution except attaching
+an unrelated code edit. (Telemetry's BUGS.md-only edits do land, e.g. 3738f29,
+so the "md-only" block is role-scoped.) The role re-authors the same change
+until the "3 consecutive tick failures" breaker trips.
 
 ## Fixed
 
