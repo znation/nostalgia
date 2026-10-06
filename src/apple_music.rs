@@ -212,7 +212,7 @@ mod tests {
 
     /// A fresh service plus a handle to the shared state it mutates, so a
     /// playback test can drive the service and then inspect the resulting
-    /// `AppState`. The five playback tests below all start with this same
+    /// `AppState`. The six playback tests below all start with this same
     /// service-and-state pair, so it lives here once.
     fn test_service_with_state() -> (AppleMusicService, Arc<Mutex<AppState>>) {
         let service = test_service();
@@ -221,7 +221,7 @@ mod tests {
     }
 
     /// Locks the shared playback state and asserts it holds `expected_track`
-    /// with `expected_playing`. The five playback tests below all end on that
+    /// with `expected_playing`. The six playback tests below all end on that
     /// same pair — the recorded track id and the playing flag — so the
     /// lock-and-compare sequence lives here once and each test only names the
     /// state it drove to.
@@ -446,6 +446,23 @@ mod tests {
 
         assert_eq!(error.to_string(), "track id must not be empty");
         assert_playback_state(&state, None, false).await;
+    }
+
+    // The rejection test above starts from the default (no track, not
+    // playing), so a regression that cleared the shared state *while*
+    // rejecting the empty id would still leave it at `None`/`false` and pass
+    // unnoticed. The Songs view can be clicked mid-playback, so pin the
+    // rejection against a live track: the already-playing song must survive
+    // untouched rather than being cleared to "nothing is playing".
+    #[tokio::test]
+    async fn play_track_rejects_an_empty_track_id_while_a_song_is_playing() {
+        let (service, state) = test_service_with_state();
+
+        service.play_track("song-1").await.unwrap();
+        let error = service.play_track("").await.unwrap_err();
+
+        assert_eq!(error.to_string(), "track id must not be empty");
+        assert_playback_state(&state, Some("song-1"), true).await;
     }
 
     #[tokio::test]
