@@ -153,10 +153,21 @@ mod tests {
         assert_eq!(ids, expected);
     }
 
+    // "All favorite artists" is the service's content contract, not just a
+    // non-empty list: every artist, in library order. The albums and songs
+    // queries each pin their exact group in order, but the artists query only
+    // asserted non-empty — so a regression that dropped an artist (e.g. a
+    // `.take(1)`) or reversed the list would pass every existing test while
+    // the browse view silently lost or reordered an artist. `assert_ids` is
+    // the same helper the other browse queries use.
     #[tokio::test]
-    async fn get_favorite_artists_returns_all_artists() {
+    async fn get_favorite_artists_returns_all_artists_in_library_order() {
         let artists = test_service().get_favorite_artists().await.unwrap();
-        assert!(!artists.is_empty());
+        assert_ids(
+            &artists,
+            |artist| artist.id.as_str(),
+            &["artist-1", "artist-2", "artist-3"],
+        );
     }
 
     #[tokio::test]
