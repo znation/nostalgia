@@ -324,6 +324,45 @@ mod tests {
         assert!(matches!(player.current_view, CurrentView::Songs));
     }
 
+    // Startup wiring: `boot` hands iced a fresh player plus the task that
+    // loads the artist list, and `update`'s `LoadArtists` arm runs that fetch
+    // into the player's `artists` buffer. A regression that stopped boot from
+    // emitting the task — or pointed the arm at the wrong fetch — would open
+    // the app with an empty browse list, so the wiring is pinned end to end.
+
+    #[tokio::test]
+    async fn boot_schedules_loading_the_artist_list() {
+        let state = Arc::new(Mutex::new(AppState::default()));
+
+        let (player, task) = boot(state);
+        assert!(matches!(player.current_view, CurrentView::Artists));
+
+        drive_task(task, "boot", |message| {
+            assert!(matches!(message, Message::LoadArtists));
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn load_artists_fetches_favorite_artists_into_the_player() {
+        let (mut player, _state) = test_player();
+
+        let task = update(&mut player, Message::LoadArtists);
+        let mut loaded: Option<Vec<Artist>> = None;
+        drive_task(task, "load artists", |message| match message {
+            Message::ArtistsLoaded(artists) => loaded = Some(artists),
+            other => panic!("unexpected load-artists task output: {other:?}"),
+        })
+        .await;
+
+        // Feed the fetch result back through the update loop, as iced would,
+        // and confirm the artists reach the browse buffer in library order.
+        let artists = loaded.expect("LoadArtists must fetch the artist list");
+        let _ = update(&mut player, Message::ArtistsLoaded(artists));
+        let ids: Vec<&str> = player.artists.iter().map(|a| a.id.as_str()).collect();
+        assert_eq!(ids, vec!["artist-1", "artist-2", "artist-3"]);
+    }
+
     // `Message::TrackSelected` wraps playback in a `Task`; the arm itself only
     // schedules it, so the real behavior lives in the returned task. Drive that
     // task to completion (as the iced runtime would) and assert the shared
