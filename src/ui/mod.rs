@@ -46,14 +46,12 @@ struct WinampPlayer {
     artists: Vec<Artist>,
     albums: Vec<Album>,
     songs: Vec<Song>,
-    selected_artist: Option<String>,
-    selected_album: Option<String>,
 }
 
 enum CurrentView {
     Artists,
-    Albums(String),
-    Songs(String, String),
+    Albums,
+    Songs,
 }
 
 fn boot(state: Arc<Mutex<AppState>>) -> (WinampPlayer, Task<Message>) {
@@ -66,8 +64,6 @@ fn boot(state: Arc<Mutex<AppState>>) -> (WinampPlayer, Task<Message>) {
             artists: Vec::new(),
             albums: Vec::new(),
             songs: Vec::new(),
-            selected_artist: None,
-            selected_album: None,
         },
         Task::done(Message::LoadArtists),
     )
@@ -91,8 +87,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             )
         }
         Message::ArtistSelected(artist_id) => {
-            player.selected_artist = Some(artist_id.clone());
-            player.current_view = CurrentView::Albums(artist_id.clone());
+            player.current_view = CurrentView::Albums;
             let service = player.apple_music_service.clone();
             Task::perform(
                 async move { service.get_albums_by_artist(&artist_id).await },
@@ -103,9 +98,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             )
         }
         Message::AlbumSelected(album_id) => {
-            player.selected_album = Some(album_id.clone());
-            let artist_id = player.selected_artist.clone().unwrap_or_default();
-            player.current_view = CurrentView::Songs(artist_id, album_id.clone());
+            player.current_view = CurrentView::Songs;
             let service = player.apple_music_service.clone();
             Task::perform(
                 async move { service.get_songs_from_album(&album_id).await },
@@ -152,8 +145,8 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
 
     let main_content = match &player.current_view {
         CurrentView::Artists => views::view_artists(&player.artists),
-        CurrentView::Albums(_) => views::view_albums(&player.albums),
-        CurrentView::Songs(_, _) => views::view_songs(&player.songs),
+        CurrentView::Albums => views::view_albums(&player.albums),
+        CurrentView::Songs => views::view_songs(&player.songs),
     };
 
     Column::new()
@@ -189,8 +182,6 @@ mod tests {
             artists: Vec::new(),
             albums: Vec::new(),
             songs: Vec::new(),
-            selected_artist: None,
-            selected_album: None,
         };
         (player, state)
     }
@@ -209,31 +200,21 @@ mod tests {
     }
 
     #[test]
-    fn artist_selected_sets_view_and_selection() {
+    fn artist_selected_flips_to_albums_view() {
         let (mut player, _state) = test_player();
 
         let _ = update(&mut player, Message::ArtistSelected("artist-1".to_string()));
 
-        assert_eq!(player.selected_artist.as_deref(), Some("artist-1"));
-        assert!(matches!(
-            player.current_view,
-            CurrentView::Albums(ref artist_id) if artist_id == "artist-1"
-        ));
+        assert!(matches!(player.current_view, CurrentView::Albums));
     }
 
     #[test]
-    fn album_selected_sets_view_and_selection() {
+    fn album_selected_flips_to_songs_view() {
         let (mut player, _state) = test_player();
-        player.selected_artist = Some("artist-2".to_string());
 
         let _ = update(&mut player, Message::AlbumSelected("album-3".to_string()));
 
-        assert_eq!(player.selected_album.as_deref(), Some("album-3"));
-        assert!(matches!(
-            player.current_view,
-            CurrentView::Songs(ref artist_id, ref album_id)
-                if artist_id == "artist-2" && album_id == "album-3"
-        ));
+        assert!(matches!(player.current_view, CurrentView::Songs));
     }
 
     #[test]
