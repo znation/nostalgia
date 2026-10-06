@@ -318,6 +318,7 @@ mod tests {
     use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB};
     use crate::sample_library::sample_library;
     use crate::test_support::{sample_album, sample_artist, sample_song};
+    use std::borrow::Cow;
     use std::collections::HashMap;
 
     // Each row maps one library entry to the (title, secondary label, press
@@ -421,6 +422,31 @@ mod tests {
             now_playing_label(&known_titles(&[]), Some("song-1")),
             "song-1"
         );
+    }
+
+    // The bar is rebuilt on every frame, and `now_playing_label` documents
+    // that the common cases borrow — the title straight out of the id→title
+    // index, or the static "Nothing" literal — so only the rare unknown-id
+    // fallback allocates. The value-equality tests above pass even if the
+    // function clones the title into a `Cow::Owned`, so pin the variants
+    // (and, for the known title, that the borrow points into the caller's
+    // map) here; otherwise a reintroduced clone would silently allocate per
+    // frame.
+    #[test]
+    fn now_playing_label_borrows_the_title_and_nothing_literal() {
+        let titles = known_titles(&[("song-1", "Opening")]);
+
+        let label = now_playing_label(&titles, Some("song-1"));
+        assert!(matches!(&label, Cow::Borrowed(_)));
+        assert_eq!(label.as_ptr(), titles["song-1"].as_ptr());
+
+        let label = now_playing_label(&titles, None);
+        assert!(matches!(&label, Cow::Borrowed(_)));
+
+        // The one allocating case stays owned: the unknown id is copied into
+        // the fallback label.
+        let label = now_playing_label(&titles, Some("no-such-song"));
+        assert!(matches!(&label, Cow::Owned(_)));
     }
 
     #[test]
