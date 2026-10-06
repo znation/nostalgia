@@ -91,20 +91,12 @@ impl AppleMusicService {
 
     /// Albums by the given artist; unknown artists yield an empty list.
     pub async fn get_albums_by_artist(&self, artist_id: &str) -> Result<Vec<Album>, Error> {
-        Ok(sample_library()
-            .albums_by_artist
-            .get(artist_id)
-            .cloned()
-            .unwrap_or_default())
+        Ok(lookup(&sample_library().albums_by_artist, artist_id))
     }
 
     /// Songs on the given album; unknown albums yield an empty list.
     pub async fn get_songs_from_album(&self, album_id: &str) -> Result<Vec<Song>, Error> {
-        Ok(sample_library()
-            .songs_by_album
-            .get(album_id)
-            .cloned()
-            .unwrap_or_default())
+        Ok(lookup(&sample_library().songs_by_album, album_id))
     }
 }
 
@@ -133,6 +125,14 @@ fn index_by<T: Clone>(items: &[T], key: impl Fn(&T) -> &str) -> HashMap<String, 
             .push(item.clone());
     }
     index
+}
+
+/// The group stored under `id` in `index`, or an empty list when the id is
+/// unknown. The read-side twin of [`index_by`]: the browse queries both look
+/// up their matches in the prebuilt tables, so this get-then-clone-then-
+/// default chain lives here once instead of in each query method.
+fn lookup<T: Clone>(index: &HashMap<String, Vec<T>>, id: &str) -> Vec<T> {
+    index.get(id).cloned().unwrap_or_default()
 }
 
 impl SampleLibrary {
