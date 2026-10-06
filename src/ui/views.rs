@@ -170,8 +170,8 @@ pub fn view_transport_controls(is_playing: bool, volume: f32) -> Element<'static
 mod tests {
     use super::{
         CurrentView, Message, album_row, artist_row, can_go_back, now_playing_label,
-        play_pause_label, song_row, view_albums, view_artists, view_back_button,
-        view_now_playing, view_songs, view_transport_controls,
+        play_pause_label, song_row, view_albums, view_artists, view_back_button, view_now_playing,
+        view_songs, view_transport_controls,
     };
     use crate::library::{sample_album, sample_artist, sample_song};
     use crate::sample_library::sample_library;

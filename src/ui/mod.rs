@@ -687,11 +687,9 @@ mod tests {
     /// function (rather than `async`) because the stepping arms use
     /// `blocking_lock`, which panics inside an async runtime.
     fn assert_track_selected(task: Task<Message>, expected: &str) {
-        futures::executor::block_on(drive_task(task, "stepping", |message| {
-            match message {
-                Message::TrackSelected(id) => assert_eq!(id, expected),
-                other => panic!("unexpected stepping task output: {other:?}"),
-            }
+        futures::executor::block_on(drive_task(task, "stepping", |message| match message {
+            Message::TrackSelected(id) => assert_eq!(id, expected),
+            other => panic!("unexpected stepping task output: {other:?}"),
         }));
     }
 
