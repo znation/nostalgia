@@ -294,14 +294,11 @@ mod tests {
         assert_eq!(state.current_track.as_deref(), Some("song-1"));
     }
 
-    // `AppleMusicToken` is the one serde-derived type the real Apple Music
-    // API will exchange that no test covers: the model types in `library.rs`
-    // all have their wire contract pinned (round-trip plus field names and
-    // missing-field rejection) so a live service can replace the stub without
-    // touching the model, but the auth token — the first payload a real
-    // implementation would deserialize — has none. A renamed or re-typed
-    // field here would only fail once real auth lands, so pin the declared
-    // contract now, the same way the model types are pinned.
+    // `AppleMusicToken` is the auth payload the real Apple Music API will
+    // hand back, so its wire contract is pinned the same way the model types
+    // in `library.rs` are: field names serialize as-is, the value round-trips
+    // through `serde_json`, unknown fields are tolerated, and a payload
+    // missing a required field is rejected.
 
     // The token's JSON shape is the contract: field names serialize as-is and
     // the value survives an out-and-back trip through `serde_json` unchanged.
@@ -332,5 +329,27 @@ mod tests {
         let result: Result<AppleMusicToken, _> =
             serde_json::from_value(json!({ "access_token": "abc123", "expires_in": 3600 }));
         assert!(result.is_err());
+    }
+
+    // The unknown-field half of the token's deserialization contract: a real
+    // token payload carries fields beyond the declared three (the OAuth 2.0
+    // token response includes a `token_type`, for one), and serde's default
+    // must tolerate the extras rather than failing the whole parse. No other
+    // test deserializes the token with an extra field, so a
+    // `#[serde(deny_unknown_fields)]` added here would clear every existing
+    // test while breaking real authentication.
+    #[test]
+    fn apple_music_token_deserialization_ignores_unknown_fields() {
+        let token: AppleMusicToken = serde_json::from_value(json!({
+            "access_token": "abc123",
+            "expires_in": 3600,
+            "refresh_token": "refresh-me",
+            "token_type": "Bearer"
+        }))
+        .unwrap();
+
+        assert_eq!(token.access_token, "abc123");
+        assert_eq!(token.expires_in, 3600);
+        assert_eq!(token.refresh_token, "refresh-me");
     }
 }
