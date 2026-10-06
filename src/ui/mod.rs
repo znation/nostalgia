@@ -139,8 +139,10 @@ fn played_or_reported<E>(result: Result<(), E>, report_error: impl FnOnce(&E)) -
 }
 
 /// Stores a freshly fetched list into the player's matching buffer, with no
-/// further work. The three `*Loaded` update arms used to repeat
-/// `buffer = items; Task::none()`; the store-and-noop shape lives here once.
+/// further work. The `ArtistsLoaded` and `AlbumsLoaded` update arms both
+/// just store; `SongsLoaded` folds the new songs into `known_songs` first
+/// (see [`store_songs`]) and then ends in this same store. The
+/// store-and-noop shape lives here once instead of in each arm.
 fn store_loaded<T>(buffer: &mut Vec<T>, items: Vec<T>) -> Task<Message> {
     *buffer = items;
     Task::none()
