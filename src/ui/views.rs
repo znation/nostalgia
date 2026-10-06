@@ -193,13 +193,9 @@ pub fn now_playing_label<'a>(
 /// fallback is moved into the widget, so the built element never borrows a
 /// temporary.
 pub fn view_now_playing(label: Cow<'_, str>) -> Element<'_, Message> {
-    let label: Element<'_, Message> = match label {
-        Cow::Borrowed(label) => Text::new(label).size(20).into(),
-        Cow::Owned(label) => Text::new(label).size(20).into(),
-    };
     Row::new()
         .push(Text::new("Now Playing: ").size(20))
-        .push(label)
+        .push(Text::new(label).size(20))
         .into()
 }
 
