@@ -54,19 +54,26 @@ enum CurrentView {
     Songs,
 }
 
-fn boot(state: Arc<Mutex<AppState>>) -> (WinampPlayer, Task<Message>) {
-    let apple_music_service = AppleMusicService::new(state.clone());
-    (
-        WinampPlayer {
+/// The initial player over the given shared state: nothing selected, no
+/// lists loaded. Both `boot` and the tests start a player this way, so the
+/// starting shape lives here instead of being repeated at each site — a new
+/// field has only one spot to get its startup value.
+impl WinampPlayer {
+    fn new(state: Arc<Mutex<AppState>>) -> Self {
+        let service = AppleMusicService::new(state.clone());
+        Self {
             state,
-            apple_music_service,
+            apple_music_service: service,
             current_view: CurrentView::Artists,
             artists: Vec::new(),
             albums: Vec::new(),
             songs: Vec::new(),
-        },
-        Task::done(Message::LoadArtists),
-    )
+        }
+    }
+}
+
+fn boot(state: Arc<Mutex<AppState>>) -> (WinampPlayer, Task<Message>) {
+    (WinampPlayer::new(state), Task::done(Message::LoadArtists))
 }
 
 fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
@@ -175,15 +182,7 @@ mod tests {
     /// same `AppState` the player mutates.
     fn test_player() -> (WinampPlayer, Arc<Mutex<AppState>>) {
         let state = Arc::new(Mutex::new(AppState::default()));
-        let player = WinampPlayer {
-            state: state.clone(),
-            apple_music_service: AppleMusicService::new(state.clone()),
-            current_view: CurrentView::Artists,
-            artists: Vec::new(),
-            albums: Vec::new(),
-            songs: Vec::new(),
-        };
-        (player, state)
+        (WinampPlayer::new(state.clone()), state)
     }
 
     // `Message::PlayPause` uses `blocking_lock`, which panics inside an async
@@ -256,5 +255,15 @@ mod tests {
         let _ = update(&mut player, Message::SongsLoaded(songs.clone()));
 
         assert_eq!(player.songs, songs);
+    }
+
+    #[test]
+    fn new_player_starts_at_artists_with_nothing_selected() {
+        let (player, _state) = test_player();
+
+        assert!(matches!(player.current_view, CurrentView::Artists));
+        assert!(player.artists.is_empty());
+        assert!(player.albums.is_empty());
+        assert!(player.songs.is_empty());
     }
 }
