@@ -170,9 +170,11 @@ pub fn view_transport_controls(is_playing: bool, volume: f32) -> Element<'static
 mod tests {
     use super::{
         CurrentView, Message, album_row, artist_row, can_go_back, now_playing_label,
-        play_pause_label, song_row,
+        play_pause_label, song_row, view_albums, view_artists, view_back_button,
+        view_now_playing, view_songs, view_transport_controls,
     };
     use crate::library::{Album, Artist, Song};
+    use crate::sample_library::sample_library;
 
     fn sample_artist() -> Artist {
         Artist {
@@ -270,5 +272,55 @@ mod tests {
     fn play_pause_label_mirrors_playing_state() {
         assert_eq!(play_pause_label(true), "Pause");
         assert_eq!(play_pause_label(false), "Play");
+    }
+
+    // The `view_*` builders are the code that runs on every frame, and no
+    // other test reaches them: the row tests stop at the (title, label,
+    // message) tuples and the `update` tests stop before the view layer, so
+    // a regression that made a builder panic — a bad slider range, an
+    // out-of-bounds index in the `scrollable_list` loop — would take the
+    // window down on every refresh with no test catching it. iced `Element`s
+    // expose no tree introspection, so the observable contract here is that
+    // each builder constructs its widget tree without panicking over the
+    // input space the app actually produces: every browse view over both the
+    // loaded library and the pre-load empty buffer, both play states, and
+    // the volume endpoints the update arm can store.
+
+    #[test]
+    fn browse_views_construct_over_the_loaded_library() {
+        // The populated branch of `scrollable_list`, built from the real
+        // sample library so each row maps actual titles and selection
+        // messages into buttons.
+        let library = sample_library();
+        let _artists = view_artists(&library.artists);
+        let _albums = view_albums(&library.albums_by_artist["artist-1"]);
+        let _songs = view_songs(&library.songs_by_album["album-1"]);
+    }
+
+    #[test]
+    fn browse_views_construct_over_an_empty_list() {
+        // Every browse view renders its pre-load state — an empty buffer —
+        // before the first fetch lands, so `scrollable_list` must build a
+        // scrollable over zero rows.
+        let _artists = view_artists(&[]);
+        let _albums = view_albums(&[]);
+        let _songs = view_songs(&[]);
+    }
+
+    #[test]
+    fn now_playing_bar_and_back_button_construct() {
+        let _bar = view_now_playing("Opening".to_string());
+        let _back = view_back_button();
+    }
+
+    #[test]
+    fn transport_controls_construct_for_both_play_states_and_volume_endpoints() {
+        // `view()` passes the shared state's `is_playing` and clamped
+        // `volume` straight through, so build the slider for every value the
+        // update arm can store, in both play states.
+        for volume in [0.0, 0.5, 1.0] {
+            let _playing = view_transport_controls(true, volume);
+            let _stopped = view_transport_controls(false, volume);
+        }
     }
 }
