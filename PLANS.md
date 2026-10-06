@@ -5,7 +5,64 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Show the song's title in the Now Playing bar, not its raw id
+
+Found by plan 2026-10-05.
+
+**Goal.** `AppState.current_track` stores a track *id*, and `WinampPlayer::view`
+renders it verbatim — after playing "Opening" the bar reads
+"Now Playing: song-1", not the title a Winamp-style player should show.
+Resolve the id against the songs currently loaded in `WinampPlayer.songs`
+(the same list the songs view renders and the Previous/Next plan sequences)
+and display the matching `Song.title`, falling back to the id when the track
+isn't in the loaded songs and to "Nothing" when nothing is current. Keep the
+resolution pure so it is testable without the UI.
+
+**Approach.**
+
+- `src/ui/views.rs` (which already imports `Song` via
+  `use crate::library::{Album, Artist, Song}`): add
+  `pub fn now_playing_label(songs: &[Song], current_track: Option<&str>) -> String`.
+  Semantics: `current_track` is `None` → `"Nothing"`; `current_track` is
+  `Some(id)` whose id matches a `Song` in `songs` → that song's `title`
+  (cloned); `Some(id)` with no match → the raw `id` itself (a track is
+  current, so "Nothing" would lie). Add a `#[cfg(test)] mod tests` covering:
+  no current track → "Nothing"; current id found in `songs` → its title;
+  current id not in `songs` → the id; empty `songs` with a current id → the
+  id. The function is pure data → `String`, matching the module's stated
+  contract ("each turns plain data … into an Element", here a label).
+- `src/ui/mod.rs`, in `WinampPlayer::view`: replace the existing
+  ```rust
+  let now_playing = state
+      .current_track
+      .clone()
+      .unwrap_or_else(|| "Nothing".to_string());
+  ```
+  with a call that reads the id while the `blocking_lock` guard is held and
+  delegates the formatting to the helper:
+  ```rust
+  let now_playing =
+      views::now_playing_label(&player.songs, state.current_track.as_deref());
+  ```
+  No `Message` change and no `AppState` change: `current_track` stays the
+  id (the planned Previous/Next plan reads it as an id via
+  `current_track.as_deref()`), and the title lookup is a view-time concern.
+  A track played from album A stays resolvable after navigating to an album
+  B's songs only if its id is still in `player.songs` (which isn't cleared on
+  navigation) — the id fallback covers any miss; sourcing titles more
+  robustly is a later plan.
+
+**Files touched.** `src/ui/views.rs`, `src/ui/mod.rs`.
+
+**Acceptance criteria.**
+- `cargo build` succeeds.
+- `cargo test` passes, including the new `now_playing_label` unit tests (no
+  current track, title lookup, unknown-id fallback, empty songs list).
+- `cargo fmt --check` passes.
+- `cargo run`: after playing a song from the songs view, the Now Playing bar
+  shows that song's title (e.g. "Opening") instead of its id ("song-1"); at
+  boot it still shows "Nothing" (manual check — build + tests are the primary
+  gate).
 
 ## Done
 
