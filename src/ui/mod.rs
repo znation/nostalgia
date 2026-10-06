@@ -307,8 +307,9 @@ mod tests {
     /// Drives an iced `Task` to completion and hands its single `Output`
     /// action to `check`. `update` only schedules work as a `Task`, so a test
     /// that wants to observe the resulting message — `TrackPlayed` after
-    /// playback, a `*Loaded` message after a fetch — must run the task itself
-    /// the way the iced runtime would. Both the playback and the fetch tests
+    /// playback, a `*Loaded` message after a fetch, a `TrackSelected` after a
+    /// step — must run the task itself the way the iced runtime would. The
+    /// playback, fetch, and (through `assert_track_selected`) stepping tests
     /// do exactly that, so the stream plumbing and the "exactly one `Output`"
     /// assertion live here once instead of at each call site.
     async fn drive_task(task: Task<Message>, what: &str, mut check: impl FnMut(Message)) {
@@ -633,17 +634,18 @@ mod tests {
     // task's stream.
     /// Drives `task` to its single output and asserts it is a `TrackSelected`
     /// for the given id, as the iced runtime would deliver the button's task.
+    /// The stepping tests drive their tasks exactly the way the playback and
+    /// fetch tests do, so they route through [`drive_task`] instead of
+    /// repeating the `into_stream`/`next` plumbing; this stays a plain
+    /// function (rather than `async`) because the stepping arms use
+    /// `blocking_lock`, which panics inside an async runtime.
     fn assert_track_selected(task: Task<Message>, expected: &str) {
-        use futures::StreamExt;
-
-        let mut stream =
-            iced_runtime::task::into_stream(task).expect("stepping must schedule a task");
-        let action = futures::executor::block_on(stream.next())
-            .expect("stepping task must yield a completion message");
-        match action {
-            iced_runtime::Action::Output(Message::TrackSelected(id)) => assert_eq!(id, expected),
-            other => panic!("unexpected stepping task output: {other:?}"),
-        }
+        futures::executor::block_on(drive_task(task, "stepping", |message| {
+            match message {
+                Message::TrackSelected(id) => assert_eq!(id, expected),
+                other => panic!("unexpected stepping task output: {other:?}"),
+            }
+        }));
     }
 
     #[test]
