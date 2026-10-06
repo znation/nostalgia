@@ -92,7 +92,7 @@ pub(crate) fn sample_song() -> Song {
 
 #[cfg(test)]
 mod tests {
-    use super::{Artist, sample_album, sample_artist, sample_song};
+    use super::{Album, Artist, Song, sample_album, sample_artist, sample_song};
     use serde_json::json;
     use std::fmt::Debug;
 
@@ -157,6 +157,26 @@ mod tests {
         // A payload missing a required field must error, not silently yield a
         // half-populated model the UI would render as blank data.
         let result: Result<Artist, _> = serde_json::from_value(json!({ "id": "artist-1" }));
+        assert!(result.is_err());
+    }
+
+    // The missing-field contract holds for every model type, not just Artist:
+    // `Album` and `Song` only have round-trip tests, which pass for *any*
+    // deserialization that yields some value, so a regression that made one of
+    // their fields optional (e.g. a stray `#[serde(default)]` added to tolerate
+    // a payload variant) would clear every existing test while silently
+    // rendering blank data. Each gets the same explicit probe as Artist.
+    #[test]
+    fn album_deserialization_rejects_missing_required_fields() {
+        let result: Result<Album, _> =
+            serde_json::from_value(json!({ "id": "album-1", "title": "First Record" }));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn song_deserialization_rejects_missing_required_fields() {
+        let result: Result<Song, _> =
+            serde_json::from_value(json!({ "id": "song-1", "title": "Opening" }));
         assert!(result.is_err());
     }
 }
