@@ -108,14 +108,15 @@ impl SampleLibrary {
     }
 }
 
+/// The process-wide cache behind [`sample_library`].
+static SAMPLE_LIBRARY: OnceLock<SampleLibrary> = OnceLock::new();
+
 /// Returns the shared sample library, building it at most once.
 ///
 /// Every browse query (favorite artists, albums by artist, songs from album)
 /// reads this on navigation, so it is cached in a [`OnceLock`] instead of
 /// being reconstructed per call — building the library allocates every
 /// artist, album, and song `String`, and the data never changes.
-static SAMPLE_LIBRARY: OnceLock<SampleLibrary> = OnceLock::new();
-
 pub fn sample_library() -> &'static SampleLibrary {
     SAMPLE_LIBRARY.get_or_init(SampleLibrary::new)
 }
