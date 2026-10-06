@@ -169,11 +169,26 @@ where
     assert_eq!(back, value);
 }
 
+/// Asserts that `payload` deserializes as `T` to exactly `expected`, proving
+/// serde's default tolerance of fields beyond `T`'s declared set: a real
+/// Apple Music payload carries more than the model's fields, so an unknown
+/// field must be ignored rather than failing the whole parse. The three model
+/// types below and `apple_music`'s auth-token test each probe this contract,
+/// so the `from_value`-then-`assert_eq` chain lives here once.
+#[cfg(test)]
+pub(crate) fn assert_unknown_fields_tolerated<T>(payload: serde_json::Value, expected: T)
+where
+    T: PartialEq + std::fmt::Debug + serde::de::DeserializeOwned,
+{
+    let parsed: T = serde_json::from_value(payload).expect("unknown fields must be tolerated");
+    assert_eq!(parsed, expected);
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        Album, Artist, Song, assert_every_field_required, assert_round_trips, sample_album,
-        sample_artist, sample_song,
+        Album, Artist, Song, assert_every_field_required, assert_round_trips,
+        assert_unknown_fields_tolerated, sample_album, sample_artist, sample_song,
     };
     use serde_json::json;
 
@@ -230,14 +245,14 @@ mod tests {
     fn deserialization_ignores_unknown_fields() {
         // Real Apple Music payloads carry more than the model's fields; serde's
         // default must tolerate the extras rather than failing the whole parse.
-        let artist: Artist = serde_json::from_value(json!({
-            "id": "artist-1",
-            "name": "The Sample Band",
-            "genres": ["rock"]
-        }))
-        .unwrap();
-
-        assert_eq!(artist, sample_artist());
+        assert_unknown_fields_tolerated::<Artist>(
+            json!({
+                "id": "artist-1",
+                "name": "The Sample Band",
+                "genres": ["rock"]
+            }),
+            sample_artist(),
+        );
     }
 
     // The unknown-field tolerance is per-type, not global: the test above pins
@@ -249,28 +264,28 @@ mod tests {
     // tolerance for both, as the missing-field tests below do per-type.
     #[test]
     fn album_deserialization_ignores_unknown_fields() {
-        let album: Album = serde_json::from_value(json!({
-            "id": "album-1",
-            "title": "First Record",
-            "artist_id": "artist-1",
-            "release_date": "2026-01-01"
-        }))
-        .unwrap();
-
-        assert_eq!(album, sample_album());
+        assert_unknown_fields_tolerated::<Album>(
+            json!({
+                "id": "album-1",
+                "title": "First Record",
+                "artist_id": "artist-1",
+                "release_date": "2026-01-01"
+            }),
+            sample_album(),
+        );
     }
 
     #[test]
     fn song_deserialization_ignores_unknown_fields() {
-        let song: Song = serde_json::from_value(json!({
-            "id": "song-1",
-            "title": "Opening",
-            "album_id": "album-1",
-            "duration_ms": 210_000
-        }))
-        .unwrap();
-
-        assert_eq!(song, sample_song());
+        assert_unknown_fields_tolerated::<Song>(
+            json!({
+                "id": "song-1",
+                "title": "Opening",
+                "album_id": "album-1",
+                "duration_ms": 210_000
+            }),
+            sample_song(),
+        );
     }
 
     #[test]

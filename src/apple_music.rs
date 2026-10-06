@@ -136,7 +136,9 @@ fn lookup<T: Clone>(index: &HashMap<String, Vec<T>>, id: &str) -> Vec<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::library::{assert_every_field_required, assert_round_trips};
+    use crate::library::{
+        assert_every_field_required, assert_round_trips, assert_unknown_fields_tolerated,
+    };
     use serde_json::json;
 
     fn test_service() -> AppleMusicService {
@@ -340,16 +342,18 @@ mod tests {
     // test while breaking real authentication.
     #[test]
     fn apple_music_token_deserialization_ignores_unknown_fields() {
-        let token: AppleMusicToken = serde_json::from_value(json!({
-            "access_token": "abc123",
-            "expires_in": 3600,
-            "refresh_token": "refresh-me",
-            "token_type": "Bearer"
-        }))
-        .unwrap();
-
-        assert_eq!(token.access_token, "abc123");
-        assert_eq!(token.expires_in, 3600);
-        assert_eq!(token.refresh_token, "refresh-me");
+        assert_unknown_fields_tolerated::<AppleMusicToken>(
+            json!({
+                "access_token": "abc123",
+                "expires_in": 3600,
+                "refresh_token": "refresh-me",
+                "token_type": "Bearer"
+            }),
+            AppleMusicToken {
+                access_token: "abc123".to_string(),
+                expires_in: 3600,
+                refresh_token: "refresh-me".to_string(),
+            },
+        );
     }
 }
