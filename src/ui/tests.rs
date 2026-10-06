@@ -12,10 +12,10 @@ fn test_player() -> (WinampPlayer, Arc<Mutex<AppState>>) {
 }
 
 /// A fresh player over the shared three-song stepping album
-/// ([`stepping_songs`]) with `current` set as the playing track — the
-/// starting shape the Next/Previous wiring tests step from. Seven tests
-/// build this same `test_player`-plus-fixture setup; only the starting
-/// track differs (or is absent), so it lives here once.
+/// ([`stepping_songs`]) with `current` recorded as the shared state's
+/// current track — the starting shape the Next/Previous wiring tests step
+/// from. Seven tests build this same `test_player`-plus-fixture setup; only
+/// the starting track differs (or is absent), so it lives here once.
 fn player_stepping_from(current: Option<&str>) -> (WinampPlayer, Arc<Mutex<AppState>>) {
     let (mut player, state) = test_player();
     player.songs = stepping_songs();
