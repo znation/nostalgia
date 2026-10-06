@@ -97,11 +97,10 @@ impl AppleMusicService {
         Self { token: None, state }
     }
 
+    /// Plays the given track by id, recording it as the current track and
+    /// marking it playing. The stub owns only this shared-state transition —
+    /// a real implementation would add the API call that starts audio.
     pub async fn play_track(&self, track_id: &str) -> Result<(), Error> {
-        // No real playback yet — the stub's job is the shared-state
-        // transition: record the selected track and mark it playing.
-        // A real implementation would add the API call that starts audio.
-
         let mut state = self.state.lock().await;
         state.current_track = Some(track_id.to_string());
         state.is_playing = true;
