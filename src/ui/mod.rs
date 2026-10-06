@@ -81,13 +81,24 @@ fn boot(state: Arc<Mutex<AppState>>) -> (WinampPlayer, Task<Message>) {
     (WinampPlayer::new(state), Task::done(Message::LoadArtists))
 }
 
-/// Maps a library-fetch `Result` to its matching `*Loaded` message, falling
-/// back to an empty list on error. Shared by the artists, albums, and songs
-/// load paths so the error fallback stays identical in all three.
-fn loaded_or_empty<T, E>(result: Result<Vec<T>, E>, loaded: impl Fn(Vec<T>) -> Message) -> Message {
+/// Maps a library-fetch `Result` to its matching `*Loaded` message: the
+/// fetched items on success, an empty list on error — after handing the
+/// error to `report_error`, so a failed fetch is never dropped silently.
+/// Shared by the artists, albums, and songs load paths so the error fallback
+/// (and its reporting) stays identical in all three. `report_error` is
+/// injected rather than hardcoded so the reporting contract is testable
+/// without capturing stderr.
+fn loaded_or_empty<T, E>(
+    result: Result<Vec<T>, E>,
+    loaded: impl Fn(Vec<T>) -> Message,
+    report_error: impl FnOnce(&E),
+) -> Message {
     match result {
         Ok(items) => loaded(items),
-        Err(_) => loaded(Vec::new()),
+        Err(err) => {
+            report_error(&err);
+            loaded(Vec::new())
+        }
     }
 }
 
@@ -101,9 +112,9 @@ fn store_loaded<T>(buffer: &mut Vec<T>, items: Vec<T>) -> Task<Message> {
 
 /// Runs a library-fetch future through iced's runtime, mapping its `Result`
 /// onto the matching `*Loaded` message (empty list on error, via
-/// [`loaded_or_empty`]). Shared by the artists, albums, and songs load arms
-/// so none of them repeats the clone-the-service-then-`Task::perform`
-/// boilerplate.
+/// [`loaded_or_empty`], with the error reported to stderr). Shared by the
+/// artists, albums, and songs load arms so none of them repeats the
+/// clone-the-service-then-`Task::perform` boilerplate.
 fn fetch_into<T, E, Fut>(
     service: &AppleMusicService,
     fetch: impl FnOnce(AppleMusicService) -> Fut + Send + 'static,
@@ -111,12 +122,14 @@ fn fetch_into<T, E, Fut>(
 ) -> Task<Message>
 where
     T: Send + 'static,
-    E: Send + 'static,
+    E: std::fmt::Debug + Send + 'static,
     Fut: Future<Output = Result<Vec<T>, E>> + Send + 'static,
 {
     let service = service.clone();
     Task::perform(async move { fetch(service).await }, move |result| {
-        loaded_or_empty(result, loaded)
+        loaded_or_empty(result, loaded, |err| {
+            eprintln!("music-library fetch failed; showing an empty list: {err:?}")
+        })
     })
 }
 
@@ -699,12 +712,35 @@ mod tests {
         }];
 
         let ok_message =
-            loaded_or_empty::<Album, String>(Ok(albums.clone()), Message::AlbumsLoaded);
+            loaded_or_empty::<Album, String>(Ok(albums.clone()), Message::AlbumsLoaded, |_| {
+                unreachable!("ok path must not report an error")
+            });
         assert!(matches!(ok_message, Message::AlbumsLoaded(v) if v == albums));
 
-        let err_message =
-            loaded_or_empty::<Album, String>(Err("boom".to_string()), Message::AlbumsLoaded);
+        let err_message = loaded_or_empty::<Album, String>(
+            Err("boom".to_string()),
+            Message::AlbumsLoaded,
+            |_| {},
+        );
         assert!(matches!(err_message, Message::AlbumsLoaded(v) if v.is_empty()));
+    }
+
+    #[test]
+    fn loaded_or_empty_reports_the_error_before_falling_back_to_empty() {
+        // A failed browse fetch must not vanish silently: the load path
+        // reports the error (to stderr in production; here to a recording
+        // closure) and still falls back to an empty list so the UI stays
+        // usable. `loaded_or_empty` takes the reporter as a parameter so this
+        // contract is testable without capturing stderr.
+        let mut reported: Option<String> = None;
+        let message = loaded_or_empty::<Album, String>(
+            Err("boom".to_string()),
+            Message::AlbumsLoaded,
+            |err| reported = Some(err.clone()),
+        );
+
+        assert_eq!(reported.as_deref(), Some("boom"));
+        assert!(matches!(message, Message::AlbumsLoaded(v) if v.is_empty()));
     }
 
     // `fetch_into` schedules the fetch as an iced `Task`; the arm itself only
