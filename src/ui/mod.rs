@@ -61,9 +61,9 @@ struct WinampPlayer {
     /// a different album (whose list replaces `songs`). `store_songs` records
     /// a freshly loaded album in O(1) per song, and `now_playing_label`
     /// resolves the per-frame bar label with a single get instead of scanning
-    /// a growing list on every frame. The map is the whole accumulation: the
-    /// buffer it indexes used to clone each whole `Song` into an unread list,
-    /// so it is the only per-album cost of keeping a track title known.
+    /// a growing list on every frame. The map is the whole accumulation — no
+    /// separate song list is kept — so it is the only per-album cost of
+    /// keeping a track title known.
     known_titles: HashMap<String, String>,
 }
 
