@@ -247,6 +247,43 @@ mod tests {
         }
     }
 
+    /// Drives the task a browse arm schedules, feeds the fetched `*Loaded`
+    /// message back through the update loop, and asserts the list lands in
+    /// the player's matching buffer in library order. The three fetch tests
+    /// — loading artists, albums by artist, and songs from album — all repeat
+    /// this drive-then-feed-then-assert flow; only the message variant, the
+    /// buffer, the id key, and the expected ids differ, so they come in as
+    /// parameters and the flow lives here once.
+    async fn drive_fetch_and_assert_loaded<T, Extract, Buffer, Key>(
+        player: &mut WinampPlayer,
+        task: Task<Message>,
+        what: &str,
+        extract: Extract,
+        loaded: impl Fn(Vec<T>) -> Message,
+        buffer: Buffer,
+        key: Key,
+        expected_ids: &[&str],
+    ) where
+        T: 'static,
+        Extract: Fn(&Message) -> Option<Vec<T>>,
+        Buffer: Fn(&mut WinampPlayer) -> &mut Vec<T>,
+        Key: Fn(&T) -> &str,
+    {
+        let mut fetched: Option<Vec<T>> = None;
+        drive_task(task, what, |message| {
+            fetched = Some(
+                extract(&message)
+                    .unwrap_or_else(|| panic!("unexpected {what} task output: {message:?}")),
+            );
+        })
+        .await;
+
+        let items = fetched.expect("browse task must yield a *Loaded message");
+        let _ = update(player, loaded(items));
+        let ids: Vec<&str> = buffer(player).iter().map(key).collect();
+        assert_eq!(ids, expected_ids);
+    }
+
     // `Message::PlayPause` uses `blocking_lock`, which panics inside an async
     // runtime, so this stays a plain test (no `#[tokio::test]`).
     #[test]
@@ -310,21 +347,24 @@ mod tests {
         let (mut player, _state) = test_player();
 
         let task = update(&mut player, Message::ArtistSelected("artist-1".to_string()));
-        let mut loaded: Option<Vec<Album>> = None;
-        drive_task(task, "load albums", |message| match message {
-            Message::AlbumsLoaded(albums) => loaded = Some(albums),
-            other => panic!("unexpected album-load task output: {other:?}"),
-        })
+        drive_fetch_and_assert_loaded(
+            &mut player,
+            task,
+            "load albums",
+            |message| match message {
+                Message::AlbumsLoaded(albums) => Some(albums.clone()),
+                _ => None,
+            },
+            Message::AlbumsLoaded,
+            |player| &mut player.albums,
+            |album| album.id.as_str(),
+            &["album-1", "album-2"],
+        )
         .await;
 
-        // The arm flips to the albums view; feed the fetched list back
-        // through the update loop, as iced would, and confirm the browse
-        // buffer holds the selected artist's albums in library order.
+        // The arm flips to the albums view before the fetched list is fed
+        // back through the update loop.
         assert!(matches!(player.current_view, CurrentView::Albums));
-        let albums = loaded.expect("ArtistSelected must fetch the album list");
-        let _ = update(&mut player, Message::AlbumsLoaded(albums));
-        let ids: Vec<&str> = player.albums.iter().map(|album| album.id.as_str()).collect();
-        assert_eq!(ids, vec!["album-1", "album-2"]);
     }
 
     #[tokio::test]
@@ -332,20 +372,24 @@ mod tests {
         let (mut player, _state) = test_player();
 
         let task = update(&mut player, Message::AlbumSelected("album-3".to_string()));
-        let mut loaded: Option<Vec<Song>> = None;
-        drive_task(task, "load songs", |message| match message {
-            Message::SongsLoaded(songs) => loaded = Some(songs),
-            other => panic!("unexpected song-load task output: {other:?}"),
-        })
+        drive_fetch_and_assert_loaded(
+            &mut player,
+            task,
+            "load songs",
+            |message| match message {
+                Message::SongsLoaded(songs) => Some(songs.clone()),
+                _ => None,
+            },
+            Message::SongsLoaded,
+            |player| &mut player.songs,
+            |song| song.id.as_str(),
+            &["song-5"],
+        )
         .await;
 
         // As with the artist arm: the view flips to songs, and the fetched
         // list lands in the browse buffer in library order.
         assert!(matches!(player.current_view, CurrentView::Songs));
-        let songs = loaded.expect("AlbumSelected must fetch the song list");
-        let _ = update(&mut player, Message::SongsLoaded(songs));
-        let ids: Vec<&str> = player.songs.iter().map(|song| song.id.as_str()).collect();
-        assert_eq!(ids, vec!["song-5"]);
     }
 
     // Startup wiring: `boot` hands iced a fresh player plus the task that
@@ -372,19 +416,20 @@ mod tests {
         let (mut player, _state) = test_player();
 
         let task = update(&mut player, Message::LoadArtists);
-        let mut loaded: Option<Vec<Artist>> = None;
-        drive_task(task, "load artists", |message| match message {
-            Message::ArtistsLoaded(artists) => loaded = Some(artists),
-            other => panic!("unexpected load-artists task output: {other:?}"),
-        })
+        drive_fetch_and_assert_loaded(
+            &mut player,
+            task,
+            "load artists",
+            |message| match message {
+                Message::ArtistsLoaded(artists) => Some(artists.clone()),
+                _ => None,
+            },
+            Message::ArtistsLoaded,
+            |player| &mut player.artists,
+            |artist| artist.id.as_str(),
+            &["artist-1", "artist-2", "artist-3"],
+        )
         .await;
-
-        // Feed the fetch result back through the update loop, as iced would,
-        // and confirm the artists reach the browse buffer in library order.
-        let artists = loaded.expect("LoadArtists must fetch the artist list");
-        let _ = update(&mut player, Message::ArtistsLoaded(artists));
-        let ids: Vec<&str> = player.artists.iter().map(|a| a.id.as_str()).collect();
-        assert_eq!(ids, vec!["artist-1", "artist-2", "artist-3"]);
     }
 
     // `Message::TrackSelected` wraps playback in a `Task`; the arm itself only
