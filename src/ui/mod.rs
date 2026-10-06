@@ -164,17 +164,19 @@ fn store_loaded<T>(buffer: &mut Vec<T>, items: Vec<T>) -> Task<Message> {
 /// and records each song's id→title pair in the accumulated
 /// [`WinampPlayer::known_titles`] index, so a later browse to a different
 /// album (which replaces `songs`) can't lose the title of the playing track.
-/// The fold is O(1) per song — one map insert, with no `Song` clone and no
+/// The fold is O(1) per song — one map entry, with no `Song` clone and no
 /// growing list to scan — rather than a linear scan of everything the player
 /// has ever loaded. Only `SongsLoaded` needs the extra fold — artists and
 /// albums never appear in the Now Playing bar.
 fn store_songs(player: &mut WinampPlayer, songs: Vec<Song>) -> Task<Message> {
     for song in &songs {
-        // A repeat id re-inserts an identical title, a no-op on the map's
-        // contents — so revisiting an album never grows `known_titles`.
+        // A known id already maps to an identical title, so `or_insert_with`
+        // keeps the existing title instead of cloning one to overwrite an
+        // equal value: revisiting an album clones only the key it probes.
         player
             .known_titles
-            .insert(song.id.clone(), song.title.clone());
+            .entry(song.id.clone())
+            .or_insert_with(|| song.title.clone());
     }
     store_loaded(&mut player.songs, songs)
 }
