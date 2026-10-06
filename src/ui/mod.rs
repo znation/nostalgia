@@ -6,7 +6,7 @@
 //! `AppleMusicService` seam. Its unit tests live in the `tests` submodule.
 
 use iced::{Element, Task, widget::Column};
-use std::{collections::HashMap, future::Future, sync::Arc};
+use std::{borrow::Cow, collections::HashMap, future::Future, sync::Arc};
 use tokio::sync::Mutex;
 
 mod transport;
@@ -105,7 +105,7 @@ impl WinampPlayer {
     /// the bar keeps naming a playing track even after a browse to another
     /// album replaced `songs`. The browse-away regression test asserts this
     /// same path.
-    fn now_playing_label(&self, current_track: Option<&str>) -> String {
+    fn now_playing_label<'a>(&'a self, current_track: Option<&str>) -> Cow<'a, str> {
         views::now_playing_label(&self.known_titles, current_track)
     }
 }
@@ -341,9 +341,9 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
 fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // The now-playing title is resolved while the state lock is held, from a
     // borrowed `current_track` against the accumulated `known_titles` index
-    // (see [`WinampPlayer::now_playing_label`]) — the label outlives the lock,
-    // but the owned `String` clone of the current track is not needed, so the
-    // per-frame path allocates only the resolved label.
+    // (see [`WinampPlayer::now_playing_label`]) — the label borrows the title
+    // from `known_titles` (or the `"Nothing"` literal), so the per-frame path
+    // allocates only in the unknown-id fallback, not the common cases.
     let (now_playing, is_playing, volume, repeat, eq_enabled, eq_preamp, eq_bands) = {
         let state = player.state.blocking_lock();
         (

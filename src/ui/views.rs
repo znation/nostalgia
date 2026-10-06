@@ -167,24 +167,39 @@ pub fn view_back_button() -> Element<'static, Message> {
 /// The Now Playing bar label: the title of `current_track` when `titles`
 /// knows it; the raw id when it doesn't; "Nothing" when stopped. `titles` is
 /// the player's known id→title index, so this per-frame resolution is a single
-/// map get rather than a scan of every song the player has ever loaded. Pure
-/// data → `String` so the title resolution is testable without an iced
-/// renderer.
-pub fn now_playing_label(titles: &HashMap<String, String>, current_track: Option<&str>) -> String {
+/// map get rather than a scan of every song the player has ever loaded. The
+/// result borrows the title from `titles` (or the `"Nothing"` literal) in the
+/// common cases, so a per-frame refresh allocates only for the rare unknown-id
+/// fallback instead of cloning the title on every view. Pure data → `Cow` so
+/// the title resolution is testable without an iced renderer.
+pub fn now_playing_label<'a>(
+    titles: &'a HashMap<String, String>,
+    current_track: Option<&str>,
+) -> Cow<'a, str> {
     match current_track {
-        Some(id) => titles.get(id).cloned().unwrap_or_else(|| id.to_string()),
-        None => "Nothing".to_string(),
+        Some(id) => titles
+            .get(id)
+            .map(|title| Cow::Borrowed(title.as_str()))
+            .unwrap_or_else(|| Cow::Owned(id.to_string())),
+        None => Cow::Borrowed("Nothing"),
     }
 }
 
 /// The Now Playing bar: the "Now Playing:" caption followed by the current
 /// track's resolved title (or "Nothing" when stopped). Takes the already
 /// resolved label (from [`now_playing_label`]) so this per-frame widget build
-/// does no song lookup itself.
-pub fn view_now_playing(label: String) -> Element<'static, Message> {
+/// does no song lookup itself. The label is a [`Cow`]: the borrowed case keeps
+/// the title owned by the caller's index (no allocation), while the owned
+/// fallback is moved into the widget, so the built element never borrows a
+/// temporary.
+pub fn view_now_playing(label: Cow<'_, str>) -> Element<'_, Message> {
+    let label: Element<'_, Message> = match label {
+        Cow::Borrowed(label) => Text::new(label).size(20).into(),
+        Cow::Owned(label) => Text::new(label).size(20).into(),
+    };
     Row::new()
         .push(Text::new("Now Playing: ").size(20))
-        .push(Text::new(label).size(20))
+        .push(label)
         .into()
 }
 
@@ -458,7 +473,7 @@ mod tests {
 
     #[test]
     fn now_playing_bar_and_back_button_construct() {
-        let _bar = view_now_playing("Opening".to_string());
+        let _bar = view_now_playing("Opening".into());
         let _back = view_back_button();
     }
 
