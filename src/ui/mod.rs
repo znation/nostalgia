@@ -6,7 +6,7 @@
 //! `AppleMusicService` seam.
 
 use iced::{Element, Task, widget::Column};
-use std::{collections::HashSet, future::Future, sync::Arc};
+use std::{collections::HashMap, future::Future, sync::Arc};
 use tokio::sync::Mutex;
 
 mod transport;
@@ -58,12 +58,14 @@ struct WinampPlayer {
     /// Playing bar can still name the playing track after the user browses to
     /// a different album (whose list replaces `songs`).
     known_songs: Vec<Song>,
-    /// The ids of [`Self::known_songs`] as a membership set, so `store_songs`
-    /// can dedup a freshly loaded album in O(1) per song instead of rescanning
-    /// the whole accumulated list. Insertion order lives in `known_songs`;
-    /// this is only a look-up index, kept in step by the same code that pushes
-    /// to the list.
-    known_ids: HashSet<String>,
+    /// Each known song's id mapped to its title — the look-up index behind
+    /// [`Self::known_songs`]. `store_songs` uses it to dedup a freshly loaded
+    /// album in O(1) per song instead of rescanning the whole accumulated
+    /// list, and `now_playing_label` resolves the per-frame bar label with a
+    /// single get instead of scanning that same growing list on every frame.
+    /// Insertion order lives in `known_songs`; this map is kept in step by the
+    /// same code that pushes to the list.
+    known_titles: HashMap<String, String>,
 }
 
 /// Which browse screen is showing. Payload-free: the albums and songs the
@@ -91,17 +93,18 @@ impl WinampPlayer {
             albums: Vec::new(),
             songs: Vec::new(),
             known_songs: Vec::new(),
-            known_ids: HashSet::new(),
+            known_titles: HashMap::new(),
         }
     }
 
     /// The Now Playing bar's label for `current_track`, resolved against the
-    /// accumulated [`Self::known_songs`] rather than the currently-browsed
-    /// album's `songs`: `view` renders the bar from this, so the bar keeps
-    /// naming a playing track even after a browse to another album replaced
-    /// `songs`. The browse-away regression test asserts this same path.
+    /// accumulated [`Self::known_titles`] index rather than the
+    /// currently-browsed album's `songs`: `view` renders the bar from this, so
+    /// the bar keeps naming a playing track even after a browse to another
+    /// album replaced `songs`. The browse-away regression test asserts this
+    /// same path.
     fn now_playing_label(&self, current_track: Option<&str>) -> String {
-        views::now_playing_label(&self.known_songs, current_track)
+        views::now_playing_label(&self.known_titles, current_track)
     }
 }
 
@@ -158,14 +161,21 @@ fn store_loaded<T>(buffer: &mut Vec<T>, items: Vec<T>) -> Task<Message> {
 /// Stores a freshly fetched song list into the player's current-album buffer
 /// and folds it into the accumulated [`WinampPlayer::known_songs`], so a later
 /// browse to a different album (which replaces `songs`) can't lose the title
-/// of the playing track. The dedup is O(1) per song via the parallel
-/// [`WinampPlayer::known_ids`] index rather than a linear scan of everything
-/// the player has ever loaded — a list that grows with every album browsed.
-/// Only `SongsLoaded` needs the extra fold — artists and albums never appear
-/// in the Now Playing bar.
+/// of the playing track. The fold is O(1) per song via the
+/// [`WinampPlayer::known_titles`] index — inserting a fresh id records its
+/// title and pushes the song, a repeat id is deduped — rather than a linear
+/// scan of everything the player has ever loaded, a list that grows with every
+/// album browsed. Only `SongsLoaded` needs the extra fold — artists and albums
+/// never appear in the Now Playing bar.
 fn store_songs(player: &mut WinampPlayer, songs: Vec<Song>) -> Task<Message> {
     for song in &songs {
-        if player.known_ids.insert(song.id.clone()) {
+        // `insert` returns `None` for a freshly-seen id, which is the dedup
+        // signal: record the title and push the song; a repeat id is ignored.
+        if player
+            .known_titles
+            .insert(song.id.clone(), song.title.clone())
+            .is_none()
+        {
             player.known_songs.push(song.clone());
         }
     }
@@ -321,9 +331,9 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
 /// above the current browse list.
 fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // The now-playing title is resolved while the state lock is held, from a
-    // borrowed `current_track` against the accumulated `known_songs` (see
-    // [`WinampPlayer::now_playing_label`]) — the label outlives the lock, but
-    // the owned `String` clone of the current track is not needed, so the
+    // borrowed `current_track` against the accumulated `known_titles` index
+    // (see [`WinampPlayer::now_playing_label`]) — the label outlives the lock,
+    // but the owned `String` clone of the current track is not needed, so the
     // per-frame path allocates only the resolved label.
     let (now_playing, is_playing, volume) = {
         let state = player.state.blocking_lock();

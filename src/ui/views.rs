@@ -7,6 +7,8 @@
 //! of the `WinampPlayer` struct means the view layer can be reworked (or
 //! tested) independently of how the app is booted.
 
+use std::collections::HashMap;
+
 use iced::{
     Background, Color, Element, Length,
     widget::{Button, Column, Row, Scrollable, Slider, Space, Text},
@@ -141,17 +143,15 @@ pub fn view_back_button() -> Element<'static, Message> {
         .into()
 }
 
-/// The Now Playing bar label: the title of `current_track` when it is one of
-/// `songs`; the raw id when it isn't in `songs`; "Nothing" when stopped.
-/// Pure data → `String` so the title resolution is testable without an iced
+/// The Now Playing bar label: the title of `current_track` when `titles`
+/// knows it; the raw id when it doesn't; "Nothing" when stopped. `titles` is
+/// the player's known id→title index, so this per-frame resolution is a single
+/// map get rather than a scan of every song the player has ever loaded. Pure
+/// data → `String` so the title resolution is testable without an iced
 /// renderer.
-pub fn now_playing_label(songs: &[Song], current_track: Option<&str>) -> String {
+pub fn now_playing_label(titles: &HashMap<String, String>, current_track: Option<&str>) -> String {
     match current_track {
-        Some(id) => songs
-            .iter()
-            .find(|song| song.id == id)
-            .map(|song| song.title.clone())
-            .unwrap_or_else(|| id.to_string()),
+        Some(id) => titles.get(id).cloned().unwrap_or_else(|| id.to_string()),
         None => "Nothing".to_string(),
     }
 }
@@ -205,6 +205,7 @@ mod tests {
     };
     use crate::library::{sample_album, sample_artist, sample_song};
     use crate::sample_library::sample_library;
+    use std::collections::HashMap;
 
     // Each row maps one library entry to the (title, secondary label, press
     // message, current-track flag) tuple that `scrollable_list` renders as a
@@ -269,30 +270,41 @@ mod tests {
     // (grouped with the other widget builders), so their pure label logic is
     // pinned here alongside the browse-row mappings.
 
+    /// Builds the id→title index the player's `store_songs` maintains, from
+    /// `(id, title)` pairs — the shape `now_playing_label` resolves against.
+    fn known_titles(entries: &[(&str, &str)]) -> HashMap<String, String> {
+        entries
+            .iter()
+            .map(|(id, title)| (id.to_string(), title.to_string()))
+            .collect()
+    }
+
     #[test]
     fn now_playing_label_shows_nothing_when_stopped() {
-        assert_eq!(now_playing_label(&[sample_song()], None), "Nothing");
+        assert_eq!(now_playing_label(&known_titles(&[]), None), "Nothing");
     }
 
     #[test]
     fn now_playing_label_resolves_known_track_to_title() {
-        assert_eq!(
-            now_playing_label(&[sample_song()], Some("song-1")),
-            "Opening"
-        );
+        let titles = known_titles(&[("song-1", "Opening")]);
+        assert_eq!(now_playing_label(&titles, Some("song-1")), "Opening");
     }
 
     #[test]
-    fn now_playing_label_falls_back_to_id_when_track_not_in_songs() {
+    fn now_playing_label_falls_back_to_id_when_track_not_in_titles() {
+        let titles = known_titles(&[("song-1", "Opening")]);
         assert_eq!(
-            now_playing_label(&[sample_song()], Some("no-such-song")),
+            now_playing_label(&titles, Some("no-such-song")),
             "no-such-song"
         );
     }
 
     #[test]
-    fn now_playing_label_falls_back_to_id_when_no_songs_loaded() {
-        assert_eq!(now_playing_label(&[], Some("song-1")), "song-1");
+    fn now_playing_label_falls_back_to_id_when_titles_is_empty() {
+        assert_eq!(
+            now_playing_label(&known_titles(&[]), Some("song-1")),
+            "song-1"
+        );
     }
 
     #[test]
