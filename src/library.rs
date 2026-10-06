@@ -205,6 +205,39 @@ mod tests {
         assert_eq!(artist, sample_artist());
     }
 
+    // The unknown-field tolerance is per-type, not global: the test above pins
+    // it for `Artist` only, so `Album`'s and `Song`'s serde "ignore an unknown
+    // field" arms are never exercised. Real Apple Music payloads carry more
+    // than the model's fields, so a `#[serde(deny_unknown_fields)]` added to
+    // either type would fail the whole parse while clearing every existing
+    // test (none deserialize these types with an extra field). Pin the same
+    // tolerance for both, as the missing-field tests below do per-type.
+    #[test]
+    fn album_deserialization_ignores_unknown_fields() {
+        let album: Album = serde_json::from_value(json!({
+            "id": "album-1",
+            "title": "First Record",
+            "artist_id": "artist-1",
+            "release_date": "2026-01-01"
+        }))
+        .unwrap();
+
+        assert_eq!(album, sample_album());
+    }
+
+    #[test]
+    fn song_deserialization_ignores_unknown_fields() {
+        let song: Song = serde_json::from_value(json!({
+            "id": "song-1",
+            "title": "Opening",
+            "album_id": "album-1",
+            "duration_ms": 210_000
+        }))
+        .unwrap();
+
+        assert_eq!(song, sample_song());
+    }
+
     #[test]
     fn deserialization_rejects_missing_required_fields() {
         // A payload missing a required field must error, not silently yield a
