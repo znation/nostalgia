@@ -21,7 +21,77 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Add a Winamp 2.x base-skin palette and apply it as the app theme (planned 2026-10-06)
+
+Found by plan 2026-10-06, following the steward drift note above.
+
+**Goal.** Every widget still renders in iced 0.14's default theme: no custom
+`Theme`/`Palette` is built anywhere (`grep -rn 'Theme\|palette' src` matches
+only the one highlight-colour button style in `views.rs`), so the window does
+not yet look like Winamp. Land the fidelity foundation the steward note asks
+for: a `src/ui/theme.rs` module naming the Winamp 2.x base-skin colours and a
+custom `iced::Theme` built from them, applied app-wide in `init_ui`, plus the
+Now Playing title in Winamp's LCD green. Later fidelity plans (title bar,
+panel bevels, playlist chrome) style against these names; this plan only
+introduces the palette and the app-wide application, so it stays one run and
+leaves no widget unstyled by accident.
+
+**Approach.**
+
+- New file `src/ui/theme.rs` (a sibling of `views.rs`/`transport.rs`, declared
+  `mod theme;` in `src/ui/mod.rs`), with module `//!` docs and a doc comment on
+  every public item (the `docs` stage denies rustdoc warnings):
+  - Public `Color` constants for the Winamp 2.x base skin, each a `const` via
+    `Color::from_rgb`, exactly as the existing `views::PLAYING_ROW_HIGHLIGHT`
+    is built:
+    - `WINDOW_BACKGROUND` — the dark gray window face,
+      `Color::from_rgb(0.18, 0.18, 0.18)`.
+    - `TEXT` — light chrome text, `Color::from_rgb(0.87, 0.87, 0.87)`.
+    - `TITLE_BLUE` — Winamp's title-bar/selection blue,
+      `Color::from_rgb(0.0, 0.0, 0.55)`.
+    - `LCD_GREEN` — the playlist/LCD green, `Color::from_rgb(0.0, 1.0, 0.0)`.
+    - `PLAYING_ROW_HIGHLIGHT` — moved here from `views.rs` with the same value
+      `Color::from_rgb(0.25, 0.5, 1.0)`, so all UI colours live in one module.
+  - `pub fn palette() -> iced::theme::Palette` filling all six fields:
+    `background: WINDOW_BACKGROUND`, `text: TEXT`, `primary: TITLE_BLUE`,
+    `success: LCD_GREEN`, and `warning`/`danger` set to
+    `Color::from_rgb(1.0, 0.65, 0.0)` / `Color::from_rgb(1.0, 0.2, 0.2)`.
+  - `pub fn winamp_theme() -> iced::Theme` returning
+    `iced::Theme::custom("Winamp", palette())`.
+  - `#[cfg(test)] mod tests`: `winamp_theme().palette().background` and
+    `.text` equal the named constants; `winamp_theme().extended_palette().is_dark`
+    is true; `winamp_theme().to_string() == "Winamp"`.
+- `src/ui/mod.rs`:
+  - Add `mod theme;` beside `mod transport;` / `mod views;`.
+  - Chain `.theme(|_: &WinampPlayer| theme::winamp_theme())` onto the
+    `iced::application(..)` builder in `init_ui`, before `.run()`.
+- `src/ui/views.rs`:
+  - Delete the local `PLAYING_ROW_HIGHLIGHT` const and use
+    `super::theme::PLAYING_ROW_HIGHLIGHT` in `scrollable_list` instead; drop
+    `Color` from the `iced` import list (it is no longer used once the const
+    moves).
+  - In `view_now_playing`, colour the current-track `Text` with
+    `super::theme::LCD_GREEN` via `Text::color` so the Now Playing bar reads as
+    Winamp's green LCD; the `"Now Playing: "` caption keeps the theme text
+    colour.
+- `README.md`: refresh the Status sentence to say the window uses a Winamp
+  base-skin colour theme; leave the `tumwater:prompt` block untouched.
+
+**Files touched.** `src/ui/theme.rs` (new), `src/ui/mod.rs`,
+`src/ui/views.rs`, `README.md`.
+
+**Acceptance criteria.**
+
+- `make check` passes (`cargo fmt --check`,
+  `cargo clippy --all-targets -- -D warnings`, `cargo doc` with rustdoc
+  warnings denied, `cargo test`).
+- The new `theme` unit tests pass; the existing `views` construction tests
+  (`now_playing_bar_and_back_button_construct`,
+  `browse_views_construct_over_the_loaded_library`) still pass with the moved
+  constant, and no unused-import or `dead_code` warning remains.
+- `cargo run`: the window renders on the dark Winamp face with light text and
+  a green Now Playing title, while the Songs view's playing-row highlight is
+  unchanged (manual check — build + tests are the primary gate).
 
 ## Done
 
