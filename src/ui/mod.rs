@@ -666,6 +666,23 @@ mod tests {
         assert!(iced_runtime::task::into_stream(task).is_none());
     }
 
+    /// Feeds a `*Loaded` message built from `items` back through `update` and
+    /// asserts the list lands in `buffer` unchanged. The three
+    /// `*_loaded_populates_list` tests — artists, albums, songs — each used
+    /// to repeat the same update-then-compare flow, differing only in the
+    /// fixture, the `*Loaded` message variant, and the buffer it fills; the
+    /// message constructor and the buffer come in as parameters so the flow
+    /// lives here once and each test only names its fixture and target.
+    fn assert_store_loaded<T: Clone + PartialEq + std::fmt::Debug>(
+        player: &mut WinampPlayer,
+        items: Vec<T>,
+        loaded: impl Fn(Vec<T>) -> Message,
+        buffer: impl Fn(&mut WinampPlayer) -> &mut Vec<T>,
+    ) {
+        let _ = update(player, loaded(items.clone()));
+        assert_eq!(&*buffer(player), &items);
+    }
+
     #[test]
     fn artists_loaded_populates_list() {
         let (mut player, _state) = test_player();
@@ -674,9 +691,9 @@ mod tests {
             name: "The Sample Band".to_string(),
         }];
 
-        let _ = update(&mut player, Message::ArtistsLoaded(artists.clone()));
-
-        assert_eq!(player.artists, artists);
+        assert_store_loaded(&mut player, artists, Message::ArtistsLoaded, |player| {
+            &mut player.artists
+        });
     }
 
     #[test]
@@ -688,9 +705,9 @@ mod tests {
             artist_id: "artist-1".to_string(),
         }];
 
-        let _ = update(&mut player, Message::AlbumsLoaded(albums.clone()));
-
-        assert_eq!(player.albums, albums);
+        assert_store_loaded(&mut player, albums, Message::AlbumsLoaded, |player| {
+            &mut player.albums
+        });
     }
 
     #[test]
@@ -702,9 +719,9 @@ mod tests {
             album_id: "album-1".to_string(),
         }];
 
-        let _ = update(&mut player, Message::SongsLoaded(songs.clone()));
-
-        assert_eq!(player.songs, songs);
+        assert_store_loaded(&mut player, songs, Message::SongsLoaded, |player| {
+            &mut player.songs
+        });
     }
 
     #[test]
