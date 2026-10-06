@@ -1,3 +1,11 @@
+//! The nostalgia binary: it builds the shared `AppState`, wires it into the
+//! stub Apple Music service, and hands both to the iced application.
+//!
+//! `unsafe` is forbidden crate-wide: the player is safe Rust, so an `unsafe`
+//! block added here is a mistake worth failing the build for rather than
+//! catching in review.
+#![forbid(unsafe_code)]
+
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
