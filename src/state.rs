@@ -277,6 +277,25 @@ mod tests {
         assert_eq!(state.eq_bands(), [0.0; BAND_COUNT]);
     }
 
+    // The `set_eq_band` tests above use only out-of-range gains and assert
+    // only the addressed slot, so neither the in-range pass-through nor the
+    // untouched neighbours are pinned. A regression that stored the gain into
+    // every band (or wrote the preamp field instead) would clear those tests
+    // while corrupting the whole curve, so pin the single-slot write: band 3
+    // takes the in-range gain and the other nine bands and the preamp stay
+    // flat.
+    #[test]
+    fn set_eq_band_writes_only_the_addressed_band() {
+        let mut state = AppState::default();
+
+        assert_keeps_track_and_volume(&mut state, |state| state.set_eq_band(3, 4.5));
+
+        let mut expected = [0.0; BAND_COUNT];
+        expected[3] = 4.5;
+        assert_eq!(state.eq_bands(), expected);
+        assert_eq!(state.eq_preamp(), 0.0);
+    }
+
     #[test]
     fn stop_clears_playing_flag_and_keeps_current_track() {
         let mut state = AppState {
