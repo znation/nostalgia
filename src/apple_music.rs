@@ -21,11 +21,12 @@ use crate::state::AppState;
 
 /// A failed music-library or playback operation.
 ///
-/// The stub produces one only when `play_track` is handed an empty track id;
-/// every other in-memory query and playback transition succeeds. The seam
-/// carries this type so a real Apple Music backend can report a failure
-/// without tying the seam's public API to a specific HTTP client. The
-/// message is the human-readable cause.
+/// The stub produces one only when handed a blank id: `play_track` rejects an
+/// empty track id, and `get_albums_by_artist` / `get_songs_from_album` reject
+/// an empty artist/album id. Every other in-memory query and playback
+/// transition succeeds. The seam carries this type so a real Apple Music
+/// backend can report a failure without tying the seam's public API to a
+/// specific HTTP client. The message is the human-readable cause.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppleMusicError(String);
 
@@ -37,10 +38,11 @@ impl std::fmt::Display for AppleMusicError {
 
 impl std::error::Error for AppleMusicError {}
 
-// The seam's error constructor is called by `play_track` to reject an empty
-// track id and stays public for a real Apple Music backend that will report
-// failures from another module, so it is live and needs no `dead_code`
-// allowance. The transport stubs and token field below still carry theirs; a
+// The seam's error constructor is called by `play_track` and the two browse
+// queries to reject a blank id, and stays public for a real Apple Music
+// backend that will report failures from another module, so it is live and
+// needs no `dead_code` allowance. The transport stubs and token field below
+// still carry theirs; a
 // *newly* dead item elsewhere still triggers the warning the clean loop
 // relies on to find removable code.
 impl AppleMusicError {
@@ -158,15 +160,31 @@ impl AppleMusicService {
     }
 
     /// Albums by the given artist; unknown artists yield an empty list.
+    ///
+    /// An empty `artist_id` is rejected with an [`AppleMusicError`] instead
+    /// of looked up: no artist has a blank id, so a blank id is a caller bug,
+    /// and returning the empty list would report it as the ordinary "no
+    /// albums" case. The same blank-id guard [`AppleMusicService::play_track`]
+    /// applies to its track id.
     pub async fn get_albums_by_artist(
         &self,
         artist_id: &str,
     ) -> Result<Vec<Album>, AppleMusicError> {
+        if artist_id.is_empty() {
+            return Err(AppleMusicError::new("artist id must not be empty"));
+        }
         Ok(lookup(&sample_library().albums_by_artist, artist_id))
     }
 
     /// Songs on the given album; unknown albums yield an empty list.
+    ///
+    /// An empty `album_id` is rejected with an [`AppleMusicError`], the
+    /// album-query twin of
+    /// [`AppleMusicService::get_albums_by_artist`].
     pub async fn get_songs_from_album(&self, album_id: &str) -> Result<Vec<Song>, AppleMusicError> {
+        if album_id.is_empty() {
+            return Err(AppleMusicError::new("album id must not be empty"));
+        }
         Ok(lookup(&sample_library().songs_by_album, album_id))
     }
 }
@@ -314,6 +332,16 @@ mod tests {
         assert!(albums.is_empty());
     }
 
+    // A blank id is a caller bug, not an unknown artist: the seam rejects it
+    // with an error rather than the empty list an unknown id yields, so a
+    // future caller that drops the id gets a report naming the cause instead
+    // of a silent "no albums".
+    #[tokio::test]
+    async fn get_albums_by_artist_rejects_an_empty_artist_id() {
+        let error = test_service().get_albums_by_artist("").await.unwrap_err();
+        assert_eq!(error.to_string(), "artist id must not be empty");
+    }
+
     #[tokio::test]
     async fn get_albums_by_artist_returns_single_album_artists_album() {
         // The empty (artist-3) and multi-album (artist-1) groups are pinned
@@ -358,6 +386,13 @@ mod tests {
             .await
             .unwrap();
         assert!(songs.is_empty());
+    }
+
+    // The album-query twin of the empty-artist-id rejection above.
+    #[tokio::test]
+    async fn get_songs_from_album_rejects_an_empty_album_id() {
+        let error = test_service().get_songs_from_album("").await.unwrap_err();
+        assert_eq!(error.to_string(), "album id must not be empty");
     }
 
     #[tokio::test]
