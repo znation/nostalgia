@@ -19,6 +19,28 @@ currently playing song in the Songs view over an in-memory sample library; the A
 Music API is not wired up yet. Open work lives in PLANS.md, BUGS.md, and QUESTIONS.md.
 <!-- tumwater:status:end -->
 
+## Screenshots
+
+Design mockups of the look Nostalgia is aiming for, matched against the classic Winamp 2.x base
+skin and shown with the built-in sample library. The running app is still the plain iced shell
+described above; the equalizer and Repeat are not built yet.
+
+![Main window, equalizer and library window docked together](docs/screenshots/hero.png)
+
+Transport states — playing, paused, stopped, and Repeat on:
+
+![Main window in playing, paused, stopped and repeat states](docs/screenshots/transport.png)
+
+The playlist editor as a library browser, drilling from Artists to Albums to Songs:
+
+![Library window showing artists, albums and songs](docs/screenshots/library.png)
+
+The equalizer with presets, plus window-shade mode:
+
+![Equalizer with flat and rock presets, and windows rolled up into shade mode](docs/screenshots/equalizer.png)
+
+The player on its own: [docs/screenshots/player.png](docs/screenshots/player.png).
+
 ## Usage
 
 Build and run with `cargo run`; the player opens an iced window showing the Now Playing bar, the
