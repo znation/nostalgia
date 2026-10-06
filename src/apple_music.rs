@@ -182,6 +182,29 @@ mod tests {
         AppleMusicService::new(Arc::new(Mutex::new(AppState::default())))
     }
 
+    /// The representative Apple Music token the three token tests share: a full,
+    /// valid payload for the round-trip, missing-field, and unknown-field
+    /// contracts. Each test used to spell out the same three field values — twice
+    /// as a struct literal and three times as the equivalent JSON object — so the
+    /// fixture lives here once and each test only names the contract it pins.
+    fn sample_token() -> AppleMusicToken {
+        AppleMusicToken {
+            access_token: "abc123".to_string(),
+            expires_in: 3600,
+            refresh_token: "refresh-me".to_string(),
+        }
+    }
+
+    /// The token's JSON wire shape, the payload the token tests deserialize. Kept
+    /// a hand-written literal rather than derived from `sample_token`, so
+    /// `apple_music_token_round_trips_through_json` still pins the serialized
+    /// field names — a `#[serde(rename)]` would change `to_value(sample_token())`
+    /// but not this object. The missing- and unknown-field probes hand it in as
+    /// the full, valid payload.
+    fn token_payload() -> serde_json::Value {
+        json!({ "access_token": "abc123", "expires_in": 3600, "refresh_token": "refresh-me" })
+    }
+
     #[test]
     fn apple_music_error_displays_its_message() {
         // The seam's error type formats as the cause itself, so a reported
@@ -380,25 +403,14 @@ mod tests {
     // the value survives an out-and-back trip through `serde_json` unchanged.
     #[test]
     fn apple_music_token_round_trips_through_json() {
-        assert_serializes_as(
-            AppleMusicToken {
-                access_token: "abc123".to_string(),
-                expires_in: 3600,
-                refresh_token: "refresh-me".to_string(),
-            },
-            json!({ "access_token": "abc123", "expires_in": 3600, "refresh_token": "refresh-me" }),
-        );
+        assert_serializes_as(sample_token(), token_payload());
     }
 
     // As with the model types: a payload missing any required field must
     // error, not silently yield a half-populated token.
     #[test]
     fn apple_music_token_deserialization_rejects_missing_required_fields() {
-        assert_every_field_required::<AppleMusicToken>(json!({
-            "access_token": "abc123",
-            "expires_in": 3600,
-            "refresh_token": "refresh-me"
-        }));
+        assert_every_field_required::<AppleMusicToken>(token_payload());
     }
 
     // The unknown-field half of the token's deserialization contract: a real
@@ -410,18 +422,11 @@ mod tests {
     // test while breaking real authentication.
     #[test]
     fn apple_music_token_deserialization_ignores_unknown_fields() {
-        assert_unknown_fields_tolerated::<AppleMusicToken>(
-            json!({
-                "access_token": "abc123",
-                "expires_in": 3600,
-                "refresh_token": "refresh-me",
-                "token_type": "Bearer"
-            }),
-            AppleMusicToken {
-                access_token: "abc123".to_string(),
-                expires_in: 3600,
-                refresh_token: "refresh-me".to_string(),
-            },
-        );
+        let mut payload = token_payload();
+        payload
+            .as_object_mut()
+            .expect("the token payload is a JSON object")
+            .insert("token_type".to_string(), json!("Bearer"));
+        assert_unknown_fields_tolerated::<AppleMusicToken>(payload, sample_token());
     }
 }
