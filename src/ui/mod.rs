@@ -266,6 +266,13 @@ mod tests {
     /// this drive-then-feed-then-assert flow; only the message variant, the
     /// buffer, the id key, and the expected ids differ, so they come in as
     /// parameters and the flow lives here once.
+    ///
+    /// `clippy::too_many_arguments` is allowed: the eight parameters are the
+    /// natural vocabulary of the three fetch tests — each one is supplied by
+    /// every call site, and bundling them into a struct would only add a
+    /// construction site per test — so the arity is the shape of the flow,
+    /// not a readability smell.
+    #[allow(clippy::too_many_arguments)]
     async fn drive_fetch_and_assert_loaded<T, Extract, Buffer, Key>(
         player: &mut WinampPlayer,
         task: Task<Message>,

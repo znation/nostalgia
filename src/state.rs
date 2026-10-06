@@ -106,9 +106,11 @@ mod tests {
 
     #[test]
     fn stop_clears_playing_flag_and_keeps_current_track() {
-        let mut state = AppState::default();
-        state.current_track = Some("song-1".to_string());
-        state.is_playing = true;
+        let mut state = AppState {
+            current_track: Some("song-1".to_string()),
+            is_playing: true,
+            ..Default::default()
+        };
         let track = state.current_track.clone();
         let volume = state.volume;
         assert!(state.is_playing);
