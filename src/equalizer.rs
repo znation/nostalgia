@@ -51,6 +51,23 @@ mod tests {
         assert_eq!(BAND_FREQUENCIES.len(), BAND_COUNT);
     }
 
+    // `BAND_FREQUENCIES` is the equalizer's user-visible content: `view_equalizer`
+    // renders one label under each of the ten sliders, and the base skin shows
+    // the hundreds-of-hertz bands in full and abbreviates the kilohertz ones.
+    // The length test above compares the array to itself (`BAND_COUNT` is
+    // defined as `BAND_FREQUENCIES.len()`), so it can never fail; a typo or a
+    // reordered band would pass every test while the panel silently showed the
+    // wrong frequency. Pin the exact labels, low to high.
+    #[test]
+    fn band_frequencies_are_the_winamp_labels_in_order() {
+        assert_eq!(
+            BAND_FREQUENCIES,
+            [
+                "60", "170", "310", "600", "1K", "3K", "6K", "12K", "14K", "16K"
+            ]
+        );
+    }
+
     #[test]
     fn clamp_gain_caps_at_the_upper_bound() {
         assert_eq!(clamp_gain(99.0), GAIN_MAX_DB);
