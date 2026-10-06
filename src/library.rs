@@ -36,7 +36,7 @@ pub struct Song {
 mod tests {
     use super::{Album, Artist, Song};
     use crate::test_support::{
-        assert_every_field_required, assert_round_trips, assert_unknown_fields_tolerated,
+        assert_every_field_required, assert_serializes_as, assert_unknown_fields_tolerated,
         sample_album, sample_artist, sample_song,
     };
     use serde_json::json;
@@ -46,48 +46,33 @@ mod tests {
     /// lets a live service replace the stub without touching the model or UI.
     #[test]
     fn artist_serializes_field_names_and_round_trips() {
-        let artist = sample_artist();
-
         // Field names are serialized as-is (no renames): the wire contract a
         // real Apple Music payload must satisfy.
-        let value = serde_json::to_value(&artist).unwrap();
-        assert_eq!(
-            value,
-            json!({ "id": "artist-1", "name": "The Sample Band" })
+        assert_serializes_as(
+            sample_artist(),
+            json!({ "id": "artist-1", "name": "The Sample Band" }),
         );
-
-        assert_round_trips(artist);
     }
 
     #[test]
     fn album_serializes_field_names_and_round_trips() {
-        let album = sample_album();
-
         // As with Artist: field names are serialized as-is (no renames), the
         // wire contract a real Apple Music payload must satisfy. The
         // round-trip alone passes for *any* field names, so the exact JSON
         // shape is pinned before it.
-        let value = serde_json::to_value(&album).unwrap();
-        assert_eq!(
-            value,
-            json!({ "id": "album-1", "title": "First Record", "artist_id": "artist-1" })
+        assert_serializes_as(
+            sample_album(),
+            json!({ "id": "album-1", "title": "First Record", "artist_id": "artist-1" }),
         );
-
-        assert_round_trips(album);
     }
 
     #[test]
     fn song_serializes_field_names_and_round_trips() {
-        let song = sample_song();
-
         // The Song twin of the Album and Artist field-name pins.
-        let value = serde_json::to_value(&song).unwrap();
-        assert_eq!(
-            value,
-            json!({ "id": "song-1", "title": "Opening", "album_id": "album-1" })
+        assert_serializes_as(
+            sample_song(),
+            json!({ "id": "song-1", "title": "Opening", "album_id": "album-1" }),
         );
-
-        assert_round_trips(song);
     }
 
     #[test]

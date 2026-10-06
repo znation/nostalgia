@@ -128,13 +128,26 @@ where
     }
 }
 
+/// Asserts that `value` serializes to exactly `expected` and then survives an
+/// out-and-back trip through `serde_json` unchanged. The library model types
+/// and `apple_music`'s auth-token test each pin the same two halves — the
+/// exact serialized field names (a `#[serde(rename)]` would pass a round-trip
+/// alone but fails this pin), then the round trip via [`assert_round_trips`] —
+/// so the serialize-then-compare-then-round-trip sequence lives here once and
+/// no caller can pin one half without the other.
+#[cfg(test)]
+pub(crate) fn assert_serializes_as<T>(value: T, expected: serde_json::Value)
+where
+    T: PartialEq + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned,
+{
+    assert_eq!(serde_json::to_value(&value).unwrap(), expected);
+    assert_round_trips(value);
+}
+
 /// Asserts that `value` survives an out-and-back trip through `serde_json`
-/// unchanged: serialize it, deserialize the result, and compare. The library
-/// model types and `apple_music`'s auth-token test each pin this contract, so
-/// the serialize-then-deserialize-then-compare chain lives here once. Each
-/// round-trip test asserts the exact serialized field names first, then calls
-/// this; a `#[serde(rename)]` would pass a round-trip alone but fails that
-/// field-name pin.
+/// unchanged: serialize it, deserialize the result, and compare. The
+/// round-trip half of [`assert_serializes_as`], kept separate so the chain has
+/// one named implementation.
 #[cfg(test)]
 pub(crate) fn assert_round_trips<T>(value: T)
 where

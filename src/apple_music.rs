@@ -156,7 +156,7 @@ fn lookup<T: Clone>(index: &HashMap<String, Vec<T>>, id: &str) -> Vec<T> {
 mod tests {
     use super::*;
     use crate::test_support::{
-        assert_every_field_required, assert_round_trips, assert_unknown_fields_tolerated,
+        assert_every_field_required, assert_serializes_as, assert_unknown_fields_tolerated,
     };
     use serde_json::json;
 
@@ -334,19 +334,14 @@ mod tests {
     // the value survives an out-and-back trip through `serde_json` unchanged.
     #[test]
     fn apple_music_token_round_trips_through_json() {
-        let token = AppleMusicToken {
-            access_token: "abc123".to_string(),
-            expires_in: 3600,
-            refresh_token: "refresh-me".to_string(),
-        };
-
-        let value = serde_json::to_value(&token).unwrap();
-        assert_eq!(
-            value,
-            json!({ "access_token": "abc123", "expires_in": 3600, "refresh_token": "refresh-me" })
+        assert_serializes_as(
+            AppleMusicToken {
+                access_token: "abc123".to_string(),
+                expires_in: 3600,
+                refresh_token: "refresh-me".to_string(),
+            },
+            json!({ "access_token": "abc123", "expires_in": 3600, "refresh_token": "refresh-me" }),
         );
-
-        assert_round_trips(token);
     }
 
     // As with the model types: a payload missing any required field must
