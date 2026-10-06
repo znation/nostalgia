@@ -246,6 +246,28 @@ mod tests {
         (WinampPlayer::new(state.clone()), state)
     }
 
+    /// Drives an iced `Task` to completion and hands its single `Output`
+    /// action to `check`. `update` only schedules work as a `Task`, so a test
+    /// that wants to observe the resulting message — `TrackPlayed` after
+    /// playback, a `*Loaded` message after a fetch — must run the task itself
+    /// the way the iced runtime would. Both the playback and the fetch tests
+    /// do exactly that, so the stream plumbing and the "exactly one `Output`"
+    /// assertion live here once instead of at each call site.
+    async fn drive_task(task: Task<Message>, what: &str, mut check: impl FnMut(Message)) {
+        use futures::StreamExt;
+
+        let mut stream =
+            iced_runtime::task::into_stream(task).expect("task must schedule a stream");
+        let action = stream
+            .next()
+            .await
+            .expect("task must yield a completion message");
+        match action {
+            iced_runtime::Action::Output(message) => check(message),
+            other => panic!("unexpected {what} task output: {other:?}"),
+        }
+    }
+
     // `Message::PlayPause` uses `blocking_lock`, which panics inside an async
     // runtime, so this stays a plain test (no `#[tokio::test]`).
     #[test]
@@ -301,22 +323,13 @@ mod tests {
     // state it mutates through the service.
     #[tokio::test]
     async fn track_selected_starts_playback_of_the_selected_track() {
-        use futures::StreamExt;
-
         let (mut player, state) = test_player();
 
         let task = update(&mut player, Message::TrackSelected("song-1".to_string()));
-        let mut stream =
-            iced_runtime::task::into_stream(task).expect("track selection must schedule playback");
-
-        let action = stream
-            .next()
-            .await
-            .expect("playback task must yield a completion message");
-        match action {
-            iced_runtime::Action::Output(Message::TrackPlayed) => {}
-            other => panic!("unexpected playback task output: {other:?}"),
-        }
+        drive_task(task, "playback", |message| {
+            assert!(matches!(message, Message::TrackPlayed));
+        })
+        .await;
 
         let state = state.lock().await;
         assert_eq!(state.current_track.as_deref(), Some("song-1"));
@@ -481,8 +494,6 @@ mod tests {
     // load-path arms would produce it.
     #[tokio::test]
     async fn fetch_into_schedules_fetch_and_maps_result_to_loaded_message() {
-        use futures::StreamExt;
-
         let (player, _state) = test_player();
 
         let task = fetch_into(
@@ -490,18 +501,13 @@ mod tests {
             |service| async move { service.get_favorite_artists().await },
             Message::ArtistsLoaded,
         );
-        let mut stream = iced_runtime::task::into_stream(task).expect("fetch must schedule a task");
-
-        let action = stream
-            .next()
-            .await
-            .expect("fetch task must yield a completion message");
-        match action {
-            iced_runtime::Action::Output(Message::ArtistsLoaded(artists)) => {
-                assert!(!artists.is_empty());
-            }
-            other => panic!("unexpected fetch task output: {other:?}"),
-        }
+        drive_task(task, "fetch", |message| {
+            assert!(matches!(
+                message,
+                Message::ArtistsLoaded(artists) if !artists.is_empty()
+            ));
+        })
+        .await;
     }
 
     #[test]
