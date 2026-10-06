@@ -406,6 +406,36 @@ mod tests {
         assert!(state.is_playing);
     }
 
+    // `init_service` is the startup seam `main` calls before the UI boots,
+    // and the hook a real Apple Music backend will authenticate and load the
+    // library through. Today's stub only prints that it is ready, and no test
+    // reaches it. Pin the one contract the stub carries — it leaves the
+    // shared playback state exactly as it found it — so a regression that
+    // wired the startup hook into `AppState` (or reused `pause`'s
+    // clear-the-flag logic) can't ship silently. The stub takes the handle a
+    // real implementation will use, so the untouched state is the observable
+    // contract, as with `next_track`/`previous_track` above. `blocking_lock`
+    // panics inside an async runtime, so this stays a plain test.
+    #[test]
+    fn init_service_leaves_the_shared_state_untouched() {
+        let state = Arc::new(Mutex::new(AppState::default()));
+        {
+            let mut state = state.blocking_lock();
+            state.current_track = Some("song-1".to_string());
+            state.is_playing = true;
+            state.repeat = true;
+            state.set_volume(0.7);
+        }
+
+        init_service(state.clone());
+
+        let state = state.blocking_lock();
+        assert_eq!(state.current_track.as_deref(), Some("song-1"));
+        assert!(state.is_playing);
+        assert!(state.repeat);
+        assert_eq!(state.volume(), 0.7);
+    }
+
     // `AppleMusicToken` is the auth payload the real Apple Music API will
     // hand back, so its wire contract is pinned the same way the model types
     // in `library.rs` are: field names serialize as-is, the value round-trips
