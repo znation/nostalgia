@@ -933,6 +933,35 @@ mod tests {
         .await;
     }
 
+    // The success path above proves `fetch_into` delivers a `*Loaded` message
+    // for a successful fetch; this pins the error path — a fetch that returns
+    // `Err` must still yield the matching `*Loaded` message with an empty
+    // list, so the browse view falls back to an empty list instead of waiting
+    // forever on a list that never arrives. `loaded_or_empty`'s error branch
+    // is tested directly above, but no test drives a failing fetch *through*
+    // `fetch_into` — the real service always succeeds, so the error path is
+    // reachable only by injecting a failing fetch closure, which is exactly
+    // what this does. A regression that swallowed the error (or failed to
+    // emit any message) would leave the browse view stuck, and only this
+    // test would catch it.
+    #[tokio::test]
+    async fn fetch_into_maps_a_failed_fetch_to_an_empty_loaded_message() {
+        let (player, _state) = test_player();
+
+        let task = fetch_into(
+            &player.apple_music_service,
+            |_service| async { Err::<Vec<Album>, String>("boom".to_string()) },
+            Message::AlbumsLoaded,
+        );
+        drive_task(task, "failed fetch", |message| {
+            assert!(matches!(
+                message,
+                Message::AlbumsLoaded(albums) if albums.is_empty()
+            ));
+        })
+        .await;
+    }
+
     #[test]
     fn new_player_starts_at_artists_with_nothing_selected() {
         let (player, _state) = test_player();
