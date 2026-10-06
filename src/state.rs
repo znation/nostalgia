@@ -76,6 +76,15 @@ impl AppState {
 /// that *are* comparable, `+inf` and `-inf`, clamp to the nearer bound like
 /// any other out-of-range value: `+inf` to `1.0` (loudest), `-inf` to `0.0`
 /// (silence).
+///
+/// `#[must_use]` guards the contract that a clamped value must be stored:
+/// the function's entire purpose is its returned value, so a caller that
+/// drops it — `state::clamp_volume(volume);` as a statement — has silently
+/// done nothing, leaving the unclamped (possibly NaN) volume in shared
+/// state with no error. Making the result `#[must_use]` turns that silent
+/// no-op into a compile error, the same way the `f32::clamp` NaN hole is
+/// caught by the function itself.
+#[must_use]
 pub fn clamp_volume(volume: f32) -> f32 {
     if volume.is_nan() {
         0.0
