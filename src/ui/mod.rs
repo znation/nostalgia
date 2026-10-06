@@ -166,12 +166,22 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
     }
 }
 
+/// The Now Playing bar label: the title of `current_track` when it is one of
+/// `songs`; the raw id when it isn't in `songs`; "Nothing" when stopped.
+fn now_playing_label(songs: &[Song], current_track: Option<&str>) -> String {
+    match current_track {
+        Some(id) => songs
+            .iter()
+            .find(|song| song.id == id)
+            .map(|song| song.title.clone())
+            .unwrap_or_else(|| id.to_string()),
+        None => "Nothing".to_string(),
+    }
+}
+
 fn view(player: &WinampPlayer) -> Element<'_, Message> {
     let state = player.state.blocking_lock();
-    let now_playing = state
-        .current_track
-        .clone()
-        .unwrap_or_else(|| "Nothing".to_string());
+    let now_playing = now_playing_label(&player.songs, state.current_track.as_deref());
     let play_label = if state.is_playing { "Pause" } else { "Play" };
     let volume = state.volume;
     drop(state);
@@ -360,5 +370,43 @@ mod tests {
         assert!(player.artists.is_empty());
         assert!(player.albums.is_empty());
         assert!(player.songs.is_empty());
+    }
+
+    #[test]
+    fn now_playing_label_shows_nothing_when_stopped() {
+        let songs = vec![Song {
+            id: "song-1".to_string(),
+            title: "Opening".to_string(),
+            album_id: "album-1".to_string(),
+        }];
+        assert_eq!(now_playing_label(&songs, None), "Nothing");
+    }
+
+    #[test]
+    fn now_playing_label_resolves_known_track_to_title() {
+        let songs = vec![Song {
+            id: "song-1".to_string(),
+            title: "Opening".to_string(),
+            album_id: "album-1".to_string(),
+        }];
+        assert_eq!(now_playing_label(&songs, Some("song-1")), "Opening");
+    }
+
+    #[test]
+    fn now_playing_label_falls_back_to_id_when_track_not_in_songs() {
+        let songs = vec![Song {
+            id: "song-1".to_string(),
+            title: "Opening".to_string(),
+            album_id: "album-1".to_string(),
+        }];
+        assert_eq!(
+            now_playing_label(&songs, Some("no-such-song")),
+            "no-such-song"
+        );
+    }
+
+    #[test]
+    fn now_playing_label_falls_back_to_id_when_no_songs_loaded() {
+        assert_eq!(now_playing_label(&[], Some("song-1")), "song-1");
     }
 }
