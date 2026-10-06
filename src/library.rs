@@ -135,28 +135,29 @@ where
     assert!(serde_json::from_value::<T>(payload).is_err());
 }
 
+/// Asserts that `value` survives an out-and-back trip through `serde_json`
+/// unchanged: serialize it, deserialize the result, and compare. The three
+/// model types below and `apple_music`'s auth-token test each pin this
+/// contract, so the serialize-then-deserialize-then-compare chain lives here
+/// once. Each round-trip test asserts the exact serialized field names first,
+/// then calls this; a `#[serde(rename)]` would pass a round-trip alone but
+/// fails that field-name pin.
+#[cfg(test)]
+pub(crate) fn assert_round_trips<T>(value: T)
+where
+    T: PartialEq + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned,
+{
+    let back: T = serde_json::from_value(serde_json::to_value(&value).unwrap()).unwrap();
+    assert_eq!(back, value);
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        Album, Artist, Song, assert_missing_field_rejected, sample_album, sample_artist,
-        sample_song,
+        Album, Artist, Song, assert_missing_field_rejected, assert_round_trips, sample_album,
+        sample_artist, sample_song,
     };
     use serde_json::json;
-    use std::fmt::Debug;
-
-    /// The model's wire contract: a value survives an out-and-back trip
-    /// through `serde_json` unchanged. Every model type is pinned for the
-    /// round-trip, so the serialize-then-deserialize-then-compare chain lives
-    /// here once. Each round-trip test asserts the exact serialized field
-    /// names first, then calls this; a `#[serde(rename)]` would pass a
-    /// round-trip alone but fails that field-name pin.
-    fn assert_round_trips<T>(value: T)
-    where
-        T: PartialEq + Debug + serde::Serialize + serde::de::DeserializeOwned,
-    {
-        let back: T = serde_json::from_value(serde_json::to_value(&value).unwrap()).unwrap();
-        assert_eq!(back, value);
-    }
 
     /// The real Apple Music API will hand these types to the app as JSON, so
     /// the round-trip (out and back through `serde_json`) is the contract that

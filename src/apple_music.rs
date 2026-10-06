@@ -20,7 +20,7 @@ use crate::library::{Album, Artist, Song};
 use crate::sample_library::sample_library;
 use crate::state::AppState;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct AppleMusicToken {
     access_token: String,
     expires_in: u64,
@@ -136,7 +136,7 @@ fn lookup<T: Clone>(index: &HashMap<String, Vec<T>>, id: &str) -> Vec<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::library::assert_missing_field_rejected;
+    use crate::library::{assert_missing_field_rejected, assert_round_trips};
     use serde_json::json;
 
     fn test_service() -> AppleMusicService {
@@ -317,10 +317,7 @@ mod tests {
             json!({ "access_token": "abc123", "expires_in": 3600, "refresh_token": "refresh-me" })
         );
 
-        let back: AppleMusicToken = serde_json::from_value(value).unwrap();
-        assert_eq!(back.access_token, "abc123");
-        assert_eq!(back.expires_in, 3600);
-        assert_eq!(back.refresh_token, "refresh-me");
+        assert_round_trips(token);
     }
 
     // As with the model types: a payload missing a required field must error,
