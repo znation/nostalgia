@@ -249,6 +249,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn get_albums_by_artist_returns_all_matching_albums_in_library_order() {
+        // The lookup table must keep every album of a multi-album artist and
+        // preserve the library's original order: a regression that dropped
+        // duplicates or reversed a group would still pass the all()-style
+        // checks above, so pin the exact group here.
+        let albums = test_service()
+            .get_albums_by_artist("artist-1")
+            .await
+            .unwrap();
+        let ids: Vec<&str> = albums.iter().map(|album| album.id.as_str()).collect();
+        assert_eq!(ids, vec!["album-1", "album-2"]);
+
+        // An existing artist with no albums yields an empty list, distinct
+        // from an unknown id (same lookup path, but worth pinning the sample).
+        assert!(test_service()
+            .get_albums_by_artist("artist-3")
+            .await
+            .unwrap()
+            .is_empty());
+    }
+
+    #[tokio::test]
     async fn get_albums_by_artist_unknown_id_is_empty() {
         let albums = test_service()
             .get_albums_by_artist("no-such-artist")
@@ -263,6 +285,18 @@ mod tests {
         let songs = service.get_songs_from_album("album-1").await.unwrap();
         assert!(!songs.is_empty());
         assert!(songs.iter().all(|song| song.album_id == "album-1"));
+    }
+
+    #[tokio::test]
+    async fn get_songs_from_album_returns_all_songs_in_library_order() {
+        // As with albums: a multi-song album must come back whole and in the
+        // sample library's order, not a subset or a reversed group.
+        let songs = test_service()
+            .get_songs_from_album("album-1")
+            .await
+            .unwrap();
+        let ids: Vec<&str> = songs.iter().map(|song| song.id.as_str()).collect();
+        assert_eq!(ids, vec!["song-1", "song-2", "song-3"]);
     }
 
     #[tokio::test]
