@@ -13,9 +13,10 @@ _None yet._
 
 Fixed by the iced 0.14 port (PLANS.md "Make the app build on iced 0.14 and
 render a browsable sample library", done 2026-10-04). The four root causes:
-1. `Artist`/`Album`/`Song` types and the `get_favorite_artists` /
-   `get_albums_by_artist` / `get_songs_from_album` methods now exist in
-   `src/apple_music/mod.rs`, backed by an in-memory sample library.
+1. `Artist`/`Album`/`Song` types now live in `src/library.rs`, and the
+   `get_favorite_artists` / `get_albums_by_artist` / `get_songs_from_album`
+   methods exist on `AppleMusicService` in `src/apple_music.rs`, backed by
+   an in-memory sample library.
 2. The UI was ported from the pre-0.14 `Application` trait to the
    `iced::application(boot, update, view)` builder with a synchronous
    `update` returning `Task`; `iced_native` was dropped from Cargo.toml.

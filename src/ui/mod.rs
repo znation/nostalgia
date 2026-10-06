@@ -8,7 +8,8 @@ use tokio::sync::Mutex;
 mod views;
 
 use crate::{
-    apple_music::{Album, AppleMusicService, Artist, Song},
+    apple_music::AppleMusicService,
+    library::{Album, Artist, Song},
     state::AppState,
 };
 

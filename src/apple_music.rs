@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, OnceLock};
 use tokio::sync::Mutex;
 
+use crate::library::{Album, Artist, Song};
 use crate::state::AppState;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -10,29 +11,6 @@ struct AppleMusicToken {
     access_token: String,
     expires_in: u64,
     refresh_token: String,
-}
-
-/// An artist in the user's library.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Artist {
-    pub id: String,
-    pub name: String,
-}
-
-/// An album by an [`Artist`], linked to it by [`Album::artist_id`].
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Album {
-    pub id: String,
-    pub title: String,
-    pub artist_id: String,
-}
-
-/// A song on an [`Album`], linked to it by [`Song::album_id`].
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Song {
-    pub id: String,
-    pub title: String,
-    pub album_id: String,
 }
 
 /// The music-library service. Until the real Apple Music API lands, every

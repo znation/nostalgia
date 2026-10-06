@@ -123,7 +123,7 @@ while `Cargo.toml` pins iced 0.14, whose `Program` requires a synchronous
 update, view)` builder. Independently, the UI calls
 `AppleMusicService::get_favorite_artists`, `get_albums_by_artist`,
 `get_songs_from_album` and imports `Artist`, `Album`, `Song`, none of which
-`src/apple_music/mod.rs` defines. Land the artist → album → song library-browse
+`src/library.rs` defines. Land the artist → album → song library-browse
 flow end to end: add the missing model and service methods (backed by an
 in-memory sample library, matching the existing stub data in `get_library`; real
 Apple Music auth/API is a later, larger plan), port the UI to iced 0.14, and get
@@ -131,11 +131,12 @@ Apple Music auth/API is a later, larger plan), port the UI to iced 0.14, and get
 
 **Approach.**
 
-- `src/apple_music/mod.rs`:
+- `src/library.rs`:
   - Add `pub struct Artist { pub id: String, pub name: String }`,
     `pub struct Album { pub id: String, pub title: String, pub artist_id: String }`,
     `pub struct Song { pub id: String, pub title: String, pub album_id: String }`,
     each deriving `Clone, Debug, PartialEq, Serialize, Deserialize`.
+- `src/apple_music.rs`:
   - Add a private builder `fn sample_library() -> SampleLibrary` returning a
     small in-memory library (3 artists, 3 albums, 5 songs) in one struct so
     the browse queries and the tests share the same data.
@@ -181,8 +182,8 @@ Apple Music auth/API is a later, larger plan), port the UI to iced 0.14, and get
 - `Cargo.toml`: drop the `iced_native` dependency; enable tokio `macros` and
   `rt` features for the `#[tokio::test]` runtime (only `sync` was enabled).
 
-**Files touched.** `Cargo.toml`, `Cargo.lock`, `src/apple_music/mod.rs`,
-`src/ui/mod.rs`, `src/ui/views.rs`, `src/main.rs`.
+**Files touched.** `Cargo.toml`, `Cargo.lock`, `src/library.rs`,
+`src/apple_music.rs`, `src/ui/mod.rs`, `src/ui/views.rs`, `src/main.rs`.
 
 **Acceptance criteria.**
 - `cargo build` succeeds.

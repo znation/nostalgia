@@ -2,6 +2,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 mod apple_music;
+mod library;
 mod state;
 mod ui;
 

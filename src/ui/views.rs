@@ -11,7 +11,7 @@ use iced::{
     widget::{Button, Column, Row, Scrollable, Space, Text},
 };
 
-use crate::apple_music::{Album, Artist, Song};
+use crate::library::{Album, Artist, Song};
 
 use super::Message;
 
