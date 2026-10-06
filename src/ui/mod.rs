@@ -139,27 +139,29 @@ fn step_track(
     }
 }
 
+/// Locks the shared playback state, applies `mutation` to it, and returns no
+/// task. The Play/Pause, Stop, and VolumeChange arms all repeat the same
+/// synchronous shared-state update — `blocking_lock`, one mutation, then
+/// `Task::none()` — so the lock-and-noop shape lives here once and each arm
+/// only names its mutation. Asynchronous work (fetches) goes through
+/// [`fetch_into`] instead.
+fn mutate_state(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> Task<Message> {
+    let mut state = player.state.blocking_lock();
+    mutation(&mut state);
+    Task::none()
+}
+
 fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
     match message {
-        Message::PlayPause => {
-            let mut state = player.state.blocking_lock();
-            state.toggle_playing();
-            Task::none()
-        }
+        Message::PlayPause => mutate_state(player, AppState::toggle_playing),
         // Stop is synchronous, exactly like PlayPause: the stub has no
         // playback position yet, so its only observable effect is the cleared
         // playing flag — identical to Pause today. The seam is the
         // distinction: once real playback lands, Stop also resets the track
         // position while Pause keeps it.
-        Message::Stop => {
-            let mut state = player.state.blocking_lock();
-            state.stop();
-            Task::none()
-        }
+        Message::Stop => mutate_state(player, AppState::stop),
         Message::VolumeChange(volume) => {
-            let mut state = player.state.blocking_lock();
-            state.volume = state::clamp_volume(volume);
-            Task::none()
+            mutate_state(player, |state| state.volume = state::clamp_volume(volume))
         }
         Message::NextTrack => step_track(player, transport::next_track_id),
         Message::PreviousTrack => step_track(player, transport::previous_track_id),
