@@ -31,6 +31,23 @@ fn assert_view(player: &WinampPlayer, expected: CurrentView) {
     assert_eq!(player.current_view, expected);
 }
 
+/// Asserts `message` flips the shared-state flag `read_flag` from false to
+/// true and back: the PlayPause, ToggleRepeat, and ToggleEqualizer update
+/// arms all do the same one-flag flip, differing only in which flag they
+/// read, so the lock-read-update sequence lives here once. The arms use
+/// `blocking_lock`, which panics inside an async runtime, so this stays a
+/// plain (non-async) helper.
+fn assert_toggles_shared_state(message: Message, read_flag: impl Fn(&AppState) -> bool) {
+    let (mut player, state) = test_player();
+    assert!(!read_flag(&state.blocking_lock()));
+
+    let _ = update(&mut player, message.clone());
+    assert!(read_flag(&state.blocking_lock()));
+
+    let _ = update(&mut player, message);
+    assert!(!read_flag(&state.blocking_lock()));
+}
+
 /// Drives an iced `Task` to completion and hands its single `Output`
 /// action to `check`. `update` only schedules work as a `Task`, so a test
 /// that wants to observe the resulting message — `TrackPlayed` after
@@ -88,47 +105,24 @@ async fn drive_fetch_and_assert_loaded<T, Buffer, Key>(
     assert_eq!(ids, expected_ids);
 }
 
-// `Message::PlayPause` uses `blocking_lock`, which panics inside an async
-// runtime, so this stays a plain test (no `#[tokio::test]`).
+// The three toggle arms share one shape: read the flag, update, read it
+// again. `assert_toggles_shared_state` owns that shape, so each test only
+// names its message and the flag it flips. All three use `blocking_lock`,
+// which panics inside an async runtime, so they stay plain tests (no
+// `#[tokio::test]`).
 #[test]
 fn play_pause_toggles_is_playing() {
-    let (mut player, state) = test_player();
-
-    let _ = update(&mut player, Message::PlayPause);
-    assert!(state.blocking_lock().is_playing);
-
-    let _ = update(&mut player, Message::PlayPause);
-    assert!(!state.blocking_lock().is_playing);
+    assert_toggles_shared_state(Message::PlayPause, |state| state.is_playing);
 }
 
-// `Message::ToggleRepeat` uses `blocking_lock`, which panics inside an
-// async runtime, so this stays a plain test (no `#[tokio::test]`), like
-// `play_pause_toggles_is_playing`.
 #[test]
 fn toggle_repeat_flips_shared_state() {
-    let (mut player, state) = test_player();
-    assert!(!state.blocking_lock().repeat);
-
-    let _ = update(&mut player, Message::ToggleRepeat);
-    assert!(state.blocking_lock().repeat);
-
-    let _ = update(&mut player, Message::ToggleRepeat);
-    assert!(!state.blocking_lock().repeat);
+    assert_toggles_shared_state(Message::ToggleRepeat, |state| state.repeat);
 }
 
-// The equalizer mutators all use `blocking_lock`, which panics inside an
-// async runtime, so these stay plain tests (no `#[tokio::test]`), like
-// `toggle_repeat_flips_shared_state`.
 #[test]
 fn toggle_equalizer_flips_shared_state() {
-    let (mut player, state) = test_player();
-    assert!(!state.blocking_lock().eq_enabled);
-
-    let _ = update(&mut player, Message::ToggleEqualizer);
-    assert!(state.blocking_lock().eq_enabled);
-
-    let _ = update(&mut player, Message::ToggleEqualizer);
-    assert!(!state.blocking_lock().eq_enabled);
+    assert_toggles_shared_state(Message::ToggleEqualizer, |state| state.eq_enabled);
 }
 
 #[test]
