@@ -496,6 +496,32 @@ fn next_track_follows_the_shared_repeat_flag_at_the_albums_end() {
     assert_track_selected(task, "song-1");
 }
 
+// The Previous arm forwards the shared Repeat flag to the transport
+// helper, the mirror of the Next test above: from the first song,
+// Previous wraps to the last when Repeat is on and re-lands on the first
+// when it is off. The arithmetic is pinned in `transport.rs`
+// (`previous_wraps_from_first_to_last` and
+// `previous_stays_on_first_without_repeat`); this pins the Previous arm's
+// wiring over the shared flag, which no other test drives — the other
+// Previous wiring tests set a current track with Repeat off or load no
+// songs, so an arm that dropped the shared flag (or passed a stale one)
+// would clear every existing test and only fail here.
+#[test]
+fn previous_track_follows_the_shared_repeat_flag_at_the_albums_start() {
+    let (mut player, state) = test_player();
+    player.songs = stepping_songs();
+    state.blocking_lock().current_track = Some("song-1".to_string());
+
+    // Repeat off (the default): Previous from the first song stays on it.
+    let task = update(&mut player, Message::PreviousTrack);
+    assert_track_selected(task, "song-1");
+
+    // Repeat on: Previous from the first song wraps to the last.
+    state.blocking_lock().repeat = true;
+    let task = update(&mut player, Message::PreviousTrack);
+    assert_track_selected(task, "song-3");
+}
+
 /// Feeds a `*Loaded` message built from `items` back through `update` and
 /// asserts the list lands in `buffer` unchanged. The three
 /// `*_loaded_populates_list` tests — artists, albums, songs — each used
