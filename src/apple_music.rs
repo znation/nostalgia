@@ -136,6 +136,7 @@ fn lookup<T: Clone>(index: &HashMap<String, Vec<T>>, id: &str) -> Vec<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::library::assert_missing_field_rejected;
     use serde_json::json;
 
     fn test_service() -> AppleMusicService {
@@ -326,9 +327,9 @@ mod tests {
     // not silently yield a half-populated token.
     #[test]
     fn apple_music_token_deserialization_rejects_missing_required_fields() {
-        let result: Result<AppleMusicToken, _> =
-            serde_json::from_value(json!({ "access_token": "abc123", "expires_in": 3600 }));
-        assert!(result.is_err());
+        assert_missing_field_rejected::<AppleMusicToken>(
+            json!({ "access_token": "abc123", "expires_in": 3600 }),
+        );
     }
 
     // The unknown-field half of the token's deserialization contract: a real

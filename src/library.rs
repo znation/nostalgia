@@ -122,9 +122,25 @@ pub(crate) fn sample_song() -> Song {
     }
 }
 
+/// Asserts that `payload` fails to deserialize as `T`, which requires every
+/// field: a payload missing one must error rather than silently yield a
+/// half-populated value the UI would render as blank data. The three model
+/// types below and `apple_music`'s auth-token test each probe this contract,
+/// so the `from_value`-then-`is_err` pair lives here once.
+#[cfg(test)]
+pub(crate) fn assert_missing_field_rejected<T>(payload: serde_json::Value)
+where
+    T: serde::de::DeserializeOwned,
+{
+    assert!(serde_json::from_value::<T>(payload).is_err());
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Album, Artist, Song, sample_album, sample_artist, sample_song};
+    use super::{
+        Album, Artist, Song, assert_missing_field_rejected, sample_album, sample_artist,
+        sample_song,
+    };
     use serde_json::json;
     use std::fmt::Debug;
 
@@ -242,8 +258,7 @@ mod tests {
     fn deserialization_rejects_missing_required_fields() {
         // A payload missing a required field must error, not silently yield a
         // half-populated model the UI would render as blank data.
-        let result: Result<Artist, _> = serde_json::from_value(json!({ "id": "artist-1" }));
-        assert!(result.is_err());
+        assert_missing_field_rejected::<Artist>(json!({ "id": "artist-1" }));
     }
 
     // The missing-field contract holds for every model type, not just Artist:
@@ -254,15 +269,11 @@ mod tests {
     // rendering blank data. Each gets the same explicit probe as Artist.
     #[test]
     fn album_deserialization_rejects_missing_required_fields() {
-        let result: Result<Album, _> =
-            serde_json::from_value(json!({ "id": "album-1", "title": "First Record" }));
-        assert!(result.is_err());
+        assert_missing_field_rejected::<Album>(json!({ "id": "album-1", "title": "First Record" }));
     }
 
     #[test]
     fn song_deserialization_rejects_missing_required_fields() {
-        let result: Result<Song, _> =
-            serde_json::from_value(json!({ "id": "song-1", "title": "Opening" }));
-        assert!(result.is_err());
+        assert_missing_field_rejected::<Song>(json!({ "id": "song-1", "title": "Opening" }));
     }
 }
