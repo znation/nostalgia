@@ -5,7 +5,95 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Add the Winamp equalizer panel: on/off, preamp, and ten band sliders
+
+Found by plan 2026-10-06.
+
+**Goal.** The equalizer is the largest classic Winamp UI element the app still
+lacks — the README's own mockup (`docs/screenshots/equalizer.png`) shows it
+docked under the main window, but no equalizer code exists (`grep -ri equaliz
+src` finds nothing). Land the equalizer's core controls as a panel in the
+existing single window: an EQ on/off toggle, a preamp slider, and ten vertical
+band sliders (60 Hz–16 kHz, ±12 dB) whose values live in the shared `AppState`,
+mirroring how `volume` and `repeat` already work. Out of scope (later plans):
+preset curves, a separate/docked OS window, window-shade mode, and any real
+audio processing (the Apple Music stub has no audio pipeline yet).
+
+**Approach.**
+
+- New file `src/equalizer.rs`, the equalizer data model — a sibling of
+  `library.rs` and `state.rs` so both the shared state and the UI can depend on
+  it without a `state` ← `ui` cycle:
+  - `pub const BAND_FREQUENCIES: [&str; 10] = ["60", "170", "310", "600", "1K", "3K", "6K", "12K", "14K", "16K"];`
+  - `pub const BAND_COUNT: usize = BAND_FREQUENCIES.len();`
+  - `pub const GAIN_MIN_DB: f32 = -12.0;` and `pub const GAIN_MAX_DB: f32 = 12.0;`
+  - `#[must_use] pub fn clamp_gain(gain: f32) -> f32` — `clamp` to the range,
+    mapping NaN to `0.0`, exactly as `state::clamp_volume` does for volume.
+  - A `#[cfg(test)] mod tests` pinning `clamp_gain` at both bounds, in range,
+    and NaN, plus `BAND_FREQUENCIES.len() == BAND_COUNT`.
+- `src/main.rs`: add `mod equalizer;` beside the other `mod` declarations.
+- `src/state.rs`:
+  - Add to `AppState`: `pub eq_enabled: bool`, `pub eq_preamp: f32`,
+    `pub eq_bands: [f32; equalizer::BAND_COUNT]`.
+  - Extend the manual `Default` impl: `eq_enabled: false`, `eq_preamp: 0.0`,
+    `eq_bands: [0.0; equalizer::BAND_COUNT]` (flat), and update the
+    "Initial state" doc comment.
+  - Add `toggle_equalizer(&mut self)` (flips `eq_enabled`, like
+    `toggle_repeat`), `set_eq_preamp(&mut self, gain: f32)` (stores
+    `equalizer::clamp_gain(gain)`), and `set_eq_band(&mut self, band: usize,
+    gain: f32)` (clamps and stores into `eq_bands[band]`, ignoring an
+    out-of-range `band` via `get_mut`).
+  - Tests: default eq is off/flat; `toggle_equalizer` flips only `eq_enabled`;
+    both setters clamp an out-of-range value and `set_eq_band` ignores an
+    out-of-range band index; none of the eq mutators change
+    `current_track`/`volume` (reuse the existing
+    `assert_keeps_track_and_volume` helper).
+- `src/ui/views.rs`:
+  - Import `VerticalSlider` from `iced::widget` and `BAND_COUNT` /
+    `BAND_FREQUENCIES` / `GAIN_MIN_DB` / `GAIN_MAX_DB` from `crate::equalizer`.
+  - `fn eq_enabled_label(enabled: bool) -> &'static str` returning `"EQ: On"`
+    / `"EQ: Off"`, mirroring `repeat_label`.
+  - `pub fn view_equalizer(enabled: bool, preamp: f32, bands: &[f32; BAND_COUNT]) -> Element<'static, Message>`
+    — a `Column` of:
+    - a header `Row` with `labeled_button(eq_enabled_label(enabled), Message::ToggleEqualizer)`;
+    - a preamp `Row` of `Text::new("Preamp")` and
+      `Slider::new(GAIN_MIN_DB..=GAIN_MAX_DB, preamp, Message::EqPreampChange).step(1.0).width(Length::Fixed(150.0))`;
+    - a bands `Row` of `BAND_COUNT` `Column`s, each a
+      `VerticalSlider::new(GAIN_MIN_DB..=GAIN_MAX_DB, bands[i], move |gain| Message::EqBandChange(i, gain)).step(1.0).height(Length::Fixed(100.0))`
+      above `Text::new(BAND_FREQUENCIES[i]).size(12)`.
+  - Tests: `eq_enabled_label` mirrors the flag; `view_equalizer` constructs for
+    enabled/disabled and both gain endpoints (mirroring the existing
+    transport-controls construction test).
+- `src/ui/mod.rs`:
+  - Add `Message::{ToggleEqualizer, EqPreampChange(f32), EqBandChange(usize, f32)}`.
+  - `update` arms: `ToggleEqualizer => mutate_state(player, AppState::toggle_equalizer)`;
+    `EqPreampChange(gain) => mutate_state(player, |s| s.set_eq_preamp(gain))`;
+    `EqBandChange(band, gain) => mutate_state(player, |s| s.set_eq_band(band, gain))`.
+  - In `view`, read `eq_enabled`/`eq_preamp`/`eq_bands` in the existing
+    state-lock block and push
+    `views::view_equalizer(eq_enabled, eq_preamp, &eq_bands)` after
+    `views::view_transport_controls(..)`.
+- `src/ui/tests.rs`: add update tests — `Message::ToggleEqualizer` flips the
+  shared flag; `EqPreampChange`/`EqBandChange` store clamped values (e.g.
+  `EqBandChange(0, 99.0)` stores `12.0`).
+- `README.md`: refresh the Status and Usage lines to describe the equalizer
+  panel; leave the `tumwater:prompt` block untouched.
+
+**Files touched.** `src/equalizer.rs` (new), `src/main.rs`, `src/state.rs`,
+`src/ui/views.rs`, `src/ui/mod.rs`, `src/ui/tests.rs`, `README.md`.
+
+**Acceptance criteria.**
+
+- `make check` passes (`cargo fmt --check`,
+  `cargo clippy --all-targets -- -D warnings`, `cargo test`).
+- The new `equalizer`, `state`, and `views` unit tests and the `ui` update
+  tests listed above pass.
+- No `dead_code`/unused warnings: every new constant, field, and method is read
+  by the UI or its tests.
+- `cargo run`: below the transport row the window shows an "EQ: Off" button, a
+  Preamp slider, and ten band sliders labelled `60`…`16K`; pressing the button
+  changes its label to "EQ: On", and dragging any slider moves it (manual check
+  — build + tests are the primary gate).
 
 
 ## Done
