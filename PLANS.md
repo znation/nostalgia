@@ -470,8 +470,10 @@ port the UI to iced 0.14, and get
   - Add a private builder `fn sample_library() -> SampleLibrary` returning a
     small in-memory library (3 artists, 3 albums, 5 songs) in one struct so
     the browse queries and the tests share the same data.
-  - Add three `pub async fn(&self, ...) -> Result<Vec<…>, reqwest::Error>`
-    methods on `AppleMusicService`: `get_favorite_artists` (all artists),
+  - Add three `pub async fn(&self, ...) -> Result<Vec<…>, AppleMusicError>`
+    methods on `AppleMusicService` (the crate-local error type the improve
+    loop later introduced when it dropped the `reqwest` dependency):
+    `get_favorite_artists` (all artists),
     `get_albums_by_artist(&self, artist_id: &str)` (albums whose
     `artist_id` matches), `get_songs_from_album(&self, album_id: &str)`
     (songs whose `album_id` matches); unknown id → empty `Vec`. `play_track`

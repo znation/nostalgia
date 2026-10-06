@@ -10,7 +10,6 @@
 //! `AppleMusicToken` type) stay so a real implementation has a surface to
 //! land on.
 
-use reqwest::Error;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -19,6 +18,23 @@ use tokio::sync::Mutex;
 use crate::library::{Album, Artist, Song};
 use crate::sample_library::sample_library;
 use crate::state::AppState;
+
+/// A failed music-library or playback operation.
+///
+/// The stub never produces one — every in-memory query and playback
+/// transition succeeds — but the seam carries this type so a real Apple
+/// Music backend can report a failure without tying the seam's public API
+/// to a specific HTTP client. The message is the human-readable cause.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AppleMusicError(String);
+
+impl std::fmt::Display for AppleMusicError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for AppleMusicError {}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct AppleMusicToken {
@@ -46,7 +62,7 @@ pub struct AppleMusicService {
 /// relies on to find removable code.
 #[allow(dead_code)]
 impl AppleMusicService {
-    async fn pause(&self) -> Result<(), Error> {
+    async fn pause(&self) -> Result<(), AppleMusicError> {
         // As with `play_track`, the stub only owns the shared-state
         // transition — clear the playing flag. A real implementation
         // would add the API call that pauses audio.
@@ -58,7 +74,7 @@ impl AppleMusicService {
         Ok(())
     }
 
-    async fn next_track(&self) -> Result<(), Error> {
+    async fn next_track(&self) -> Result<(), AppleMusicError> {
         // In a real implementation, this would:
         // 1. Get current track position
         // 2. Play next track in library
@@ -67,7 +83,7 @@ impl AppleMusicService {
         Ok(())
     }
 
-    async fn previous_track(&self) -> Result<(), Error> {
+    async fn previous_track(&self) -> Result<(), AppleMusicError> {
         // In a real implementation, this would:
         // 1. Get current track position
         // 2. Play previous track in library
@@ -100,7 +116,7 @@ impl AppleMusicService {
     /// Plays the given track by id, recording it as the current track and
     /// marking it playing. The stub owns only this shared-state transition —
     /// a real implementation would add the API call that starts audio.
-    pub async fn play_track(&self, track_id: &str) -> Result<(), Error> {
+    pub async fn play_track(&self, track_id: &str) -> Result<(), AppleMusicError> {
         let mut state = self.state.lock().await;
         state.current_track = Some(track_id.to_string());
         state.is_playing = true;
@@ -110,17 +126,20 @@ impl AppleMusicService {
     }
 
     /// All favorite artists (every artist in the sample library).
-    pub async fn get_favorite_artists(&self) -> Result<Vec<Artist>, Error> {
+    pub async fn get_favorite_artists(&self) -> Result<Vec<Artist>, AppleMusicError> {
         Ok(sample_library().artists.clone())
     }
 
     /// Albums by the given artist; unknown artists yield an empty list.
-    pub async fn get_albums_by_artist(&self, artist_id: &str) -> Result<Vec<Album>, Error> {
+    pub async fn get_albums_by_artist(
+        &self,
+        artist_id: &str,
+    ) -> Result<Vec<Album>, AppleMusicError> {
         Ok(lookup(&sample_library().albums_by_artist, artist_id))
     }
 
     /// Songs on the given album; unknown albums yield an empty list.
-    pub async fn get_songs_from_album(&self, album_id: &str) -> Result<Vec<Song>, Error> {
+    pub async fn get_songs_from_album(&self, album_id: &str) -> Result<Vec<Song>, AppleMusicError> {
         Ok(lookup(&sample_library().songs_by_album, album_id))
     }
 }
@@ -143,6 +162,14 @@ mod tests {
 
     fn test_service() -> AppleMusicService {
         AppleMusicService::new(Arc::new(Mutex::new(AppState::default())))
+    }
+
+    #[test]
+    fn apple_music_error_displays_its_message() {
+        // The seam's error type formats as the cause itself, so a reported
+        // failure reads as the message, not as a struct dump.
+        let error = AppleMusicError("track not found".to_string());
+        assert_eq!(error.to_string(), "track not found");
     }
 
     /// Asserts that `items` yield exactly the expected ids, in order. Four
