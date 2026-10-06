@@ -1,7 +1,7 @@
 //! The equalizer's data model: the ten Winamp frequency bands, the shared
-//! gain range they move within, and the pure gain clamp both the shared state
-//! and the UI apply. Kept in its own module beside `library` and `state` so
-//! both the state and the UI can depend on it without a `state` ← `ui` cycle.
+//! gain range they move within, and the pure gain clamp the shared state
+//! applies. Kept in its own module beside `library` and `state` so both the
+//! state and the UI can depend on it without a `state` ← `ui` cycle.
 
 /// The centre frequencies of Winamp's ten equalizer bands, low to high, as
 /// the short display labels printed under each slider (Winamp shows the
@@ -28,8 +28,8 @@ pub const GAIN_MAX_DB: f32 = 12.0;
 /// iced's sliders can emit a value outside the range (a drag beyond the ends,
 /// or a stale in-flight change), and the UI must never store an unclamped
 /// gain in `AppState`. The gains are shared state, so the rule lives beside
-/// the band constants as a pure function the UI's `update` arms call before
-/// storing, exactly as `state::clamp_volume` does for volume.
+/// the band constants as a pure function the `AppState` gain setters call
+/// before storing, exactly as `state::clamp_volume` does for volume.
 ///
 /// `f32::clamp` passes NaN through unchanged, so a NaN gain is mapped to
 /// `0.0` (flat) rather than being stored as-is — the safe, neutral outcome
