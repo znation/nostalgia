@@ -181,18 +181,18 @@ fn stop_clears_is_playing() {
 fn volume_change_clamps_value_before_storing() {
     let (mut player, state) = test_player();
     // Default volume is 0.5 (see `AppState::default`).
-    assert_eq!(state.blocking_lock().volume, 0.5);
+    assert_eq!(state.blocking_lock().volume(), 0.5);
 
     // Out-of-range slider values are clamped by the update arm.
     let _ = update(&mut player, Message::VolumeChange(1.5));
-    assert_eq!(state.blocking_lock().volume, 1.0);
+    assert_eq!(state.blocking_lock().volume(), 1.0);
 
     let _ = update(&mut player, Message::VolumeChange(-0.2));
-    assert_eq!(state.blocking_lock().volume, 0.0);
+    assert_eq!(state.blocking_lock().volume(), 0.0);
 
     // An in-range value is stored as-is.
     let _ = update(&mut player, Message::VolumeChange(0.3));
-    assert_eq!(state.blocking_lock().volume, 0.3);
+    assert_eq!(state.blocking_lock().volume(), 0.3);
 }
 
 #[test]
@@ -388,7 +388,7 @@ fn track_played_handoff_is_a_noop() {
         let mut state = state.blocking_lock();
         state.current_track = Some("song-1".to_string());
         state.is_playing = true;
-        state.volume = 0.7;
+        state.set_volume(0.7);
     }
 
     let task = update(&mut player, Message::TrackPlayed);
@@ -400,7 +400,7 @@ fn track_played_handoff_is_a_noop() {
     let state = state.blocking_lock();
     assert_eq!(state.current_track.as_deref(), Some("song-1"));
     assert!(state.is_playing);
-    assert_eq!(state.volume, 0.7);
+    assert_eq!(state.volume(), 0.7);
 }
 
 // The Previous/Next buttons read the player's songs buffer and the shared
@@ -880,7 +880,7 @@ fn view_constructs_over_the_apps_full_input_space() {
                             state.current_track = current_track.map(str::to_string);
                             state.is_playing = is_playing;
                             state.repeat = repeat;
-                            state.volume = volume;
+                            state.set_volume(volume);
                         }
                         let _screen = view(&player);
                     }

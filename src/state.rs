@@ -16,7 +16,11 @@ pub struct AppState {
     /// Whether Previous/Next wrap around the current album's ends (Repeat on)
     /// or stop at the edge (Repeat off). Starts off, as in Winamp.
     pub repeat: bool,
-    pub volume: f32,
+    /// Playback volume in `[0.0, 1.0]`, never NaN. Kept private — unlike the
+    /// other fields, which have no validity range — so the only way to change
+    /// it is [`AppState::set_volume`], which clamps. Read it with
+    /// [`AppState::volume`].
+    volume: f32,
     /// Whether the equalizer is engaged. Starts off, as in Winamp; the band
     /// gains below are stored regardless so turning it back on restores them.
     pub eq_enabled: bool,
@@ -103,14 +107,30 @@ impl AppState {
             *slot = equalizer::clamp_gain(gain);
         }
     }
+
+    /// The current playback volume, always in `[0.0, 1.0]` (see
+    /// [`AppState::set_volume`]). The UI's `view` reads it for the slider.
+    #[must_use]
+    pub fn volume(&self) -> f32 {
+        self.volume
+    }
+
+    /// Stores `volume`, clamped to `[0.0, 1.0]` with NaN mapped to silence by
+    /// [`clamp_volume`]. The field is private and this is its only writer, so
+    /// the clamped invariant holds no matter which caller (today, the UI's
+    /// `VolumeChange` arm) sets it.
+    pub fn set_volume(&mut self, volume: f32) {
+        self.volume = clamp_volume(volume);
+    }
 }
 
 /// Clamps a volume value to the valid `[0.0, 1.0]` range.
 ///
 /// iced's slider can emit a value outside the range (a drag beyond the ends,
 /// or a stale in-flight change), and the UI must never store an unclamped
-/// volume in `AppState`. Volume is shared state, so the rule lives beside
-/// `AppState` as a pure function the UI's `update` arm calls before storing.
+/// volume in `AppState`. [`AppState::set_volume`] is the field's only writer
+/// and calls this, so the rule lives here as a pure function beside the state
+/// it protects rather than at each call site.
 ///
 /// `f32::clamp` passes NaN through unchanged, so a NaN volume is mapped to
 /// `0.0` (silence) rather than being stored as-is — the safe outcome for a
@@ -122,10 +142,9 @@ impl AppState {
 /// `#[must_use]` guards the contract that a clamped value must be stored:
 /// the function's entire purpose is its returned value, so a caller that
 /// drops it — `state::clamp_volume(volume);` as a statement — has silently
-/// done nothing, leaving the unclamped (possibly NaN) volume in shared
-/// state with no error. Making the result `#[must_use]` turns that silent
-/// no-op into a compile error, the same way the `f32::clamp` NaN hole is
-/// caught by the function itself.
+/// done nothing, discarding the clamped value with no error. Making the
+/// result `#[must_use]` turns that silent no-op into a compile error, the
+/// same way the `f32::clamp` NaN hole is caught by the function itself.
 #[must_use]
 pub fn clamp_volume(volume: f32) -> f32 {
     if volume.is_nan() {
@@ -148,10 +167,10 @@ mod tests {
     /// site.
     fn assert_keeps_track_and_volume(state: &mut AppState, mutation: impl FnOnce(&mut AppState)) {
         let track = state.current_track.clone();
-        let volume = state.volume;
+        let volume = state.volume();
         mutation(state);
         assert_eq!(state.current_track, track);
-        assert_eq!(state.volume, volume);
+        assert_eq!(state.volume(), volume);
     }
 
     #[test]
@@ -160,7 +179,7 @@ mod tests {
         assert_eq!(state.current_track, None);
         assert!(!state.is_playing);
         assert!(!state.repeat);
-        assert_eq!(state.volume, 0.5);
+        assert_eq!(state.volume(), 0.5);
         assert!(!state.eq_enabled);
         assert_eq!(state.eq_preamp, 0.0);
         assert_eq!(state.eq_bands, [0.0; BAND_COUNT]);
@@ -258,6 +277,29 @@ mod tests {
 
         assert_keeps_track_and_volume(&mut state, AppState::stop);
         assert!(!state.is_playing);
+    }
+
+    #[test]
+    fn set_volume_stores_an_in_range_value() {
+        let mut state = AppState::default();
+        state.set_volume(0.3);
+        assert_eq!(state.volume(), 0.3);
+    }
+
+    #[test]
+    fn set_volume_clamps_out_of_range_values() {
+        let mut state = AppState::default();
+        state.set_volume(1.5);
+        assert_eq!(state.volume(), 1.0);
+        state.set_volume(-0.2);
+        assert_eq!(state.volume(), 0.0);
+    }
+
+    #[test]
+    fn set_volume_maps_nan_to_silence() {
+        let mut state = AppState::default();
+        state.set_volume(f32::NAN);
+        assert_eq!(state.volume(), 0.0);
     }
 
     #[test]

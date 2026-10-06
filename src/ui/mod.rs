@@ -15,7 +15,7 @@ mod views;
 use crate::{
     apple_music::AppleMusicService,
     library::{Album, Artist, Song},
-    state::{self, AppState},
+    state::AppState,
 };
 
 /// Runs the UI, blocking until the window is closed.
@@ -265,9 +265,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         // position while Pause keeps it.
         Message::Stop => mutate_state(player, AppState::stop),
         Message::ToggleRepeat => mutate_state(player, AppState::toggle_repeat),
-        Message::VolumeChange(volume) => {
-            mutate_state(player, |state| state.volume = state::clamp_volume(volume))
-        }
+        Message::VolumeChange(volume) => mutate_state(player, |state| state.set_volume(volume)),
         // The equalizer mutators all store clamped gains in shared state, so
         // the sliders can never write an out-of-range value; the clamp itself
         // lives in `equalizer::clamp_gain`, called by the `AppState` setters.
@@ -349,7 +347,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
         (
             player.now_playing_label(state.current_track.as_deref()),
             state.is_playing,
-            state.volume,
+            state.volume(),
             state.repeat,
             state.eq_enabled,
             state.eq_preamp,
