@@ -138,14 +138,24 @@ fn song_row<'a>(
     )
 }
 
+/// The Artists browse view: one row per artist, in the order given, each
+/// emitting [`Message::ArtistSelected`] with the artist's id. Built by
+/// [`scrollable_list`] from the [`artist_row`] mapping.
 pub fn view_artists(artists: &[Artist]) -> Element<'_, Message> {
     scrollable_list(artists.iter().map(artist_row))
 }
 
+/// The Albums browse view: one row per album, in the order given, each
+/// emitting [`Message::AlbumSelected`] with the album's id. Built by
+/// [`scrollable_list`] from the [`album_row`] mapping.
 pub fn view_albums(albums: &[Album]) -> Element<'_, Message> {
     scrollable_list(albums.iter().map(album_row))
 }
 
+/// The Songs browse view: one row per song, in the order given, each emitting
+/// [`Message::TrackSelected`] with the song's id; the row whose id is
+/// `current_track` is marked as playing. Built by [`scrollable_list`] from the
+/// [`song_row`] mapping.
 pub fn view_songs<'a>(songs: &'a [Song], current_track: Option<&str>) -> Element<'a, Message> {
     scrollable_list(songs.iter().map(|song| song_row(song, current_track)))
 }
