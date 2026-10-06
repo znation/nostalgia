@@ -70,9 +70,12 @@ impl AppState {
 /// volume in `AppState`. Volume is shared state, so the rule lives beside
 /// `AppState` as a pure function the UI's `update` arm calls before storing.
 ///
-/// `f32::clamp` passes NaN through unchanged, so a non-finite volume is
-/// mapped to `0.0` (silence) rather than being stored as-is — the safe
-/// outcome for a value that is neither in range nor comparable to it.
+/// `f32::clamp` passes NaN through unchanged, so a NaN volume is mapped to
+/// `0.0` (silence) rather than being stored as-is — the safe outcome for a
+/// value that is neither in range nor comparable to it. Non-finite values
+/// that *are* comparable, `+inf` and `-inf`, clamp to the nearer bound like
+/// any other out-of-range value: `+inf` to `1.0` (loudest), `-inf` to `0.0`
+/// (silence).
 pub fn clamp_volume(volume: f32) -> f32 {
     if volume.is_nan() {
         0.0
@@ -171,5 +174,21 @@ mod tests {
         // `f32::clamp` passes NaN through unchanged, so it must be handled
         // explicitly or a non-finite value lands in shared state.
         assert_eq!(clamp_volume(f32::NAN), 0.0);
+    }
+
+    #[test]
+    fn clamp_volume_caps_positive_infinity_at_loudest() {
+        // `+inf` is non-finite but comparable (it exceeds every volume), so
+        // `f32::clamp` maps it to the upper bound — full volume, not the
+        // silence reserved for the incomparable NaN. Pinned so a refactor of
+        // the non-finite handling can't silently change this branch.
+        assert_eq!(clamp_volume(f32::INFINITY), 1.0);
+    }
+
+    #[test]
+    fn clamp_volume_floors_negative_infinity_at_silence() {
+        // The `-inf` twin of `+inf`: comparable and below every volume, so
+        // it clamps to the lower bound (silence).
+        assert_eq!(clamp_volume(f32::NEG_INFINITY), 0.0);
     }
 }
