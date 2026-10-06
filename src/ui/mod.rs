@@ -228,6 +228,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::library::stepping_songs;
 
     /// A fresh player over its own shared state, so a test can inspect the
     /// same `AppState` the player mutates.
@@ -484,26 +485,6 @@ mod tests {
     // `blocking_lock`, which panics inside an async runtime, so each test
     // calls `update` on a plain thread and only then drives the returned
     // task's stream.
-    fn songs_for_stepping() -> Vec<Song> {
-        vec![
-            Song {
-                id: "song-1".to_string(),
-                title: "One".to_string(),
-                album_id: "album-1".to_string(),
-            },
-            Song {
-                id: "song-2".to_string(),
-                title: "Two".to_string(),
-                album_id: "album-1".to_string(),
-            },
-            Song {
-                id: "song-3".to_string(),
-                title: "Three".to_string(),
-                album_id: "album-1".to_string(),
-            },
-        ]
-    }
-
     /// Drives `task` to its single output and asserts it is a `TrackSelected`
     /// for the given id, as the iced runtime would deliver the button's task.
     fn assert_track_selected(task: Task<Message>, expected: &str) {
@@ -522,7 +503,7 @@ mod tests {
     #[test]
     fn next_track_steps_to_the_following_song() {
         let (mut player, state) = test_player();
-        player.songs = songs_for_stepping();
+        player.songs = stepping_songs();
         state.blocking_lock().current_track = Some("song-1".to_string());
 
         let task = update(&mut player, Message::NextTrack);
@@ -533,7 +514,7 @@ mod tests {
     #[test]
     fn previous_track_steps_to_the_preceding_song() {
         let (mut player, state) = test_player();
-        player.songs = songs_for_stepping();
+        player.songs = stepping_songs();
         state.blocking_lock().current_track = Some("song-2".to_string());
 
         let task = update(&mut player, Message::PreviousTrack);
@@ -544,7 +525,7 @@ mod tests {
     #[test]
     fn next_track_with_no_current_track_starts_at_the_first_song() {
         let (mut player, _state) = test_player();
-        player.songs = songs_for_stepping();
+        player.songs = stepping_songs();
 
         let task = update(&mut player, Message::NextTrack);
 

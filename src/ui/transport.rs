@@ -52,26 +52,7 @@ pub fn previous_track_id(songs: &[Song], current: Option<&str>) -> Option<String
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn sample_songs() -> Vec<Song> {
-        vec![
-            Song {
-                id: "song-1".to_string(),
-                title: "One".to_string(),
-                album_id: "album-1".to_string(),
-            },
-            Song {
-                id: "song-2".to_string(),
-                title: "Two".to_string(),
-                album_id: "album-1".to_string(),
-            },
-            Song {
-                id: "song-3".to_string(),
-                title: "Three".to_string(),
-                album_id: "album-1".to_string(),
-            },
-        ]
-    }
+    use crate::library::stepping_songs;
 
     #[test]
     fn empty_list_is_a_noop_for_both_directions() {
@@ -82,7 +63,7 @@ mod tests {
     #[test]
     fn next_without_current_starts_at_first() {
         assert_eq!(
-            next_track_id(&sample_songs(), None),
+            next_track_id(&stepping_songs(), None),
             Some("song-1".to_string())
         );
     }
@@ -90,7 +71,7 @@ mod tests {
     #[test]
     fn previous_without_current_starts_at_last() {
         assert_eq!(
-            previous_track_id(&sample_songs(), None),
+            previous_track_id(&stepping_songs(), None),
             Some("song-3".to_string())
         );
     }
@@ -98,7 +79,7 @@ mod tests {
     #[test]
     fn next_with_unknown_current_starts_at_first() {
         assert_eq!(
-            next_track_id(&sample_songs(), Some("nope")),
+            next_track_id(&stepping_songs(), Some("nope")),
             Some("song-1".to_string())
         );
     }
@@ -106,7 +87,7 @@ mod tests {
     #[test]
     fn previous_with_unknown_current_starts_at_last() {
         assert_eq!(
-            previous_track_id(&sample_songs(), Some("nope")),
+            previous_track_id(&stepping_songs(), Some("nope")),
             Some("song-3".to_string())
         );
     }
@@ -114,11 +95,11 @@ mod tests {
     #[test]
     fn next_advances_through_the_list() {
         assert_eq!(
-            next_track_id(&sample_songs(), Some("song-1")),
+            next_track_id(&stepping_songs(), Some("song-1")),
             Some("song-2".to_string())
         );
         assert_eq!(
-            next_track_id(&sample_songs(), Some("song-2")),
+            next_track_id(&stepping_songs(), Some("song-2")),
             Some("song-3".to_string())
         );
     }
@@ -126,7 +107,7 @@ mod tests {
     #[test]
     fn previous_reverses_through_the_list() {
         assert_eq!(
-            previous_track_id(&sample_songs(), Some("song-2")),
+            previous_track_id(&stepping_songs(), Some("song-2")),
             Some("song-1".to_string())
         );
     }
@@ -134,7 +115,7 @@ mod tests {
     #[test]
     fn next_wraps_from_last_to_first() {
         assert_eq!(
-            next_track_id(&sample_songs(), Some("song-3")),
+            next_track_id(&stepping_songs(), Some("song-3")),
             Some("song-1".to_string())
         );
     }
@@ -142,7 +123,7 @@ mod tests {
     #[test]
     fn previous_wraps_from_first_to_last() {
         assert_eq!(
-            previous_track_id(&sample_songs(), Some("song-1")),
+            previous_track_id(&stepping_songs(), Some("song-1")),
             Some("song-3".to_string())
         );
     }

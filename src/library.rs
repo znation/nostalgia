@@ -32,6 +32,33 @@ pub struct Song {
     pub album_id: String,
 }
 
+/// The three songs on `album-1` that the Previous/Next stepping tests step
+/// through, shared by the `ui::transport` and `ui` test suites. Both suites
+/// pin the same stepping behavior over the same three-song album and used to
+/// build this list independently — a rename or reorder in one fixture would
+/// silently diverge from the other — so it lives here once, next to `Song`,
+/// and is compiled only for tests.
+#[cfg(test)]
+pub(crate) fn stepping_songs() -> Vec<Song> {
+    vec![
+        Song {
+            id: "song-1".to_string(),
+            title: "One".to_string(),
+            album_id: "album-1".to_string(),
+        },
+        Song {
+            id: "song-2".to_string(),
+            title: "Two".to_string(),
+            album_id: "album-1".to_string(),
+        },
+        Song {
+            id: "song-3".to_string(),
+            title: "Three".to_string(),
+            album_id: "album-1".to_string(),
+        },
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::{Album, Artist, Song};
