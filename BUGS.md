@@ -47,6 +47,30 @@ until the "3 consecutive tick failures" breaker trips.
 
 ## Fixed
 
+### Main's test target stopped compiling after perf changed `TrackSelected` to a struct variant (found 2026-10-06, fixed 2026-10-06)
+
+Found by perf 2026-10-06.
+
+Perf #4 (`65cb262`) changed `Message::TrackSelected` from a tuple variant
+carrying a `String` id to a struct variant carrying `{ epoch, index }`, and
+updated most of the suite — but left three tuple-form calls in
+`track_selected_ignores_an_id_no_longer_in_the_songs_buffer` in
+`src/ui/tests.rs`. The test target then failed to compile with three
+`E0533: expected value, found struct variant` errors, so `cargo clippy
+--all-targets` and `make check` failed on main even though that commit's
+VERIFIED line claimed `make check` exit 0.
+
+Reproduce: run `make check` on `65cb262`; the clippy stage fails to build the
+test target with the three errors above, before any test runs.
+
+Fixed by rewriting that test for the index-carrying message:
+`track_selected_with_an_out_of_range_index_leaves_known_titles_unchanged`
+loads `stepping_songs`, plays index 0, then sends an in-epoch index past the
+list's end and asserts `known_titles` still holds exactly the played title.
+The stale-epoch case is covered by
+`selection_messages_with_a_stale_epoch_or_index_do_nothing`, added by the same
+perf #4 commit.
+
 ### Organize's ui-test-suite extraction burned 5 ticks / 0.6 h on a disproven "byte-identical" VERIFIED claim before it landed (found by telemetry 2026-10-06, fixed 2026-10-06)
 
 Found by telemetry 2026-10-06; fixed by the bugfix loop 2026-10-06.

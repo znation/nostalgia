@@ -53,22 +53,23 @@ fn labeled_button(label: &'static str, message: Message) -> Button<'static, Mess
 ///
 /// The rows borrow their titles from the list the caller passes in rather
 /// than owning clones: this builder runs on every view refresh, so the
-/// borrowed title avoids a `String` allocation per row per frame. Only the
-/// one marked row needs an owned title, for its `▶` prefix.
+/// borrowed title avoids a `String` allocation per row per frame. The
+/// playing row's `▶` marker is pushed as its own static label beside the
+/// borrowed title rather than formatted into an owned one, so the marked row
+/// allocates nothing either.
 fn scrollable_list<'a>(
     items: impl IntoIterator<Item = (&'a str, &'static str, Message, bool)>,
 ) -> Element<'a, Message> {
     let mut column = Column::new().padding(20);
 
     for (title, label, message, is_current) in items {
-        let title: Cow<'a, str> = if is_current {
-            Cow::Owned(format!("▶ {title}"))
+        let row = if is_current {
+            Row::new().push(Text::new("▶ ").size(18))
         } else {
-            Cow::Borrowed(title)
+            Row::new()
         };
         let button = Button::new(
-            Row::new()
-                .push(Text::new(title).size(18))
+            row.push(Text::new(title).size(18))
                 .push(spacer(10.0))
                 .push(Text::new(label).size(14)),
         )
