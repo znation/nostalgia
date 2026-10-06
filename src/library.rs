@@ -92,7 +92,7 @@ pub(crate) fn sample_song() -> Song {
 
 #[cfg(test)]
 mod tests {
-    use super::{sample_album, sample_artist, sample_song, Artist};
+    use super::{Artist, sample_album, sample_artist, sample_song};
     use serde_json::json;
     use std::fmt::Debug;
 

@@ -933,6 +933,7 @@ mod tests {
 
         let task = fetch_into(
             &player.apple_music_service,
+            "loading albums for artist \"artist-1\"".to_string(),
             |_service| async { Err::<Vec<Album>, String>("boom".to_string()) },
             Message::AlbumsLoaded,
         );
