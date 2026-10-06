@@ -32,6 +32,18 @@ fn spacer(width: f32) -> Space {
 /// echoing Winamp's playlist selection bar (a saturated blue).
 const PLAYING_ROW_HIGHLIGHT: Color = Color::from_rgb(0.25, 0.5, 1.0);
 
+/// A button showing a single text label that emits `message` on press.
+///
+/// The transport row's four buttons (Play/Pause, Stop, Previous, Next) and
+/// the browse Back button all build the same `Button::new(Text::new(..))
+/// .on_press(..)` widget, so that expression lives here once instead of
+/// being repeated at every call site. The label is `'static` — a literal, or
+/// a `&'static str` such as [`play_pause_label`] returns — so the resulting
+/// button is `'static` like the view builders that push it.
+fn labeled_button(label: &'static str, message: Message) -> Button<'static, Message> {
+    Button::new(Text::new(label)).on_press(message)
+}
+
 /// Builds a scrollable list where each item is a button showing a title
 /// followed by a secondary label, emitting the given message on press.
 /// Shared by the artists, albums, and songs views. The last tuple element
@@ -138,9 +150,7 @@ pub fn can_go_back(view: &CurrentView) -> bool {
 /// → Albums → Artists). Rendered only where [`can_go_back`] is true; the
 /// update loop turns the pressed message into the view change.
 pub fn view_back_button() -> Element<'static, Message> {
-    Button::new(Text::new("Back"))
-        .on_press(Message::Back)
-        .into()
+    labeled_button("Back", Message::Back).into()
 }
 
 /// The Now Playing bar label: the title of `current_track` when `titles`
@@ -180,13 +190,16 @@ fn play_pause_label(is_playing: bool) -> &'static str {
 /// `play_pause_label`-style helper is needed.
 pub fn view_transport_controls(is_playing: bool, volume: f32) -> Element<'static, Message> {
     Row::new()
-        .push(Button::new(Text::new(play_pause_label(is_playing))).on_press(Message::PlayPause))
+        .push(labeled_button(
+            play_pause_label(is_playing),
+            Message::PlayPause,
+        ))
         .push(spacer(20.0))
-        .push(Button::new(Text::new("Stop")).on_press(Message::Stop))
+        .push(labeled_button("Stop", Message::Stop))
         .push(spacer(20.0))
-        .push(Button::new(Text::new("Previous")).on_press(Message::PreviousTrack))
+        .push(labeled_button("Previous", Message::PreviousTrack))
         .push(spacer(20.0))
-        .push(Button::new(Text::new("Next")).on_press(Message::NextTrack))
+        .push(labeled_button("Next", Message::NextTrack))
         .push(spacer(20.0))
         .push(
             Slider::new(0.0..=1.0, volume, Message::VolumeChange)
