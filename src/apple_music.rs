@@ -20,8 +20,49 @@ struct AppleMusicToken {
 /// so the UI and its tests agree on the same stub data.
 #[derive(Clone)]
 pub struct AppleMusicService {
+    // Unused until a real Apple Music API sets it during authentication.
+    #[allow(dead_code)]
     token: Option<AppleMusicToken>,
     state: Arc<Mutex<AppState>>,
+}
+
+/// Transport stubs kept as the seam a real Apple Music implementation will
+/// fill: pause, next, and previous are not yet wired to the UI (the
+/// transport.rs stepping helpers drive those buttons), so `dead_code` is
+/// allowed on exactly this block and the `token` field — a *newly* dead
+/// field or method elsewhere still triggers the warning the clean loop
+/// relies on to find removable code.
+#[allow(dead_code)]
+impl AppleMusicService {
+    async fn pause(&self) -> Result<(), Error> {
+        // As with `play_track`, the stub only owns the shared-state
+        // transition — clear the playing flag. A real implementation
+        // would add the API call that pauses audio.
+
+        let mut state = self.state.lock().await;
+        state.is_playing = false;
+
+        println!("Paused playback");
+        Ok(())
+    }
+
+    async fn next_track(&self) -> Result<(), Error> {
+        // In a real implementation, this would:
+        // 1. Get current track position
+        // 2. Play next track in library
+
+        println!("Playing next track");
+        Ok(())
+    }
+
+    async fn previous_track(&self) -> Result<(), Error> {
+        // In a real implementation, this would:
+        // 1. Get current track position
+        // 2. Play previous track in library
+
+        println!("Playing previous track");
+        Ok(())
+    }
 }
 
 /// Initializes the service.
@@ -52,36 +93,6 @@ impl AppleMusicService {
         state.is_playing = true;
 
         println!("Playing track: {}", track_id);
-        Ok(())
-    }
-
-    async fn pause(&self) -> Result<(), Error> {
-        // As with `play_track`, the stub only owns the shared-state
-        // transition — clear the playing flag. A real implementation
-        // would add the API call that pauses audio.
-
-        let mut state = self.state.lock().await;
-        state.is_playing = false;
-
-        println!("Paused playback");
-        Ok(())
-    }
-
-    async fn next_track(&self) -> Result<(), Error> {
-        // In a real implementation, this would:
-        // 1. Get current track position
-        // 2. Play next track in library
-
-        println!("Playing next track");
-        Ok(())
-    }
-
-    async fn previous_track(&self) -> Result<(), Error> {
-        // In a real implementation, this would:
-        // 1. Get current track position
-        // 2. Play previous track in library
-
-        println!("Playing previous track");
         Ok(())
     }
 
