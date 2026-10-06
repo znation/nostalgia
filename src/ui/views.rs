@@ -7,6 +7,7 @@
 //! of the `WinampPlayer` struct means the view layer can be reworked (or
 //! tested) independently of how the app is booted.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use iced::{
@@ -51,16 +52,21 @@ fn labeled_button(label: &'static str, message: Message) -> Button<'static, Mess
 /// marks the currently playing row: such a row gets a `▶` prefix and a
 /// highlighted background so the list reads as a playlist. Only `song_row`
 /// ever sets the flag to true.
-fn scrollable_list(
-    items: impl IntoIterator<Item = (String, &'static str, Message, bool)>,
-) -> Element<'static, Message> {
+///
+/// The rows borrow their titles from the list the caller passes in rather
+/// than owning clones: this builder runs on every view refresh, so the
+/// borrowed title avoids a `String` allocation per row per frame. Only the
+/// one marked row needs an owned title, for its `▶` prefix.
+fn scrollable_list<'a>(
+    items: impl IntoIterator<Item = (&'a str, &'static str, Message, bool)>,
+) -> Element<'a, Message> {
     let mut column = Column::new().padding(20);
 
     for (title, label, message, is_current) in items {
-        let title = if is_current {
-            format!("▶ {title}")
+        let title: Cow<'a, str> = if is_current {
+            Cow::Owned(format!("▶ {title}"))
         } else {
-            title
+            Cow::Borrowed(title)
         };
         let button = Button::new(
             Row::new()
@@ -93,9 +99,9 @@ fn scrollable_list(
 /// of `view_artists` so the title/label/selection contract is testable
 /// without an iced renderer. Artists are never the currently playing row, so
 /// the flag is always false.
-fn artist_row(artist: &Artist) -> (String, &'static str, Message, bool) {
+fn artist_row(artist: &Artist) -> (&str, &'static str, Message, bool) {
     (
-        artist.name.clone(),
+        artist.name.as_str(),
         "View Albums",
         Message::ArtistSelected(artist.id.clone()),
         false,
@@ -105,9 +111,9 @@ fn artist_row(artist: &Artist) -> (String, &'static str, Message, bool) {
 /// The browse row an album becomes: its title, the "View Songs" hint, the
 /// message emitted when it is pressed, and the current-track flag. Albums
 /// are never the currently playing row, so the flag is always false.
-fn album_row(album: &Album) -> (String, &'static str, Message, bool) {
+fn album_row(album: &Album) -> (&str, &'static str, Message, bool) {
     (
-        album.title.clone(),
+        album.title.as_str(),
         "View Songs",
         Message::AlbumSelected(album.id.clone()),
         false,
@@ -119,9 +125,12 @@ fn album_row(album: &Album) -> (String, &'static str, Message, bool) {
 /// (true only when `current_track` names this song). The flag feeds
 /// `scrollable_list`'s `▶` + highlight marker, so the album list reads as a
 /// playlist.
-fn song_row(song: &Song, current_track: Option<&str>) -> (String, &'static str, Message, bool) {
+fn song_row<'a>(
+    song: &'a Song,
+    current_track: Option<&str>,
+) -> (&'a str, &'static str, Message, bool) {
     (
-        song.title.clone(),
+        song.title.as_str(),
         "Play",
         Message::TrackSelected(song.id.clone()),
         Some(song.id.as_str()) == current_track,
@@ -244,7 +253,8 @@ mod tests {
 
     #[test]
     fn artist_row_uses_name_and_selects_the_artist() {
-        let (title, label, message, is_current) = artist_row(&sample_artist());
+        let artist = sample_artist();
+        let (title, label, message, is_current) = artist_row(&artist);
         assert_eq!(title, "The Sample Band");
         assert_eq!(label, "View Albums");
         assert!(matches!(message, Message::ArtistSelected(id) if id == "artist-1"));
@@ -253,7 +263,8 @@ mod tests {
 
     #[test]
     fn album_row_uses_title_and_selects_the_album() {
-        let (title, label, message, is_current) = album_row(&sample_album());
+        let album = sample_album();
+        let (title, label, message, is_current) = album_row(&album);
         assert_eq!(title, "First Record");
         assert_eq!(label, "View Songs");
         assert!(matches!(message, Message::AlbumSelected(id) if id == "album-1"));
@@ -262,7 +273,8 @@ mod tests {
 
     #[test]
     fn song_row_uses_title_and_selects_the_song() {
-        let (title, label, message, is_current) = song_row(&sample_song(), None);
+        let song = sample_song();
+        let (title, label, message, is_current) = song_row(&song, None);
         assert_eq!(title, "Opening");
         assert_eq!(label, "Play");
         assert!(matches!(message, Message::TrackSelected(id) if id == "song-1"));
