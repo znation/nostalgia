@@ -14,7 +14,7 @@ use iced::{
 
 use crate::library::{Album, Artist, Song};
 
-use super::Message;
+use super::{CurrentView, Message};
 
 /// A fixed-width horizontal gap between adjacent widgets.
 ///
@@ -95,6 +95,22 @@ pub fn view_songs(songs: &[Song]) -> Element<'_, Message> {
     scrollable_list(songs.iter().map(song_row))
 }
 
+/// Whether the browse view has a level above it to return to. The Albums and
+/// Songs views do — the Back button is shown above their lists — while the
+/// top-level Artists list has nothing to go back to.
+pub fn can_go_back(view: &CurrentView) -> bool {
+    !matches!(view, CurrentView::Artists)
+}
+
+/// The browse view's Back button, stepping the hierarchy one level up (Songs
+/// → Albums → Artists). Rendered only where [`can_go_back`] is true; the
+/// update loop turns the pressed message into the view change.
+pub fn view_back_button() -> Element<'static, Message> {
+    Button::new(Text::new("Back"))
+        .on_press(Message::Back)
+        .into()
+}
+
 /// The Now Playing bar label: the title of `current_track` when it is one of
 /// `songs`; the raw id when it isn't in `songs`; "Nothing" when stopped.
 /// Pure data → `String` so the title resolution is testable without an iced
@@ -150,7 +166,10 @@ pub fn view_transport_controls(is_playing: bool, volume: f32) -> Element<'static
 
 #[cfg(test)]
 mod tests {
-    use super::{Message, album_row, artist_row, now_playing_label, play_pause_label, song_row};
+    use super::{
+        CurrentView, Message, album_row, artist_row, can_go_back, now_playing_label,
+        play_pause_label, song_row,
+    };
     use crate::library::{Album, Artist, Song};
 
     fn sample_artist() -> Artist {
@@ -203,6 +222,16 @@ mod tests {
         assert_eq!(title, "Opening");
         assert_eq!(label, "Play");
         assert!(matches!(message, Message::TrackSelected(id) if id == "song-1"));
+    }
+
+    // The Back button is a browse-navigation control: it must exist only
+    // where there is a level above to return to, so the visibility predicate
+    // is pinned alongside the other pure browse helpers.
+    #[test]
+    fn back_button_is_available_only_below_the_artist_list() {
+        assert!(!can_go_back(&CurrentView::Artists));
+        assert!(can_go_back(&CurrentView::Albums));
+        assert!(can_go_back(&CurrentView::Songs));
     }
 
     // The Now Playing bar and transport controls are built in this module

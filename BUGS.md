@@ -9,6 +9,29 @@ _None yet._
 
 ## Fixed
 
+### Browse view can only move forward — no way back from Albums/Songs, a dead end (fixed 2026-10-06)
+
+Found by bugfix 2026-10-06.
+
+The browse hierarchy is a one-way corridor: `Message::ArtistSelected` moves the
+view Artists → Albums and `Message::AlbumSelected` moves Albums → Songs, but
+no message ever steps the other way, so once you leave the artist list you
+cannot return. With the sample data the sharpest case is clicking "Mono Tones"
+(artist-3, which has no albums): you land on an empty Albums screen with no
+escape short of restarting the app. Every browsing session past the first
+click-through hits the dead end.
+
+Fixed by adding `Message::Back`, handled in the update loop by stepping
+`current_view` up one level (Songs → Albums → Artists, a no-op at Artists), and
+a Back button in `src/ui/views.rs` (`view_back_button`, shown only below the
+artist list via the `can_go_back` predicate). The three update arms and the
+visibility predicate are unit-tested; `cargo build`, `cargo test`, and
+`cargo fmt --check` all pass.
+
+**Validation gap:** unclear-invariant — nothing specified that the browse
+hierarchy must be navigable back to a higher level, so the bidirectional-browse
+contract had to be reconstructed before the dead end could be confirmed.
+
 ### Now Playing bar shows the track id instead of the song title (fixed 2026-10-05)
 
 Found by bugfix 2026-10-05.

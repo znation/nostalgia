@@ -32,6 +32,7 @@ enum Message {
     TrackSelected(String),
     ArtistSelected(String),
     AlbumSelected(String),
+    Back,
     LoadArtists,
     ArtistsLoaded(Vec<Artist>),
     AlbumsLoaded(Vec<Album>),
@@ -187,6 +188,19 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 Message::SongsLoaded,
             )
         }
+        // The browse hierarchy is navigable both ways: ArtistSelected and
+        // AlbumSelected step down (Artists → Albums → Songs), Back steps up
+        // again. The Back button is only rendered below the artist list, so
+        // this arm mostly fires where a level exists to leave; the explicit
+        // top-level arm keeps the no-op in the same place as the steps.
+        Message::Back => {
+            player.current_view = match &player.current_view {
+                CurrentView::Songs => CurrentView::Albums,
+                CurrentView::Albums => CurrentView::Artists,
+                CurrentView::Artists => CurrentView::Artists,
+            };
+            Task::none()
+        }
         Message::LoadArtists => fetch_into(
             &player.apple_music_service,
             |service| async move { service.get_favorite_artists().await },
@@ -215,14 +229,18 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
         CurrentView::Songs => views::view_songs(&player.songs),
     };
 
-    Column::new()
+    let mut column = Column::new()
         .push(views::view_now_playing(
             &player.songs,
             current_track.as_deref(),
         ))
-        .push(views::view_transport_controls(is_playing, volume))
-        .push(main_content)
-        .into()
+        .push(views::view_transport_controls(is_playing, volume));
+    // The Back button sits above the list it navigates and exists only where
+    // the hierarchy has a level above to return to (see `views::can_go_back`).
+    if views::can_go_back(&player.current_view) {
+        column = column.push(views::view_back_button());
+    }
+    column.push(main_content).into()
 }
 
 #[cfg(test)]
@@ -363,6 +381,45 @@ mod tests {
         let _ = update(&mut player, Message::AlbumSelected("album-3".to_string()));
 
         assert!(matches!(player.current_view, CurrentView::Songs));
+    }
+
+    // The browse hierarchy must be navigable back up (Songs → Albums →
+    // Artists), not just down: without `Message::Back` a session is a one-way
+    // corridor that ends stuck at the bottom of the hierarchy. These arms use
+    // only field assignment (no `blocking_lock`), so they stay plain tests
+    // like the view-flip tests above.
+    #[test]
+    fn back_from_albums_returns_to_artists() {
+        let (mut player, _state) = test_player();
+
+        let _ = update(&mut player, Message::ArtistSelected("artist-1".to_string()));
+
+        assert!(matches!(player.current_view, CurrentView::Albums));
+
+        let _ = update(&mut player, Message::Back);
+        assert!(matches!(player.current_view, CurrentView::Artists));
+    }
+
+    #[test]
+    fn back_from_songs_returns_to_albums() {
+        let (mut player, _state) = test_player();
+
+        let _ = update(&mut player, Message::ArtistSelected("artist-1".to_string()));
+        let _ = update(&mut player, Message::AlbumSelected("album-1".to_string()));
+
+        assert!(matches!(player.current_view, CurrentView::Songs));
+
+        let _ = update(&mut player, Message::Back);
+        assert!(matches!(player.current_view, CurrentView::Albums));
+    }
+
+    #[test]
+    fn back_from_artists_is_a_noop() {
+        let (mut player, _state) = test_player();
+        assert!(matches!(player.current_view, CurrentView::Artists));
+
+        let _ = update(&mut player, Message::Back);
+        assert!(matches!(player.current_view, CurrentView::Artists));
     }
 
     // The browse arms do two things — flip the view and fetch the next
