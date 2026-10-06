@@ -1,7 +1,4 @@
-use iced::{
-    Element, Length, Task,
-    widget::{Button, Column, Row, Slider, Space, Text},
-};
+use iced::{Element, Task, widget::Column};
 use std::{future::Future, sync::Arc};
 use tokio::sync::Mutex;
 
@@ -191,23 +188,13 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
     }
 }
 
-/// The Now Playing bar label: the title of `current_track` when it is one of
-/// `songs`; the raw id when it isn't in `songs`; "Nothing" when stopped.
-fn now_playing_label(songs: &[Song], current_track: Option<&str>) -> String {
-    match current_track {
-        Some(id) => songs
-            .iter()
-            .find(|song| song.id == id)
-            .map(|song| song.title.clone())
-            .unwrap_or_else(|| id.to_string()),
-        None => "Nothing".to_string(),
-    }
-}
-
+/// Assembles the app screen: the Now Playing bar and transport row — both
+/// built in `views.rs` from the resolved title, playback state, and volume —
+/// above the current browse list.
 fn view(player: &WinampPlayer) -> Element<'_, Message> {
     let state = player.state.blocking_lock();
-    let now_playing = now_playing_label(&player.songs, state.current_track.as_deref());
-    let play_label = if state.is_playing { "Pause" } else { "Play" };
+    let current_track = state.current_track.clone();
+    let is_playing = state.is_playing;
     let volume = state.volume;
     drop(state);
 
@@ -218,25 +205,11 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     };
 
     Column::new()
-        .push(
-            Row::new()
-                .push(Text::new("Now Playing: ").size(20))
-                .push(Text::new(now_playing).size(20)),
-        )
-        .push(
-            Row::new()
-                .push(Button::new(Text::new(play_label)).on_press(Message::PlayPause))
-                .push(Space::new().width(Length::Fixed(20.0)))
-                .push(Button::new(Text::new("Previous")).on_press(Message::PreviousTrack))
-                .push(Space::new().width(Length::Fixed(20.0)))
-                .push(Button::new(Text::new("Next")).on_press(Message::NextTrack))
-                .push(Space::new().width(Length::Fixed(20.0)))
-                .push(
-                    Slider::new(0.0..=1.0, volume, Message::VolumeChange)
-                        .step(0.01)
-                        .width(Length::Fixed(100.0)),
-                ),
-        )
+        .push(views::view_now_playing(
+            &player.songs,
+            current_track.as_deref(),
+        ))
+        .push(views::view_transport_controls(is_playing, volume))
         .push(main_content)
         .into()
 }
@@ -563,43 +536,5 @@ mod tests {
         assert!(player.artists.is_empty());
         assert!(player.albums.is_empty());
         assert!(player.songs.is_empty());
-    }
-
-    #[test]
-    fn now_playing_label_shows_nothing_when_stopped() {
-        let songs = vec![Song {
-            id: "song-1".to_string(),
-            title: "Opening".to_string(),
-            album_id: "album-1".to_string(),
-        }];
-        assert_eq!(now_playing_label(&songs, None), "Nothing");
-    }
-
-    #[test]
-    fn now_playing_label_resolves_known_track_to_title() {
-        let songs = vec![Song {
-            id: "song-1".to_string(),
-            title: "Opening".to_string(),
-            album_id: "album-1".to_string(),
-        }];
-        assert_eq!(now_playing_label(&songs, Some("song-1")), "Opening");
-    }
-
-    #[test]
-    fn now_playing_label_falls_back_to_id_when_track_not_in_songs() {
-        let songs = vec![Song {
-            id: "song-1".to_string(),
-            title: "Opening".to_string(),
-            album_id: "album-1".to_string(),
-        }];
-        assert_eq!(
-            now_playing_label(&songs, Some("no-such-song")),
-            "no-such-song"
-        );
-    }
-
-    #[test]
-    fn now_playing_label_falls_back_to_id_when_no_songs_loaded() {
-        assert_eq!(now_playing_label(&[], Some("song-1")), "song-1");
     }
 }

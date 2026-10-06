@@ -1,14 +1,15 @@
-//! Widget construction for the library browser.
+//! Widget construction for the player's UI.
 //!
-//! Pure functions: each turns plain data (`&[Artist]`, `&[Album]`,
-//! `&[Song]`) into an `Element` and knows nothing about the player's
-//! state or update loop. Keeping them free of the `WinampPlayer` struct
-//! means the view layer can be reworked (or tested) independently of how
-//! the app is booted.
+//! Pure functions: each turns plain data — the current track and the loaded
+//! songs, the playback state, or `&[Artist]` / `&[Album]` / `&[Song]` — into
+//! an `Element` (a couple of label helpers return a `String` instead) and
+//! knows nothing about the player's state or update loop. Keeping them free
+//! of the `WinampPlayer` struct means the view layer can be reworked (or
+//! tested) independently of how the app is booted.
 
 use iced::{
     Element, Length,
-    widget::{Button, Column, Row, Scrollable, Space, Text},
+    widget::{Button, Column, Row, Scrollable, Slider, Space, Text},
 };
 
 use crate::library::{Album, Artist, Song};
@@ -84,9 +85,58 @@ pub fn view_songs(songs: &[Song]) -> Element<'_, Message> {
     scrollable_list(songs.iter().map(song_row))
 }
 
+/// The Now Playing bar label: the title of `current_track` when it is one of
+/// `songs`; the raw id when it isn't in `songs`; "Nothing" when stopped.
+/// Pure data → `String` so the title resolution is testable without an iced
+/// renderer.
+pub fn now_playing_label(songs: &[Song], current_track: Option<&str>) -> String {
+    match current_track {
+        Some(id) => songs
+            .iter()
+            .find(|song| song.id == id)
+            .map(|song| song.title.clone())
+            .unwrap_or_else(|| id.to_string()),
+        None => "Nothing".to_string(),
+    }
+}
+
+/// The Now Playing bar: the "Now Playing:" caption followed by the current
+/// track's resolved title (or "Nothing" when stopped).
+pub fn view_now_playing(songs: &[Song], current_track: Option<&str>) -> Element<'static, Message> {
+    Row::new()
+        .push(Text::new("Now Playing: ").size(20))
+        .push(Text::new(now_playing_label(songs, current_track)).size(20))
+        .into()
+}
+
+/// The Play/Pause button's label: "Pause" while playing, "Play" when
+/// stopped. Pure so the label logic is testable without an iced `Element`.
+fn play_pause_label(is_playing: bool) -> &'static str {
+    if is_playing { "Pause" } else { "Play" }
+}
+
+/// The transport row: the Play/Pause, Previous, and Next buttons and the
+/// volume slider. `volume` is the slider's current value; dragging it emits
+/// `Message::VolumeChange`.
+pub fn view_transport_controls(is_playing: bool, volume: f32) -> Element<'static, Message> {
+    Row::new()
+        .push(Button::new(Text::new(play_pause_label(is_playing))).on_press(Message::PlayPause))
+        .push(Space::new().width(Length::Fixed(20.0)))
+        .push(Button::new(Text::new("Previous")).on_press(Message::PreviousTrack))
+        .push(Space::new().width(Length::Fixed(20.0)))
+        .push(Button::new(Text::new("Next")).on_press(Message::NextTrack))
+        .push(Space::new().width(Length::Fixed(20.0)))
+        .push(
+            Slider::new(0.0..=1.0, volume, Message::VolumeChange)
+                .step(0.01)
+                .width(Length::Fixed(100.0)),
+        )
+        .into()
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Message, album_row, artist_row, song_row};
+    use super::{Message, album_row, artist_row, now_playing_label, play_pause_label, song_row};
     use crate::library::{Album, Artist, Song};
 
     fn sample_artist() -> Artist {
@@ -139,5 +189,41 @@ mod tests {
         assert_eq!(title, "Opening");
         assert_eq!(label, "Play");
         assert!(matches!(message, Message::TrackSelected(id) if id == "song-1"));
+    }
+
+    // The Now Playing bar and transport controls are built in this module
+    // (grouped with the other widget builders), so their pure label logic is
+    // pinned here alongside the browse-row mappings.
+
+    #[test]
+    fn now_playing_label_shows_nothing_when_stopped() {
+        assert_eq!(now_playing_label(&[sample_song()], None), "Nothing");
+    }
+
+    #[test]
+    fn now_playing_label_resolves_known_track_to_title() {
+        assert_eq!(
+            now_playing_label(&[sample_song()], Some("song-1")),
+            "Opening"
+        );
+    }
+
+    #[test]
+    fn now_playing_label_falls_back_to_id_when_track_not_in_songs() {
+        assert_eq!(
+            now_playing_label(&[sample_song()], Some("no-such-song")),
+            "no-such-song"
+        );
+    }
+
+    #[test]
+    fn now_playing_label_falls_back_to_id_when_no_songs_loaded() {
+        assert_eq!(now_playing_label(&[], Some("song-1")), "song-1");
+    }
+
+    #[test]
+    fn play_pause_label_mirrors_playing_state() {
+        assert_eq!(play_pause_label(true), "Pause");
+        assert_eq!(play_pause_label(false), "Play");
     }
 }

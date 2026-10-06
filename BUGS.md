@@ -24,7 +24,9 @@ Fixed by resolving `current_track` against the loaded `player.songs` in a pure
 `now_playing_label(&[Song], Option<&str>)` helper that `view` calls: a known id
 maps to the song's title, an id not in `songs` falls back to the id itself, and
 no current track yields "Nothing". The helper and its four cases (stopped,
-known track, unknown id, no songs loaded) are unit-tested in `src/ui/mod.rs`;
+known track, unknown id, no songs loaded) are unit-tested in
+`src/ui/views.rs` (the helper, its tests, and the Now Playing bar and
+transport row construction moved there from `src/ui/mod.rs` on 2026-10-06);
 `cargo build`, `cargo test`, and `cargo fmt --check` all pass.
 
 **Validation gap:** unclear-invariant — the Now Playing bar's contract (show a

@@ -68,6 +68,12 @@ resolution pure so it is testable without the UI.
   boot it still shows "Nothing" (manual check — build + tests are the primary
   gate).
 
+**Update (2026-10-06, organize).** `now_playing_label` (with its unit tests)
+and the Now Playing bar / transport row construction moved to
+`src/ui/views.rs`, grouped with the other widget builders; the plan's
+original placement — the helper beside `view` in `src/ui/mod.rs` — is
+superseded.
+
 ### Make Previous/Next step through the songs of the current album (done 2026-10-05)
 
 Found by plan 2026-10-04.
