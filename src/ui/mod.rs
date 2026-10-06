@@ -5,6 +5,7 @@ use iced::{
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+mod transport;
 mod views;
 
 use crate::{
@@ -103,7 +104,20 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             state.volume = state::clamp_volume(volume);
             Task::none()
         }
-        Message::NextTrack | Message::PreviousTrack => Task::none(),
+        Message::NextTrack => {
+            let current = player.state.blocking_lock().current_track.clone();
+            match transport::next_track_id(&player.songs, current.as_deref()) {
+                Some(track_id) => Task::done(Message::TrackSelected(track_id)),
+                None => Task::none(),
+            }
+        }
+        Message::PreviousTrack => {
+            let current = player.state.blocking_lock().current_track.clone();
+            match transport::previous_track_id(&player.songs, current.as_deref()) {
+                Some(track_id) => Task::done(Message::TrackSelected(track_id)),
+                None => Task::none(),
+            }
+        }
         Message::TrackSelected(track_id) => {
             let service = player.apple_music_service.clone();
             Task::perform(

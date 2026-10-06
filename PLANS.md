@@ -5,7 +5,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Make Previous/Next step through the songs of the current album
+_None yet._
+
+## Done
+
+### Make Previous/Next step through the songs of the current album (done 2026-10-05)
 
 Found by plan 2026-10-04.
 
@@ -59,8 +63,6 @@ service models the library API, not the current playlist).
   move the Now Playing track through that album's songs, wrapping at the ends;
   at the artist/album list (no songs loaded) they do nothing (manual check —
   build + tests are the primary gate).
-
-## Done
 
 ### Add a working volume slider to the transport controls (done 2026-10-05)
 
