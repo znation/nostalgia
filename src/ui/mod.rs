@@ -790,6 +790,37 @@ mod tests {
         });
     }
 
+    // `store_songs` folds a loaded song list into the accumulated
+    // `known_songs` so the Now Playing bar keeps naming a playing track after
+    // a browse away. The fold dedups: a song `known_songs` already holds must
+    // not be pushed a second time — otherwise every revisit of an album grows
+    // the buffer unboundedly, and since `view` scans it per frame, eventually
+    // slows the bar. No other test loads overlapping lists:
+    // `songs_loaded_populates_list` fills an empty buffer and the browse-away
+    // test loads two disjoint albums, so the dedup branch (a song arriving
+    // that `known_songs` already contains) is reachable only by loading the
+    // same album twice — which this does. A regression that dropped the `any`
+    // guard would pass every other test while duplicating songs here.
+    #[test]
+    fn songs_loaded_does_not_duplicate_already_known_songs() {
+        let (mut player, _state) = test_player();
+
+        let songs = stepping_songs();
+        let _ = update(&mut player, Message::SongsLoaded(songs.clone()));
+
+        // Re-load the same album — e.g. browsing back to it after stepping
+        // away — and its songs must not appear twice in `known_songs`.
+        let _ = update(&mut player, Message::SongsLoaded(songs));
+
+        assert_eq!(player.known_songs.len(), 3);
+        let known_ids: Vec<&str> = player
+            .known_songs
+            .iter()
+            .map(|song| song.id.as_str())
+            .collect();
+        assert_eq!(known_ids, vec!["song-1", "song-2", "song-3"]);
+    }
+
     // The Now Playing bar must keep naming the playing track, not its raw id,
     // after the user browses to a different album. `view` renders the bar's
     // label through `WinampPlayer::now_playing_label`, so asserting that same
