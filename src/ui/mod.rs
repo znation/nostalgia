@@ -691,7 +691,7 @@ mod tests {
         let task = update(&mut player, Message::TrackPlayed);
 
         // The arm schedules no follow-up work...
-        assert!(iced_runtime::task::into_stream(task).is_none());
+        assert_no_task(task);
 
         // ...and leaves the shared state exactly as it was.
         let state = state.blocking_lock();
@@ -721,6 +721,16 @@ mod tests {
             Message::TrackSelected(id) => assert_eq!(id, expected),
             other => panic!("unexpected stepping task output: {other:?}"),
         }));
+    }
+
+    /// Asserts that an update arm scheduled no follow-up work: `update`
+    /// returns `Task::none()` for a no-op arm, and iced's `Task` represents
+    /// that as no stream to run. The no-op arms — `TrackPlayed`, and
+    /// Next/Previous with an empty `songs` buffer — each used to repeat the
+    /// same `into_stream(task).is_none()` probe, so it lives here once and
+    /// "this arm schedules nothing" reads as the named contract it is.
+    fn assert_no_task(task: Task<Message>) {
+        assert!(iced_runtime::task::into_stream(task).is_none());
     }
 
     #[test]
@@ -779,7 +789,7 @@ mod tests {
 
         let task = update(&mut player, Message::NextTrack);
 
-        assert!(iced_runtime::task::into_stream(task).is_none());
+        assert_no_task(task);
     }
 
     #[test]
@@ -788,7 +798,7 @@ mod tests {
 
         let task = update(&mut player, Message::PreviousTrack);
 
-        assert!(iced_runtime::task::into_stream(task).is_none());
+        assert_no_task(task);
     }
 
     /// Feeds a `*Loaded` message built from `items` back through `update` and
