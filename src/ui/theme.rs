@@ -33,7 +33,7 @@ pub const PLAYING_ROW_HIGHLIGHT: Color = Color::from_rgb(0.25, 0.5, 1.0);
 /// [`TITLE_BLUE`] drives interactive accents, and [`LCD_GREEN`] is the
 /// success colour. Warning and danger keep conventional amber/red so a
 /// future error state reads correctly against the dark face.
-pub fn palette() -> iced::theme::Palette {
+fn palette() -> iced::theme::Palette {
     iced::theme::Palette {
         background: WINDOW_BACKGROUND,
         text: TEXT,
@@ -60,7 +60,7 @@ fn cached_theme() -> &'static Theme {
 }
 
 /// The app-wide Winamp theme: a custom [`Theme`] named `"Winamp"` over the
-/// base-skin [`palette`]. Applied by `init_ui` so every widget that follows
+/// base-skin `palette`. Applied by `init_ui` so every widget that follows
 /// the theme renders on the dark Winamp face. A cheap clone of the cached
 /// [`cached_theme`], so the per-rebuild call allocates nothing new.
 pub fn winamp_theme() -> Theme {
