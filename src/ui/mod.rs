@@ -296,6 +296,58 @@ mod tests {
         assert!(matches!(player.current_view, CurrentView::Songs));
     }
 
+    // The browse arms do two things — flip the view and fetch the next
+    // level's list — and the view-flip tests above stop at the first half.
+    // These pin the fetch half: `ArtistSelected` must load the selected
+    // artist's albums and `AlbumSelected` the selected album's songs, both
+    // delivered as a `*Loaded` message that iced feeds back into the browse
+    // buffer. A regression that fetched the wrong artist's albums (or the
+    // wrong album's songs) would still flip the view, so the loaded contents
+    // are asserted, not just the view.
+
+    #[tokio::test]
+    async fn artist_selected_fetches_the_artists_albums_into_the_player() {
+        let (mut player, _state) = test_player();
+
+        let task = update(&mut player, Message::ArtistSelected("artist-1".to_string()));
+        let mut loaded: Option<Vec<Album>> = None;
+        drive_task(task, "load albums", |message| match message {
+            Message::AlbumsLoaded(albums) => loaded = Some(albums),
+            other => panic!("unexpected album-load task output: {other:?}"),
+        })
+        .await;
+
+        // The arm flips to the albums view; feed the fetched list back
+        // through the update loop, as iced would, and confirm the browse
+        // buffer holds the selected artist's albums in library order.
+        assert!(matches!(player.current_view, CurrentView::Albums));
+        let albums = loaded.expect("ArtistSelected must fetch the album list");
+        let _ = update(&mut player, Message::AlbumsLoaded(albums));
+        let ids: Vec<&str> = player.albums.iter().map(|album| album.id.as_str()).collect();
+        assert_eq!(ids, vec!["album-1", "album-2"]);
+    }
+
+    #[tokio::test]
+    async fn album_selected_fetches_the_albums_songs_into_the_player() {
+        let (mut player, _state) = test_player();
+
+        let task = update(&mut player, Message::AlbumSelected("album-3".to_string()));
+        let mut loaded: Option<Vec<Song>> = None;
+        drive_task(task, "load songs", |message| match message {
+            Message::SongsLoaded(songs) => loaded = Some(songs),
+            other => panic!("unexpected song-load task output: {other:?}"),
+        })
+        .await;
+
+        // As with the artist arm: the view flips to songs, and the fetched
+        // list lands in the browse buffer in library order.
+        assert!(matches!(player.current_view, CurrentView::Songs));
+        let songs = loaded.expect("AlbumSelected must fetch the song list");
+        let _ = update(&mut player, Message::SongsLoaded(songs));
+        let ids: Vec<&str> = player.songs.iter().map(|song| song.id.as_str()).collect();
+        assert_eq!(ids, vec!["song-5"]);
+    }
+
     // Startup wiring: `boot` hands iced a fresh player plus the task that
     // loads the artist list, and `update`'s `LoadArtists` arm runs that fetch
     // into the player's `artists` buffer. A regression that stopped boot from
