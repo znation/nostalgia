@@ -172,3 +172,107 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
         .push(main_content)
         .into()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A fresh player over its own shared state, so a test can inspect the
+    /// same `AppState` the player mutates.
+    fn test_player() -> (WinampPlayer, Arc<Mutex<AppState>>) {
+        let state = Arc::new(Mutex::new(AppState::default()));
+        let player = WinampPlayer {
+            state: state.clone(),
+            apple_music_service: AppleMusicService::new(state.clone()),
+            current_view: CurrentView::Artists,
+            artists: Vec::new(),
+            albums: Vec::new(),
+            songs: Vec::new(),
+            selected_artist: None,
+            selected_album: None,
+        };
+        (player, state)
+    }
+
+    // `Message::PlayPause` uses `blocking_lock`, which panics inside an async
+    // runtime, so this stays a plain test (no `#[tokio::test]`).
+    #[test]
+    fn play_pause_toggles_is_playing() {
+        let (mut player, state) = test_player();
+
+        let _ = update(&mut player, Message::PlayPause);
+        assert!(state.blocking_lock().is_playing);
+
+        let _ = update(&mut player, Message::PlayPause);
+        assert!(!state.blocking_lock().is_playing);
+    }
+
+    #[test]
+    fn artist_selected_sets_view_and_selection() {
+        let (mut player, _state) = test_player();
+
+        let _ = update(&mut player, Message::ArtistSelected("artist-1".to_string()));
+
+        assert_eq!(player.selected_artist.as_deref(), Some("artist-1"));
+        assert!(matches!(
+            player.current_view,
+            CurrentView::Albums(ref artist_id) if artist_id == "artist-1"
+        ));
+    }
+
+    #[test]
+    fn album_selected_sets_view_and_selection() {
+        let (mut player, _state) = test_player();
+        player.selected_artist = Some("artist-2".to_string());
+
+        let _ = update(&mut player, Message::AlbumSelected("album-3".to_string()));
+
+        assert_eq!(player.selected_album.as_deref(), Some("album-3"));
+        assert!(matches!(
+            player.current_view,
+            CurrentView::Songs(ref artist_id, ref album_id)
+                if artist_id == "artist-2" && album_id == "album-3"
+        ));
+    }
+
+    #[test]
+    fn artists_loaded_populates_list() {
+        let (mut player, _state) = test_player();
+        let artists = vec![Artist {
+            id: "artist-1".to_string(),
+            name: "The Sample Band".to_string(),
+        }];
+
+        let _ = update(&mut player, Message::ArtistsLoaded(artists.clone()));
+
+        assert_eq!(player.artists, artists);
+    }
+
+    #[test]
+    fn albums_loaded_populates_list() {
+        let (mut player, _state) = test_player();
+        let albums = vec![Album {
+            id: "album-1".to_string(),
+            title: "First Record".to_string(),
+            artist_id: "artist-1".to_string(),
+        }];
+
+        let _ = update(&mut player, Message::AlbumsLoaded(albums.clone()));
+
+        assert_eq!(player.albums, albums);
+    }
+
+    #[test]
+    fn songs_loaded_populates_list() {
+        let (mut player, _state) = test_player();
+        let songs = vec![Song {
+            id: "song-1".to_string(),
+            title: "Opening".to_string(),
+            album_id: "album-1".to_string(),
+        }];
+
+        let _ = update(&mut player, Message::SongsLoaded(songs.clone()));
+
+        assert_eq!(player.songs, songs);
+    }
+}
