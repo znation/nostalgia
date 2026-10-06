@@ -49,6 +49,10 @@ struct WinampPlayer {
     songs: Vec<Song>,
 }
 
+/// Which browse screen is showing. Payload-free: the albums and songs the
+/// view renders come from the loaded `albums`/`songs` buffers, so carrying
+/// the selected ids here (as earlier versions did) only duplicated
+/// state nothing read.
 enum CurrentView {
     Artists,
     Albums,
