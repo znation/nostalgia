@@ -26,4 +26,4 @@ config files yet.
 
 ## Development
 
-`make check` runs the whole landing gate in one command — `cargo fmt --check`, `cargo clippy --all-targets`, and the test suite — and is the fastest way to see whether a change is merge-ready. The individual stages are available separately (`make fmt`, `make lint`, `make test`), and `make run` is the same as `cargo run`.
+`make check` runs the whole landing gate in one command — `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and the test suite — and is the fastest way to see whether a change is merge-ready. The individual stages are available separately (`make fmt`, `make lint`, `make test`), and `make run` is the same as `cargo run`.

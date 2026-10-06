@@ -18,9 +18,13 @@ test:
 fmt:
 	cargo fmt --check
 
-## Lints every target with clippy.
+## Lints every target with clippy, failing on any warning.
+##
+## `-D warnings` turns the clippy run into the "clippy clean" the landing
+## gate means: without it, a tree that introduces a warning still passes
+## `make check`, misreporting a change as merge-ready.
 lint:
-	cargo clippy --all-targets
+	cargo clippy --all-targets -- -D warnings
 
 ## Builds and runs the player window.
 run:
