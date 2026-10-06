@@ -137,11 +137,12 @@ clicking "Opening" in the Songs view made the Now Playing bar read
 "Now Playing: song-1". The id is an internal key; the bar is meant to name the
 song for the user.
 
-Fixed by resolving `current_track` against the loaded `player.songs` in a pure
-`now_playing_label(&[Song], Option<&str>)` helper that `view` calls: a known id
-maps to the song's title, an id not in `songs` falls back to the id itself, and
-no current track yields "Nothing". The helper and its four cases (stopped,
-known track, unknown id, no songs loaded) are unit-tested in
+Fixed by resolving `current_track` in a pure `now_playing_label` helper that
+`view` calls — originally against the loaded `player.songs`, since 2026-10-06
+against the player's accumulated id→title `known_titles` index: a known id
+maps to the song's title, an id not in the index falls back to the id itself,
+and no current track yields "Nothing". The helper and its four cases (no
+current track, known track, unknown id, no songs loaded) are unit-tested in
 `src/ui/views.rs` (the helper, its tests, and the Now Playing bar and
 transport row construction moved there from `src/ui/mod.rs` on 2026-10-06);
 `cargo build`, `cargo test`, and `cargo fmt --check` all pass.

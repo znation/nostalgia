@@ -171,7 +171,8 @@ pub fn view_back_button() -> Element<'static, Message> {
 }
 
 /// The Now Playing bar label: the title of `current_track` when `titles`
-/// knows it; the raw id when it doesn't; "Nothing" when stopped. `titles` is
+/// knows it; the raw id when it doesn't; "Nothing" when no track is current
+/// (Stop keeps the interrupted track's title). `titles` is
 /// the player's known id→title index, so this per-frame resolution is a single
 /// map get rather than a scan of every song the player has ever loaded. The
 /// result borrows the title from `titles` (or the `"Nothing"` literal) in the
@@ -192,12 +193,12 @@ pub fn now_playing_label<'a>(
 }
 
 /// The Now Playing bar: the "Now Playing:" caption followed by the current
-/// track's resolved title (or "Nothing" when stopped). Takes the already
-/// resolved label (from [`now_playing_label`]) so this per-frame widget build
-/// does no song lookup itself. The label is a [`Cow`]: the borrowed case keeps
-/// the title owned by the caller's index (no allocation), while the owned
-/// fallback is moved into the widget, so the built element never borrows a
-/// temporary.
+/// track's resolved title (or "Nothing" when nothing is current). Takes the
+/// already resolved label (from [`now_playing_label`]) so this per-frame
+/// widget build does no song lookup itself. The label is a [`Cow`]: the
+/// borrowed case keeps the title owned by the caller's index (no allocation),
+/// while the owned fallback is moved into the widget, so the built element
+/// never borrows a temporary.
 pub fn view_now_playing(label: Cow<'_, str>) -> Element<'_, Message> {
     Row::new()
         .push(Text::new("Now Playing: ").size(20))
@@ -393,7 +394,7 @@ mod tests {
     }
 
     #[test]
-    fn now_playing_label_shows_nothing_when_stopped() {
+    fn now_playing_label_shows_nothing_with_no_current_track() {
         assert_eq!(now_playing_label(&known_titles(&[]), None), "Nothing");
     }
 
