@@ -953,6 +953,34 @@ mod tests {
         assert_eq!(known_ids, vec!["song-1", "song-2", "song-3"]);
     }
 
+    // Browsing to a new album must *replace* the Songs view's buffer, not
+    // append to it: after loading album-1's songs and then browsing to
+    // album-2, `player.songs` holds only album-2's song — otherwise the
+    // Songs view would render stale rows from every album visited. The other
+    // `*Loaded` tests load only into an empty buffer, and the browse-away
+    // label test (`now_playing_label_keeps_the_track_name_after_browsing_to_another_album`)
+    // asserts the label but never the buffer, so an
+    // append-instead-of-replace regression in `store_songs` would clear every
+    // existing test and only fail here.
+    #[test]
+    fn songs_loaded_replaces_the_previous_albums_songs() {
+        let (mut player, _state) = test_player();
+
+        // Load album-1's three songs, then browse to album-2 (one song).
+        let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+        let _ = update(
+            &mut player,
+            Message::SongsLoaded(vec![Song {
+                id: "song-4".to_string(),
+                title: "B-side".to_string(),
+                album_id: "album-2".to_string(),
+            }]),
+        );
+
+        let ids: Vec<&str> = player.songs.iter().map(|song| song.id.as_str()).collect();
+        assert_eq!(ids, vec!["song-4"]);
+    }
+
     // The Now Playing bar must keep naming the playing track, not its raw id,
     // after the user browses to a different album. `view` renders the bar's
     // label through `WinampPlayer::now_playing_label`, so asserting that same
