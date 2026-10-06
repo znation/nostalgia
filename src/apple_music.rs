@@ -142,6 +142,17 @@ mod tests {
         AppleMusicService::new(Arc::new(Mutex::new(AppState::default())))
     }
 
+    /// Asserts that `items` yield exactly the expected ids, in order. Four
+    /// browse-query tests — the multi- and single-group albums and the multi-
+    /// and single-song albums — each used to repeat the same
+    /// map-to-ids-then-compare chain over the fetched list; only the id
+    /// closure and the expected ids differ, so the chain lives here once and
+    /// each test only names its list and expectation.
+    fn assert_ids<T>(items: &[T], id: impl Fn(&T) -> &str, expected: &[&str]) {
+        let ids: Vec<&str> = items.iter().map(id).collect();
+        assert_eq!(ids, expected);
+    }
+
     #[tokio::test]
     async fn get_favorite_artists_returns_all_artists() {
         let artists = test_service().get_favorite_artists().await.unwrap();
@@ -167,8 +178,7 @@ mod tests {
             .get_albums_by_artist("artist-1")
             .await
             .unwrap();
-        let ids: Vec<&str> = albums.iter().map(|album| album.id.as_str()).collect();
-        assert_eq!(ids, vec!["album-1", "album-2"]);
+        assert_ids(&albums, |album| album.id.as_str(), &["album-1", "album-2"]);
 
         // An existing artist with no albums yields an empty list, distinct
         // from an unknown id (same lookup path, but worth pinning the sample).
@@ -201,8 +211,7 @@ mod tests {
             .get_albums_by_artist("artist-2")
             .await
             .unwrap();
-        let ids: Vec<&str> = albums.iter().map(|album| album.id.as_str()).collect();
-        assert_eq!(ids, vec!["album-3"]);
+        assert_ids(&albums, |album| album.id.as_str(), &["album-3"]);
     }
 
     #[tokio::test]
@@ -221,8 +230,7 @@ mod tests {
             .get_songs_from_album("album-1")
             .await
             .unwrap();
-        let ids: Vec<&str> = songs.iter().map(|song| song.id.as_str()).collect();
-        assert_eq!(ids, vec!["song-1", "song-2", "song-3"]);
+        assert_ids(&songs, |song| song.id.as_str(), &["song-1", "song-2", "song-3"]);
     }
 
     #[tokio::test]
@@ -243,8 +251,7 @@ mod tests {
             .get_songs_from_album("album-2")
             .await
             .unwrap();
-        let ids: Vec<&str> = songs.iter().map(|song| song.id.as_str()).collect();
-        assert_eq!(ids, vec!["song-4"]);
+        assert_ids(&songs, |song| song.id.as_str(), &["song-4"]);
     }
 
     #[tokio::test]
