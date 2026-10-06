@@ -16,6 +16,16 @@ use crate::library::{Album, Artist, Song};
 
 use super::Message;
 
+/// A fixed-width horizontal gap between adjacent widgets.
+///
+/// The browse rows (a 10px gap between the title and the secondary label)
+/// and the transport row (a 20px gap between each control) all construct
+/// the same `Space`, so the `Space::new().width(Length::Fixed(..))`
+/// expression lives here once instead of being repeated at every call site.
+fn spacer(width: f32) -> Space {
+    Space::new().width(Length::Fixed(width))
+}
+
 /// Builds a scrollable list where each item is a button showing a title
 /// followed by a secondary label, emitting the given message on press.
 /// Shared by the artists, albums, and songs views.
@@ -29,7 +39,7 @@ fn scrollable_list(
             Button::new(
                 Row::new()
                     .push(Text::new(title).size(18))
-                    .push(Space::new().width(Length::Fixed(10.0)))
+                    .push(spacer(10.0))
                     .push(Text::new(label).size(14)),
             )
             .on_press(message),
@@ -121,11 +131,11 @@ fn play_pause_label(is_playing: bool) -> &'static str {
 pub fn view_transport_controls(is_playing: bool, volume: f32) -> Element<'static, Message> {
     Row::new()
         .push(Button::new(Text::new(play_pause_label(is_playing))).on_press(Message::PlayPause))
-        .push(Space::new().width(Length::Fixed(20.0)))
+        .push(spacer(20.0))
         .push(Button::new(Text::new("Previous")).on_press(Message::PreviousTrack))
-        .push(Space::new().width(Length::Fixed(20.0)))
+        .push(spacer(20.0))
         .push(Button::new(Text::new("Next")).on_press(Message::NextTrack))
-        .push(Space::new().width(Length::Fixed(20.0)))
+        .push(spacer(20.0))
         .push(
             Slider::new(0.0..=1.0, volume, Message::VolumeChange)
                 .step(0.01)
