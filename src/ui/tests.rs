@@ -48,6 +48,20 @@ fn assert_toggles_shared_state(message: Message, read_flag: impl Fn(&AppState) -
     assert!(!read_flag(&state.blocking_lock()));
 }
 
+/// Drives a slider-change message through `update` and asserts the clamped
+/// value lands in shared state. The VolumeChange, EqPreampChange, and
+/// EqBandChange arms all do the same one-value write — the setter clamps the
+/// slider's value before storing it — so the lock-read-assert sequence lives
+/// here once and each call only names its message, the field read back, and
+/// the clamped value. The arms use `blocking_lock`, which panics inside an
+/// async runtime, so this stays a plain (non-async) helper, like
+/// [`assert_toggles_shared_state`].
+fn assert_message_clamps(message: Message, read: impl Fn(&AppState) -> f32, expected: f32) {
+    let (mut player, state) = test_player();
+    let _ = update(&mut player, message);
+    assert_eq!(read(&state.blocking_lock()), expected);
+}
+
 /// Drives an iced `Task` to completion and hands its single `Output`
 /// action to `check`. `update` only schedules work as a `Task`, so a test
 /// that wants to observe the resulting message — `TrackPlayed` after
@@ -126,26 +140,30 @@ fn toggle_equalizer_flips_shared_state() {
 
 #[test]
 fn eq_preamp_change_clamps_value_before_storing() {
-    let (mut player, state) = test_player();
-    // Default preamp is flat (see `AppState::default`).
-    assert_eq!(state.blocking_lock().eq_preamp(), 0.0);
-
-    let _ = update(&mut player, Message::EqPreampChange(99.0));
-    assert_eq!(state.blocking_lock().eq_preamp(), GAIN_MAX_DB);
-
-    let _ = update(&mut player, Message::EqPreampChange(-99.0));
-    assert_eq!(state.blocking_lock().eq_preamp(), GAIN_MIN_DB);
+    assert_message_clamps(
+        Message::EqPreampChange(99.0),
+        |state| state.eq_preamp(),
+        GAIN_MAX_DB,
+    );
+    assert_message_clamps(
+        Message::EqPreampChange(-99.0),
+        |state| state.eq_preamp(),
+        GAIN_MIN_DB,
+    );
 }
 
 #[test]
 fn eq_band_change_clamps_value_before_storing() {
-    let (mut player, state) = test_player();
-
-    let _ = update(&mut player, Message::EqBandChange(0, 99.0));
-    assert_eq!(state.blocking_lock().eq_bands()[0], GAIN_MAX_DB);
-
-    let _ = update(&mut player, Message::EqBandChange(1, -99.0));
-    assert_eq!(state.blocking_lock().eq_bands()[1], GAIN_MIN_DB);
+    assert_message_clamps(
+        Message::EqBandChange(0, 99.0),
+        |state| state.eq_bands()[0],
+        GAIN_MAX_DB,
+    );
+    assert_message_clamps(
+        Message::EqBandChange(1, -99.0),
+        |state| state.eq_bands()[1],
+        GAIN_MIN_DB,
+    );
 }
 
 // `Message::Stop` uses `blocking_lock`, which panics inside an async
@@ -163,20 +181,12 @@ fn stop_clears_is_playing() {
 
 #[test]
 fn volume_change_clamps_value_before_storing() {
-    let (mut player, state) = test_player();
-    // Default volume is 0.5 (see `AppState::default`).
-    assert_eq!(state.blocking_lock().volume(), 0.5);
-
     // Out-of-range slider values are clamped by the update arm.
-    let _ = update(&mut player, Message::VolumeChange(1.5));
-    assert_eq!(state.blocking_lock().volume(), 1.0);
-
-    let _ = update(&mut player, Message::VolumeChange(-0.2));
-    assert_eq!(state.blocking_lock().volume(), 0.0);
+    assert_message_clamps(Message::VolumeChange(1.5), |state| state.volume(), 1.0);
+    assert_message_clamps(Message::VolumeChange(-0.2), |state| state.volume(), 0.0);
 
     // An in-range value is stored as-is.
-    let _ = update(&mut player, Message::VolumeChange(0.3));
-    assert_eq!(state.blocking_lock().volume(), 0.3);
+    assert_message_clamps(Message::VolumeChange(0.3), |state| state.volume(), 0.3);
 }
 
 #[test]
