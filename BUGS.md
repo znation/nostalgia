@@ -9,6 +9,35 @@ _None yet._
 
 ## Fixed
 
+### Now Playing bar falls back to the raw track id after browsing to a different album (fixed 2026-10-06)
+
+Found by bugfix 2026-10-06.
+
+The 2026-10-05 fix resolves the Now Playing bar's label against the
+currently-browsed album's songs (`player.songs`), and that buffer is replaced
+every time `SongsLoaded` lands. So play song-1 from "First Record" (album-1),
+then browse away to "Second Record" (album-2): `player.songs` is now album-2's
+list, song-1 is no longer "known", and the bar — which is meant to name the
+song for the user — falls back to the raw internal id "song-1".
+
+Fixed by accumulating every loaded song in a new `known_songs` buffer: the
+`SongsLoaded` arm stores into `player.songs` (as before) and folds each new
+song into `known_songs`, and `view` resolves the bar's label through
+`WinampPlayer::now_playing_label`, which looks the current track up in
+`known_songs` instead of `songs`. `player.songs ⊆ known_songs` always, so
+every case that worked before still works, and the browse-away case now names
+the playing track. The regression test
+(`now_playing_label_keeps_the_track_name_after_browsing_to_another_album`)
+asserts the bar's label through the same `WinampPlayer::now_playing_label`
+path that `view` renders, after playing a song and browsing to another album —
+it fails with the raw id both when `known_songs` is not accumulated and when
+the resolution is reverted to `songs`. `cargo build`, `cargo test`, and
+`cargo fmt --check` all pass.
+
+**Validation gap:** no-observability — the failing label is computed inside
+`view`'s iced `Element`, which no test path inspected, so the browse-away
+regression left no trace in the suite.
+
 ### Browse view can only move forward — no way back from Albums/Songs, a dead end (fixed 2026-10-06)
 
 Found by bugfix 2026-10-06.

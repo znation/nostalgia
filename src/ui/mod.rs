@@ -54,6 +54,10 @@ struct WinampPlayer {
     artists: Vec<Artist>,
     albums: Vec<Album>,
     songs: Vec<Song>,
+    /// Every song the player has loaded across all browsed albums, so the Now
+    /// Playing bar can still name the playing track after the user browses to
+    /// a different album (whose list replaces `songs`).
+    known_songs: Vec<Song>,
 }
 
 /// Which browse screen is showing. Payload-free: the albums and songs the
@@ -80,7 +84,17 @@ impl WinampPlayer {
             artists: Vec::new(),
             albums: Vec::new(),
             songs: Vec::new(),
+            known_songs: Vec::new(),
         }
+    }
+
+    /// The Now Playing bar's label for `current_track`, resolved against the
+    /// accumulated [`Self::known_songs`] rather than the currently-browsed
+    /// album's `songs`: `view` renders the bar from this, so the bar keeps
+    /// naming a playing track even after a browse to another album replaced
+    /// `songs`. The browse-away regression test asserts this same path.
+    fn now_playing_label(&self, current_track: Option<&str>) -> String {
+        views::now_playing_label(&self.known_songs, current_track)
     }
 }
 
@@ -130,6 +144,20 @@ fn played_or_reported<E>(result: Result<(), E>, report_error: impl FnOnce(&E)) -
 fn store_loaded<T>(buffer: &mut Vec<T>, items: Vec<T>) -> Task<Message> {
     *buffer = items;
     Task::none()
+}
+
+/// Stores a freshly fetched song list into the player's current-album buffer
+/// and folds it into the accumulated [`WinampPlayer::known_songs`], so a later
+/// browse to a different album (which replaces `songs`) can't lose the title
+/// of the playing track. Only `SongsLoaded` needs the extra fold — artists
+/// and albums never appear in the Now Playing bar.
+fn store_songs(player: &mut WinampPlayer, songs: Vec<Song>) -> Task<Message> {
+    for song in &songs {
+        if !player.known_songs.iter().any(|known| known.id == song.id) {
+            player.known_songs.push(song.clone());
+        }
+    }
+    store_loaded(&mut player.songs, songs)
 }
 
 /// Runs a library-fetch future through iced's runtime, mapping its `Result`
@@ -253,7 +281,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         ),
         Message::ArtistsLoaded(artists) => store_loaded(&mut player.artists, artists),
         Message::AlbumsLoaded(albums) => store_loaded(&mut player.albums, albums),
-        Message::SongsLoaded(songs) => store_loaded(&mut player.songs, songs),
+        Message::SongsLoaded(songs) => store_songs(player, songs),
         Message::TrackPlayed => Task::none(),
     }
 }
@@ -263,13 +291,14 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
 /// above the current browse list.
 fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // The now-playing title is resolved while the state lock is held, from a
-    // borrowed `current_track` — the label outlives the lock, but the owned
-    // `String` clone of the current track is not needed, so the per-frame
-    // path allocates only the resolved label (see `views::now_playing_label`).
+    // borrowed `current_track` against the accumulated `known_songs` (see
+    // [`WinampPlayer::now_playing_label`]) — the label outlives the lock, but
+    // the owned `String` clone of the current track is not needed, so the
+    // per-frame path allocates only the resolved label.
     let (now_playing, is_playing, volume) = {
         let state = player.state.blocking_lock();
         (
-            views::now_playing_label(&player.songs, state.current_track.as_deref()),
+            player.now_playing_label(state.current_track.as_deref()),
             state.is_playing,
             state.volume,
         )
@@ -754,6 +783,35 @@ mod tests {
         assert_store_loaded(&mut player, songs, Message::SongsLoaded, |player| {
             &mut player.songs
         });
+    }
+
+    // The Now Playing bar must keep naming the playing track, not its raw id,
+    // after the user browses to a different album. `view` renders the bar's
+    // label through `WinampPlayer::now_playing_label`, so asserting that same
+    // resolution after a browse-away pins the actual bar path: if the label
+    // were resolved against `songs` (the currently-browsed album's list, which
+    // album-2's `SongsLoaded` just replaced) instead of the accumulated
+    // `known_songs`, song-1 would no longer be "known" and the label would
+    // fall back to the raw id "song-1", failing this test.
+    #[test]
+    fn now_playing_label_keeps_the_track_name_after_browsing_to_another_album() {
+        let (mut player, state) = test_player();
+
+        // Play song-1 (title "One") from album-1, then browse to album-2's
+        // songs — the flow that used to leave the bar showing "song-1".
+        let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+        state.blocking_lock().current_track = Some("song-1".to_string());
+        let _ = update(
+            &mut player,
+            Message::SongsLoaded(vec![Song {
+                id: "song-4".to_string(),
+                title: "B-side".to_string(),
+                album_id: "album-2".to_string(),
+            }]),
+        );
+
+        let current_track = state.blocking_lock().current_track.clone();
+        assert_eq!(player.now_playing_label(current_track.as_deref()), "One");
     }
 
     #[test]
