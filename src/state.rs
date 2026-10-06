@@ -88,6 +88,19 @@ pub fn clamp_volume(volume: f32) -> f32 {
 mod tests {
     use super::{AppState, clamp_volume};
 
+    /// Runs `mutation` on `state` and asserts it leaves `current_track` and
+    /// `volume` untouched. Both playback mutations — `toggle_playing` and
+    /// `stop` — contract that only the playing flag changes (the Now Playing
+    /// bar keeps the interrupted track's title), so the snapshot-then-compare
+    /// sequence lives here once instead of at each call site.
+    fn assert_keeps_track_and_volume(state: &mut AppState, mutation: impl FnOnce(&mut AppState)) {
+        let track = state.current_track.clone();
+        let volume = state.volume;
+        mutation(state);
+        assert_eq!(state.current_track, track);
+        assert_eq!(state.volume, volume);
+    }
+
     #[test]
     fn default_state_is_stopped_at_half_volume() {
         let state = AppState::default();
@@ -105,16 +118,12 @@ mod tests {
     #[test]
     fn toggle_playing_flips_only_the_playback_flag() {
         let mut state = AppState::default();
-        let track = state.current_track.clone();
-        let volume = state.volume;
         assert!(!state.is_playing);
 
-        state.toggle_playing();
+        assert_keeps_track_and_volume(&mut state, AppState::toggle_playing);
         assert!(state.is_playing);
-        assert_eq!(state.current_track, track);
-        assert_eq!(state.volume, volume);
 
-        state.toggle_playing();
+        assert_keeps_track_and_volume(&mut state, AppState::toggle_playing);
         assert!(!state.is_playing);
     }
 
@@ -142,14 +151,10 @@ mod tests {
             is_playing: true,
             ..Default::default()
         };
-        let track = state.current_track.clone();
-        let volume = state.volume;
         assert!(state.is_playing);
 
-        state.stop();
+        assert_keeps_track_and_volume(&mut state, AppState::stop);
         assert!(!state.is_playing);
-        assert_eq!(state.current_track, track);
-        assert_eq!(state.volume, volume);
     }
 
     #[test]
