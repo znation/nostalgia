@@ -13,8 +13,9 @@ Nostalgia is a (very close if not pixel-perfect) clone of the classic Winamp UI,
 
 <!-- tumwater:status:start -->
 Early skeleton (0.1.0): an iced (0.14) desktop shell — a Now Playing bar showing the real song
-title, transport controls with Play/Pause/Stop and Previous/Next stepping through the current album and
-a Winamp-style volume slider, and an artist → album → song browser with Back navigation that marks the
+title, transport controls with Play/Pause/Stop and Previous/Next stepping through the current album
+(a Winamp-style Repeat toggle, off by default, makes them wrap at the album's ends) and a
+Winamp-style volume slider, and an artist → album → song browser with Back navigation that marks the
 currently playing song in the Songs view over an in-memory sample library; the Apple
 Music API is not wired up yet. Open work lives in PLANS.md, BUGS.md, and QUESTIONS.md.
 <!-- tumwater:status:end -->
@@ -44,8 +45,8 @@ The player on its own: [docs/screenshots/player.png](docs/screenshots/player.png
 ## Usage
 
 Build and run with `cargo run`; the player opens an iced window showing the Now Playing bar, the
-Play/Pause/Stop/Previous/Next controls, a volume slider, and a browse list. There are no CLI flags or
-config files yet.
+Play/Pause/Stop/Previous/Next controls, a Repeat toggle, a volume slider, and a browse list. There
+are no CLI flags or config files yet.
 
 ## Development
 
