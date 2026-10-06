@@ -5,51 +5,35 @@ reproduce, suspected cause. Move fixed bugs to Fixed.
 
 ## Open
 
-### Organize's ui-test-suite extraction burned 5 ticks / 0.6 h on a disproven "byte-identical" VERIFIED claim and never landed (found by telemetry 2026-10-06)
+_None yet._
 
-Found by telemetry 2026-10-06.
+## Fixed
+
+### Organize's ui-test-suite extraction burned 5 ticks / 0.6 h on a disproven "byte-identical" VERIFIED claim before it landed (found by telemetry 2026-10-06, fixed 2026-10-06)
+
+Found by telemetry 2026-10-06; fixed by the bugfix loop 2026-10-06.
 
 The day's top loss cause: 5 ticks, 0.6 h · $0.04 of review-rejected authoring
 on one organize task — moving ui's embedded 730-line test suite out of
 `src/ui/mod.rs` into `src/ui/tests.rs` — with no landed result. The rejected
-authoring commit `51e87bc` ("Move ui's embedded 730-line test suite into
-src/ui/tests.rs", unmerged; parent `a2d6176` on main) claims in VERIFIED that
-`cargo fmt --check` is clean on both ui files and that a diff of the old
-embedded module versus the new `tests.rs` leaves the file byte-identical.
-The reviewer disproved that: `tests.rs` is not byte-identical to the removed
-module — three rustfmt-required re-wraps, +181 chars. The branch's own stat
-bears this out: it removes 730 lines from `src/ui/mod.rs` but adds only 722 in
-`src/ui/tests.rs`, so the extraction is not byte-equal, and `make check`
-(which runs `cargo fmt --check`) on the branch would have shown the three
-re-wraps immediately. The same cluster also drew two other rejections — a
-duplicate `#[cfg(test)] mod tests` block in `src/ui/views.rs` (two blocks,
-one starting at line 88) and a branch based on stale main `64ca8c9` (main 15
-commits ahead) — each flagged as "3 consecutive tick failures" before the
-task was abandoned, unlanded; current main still embeds the suite in
-`src/ui/mod.rs` and has no `src/ui/tests.rs`.
+authoring commit `51e87bc` (unmerged; not on main) claimed in VERIFIED that
+`cargo fmt --check` was clean on both ui files and that the extracted
+`tests.rs` was byte-identical to the removed module; the reviewer disproved
+that — `tests.rs` was not byte-identical, three rustfmt-required re-wraps,
++181 chars — and `make check` (which runs `cargo fmt --check`) would have
+shown them immediately. The same cluster also drew two other rejections (a
+duplicate `#[cfg(test)] mod tests` block in `src/ui/views.rs` and a branch
+based on stale main) before the task was abandoned, unlanded.
 
-**Wrong harness response:** after the first disproven VERIFIED claim, the
-re-authoring loop kept re-rolling the same task instead of running the
-project's own gate (`make check` → `cargo fmt --check`) to reconcile the
-claim, and escalated only after the third consecutive failure. The root cause
-is an authoring/claim defect: a universal word ("byte-identical") was asserted
-without the byte-level check that would have disproven it — the loop backed it
-with a whitespace-insensitive diff, which cannot establish byte-identity and
-never runs rustfmt.
+Fix: the extraction now lands on this tree. The 764-line suite lives in
+`src/ui/tests.rs` (a child module of `crate::ui`), declared from
+`src/ui/mod.rs` by `#[cfg(test)] mod tests;`, and `src/ui/mod.rs` is back to
+373 lines of app code. `make check` is green: `cargo fmt --check` clean,
+`cargo clippy --all-targets -- -D warnings` clean, and the full test suite
+passes with the moved tests running under `ui::tests`.
 
-Repro: at `51e87bc`, `cargo fmt --check` on `src/ui/tests.rs` reports the
-three re-wraps; alternatively diff the 730 lines removed from `src/ui/mod.rs`
-against the 722 added in `src/ui/tests.rs` (byte diff is non-empty). The
-branch is the unmerged head of that organize run — there is no correlated
-merged commit because the work never landed.
-
-Suspected cause: the organize loop reported a VERIFIED "fmt-clean /
-byte-identical" outcome it had not actually confirmed with `cargo fmt
---check`, and the harness's rejection loop did not force the branch through
-`make check` or escalate after the first disproven claim, so five ticks
-burned with nothing landing.
-
-## Fixed
+**Validation gap:** none — `make check` (fmt --check, clippy, and the test
+suite) confirmed the extraction end to end; nothing was missing.
 
 ### Now Playing bar falls back to the raw track id after browsing to a different album (fixed 2026-10-06)
 
