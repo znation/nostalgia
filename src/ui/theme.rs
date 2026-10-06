@@ -8,6 +8,8 @@
 //! lets later fidelity work (title bar, panel bevels, playlist chrome) style
 //! against the same names.
 
+use std::sync::OnceLock;
+
 use iced::{Color, Theme};
 
 /// The dark gray window face every panel is drawn on.
@@ -42,11 +44,27 @@ pub fn palette() -> iced::theme::Palette {
     }
 }
 
+/// The process-wide cache behind [`winamp_theme`], so the theme is built at
+/// most once.
+static WINAMP_THEME: OnceLock<Theme> = OnceLock::new();
+
+/// Returns the shared Winamp theme, building it at most once.
+///
+/// iced calls the app's theme function on every UI rebuild — every message,
+/// including each slider tick — and `Theme::custom` allocates its `Arc` and
+/// generates the full extended palette each time it runs. Caching the theme
+/// here turns that per-rebuild construction into an `Arc` clone; the palette
+/// never changes, so every rebuild can share one instance.
+fn cached_theme() -> &'static Theme {
+    WINAMP_THEME.get_or_init(|| Theme::custom("Winamp", palette()))
+}
+
 /// The app-wide Winamp theme: a custom [`Theme`] named `"Winamp"` over the
 /// base-skin [`palette`]. Applied by `init_ui` so every widget that follows
-/// the theme renders on the dark Winamp face.
+/// the theme renders on the dark Winamp face. A cheap clone of the cached
+/// [`cached_theme`], so the per-rebuild call allocates nothing new.
 pub fn winamp_theme() -> Theme {
-    Theme::custom("Winamp", palette())
+    cached_theme().clone()
 }
 
 #[cfg(test)]
@@ -72,5 +90,15 @@ mod tests {
     #[test]
     fn theme_is_named_winamp() {
         assert_eq!(winamp_theme().to_string(), "Winamp");
+    }
+
+    // `winamp_theme` is cached in a `OnceLock` so the app's per-rebuild theme
+    // call clones one shared `Arc` instead of constructing a fresh
+    // `Theme::custom` (an allocation plus extended-palette generation) each
+    // time. Pointer identity across calls is the observable guarantee of that
+    // caching.
+    #[test]
+    fn winamp_theme_is_cached_as_a_singleton() {
+        assert!(std::ptr::eq(cached_theme(), cached_theme()));
     }
 }
