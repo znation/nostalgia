@@ -1,4 +1,4 @@
-use reqwest::{Client, Error};
+use reqwest::Error;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
@@ -19,7 +19,6 @@ struct AppleMusicToken {
 /// and its tests agree on the same stub data.
 #[derive(Clone)]
 pub struct AppleMusicService {
-    client: Client,
     token: Option<AppleMusicToken>,
     state: Arc<Mutex<AppState>>,
 }
@@ -39,11 +38,7 @@ pub fn init_service(_state: Arc<Mutex<AppState>>) {
 
 impl AppleMusicService {
     pub fn new(state: Arc<Mutex<AppState>>) -> Self {
-        Self {
-            client: Client::new(),
-            token: None,
-            state,
-        }
+        Self { token: None, state }
     }
 
     pub async fn play_track(&self, track_id: &str) -> Result<(), Error> {
