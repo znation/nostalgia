@@ -9,6 +9,7 @@ use iced::{Element, Task, widget::Column};
 use std::{borrow::Cow, collections::HashMap, future::Future, sync::Arc};
 use tokio::sync::Mutex;
 
+mod theme;
 mod transport;
 mod views;
 
@@ -26,6 +27,7 @@ use crate::{
 pub fn init_ui(state: Arc<Mutex<AppState>>) -> iced::Result {
     iced::application(move || boot(state.clone()), update, view)
         .title("nostalgia")
+        .theme(|_: &WinampPlayer| theme::winamp_theme())
         .run()
 }
 

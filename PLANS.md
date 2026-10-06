@@ -21,7 +21,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Add a Winamp 2.x base-skin palette and apply it as the app theme (planned 2026-10-06)
+_None yet._
+
+## Done
+
+### Add a Winamp 2.x base-skin palette and apply it as the app theme (done 2026-10-06)
 
 Found by plan 2026-10-06, following the steward drift note above.
 
@@ -92,8 +96,6 @@ leaves no widget unstyled by accident.
 - `cargo run`: the window renders on the dark Winamp face with light text and
   a green Now Playing title, while the Songs view's playing-row highlight is
   unchanged (manual check — build + tests are the primary gate).
-
-## Done
 
 ### Add the Winamp equalizer panel: on/off, preamp, and ten band sliders (done 2026-10-06)
 

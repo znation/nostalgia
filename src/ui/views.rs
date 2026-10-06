@@ -11,7 +11,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 use iced::{
-    Background, Color, Element, Length,
+    Background, Element, Length,
     widget::{Button, Column, Row, Scrollable, Slider, Space, Text, VerticalSlider},
 };
 
@@ -29,10 +29,6 @@ use super::{CurrentView, Message};
 fn spacer(width: f32) -> Space {
     Space::new().width(Length::Fixed(width))
 }
-
-/// The highlight colour behind the currently playing row in a Songs list,
-/// echoing Winamp's playlist selection bar (a saturated blue).
-const PLAYING_ROW_HIGHLIGHT: Color = Color::from_rgb(0.25, 0.5, 1.0);
 
 /// A button showing a single text label that emits `message` on press.
 ///
@@ -81,7 +77,7 @@ fn scrollable_list<'a>(
         column = column.push(if is_current {
             button.style(|theme, status| {
                 let mut style = iced::widget::button::background(theme, status);
-                style.background = Some(Background::Color(PLAYING_ROW_HIGHLIGHT));
+                style.background = Some(Background::Color(super::theme::PLAYING_ROW_HIGHLIGHT));
                 style
             })
         } else {
@@ -205,7 +201,7 @@ pub fn now_playing_label<'a>(
 pub fn view_now_playing(label: Cow<'_, str>) -> Element<'_, Message> {
     Row::new()
         .push(Text::new("Now Playing: ").size(20))
-        .push(Text::new(label).size(20))
+        .push(Text::new(label).size(20).color(super::theme::LCD_GREEN))
         .into()
 }
 
