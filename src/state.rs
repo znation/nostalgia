@@ -2,6 +2,7 @@
 //! status. Both the Apple Music service and the UI read and mutate it,
 //! so it lives in its own module rather than in the binary's entry point.
 
+use crate::clamp;
 use crate::equalizer;
 
 /// Global playback state shared between the Apple Music service and the UI.
@@ -124,34 +125,20 @@ impl AppState {
     }
 }
 
-/// Clamps a volume value to the valid `[0.0, 1.0]` range.
+/// Clamps a volume value to the valid `[0.0, 1.0]` range, mapping a NaN to
+/// `0.0` (silence).
 ///
 /// iced's slider can emit a value outside the range (a drag beyond the ends,
 /// or a stale in-flight change), and the UI must never store an unclamped
 /// volume in `AppState`. [`AppState::set_volume`] is the field's only writer
 /// and calls this, so the rule lives here as a pure function beside the state
-/// it protects rather than at each call site.
-///
-/// `f32::clamp` passes NaN through unchanged, so a NaN volume is mapped to
-/// `0.0` (silence) rather than being stored as-is — the safe outcome for a
-/// value that is neither in range nor comparable to it. Non-finite values
-/// that *are* comparable, `+inf` and `-inf`, clamp to the nearer bound like
-/// any other out-of-range value: `+inf` to `1.0` (loudest), `-inf` to `0.0`
-/// (silence).
-///
-/// `#[must_use]` guards the contract that a clamped value must be stored:
-/// the function's entire purpose is its returned value, so a caller that
-/// drops it — `state::clamp_volume(volume);` as a statement — has silently
-/// done nothing, discarding the clamped value with no error. Making the
-/// result `#[must_use]` turns that silent no-op into a compile error, the
-/// same way the `f32::clamp` NaN hole is caught by the function itself.
+/// it protects rather than at each call site. The NaN-and-bounds behaviour
+/// itself is [`crate::clamp::clamp_with_nan_fallback`], shared with
+/// `equalizer::clamp_gain`; this wrapper only names volume's range and its
+/// silence fallback.
 #[must_use]
 pub fn clamp_volume(volume: f32) -> f32 {
-    if volume.is_nan() {
-        0.0
-    } else {
-        volume.clamp(0.0, 1.0)
-    }
+    clamp::clamp_with_nan_fallback(volume, 0.0, 1.0, 0.0)
 }
 
 #[cfg(test)]
@@ -321,24 +308,8 @@ mod tests {
 
     #[test]
     fn clamp_volume_treats_nan_as_silence() {
-        // `f32::clamp` passes NaN through unchanged, so it must be handled
-        // explicitly or a non-finite value lands in shared state.
+        // The shared clamp handles the NaN branch; this pins that
+        // `clamp_volume` passes the silence fallback.
         assert_eq!(clamp_volume(f32::NAN), 0.0);
-    }
-
-    #[test]
-    fn clamp_volume_caps_positive_infinity_at_loudest() {
-        // `+inf` is non-finite but comparable (it exceeds every volume), so
-        // `f32::clamp` maps it to the upper bound — full volume, not the
-        // silence reserved for the incomparable NaN. Pinned so a refactor of
-        // the non-finite handling can't silently change this branch.
-        assert_eq!(clamp_volume(f32::INFINITY), 1.0);
-    }
-
-    #[test]
-    fn clamp_volume_floors_negative_infinity_at_silence() {
-        // The `-inf` twin of `+inf`: comparable and below every volume, so
-        // it clamps to the lower bound (silence).
-        assert_eq!(clamp_volume(f32::NEG_INFINITY), 0.0);
     }
 }
