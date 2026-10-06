@@ -727,6 +727,24 @@ mod tests {
         assert_track_selected(task, "song-1");
     }
 
+    // `next_track_with_no_current_track_starts_at_the_first_song` pins the
+    // Next half of the no-current case; this pins the Previous half — pressing
+    // Previous before anything has played must land on the last song, not do
+    // nothing. The transport arithmetic for a `None` current is pinned in
+    // `transport.rs` (`previous_without_current_starts_at_last`); this pins
+    // the `PreviousTrack` arm's wiring over the same case, which no other
+    // test drives (the only other `previous` wiring tests set a current track
+    // or load no songs).
+    #[test]
+    fn previous_track_with_no_current_track_starts_at_the_last_song() {
+        let (mut player, _state) = test_player();
+        player.songs = stepping_songs();
+
+        let task = update(&mut player, Message::PreviousTrack);
+
+        assert_track_selected(task, "song-3");
+    }
+
     #[test]
     fn next_track_with_no_songs_loaded_does_nothing() {
         let (mut player, _state) = test_player();
