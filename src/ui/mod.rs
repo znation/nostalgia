@@ -1,6 +1,6 @@
 use iced::{
     Element, Length, Task,
-    widget::{Button, Column, Row, Space, Text},
+    widget::{Button, Column, Row, Slider, Space, Text},
 };
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -10,7 +10,7 @@ mod views;
 use crate::{
     apple_music::AppleMusicService,
     library::{Album, Artist, Song},
-    state::AppState,
+    state::{self, AppState},
 };
 
 /// Runs the UI, blocking until the window is closed.
@@ -27,6 +27,7 @@ pub fn init_ui(state: Arc<Mutex<AppState>>) -> iced::Result {
 #[derive(Debug, Clone)]
 enum Message {
     PlayPause,
+    VolumeChange(f32),
     NextTrack,
     PreviousTrack,
     TrackSelected(String),
@@ -81,6 +82,11 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::PlayPause => {
             let mut state = player.state.blocking_lock();
             state.toggle_playing();
+            Task::none()
+        }
+        Message::VolumeChange(volume) => {
+            let mut state = player.state.blocking_lock();
+            state.volume = state::clamp_volume(volume);
             Task::none()
         }
         Message::NextTrack | Message::PreviousTrack => Task::none(),
@@ -148,6 +154,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
         .clone()
         .unwrap_or_else(|| "Nothing".to_string());
     let play_label = if state.is_playing { "Pause" } else { "Play" };
+    let volume = state.volume;
     drop(state);
 
     let main_content = match &player.current_view {
@@ -168,7 +175,13 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
                 .push(Space::new().width(Length::Fixed(20.0)))
                 .push(Button::new(Text::new("Previous")).on_press(Message::PreviousTrack))
                 .push(Space::new().width(Length::Fixed(20.0)))
-                .push(Button::new(Text::new("Next")).on_press(Message::NextTrack)),
+                .push(Button::new(Text::new("Next")).on_press(Message::NextTrack))
+                .push(Space::new().width(Length::Fixed(20.0)))
+                .push(
+                    Slider::new(0.0..=1.0, volume, Message::VolumeChange)
+                        .step(0.01)
+                        .width(Length::Fixed(100.0)),
+                ),
         )
         .push(main_content)
         .into()
@@ -196,6 +209,24 @@ mod tests {
 
         let _ = update(&mut player, Message::PlayPause);
         assert!(!state.blocking_lock().is_playing);
+    }
+
+    #[test]
+    fn volume_change_clamps_value_before_storing() {
+        let (mut player, state) = test_player();
+        // Default volume is 0.5 (see `AppState::default`).
+        assert_eq!(state.blocking_lock().volume, 0.5);
+
+        // Out-of-range slider values are clamped by the update arm.
+        let _ = update(&mut player, Message::VolumeChange(1.5));
+        assert_eq!(state.blocking_lock().volume, 1.0);
+
+        let _ = update(&mut player, Message::VolumeChange(-0.2));
+        assert_eq!(state.blocking_lock().volume, 0.0);
+
+        // An in-range value is stored as-is.
+        let _ = update(&mut player, Message::VolumeChange(0.3));
+        assert_eq!(state.blocking_lock().volume, 0.3);
     }
 
     #[test]

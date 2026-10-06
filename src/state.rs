@@ -41,9 +41,19 @@ impl AppState {
     }
 }
 
+/// Clamps a volume value to the valid `[0.0, 1.0]` range.
+///
+/// iced's slider can emit a value outside the range (a drag beyond the ends,
+/// or a stale in-flight change), and the UI must never store an unclamped
+/// volume in `AppState`. Volume is shared state, so the rule lives beside
+/// `AppState` as a pure function the UI's `update` arm calls before storing.
+pub fn clamp_volume(volume: f32) -> f32 {
+    volume.clamp(0.0, 1.0)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::AppState;
+    use super::{AppState, clamp_volume};
 
     #[test]
     fn default_state_is_stopped_at_half_volume() {
@@ -72,5 +82,22 @@ mod tests {
 
         state.toggle_playing();
         assert!(!state.is_playing);
+    }
+
+    #[test]
+    fn clamp_volume_caps_above_one() {
+        assert_eq!(clamp_volume(1.5), 1.0);
+    }
+
+    #[test]
+    fn clamp_volume_floors_below_zero() {
+        assert_eq!(clamp_volume(-0.2), 0.0);
+    }
+
+    #[test]
+    fn clamp_volume_passes_through_in_range() {
+        assert_eq!(clamp_volume(0.0), 0.0);
+        assert_eq!(clamp_volume(0.3), 0.3);
+        assert_eq!(clamp_volume(1.0), 1.0);
     }
 }
