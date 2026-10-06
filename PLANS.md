@@ -10,14 +10,15 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 Found by plan 2026-10-04.
 
 **Goal.** The transport row renders Play/Pause, Previous, and Next, and
-`WinampPlayer::update` already handles `Message::VolumeChange(f32)` (clamps
-and stores into `state.volume`) — but no widget ever emits it, so the volume
-control is dead code and playback volume cannot actually be changed. Land the
-classic Winamp-style volume slider: add iced's `Slider` widget to the transport
-row in `WinampPlayer::view`, wired to `Message::VolumeChange`, and move the
-clamping logic into a pure, tested helper. Assumes the iced 0.14 port above has
-landed first — this touches the same `src/ui/mod.rs` and the crate must compile
-for any of this to run.
+`AppState` holds a `volume: f32` (default 0.5) that nothing currently reads or
+changes — the iced 0.14 port dropped the `VolumeChange` message entirely, so
+the volume control must be built from scratch (message variant, `update` arm,
+and widget), not re-wired to a handler that no longer exists. Land the classic
+Winamp-style volume slider: add iced's `Slider` widget to the transport row in
+`WinampPlayer::view` wired to a new `Message::VolumeChange(f32)` variant and
+`update` arm that stores the clamped value into `state.volume`, keeping the
+clamping logic in a pure, tested helper. The iced 0.14 port has landed (done
+2026-10-04), so the crate compiles on iced 0.14 as-is and this plan can build.
 
 **Approach.**
 
@@ -30,14 +31,16 @@ for any of this to run.
   - Extend the `iced::widget` import (`Button, Column, Row, Space, Text`) to
     include `Slider`.
   - In `WinampPlayer::view`, append `Slider::new(0.0..=1.0, state.volume,
-    Message::VolumeChange)` with a fixed width (`Length::Pixels(100)` or
+    Message::VolumeChange)` with a fixed width (`Length::Fixed(100.0)` or
     similar) to the transport `Row` that currently holds the Play/Pause,
     Previous, and Next buttons.
-  - In the `Message::VolumeChange(volume)` arm of `WinampPlayer::update`,
-    replace the inline `volume.clamp(0.0, 1.0)` with
-    `state::clamp_volume(volume)`.
-  - Use iced 0.14's `Length::Pixels` spelling near the slider, per the port
-    plan above.
+  - In `WinampPlayer::update`, add a `Message::VolumeChange(volume)` arm — the
+    port dropped this message, so no such arm exists today — that stores
+    `state::clamp_volume(volume)` into `state.volume`.
+  - Use iced 0.14's `Length::Fixed` spelling near the slider (e.g.
+    `Length::Fixed(100.0)`): `Length::Pixels` does not exist in iced 0.14
+    (the port's Done note records the rename from `Length::Units` to
+    `Length::Fixed`).
 
 **Files touched.** `src/state.rs`, `src/ui/mod.rs`.
 
@@ -47,9 +50,9 @@ for any of this to run.
   above 1, pass through in-range).
 - `cargo run` shows a volume slider in the transport row; dragging it changes
   the volume (manual check — build + tests are the primary gate).
-- `Message::VolumeChange` is no longer dead: a `grep -n 'VolumeChange' src`
-  shows both the emitter (`Slider` `on_changed` in `view`) and the handler in
-  `update`.
+- The new `Message::VolumeChange` is wired on both ends: a `grep -n
+  'VolumeChange' src` shows both the emitter (`Slider` `on_changed` in
+  `view`) and the handler in `update`.
 
 ### Make Previous/Next step through the songs of the current album
 
