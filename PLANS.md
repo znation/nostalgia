@@ -85,7 +85,8 @@ audio processing (the Apple Music stub has no audio pipeline yet).
 **Acceptance criteria.**
 
 - `make check` passes (`cargo fmt --check`,
-  `cargo clippy --all-targets -- -D warnings`, `cargo test`).
+  `cargo clippy --all-targets -- -D warnings`, `cargo doc` with rustdoc
+  warnings denied, `cargo test`).
 - The new `equalizer`, `state`, and `views` unit tests and the `ui` update
   tests listed above pass.
 - No `dead_code`/unused warnings: every new constant, field, and method is read

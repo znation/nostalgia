@@ -1,14 +1,15 @@
 # Developer convenience targets for the nostalgia crate.
 #
 # The project's landing gate is exactly: `cargo fmt --check` clean,
-# `cargo clippy --all-targets` clean, and the test suite green.
+# `cargo clippy --all-targets -- -D warnings` clean, `cargo doc` clean
+# (rustdoc warnings denied), and the test suite green.
 # `make check` runs that whole gate in one command; the granular targets
 # let a contributor run just the part they changed.
 
-.PHONY: check test fmt lint run clean
+.PHONY: check test fmt lint docs run clean
 
-## The full landing gate: formatting, lints, then tests.
-check: fmt lint test
+## The full landing gate: formatting, lints, docs, then tests.
+check: fmt lint docs test
 
 ## Runs the test suite.
 test:
@@ -25,6 +26,16 @@ fmt:
 ## `make check`, misreporting a change as merge-ready.
 lint:
 	cargo clippy --all-targets -- -D warnings
+
+## Builds the docs, failing on any rustdoc warning.
+##
+## `-D warnings` is what turns a broken intra-doc link or bare URL into a
+## failed run instead of a printed warning. rustdoc resolves and checks the
+## links in this crate's items — private modules included — without any extra
+## flag, so `--document-private-items` is not needed: that flag only controls
+## whether private items are rendered into the generated HTML.
+docs:
+	RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
 
 ## Builds and runs the player window.
 run:
