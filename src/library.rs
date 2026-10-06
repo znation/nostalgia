@@ -36,6 +36,21 @@ pub struct Song {
 mod tests {
     use super::{Album, Artist, Song};
     use serde_json::json;
+    use std::fmt::Debug;
+
+    /// The model's wire contract: a value survives an out-and-back trip
+    /// through `serde_json` unchanged. Every model type is pinned for the
+    /// round-trip, so the serialize-then-deserialize-then-compare chain lives
+    /// here once and each test only builds its value. (The artist test
+    /// additionally asserts the exact serialized field names, which it does
+    /// before the round-trip.)
+    fn assert_round_trips<T>(value: T)
+    where
+        T: PartialEq + Debug + serde::Serialize + serde::de::DeserializeOwned,
+    {
+        let back: T = serde_json::from_value(serde_json::to_value(&value).unwrap()).unwrap();
+        assert_eq!(back, value);
+    }
 
     /// The real Apple Music API will hand these types to the app as JSON, so
     /// the round-trip (out and back through `serde_json`) is the contract that
@@ -55,8 +70,7 @@ mod tests {
             json!({ "id": "artist-1", "name": "The Sample Band" })
         );
 
-        let back: Artist = serde_json::from_value(value).unwrap();
-        assert_eq!(back, artist);
+        assert_round_trips(artist);
     }
 
     #[test]
@@ -67,8 +81,7 @@ mod tests {
             artist_id: "artist-1".to_string(),
         };
 
-        let back: Album = serde_json::from_value(serde_json::to_value(&album).unwrap()).unwrap();
-        assert_eq!(back, album);
+        assert_round_trips(album);
     }
 
     #[test]
@@ -79,8 +92,7 @@ mod tests {
             album_id: "album-1".to_string(),
         };
 
-        let back: Song = serde_json::from_value(serde_json::to_value(&song).unwrap()).unwrap();
-        assert_eq!(back, song);
+        assert_round_trips(song);
     }
 
     #[test]
