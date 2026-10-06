@@ -136,7 +136,7 @@ fn lookup<T: Clone>(index: &HashMap<String, Vec<T>>, id: &str) -> Vec<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::library::{assert_missing_field_rejected, assert_round_trips};
+    use crate::library::{assert_every_field_required, assert_round_trips};
     use serde_json::json;
 
     fn test_service() -> AppleMusicService {
@@ -320,13 +320,15 @@ mod tests {
         assert_round_trips(token);
     }
 
-    // As with the model types: a payload missing a required field must error,
-    // not silently yield a half-populated token.
+    // As with the model types: a payload missing any required field must
+    // error, not silently yield a half-populated token.
     #[test]
     fn apple_music_token_deserialization_rejects_missing_required_fields() {
-        assert_missing_field_rejected::<AppleMusicToken>(
-            json!({ "access_token": "abc123", "expires_in": 3600 }),
-        );
+        assert_every_field_required::<AppleMusicToken>(json!({
+            "access_token": "abc123",
+            "expires_in": 3600,
+            "refresh_token": "refresh-me"
+        }));
     }
 
     // The unknown-field half of the token's deserialization contract: a real

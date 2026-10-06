@@ -122,17 +122,35 @@ pub(crate) fn sample_song() -> Song {
     }
 }
 
-/// Asserts that `payload` fails to deserialize as `T`, which requires every
-/// field: a payload missing one must error rather than silently yield a
-/// half-populated value the UI would render as blank data. The three model
-/// types below and `apple_music`'s auth-token test each probe this contract,
-/// so the `from_value`-then-`is_err` pair lives here once.
+/// Asserts that `T` requires every field `payload` declares: for each key,
+/// removing that one key must fail deserialization, because a payload missing
+/// a required field must error rather than silently yield a half-populated
+/// value the UI would render as blank data. The model types below and
+/// `apple_music`'s auth-token test each hand in a full, valid payload, so the
+/// walk-every-key loop lives here once. Probing every key matters: a single
+/// named field per type leaves the others unpinned, and a `#[serde(default)]`
+/// added to a field no probe omitted would clear the suite while blanking
+/// that field.
 #[cfg(test)]
-pub(crate) fn assert_missing_field_rejected<T>(payload: serde_json::Value)
+pub(crate) fn assert_every_field_required<T>(payload: serde_json::Value)
 where
     T: serde::de::DeserializeOwned,
 {
-    assert!(serde_json::from_value::<T>(payload).is_err());
+    let object = payload
+        .as_object()
+        .expect("a full payload must be a JSON object");
+    assert!(
+        !object.is_empty(),
+        "a full payload must declare at least one field"
+    );
+    for key in object.keys() {
+        let mut without = object.clone();
+        without.remove(key);
+        assert!(
+            serde_json::from_value::<T>(serde_json::Value::Object(without)).is_err(),
+            "a payload missing required field {key:?} must be rejected"
+        );
+    }
 }
 
 /// Asserts that `value` survives an out-and-back trip through `serde_json`
@@ -154,7 +172,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::{
-        Album, Artist, Song, assert_missing_field_rejected, assert_round_trips, sample_album,
+        Album, Artist, Song, assert_every_field_required, assert_round_trips, sample_album,
         sample_artist, sample_song,
     };
     use serde_json::json;
@@ -257,9 +275,11 @@ mod tests {
 
     #[test]
     fn deserialization_rejects_missing_required_fields() {
-        // A payload missing a required field must error, not silently yield a
-        // half-populated model the UI would render as blank data.
-        assert_missing_field_rejected::<Artist>(json!({ "id": "artist-1" }));
+        // A payload missing any required field must error, not silently yield
+        // a half-populated model the UI would render as blank data.
+        assert_every_field_required::<Artist>(
+            json!({ "id": "artist-1", "name": "The Sample Band" }),
+        );
     }
 
     // The missing-field contract holds for every model type, not just Artist:
@@ -267,14 +287,18 @@ mod tests {
     // deserialization that yields some value, so a regression that made one of
     // their fields optional (e.g. a stray `#[serde(default)]` added to tolerate
     // a payload variant) would clear every existing test while silently
-    // rendering blank data. Each gets the same explicit probe as Artist.
+    // rendering blank data. Each gets the same every-field probe as Artist.
     #[test]
     fn album_deserialization_rejects_missing_required_fields() {
-        assert_missing_field_rejected::<Album>(json!({ "id": "album-1", "title": "First Record" }));
+        assert_every_field_required::<Album>(
+            json!({ "id": "album-1", "title": "First Record", "artist_id": "artist-1" }),
+        );
     }
 
     #[test]
     fn song_deserialization_rejects_missing_required_fields() {
-        assert_missing_field_rejected::<Song>(json!({ "id": "song-1", "title": "Opening" }));
+        assert_every_field_required::<Song>(
+            json!({ "id": "song-1", "title": "Opening", "album_id": "album-1" }),
+        );
     }
 }
