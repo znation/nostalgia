@@ -173,31 +173,8 @@ mod tests {
         play_pause_label, song_row, view_albums, view_artists, view_back_button,
         view_now_playing, view_songs, view_transport_controls,
     };
-    use crate::library::{Album, Artist, Song};
+    use crate::library::{sample_album, sample_artist, sample_song};
     use crate::sample_library::sample_library;
-
-    fn sample_artist() -> Artist {
-        Artist {
-            id: "artist-1".to_string(),
-            name: "The Sample Band".to_string(),
-        }
-    }
-
-    fn sample_album() -> Album {
-        Album {
-            id: "album-1".to_string(),
-            title: "First Record".to_string(),
-            artist_id: "artist-1".to_string(),
-        }
-    }
-
-    fn sample_song() -> Song {
-        Song {
-            id: "song-1".to_string(),
-            title: "Opening".to_string(),
-            album_id: "album-1".to_string(),
-        }
-    }
 
     // Each row maps one library entry to the (title, secondary label, press
     // message) tuple that `scrollable_list` renders as a button. Wrong label

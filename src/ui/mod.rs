@@ -342,7 +342,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::library::stepping_songs;
+    use crate::library::{sample_album, sample_artist, sample_song, stepping_songs};
 
     /// A fresh player over its own shared state, so a test can inspect the
     /// same `AppState` the player mutates.
@@ -765,10 +765,7 @@ mod tests {
     #[test]
     fn artists_loaded_populates_list() {
         let (mut player, _state) = test_player();
-        let artists = vec![Artist {
-            id: "artist-1".to_string(),
-            name: "The Sample Band".to_string(),
-        }];
+        let artists = vec![sample_artist()];
 
         assert_store_loaded(&mut player, artists, Message::ArtistsLoaded, |player| {
             &mut player.artists
@@ -778,11 +775,7 @@ mod tests {
     #[test]
     fn albums_loaded_populates_list() {
         let (mut player, _state) = test_player();
-        let albums = vec![Album {
-            id: "album-1".to_string(),
-            title: "First Record".to_string(),
-            artist_id: "artist-1".to_string(),
-        }];
+        let albums = vec![sample_album()];
 
         assert_store_loaded(&mut player, albums, Message::AlbumsLoaded, |player| {
             &mut player.albums
@@ -792,11 +785,7 @@ mod tests {
     #[test]
     fn songs_loaded_populates_list() {
         let (mut player, _state) = test_player();
-        let songs = vec![Song {
-            id: "song-1".to_string(),
-            title: "Opening".to_string(),
-            album_id: "album-1".to_string(),
-        }];
+        let songs = vec![sample_song()];
 
         assert_store_loaded(&mut player, songs, Message::SongsLoaded, |player| {
             &mut player.songs
@@ -834,11 +823,7 @@ mod tests {
 
     #[test]
     fn loaded_or_empty_maps_ok_and_err_to_loaded() {
-        let albums = vec![Album {
-            id: "album-1".to_string(),
-            title: "First Record".to_string(),
-            artist_id: "artist-1".to_string(),
-        }];
+        let albums = vec![sample_album()];
 
         let ok_message =
             loaded_or_empty::<Album, String>(Ok(albums.clone()), Message::AlbumsLoaded, |_| {
@@ -1006,20 +991,9 @@ mod tests {
 
         // The loaded shape: artists, albums, and songs in the browse buffers,
         // rendered for every now-playing resolution a session can reach.
-        player.artists = vec![Artist {
-            id: "artist-1".to_string(),
-            name: "The Sample Band".to_string(),
-        }];
-        player.albums = vec![Album {
-            id: "album-1".to_string(),
-            title: "First Record".to_string(),
-            artist_id: "artist-1".to_string(),
-        }];
-        player.songs = vec![Song {
-            id: "song-1".to_string(),
-            title: "Opening".to_string(),
-            album_id: "album-1".to_string(),
-        }];
+        player.artists = vec![sample_artist()];
+        player.albums = vec![sample_album()];
+        player.songs = vec![sample_song()];
 
         let now_playing_options = [None, Some("song-1"), Some("no-such-song")];
         let play_states = [false, true];

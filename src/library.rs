@@ -59,9 +59,40 @@ pub(crate) fn stepping_songs() -> Vec<Song> {
     ]
 }
 
+/// A single representative artist, album, and song, shared by the `library`,
+/// `ui::views`, and `ui` test suites. Each suite used to build these same
+/// objects independently — a retitle or id change in one fixture would
+/// silently diverge from the others — so they live here once, next to
+/// [`stepping_songs`], and each test only names which one it wants.
+#[cfg(test)]
+pub(crate) fn sample_artist() -> Artist {
+    Artist {
+        id: "artist-1".to_string(),
+        name: "The Sample Band".to_string(),
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn sample_album() -> Album {
+    Album {
+        id: "album-1".to_string(),
+        title: "First Record".to_string(),
+        artist_id: "artist-1".to_string(),
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn sample_song() -> Song {
+    Song {
+        id: "song-1".to_string(),
+        title: "Opening".to_string(),
+        album_id: "album-1".to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Album, Artist, Song};
+    use super::{sample_album, sample_artist, sample_song, Artist};
     use serde_json::json;
     use std::fmt::Debug;
 
@@ -84,10 +115,7 @@ mod tests {
     /// lets a live service replace the stub without touching the model or UI.
     #[test]
     fn artist_serializes_field_names_and_round_trips() {
-        let artist = Artist {
-            id: "artist-1".to_string(),
-            name: "The Sample Band".to_string(),
-        };
+        let artist = sample_artist();
 
         // Field names are serialized as-is (no renames): the wire contract a
         // real Apple Music payload must satisfy.
@@ -102,24 +130,12 @@ mod tests {
 
     #[test]
     fn album_round_trips_through_json() {
-        let album = Album {
-            id: "album-1".to_string(),
-            title: "First Record".to_string(),
-            artist_id: "artist-1".to_string(),
-        };
-
-        assert_round_trips(album);
+        assert_round_trips(sample_album());
     }
 
     #[test]
     fn song_round_trips_through_json() {
-        let song = Song {
-            id: "song-1".to_string(),
-            title: "Opening".to_string(),
-            album_id: "album-1".to_string(),
-        };
-
-        assert_round_trips(song);
+        assert_round_trips(sample_song());
     }
 
     #[test]
@@ -133,13 +149,7 @@ mod tests {
         }))
         .unwrap();
 
-        assert_eq!(
-            artist,
-            Artist {
-                id: "artist-1".to_string(),
-                name: "The Sample Band".to_string(),
-            }
-        );
+        assert_eq!(artist, sample_artist());
     }
 
     #[test]
