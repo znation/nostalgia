@@ -251,6 +251,34 @@ mod tests {
         assert!(matches!(player.current_view, CurrentView::Songs));
     }
 
+    // `Message::TrackSelected` wraps playback in a `Task`; the arm itself only
+    // schedules it, so the real behavior lives in the returned task. Drive that
+    // task to completion (as the iced runtime would) and assert the shared
+    // state it mutates through the service.
+    #[tokio::test]
+    async fn track_selected_starts_playback_of_the_selected_track() {
+        use futures::StreamExt;
+
+        let (mut player, state) = test_player();
+
+        let task = update(&mut player, Message::TrackSelected("song-1".to_string()));
+        let mut stream = iced_runtime::task::into_stream(task)
+            .expect("track selection must schedule playback");
+
+        let action = stream
+            .next()
+            .await
+            .expect("playback task must yield a completion message");
+        match action {
+            iced_runtime::Action::Output(Message::TrackPlayed) => {}
+            other => panic!("unexpected playback task output: {other:?}"),
+        }
+
+        let state = state.lock().await;
+        assert_eq!(state.current_track.as_deref(), Some("song-1"));
+        assert!(state.is_playing);
+    }
+
     #[test]
     fn artists_loaded_populates_list() {
         let (mut player, _state) = test_player();

@@ -1991,7 +1991,9 @@ dependencies = [
 name = "nostalgia"
 version = "0.1.0"
 dependencies = [
+ "futures",
  "iced",
+ "iced_runtime",
  "reqwest",
  "serde",
  "tokio",
