@@ -1,3 +1,15 @@
+//! The seam to the Apple Music API.
+//!
+//! This is the narrow integration point a real Apple Music backend will
+//! replace. Until it lands, `AppleMusicService` answers every browse query
+//! from the shared in-memory sample library
+//! ([`crate::sample_library::sample_library`]) and stubs playback as
+//! shared-state transitions: `play_track` records the selected track and
+//! marks it playing, `pause` clears the flag. The still-unimplemented stubs
+//! (`next_track`, `previous_track`, and the `token` field with its
+//! `AppleMusicToken` type) stay so a real implementation has a surface to
+//! land on.
+
 use reqwest::Error;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
