@@ -21,5 +21,6 @@ Music API is not wired up yet. Open work lives in PLANS.md, BUGS.md, and QUESTIO
 ## Usage
 
 Build and run with `cargo run`; the player opens an iced window showing the Now Playing bar, the
-Play/Pause/Stop/Previous/Next controls, a volume slider, and a browse list. There are no CLI flags or
-config files yet.
+Play/Pause/Stop/Previous/Next controls, a volume slider, and a browse list. `make check` runs the full
+gate — `cargo fmt --check`, `cargo clippy --all-targets`, and the tests — in one command. There are no
+CLI flags or config files yet.
