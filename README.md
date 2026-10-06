@@ -24,7 +24,7 @@ Music API is not wired up yet. Open work lives in PLANS.md, BUGS.md, and QUESTIO
 
 Design mockups of the look Nostalgia is aiming for, matched against the classic Winamp 2.x base
 skin and shown with the built-in sample library. The running app is still the plain iced shell
-described above; the equalizer and Repeat are not built yet.
+described above; the equalizer is not built yet.
 
 ![Main window, equalizer and library window docked together](docs/screenshots/hero.png)
 
