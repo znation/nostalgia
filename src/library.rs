@@ -131,9 +131,9 @@ mod tests {
     /// The model's wire contract: a value survives an out-and-back trip
     /// through `serde_json` unchanged. Every model type is pinned for the
     /// round-trip, so the serialize-then-deserialize-then-compare chain lives
-    /// here once and each test only builds its value. (The artist test
-    /// additionally asserts the exact serialized field names, which it does
-    /// before the round-trip.)
+    /// here once. Each round-trip test asserts the exact serialized field
+    /// names first, then calls this; a `#[serde(rename)]` would pass a
+    /// round-trip alone but fails that field-name pin.
     fn assert_round_trips<T>(value: T)
     where
         T: PartialEq + Debug + serde::Serialize + serde::de::DeserializeOwned,
@@ -161,13 +161,34 @@ mod tests {
     }
 
     #[test]
-    fn album_round_trips_through_json() {
-        assert_round_trips(sample_album());
+    fn album_serializes_field_names_and_round_trips() {
+        let album = sample_album();
+
+        // As with Artist: field names are serialized as-is (no renames), the
+        // wire contract a real Apple Music payload must satisfy. The
+        // round-trip alone passes for *any* field names, so the exact JSON
+        // shape is pinned before it.
+        let value = serde_json::to_value(&album).unwrap();
+        assert_eq!(
+            value,
+            json!({ "id": "album-1", "title": "First Record", "artist_id": "artist-1" })
+        );
+
+        assert_round_trips(album);
     }
 
     #[test]
-    fn song_round_trips_through_json() {
-        assert_round_trips(sample_song());
+    fn song_serializes_field_names_and_round_trips() {
+        let song = sample_song();
+
+        // The Song twin of the Album and Artist field-name pins.
+        let value = serde_json::to_value(&song).unwrap();
+        assert_eq!(
+            value,
+            json!({ "id": "song-1", "title": "Opening", "album_id": "album-1" })
+        );
+
+        assert_round_trips(song);
     }
 
     #[test]
