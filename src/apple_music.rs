@@ -383,6 +383,29 @@ mod tests {
         assert_eq!(state.current_track.as_deref(), Some("song-1"));
     }
 
+    // `pause`'s test above pins its state change; its two sibling stubs,
+    // `next_track` and `previous_track`, have no test reaching them at all.
+    // They are deliberately unimplemented no-ops — the transport buttons step
+    // through `transport::next_track_id`/`previous_track_id` instead — so pin
+    // the one contract they do carry: they report success and, unlike
+    // `pause`, leave the shared playback state untouched. A regression that
+    // wired either stub into `AppState` (or made it fail) would otherwise
+    // ship silently, since no caller reaches them today.
+    #[tokio::test]
+    async fn next_and_previous_track_stubs_succeed_without_touching_state() {
+        let service = test_service();
+        let state = service.state.clone();
+
+        service.play_track("song-1").await.unwrap();
+
+        service.next_track().await.unwrap();
+        service.previous_track().await.unwrap();
+
+        let state = state.lock().await;
+        assert_eq!(state.current_track.as_deref(), Some("song-1"));
+        assert!(state.is_playing);
+    }
+
     // `AppleMusicToken` is the auth payload the real Apple Music API will
     // hand back, so its wire contract is pinned the same way the model types
     // in `library.rs` are: field names serialize as-is, the value round-trips
