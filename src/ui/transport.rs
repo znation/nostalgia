@@ -52,7 +52,7 @@ pub fn previous_track_id(songs: &[Song], current: Option<&str>) -> Option<String
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::library::stepping_songs;
+    use crate::library::{single_song_album, stepping_songs};
 
     #[test]
     fn empty_list_is_a_noop_for_both_directions() {
@@ -130,11 +130,7 @@ mod tests {
 
     #[test]
     fn single_song_steps_to_itself_in_both_directions() {
-        let songs = vec![Song {
-            id: "song-1".to_string(),
-            title: "Only".to_string(),
-            album_id: "album-1".to_string(),
-        }];
+        let songs = single_song_album();
         assert_eq!(
             next_track_id(&songs, Some("song-1")),
             Some("song-1".to_string())
@@ -157,11 +153,7 @@ mod tests {
     // other test and only fail here.
     #[test]
     fn single_song_with_no_current_steps_to_itself_in_both_directions() {
-        let songs = vec![Song {
-            id: "song-1".to_string(),
-            title: "Only".to_string(),
-            album_id: "album-1".to_string(),
-        }];
+        let songs = single_song_album();
         assert_eq!(next_track_id(&songs, None), Some("song-1".to_string()));
         assert_eq!(previous_track_id(&songs, None), Some("song-1".to_string()));
     }

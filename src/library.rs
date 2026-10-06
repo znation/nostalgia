@@ -59,6 +59,21 @@ pub(crate) fn stepping_songs() -> Vec<Song> {
     ]
 }
 
+/// The one-song album the single-song stepping tests step through, shared by
+/// the two `ui::transport` tests that pin the single-song edge cases (Next and
+/// Previous on a one-element list). Both used to build this same list
+/// independently — a rename in one fixture would silently diverge from the
+/// other — so it lives here once, next to [`stepping_songs`] and `Song`, and
+/// is compiled only for tests.
+#[cfg(test)]
+pub(crate) fn single_song_album() -> Vec<Song> {
+    vec![Song {
+        id: "song-1".to_string(),
+        title: "Only".to_string(),
+        album_id: "album-1".to_string(),
+    }]
+}
+
 /// A single representative artist, album, and song, shared by the `library`,
 /// `ui::views`, and `ui` test suites. Each suite used to build these same
 /// objects independently — a retitle or id change in one fixture would
