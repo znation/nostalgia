@@ -130,12 +130,20 @@ impl AppleMusicService {
 
     /// Albums by the given artist; unknown artists yield an empty list.
     pub async fn get_albums_by_artist(&self, artist_id: &str) -> Result<Vec<Album>, Error> {
-        Ok(matching(&sample_library().albums, |album| &album.artist_id, artist_id))
+        Ok(matching(
+            &sample_library().albums,
+            |album| &album.artist_id,
+            artist_id,
+        ))
     }
 
     /// Songs on the given album; unknown albums yield an empty list.
     pub async fn get_songs_from_album(&self, album_id: &str) -> Result<Vec<Song>, Error> {
-        Ok(matching(&sample_library().songs, |song| &song.album_id, album_id))
+        Ok(matching(
+            &sample_library().songs,
+            |song| &song.album_id,
+            album_id,
+        ))
     }
 }
 
@@ -148,8 +156,8 @@ struct SampleLibrary {
 }
 
 impl SampleLibrary {
-    /// Builds the sample library: three artists, each with one or two albums,
-    /// each album with a couple of songs.
+    /// Builds the sample library: three artists — two with one or two albums
+    /// each, one with none — and one to three songs per album.
     fn new() -> Self {
         SampleLibrary {
             artists: vec![
