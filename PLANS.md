@@ -267,3 +267,10 @@ port the UI to iced 0.14, and get
   artists; selecting an artist lists that artist's albums, and selecting an
   album lists its songs (manual check — the build + tests are the primary
   gate).
+
+**Update (2026-10-06, organize).** `SampleLibrary` (with its `index_by`
+lookup builder, the `SAMPLE_LIBRARY` cache, and the `sample_library()`
+accessor) moved out of `src/apple_music.rs` into a new `src/sample_library.rs`
+module, so the in-memory stub data is separate from the Apple Music service
+seam — `src/apple_music.rs` now holds only the service. The plan's original
+placement — the builder inside `src/apple_music.rs` — is superseded.
