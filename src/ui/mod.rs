@@ -232,11 +232,18 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
 /// built in `views.rs` from the resolved title, playback state, and volume —
 /// above the current browse list.
 fn view(player: &WinampPlayer) -> Element<'_, Message> {
-    let state = player.state.blocking_lock();
-    let current_track = state.current_track.clone();
-    let is_playing = state.is_playing;
-    let volume = state.volume;
-    drop(state);
+    // The now-playing title is resolved while the state lock is held, from a
+    // borrowed `current_track` — the label outlives the lock, but the owned
+    // `String` clone of the current track is not needed, so the per-frame
+    // path allocates only the resolved label (see `views::now_playing_label`).
+    let (now_playing, is_playing, volume) = {
+        let state = player.state.blocking_lock();
+        (
+            views::now_playing_label(&player.songs, state.current_track.as_deref()),
+            state.is_playing,
+            state.volume,
+        )
+    };
 
     let main_content = match &player.current_view {
         CurrentView::Artists => views::view_artists(&player.artists),
@@ -245,10 +252,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     };
 
     let mut column = Column::new()
-        .push(views::view_now_playing(
-            &player.songs,
-            current_track.as_deref(),
-        ))
+        .push(views::view_now_playing(now_playing))
         .push(views::view_transport_controls(is_playing, volume));
     // The Back button sits above the list it navigates and exists only where
     // the hierarchy has a level above to return to (see `views::can_go_back`).

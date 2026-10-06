@@ -127,11 +127,13 @@ pub fn now_playing_label(songs: &[Song], current_track: Option<&str>) -> String 
 }
 
 /// The Now Playing bar: the "Now Playing:" caption followed by the current
-/// track's resolved title (or "Nothing" when stopped).
-pub fn view_now_playing(songs: &[Song], current_track: Option<&str>) -> Element<'static, Message> {
+/// track's resolved title (or "Nothing" when stopped). Takes the already
+/// resolved label (from [`now_playing_label`]) so this per-frame widget build
+/// does no song lookup itself.
+pub fn view_now_playing(label: String) -> Element<'static, Message> {
     Row::new()
         .push(Text::new("Now Playing: ").size(20))
-        .push(Text::new(now_playing_label(songs, current_track)).size(20))
+        .push(Text::new(label).size(20))
         .into()
 }
 
