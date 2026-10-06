@@ -166,6 +166,21 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn get_albums_by_artist_returns_single_album_artists_album() {
+        // The empty (artist-3) and multi-album (artist-1) groups are pinned
+        // above; artist-2's single-album group is the third branch of the
+        // `index_by` grouping — a regression that dropped a one-element group
+        // (e.g. only pushing after a second element arrives) would clear the
+        // other two tests and silently lose this artist's album.
+        let albums = test_service()
+            .get_albums_by_artist("artist-2")
+            .await
+            .unwrap();
+        let ids: Vec<&str> = albums.iter().map(|album| album.id.as_str()).collect();
+        assert_eq!(ids, vec!["album-3"]);
+    }
+
+    #[tokio::test]
     async fn get_songs_from_album_returns_only_matching_songs() {
         let service = test_service();
         let songs = service.get_songs_from_album("album-1").await.unwrap();
@@ -192,6 +207,19 @@ mod tests {
             .await
             .unwrap();
         assert!(songs.is_empty());
+    }
+
+    #[tokio::test]
+    async fn get_songs_from_album_returns_single_song_albums_song() {
+        // album-1 (multi-song) and the unknown-id case are pinned above;
+        // album-2's single-song group is the third branch — if the grouping
+        // dropped one-element groups, this song would silently vanish.
+        let songs = test_service()
+            .get_songs_from_album("album-2")
+            .await
+            .unwrap();
+        let ids: Vec<&str> = songs.iter().map(|song| song.id.as_str()).collect();
+        assert_eq!(ids, vec!["song-4"]);
     }
 
     #[tokio::test]
