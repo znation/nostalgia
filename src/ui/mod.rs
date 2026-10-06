@@ -3,7 +3,7 @@
 //! construction lives in the `views` submodule (browse lists, Now Playing bar,
 //! transport controls) and the Previous/Next stepping arithmetic in
 //! `transport`; this module wires those to the shared `AppState` and the
-//! `AppleMusicService` seam.
+//! `AppleMusicService` seam. Its unit tests live in the `tests` submodule.
 
 use iced::{Element, Task, widget::Column};
 use std::{collections::HashMap, future::Future, sync::Arc};
