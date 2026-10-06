@@ -92,68 +92,100 @@ fn scrollable_list<'a>(
 }
 
 /// The browse row an artist becomes: its name, the "View Albums" hint, the
-/// message emitted when it is pressed, and the current-track flag. Kept out
-/// of `view_artists` so the title/label/selection contract is testable
-/// without an iced renderer. Artists are never the currently playing row, so
-/// the flag is always false.
-fn artist_row(artist: &Artist) -> (&str, &'static str, Message, bool) {
+/// message emitted when it is pressed, and the current-track flag. `epoch` is
+/// the loaded-list epoch and `index` the artist's position in that list; both
+/// become the selection message's payload, so building a row never clones the
+/// artist's id — the update loop resolves the index back to an id only when
+/// the row is actually pressed, and rejects the press if the list has since
+/// been replaced. Kept out of `view_artists` so the title/label/selection
+/// contract is testable without an iced renderer. Artists are never the
+/// currently playing row, so the flag is always false.
+fn artist_row(epoch: u64, index: usize, artist: &Artist) -> (&str, &'static str, Message, bool) {
     (
         artist.name.as_str(),
         "View Albums",
-        Message::ArtistSelected(artist.id.clone()),
+        Message::ArtistSelected { epoch, index },
         false,
     )
 }
 
 /// The browse row an album becomes: its title, the "View Songs" hint, the
-/// message emitted when it is pressed, and the current-track flag. Albums
-/// are never the currently playing row, so the flag is always false.
-fn album_row(album: &Album) -> (&str, &'static str, Message, bool) {
+/// message emitted when it is pressed, and the current-track flag. `epoch`
+/// and `index` are the loaded-list epoch and the album's position in that
+/// list, carried so building a row never clones the album's id (see
+/// [`artist_row`]). Albums are never the currently playing row, so the flag
+/// is always false.
+fn album_row(epoch: u64, index: usize, album: &Album) -> (&str, &'static str, Message, bool) {
     (
         album.title.as_str(),
         "View Songs",
-        Message::AlbumSelected(album.id.clone()),
+        Message::AlbumSelected { epoch, index },
         false,
     )
 }
 
 /// The browse row a song becomes: its title, the "Play" hint, the message
 /// emitted when it is pressed, and whether it is the currently playing track
-/// (true only when `current_track` names this song). The flag feeds
-/// `scrollable_list`'s `▶` + highlight marker, so the album list reads as a
-/// playlist.
+/// (true only when `current_track` names this song). `epoch` and `index` are
+/// the loaded-list epoch and the song's position in that list, carried so
+/// building a row never clones the song's id (see [`artist_row`]). The flag
+/// feeds `scrollable_list`'s `▶` + highlight marker, so the album list reads
+/// as a playlist.
 fn song_row<'a>(
+    epoch: u64,
+    index: usize,
     song: &'a Song,
     current_track: Option<&str>,
 ) -> (&'a str, &'static str, Message, bool) {
     (
         song.title.as_str(),
         "Play",
-        Message::TrackSelected(song.id.clone()),
+        Message::TrackSelected { epoch, index },
         Some(song.id.as_str()) == current_track,
     )
 }
 
 /// The Artists browse view: one row per artist, in the order given, each
-/// emitting [`Message::ArtistSelected`] with the artist's id. Built by
-/// [`scrollable_list`] from the [`artist_row`] mapping.
-pub fn view_artists(artists: &[Artist]) -> Element<'_, Message> {
-    scrollable_list(artists.iter().map(artist_row))
+/// emitting [`Message::ArtistSelected`] with the artist's index in the list
+/// and the list's `epoch`. Built by [`scrollable_list`] from the
+/// [`artist_row`] mapping.
+pub fn view_artists(artists: &[Artist], epoch: u64) -> Element<'_, Message> {
+    scrollable_list(
+        artists
+            .iter()
+            .enumerate()
+            .map(|(index, artist)| artist_row(epoch, index, artist)),
+    )
 }
 
 /// The Albums browse view: one row per album, in the order given, each
-/// emitting [`Message::AlbumSelected`] with the album's id. Built by
-/// [`scrollable_list`] from the [`album_row`] mapping.
-pub fn view_albums(albums: &[Album]) -> Element<'_, Message> {
-    scrollable_list(albums.iter().map(album_row))
+/// emitting [`Message::AlbumSelected`] with the album's index in the list and
+/// the list's `epoch`. Built by [`scrollable_list`] from the [`album_row`]
+/// mapping.
+pub fn view_albums(albums: &[Album], epoch: u64) -> Element<'_, Message> {
+    scrollable_list(
+        albums
+            .iter()
+            .enumerate()
+            .map(|(index, album)| album_row(epoch, index, album)),
+    )
 }
 
 /// The Songs browse view: one row per song, in the order given, each emitting
-/// [`Message::TrackSelected`] with the song's id; the row whose id is
-/// `current_track` is marked as playing. Built by [`scrollable_list`] from the
-/// [`song_row`] mapping.
-pub fn view_songs<'a>(songs: &'a [Song], current_track: Option<&str>) -> Element<'a, Message> {
-    scrollable_list(songs.iter().map(|song| song_row(song, current_track)))
+/// [`Message::TrackSelected`] with the song's index in the list and the
+/// list's `epoch`; the row whose id is `current_track` is marked as playing.
+/// Built by [`scrollable_list`] from the [`song_row`] mapping.
+pub fn view_songs<'a>(
+    songs: &'a [Song],
+    epoch: u64,
+    current_track: Option<&str>,
+) -> Element<'a, Message> {
+    scrollable_list(
+        songs
+            .iter()
+            .enumerate()
+            .map(|(index, song)| song_row(epoch, index, song, current_track)),
+    )
 }
 
 /// Whether the browse view has a level above it to return to. The Albums and
@@ -328,32 +360,54 @@ mod tests {
     // marker.
 
     #[test]
-    fn artist_row_uses_name_and_selects_the_artist() {
+    fn artist_row_uses_name_and_selects_the_artist_by_index() {
+        // The row carries the position `view_artists` enumerates and the
+        // list's epoch, not the id: the update loop resolves that index back
+        // to the artist. The index-to-id mapping is pinned by
+        // `artist_selected_fetches_the_artists_albums_into_the_player` in
+        // `ui::tests`.
         let artist = sample_artist();
-        let (title, label, message, is_current) = artist_row(&artist);
+        let (title, label, message, is_current) = artist_row(0, 0, &artist);
         assert_eq!(title, "The Sample Band");
         assert_eq!(label, "View Albums");
-        assert!(matches!(message, Message::ArtistSelected(id) if id == "artist-1"));
+        assert!(matches!(
+            message,
+            Message::ArtistSelected { epoch: 0, index: 0 }
+        ));
         assert!(!is_current);
     }
 
     #[test]
-    fn album_row_uses_title_and_selects_the_album() {
+    fn album_row_uses_title_and_selects_the_album_by_index() {
+        // As with `artist_row`: the message carries the row's position and the
+        // list's epoch, and
+        // `album_selected_fetches_the_albums_songs_into_the_player` in
+        // `ui::tests` pins the index-to-id mapping.
         let album = sample_album();
-        let (title, label, message, is_current) = album_row(&album);
+        let (title, label, message, is_current) = album_row(0, 0, &album);
         assert_eq!(title, "First Record");
         assert_eq!(label, "View Songs");
-        assert!(matches!(message, Message::AlbumSelected(id) if id == "album-1"));
+        assert!(matches!(
+            message,
+            Message::AlbumSelected { epoch: 0, index: 0 }
+        ));
         assert!(!is_current);
     }
 
     #[test]
-    fn song_row_uses_title_and_selects_the_song() {
+    fn song_row_uses_title_and_selects_the_song_by_index() {
+        // As with the other rows: the message carries the row's position and
+        // the list's epoch, and
+        // `track_selected_starts_playback_of_the_selected_track` in
+        // `ui::tests` pins the index-to-id mapping.
         let song = sample_song();
-        let (title, label, message, is_current) = song_row(&song, None);
+        let (title, label, message, is_current) = song_row(0, 0, &song, None);
         assert_eq!(title, "Opening");
         assert_eq!(label, "Play");
-        assert!(matches!(message, Message::TrackSelected(id) if id == "song-1"));
+        assert!(matches!(
+            message,
+            Message::TrackSelected { epoch: 0, index: 0 }
+        ));
         assert!(!is_current);
     }
 
@@ -362,13 +416,13 @@ mod tests {
         // The flag is true only when `current_track` names exactly this
         // song; a different id — or no track at all — leaves the row
         // unmarked, so the `▶`/highlight marker follows the playback state.
-        let (_, _, _, is_current) = song_row(&sample_song(), Some("song-1"));
+        let (_, _, _, is_current) = song_row(0, 0, &sample_song(), Some("song-1"));
         assert!(is_current);
 
-        let (_, _, _, is_current) = song_row(&sample_song(), Some("other-song"));
+        let (_, _, _, is_current) = song_row(0, 0, &sample_song(), Some("other-song"));
         assert!(!is_current);
 
-        let (_, _, _, is_current) = song_row(&sample_song(), None);
+        let (_, _, _, is_current) = song_row(0, 0, &sample_song(), None);
         assert!(!is_current);
     }
 
@@ -486,10 +540,10 @@ mod tests {
         // messages into buttons. Rendered both with no current track (no
         // marker) and with one set (the `▶`/highlight marker builds).
         let library = sample_library();
-        let _artists = view_artists(&library.artists);
-        let _albums = view_albums(&library.albums_by_artist["artist-1"]);
-        let _songs = view_songs(&library.songs_by_album["album-1"], None);
-        let _songs_marked = view_songs(&library.songs_by_album["album-1"], Some("song-1"));
+        let _artists = view_artists(&library.artists, 0);
+        let _albums = view_albums(&library.albums_by_artist["artist-1"], 0);
+        let _songs = view_songs(&library.songs_by_album["album-1"], 0, None);
+        let _songs_marked = view_songs(&library.songs_by_album["album-1"], 0, Some("song-1"));
     }
 
     #[test]
@@ -497,10 +551,10 @@ mod tests {
         // Every browse view renders its pre-load state — an empty buffer —
         // before the first fetch lands, so `scrollable_list` must build a
         // scrollable over zero rows, with or without a current track set.
-        let _artists = view_artists(&[]);
-        let _albums = view_albums(&[]);
-        let _songs = view_songs(&[], None);
-        let _songs_marked = view_songs(&[], Some("song-1"));
+        let _artists = view_artists(&[], 0);
+        let _albums = view_albums(&[], 0);
+        let _songs = view_songs(&[], 0, None);
+        let _songs_marked = view_songs(&[], 0, Some("song-1"));
     }
 
     #[test]

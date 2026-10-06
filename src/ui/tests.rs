@@ -192,8 +192,9 @@ fn volume_change_clamps_value_before_storing() {
 #[test]
 fn artist_selected_flips_to_albums_view() {
     let (mut player, _state) = test_player();
+    player.artists = vec![sample_artist()];
 
-    let _ = update(&mut player, Message::ArtistSelected("artist-1".to_string()));
+    let _ = update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 });
 
     assert_view(&player, CurrentView::Albums);
 }
@@ -201,10 +202,54 @@ fn artist_selected_flips_to_albums_view() {
 #[test]
 fn album_selected_flips_to_songs_view() {
     let (mut player, _state) = test_player();
+    player.albums = vec![sample_album()];
 
-    let _ = update(&mut player, Message::AlbumSelected("album-3".to_string()));
+    let _ = update(&mut player, Message::AlbumSelected { epoch: 0, index: 0 });
 
     assert_view(&player, CurrentView::Songs);
+}
+
+// The selection messages carry a row index and the epoch of the list that
+// rendered the row. An index past the end of the current buffer can only
+// come from a stale message, so every selection arm must no-op rather than
+// panic. And because a replaced list bumps its epoch, an index that is in
+// range of the *new* list but was rendered against the old one must also
+// no-op rather than select the wrong entry — the bug an unguarded index
+// would introduce during the fetch window. The first half runs against
+// empty buffers (index 0 is out of range for all three); the second half
+// replaces a loaded list with a same-length one so the stale index stays in
+// range and only the epoch guard can reject it.
+#[test]
+fn selection_messages_with_a_stale_epoch_or_index_do_nothing() {
+    let (mut player, state) = test_player();
+
+    assert_no_task(update(
+        &mut player,
+        Message::ArtistSelected { epoch: 0, index: 0 },
+    ));
+    assert_no_task(update(
+        &mut player,
+        Message::AlbumSelected { epoch: 0, index: 0 },
+    ));
+    assert_no_task(update(
+        &mut player,
+        Message::TrackSelected { epoch: 0, index: 0 },
+    ));
+
+    assert_view(&player, CurrentView::Artists);
+    assert!(state.blocking_lock().current_track.is_none());
+
+    // Render a row from the first loaded list (epoch 1), then replace that
+    // list with a same-length one (epoch 2): the stale press names index 0,
+    // which is in range of the new list, so only the epoch guard stops it
+    // from playing the wrong song.
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
+    assert_no_task(update(
+        &mut player,
+        Message::TrackSelected { epoch: 1, index: 0 },
+    ));
+    assert!(state.blocking_lock().current_track.is_none());
 }
 
 // The browse hierarchy must be navigable back up (Songs → Albums →
@@ -215,8 +260,9 @@ fn album_selected_flips_to_songs_view() {
 #[test]
 fn back_from_albums_returns_to_artists() {
     let (mut player, _state) = test_player();
+    player.artists = vec![sample_artist()];
 
-    let _ = update(&mut player, Message::ArtistSelected("artist-1".to_string()));
+    let _ = update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 });
 
     assert_view(&player, CurrentView::Albums);
 
@@ -227,9 +273,11 @@ fn back_from_albums_returns_to_artists() {
 #[test]
 fn back_from_songs_returns_to_albums() {
     let (mut player, _state) = test_player();
+    player.artists = vec![sample_artist()];
+    player.albums = vec![sample_album()];
 
-    let _ = update(&mut player, Message::ArtistSelected("artist-1".to_string()));
-    let _ = update(&mut player, Message::AlbumSelected("album-1".to_string()));
+    let _ = update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 });
+    let _ = update(&mut player, Message::AlbumSelected { epoch: 0, index: 0 });
 
     assert_view(&player, CurrentView::Songs);
 
@@ -258,8 +306,9 @@ fn back_from_artists_is_a_noop() {
 #[tokio::test]
 async fn artist_selected_fetches_the_artists_albums_into_the_player() {
     let (mut player, _state) = test_player();
+    player.artists = vec![sample_artist()];
 
-    let task = update(&mut player, Message::ArtistSelected("artist-1".to_string()));
+    let task = update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 });
     drive_fetch_and_assert_loaded(
         &mut player,
         task,
@@ -278,8 +327,13 @@ async fn artist_selected_fetches_the_artists_albums_into_the_player() {
 #[tokio::test]
 async fn album_selected_fetches_the_albums_songs_into_the_player() {
     let (mut player, _state) = test_player();
+    player.albums = vec![Album {
+        id: "album-3".to_string(),
+        title: "Debut".to_string(),
+        artist_id: "artist-2".to_string(),
+    }];
 
-    let task = update(&mut player, Message::AlbumSelected("album-3".to_string()));
+    let task = update(&mut player, Message::AlbumSelected { epoch: 0, index: 0 });
     drive_fetch_and_assert_loaded(
         &mut player,
         task,
@@ -337,8 +391,9 @@ async fn load_artists_fetches_favorite_artists_into_the_player() {
 #[tokio::test]
 async fn track_selected_starts_playback_of_the_selected_track() {
     let (mut player, state) = test_player();
+    player.songs = vec![sample_song()];
 
-    let task = update(&mut player, Message::TrackSelected("song-1".to_string()));
+    let task = update(&mut player, Message::TrackSelected { epoch: 0, index: 0 });
     drive_task(task, "playback", |message| {
         assert!(matches!(message, Message::TrackPlayed));
     })
@@ -392,15 +447,18 @@ fn track_played_handoff_is_a_noop() {
 // calls `update` on a plain thread and only then drives the returned
 // task's stream.
 /// Drives `task` to its single output and asserts it is a `TrackSelected`
-/// for the given id, as the iced runtime would deliver the button's task.
-/// The stepping tests drive their tasks exactly the way the playback and
-/// fetch tests do, so they route through [`drive_task`] instead of
-/// repeating the `into_stream`/`next` plumbing; this stays a plain
-/// function (rather than `async`) because the stepping arms use
-/// `blocking_lock`, which panics inside an async runtime.
-fn assert_track_selected(task: Task<Message>, expected: &str) {
+/// for the given epoch and index into the player's songs, as the iced
+/// runtime would deliver the button's task. The stepping tests drive their
+/// tasks exactly the way the playback and fetch tests do, so they route
+/// through [`drive_task`] instead of repeating the `into_stream`/`next`
+/// plumbing; this stays a plain function (rather than `async`) because the
+/// stepping arms use `blocking_lock`, which panics inside an async runtime.
+fn assert_track_selected(task: Task<Message>, expected_epoch: u64, expected_index: usize) {
     futures::executor::block_on(drive_task(task, "stepping", |message| match message {
-        Message::TrackSelected(id) => assert_eq!(id, expected),
+        Message::TrackSelected { epoch, index } => {
+            assert_eq!(epoch, expected_epoch);
+            assert_eq!(index, expected_index);
+        }
         other => panic!("unexpected stepping task output: {other:?}"),
     }));
 }
@@ -421,7 +479,7 @@ fn next_track_steps_to_the_following_song() {
 
     let task = update(&mut player, Message::NextTrack);
 
-    assert_track_selected(task, "song-2");
+    assert_track_selected(task, 0, 1);
 }
 
 #[test]
@@ -430,7 +488,7 @@ fn previous_track_steps_to_the_preceding_song() {
 
     let task = update(&mut player, Message::PreviousTrack);
 
-    assert_track_selected(task, "song-1");
+    assert_track_selected(task, 0, 0);
 }
 
 #[test]
@@ -439,7 +497,7 @@ fn next_track_with_no_current_track_starts_at_the_first_song() {
 
     let task = update(&mut player, Message::NextTrack);
 
-    assert_track_selected(task, "song-1");
+    assert_track_selected(task, 0, 0);
 }
 
 // `next_track_with_no_current_track_starts_at_the_first_song` pins the
@@ -456,7 +514,7 @@ fn previous_track_with_no_current_track_starts_at_the_last_song() {
 
     let task = update(&mut player, Message::PreviousTrack);
 
-    assert_track_selected(task, "song-3");
+    assert_track_selected(task, 0, 2);
 }
 
 // Browsing to a different album replaces `player.songs` with the new
@@ -481,12 +539,12 @@ fn stepping_after_browsing_away_steps_within_the_new_albums_songs() {
     // song that is not in the buffer, exactly as after a browse-away.
 
     let next = update(&mut player, Message::NextTrack);
-    assert_track_selected(next, "song-1");
+    assert_track_selected(next, 0, 0);
 
     // The buttons only schedule a step — neither mutates the current
     // track — so Previous still sees the same browse-away state.
     let previous = update(&mut player, Message::PreviousTrack);
-    assert_track_selected(previous, "song-3");
+    assert_track_selected(previous, 0, 2);
 }
 
 #[test]
@@ -508,31 +566,32 @@ fn previous_track_with_no_songs_loaded_does_nothing() {
 }
 
 /// Drives a step `message` twice from `start` — once with Repeat off (the
-/// default) and once with Repeat on — and asserts the id it lands on each
-/// time. The Next and Previous repeat-flag tests below pin the same shape:
-/// step from the album's edge, re-land on that edge with Repeat off, then
-/// wrap to the opposite end with Repeat on. Only the message, the starting
-/// song, and the two expected ids differ, so the set-Repeat-then-step
-/// sequence lives here once and each test names its direction and edges.
+/// default) and once with Repeat on — and asserts the index it lands on
+/// each time. The Next and Previous repeat-flag tests below pin the same
+/// shape: step from the album's edge, re-land on that edge with Repeat off,
+/// then wrap to the opposite end with Repeat on. Only the message, the
+/// starting song, and the two expected indices differ, so the
+/// set-Repeat-then-step sequence lives here once and each test names its
+/// direction and edges.
 /// The arms use `blocking_lock`, which panics inside an async runtime, so
 /// this stays a plain (non-async) helper, like
 /// [`assert_toggles_shared_state`].
 fn assert_repeat_wraps_at_the_edge(
     message: Message,
     start: &str,
-    repeat_off: &str,
-    repeat_on: &str,
+    repeat_off: usize,
+    repeat_on: usize,
 ) {
     let (mut player, state) = player_stepping_from(Some(start));
 
     // Repeat off (the default): the step re-lands on the edge song.
     let task = update(&mut player, message.clone());
-    assert_track_selected(task, repeat_off);
+    assert_track_selected(task, 0, repeat_off);
 
     // Repeat on: the step wraps to the opposite end.
     state.blocking_lock().repeat = true;
     let task = update(&mut player, message);
-    assert_track_selected(task, repeat_on);
+    assert_track_selected(task, 0, repeat_on);
 }
 
 // The Next arm forwards the shared Repeat flag to the transport helper:
@@ -543,7 +602,7 @@ fn assert_repeat_wraps_at_the_edge(
 // the shared flag, which no other test drives.
 #[test]
 fn next_track_follows_the_shared_repeat_flag_at_the_albums_end() {
-    assert_repeat_wraps_at_the_edge(Message::NextTrack, "song-3", "song-3", "song-1");
+    assert_repeat_wraps_at_the_edge(Message::NextTrack, "song-3", 2, 0);
 }
 
 // The Previous arm forwards the shared Repeat flag to the transport
@@ -558,7 +617,7 @@ fn next_track_follows_the_shared_repeat_flag_at_the_albums_end() {
 // would clear every existing test and only fail here.
 #[test]
 fn previous_track_follows_the_shared_repeat_flag_at_the_albums_start() {
-    assert_repeat_wraps_at_the_edge(Message::PreviousTrack, "song-1", "song-1", "song-3");
+    assert_repeat_wraps_at_the_edge(Message::PreviousTrack, "song-1", 0, 2);
 }
 
 /// Feeds a `*Loaded` message built from `items` back through `update` and
@@ -629,7 +688,7 @@ fn track_selected_records_the_played_tracks_title() {
     let (mut player, _state) = test_player();
     let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
 
-    let _ = update(&mut player, Message::TrackSelected("song-2".to_string()));
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 1 });
 
     assert_eq!(
         player.known_titles.get("song-2").map(String::as_str),
@@ -711,7 +770,7 @@ fn now_playing_label_keeps_the_track_name_after_browsing_to_another_album() {
     // `known_titles` — then browse to album-2's songs, the flow that used
     // to leave the bar showing "song-1".
     let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
-    let _ = update(&mut player, Message::TrackSelected("song-1".to_string()));
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
     state.blocking_lock().current_track = Some("song-1".to_string());
     let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
 

@@ -46,9 +46,16 @@ enum Message {
     EqBandChange(usize, f32),
     NextTrack,
     PreviousTrack,
-    TrackSelected(String),
-    ArtistSelected(String),
-    AlbumSelected(String),
+    // The selection messages carry a row's index into the list that rendered
+    // it, plus that list's epoch. Building a row therefore never clones the
+    // entry's `String` id (the view rebuilds on every message, so that clone
+    // ran per row per refresh); `update` resolves the index back to an id only
+    // when the row is actually pressed. The epoch guards the case where the
+    // list is replaced between rendering and the press: a stale index would
+    // otherwise resolve against the new list and select the wrong entry.
+    TrackSelected { epoch: u64, index: usize },
+    ArtistSelected { epoch: u64, index: usize },
+    AlbumSelected { epoch: u64, index: usize },
     Back,
     LoadArtists,
     ArtistsLoaded(Vec<Artist>),
@@ -74,6 +81,13 @@ struct WinampPlayer {
     /// proportional to songs actually played and takes the per-album fold off
     /// the browse path.
     known_titles: HashMap<String, String>,
+    /// Monotonic counters bumped whenever a fetched list replaces its buffer
+    /// (see [`store_loaded`]). A selection message carries the epoch of the
+    /// list that rendered its row, so `update` can reject a press that
+    /// outlived that list instead of resolving its index against the new one.
+    artists_epoch: u64,
+    albums_epoch: u64,
+    songs_epoch: u64,
 }
 
 /// Which browse screen is showing. Payload-free: the albums and songs the
@@ -102,6 +116,9 @@ impl WinampPlayer {
             albums: Vec::new(),
             songs: Vec::new(),
             known_titles: HashMap::new(),
+            artists_epoch: 0,
+            albums_epoch: 0,
+            songs_epoch: 0,
         }
     }
 
@@ -120,12 +137,19 @@ fn boot(state: Arc<Mutex<AppState>>) -> (WinampPlayer, Task<Message>) {
     (WinampPlayer::new(state), Task::done(Message::LoadArtists))
 }
 
-/// Stores a freshly fetched list into the player's matching buffer, with no
-/// further work. The `ArtistsLoaded`, `AlbumsLoaded`, and `SongsLoaded`
-/// update arms all just store. The store-and-noop shape lives here once
-/// instead of in each arm.
-fn store_loaded<T>(buffer: &mut Vec<T>, items: Vec<T>) -> Task<Message> {
+/// Stores a freshly fetched list into the player's matching buffer and bumps
+/// that buffer's epoch, with no further work. The `ArtistsLoaded`,
+/// `AlbumsLoaded`, and `SongsLoaded` update arms all just store. The
+/// store-and-noop shape lives here once instead of in each arm.
+///
+/// The epoch is what makes the index-carrying selection messages safe: a row
+/// rendered from the old list carries the old epoch, so if the list is
+/// replaced before the press is processed, the epoch no longer matches and
+/// the stale press is ignored rather than resolving its index against the
+/// new list.
+fn store_loaded<T>(buffer: &mut Vec<T>, epoch: &mut u64, items: Vec<T>) -> Task<Message> {
     *buffer = items;
+    *epoch = epoch.wrapping_add(1);
     Task::none()
 }
 
@@ -149,8 +173,18 @@ fn step_track(
     // the per-frame now-playing path used to do — so the lock now covers the
     // pure stepping scan (fast, and `step` never locks anything itself).
     let state = player.state.blocking_lock();
+    let epoch = player.songs_epoch;
     match step(&player.songs, state.current_track.as_deref(), state.repeat) {
-        Some(track_id) => Task::done(Message::TrackSelected(track_id)),
+        // `transport` answers with the stepped song's id, but the selection
+        // message carries the song's index and the epoch of the list that
+        // rendered the row (see `TrackSelected`), so resolve the id to its
+        // position in this same buffer. This scan runs once per button press,
+        // not per view refresh, and the stepped id always names a song in
+        // this buffer.
+        Some(track_id) => match player.songs.iter().position(|song| song.id == track_id) {
+            Some(index) => Task::done(Message::TrackSelected { epoch, index }),
+            None => Task::none(),
+        },
         None => Task::none(),
     }
 }
@@ -188,22 +222,31 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         }
         Message::NextTrack => step_track(player, transport::next_track_id),
         Message::PreviousTrack => step_track(player, transport::previous_track_id),
-        Message::TrackSelected(track_id) => {
+        Message::TrackSelected { epoch, index } => {
+            // The message carries the pressed row's index into `songs` plus the
+            // epoch of the list that rendered it. A mismatched epoch means the
+            // list was replaced after the row was rendered, so the index names
+            // a different song now — ignore the stale press. An out-of-range
+            // index likewise names no track and is a no-op rather than a bogus
+            // play.
+            if epoch != player.songs_epoch {
+                return Task::none();
+            }
+            let Some(song) = player.songs.get(index) else {
+                return Task::none();
+            };
+            let track_id = song.id.clone();
             // Record the played track's title before handing the id to the
             // async play: the Now Playing bar resolves its label from
             // `known_titles`, and the entry must survive a later browse to a
             // different album (which replaces `songs`). Recording once per
             // play — rather than folding every song of every browsed album
             // into the map — keeps the index proportional to songs actually
-            // played and takes the fold off the browse path. The id comes
-            // from a row of the currently loaded `songs`, so the lookup hits;
-            // the `if let` only guards a stale id defensively.
-            if let Some(song) = player.songs.iter().find(|song| song.id == track_id) {
-                player
-                    .known_titles
-                    .entry(track_id.clone())
-                    .or_insert_with(|| song.title.clone());
-            }
+            // played and takes the fold off the browse path.
+            player
+                .known_titles
+                .entry(track_id.clone())
+                .or_insert_with(|| song.title.clone());
             let service = player.apple_music_service.clone();
             let id_for_report = track_id.clone();
             Task::perform(
@@ -215,7 +258,17 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 },
             )
         }
-        Message::ArtistSelected(artist_id) => {
+        Message::ArtistSelected { epoch, index } => {
+            // As with `TrackSelected`: the row message carries the artist's
+            // index and its list's epoch. A mismatched epoch is a stale press
+            // from a replaced list; an out-of-range index has no artist to
+            // browse. Both are no-ops.
+            if epoch != player.artists_epoch {
+                return Task::none();
+            }
+            let Some(artist_id) = player.artists.get(index).map(|artist| artist.id.clone()) else {
+                return Task::none();
+            };
             player.current_view = CurrentView::Albums;
             fetch_into(
                 &player.apple_music_service,
@@ -224,7 +277,14 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 Message::AlbumsLoaded,
             )
         }
-        Message::AlbumSelected(album_id) => {
+        Message::AlbumSelected { epoch, index } => {
+            // The album twin of the artist arm above.
+            if epoch != player.albums_epoch {
+                return Task::none();
+            }
+            let Some(album_id) = player.albums.get(index).map(|album| album.id.clone()) else {
+                return Task::none();
+            };
             player.current_view = CurrentView::Songs;
             fetch_into(
                 &player.apple_music_service,
@@ -252,9 +312,15 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             |service| async move { service.get_favorite_artists().await },
             Message::ArtistsLoaded,
         ),
-        Message::ArtistsLoaded(artists) => store_loaded(&mut player.artists, artists),
-        Message::AlbumsLoaded(albums) => store_loaded(&mut player.albums, albums),
-        Message::SongsLoaded(songs) => store_loaded(&mut player.songs, songs),
+        Message::ArtistsLoaded(artists) => {
+            store_loaded(&mut player.artists, &mut player.artists_epoch, artists)
+        }
+        Message::AlbumsLoaded(albums) => {
+            store_loaded(&mut player.albums, &mut player.albums_epoch, albums)
+        }
+        Message::SongsLoaded(songs) => {
+            store_loaded(&mut player.songs, &mut player.songs_epoch, songs)
+        }
         Message::TrackPlayed => Task::none(),
     }
 }
@@ -283,8 +349,8 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     };
 
     let main_content = match &player.current_view {
-        CurrentView::Artists => views::view_artists(&player.artists),
-        CurrentView::Albums => views::view_albums(&player.albums),
+        CurrentView::Artists => views::view_artists(&player.artists, player.artists_epoch),
+        CurrentView::Albums => views::view_albums(&player.albums, player.albums_epoch),
         // A second short lock (like the label block above) hands the current
         // track's id to the Songs view so it can mark the playing row. The
         // borrowed id is compared inside `song_row` and the guard drops at
@@ -292,7 +358,11 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
         // needed.
         CurrentView::Songs => {
             let state = player.state.blocking_lock();
-            views::view_songs(&player.songs, state.current_track.as_deref())
+            views::view_songs(
+                &player.songs,
+                player.songs_epoch,
+                state.current_track.as_deref(),
+            )
         }
     };
 
