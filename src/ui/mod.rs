@@ -1,7 +1,7 @@
 //! The iced application: the `WinampPlayer` app struct, its `Message` event
 //! type, and the `update`/`view` loop `init_ui` hands to iced. Widget
 //! construction lives in the `views` submodule (browse lists, Now Playing bar,
-//! transport controls) and the Previous/Next stepping arithmetic in
+//! transport controls, equalizer panel) and the Previous/Next stepping arithmetic in
 //! `transport`; this module wires those to the shared `AppState` and the
 //! `AppleMusicService` seam. Its unit tests live in the `tests` submodule.
 
@@ -35,6 +35,9 @@ enum Message {
     Stop,
     ToggleRepeat,
     VolumeChange(f32),
+    ToggleEqualizer,
+    EqPreampChange(f32),
+    EqBandChange(usize, f32),
     NextTrack,
     PreviousTrack,
     TrackSelected(String),
@@ -265,6 +268,14 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::VolumeChange(volume) => {
             mutate_state(player, |state| state.volume = state::clamp_volume(volume))
         }
+        // The equalizer mutators all store clamped gains in shared state, so
+        // the sliders can never write an out-of-range value; the clamp itself
+        // lives in `equalizer::clamp_gain`, called by the `AppState` setters.
+        Message::ToggleEqualizer => mutate_state(player, AppState::toggle_equalizer),
+        Message::EqPreampChange(gain) => mutate_state(player, |state| state.set_eq_preamp(gain)),
+        Message::EqBandChange(band, gain) => {
+            mutate_state(player, |state| state.set_eq_band(band, gain))
+        }
         Message::NextTrack => step_track(player, transport::next_track_id),
         Message::PreviousTrack => step_track(player, transport::previous_track_id),
         Message::TrackSelected(track_id) => {
@@ -323,22 +334,26 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
     }
 }
 
-/// Assembles the app screen: the Now Playing bar and transport row — both
-/// built in `views.rs` from the resolved title, playback state, and volume —
-/// above the current browse list.
+/// Assembles the app screen: the Now Playing bar, transport row, and
+/// equalizer panel — all built in `views.rs` from the resolved title and the
+/// shared playback, volume, Repeat, and EQ state — above the current browse
+/// list.
 fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // The now-playing title is resolved while the state lock is held, from a
     // borrowed `current_track` against the accumulated `known_titles` index
     // (see [`WinampPlayer::now_playing_label`]) — the label outlives the lock,
     // but the owned `String` clone of the current track is not needed, so the
     // per-frame path allocates only the resolved label.
-    let (now_playing, is_playing, volume, repeat) = {
+    let (now_playing, is_playing, volume, repeat, eq_enabled, eq_preamp, eq_bands) = {
         let state = player.state.blocking_lock();
         (
             player.now_playing_label(state.current_track.as_deref()),
             state.is_playing,
             state.volume,
             state.repeat,
+            state.eq_enabled,
+            state.eq_preamp,
+            state.eq_bands,
         )
     };
 
@@ -358,7 +373,8 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
 
     let mut column = Column::new()
         .push(views::view_now_playing(now_playing))
-        .push(views::view_transport_controls(is_playing, volume, repeat));
+        .push(views::view_transport_controls(is_playing, volume, repeat))
+        .push(views::view_equalizer(eq_enabled, eq_preamp, &eq_bands));
     // The Back button sits above the list it navigates and exists only where
     // the hierarchy has a level above to return to (see `views::can_go_back`).
     if views::can_go_back(&player.current_view) {

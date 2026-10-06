@@ -5,7 +5,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Add the Winamp equalizer panel: on/off, preamp, and ten band sliders
+_None yet._
+
+## Done
+
+### Add the Winamp equalizer panel: on/off, preamp, and ten band sliders (done 2026-10-06)
 
 Found by plan 2026-10-06.
 
@@ -96,8 +100,6 @@ audio processing (the Apple Music stub has no audio pipeline yet).
   changes its label to "EQ: On", and dragging any slider moves it (manual check
   — build + tests are the primary gate).
 
-
-## Done
 
 ### Add a Repeat toggle to the transport controls (done 2026-10-06)
 

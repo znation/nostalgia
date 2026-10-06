@@ -2,6 +2,8 @@
 //! status. Both the Apple Music service and the UI read and mutate it,
 //! so it lives in its own module rather than in the binary's entry point.
 
+use crate::equalizer;
+
 /// Global playback state shared between the Apple Music service and the UI.
 ///
 /// `Debug` lets the state be included in error messages and logs, `Clone`
@@ -15,6 +17,15 @@ pub struct AppState {
     /// or stop at the edge (Repeat off). Starts off, as in Winamp.
     pub repeat: bool,
     pub volume: f32,
+    /// Whether the equalizer is engaged. Starts off, as in Winamp; the band
+    /// gains below are stored regardless so turning it back on restores them.
+    pub eq_enabled: bool,
+    /// The preamp gain in decibels applied ahead of the bands, in
+    /// `[equalizer::GAIN_MIN_DB, equalizer::GAIN_MAX_DB]`.
+    pub eq_preamp: f32,
+    /// The gain in decibels of each of the [`equalizer::BAND_COUNT`] bands,
+    /// low frequency to high; flat (all `0.0`) by default.
+    pub eq_bands: [f32; equalizer::BAND_COUNT],
 }
 
 /// The one production `AppState` is built in the app's entry point (`main`)
@@ -24,7 +35,8 @@ pub struct AppState {
 /// place, instead of in a struct literal repeated at each site. The starting
 /// volume is 0.5, not the derived 0.0, so a manual impl is required.
 ///
-/// Initial state: nothing loaded, stopped, Repeat off, at 50% volume.
+/// Initial state: nothing loaded, stopped, Repeat off, at 50% volume, and the
+/// equalizer off with a flat (all-zero) curve.
 impl Default for AppState {
     fn default() -> Self {
         Self {
@@ -32,6 +44,9 @@ impl Default for AppState {
             is_playing: false,
             repeat: false,
             volume: 0.5,
+            eq_enabled: false,
+            eq_preamp: 0.0,
+            eq_bands: [0.0; equalizer::BAND_COUNT],
         }
     }
 }
@@ -60,6 +75,33 @@ impl AppState {
     /// to the field they mutate, like `toggle_playing`.
     pub fn stop(&mut self) {
         self.is_playing = false;
+    }
+
+    /// Flip the equalizer's on/off flag in place. The UI's EQ button is the
+    /// only toggle caller; keeping the flip here (rather than inlined at the
+    /// call site) puts the toggling semantics next to the field they mutate,
+    /// like `toggle_repeat`. The stored preamp and band gains are left alone,
+    /// so re-enabling the equalizer restores the curve the user dialed in.
+    pub fn toggle_equalizer(&mut self) {
+        self.eq_enabled = !self.eq_enabled;
+    }
+
+    /// Store a preamp gain, clamped to the valid range via
+    /// [`equalizer::clamp_gain`]. The UI's preamp slider is the only caller;
+    /// the clamp lives in `equalizer` so the UI can never store an
+    /// out-of-range (or NaN) gain in shared state.
+    pub fn set_eq_preamp(&mut self, gain: f32) {
+        self.eq_preamp = equalizer::clamp_gain(gain);
+    }
+
+    /// Store a clamped gain into band `band`. An out-of-range `band` index
+    /// (a stale slider message after the band count shrinks, say) is ignored
+    /// rather than panicking: `get_mut` yields `None` and nothing is stored,
+    /// so a bad index can't take the window down mid-drag.
+    pub fn set_eq_band(&mut self, band: usize, gain: f32) {
+        if let Some(slot) = self.eq_bands.get_mut(band) {
+            *slot = equalizer::clamp_gain(gain);
+        }
     }
 }
 
@@ -96,6 +138,7 @@ pub fn clamp_volume(volume: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{AppState, clamp_volume};
+    use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB};
 
     /// Runs `mutation` on `state` and asserts it leaves `current_track` and
     /// `volume` untouched. The playback mutations — `toggle_playing`, `stop`,
@@ -118,6 +161,9 @@ mod tests {
         assert!(!state.is_playing);
         assert!(!state.repeat);
         assert_eq!(state.volume, 0.5);
+        assert!(!state.eq_enabled);
+        assert_eq!(state.eq_preamp, 0.0);
+        assert_eq!(state.eq_bands, [0.0; BAND_COUNT]);
     }
 
     #[test]
@@ -148,6 +194,57 @@ mod tests {
 
         assert_keeps_track_and_volume(&mut state, AppState::toggle_repeat);
         assert!(!state.repeat);
+    }
+
+    #[test]
+    fn toggle_equalizer_flips_only_the_eq_flag() {
+        let mut state = AppState::default();
+        assert!(!state.eq_enabled);
+        let preamp = state.eq_preamp;
+        let bands = state.eq_bands;
+
+        assert_keeps_track_and_volume(&mut state, AppState::toggle_equalizer);
+        assert!(state.eq_enabled);
+        assert!(!state.is_playing);
+
+        assert_keeps_track_and_volume(&mut state, AppState::toggle_equalizer);
+        assert!(!state.eq_enabled);
+        // Toggling never disturbs the stored curve, so re-enabling restores it.
+        assert_eq!(state.eq_preamp, preamp);
+        assert_eq!(state.eq_bands, bands);
+    }
+
+    #[test]
+    fn set_eq_preamp_clamps_and_keeps_track_and_volume() {
+        let mut state = AppState::default();
+
+        assert_keeps_track_and_volume(&mut state, |state| state.set_eq_preamp(99.0));
+        assert_eq!(state.eq_preamp, GAIN_MAX_DB);
+
+        assert_keeps_track_and_volume(&mut state, |state| state.set_eq_preamp(-99.0));
+        assert_eq!(state.eq_preamp, GAIN_MIN_DB);
+
+        assert_keeps_track_and_volume(&mut state, |state| state.set_eq_preamp(3.5));
+        assert_eq!(state.eq_preamp, 3.5);
+    }
+
+    #[test]
+    fn set_eq_band_clamps_the_stored_gain() {
+        let mut state = AppState::default();
+
+        assert_keeps_track_and_volume(&mut state, |state| state.set_eq_band(0, 99.0));
+        assert_eq!(state.eq_bands[0], GAIN_MAX_DB);
+
+        assert_keeps_track_and_volume(&mut state, |state| state.set_eq_band(9, -99.0));
+        assert_eq!(state.eq_bands[9], GAIN_MIN_DB);
+    }
+
+    #[test]
+    fn set_eq_band_ignores_an_out_of_range_band_index() {
+        let mut state = AppState::default();
+
+        assert_keeps_track_and_volume(&mut state, |state| state.set_eq_band(BAND_COUNT, 5.0));
+        assert_eq!(state.eq_bands, [0.0; BAND_COUNT]);
     }
 
     #[test]

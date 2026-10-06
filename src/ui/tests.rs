@@ -1,4 +1,5 @@
 use super::*;
+use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB};
 use crate::library::{
     sample_album, sample_artist, sample_song, second_album_songs, stepping_songs,
 };
@@ -110,6 +111,45 @@ fn toggle_repeat_flips_shared_state() {
 
     let _ = update(&mut player, Message::ToggleRepeat);
     assert!(!state.blocking_lock().repeat);
+}
+
+// The equalizer mutators all use `blocking_lock`, which panics inside an
+// async runtime, so these stay plain tests (no `#[tokio::test]`), like
+// `toggle_repeat_flips_shared_state`.
+#[test]
+fn toggle_equalizer_flips_shared_state() {
+    let (mut player, state) = test_player();
+    assert!(!state.blocking_lock().eq_enabled);
+
+    let _ = update(&mut player, Message::ToggleEqualizer);
+    assert!(state.blocking_lock().eq_enabled);
+
+    let _ = update(&mut player, Message::ToggleEqualizer);
+    assert!(!state.blocking_lock().eq_enabled);
+}
+
+#[test]
+fn eq_preamp_change_clamps_value_before_storing() {
+    let (mut player, state) = test_player();
+    // Default preamp is flat (see `AppState::default`).
+    assert_eq!(state.blocking_lock().eq_preamp, 0.0);
+
+    let _ = update(&mut player, Message::EqPreampChange(99.0));
+    assert_eq!(state.blocking_lock().eq_preamp, GAIN_MAX_DB);
+
+    let _ = update(&mut player, Message::EqPreampChange(-99.0));
+    assert_eq!(state.blocking_lock().eq_preamp, GAIN_MIN_DB);
+}
+
+#[test]
+fn eq_band_change_clamps_value_before_storing() {
+    let (mut player, state) = test_player();
+
+    let _ = update(&mut player, Message::EqBandChange(0, 99.0));
+    assert_eq!(state.blocking_lock().eq_bands[0], GAIN_MAX_DB);
+
+    let _ = update(&mut player, Message::EqBandChange(1, -99.0));
+    assert_eq!(state.blocking_lock().eq_bands[1], GAIN_MIN_DB);
 }
 
 // `Message::Stop` uses `blocking_lock`, which panics inside an async

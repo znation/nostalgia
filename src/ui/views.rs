@@ -12,9 +12,10 @@ use std::collections::HashMap;
 
 use iced::{
     Background, Color, Element, Length,
-    widget::{Button, Column, Row, Scrollable, Slider, Space, Text},
+    widget::{Button, Column, Row, Scrollable, Slider, Space, Text, VerticalSlider},
 };
 
+use crate::equalizer::{BAND_COUNT, BAND_FREQUENCIES, GAIN_MAX_DB, GAIN_MIN_DB};
 use crate::library::{Album, Artist, Song};
 
 use super::{CurrentView, Message};
@@ -200,6 +201,13 @@ fn repeat_label(repeat: bool) -> &'static str {
     if repeat { "Repeat: On" } else { "Repeat: Off" }
 }
 
+/// The equalizer on/off button's label: "EQ: On" while the equalizer is
+/// engaged, "EQ: Off" when it is off. Pure so the label logic is testable
+/// without an iced `Element`, like [`repeat_label`].
+fn eq_enabled_label(enabled: bool) -> &'static str {
+    if enabled { "EQ: On" } else { "EQ: Off" }
+}
+
 /// The transport row: the Play/Pause, Stop, Previous, Next, and Repeat
 /// buttons and the volume slider. `volume` is the slider's current value;
 /// dragging it emits `Message::VolumeChange`. `repeat` is the shared Repeat
@@ -233,13 +241,60 @@ pub fn view_transport_controls(
         .into()
 }
 
+/// The equalizer panel: an on/off button, a preamp slider, and a row of the
+/// [`BAND_COUNT`] vertical band sliders labelled from [`BAND_FREQUENCIES`].
+///
+/// `enabled` is the shared EQ on/off flag shown on the button and toggled by
+/// pressing it; `preamp` and `bands` are the stored gains the sliders start
+/// from. Every slider spans `GAIN_MIN_DB..=GAIN_MAX_DB` in 1 dB steps and
+/// emits its own change message, so dragging one routes a clamped gain back
+/// into shared state. The band row is built by index so each slider's closure
+/// captures its own band number — the vertical twin of the volume slider in
+/// [`view_transport_controls`].
+pub fn view_equalizer(
+    enabled: bool,
+    preamp: f32,
+    bands: &[f32; BAND_COUNT],
+) -> Element<'static, Message> {
+    let mut band_row = Row::new();
+    for (index, frequency) in BAND_FREQUENCIES.iter().enumerate() {
+        band_row = band_row.push(
+            Column::new()
+                .push(
+                    VerticalSlider::new(GAIN_MIN_DB..=GAIN_MAX_DB, bands[index], move |gain| {
+                        Message::EqBandChange(index, gain)
+                    })
+                    .step(1.0)
+                    .height(Length::Fixed(100.0)),
+                )
+                .push(Text::new(*frequency).size(12)),
+        );
+    }
+
+    Column::new()
+        .push(labeled_button(
+            eq_enabled_label(enabled),
+            Message::ToggleEqualizer,
+        ))
+        .push(
+            Row::new().push(Text::new("Preamp")).push(
+                Slider::new(GAIN_MIN_DB..=GAIN_MAX_DB, preamp, Message::EqPreampChange)
+                    .step(1.0)
+                    .width(Length::Fixed(150.0)),
+            ),
+        )
+        .push(band_row)
+        .into()
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        CurrentView, Message, album_row, artist_row, can_go_back, now_playing_label,
-        play_pause_label, repeat_label, song_row, view_albums, view_artists, view_back_button,
-        view_now_playing, view_songs, view_transport_controls,
+        CurrentView, Message, album_row, artist_row, can_go_back, eq_enabled_label,
+        now_playing_label, play_pause_label, repeat_label, song_row, view_albums, view_artists,
+        view_back_button, view_equalizer, view_now_playing, view_songs, view_transport_controls,
     };
+    use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB};
     use crate::library::{sample_album, sample_artist, sample_song};
     use crate::sample_library::sample_library;
     use std::collections::HashMap;
@@ -359,6 +414,12 @@ mod tests {
         assert_eq!(repeat_label(false), "Repeat: Off");
     }
 
+    #[test]
+    fn eq_enabled_label_mirrors_enabled_state() {
+        assert_eq!(eq_enabled_label(true), "EQ: On");
+        assert_eq!(eq_enabled_label(false), "EQ: Off");
+    }
+
     // The `view_*` builders are the code that runs on every frame, and no
     // other test reaches them: the row tests stop at the (title, label,
     // message) tuples and the `update` tests stop before the view layer, so
@@ -411,6 +472,22 @@ mod tests {
                 for repeat in [false, true] {
                     let _controls = view_transport_controls(is_playing, volume, repeat);
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn equalizer_panel_constructs_for_both_states_and_gain_endpoints() {
+        // `view()` passes the shared EQ flag, preamp, and band array straight
+        // through, so build the panel for both on/off states and every gain
+        // the update arms can store: the range endpoints and flat. iced
+        // `Element`s expose no tree introspection, so the observable contract
+        // is that the builder constructs its ten-slider tree without
+        // panicking over the input space the app produces.
+        for enabled in [false, true] {
+            for gain in [GAIN_MIN_DB, 0.0, GAIN_MAX_DB] {
+                let bands = [gain; BAND_COUNT];
+                let _panel = view_equalizer(enabled, gain, &bands);
             }
         }
     }
