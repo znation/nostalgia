@@ -356,6 +356,35 @@ mod tests {
         assert_eq!(state.volume(), 0.0);
     }
 
+    // `set_volume` is the one mutation `assert_keeps_track_and_volume` cannot
+    // guard, because volume is the field that helper holds constant. Its three
+    // tests above assert only the stored volume, so a regression that also
+    // cleared `current_track` (blanking the Now Playing bar mid-drag) or reset
+    // a playback or EQ flag would pass all of them. Pin that the volume setter
+    // writes volume alone, against a state whose every other field is set.
+    #[test]
+    fn set_volume_changes_only_the_volume() {
+        let mut state = AppState {
+            current_track: Some("song-1".to_string()),
+            is_playing: true,
+            repeat: true,
+            eq_enabled: true,
+            ..Default::default()
+        };
+        state.set_eq_preamp(3.0);
+        state.set_eq_band(4, 5.0);
+
+        state.set_volume(0.9);
+
+        assert_eq!(state.volume(), 0.9);
+        assert_eq!(state.current_track.as_deref(), Some("song-1"));
+        assert!(state.is_playing);
+        assert!(state.repeat);
+        assert!(state.eq_enabled);
+        assert_eq!(state.eq_preamp(), 3.0);
+        assert_eq!(state.eq_bands()[4], 5.0);
+    }
+
     #[test]
     fn clamp_volume_caps_above_one() {
         assert_eq!(clamp_volume(1.5), 1.0);
