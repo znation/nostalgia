@@ -263,11 +263,13 @@ mod tests {
 
         // An existing artist with no albums yields an empty list, distinct
         // from an unknown id (same lookup path, but worth pinning the sample).
-        assert!(test_service()
-            .get_albums_by_artist("artist-3")
-            .await
-            .unwrap()
-            .is_empty());
+        assert!(
+            test_service()
+                .get_albums_by_artist("artist-3")
+                .await
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[tokio::test]

@@ -92,6 +92,14 @@ fn loaded_or_empty<T, E>(result: Result<Vec<T>, E>, loaded: impl Fn(Vec<T>) -> M
     }
 }
 
+/// Stores a freshly fetched list into the player's matching buffer, with no
+/// further work. The three `*Loaded` update arms used to repeat
+/// `buffer = items; Task::none()`; the store-and-noop shape lives here once.
+fn store_loaded<T>(buffer: &mut Vec<T>, items: Vec<T>) -> Task<Message> {
+    *buffer = items;
+    Task::none()
+}
+
 /// Runs a library-fetch future through iced's runtime, mapping its `Result`
 /// onto the matching `*Loaded` message (empty list on error, via
 /// [`loaded_or_empty`]). Shared by the artists, albums, and songs load arms
@@ -176,18 +184,9 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             |service| async move { service.get_favorite_artists().await },
             Message::ArtistsLoaded,
         ),
-        Message::ArtistsLoaded(artists) => {
-            player.artists = artists;
-            Task::none()
-        }
-        Message::AlbumsLoaded(albums) => {
-            player.albums = albums;
-            Task::none()
-        }
-        Message::SongsLoaded(songs) => {
-            player.songs = songs;
-            Task::none()
-        }
+        Message::ArtistsLoaded(artists) => store_loaded(&mut player.artists, artists),
+        Message::AlbumsLoaded(albums) => store_loaded(&mut player.albums, albums),
+        Message::SongsLoaded(songs) => store_loaded(&mut player.songs, songs),
         Message::TrackPlayed => Task::none(),
     }
 }
