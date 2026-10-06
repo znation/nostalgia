@@ -540,6 +540,39 @@ mod tests {
         assert!(state.is_playing);
     }
 
+    // `Message::TrackPlayed` is the other half of the `TrackSelected` handoff:
+    // the playback task reports the track started, and `update`'s `TrackPlayed`
+    // arm receives that completion. The test above only *produces* the message
+    // (it drives the task and asserts its output); nothing feeds `TrackPlayed`
+    // back through `update`, so this arm — the one update branch the suite
+    // never reaches — could drift (e.g. scheduling a follow-up task or touching
+    // shared state) with no test catching it. Pin the arm's no-op contract: it
+    // schedules no work and leaves the shared state untouched. `blocking_lock`
+    // panics inside an async runtime, so this stays a plain test.
+    #[test]
+    fn track_played_handoff_is_a_noop() {
+        let (mut player, state) = test_player();
+
+        // A track is mid-playback when the completion handoff arrives.
+        {
+            let mut state = state.blocking_lock();
+            state.current_track = Some("song-1".to_string());
+            state.is_playing = true;
+            state.volume = 0.7;
+        }
+
+        let task = update(&mut player, Message::TrackPlayed);
+
+        // The arm schedules no follow-up work...
+        assert!(iced_runtime::task::into_stream(task).is_none());
+
+        // ...and leaves the shared state exactly as it was.
+        let state = state.blocking_lock();
+        assert_eq!(state.current_track.as_deref(), Some("song-1"));
+        assert!(state.is_playing);
+        assert_eq!(state.volume, 0.7);
+    }
+
     // The Previous/Next buttons read the player's songs buffer and the shared
     // current track, hand the direction to the transport helper, and schedule
     // the stepped track as `Message::TrackSelected` (or no task when there is
