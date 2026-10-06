@@ -5,6 +5,13 @@ edition = "2024"
 # Minimum supported Rust version: edition 2024 needs >=1.85 and iced 0.14
 # declares rust-version 1.88, so 1.88 is the floor for this crate.
 rust-version = "1.88"
+# Package metadata: `cargo package` warns when the manifest has no
+# description or license. The SPDX identifier matches the BSD-3-Clause
+# LICENSE file at the repo root, and the repository is the project's GitHub
+# home.
+description = "A Winamp 2.x UI clone in Rust, using Apple Music as the music library."
+license = "BSD-3-Clause"
+repository = "https://github.com/znation/nostalgia"
 
 [dependencies]
 # `iced_native` was dropped with the iced 0.14 port (no longer referenced).
