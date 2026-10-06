@@ -144,4 +144,25 @@ mod tests {
             Some("song-1".to_string())
         );
     }
+
+    // The no-current branch on a one-song list is the one intersection the
+    // other stepping tests don't pin: `next_without_current_starts_at_first`
+    // and `previous_without_current_starts_at_last` step the three-song
+    // album, and `single_song_steps_to_itself_in_both_directions` sets a
+    // current track. With no current on a one-song album, Next must land on
+    // the forward edge (the first song) and Previous on the backward edge
+    // (the last) — the same song here — not `None`. A regression that
+    // misread "no current" on a one-element list as "nothing to step to"
+    // (e.g. special-casing a short list to return `None`) would clear every
+    // other test and only fail here.
+    #[test]
+    fn single_song_with_no_current_steps_to_itself_in_both_directions() {
+        let songs = vec![Song {
+            id: "song-1".to_string(),
+            title: "Only".to_string(),
+            album_id: "album-1".to_string(),
+        }];
+        assert_eq!(next_track_id(&songs, None), Some("song-1".to_string()));
+        assert_eq!(previous_track_id(&songs, None), Some("song-1".to_string()));
+    }
 }

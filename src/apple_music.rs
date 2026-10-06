@@ -230,7 +230,11 @@ mod tests {
             .get_songs_from_album("album-1")
             .await
             .unwrap();
-        assert_ids(&songs, |song| song.id.as_str(), &["song-1", "song-2", "song-3"]);
+        assert_ids(
+            &songs,
+            |song| song.id.as_str(),
+            &["song-1", "song-2", "song-3"],
+        );
     }
 
     #[tokio::test]
