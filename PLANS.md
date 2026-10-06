@@ -5,7 +5,23 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Add a Repeat toggle to the transport controls (planned 2026-10-06)
+
+**Goal.** Match Winamp's Repeat control: a Repeat button in the transport row that switches Previous/Next through the current album's songs between wrap-around (Repeat on) and stop-at-the-edge (Repeat off) stepping. Today `transport::next_track_id` and `transport::previous_track_id` always wrap at the album's ends, so the current default is indistinguishable from Repeat-on; this feature makes wrapping explicitly opt-in and starts Repeat off, as Winamp does.
+
+**Approach.**
+- `src/state.rs`: add `pub repeat: bool` to `AppState` (initialised `false` in `impl Default`), plus a `pub fn toggle_repeat(&mut self)` mirroring `toggle_playing`. Update `default_state_is_stopped_at_half_volume` to assert `!state.repeat`; add `toggle_repeat_flips_only_the_repeat_flag` (flips both ways, leaves `current_track`, `is_playing`, `volume` untouched). The `stop_clears_playing_flag_and_keeps_current_track` test builds `AppState` with `..Default::default()`, so it needs no change.
+- `src/ui/transport.rs`: add a `repeat: bool` parameter to `stepped_track_id`, `next_track_id`, and `previous_track_id`. With `repeat == false`, a step that would cross the boundary stays on the edge instead of wrapping — Next from the last song returns the last song's id, Previous from the first returns the first's — so the button re-lands on the current track rather than moving or doing nothing. With `repeat == true`, and in every no-current / empty-list / single-song case, behavior is unchanged: the no-current branch still lands on the forward/backward edge. Update the two wrap tests (`next_wraps_from_last_to_first`, `previous_wraps_from_first_to_last`) to pass `true`; give the other existing transport tests the new argument (any value where the expectation does not depend on repeat); add `next_stays_on_last_without_repeat` and `previous_stays_on_first_without_repeat`.
+- `src/ui/views.rs`: `view_transport_controls` gains a `repeat: bool` parameter and pushes a Repeat button (via the existing `labeled_button`) after the Next button; add `fn repeat_label(repeat: bool) -> &'static str` beside `play_pause_label`, returning "Repeat: Off"/"Repeat: On", and pin it in `repeat_label_mirrors_repeat_state`. Extend `transport_controls_construct_for_both_play_states_and_volume_endpoints` to also loop over `[false, true]` for repeat.
+- `src/ui/mod.rs`: add `Message::ToggleRepeat`; its update arm routes to `mutate_state(player, AppState::toggle_repeat)`. `step_track`'s `step` parameter becomes `fn(&[Song], Option<&str>, bool) -> Option<String>` and the Next/Previous arms pass `state.repeat` (read under the existing lock), so the arm wiring keeps the shared flag in step. `view` reads `repeat` in its lock block and passes it to `views::view_transport_controls`. Add wiring tests: `toggle_repeat_flips_shared_state` (drive `Message::ToggleRepeat` through `update`, like `play_pause_toggles_is_playing`) and a stepping-wiring test driving `Message::NextTrack` from the last song — wraps when `state.repeat` is true, stays on the last song when false.
+
+**Files touched.** `src/state.rs`, `src/ui/transport.rs`, `src/ui/views.rs`, `src/ui/mod.rs` (each including its `#[cfg(test)]` module).
+
+**Acceptance criteria.**
+- `AppState::default().repeat` is `false`; `toggle_repeat` flips it and nothing else.
+- `next_track_id`/`previous_track_id` with `repeat = false` stop at the album's edge (return the current edge song's id); with `repeat = true`, and in every no-current/empty/single-song case, they behave exactly as before the change.
+- The transport row renders a Repeat button whose label tracks the shared `repeat` flag, and pressing it flips that flag in shared state.
+- `make check` is green: `cargo fmt --check`, `cargo clippy --all-targets`, and the full `cargo test` suite pass.
 
 
 ## Done
