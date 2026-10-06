@@ -74,6 +74,23 @@ pub(crate) fn single_song_album() -> Vec<Song> {
     }]
 }
 
+/// The one-song album the browse-away tests land on after leaving `album-1`:
+/// album-2's "song-4" / "B-side".
+/// `songs_loaded_replaces_the_previous_albums_songs` and
+/// `now_playing_label_keeps_the_track_name_after_browsing_to_another_album`
+/// both built this same list inline to stand in for the album browsed to — a
+/// retitle or id change in one copy would silently diverge from the other — so
+/// it lives here once, next to [`single_song_album`], and is compiled only for
+/// tests.
+#[cfg(test)]
+pub(crate) fn second_album_songs() -> Vec<Song> {
+    vec![Song {
+        id: "song-4".to_string(),
+        title: "B-side".to_string(),
+        album_id: "album-2".to_string(),
+    }]
+}
+
 /// A single representative artist, album, and song, shared by the `library`,
 /// `ui::views`, and `ui` test suites. Each suite used to build these same
 /// objects independently — a retitle or id change in one fixture would

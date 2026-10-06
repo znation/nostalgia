@@ -1,5 +1,7 @@
 use super::*;
-use crate::library::{sample_album, sample_artist, sample_song, stepping_songs};
+use crate::library::{
+    sample_album, sample_artist, sample_song, second_album_songs, stepping_songs,
+};
 
 /// A fresh player over its own shared state, so a test can inspect the
 /// same `AppState` the player mutates.
@@ -611,14 +613,7 @@ fn songs_loaded_replaces_the_previous_albums_songs() {
 
     // Load album-1's three songs, then browse to album-2 (one song).
     let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
-    let _ = update(
-        &mut player,
-        Message::SongsLoaded(vec![Song {
-            id: "song-4".to_string(),
-            title: "B-side".to_string(),
-            album_id: "album-2".to_string(),
-        }]),
-    );
+    let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
 
     let ids: Vec<&str> = player.songs.iter().map(|song| song.id.as_str()).collect();
     assert_eq!(ids, vec!["song-4"]);
@@ -640,14 +635,7 @@ fn now_playing_label_keeps_the_track_name_after_browsing_to_another_album() {
     // songs — the flow that used to leave the bar showing "song-1".
     let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
     state.blocking_lock().current_track = Some("song-1".to_string());
-    let _ = update(
-        &mut player,
-        Message::SongsLoaded(vec![Song {
-            id: "song-4".to_string(),
-            title: "B-side".to_string(),
-            album_id: "album-2".to_string(),
-        }]),
-    );
+    let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
 
     let current_track = state.blocking_lock().current_track.clone();
     assert_eq!(player.now_playing_label(current_track.as_deref()), "One");
