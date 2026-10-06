@@ -53,46 +53,37 @@ async fn drive_task(task: Task<Message>, what: &str, mut check: impl FnMut(Messa
     }
 }
 
-/// Drives the task a browse arm schedules, feeds the fetched `*Loaded`
+/// Drives the task a browse arm schedules, feeds the resulting `*Loaded`
 /// message back through the update loop, and asserts the list lands in
 /// the player's matching buffer in library order. The three fetch tests
 /// — loading artists, albums by artist, and songs from album — all repeat
-/// this drive-then-feed-then-assert flow; only the message variant, the
-/// buffer, the id key, and the expected ids differ, so they come in as
-/// parameters and the flow lives here once.
+/// this drive-then-feed-then-assert flow; only the buffer, the id key, and
+/// the expected ids differ, so they come in as parameters and the flow
+/// lives here once.
 ///
-/// `clippy::too_many_arguments` is allowed: the eight parameters are the
-/// natural vocabulary of the three fetch tests — each one is supplied by
-/// every call site, and bundling them into a struct would only add a
-/// construction site per test — so the arity is the shape of the flow,
-/// not a readability smell.
-#[allow(clippy::too_many_arguments)]
-async fn drive_fetch_and_assert_loaded<T, Extract, Buffer, Key>(
+/// The task's own output message is fed straight back, rather than a
+/// reconstructed copy: each fetch test used to pass a match-and-clone
+/// closure naming its `*Loaded` variant plus that variant's constructor,
+/// and this helper now takes neither — the task's message serves as both.
+/// Feeding the message unchanged also proves the arm's task yields the
+/// `*Loaded` variant whose buffer is asserted — a wrong variant would leave
+/// the expected buffer empty.
+async fn drive_fetch_and_assert_loaded<T, Buffer, Key>(
     player: &mut WinampPlayer,
     task: Task<Message>,
     what: &str,
-    extract: Extract,
-    loaded: impl Fn(Vec<T>) -> Message,
     buffer: Buffer,
     key: Key,
     expected_ids: &[&str],
 ) where
-    T: 'static,
-    Extract: Fn(&Message) -> Option<Vec<T>>,
     Buffer: Fn(&mut WinampPlayer) -> &mut Vec<T>,
     Key: Fn(&T) -> &str,
 {
-    let mut fetched: Option<Vec<T>> = None;
-    drive_task(task, what, |message| {
-        fetched = Some(
-            extract(&message)
-                .unwrap_or_else(|| panic!("unexpected {what} task output: {message:?}")),
-        );
-    })
-    .await;
+    let mut output: Option<Message> = None;
+    drive_task(task, what, |message| output = Some(message)).await;
 
-    let items = fetched.expect("browse task must yield a *Loaded message");
-    let _ = update(player, loaded(items));
+    let message = output.expect("browse task must yield a *Loaded message");
+    let _ = update(player, message);
     let ids: Vec<&str> = buffer(player).iter().map(key).collect();
     assert_eq!(ids, expected_ids);
 }
@@ -270,11 +261,6 @@ async fn artist_selected_fetches_the_artists_albums_into_the_player() {
         &mut player,
         task,
         "load albums",
-        |message| match message {
-            Message::AlbumsLoaded(albums) => Some(albums.clone()),
-            _ => None,
-        },
-        Message::AlbumsLoaded,
         |player| &mut player.albums,
         |album| album.id.as_str(),
         &["album-1", "album-2"],
@@ -295,11 +281,6 @@ async fn album_selected_fetches_the_albums_songs_into_the_player() {
         &mut player,
         task,
         "load songs",
-        |message| match message {
-            Message::SongsLoaded(songs) => Some(songs.clone()),
-            _ => None,
-        },
-        Message::SongsLoaded,
         |player| &mut player.songs,
         |song| song.id.as_str(),
         &["song-5"],
@@ -339,11 +320,6 @@ async fn load_artists_fetches_favorite_artists_into_the_player() {
         &mut player,
         task,
         "load artists",
-        |message| match message {
-            Message::ArtistsLoaded(artists) => Some(artists.clone()),
-            _ => None,
-        },
-        Message::ArtistsLoaded,
         |player| &mut player.artists,
         |artist| artist.id.as_str(),
         &["artist-1", "artist-2", "artist-3"],
