@@ -12,23 +12,32 @@ use serde::{Deserialize, Serialize};
 /// An artist in the user's library.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Artist {
+    /// The artist's stable identifier; an [`Album::artist_id`] refers to it.
     pub id: String,
+    /// The display name the Artists view renders.
     pub name: String,
 }
 
 /// An album by an [`Artist`], linked to it by [`Album::artist_id`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Album {
+    /// The album's stable identifier; a [`Song::album_id`] refers to it.
     pub id: String,
+    /// The display title the Albums view renders.
     pub title: String,
+    /// The [`Artist::id`] of the artist this album belongs to.
     pub artist_id: String,
 }
 
 /// A song on an [`Album`], linked to it by [`Song::album_id`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Song {
+    /// The song's stable identifier; the shared `AppState` records it as the
+    /// current track when the song plays.
     pub id: String,
+    /// The display title the Songs view and the Now Playing bar render.
     pub title: String,
+    /// The [`Album::id`] of the album this song belongs to.
     pub album_id: String,
 }
 

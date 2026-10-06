@@ -11,7 +11,14 @@ use crate::equalizer;
 /// values, such as the default-state tests below.
 #[derive(Debug, PartialEq)]
 pub struct AppState {
+    /// The id of the track the player currently has loaded, or `None` before
+    /// anything has played. The Now Playing bar names it and the Songs view
+    /// marks its row; [`AppState::stop`] leaves it set so the bar keeps
+    /// showing the interrupted track's title.
     pub current_track: Option<String>,
+    /// Whether playback is running. The transport row's Play/Pause button
+    /// reads it to choose its "Pause"/"Play" label, and [`AppState::stop`]
+    /// clears it without clearing the current track.
     pub is_playing: bool,
     /// Whether Previous/Next wrap around the current album's ends (Repeat on)
     /// or stop at the edge (Repeat off). Starts off, as in Winamp.
