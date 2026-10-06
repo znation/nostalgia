@@ -183,6 +183,31 @@ mod tests {
         AppleMusicService::new(Arc::new(Mutex::new(AppState::default())))
     }
 
+    /// A fresh service plus a handle to the shared state it mutates, so a
+    /// playback test can drive the service and then inspect the resulting
+    /// `AppState`. The four playback tests below all start with this same
+    /// service-and-state pair, so it lives here once.
+    fn test_service_with_state() -> (AppleMusicService, Arc<Mutex<AppState>>) {
+        let service = test_service();
+        let state = service.state.clone();
+        (service, state)
+    }
+
+    /// Locks the shared playback state and asserts it holds `expected_track`
+    /// with `expected_playing`. The four playback tests below all end on that
+    /// same pair — the recorded track id and the playing flag — so the
+    /// lock-and-compare sequence lives here once and each test only names the
+    /// state it drove to.
+    async fn assert_playback_state(
+        state: &Arc<Mutex<AppState>>,
+        expected_track: Option<&str>,
+        expected_playing: bool,
+    ) {
+        let state = state.lock().await;
+        assert_eq!(state.current_track.as_deref(), expected_track);
+        assert_eq!(state.is_playing, expected_playing);
+    }
+
     /// The representative Apple Music token the three token tests share: a full,
     /// valid payload for the round-trip, missing-field, and unknown-field
     /// contracts. Each test used to spell out the same three field values — twice
@@ -340,14 +365,11 @@ mod tests {
 
     #[tokio::test]
     async fn play_track_sets_current_track_and_starts_playing() {
-        let service = test_service();
-        let state = service.state.clone();
+        let (service, state) = test_service_with_state();
 
         service.play_track("song-1").await.unwrap();
 
-        let state = state.lock().await;
-        assert_eq!(state.current_track.as_deref(), Some("song-1"));
-        assert!(state.is_playing);
+        assert_playback_state(&state, Some("song-1"), true).await;
     }
 
     // The test above plays once from the default (no track), so it only
@@ -359,28 +381,22 @@ mod tests {
     // and that playback stays on across it.
     #[tokio::test]
     async fn play_track_replaces_the_current_track_when_another_song_is_played() {
-        let service = test_service();
-        let state = service.state.clone();
+        let (service, state) = test_service_with_state();
 
         service.play_track("song-1").await.unwrap();
         service.play_track("song-2").await.unwrap();
 
-        let state = state.lock().await;
-        assert_eq!(state.current_track.as_deref(), Some("song-2"));
-        assert!(state.is_playing);
+        assert_playback_state(&state, Some("song-2"), true).await;
     }
 
     #[tokio::test]
     async fn pause_stops_playing_but_keeps_current_track() {
-        let service = test_service();
-        let state = service.state.clone();
+        let (service, state) = test_service_with_state();
 
         service.play_track("song-1").await.unwrap();
         service.pause().await.unwrap();
 
-        let state = state.lock().await;
-        assert!(!state.is_playing);
-        assert_eq!(state.current_track.as_deref(), Some("song-1"));
+        assert_playback_state(&state, Some("song-1"), false).await;
     }
 
     // `pause`'s test above pins its state change; its two sibling stubs,
@@ -393,17 +409,14 @@ mod tests {
     // ship silently, since no caller reaches them today.
     #[tokio::test]
     async fn next_and_previous_track_stubs_succeed_without_touching_state() {
-        let service = test_service();
-        let state = service.state.clone();
+        let (service, state) = test_service_with_state();
 
         service.play_track("song-1").await.unwrap();
 
         service.next_track().await.unwrap();
         service.previous_track().await.unwrap();
 
-        let state = state.lock().await;
-        assert_eq!(state.current_track.as_deref(), Some("song-1"));
-        assert!(state.is_playing);
+        assert_playback_state(&state, Some("song-1"), true).await;
     }
 
     // `init_service` is the startup seam `main` calls before the UI boots,
