@@ -170,11 +170,13 @@ mod tests {
     use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB};
 
     /// Runs `mutation` on `state` and asserts it leaves `current_track` and
-    /// `volume` untouched. The playback mutations — `toggle_playing`, `stop`,
-    /// and `toggle_repeat` — each contract that only their flag changes (the
-    /// Now Playing bar keeps the interrupted track's title), so the
-    /// snapshot-then-compare sequence lives here once instead of at each call
-    /// site.
+    /// `volume` untouched. Every `AppState` mutation but `set_volume` uses
+    /// this helper — the playback flips (`toggle_playing`, `stop`,
+    /// `toggle_repeat`) and the equalizer setters (`toggle_equalizer`,
+    /// `set_eq_preamp`, `set_eq_band`) — so the snapshot-then-compare
+    /// sequence lives here once instead of at each call site. Each test pins
+    /// its own field's new value separately; this helper only pins the two
+    /// fields the mutation must not disturb.
     fn assert_keeps_track_and_volume(state: &mut AppState, mutation: impl FnOnce(&mut AppState)) {
         let track = state.current_track.clone();
         let volume = state.volume();
