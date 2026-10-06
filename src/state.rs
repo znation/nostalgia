@@ -17,13 +17,11 @@ pub struct AppState {
 /// The one production `AppState` is built in the app's entry point (`main`)
 /// and shared (as an `Arc<Mutex<_>>`) with both the UI and the Apple Music
 /// service; the test modules build their own. A single `Default` keeps every
-/// construction site in sync. The starting volume is 0.5, not the derived 0.0,
-/// so a manual impl is required.
+/// construction site in sync: a new field's startup value is set here, in one
+/// place, instead of in a struct literal repeated at each site. The starting
+/// volume is 0.5, not the derived 0.0, so a manual impl is required.
 ///
-/// Initial state: nothing loaded, stopped, at 50% volume. Keeping the
-/// initial values in one place (rather than repeating the struct literal
-/// at each construction site) means a new field has only one spot to be
-/// given its startup value.
+/// Initial state: nothing loaded, stopped, at 50% volume.
 impl Default for AppState {
     fn default() -> Self {
         Self {
