@@ -59,6 +59,18 @@ pub fn init_service(_state: Arc<Mutex<AppState>>) {
     println!("Apple Music service initialized");
 }
 
+/// The elements of `items` whose key — read from each element by `key` —
+/// equals `id`, in their original order. Used by the browse queries to pick
+/// the albums of an artist and the songs of an album without repeating the
+/// filter-then-clone dance.
+fn matching<T: Clone>(items: &[T], key: impl Fn(&T) -> &str, id: &str) -> Vec<T> {
+    items
+        .iter()
+        .filter(|item| key(item) == id)
+        .cloned()
+        .collect()
+}
+
 impl AppleMusicService {
     pub fn new(state: Arc<Mutex<AppState>>) -> Self {
         Self {
@@ -140,22 +152,12 @@ impl AppleMusicService {
 
     /// Albums by the given artist; unknown artists yield an empty list.
     pub async fn get_albums_by_artist(&self, artist_id: &str) -> Result<Vec<Album>, Error> {
-        Ok(sample_library()
-            .albums
-            .iter()
-            .filter(|album| album.artist_id == artist_id)
-            .cloned()
-            .collect())
+        Ok(matching(&sample_library().albums, |album| &album.artist_id, artist_id))
     }
 
     /// Songs on the given album; unknown albums yield an empty list.
     pub async fn get_songs_from_album(&self, album_id: &str) -> Result<Vec<Song>, Error> {
-        Ok(sample_library()
-            .songs
-            .iter()
-            .filter(|song| song.album_id == album_id)
-            .cloned()
-            .collect())
+        Ok(matching(&sample_library().songs, |song| &song.album_id, album_id))
     }
 }
 
