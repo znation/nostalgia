@@ -10,7 +10,11 @@ rust-version = "1.88"
 # `iced_native` was dropped with the iced 0.14 port (no longer referenced).
 # tokio `macros` + `rt` power the `#[tokio::test]` runtime in apple_music.
 iced = "0.14.0"
-serde = "1.0.228"
+# `derive` is requested explicitly: `library` and `apple_music` use
+# `#[derive(Serialize, Deserialize)]`, and without this the crate would compile
+# only because a transitive iced dependency (zbus) happens to enable the
+# feature. Naming it here keeps the derive macros ours, not a side effect.
+serde = { version = "1.0.228", features = ["derive"] }
 tokio = {version = "1.48.0", features = ["sync", "macros", "rt"]}
 
 [dev-dependencies]
