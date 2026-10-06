@@ -128,7 +128,6 @@ where
 /// alone but fails this pin), then the round trip via [`assert_round_trips`] —
 /// so the serialize-then-compare-then-round-trip sequence lives here once and
 /// no caller can pin one half without the other.
-#[cfg(test)]
 pub(crate) fn assert_serializes_as<T>(value: T, expected: serde_json::Value)
 where
     T: PartialEq + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned,
