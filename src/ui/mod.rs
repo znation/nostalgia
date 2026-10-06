@@ -323,6 +323,100 @@ mod tests {
         assert!(state.is_playing);
     }
 
+    // The Previous/Next buttons read the player's songs buffer and the shared
+    // current track, hand the direction to the transport helper, and schedule
+    // the stepped track as `Message::TrackSelected` (or no task when there is
+    // nothing to step through). The stepping arithmetic is tested in
+    // `transport.rs`; these tests pin the arm's wiring — that it reads the
+    // player's state and forwards the stepped track. The arms use
+    // `blocking_lock`, which panics inside an async runtime, so each test
+    // calls `update` on a plain thread and only then drives the returned
+    // task's stream.
+    fn songs_for_stepping() -> Vec<Song> {
+        vec![
+            Song {
+                id: "song-1".to_string(),
+                title: "One".to_string(),
+                album_id: "album-1".to_string(),
+            },
+            Song {
+                id: "song-2".to_string(),
+                title: "Two".to_string(),
+                album_id: "album-1".to_string(),
+            },
+            Song {
+                id: "song-3".to_string(),
+                title: "Three".to_string(),
+                album_id: "album-1".to_string(),
+            },
+        ]
+    }
+
+    /// Drives `task` to its single output and asserts it is a `TrackSelected`
+    /// for the given id, as the iced runtime would deliver the button's task.
+    fn assert_track_selected(task: Task<Message>, expected: &str) {
+        use futures::StreamExt;
+
+        let mut stream =
+            iced_runtime::task::into_stream(task).expect("stepping must schedule a task");
+        let action = futures::executor::block_on(stream.next())
+            .expect("stepping task must yield a completion message");
+        match action {
+            iced_runtime::Action::Output(Message::TrackSelected(id)) => assert_eq!(id, expected),
+            other => panic!("unexpected stepping task output: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn next_track_steps_to_the_following_song() {
+        let (mut player, state) = test_player();
+        player.songs = songs_for_stepping();
+        state.blocking_lock().current_track = Some("song-1".to_string());
+
+        let task = update(&mut player, Message::NextTrack);
+
+        assert_track_selected(task, "song-2");
+    }
+
+    #[test]
+    fn previous_track_steps_to_the_preceding_song() {
+        let (mut player, state) = test_player();
+        player.songs = songs_for_stepping();
+        state.blocking_lock().current_track = Some("song-2".to_string());
+
+        let task = update(&mut player, Message::PreviousTrack);
+
+        assert_track_selected(task, "song-1");
+    }
+
+    #[test]
+    fn next_track_with_no_current_track_starts_at_the_first_song() {
+        let (mut player, _state) = test_player();
+        player.songs = songs_for_stepping();
+
+        let task = update(&mut player, Message::NextTrack);
+
+        assert_track_selected(task, "song-1");
+    }
+
+    #[test]
+    fn next_track_with_no_songs_loaded_does_nothing() {
+        let (mut player, _state) = test_player();
+
+        let task = update(&mut player, Message::NextTrack);
+
+        assert!(iced_runtime::task::into_stream(task).is_none());
+    }
+
+    #[test]
+    fn previous_track_with_no_songs_loaded_does_nothing() {
+        let (mut player, _state) = test_player();
+
+        let task = update(&mut player, Message::PreviousTrack);
+
+        assert!(iced_runtime::task::into_stream(task).is_none());
+    }
+
     #[test]
     fn artists_loaded_populates_list() {
         let (mut player, _state) = test_player();
