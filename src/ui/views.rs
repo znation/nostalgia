@@ -2,7 +2,7 @@
 //!
 //! Pure functions: each turns plain data — the current track and the loaded
 //! songs, the playback state, or `&[Artist]` / `&[Album]` / `&[Song]` — into
-//! an `Element` (a couple of label helpers return a `String` instead) and
+//! an `Element` (a few label helpers return `&str` or `Cow<str>` instead) and
 //! knows nothing about the player's state or update loop. Keeping them free
 //! of the `WinampPlayer` struct means the view layer can be reworked (or
 //! tested) independently of how the app is booted.
