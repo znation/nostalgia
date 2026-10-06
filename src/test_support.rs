@@ -13,7 +13,6 @@ use crate::library::{Album, Artist, Song};
 /// build this list independently — a rename or reorder in one fixture would
 /// silently diverge from the other — so it lives here once, next to the other
 /// shared fixtures, and is compiled only for tests.
-#[cfg(test)]
 pub(crate) fn stepping_songs() -> Vec<Song> {
     vec![
         Song {
@@ -40,7 +39,6 @@ pub(crate) fn stepping_songs() -> Vec<Song> {
 /// independently — a rename in one fixture would silently diverge from the
 /// other — so it lives here once, next to [`stepping_songs`], and is compiled
 /// only for tests.
-#[cfg(test)]
 pub(crate) fn single_song_album() -> Vec<Song> {
     vec![Song {
         id: "song-1".to_string(),
@@ -57,7 +55,6 @@ pub(crate) fn single_song_album() -> Vec<Song> {
 /// retitle or id change in one copy would silently diverge from the other — so
 /// it lives here once, next to [`single_song_album`], and is compiled only for
 /// tests.
-#[cfg(test)]
 pub(crate) fn second_album_songs() -> Vec<Song> {
     vec![Song {
         id: "song-4".to_string(),
@@ -71,7 +68,6 @@ pub(crate) fn second_album_songs() -> Vec<Song> {
 /// objects independently — a retitle or id change in one fixture would
 /// silently diverge from the others — so they live here once, next to
 /// [`stepping_songs`], and each test only names which one it wants.
-#[cfg(test)]
 pub(crate) fn sample_artist() -> Artist {
     Artist {
         id: "artist-1".to_string(),
@@ -79,7 +75,6 @@ pub(crate) fn sample_artist() -> Artist {
     }
 }
 
-#[cfg(test)]
 pub(crate) fn sample_album() -> Album {
     Album {
         id: "album-1".to_string(),
@@ -88,7 +83,6 @@ pub(crate) fn sample_album() -> Album {
     }
 }
 
-#[cfg(test)]
 pub(crate) fn sample_song() -> Song {
     Song {
         id: "song-1".to_string(),
@@ -106,7 +100,6 @@ pub(crate) fn sample_song() -> Song {
 /// named field per type leaves the others unpinned, and a `#[serde(default)]`
 /// added to a field no probe omitted would clear the suite while blanking
 /// that field.
-#[cfg(test)]
 pub(crate) fn assert_every_field_required<T>(payload: serde_json::Value)
 where
     T: serde::de::DeserializeOwned,
@@ -148,7 +141,6 @@ where
 /// unchanged: serialize it, deserialize the result, and compare. The
 /// round-trip half of [`assert_serializes_as`], kept separate so the chain has
 /// one named implementation.
-#[cfg(test)]
 pub(crate) fn assert_round_trips<T>(value: T)
 where
     T: PartialEq + std::fmt::Debug + serde::Serialize + serde::de::DeserializeOwned,
@@ -163,7 +155,6 @@ where
 /// field must be ignored rather than failing the whole parse. The three model
 /// types below and `apple_music`'s auth-token test each probe this contract,
 /// so the `from_value`-then-`assert_eq` chain lives here once.
-#[cfg(test)]
 pub(crate) fn assert_unknown_fields_tolerated<T>(payload: serde_json::Value, expected: T)
 where
     T: PartialEq + std::fmt::Debug + serde::de::DeserializeOwned,
