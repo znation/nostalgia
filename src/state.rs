@@ -259,6 +259,19 @@ mod tests {
         assert_eq!(state.eq_preamp(), 3.5);
     }
 
+    // `set_volume`'s NaN-to-silence mapping is pinned at the state level, but
+    // the preamp setter's NaN mapping is only pinned in `clamp_gain`'s own
+    // test. `set_eq_preamp` is the field's only writer, so pin the flat
+    // fallback here too: a refactor that bypassed `clamp_gain` (an inline
+    // `gain.clamp(..)`, say) would still pass the out-of-range tests above
+    // while letting NaN into shared state and the preamp slider.
+    #[test]
+    fn set_eq_preamp_maps_nan_to_flat() {
+        let mut state = AppState::default();
+        state.set_eq_preamp(f32::NAN);
+        assert_eq!(state.eq_preamp(), 0.0);
+    }
+
     #[test]
     fn set_eq_band_clamps_the_stored_gain() {
         let mut state = AppState::default();
@@ -295,6 +308,16 @@ mod tests {
         expected[3] = 4.5;
         assert_eq!(state.eq_bands(), expected);
         assert_eq!(state.eq_preamp(), 0.0);
+    }
+
+    // The band twin of `set_eq_preamp_maps_nan_to_flat`: `set_eq_band` is the
+    // only writer of the band array, so pin that a NaN gain lands as flat
+    // rather than in the stored curve.
+    #[test]
+    fn set_eq_band_maps_nan_to_flat() {
+        let mut state = AppState::default();
+        state.set_eq_band(0, f32::NAN);
+        assert_eq!(state.eq_bands()[0], 0.0);
     }
 
     #[test]
