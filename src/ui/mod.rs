@@ -851,4 +851,79 @@ mod tests {
         assert!(player.albums.is_empty());
         assert!(player.songs.is_empty());
     }
+
+    // `view` is the per-frame assembly: it locks the shared state, resolves
+    // the now-playing label, matches the current browse view onto its list
+    // buffer, and stacks the Now Playing bar, the transport row, the optional
+    // Back button (only below the artist list), and the browse list. No other
+    // test reaches it — the `views.rs` tests stop at the individual builders
+    // and the `update` tests stop before the view layer — so a regression
+    // that made this assembly panic (a bad slider range, a `view_*` builder
+    // failing over the input the app produces) would take the window down on
+    // every refresh with no test catching it. iced `Element`s expose no tree
+    // introspection, so the observable contract — as with the `views.rs`
+    // builder tests — is that `view` builds its widget tree without panicking
+    // over the space the app actually produces: every browse view (including
+    // the pre-load empty buffers), both play states, the volume endpoints the
+    // update arm can store, and each now-playing resolution. `view` uses
+    // `blocking_lock`, which panics inside an async runtime, so this stays a
+    // plain test.
+    #[test]
+    fn view_constructs_over_the_apps_full_input_space() {
+        let (mut player, state) = test_player();
+
+        // The pre-load shape: nothing fetched, no current track. This is what
+        // the window shows before the first `LoadArtists` fetch lands, in
+        // every browse view.
+        for current_view in [
+            CurrentView::Artists,
+            CurrentView::Albums,
+            CurrentView::Songs,
+        ] {
+            player.current_view = current_view;
+            let _empty = view(&player);
+        }
+
+        // The loaded shape: artists, albums, and songs in the browse buffers,
+        // rendered for every now-playing resolution a session can reach.
+        player.artists = vec![Artist {
+            id: "artist-1".to_string(),
+            name: "The Sample Band".to_string(),
+        }];
+        player.albums = vec![Album {
+            id: "album-1".to_string(),
+            title: "First Record".to_string(),
+            artist_id: "artist-1".to_string(),
+        }];
+        player.songs = vec![Song {
+            id: "song-1".to_string(),
+            title: "Opening".to_string(),
+            album_id: "album-1".to_string(),
+        }];
+
+        let now_playing_options = [None, Some("song-1"), Some("no-such-song")];
+        let play_states = [false, true];
+        let volumes = [0.0, 0.5, 1.0];
+
+        for current_view in [
+            CurrentView::Artists,
+            CurrentView::Albums,
+            CurrentView::Songs,
+        ] {
+            player.current_view = current_view;
+            for current_track in now_playing_options {
+                for is_playing in play_states {
+                    for volume in volumes {
+                        {
+                            let mut state = state.blocking_lock();
+                            state.current_track = current_track.map(str::to_string);
+                            state.is_playing = is_playing;
+                            state.volume = volume;
+                        }
+                        let _screen = view(&player);
+                    }
+                }
+            }
+        }
+    }
 }
