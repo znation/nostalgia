@@ -1996,6 +1996,7 @@ dependencies = [
  "iced_runtime",
  "reqwest",
  "serde",
+ "serde_json",
  "tokio",
 ]
 

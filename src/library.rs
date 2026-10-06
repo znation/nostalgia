@@ -31,3 +31,83 @@ pub struct Song {
     pub title: String,
     pub album_id: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Album, Artist, Song};
+    use serde_json::json;
+
+    /// The real Apple Music API will hand these types to the app as JSON, so
+    /// the round-trip (out and back through `serde_json`) is the contract that
+    /// lets a live service replace the stub without touching the model or UI.
+    #[test]
+    fn artist_serializes_field_names_and_round_trips() {
+        let artist = Artist {
+            id: "artist-1".to_string(),
+            name: "The Sample Band".to_string(),
+        };
+
+        // Field names are serialized as-is (no renames): the wire contract a
+        // real Apple Music payload must satisfy.
+        let value = serde_json::to_value(&artist).unwrap();
+        assert_eq!(
+            value,
+            json!({ "id": "artist-1", "name": "The Sample Band" })
+        );
+
+        let back: Artist = serde_json::from_value(value).unwrap();
+        assert_eq!(back, artist);
+    }
+
+    #[test]
+    fn album_round_trips_through_json() {
+        let album = Album {
+            id: "album-1".to_string(),
+            title: "First Record".to_string(),
+            artist_id: "artist-1".to_string(),
+        };
+
+        let back: Album = serde_json::from_value(serde_json::to_value(&album).unwrap()).unwrap();
+        assert_eq!(back, album);
+    }
+
+    #[test]
+    fn song_round_trips_through_json() {
+        let song = Song {
+            id: "song-1".to_string(),
+            title: "Opening".to_string(),
+            album_id: "album-1".to_string(),
+        };
+
+        let back: Song = serde_json::from_value(serde_json::to_value(&song).unwrap()).unwrap();
+        assert_eq!(back, song);
+    }
+
+    #[test]
+    fn deserialization_ignores_unknown_fields() {
+        // Real Apple Music payloads carry more than the model's fields; serde's
+        // default must tolerate the extras rather than failing the whole parse.
+        let artist: Artist = serde_json::from_value(json!({
+            "id": "artist-1",
+            "name": "The Sample Band",
+            "genres": ["rock"]
+        }))
+        .unwrap();
+
+        assert_eq!(
+            artist,
+            Artist {
+                id: "artist-1".to_string(),
+                name: "The Sample Band".to_string(),
+            }
+        );
+    }
+
+    #[test]
+    fn deserialization_rejects_missing_required_fields() {
+        // A payload missing a required field must error, not silently yield a
+        // half-populated model the UI would render as blank data.
+        let result: Result<Artist, _> = serde_json::from_value(json!({ "id": "artist-1" }));
+        assert!(result.is_err());
+    }
+}

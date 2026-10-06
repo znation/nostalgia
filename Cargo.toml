@@ -21,3 +21,7 @@ tokio = {version = "1.48.0", features = ["sync", "macros", "rt"]}
 # crates are introduced.
 futures = "0.3"
 iced_runtime = "0.14.0"
+# Test-only: exercise the library model's serde contract (the JSON seam the
+# real Apple Music API will populate). Already in the dependency tree as a
+# transitive dep of `reqwest`, so no new crate is introduced.
+serde_json = "1.0.146"
