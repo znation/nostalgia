@@ -34,12 +34,13 @@ const PLAYING_ROW_HIGHLIGHT: Color = Color::from_rgb(0.25, 0.5, 1.0);
 
 /// A button showing a single text label that emits `message` on press.
 ///
-/// The transport row's four buttons (Play/Pause, Stop, Previous, Next) and
-/// the browse Back button all build the same `Button::new(Text::new(..))
-/// .on_press(..)` widget, so that expression lives here once instead of
-/// being repeated at every call site. The label is `'static` — a literal, or
-/// a `&'static str` such as [`play_pause_label`] returns — so the resulting
-/// button is `'static` like the view builders that push it.
+/// The transport row's five buttons (Play/Pause, Stop, Previous, Next,
+/// Repeat) and the browse Back button all build the same
+/// `Button::new(Text::new(..)).on_press(..)` widget, so that expression
+/// lives here once instead of being repeated at every call site. The label
+/// is `'static` — a literal, or a `&'static str` such as [`play_pause_label`]
+/// returns — so the resulting button is `'static` like the view builders
+/// that push it.
 fn labeled_button(label: &'static str, message: Message) -> Button<'static, Message> {
     Button::new(Text::new(label)).on_press(message)
 }
@@ -183,12 +184,24 @@ fn play_pause_label(is_playing: bool) -> &'static str {
     if is_playing { "Pause" } else { "Play" }
 }
 
-/// The transport row: the Play/Pause, Stop, Previous, and Next buttons and
-/// the volume slider. `volume` is the slider's current value; dragging it
-/// emits `Message::VolumeChange`. The Stop label is static — Stop is always
-/// pressable, even when already stopped, as in Winamp — so no
-/// `play_pause_label`-style helper is needed.
-pub fn view_transport_controls(is_playing: bool, volume: f32) -> Element<'static, Message> {
+/// The Repeat button's label: "Repeat: On" while Repeat is on, "Repeat:
+/// Off" when it is off. Pure so the label logic is testable without an
+/// iced `Element`, like [`play_pause_label`].
+fn repeat_label(repeat: bool) -> &'static str {
+    if repeat { "Repeat: On" } else { "Repeat: Off" }
+}
+
+/// The transport row: the Play/Pause, Stop, Previous, Next, and Repeat
+/// buttons and the volume slider. `volume` is the slider's current value;
+/// dragging it emits `Message::VolumeChange`. `repeat` is the shared Repeat
+/// flag, shown on the Repeat button and toggled by pressing it. The Stop
+/// label is static — Stop is always pressable, even when already stopped, as
+/// in Winamp — so no `play_pause_label`-style helper is needed.
+pub fn view_transport_controls(
+    is_playing: bool,
+    volume: f32,
+    repeat: bool,
+) -> Element<'static, Message> {
     Row::new()
         .push(labeled_button(
             play_pause_label(is_playing),
@@ -200,6 +213,8 @@ pub fn view_transport_controls(is_playing: bool, volume: f32) -> Element<'static
         .push(labeled_button("Previous", Message::PreviousTrack))
         .push(spacer(20.0))
         .push(labeled_button("Next", Message::NextTrack))
+        .push(spacer(20.0))
+        .push(labeled_button(repeat_label(repeat), Message::ToggleRepeat))
         .push(spacer(20.0))
         .push(
             Slider::new(0.0..=1.0, volume, Message::VolumeChange)
@@ -213,8 +228,8 @@ pub fn view_transport_controls(is_playing: bool, volume: f32) -> Element<'static
 mod tests {
     use super::{
         CurrentView, Message, album_row, artist_row, can_go_back, now_playing_label,
-        play_pause_label, song_row, view_albums, view_artists, view_back_button, view_now_playing,
-        view_songs, view_transport_controls,
+        play_pause_label, repeat_label, song_row, view_albums, view_artists, view_back_button,
+        view_now_playing, view_songs, view_transport_controls,
     };
     use crate::library::{sample_album, sample_artist, sample_song};
     use crate::sample_library::sample_library;
@@ -326,6 +341,12 @@ mod tests {
         assert_eq!(play_pause_label(false), "Play");
     }
 
+    #[test]
+    fn repeat_label_mirrors_repeat_state() {
+        assert_eq!(repeat_label(true), "Repeat: On");
+        assert_eq!(repeat_label(false), "Repeat: Off");
+    }
+
     // The `view_*` builders are the code that runs on every frame, and no
     // other test reaches them: the row tests stop at the (title, label,
     // message) tuples and the `update` tests stop before the view layer, so
@@ -335,8 +356,8 @@ mod tests {
     // expose no tree introspection, so the observable contract here is that
     // each builder constructs its widget tree without panicking over the
     // input space the app actually produces: every browse view over both the
-    // loaded library and the pre-load empty buffer, both play states, and
-    // the volume endpoints the update arm can store.
+    // loaded library and the pre-load empty buffer, both play states, the
+    // volume endpoints the update arm can store, and both repeat states.
 
     #[test]
     fn browse_views_construct_over_the_loaded_library() {
@@ -369,13 +390,16 @@ mod tests {
     }
 
     #[test]
-    fn transport_controls_construct_for_both_play_states_and_volume_endpoints() {
-        // `view()` passes the shared state's `is_playing` and clamped
-        // `volume` straight through, so build the slider for every value the
-        // update arm can store, in both play states.
+    fn transport_controls_construct_for_both_play_states_volume_endpoints_and_repeat_states() {
+        // `view()` passes the shared state's `is_playing`, clamped `volume`,
+        // and `repeat` straight through, so build the transport row for every
+        // value the update arm can store, in both play and repeat states.
         for volume in [0.0, 0.5, 1.0] {
-            let _playing = view_transport_controls(true, volume);
-            let _stopped = view_transport_controls(false, volume);
+            for is_playing in [false, true] {
+                for repeat in [false, true] {
+                    let _controls = view_transport_controls(is_playing, volume, repeat);
+                }
+            }
         }
     }
 }

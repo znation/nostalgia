@@ -9,13 +9,21 @@
 use crate::library::Song;
 
 /// The id of the song one step from `current` in `songs`, in the given
-/// direction, wrapping around the ends: forward for Next (starting at the
-/// first song when there is no current one), backward for Previous (starting
-/// at the last). `None` when `songs` is empty. Both direction lookups share
-/// the empty guard, the current-song position scan, and the wrap-around, so
-/// the stepping logic lives here once and the two public functions below only
-/// name the direction.
-fn stepped_track_id(songs: &[Song], current: Option<&str>, forward: bool) -> Option<String> {
+/// direction. With `repeat` (Repeat on) the step wraps around the ends:
+/// forward for Next (starting at the first song when there is no current
+/// one), backward for Previous (starting at the last). With `repeat` off
+/// (the Winamp default), a step that would cross the boundary stays on the
+/// edge song instead of wrapping, so the button re-lands on the current
+/// track. `None` when `songs` is empty. Both direction lookups share the
+/// empty guard, the current-song position scan, and the boundary handling,
+/// so the stepping logic lives here once and the two public functions below
+/// only name the direction.
+fn stepped_track_id(
+    songs: &[Song],
+    current: Option<&str>,
+    forward: bool,
+    repeat: bool,
+) -> Option<String> {
     if songs.is_empty() {
         return None;
     }
@@ -23,30 +31,47 @@ fn stepped_track_id(songs: &[Song], current: Option<&str>, forward: bool) -> Opt
     let stepped = match index {
         // No current song (or one not in the list): land on the edge the step
         // moves toward — the first song going forward, the last going backward.
+        // With no current there is no boundary to respect, so this holds with
+        // Repeat either on or off.
         None if forward => 0,
         None => songs.len() - 1,
-        // One step in the direction, wrapping at the boundary. Backward is
-        // `len - 1` forward steps mod `len`.
-        Some(i) if forward => (i + 1) % songs.len(),
-        Some(i) => (i + songs.len() - 1) % songs.len(),
+        // One step in the direction. With Repeat on, wrap at the boundary
+        // (backward is `len - 1` forward steps mod `len`); with Repeat off,
+        // stay on the edge song rather than crossing it.
+        Some(i) if forward => {
+            if repeat {
+                (i + 1) % songs.len()
+            } else {
+                (i + 1).min(songs.len() - 1)
+            }
+        }
+        Some(i) => {
+            if repeat {
+                (i + songs.len() - 1) % songs.len()
+            } else {
+                i.saturating_sub(1)
+            }
+        }
     };
     Some(songs[stepped].id.clone())
 }
 
 /// The id of the song to play when Next is pressed: one past `current` in
-/// `songs`, wrapping from the end back to the start. `None` when there is
-/// nothing to step through (empty `songs`); with no `current` (or an unknown
-/// one), the first song.
-pub fn next_track_id(songs: &[Song], current: Option<&str>) -> Option<String> {
-    stepped_track_id(songs, current, true)
+/// `songs`. With `repeat`, wraps from the end back to the start; without it
+/// (the default), stays on the last song. `None` when there is nothing to
+/// step through (empty `songs`); with no `current` (or an unknown one), the
+/// first song regardless of `repeat`.
+pub fn next_track_id(songs: &[Song], current: Option<&str>, repeat: bool) -> Option<String> {
+    stepped_track_id(songs, current, true, repeat)
 }
 
 /// The id of the song to play when Previous is pressed: one before `current`
-/// in `songs`, wrapping from the start back to the end. `None` when there is
-/// nothing to step through (empty `songs`); with no `current` (or an unknown
-/// one), the last song.
-pub fn previous_track_id(songs: &[Song], current: Option<&str>) -> Option<String> {
-    stepped_track_id(songs, current, false)
+/// in `songs`. With `repeat`, wraps from the start back to the end; without
+/// it (the default), stays on the first song. `None` when there is nothing to
+/// step through (empty `songs`); with no `current` (or an unknown one), the
+/// last song regardless of `repeat`.
+pub fn previous_track_id(songs: &[Song], current: Option<&str>, repeat: bool) -> Option<String> {
+    stepped_track_id(songs, current, false, repeat)
 }
 
 #[cfg(test)]
@@ -56,14 +81,14 @@ mod tests {
 
     #[test]
     fn empty_list_is_a_noop_for_both_directions() {
-        assert_eq!(next_track_id(&[], Some("song-1")), None);
-        assert_eq!(previous_track_id(&[], Some("song-1")), None);
+        assert_eq!(next_track_id(&[], Some("song-1"), false), None);
+        assert_eq!(previous_track_id(&[], Some("song-1"), false), None);
     }
 
     #[test]
     fn next_without_current_starts_at_first() {
         assert_eq!(
-            next_track_id(&stepping_songs(), None),
+            next_track_id(&stepping_songs(), None, false),
             Some("song-1".to_string())
         );
     }
@@ -71,7 +96,7 @@ mod tests {
     #[test]
     fn previous_without_current_starts_at_last() {
         assert_eq!(
-            previous_track_id(&stepping_songs(), None),
+            previous_track_id(&stepping_songs(), None, false),
             Some("song-3".to_string())
         );
     }
@@ -79,7 +104,7 @@ mod tests {
     #[test]
     fn next_with_unknown_current_starts_at_first() {
         assert_eq!(
-            next_track_id(&stepping_songs(), Some("nope")),
+            next_track_id(&stepping_songs(), Some("nope"), false),
             Some("song-1".to_string())
         );
     }
@@ -87,7 +112,7 @@ mod tests {
     #[test]
     fn previous_with_unknown_current_starts_at_last() {
         assert_eq!(
-            previous_track_id(&stepping_songs(), Some("nope")),
+            previous_track_id(&stepping_songs(), Some("nope"), false),
             Some("song-3".to_string())
         );
     }
@@ -95,11 +120,11 @@ mod tests {
     #[test]
     fn next_advances_through_the_list() {
         assert_eq!(
-            next_track_id(&stepping_songs(), Some("song-1")),
+            next_track_id(&stepping_songs(), Some("song-1"), false),
             Some("song-2".to_string())
         );
         assert_eq!(
-            next_track_id(&stepping_songs(), Some("song-2")),
+            next_track_id(&stepping_songs(), Some("song-2"), false),
             Some("song-3".to_string())
         );
     }
@@ -107,7 +132,7 @@ mod tests {
     #[test]
     fn previous_reverses_through_the_list() {
         assert_eq!(
-            previous_track_id(&stepping_songs(), Some("song-2")),
+            previous_track_id(&stepping_songs(), Some("song-2"), false),
             Some("song-1".to_string())
         );
     }
@@ -115,7 +140,7 @@ mod tests {
     #[test]
     fn next_wraps_from_last_to_first() {
         assert_eq!(
-            next_track_id(&stepping_songs(), Some("song-3")),
+            next_track_id(&stepping_songs(), Some("song-3"), true),
             Some("song-1".to_string())
         );
     }
@@ -123,8 +148,29 @@ mod tests {
     #[test]
     fn previous_wraps_from_first_to_last() {
         assert_eq!(
-            previous_track_id(&stepping_songs(), Some("song-1")),
+            previous_track_id(&stepping_songs(), Some("song-1"), true),
             Some("song-3".to_string())
+        );
+    }
+
+    // With Repeat off (the Winamp default) a step that would cross the
+    // album's edge stays on the edge song instead of wrapping: Next from the
+    // last song re-lands on the last, Previous from the first on the first.
+    // The wrap tests above pass `true`; these pin the off half of the
+    // boundary, which no other test drives.
+    #[test]
+    fn next_stays_on_last_without_repeat() {
+        assert_eq!(
+            next_track_id(&stepping_songs(), Some("song-3"), false),
+            Some("song-3".to_string())
+        );
+    }
+
+    #[test]
+    fn previous_stays_on_first_without_repeat() {
+        assert_eq!(
+            previous_track_id(&stepping_songs(), Some("song-1"), false),
+            Some("song-1".to_string())
         );
     }
 
@@ -132,11 +178,11 @@ mod tests {
     fn single_song_steps_to_itself_in_both_directions() {
         let songs = single_song_album();
         assert_eq!(
-            next_track_id(&songs, Some("song-1")),
+            next_track_id(&songs, Some("song-1"), false),
             Some("song-1".to_string())
         );
         assert_eq!(
-            previous_track_id(&songs, Some("song-1")),
+            previous_track_id(&songs, Some("song-1"), false),
             Some("song-1".to_string())
         );
     }
@@ -154,7 +200,13 @@ mod tests {
     #[test]
     fn single_song_with_no_current_steps_to_itself_in_both_directions() {
         let songs = single_song_album();
-        assert_eq!(next_track_id(&songs, None), Some("song-1".to_string()));
-        assert_eq!(previous_track_id(&songs, None), Some("song-1".to_string()));
+        assert_eq!(
+            next_track_id(&songs, None, false),
+            Some("song-1".to_string())
+        );
+        assert_eq!(
+            previous_track_id(&songs, None, false),
+            Some("song-1".to_string())
+        );
     }
 }

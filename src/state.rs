@@ -11,6 +11,9 @@
 pub struct AppState {
     pub current_track: Option<String>,
     pub is_playing: bool,
+    /// Whether Previous/Next wrap around the current album's ends (Repeat on)
+    /// or stop at the edge (Repeat off). Starts off, as in Winamp.
+    pub repeat: bool,
     pub volume: f32,
 }
 
@@ -21,12 +24,13 @@ pub struct AppState {
 /// place, instead of in a struct literal repeated at each site. The starting
 /// volume is 0.5, not the derived 0.0, so a manual impl is required.
 ///
-/// Initial state: nothing loaded, stopped, at 50% volume.
+/// Initial state: nothing loaded, stopped, Repeat off, at 50% volume.
 impl Default for AppState {
     fn default() -> Self {
         Self {
             current_track: None,
             is_playing: false,
+            repeat: false,
             volume: 0.5,
         }
     }
@@ -38,6 +42,14 @@ impl AppState {
     /// call site) puts the toggling semantics next to the field they mutate.
     pub fn toggle_playing(&mut self) {
         self.is_playing = !self.is_playing;
+    }
+
+    /// Flip the Repeat flag in place. The UI's Repeat button is the only
+    /// toggle caller; keeping the flip here (rather than inlined at the call
+    /// site) puts the toggling semantics next to the field they mutate, like
+    /// `toggle_playing`.
+    pub fn toggle_repeat(&mut self) {
+        self.repeat = !self.repeat;
     }
 
     /// Clear the playback flag in place, leaving `current_track` in place so
@@ -78,6 +90,7 @@ mod tests {
         let state = AppState::default();
         assert_eq!(state.current_track, None);
         assert!(!state.is_playing);
+        assert!(!state.repeat);
         assert_eq!(state.volume, 0.5);
     }
 
@@ -100,6 +113,23 @@ mod tests {
 
         state.toggle_playing();
         assert!(!state.is_playing);
+    }
+
+    #[test]
+    fn toggle_repeat_flips_only_the_repeat_flag() {
+        let mut state = AppState::default();
+        let track = state.current_track.clone();
+        let volume = state.volume;
+        assert!(!state.repeat);
+
+        state.toggle_repeat();
+        assert!(state.repeat);
+        assert_eq!(state.current_track, track);
+        assert!(!state.is_playing);
+        assert_eq!(state.volume, volume);
+
+        state.toggle_repeat();
+        assert!(!state.repeat);
     }
 
     #[test]

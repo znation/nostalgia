@@ -5,7 +5,14 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Add a Repeat toggle to the transport controls (planned 2026-10-06)
+_None yet._
+
+
+## Done
+
+### Add a Repeat toggle to the transport controls (done 2026-10-06)
+
+Found by plan 2026-10-06.
 
 **Goal.** Match Winamp's Repeat control: a Repeat button in the transport row that switches Previous/Next through the current album's songs between wrap-around (Repeat on) and stop-at-the-edge (Repeat off) stepping. Today `transport::next_track_id` and `transport::previous_track_id` always wrap at the album's ends, so the current default is indistinguishable from Repeat-on; this feature makes wrapping explicitly opt-in and starts Repeat off, as Winamp does.
 
@@ -23,8 +30,6 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 - The transport row renders a Repeat button whose label tracks the shared `repeat` flag, and pressing it flips that flag in shared state.
 - `make check` is green: `cargo fmt --check`, `cargo clippy --all-targets`, and the full `cargo test` suite pass.
 
-
-## Done
 
 ### Highlight the currently playing song in the Songs browse view (done 2026-10-06)
 

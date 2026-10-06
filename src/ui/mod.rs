@@ -33,6 +33,7 @@ pub fn init_ui(state: Arc<Mutex<AppState>>) -> iced::Result {
 enum Message {
     PlayPause,
     Stop,
+    ToggleRepeat,
     VolumeChange(f32),
     NextTrack,
     PreviousTrack,
@@ -227,10 +228,12 @@ where
 /// there is nothing to step through. Both transport update arms used to
 /// repeat this lock-then-dispatch block; the direction comes in as a function
 /// so the stepping arithmetic stays in `transport` and the wiring lives here
-/// once.
+/// once. The shared Repeat flag is read under the same lock and passed
+/// through to the stepping function, so the wrap-vs-stop-at-the-edge decision
+/// (see `transport::next_track_id`) stays in `transport` too.
 fn step_track(
     player: &WinampPlayer,
-    step: fn(&[Song], Option<&str>) -> Option<String>,
+    step: fn(&[Song], Option<&str>, bool) -> Option<String>,
 ) -> Task<Message> {
     // The stepped song is computed under the state lock, borrowing the
     // current track directly. The earlier version cloned the `current_track`
@@ -238,17 +241,17 @@ fn step_track(
     // the per-frame now-playing path used to do — so the lock now covers the
     // pure stepping scan (fast, and `step` never locks anything itself).
     let state = player.state.blocking_lock();
-    match step(&player.songs, state.current_track.as_deref()) {
+    match step(&player.songs, state.current_track.as_deref(), state.repeat) {
         Some(track_id) => Task::done(Message::TrackSelected(track_id)),
         None => Task::none(),
     }
 }
 
 /// Locks the shared playback state, applies `mutation` to it, and returns no
-/// task. The Play/Pause, Stop, and VolumeChange arms all repeat the same
-/// synchronous shared-state update — `blocking_lock`, one mutation, then
-/// `Task::none()` — so the lock-and-noop shape lives here once and each arm
-/// only names its mutation. Asynchronous work (fetches) goes through
+/// task. The Play/Pause, Stop, ToggleRepeat, and VolumeChange arms all repeat
+/// the same synchronous shared-state update — `blocking_lock`, one mutation,
+/// then `Task::none()` — so the lock-and-noop shape lives here once and each
+/// arm only names its mutation. Asynchronous work (fetches) goes through
 /// [`fetch_into`] instead.
 fn mutate_state(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> Task<Message> {
     let mut state = player.state.blocking_lock();
@@ -265,6 +268,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         // distinction: once real playback lands, Stop also resets the track
         // position while Pause keeps it.
         Message::Stop => mutate_state(player, AppState::stop),
+        Message::ToggleRepeat => mutate_state(player, AppState::toggle_repeat),
         Message::VolumeChange(volume) => {
             mutate_state(player, |state| state.volume = state::clamp_volume(volume))
         }
@@ -335,12 +339,13 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // (see [`WinampPlayer::now_playing_label`]) — the label outlives the lock,
     // but the owned `String` clone of the current track is not needed, so the
     // per-frame path allocates only the resolved label.
-    let (now_playing, is_playing, volume) = {
+    let (now_playing, is_playing, volume, repeat) = {
         let state = player.state.blocking_lock();
         (
             player.now_playing_label(state.current_track.as_deref()),
             state.is_playing,
             state.volume,
+            state.repeat,
         )
     };
 
@@ -360,7 +365,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
 
     let mut column = Column::new()
         .push(views::view_now_playing(now_playing))
-        .push(views::view_transport_controls(is_playing, volume));
+        .push(views::view_transport_controls(is_playing, volume, repeat));
     // The Back button sits above the list it navigates and exists only where
     // the hierarchy has a level above to return to (see `views::can_go_back`).
     if views::can_go_back(&player.current_view) {
@@ -459,6 +464,21 @@ mod tests {
 
         let _ = update(&mut player, Message::PlayPause);
         assert!(!state.blocking_lock().is_playing);
+    }
+
+    // `Message::ToggleRepeat` uses `blocking_lock`, which panics inside an
+    // async runtime, so this stays a plain test (no `#[tokio::test]`), like
+    // `play_pause_toggles_is_playing`.
+    #[test]
+    fn toggle_repeat_flips_shared_state() {
+        let (mut player, state) = test_player();
+        assert!(!state.blocking_lock().repeat);
+
+        let _ = update(&mut player, Message::ToggleRepeat);
+        assert!(state.blocking_lock().repeat);
+
+        let _ = update(&mut player, Message::ToggleRepeat);
+        assert!(!state.blocking_lock().repeat);
     }
 
     // `Message::Stop` uses `blocking_lock`, which panics inside an async
@@ -833,6 +853,28 @@ mod tests {
         assert_no_task(task);
     }
 
+    // The Next arm forwards the shared Repeat flag to the transport helper:
+    // from the last song, Next wraps to the first when Repeat is on and
+    // re-lands on the last when it is off. The arithmetic is pinned in
+    // `transport.rs` (`next_wraps_from_last_to_first` and
+    // `next_stays_on_last_without_repeat`); this pins the arm's wiring over
+    // the shared flag, which no other test drives.
+    #[test]
+    fn next_track_follows_the_shared_repeat_flag_at_the_albums_end() {
+        let (mut player, state) = test_player();
+        player.songs = stepping_songs();
+        state.blocking_lock().current_track = Some("song-3".to_string());
+
+        // Repeat off (the default): Next from the last song stays on it.
+        let task = update(&mut player, Message::NextTrack);
+        assert_track_selected(task, "song-3");
+
+        // Repeat on: Next from the last song wraps to the first.
+        state.blocking_lock().repeat = true;
+        let task = update(&mut player, Message::NextTrack);
+        assert_track_selected(task, "song-1");
+    }
+
     /// Feeds a `*Loaded` message built from `items` back through `update` and
     /// asserts the list lands in `buffer` unchanged. The three
     /// `*_loaded_populates_list` tests — artists, albums, songs — each used
@@ -1089,10 +1131,10 @@ mod tests {
     // introspection, so the observable contract — as with the `views.rs`
     // builder tests — is that `view` builds its widget tree without panicking
     // over the space the app actually produces: every browse view (including
-    // the pre-load empty buffers), both play states, the volume endpoints the
-    // update arm can store, and each now-playing resolution. `view` uses
-    // `blocking_lock`, which panics inside an async runtime, so this stays a
-    // plain test.
+    // the pre-load empty buffers), both play states, both repeat states, the
+    // volume endpoints the update arm can store, and each now-playing
+    // resolution. `view` uses `blocking_lock`, which panics inside an async
+    // runtime, so this stays a plain test.
     #[test]
     fn view_constructs_over_the_apps_full_input_space() {
         let (mut player, state) = test_player();
@@ -1117,6 +1159,7 @@ mod tests {
 
         let now_playing_options = [None, Some("song-1"), Some("no-such-song")];
         let play_states = [false, true];
+        let repeats = [false, true];
         let volumes = [0.0, 0.5, 1.0];
 
         for current_view in [
@@ -1127,14 +1170,17 @@ mod tests {
             player.current_view = current_view;
             for current_track in now_playing_options {
                 for is_playing in play_states {
-                    for volume in volumes {
-                        {
-                            let mut state = state.blocking_lock();
-                            state.current_track = current_track.map(str::to_string);
-                            state.is_playing = is_playing;
-                            state.volume = volume;
+                    for repeat in repeats {
+                        for volume in volumes {
+                            {
+                                let mut state = state.blocking_lock();
+                                state.current_track = current_track.map(str::to_string);
+                                state.is_playing = is_playing;
+                                state.repeat = repeat;
+                                state.volume = volume;
+                            }
+                            let _screen = view(&player);
                         }
-                        let _screen = view(&player);
                     }
                 }
             }
