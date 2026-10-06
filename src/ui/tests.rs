@@ -637,6 +637,44 @@ fn track_selected_records_the_played_tracks_title() {
     );
 }
 
+// The recording above only covers a `TrackSelected` whose id is still in the
+// loaded `songs`, so the arm's `if let Some(song) = player.songs.iter().find(..)`
+// guard is never entered with `None`. A stale click reaches that branch: the
+// row was rendered from the album the user just browsed away from, and its
+// click message is processed after `SongsLoaded` replaced `songs`, so the id
+// no longer resolves to a song and the title cannot be recovered. The guard
+// must then leave `known_titles` exactly as it was — an already-recorded
+// title survives the stale click, and an id that was never loaded adds no
+// entry (the index stays proportional to songs actually played). A
+// regression that fell through to a fallback insert would either clobber a
+// known title or grow the index with stale ids.
+#[test]
+fn track_selected_ignores_an_id_no_longer_in_the_songs_buffer() {
+    let (mut player, _state) = test_player();
+
+    // Play song-1 (title "One") while album-1 is loaded, recording its title.
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    let _ = update(&mut player, Message::TrackSelected("song-1".to_string()));
+
+    // Browse to album-2, replacing `songs`, then deliver the stale click for
+    // the just-left song and one for an id never loaded at all.
+    let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
+    let _ = update(&mut player, Message::TrackSelected("song-1".to_string()));
+    let _ = update(&mut player, Message::TrackSelected("song-9".to_string()));
+
+    // The stale clicks changed nothing: the known title survived and no entry
+    // was added for the id that was never loaded.
+    assert_eq!(
+        player.known_titles.get("song-1").map(String::as_str),
+        Some("One")
+    );
+    assert!(!player.known_titles.contains_key("song-9"));
+    assert_eq!(player.known_titles.len(), 1);
+
+    // The Now Playing bar still names the playing track rather than its id.
+    assert_eq!(player.now_playing_label(Some("song-1")), "One");
+}
+
 // Browsing to a new album must *replace* the Songs view's buffer, not
 // append to it: after loading album-1's songs and then browsing to
 // album-2, `player.songs` holds only album-2's song — otherwise the
