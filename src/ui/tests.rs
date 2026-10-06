@@ -681,87 +681,6 @@ fn now_playing_label_keeps_the_track_name_after_browsing_to_another_album() {
     assert_eq!(player.now_playing_label(current_track.as_deref()), "One");
 }
 
-#[test]
-fn loaded_or_empty_maps_ok_and_err_to_loaded() {
-    let albums = vec![sample_album()];
-
-    let ok_message =
-        loaded_or_empty::<Album, String>(Ok(albums.clone()), Message::AlbumsLoaded, |_| {
-            unreachable!("ok path must not report an error")
-        });
-    assert!(matches!(ok_message, Message::AlbumsLoaded(v) if v == albums));
-
-    let err_message =
-        loaded_or_empty::<Album, String>(Err("boom".to_string()), Message::AlbumsLoaded, |_| {});
-    assert!(matches!(err_message, Message::AlbumsLoaded(v) if v.is_empty()));
-}
-
-#[test]
-fn loaded_or_empty_reports_the_error_before_falling_back_to_empty() {
-    // A failed browse fetch must not vanish silently: the load path
-    // reports the error (to stderr in production; here to a recording
-    // closure) and still falls back to an empty list so the UI stays
-    // usable. `loaded_or_empty` takes the reporter as a parameter so this
-    // contract is testable without capturing stderr.
-    let mut reported: Option<String> = None;
-    let message =
-        loaded_or_empty::<Album, String>(Err("boom".to_string()), Message::AlbumsLoaded, |err| {
-            reported = Some(err.clone())
-        });
-
-    assert_eq!(reported.as_deref(), Some("boom"));
-    assert!(matches!(message, Message::AlbumsLoaded(v) if v.is_empty()));
-}
-
-#[test]
-fn played_or_reported_reports_a_failed_play_and_still_completes() {
-    // A failed play must not vanish silently: the playback path reports
-    // the error (to stderr in production; here to a recording closure)
-    // and still emits the `TrackPlayed` completion so the UI's handoff
-    // stays intact. `played_or_reported` takes the reporter as a
-    // parameter so this contract is testable without capturing stderr.
-    let mut reported: Option<String> = None;
-    let message = played_or_reported::<String>(Err("boom".to_string()), |err| {
-        reported = Some(err.clone());
-    });
-
-    assert_eq!(reported.as_deref(), Some("boom"));
-    assert!(matches!(message, Message::TrackPlayed));
-
-    // The Ok path completes with the same message and reports nothing.
-    let mut reported_ok: Option<String> = None;
-    let ok_message = played_or_reported::<String>(Ok(()), |err| {
-        reported_ok = Some(err.clone());
-    });
-    assert!(reported_ok.is_none());
-    assert!(matches!(ok_message, Message::TrackPlayed));
-}
-
-#[test]
-fn fetch_failure_report_names_the_fetch_and_includes_the_error() {
-    // The browse error report must identify the failing query (the fetch
-    // context plus the underlying error), not just say a fetch failed —
-    // otherwise a broken backend would log three identical lines for the
-    // artists, albums, and songs paths with no way to tell which query
-    // failed. The format is pinned here so the contract can't drift.
-    let report = fetch_failure_report("loading albums for artist \"artist-1\"", &"boom");
-    assert_eq!(
-        report,
-        "music-library fetch failed (loading albums for artist \"artist-1\"); showing an empty list: boom"
-    );
-}
-
-#[test]
-fn play_failure_report_names_the_track_and_includes_the_error() {
-    // The playback error report is the sibling of the browse one: it must
-    // name the offending track and include the underlying error, so a
-    // rejected play is diagnosable from the log. `Display` formatting is
-    // pinned here too — `&str` renders bare, so a regression to `Debug`
-    // would quote it as `"boom"`.
-    let report = play_failure_report("track-1", &"boom");
-    assert_eq!(report, "failed to play track \"track-1\": boom");
-}
-
 // `fetch_into` schedules the fetch as an iced `Task`; the arm itself only
 // builds it, so the real behavior lives in the returned task. Drive that
 // task to completion and assert the mapped `*Loaded` message, as the
@@ -790,7 +709,7 @@ async fn fetch_into_schedules_fetch_and_maps_result_to_loaded_message() {
 // `Err` must still yield the matching `*Loaded` message with an empty
 // list, so the browse view falls back to an empty list instead of waiting
 // forever on a list that never arrives. `loaded_or_empty`'s error branch
-// is tested directly above, but no test drives a failing fetch *through*
+// is tested in `loading`'s test module, but no test drives a failing fetch *through*
 // `fetch_into` — the real service always succeeds, so the error path is
 // reachable only by injecting a failing fetch closure, which is exactly
 // what this does. A regression that swallowed the error (or failed to

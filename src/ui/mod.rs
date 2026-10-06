@@ -1,14 +1,16 @@
 //! The iced application: the `WinampPlayer` app struct, its `Message` event
 //! type, and the `update`/`view` loop `init_ui` hands to iced. Widget
 //! construction lives in the `views` submodule (browse lists, Now Playing bar,
-//! transport controls, equalizer panel) and the Previous/Next stepping arithmetic in
-//! `transport`; this module wires those to the shared `AppState` and the
-//! `AppleMusicService` seam. Its unit tests live in the `tests` submodule.
+//! transport controls, equalizer panel), the Previous/Next stepping arithmetic
+//! in `transport`, and the library-fetch/error-reporting adapter in `loading`;
+//! this module wires those to the shared `AppState` and the `AppleMusicService`
+//! seam. Its unit tests live in the `tests` submodule.
 
 use iced::{Element, Task, widget::Column};
-use std::{borrow::Cow, collections::HashMap, future::Future, sync::Arc};
+use std::{borrow::Cow, collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 
+mod loading;
 mod theme;
 mod transport;
 mod views;
@@ -18,6 +20,7 @@ use crate::{
     library::{Album, Artist, Song},
     state::AppState,
 };
+use loading::{fetch_into, play_failure_report, played_or_reported};
 
 /// Runs the UI, blocking until the window is closed.
 ///
@@ -116,42 +119,6 @@ fn boot(state: Arc<Mutex<AppState>>) -> (WinampPlayer, Task<Message>) {
     (WinampPlayer::new(state), Task::done(Message::LoadArtists))
 }
 
-/// Maps a library-fetch `Result` to its matching `*Loaded` message: the
-/// fetched items on success, an empty list on error — after handing the
-/// error to `report_error`, so a failed fetch is never dropped silently.
-/// Shared by the artists, albums, and songs load paths so the error fallback
-/// (and its reporting) stays identical in all three. `report_error` is
-/// injected rather than hardcoded so the reporting contract is testable
-/// without capturing stderr.
-fn loaded_or_empty<T, E>(
-    result: Result<Vec<T>, E>,
-    loaded: impl Fn(Vec<T>) -> Message,
-    report_error: impl FnOnce(&E),
-) -> Message {
-    match result {
-        Ok(items) => loaded(items),
-        Err(err) => {
-            report_error(&err);
-            loaded(Vec::new())
-        }
-    }
-}
-
-/// Maps a playback `Result` to the `TrackPlayed` completion message, handing
-/// any error to `report_error` first so a failed play is never dropped
-/// silently — a backend that rejects a track would otherwise look like the
-/// button did nothing. The playback twin of [`loaded_or_empty`], which
-/// cannot serve here: it maps `Result<Vec<T>, _>` onto a `*Loaded` message,
-/// while a play has no payload to load, only a completion. `report_error`
-/// is injected rather than hardcoded so the reporting contract is testable
-/// without capturing stderr.
-fn played_or_reported<E>(result: Result<(), E>, report_error: impl FnOnce(&E)) -> Message {
-    if let Err(err) = result {
-        report_error(&err);
-    }
-    Message::TrackPlayed
-}
-
 /// Stores a freshly fetched list into the player's matching buffer, with no
 /// further work. The `ArtistsLoaded`, `AlbumsLoaded`, and `SongsLoaded`
 /// update arms all just store. The store-and-noop shape lives here once
@@ -159,57 +126,6 @@ fn played_or_reported<E>(result: Result<(), E>, report_error: impl FnOnce(&E)) -
 fn store_loaded<T>(buffer: &mut Vec<T>, items: Vec<T>) -> Task<Message> {
     *buffer = items;
     Task::none()
-}
-
-/// Formats the browse-fetch failure report: names the fetch that failed
-/// (e.g. "loading albums for artist \"artist-1\""), states the empty-list
-/// fallback, and includes the underlying error. The play path names the
-/// offending track; this names the offending query, so a failed browse tells
-/// the user which fetch failed and what it was fetching. Kept as a pure
-/// function so the report contract is testable without capturing stderr.
-/// The error is formatted with `Display`, not `Debug`, so a real backend's
-/// error reads as its human-readable cause (see `AppleMusicError`'s `Display`
-/// impl) rather than a struct dump.
-fn fetch_failure_report<E: std::fmt::Display>(context: &str, err: &E) -> String {
-    format!("music-library fetch failed ({context}); showing an empty list: {err}")
-}
-
-/// Formats the playback failure report: names the offending track and
-/// includes the underlying error. The playback twin of
-/// [`fetch_failure_report`], and pure for the same reason — the play path's
-/// stderr report is testable without capturing stderr. The error is formatted
-/// with `Display` so a real backend's failure reads as its human-readable
-/// cause rather than a struct dump.
-fn play_failure_report<E: std::fmt::Display>(track_id: &str, err: &E) -> String {
-    format!("failed to play track {track_id:?}: {err}")
-}
-
-/// Runs a library-fetch future through iced's runtime, mapping its `Result`
-/// onto the matching `*Loaded` message (empty list on error, via
-/// [`loaded_or_empty`], with the error reported to stderr via
-/// [`fetch_failure_report`]). `context` names the fetch — "loading favorite
-/// artists", "loading albums for artist \"artist-1\"", or "loading songs from
-/// album \"album-1\"" — so a failed browse reports *which* query failed and
-/// what it was fetching, not just that a fetch failed. Shared by the artists,
-/// albums, and songs load arms so none of them repeats the
-/// clone-the-service-then-`Task::perform` boilerplate.
-fn fetch_into<T, E, Fut>(
-    service: &AppleMusicService,
-    context: String,
-    fetch: impl FnOnce(AppleMusicService) -> Fut + Send + 'static,
-    loaded: impl Fn(Vec<T>) -> Message + Send + 'static,
-) -> Task<Message>
-where
-    T: Send + 'static,
-    E: std::fmt::Display + Send + 'static,
-    Fut: Future<Output = Result<Vec<T>, E>> + Send + 'static,
-{
-    let service = service.clone();
-    Task::perform(async move { fetch(service).await }, move |result| {
-        loaded_or_empty(result, loaded, |err| {
-            eprintln!("{}", fetch_failure_report(&context, err))
-        })
-    })
 }
 
 /// The task the Next/Previous buttons schedule: step the current track
