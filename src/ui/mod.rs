@@ -783,6 +783,38 @@ mod tests {
         assert_track_selected(task, "song-3");
     }
 
+    // Browsing to a different album replaces `player.songs` with the new
+    // album's list while the shared `current_track` still names a song from
+    // the album just left — the same browse-away state the now-playing-label
+    // regression (`now_playing_label_keeps_the_track_name_after_browsing_to_another_album`)
+    // is about. Pressing Next or Previous must then step within the newly
+    // browsed album's songs — Next onto its first, Previous onto its last —
+    // not do nothing because the playing track is no longer in the buffer.
+    // `transport.rs` pins the arithmetic for an unknown current
+    // (`next_with_unknown_current_starts_at_first` and
+    // `previous_with_unknown_current_starts_at_last`), but no arm-level test
+    // drives this exact browse-away-then-step flow: the other stepping wiring
+    // tests set a current track that IS in `player.songs` or load no songs, so
+    // a guard in `step_track` that bailed on a current unknown to this album
+    // would clear every existing test.
+    #[test]
+    fn stepping_after_browsing_away_steps_within_the_new_albums_songs() {
+        let (mut player, state) = test_player();
+        player.songs = stepping_songs();
+        // Played song-4 (an album-2 song) from the library, then browsed to
+        // album-1's songs (now the current buffer): the current track names a
+        // song that is not in the buffer, exactly as after a browse-away.
+        state.blocking_lock().current_track = Some("song-4".to_string());
+
+        let next = update(&mut player, Message::NextTrack);
+        assert_track_selected(next, "song-1");
+
+        // The buttons only schedule a step — neither mutates the current
+        // track — so Previous still sees the same browse-away state.
+        let previous = update(&mut player, Message::PreviousTrack);
+        assert_track_selected(previous, "song-3");
+    }
+
     #[test]
     fn next_track_with_no_songs_loaded_does_nothing() {
         let (mut player, _state) = test_player();
