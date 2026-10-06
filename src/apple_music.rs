@@ -36,6 +36,24 @@ impl std::fmt::Display for AppleMusicError {
 
 impl std::error::Error for AppleMusicError {}
 
+// The seam's error constructor is kept for a real Apple Music backend that
+// will report failures from another module — no stub call site constructs one
+// yet — so `dead_code` is allowed on exactly this block, as it is on the
+// transport stubs and token field below. A *newly* dead item elsewhere still
+// triggers the warning the clean loop relies on to find removable code.
+#[allow(dead_code)]
+impl AppleMusicError {
+    /// Builds a failure whose [`Display`](std::fmt::Display) output is
+    /// `message` — the human-readable cause. The wrapped message is private,
+    /// so this constructor (rather than a struct literal) is how a real Apple
+    /// Music backend outside this module reports a failure through the seam.
+    /// `impl Into<String>` accepts both `&str` and `String`.
+    #[must_use]
+    pub fn new(message: impl Into<String>) -> Self {
+        Self(message.into())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct AppleMusicToken {
     access_token: String,
@@ -168,8 +186,16 @@ mod tests {
     fn apple_music_error_displays_its_message() {
         // The seam's error type formats as the cause itself, so a reported
         // failure reads as the message, not as a struct dump.
-        let error = AppleMusicError("track not found".to_string());
+        let error = AppleMusicError::new("track not found");
         assert_eq!(error.to_string(), "track not found");
+    }
+
+    #[test]
+    fn apple_music_error_new_accepts_an_owned_message() {
+        // `new` takes `impl Into<String>`, so a backend can pass a formatted
+        // `String` as readily as a `&str`; both must format identically.
+        let error = AppleMusicError::new(format!("album {} not found", "album-1"));
+        assert_eq!(error.to_string(), "album album-1 not found");
     }
 
     /// Asserts that `items` yield exactly the expected ids, in order. Five
