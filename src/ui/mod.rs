@@ -55,17 +55,15 @@ struct WinampPlayer {
     artists: Vec<Artist>,
     albums: Vec<Album>,
     songs: Vec<Song>,
-    /// Every song the player has loaded across all browsed albums, so the Now
+    /// Each known song's id mapped to its title — the accumulated index of
+    /// every song the player has loaded across all browsed albums, so the Now
     /// Playing bar can still name the playing track after the user browses to
-    /// a different album (whose list replaces `songs`).
-    known_songs: Vec<Song>,
-    /// Each known song's id mapped to its title — the look-up index behind
-    /// [`Self::known_songs`]. `store_songs` uses it to dedup a freshly loaded
-    /// album in O(1) per song instead of rescanning the whole accumulated
-    /// list, and `now_playing_label` resolves the per-frame bar label with a
-    /// single get instead of scanning that same growing list on every frame.
-    /// Insertion order lives in `known_songs`; this map is kept in step by the
-    /// same code that pushes to the list.
+    /// a different album (whose list replaces `songs`). `store_songs` records
+    /// a freshly loaded album in O(1) per song, and `now_playing_label`
+    /// resolves the per-frame bar label with a single get instead of scanning
+    /// a growing list on every frame. The map is the whole accumulation: the
+    /// buffer it indexes used to clone each whole `Song` into an unread list,
+    /// so it is the only per-album cost of keeping a track title known.
     known_titles: HashMap<String, String>,
 }
 
@@ -93,7 +91,6 @@ impl WinampPlayer {
             artists: Vec::new(),
             albums: Vec::new(),
             songs: Vec::new(),
-            known_songs: Vec::new(),
             known_titles: HashMap::new(),
         }
     }
@@ -151,7 +148,7 @@ fn played_or_reported<E>(result: Result<(), E>, report_error: impl FnOnce(&E)) -
 
 /// Stores a freshly fetched list into the player's matching buffer, with no
 /// further work. The `ArtistsLoaded` and `AlbumsLoaded` update arms both
-/// just store; `SongsLoaded` folds the new songs into `known_songs` first
+/// just store; `SongsLoaded` records the new songs into `known_titles` first
 /// (see [`store_songs`]) and then ends in this same store. The
 /// store-and-noop shape lives here once instead of in each arm.
 fn store_loaded<T>(buffer: &mut Vec<T>, items: Vec<T>) -> Task<Message> {
@@ -160,25 +157,20 @@ fn store_loaded<T>(buffer: &mut Vec<T>, items: Vec<T>) -> Task<Message> {
 }
 
 /// Stores a freshly fetched song list into the player's current-album buffer
-/// and folds it into the accumulated [`WinampPlayer::known_songs`], so a later
-/// browse to a different album (which replaces `songs`) can't lose the title
-/// of the playing track. The fold is O(1) per song via the
-/// [`WinampPlayer::known_titles`] index — inserting a fresh id records its
-/// title and pushes the song, a repeat id is deduped — rather than a linear
-/// scan of everything the player has ever loaded, a list that grows with every
-/// album browsed. Only `SongsLoaded` needs the extra fold — artists and albums
-/// never appear in the Now Playing bar.
+/// and records each song's id→title pair in the accumulated
+/// [`WinampPlayer::known_titles`] index, so a later browse to a different
+/// album (which replaces `songs`) can't lose the title of the playing track.
+/// The fold is O(1) per song — one map insert, with no `Song` clone and no
+/// growing list to scan — rather than a linear scan of everything the player
+/// has ever loaded. Only `SongsLoaded` needs the extra fold — artists and
+/// albums never appear in the Now Playing bar.
 fn store_songs(player: &mut WinampPlayer, songs: Vec<Song>) -> Task<Message> {
     for song in &songs {
-        // `insert` returns `None` for a freshly-seen id, which is the dedup
-        // signal: record the title and push the song; a repeat id is ignored.
-        if player
+        // A repeat id re-inserts an identical title, a no-op on the map's
+        // contents — so revisiting an album never grows `known_titles`.
+        player
             .known_titles
-            .insert(song.id.clone(), song.title.clone())
-            .is_none()
-        {
-            player.known_songs.push(song.clone());
-        }
+            .insert(song.id.clone(), song.title.clone());
     }
     store_loaded(&mut player.songs, songs)
 }
@@ -922,35 +914,31 @@ mod tests {
         });
     }
 
-    // `store_songs` folds a loaded song list into the accumulated
-    // `known_songs` so the Now Playing bar keeps naming a playing track after
-    // a browse away. The fold dedups: a song `known_songs` already holds must
-    // not be pushed a second time — otherwise every revisit of an album grows
-    // the buffer unboundedly, and since `view` scans it per frame, eventually
-    // slows the bar. No other test loads overlapping lists:
-    // `songs_loaded_populates_list` fills an empty buffer and the browse-away
-    // test loads two disjoint albums, so the dedup branch (a song arriving
-    // that `known_songs` already contains) is reachable only by loading the
-    // same album twice — which this does. A regression that dropped the dedup
-    // guard would pass every other test while duplicating songs here.
+    // `store_songs` records a loaded song list's id→title pairs into the
+    // accumulated `known_titles` index so the Now Playing bar keeps naming a
+    // playing track after a browse away. The index must not grow on a revisit:
+    // re-loading the same album re-inserts the same ids and titles, so the map
+    // still holds exactly the album's songs. No other test loads overlapping
+    // lists: `songs_loaded_populates_list` fills an empty buffer and the
+    // browse-away test loads two disjoint albums, so the revisit branch (a
+    // song arriving that the index already holds) is reachable only by loading
+    // the same album twice — which this does. A regression that grew the index
+    // per load would pass every other test while duplicating entries here.
     #[test]
-    fn songs_loaded_does_not_duplicate_already_known_songs() {
+    fn songs_loaded_does_not_grow_the_known_titles_index_on_revisit() {
         let (mut player, _state) = test_player();
 
         let songs = stepping_songs();
         let _ = update(&mut player, Message::SongsLoaded(songs.clone()));
 
         // Re-load the same album — e.g. browsing back to it after stepping
-        // away — and its songs must not appear twice in `known_songs`.
+        // away — and the index must still hold exactly these three titles.
         let _ = update(&mut player, Message::SongsLoaded(songs));
 
-        assert_eq!(player.known_songs.len(), 3);
-        let known_ids: Vec<&str> = player
-            .known_songs
-            .iter()
-            .map(|song| song.id.as_str())
-            .collect();
-        assert_eq!(known_ids, vec!["song-1", "song-2", "song-3"]);
+        assert_eq!(player.known_titles.len(), 3);
+        for (id, title) in [("song-1", "One"), ("song-2", "Two"), ("song-3", "Three")] {
+            assert_eq!(player.known_titles.get(id).map(String::as_str), Some(title));
+        }
     }
 
     // Browsing to a new album must *replace* the Songs view's buffer, not
@@ -987,7 +975,7 @@ mod tests {
     // resolution after a browse-away pins the actual bar path: if the label
     // were resolved against `songs` (the currently-browsed album's list, which
     // album-2's `SongsLoaded` just replaced) instead of the accumulated
-    // `known_songs`, song-1 would no longer be "known" and the label would
+    // `known_titles`, song-1 would no longer be "known" and the label would
     // fall back to the raw id "song-1", failing this test.
     #[test]
     fn now_playing_label_keeps_the_track_name_after_browsing_to_another_album() {
