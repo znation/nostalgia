@@ -337,6 +337,26 @@ mod tests {
         assert!(state.is_playing);
     }
 
+    // The test above plays once from the default (no track), so it only
+    // proves the first selection is recorded. The Songs view lets the user
+    // click any row, so every later selection must replace `current_track`;
+    // a regression that only set it when none was playing (or that made
+    // `play_track` idempotent on the id) would clear that test while the
+    // Now Playing bar silently kept naming the first song. Pin the overwrite,
+    // and that playback stays on across it.
+    #[tokio::test]
+    async fn play_track_replaces_the_current_track_when_another_song_is_played() {
+        let service = test_service();
+        let state = service.state.clone();
+
+        service.play_track("song-1").await.unwrap();
+        service.play_track("song-2").await.unwrap();
+
+        let state = state.lock().await;
+        assert_eq!(state.current_track.as_deref(), Some("song-2"));
+        assert!(state.is_playing);
+    }
+
     #[tokio::test]
     async fn pause_stops_playing_but_keeps_current_track() {
         let service = test_service();
