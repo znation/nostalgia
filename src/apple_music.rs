@@ -21,10 +21,11 @@ use crate::state::AppState;
 
 /// A failed music-library or playback operation.
 ///
-/// The stub produces one only when handed a blank id: `play_track` rejects an
-/// empty track id, and `get_albums_by_artist` / `get_songs_from_album` reject
-/// an empty artist/album id. Every other in-memory query and playback
-/// transition succeeds. The seam carries this type so a real Apple Music
+/// The stub produces one only when handed a blank id: `play_track` rejects a
+/// blank track id, and `get_albums_by_artist` / `get_songs_from_album` reject
+/// a blank artist/album id (an id is blank when it is empty or only
+/// whitespace). Every other in-memory query and playback transition succeeds.
+/// The seam carries this type so a real Apple Music
 /// backend can report a failure without tying the seam's public API to a
 /// specific HTTP client. The message is the human-readable cause.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -134,16 +135,14 @@ impl AppleMusicService {
     }
 
     /// Plays the given track by id, recording it as the current track and
-    /// marking it playing. An empty `track_id` is rejected with an
-    /// [`AppleMusicError`] and leaves shared state untouched: a blank id can
-    /// never name a track, so recording it would show a blank Now Playing
-    /// entry and report playback of nothing as playing. The stub owns only
-    /// this shared-state transition — a real implementation would add the API
-    /// call that starts audio.
+    /// marking it playing. A blank `track_id` — empty or only whitespace — is
+    /// rejected with an [`AppleMusicError`] and leaves shared state untouched:
+    /// a blank id can never name a track, so recording it would show a blank
+    /// Now Playing entry and report playback of nothing as playing. The stub
+    /// owns only this shared-state transition — a real implementation would
+    /// add the API call that starts audio.
     pub async fn play_track(&self, track_id: &str) -> Result<(), AppleMusicError> {
-        if track_id.is_empty() {
-            return Err(AppleMusicError::new("track id must not be empty"));
-        }
+        ensure_id_is_not_blank(track_id, "track")?;
 
         let mut state = self.state.lock().await;
         state.current_track = Some(track_id.to_string());
@@ -160,32 +159,48 @@ impl AppleMusicService {
 
     /// Albums by the given artist; unknown artists yield an empty list.
     ///
-    /// An empty `artist_id` is rejected with an [`AppleMusicError`] instead
-    /// of looked up: no artist has a blank id, so a blank id is a caller bug,
-    /// and returning the empty list would report it as the ordinary "no
-    /// albums" case. The same blank-id guard [`AppleMusicService::play_track`]
-    /// applies to its track id.
+    /// A blank `artist_id` — empty or only whitespace — is rejected with an
+    /// [`AppleMusicError`] instead of looked up: no artist has a blank id, so
+    /// a blank id is a caller bug, and returning the empty list would report
+    /// it as the ordinary "no albums" case. The same blank-id guard
+    /// [`AppleMusicService::play_track`] applies to its track id.
     pub async fn get_albums_by_artist(
         &self,
         artist_id: &str,
     ) -> Result<Vec<Album>, AppleMusicError> {
-        if artist_id.is_empty() {
-            return Err(AppleMusicError::new("artist id must not be empty"));
-        }
+        ensure_id_is_not_blank(artist_id, "artist")?;
         Ok(lookup(&sample_library().albums_by_artist, artist_id))
     }
 
     /// Songs on the given album; unknown albums yield an empty list.
     ///
-    /// An empty `album_id` is rejected with an [`AppleMusicError`], the
-    /// album-query twin of
+    /// A blank `album_id` — empty or only whitespace — is rejected with an
+    /// [`AppleMusicError`], the album-query twin of
     /// [`AppleMusicService::get_albums_by_artist`].
     pub async fn get_songs_from_album(&self, album_id: &str) -> Result<Vec<Song>, AppleMusicError> {
-        if album_id.is_empty() {
-            return Err(AppleMusicError::new("album id must not be empty"));
-        }
+        ensure_id_is_not_blank(album_id, "album")?;
         Ok(lookup(&sample_library().songs_by_album, album_id))
     }
+}
+
+/// Rejects a blank id at the seam: `Ok` when `id` names a resource, `Err`
+/// naming the offending value when it is empty or only whitespace.
+///
+/// Every id in the library names a real Apple Music resource, so a blank id
+/// is a caller bug rather than the ordinary "unknown id" case the browse
+/// queries answer with an empty list. `kind` names the id in the message
+/// ("track", "artist", or "album"). A whitespace-only id is rejected too:
+/// like an empty one it can name nothing, and letting it through would record
+/// a blank-looking Now Playing entry or report the bug as an ordinary empty
+/// result. The message quotes the value with `{id:?}`, so a whitespace-only
+/// id reads as `"   "` rather than as an invisible empty string.
+fn ensure_id_is_not_blank(id: &str, kind: &str) -> Result<(), AppleMusicError> {
+    if id.trim().is_empty() {
+        return Err(AppleMusicError::new(format!(
+            "{kind} id must not be blank (got {id:?})"
+        )));
+    }
+    Ok(())
 }
 
 /// The group stored under `id` in `index`, or an empty list when the id is
@@ -273,6 +288,28 @@ mod tests {
         assert_eq!(error.to_string(), "album album-1 not found");
     }
 
+    #[test]
+    fn ensure_id_is_not_blank_rejects_empty_and_whitespace_ids() {
+        // An id names a real Apple Music resource, so a blank one is a caller
+        // bug. Both an empty id and a whitespace-only id are blank; the
+        // message quotes the value so the whitespace case is visible rather
+        // than reading as an empty string.
+        assert_eq!(
+            ensure_id_is_not_blank("", "track").unwrap_err().to_string(),
+            "track id must not be blank (got \"\")"
+        );
+        assert_eq!(
+            ensure_id_is_not_blank("\t", "artist")
+                .unwrap_err()
+                .to_string(),
+            "artist id must not be blank (got \"\\t\")"
+        );
+        // A nameable id passes through untouched, including one with an
+        // internal space; only a wholly blank id is rejected.
+        assert!(ensure_id_is_not_blank("song-1", "track").is_ok());
+        assert!(ensure_id_is_not_blank("a b", "album").is_ok());
+    }
+
     // "All favorite artists" is the service's content contract, not just a
     // non-empty list: every artist, in library order. The albums and songs
     // queries each pin their exact group in order, but the artists query only
@@ -334,11 +371,21 @@ mod tests {
     // A blank id is a caller bug, not an unknown artist: the seam rejects it
     // with an error rather than the empty list an unknown id yields, so a
     // future caller that drops the id gets a report naming the cause instead
-    // of a silent "no albums".
+    // of a silent "no albums". The whitespace-only case goes through the same
+    // guard as the empty one.
     #[tokio::test]
-    async fn get_albums_by_artist_rejects_an_empty_artist_id() {
+    async fn get_albums_by_artist_rejects_a_blank_artist_id() {
         let error = test_service().get_albums_by_artist("").await.unwrap_err();
-        assert_eq!(error.to_string(), "artist id must not be empty");
+        assert_eq!(error.to_string(), "artist id must not be blank (got \"\")");
+
+        let error = test_service()
+            .get_albums_by_artist("   ")
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "artist id must not be blank (got \"   \")"
+        );
     }
 
     #[tokio::test]
@@ -387,11 +434,11 @@ mod tests {
         assert!(songs.is_empty());
     }
 
-    // The album-query twin of the empty-artist-id rejection above.
+    // The album-query twin of the blank-artist-id rejection above.
     #[tokio::test]
-    async fn get_songs_from_album_rejects_an_empty_album_id() {
+    async fn get_songs_from_album_rejects_a_blank_album_id() {
         let error = test_service().get_songs_from_album("").await.unwrap_err();
-        assert_eq!(error.to_string(), "album id must not be empty");
+        assert_eq!(error.to_string(), "album id must not be blank (got \"\")");
     }
 
     #[tokio::test]
@@ -432,35 +479,41 @@ mod tests {
         assert_playback_state(&state, Some("song-2"), true).await;
     }
 
-    // An empty id can never name a track, so the seam rejects it instead of
+    // A blank id can never name a track, so the seam rejects it instead of
     // recording a blank `current_track` and marking nothing as playing. The
     // error path the UI's `played_or_reported` reports is pinned here, and
     // shared state must be left untouched (the rejection happens before the
-    // state lock).
+    // state lock). Both an empty and a whitespace-only id are blank.
     #[tokio::test]
-    async fn play_track_rejects_an_empty_track_id_without_touching_state() {
+    async fn play_track_rejects_a_blank_track_id_without_touching_state() {
         let (service, state) = test_service_with_state();
 
         let error = service.play_track("").await.unwrap_err();
+        assert_eq!(error.to_string(), "track id must not be blank (got \"\")");
 
-        assert_eq!(error.to_string(), "track id must not be empty");
+        let error = service.play_track("   ").await.unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "track id must not be blank (got \"   \")"
+        );
+
         assert_playback_state(&state, None, false).await;
     }
 
     // The rejection test above starts from the default (no track, not
     // playing), so a regression that cleared the shared state *while*
-    // rejecting the empty id would still leave it at `None`/`false` and pass
+    // rejecting the blank id would still leave it at `None`/`false` and pass
     // unnoticed. The Songs view can be clicked mid-playback, so pin the
     // rejection against a live track: the already-playing song must survive
     // untouched rather than being cleared to "nothing is playing".
     #[tokio::test]
-    async fn play_track_rejects_an_empty_track_id_while_a_song_is_playing() {
+    async fn play_track_rejects_a_blank_track_id_while_a_song_is_playing() {
         let (service, state) = test_service_with_state();
 
         service.play_track("song-1").await.unwrap();
         let error = service.play_track("").await.unwrap_err();
 
-        assert_eq!(error.to_string(), "track id must not be empty");
+        assert_eq!(error.to_string(), "track id must not be blank (got \"\")");
         assert_playback_state(&state, Some("song-1"), true).await;
     }
 
