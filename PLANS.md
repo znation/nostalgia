@@ -5,7 +5,69 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Add a Stop button to the transport controls
+
+Found by plan 2026-10-06.
+
+**Goal.** The classic Winamp transport is Play, Pause, Stop, Previous, Next; this
+player renders Play/Pause, Previous, and Next (plus the volume slider) but no
+Stop — a Winamp-clone transport without Stop is missing one of its five core
+buttons. Land a Stop button that halts playback: it clears `is_playing` while
+leaving `current_track` in place, so the Now Playing bar keeps showing the
+interrupted track's title (matching Winamp, where Stop stops the music and the
+title stays in the display).
+
+**Approach.** Stop is a transport control, so — following the Previous/Next
+precedent, which moved transport sequencing out of the service (the transport
+plan's note: "the service models the library API, not the current playlist") —
+it is handled in the UI against shared state, not as a new
+`AppleMusicService` method. The service's private `pause`/`next_track`/
+`previous_track` stubs stay untouched.
+
+- `src/state.rs`: add `pub fn stop(&mut self)` on `AppState` that sets
+  `self.is_playing = false` and changes nothing else — the sibling of
+  `toggle_playing` (whose doc comment says the Play/Pause button is its only
+  caller), keeping the stop semantics beside the field they mutate rather than
+  inlined at the call site. Add a `#[cfg(test)]` test
+  `stop_clears_playing_flag_and_keeps_current_track` mirroring
+  `toggle_playing_flips_only_the_playback_flag`: after `stop()`, `is_playing`
+  is false and `current_track` and `volume` are unchanged.
+- `src/ui/mod.rs`:
+  - Add a `Message::Stop` variant to the `Message` enum.
+  - In `update`, add a `Message::Stop` arm calling
+    `player.state.blocking_lock().stop()` and returning `Task::none()` —
+    synchronous, exactly like the `Message::PlayPause` arm. (The stub has no
+    playback position yet, so Stop's only observable effect is the cleared
+    playing flag — identical to Pause today. The distinction is the seam:
+    once real playback lands, Stop also resets the track position while Pause
+    keeps it. Not a design question for this plan — just record it in the
+    arm's comment.)
+  - In the `#[cfg(test)]` module, add a plain test
+    `stop_clears_is_playing` mirroring `play_pause_toggles_is_playing`: after
+    `Message::Stop` the shared state's `is_playing` is false (it stays a plain
+    test because the arm uses `blocking_lock`, which panics inside an async
+    runtime).
+- `src/ui/views.rs`: in `view_transport_controls`, insert a Stop button
+  between the Play/Pause button and the Previous button, in Winamp's order:
+  `Button::new(Text::new("Stop")).on_press(Message::Stop)`, separated by the
+  existing `spacer(20.0)`. The label is static (Stop is always pressable, even
+  when stopped, as in Winamp), so no `play_pause_label`-style helper is
+  needed; `view_transport_controls`'s signature stays unchanged.
+
+**Files touched.** `src/state.rs`, `src/ui/mod.rs`, `src/ui/views.rs`.
+
+**Acceptance criteria.**
+- `cargo build` succeeds.
+- `cargo test` passes, including the new `stop_clears_playing_flag_and_keeps_current_track`
+  (state.rs) and `stop_clears_is_playing` (ui/mod.rs) tests.
+- `cargo fmt --check` passes.
+- `Message::Stop` is wired on both ends: `grep -n 'Message::Stop' src` shows
+  the emitter (the Stop button's `on_press` in `view_transport_controls`) and
+  the handler (the `update` arm).
+- `cargo run`: with a song playing, Stop flips the Play/Pause button back to
+  "Play" (is_playing cleared) while the Now Playing bar keeps the interrupted
+  track's title; pressing Play resumes it (manual check — build + tests are the
+  primary gate).
 
 ## Done
 
