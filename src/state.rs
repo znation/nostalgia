@@ -47,8 +47,16 @@ impl AppState {
 /// or a stale in-flight change), and the UI must never store an unclamped
 /// volume in `AppState`. Volume is shared state, so the rule lives beside
 /// `AppState` as a pure function the UI's `update` arm calls before storing.
+///
+/// `f32::clamp` passes NaN through unchanged, so a non-finite volume is
+/// mapped to `0.0` (silence) rather than being stored as-is — the safe
+/// outcome for a value that is neither in range nor comparable to it.
 pub fn clamp_volume(volume: f32) -> f32 {
-    volume.clamp(0.0, 1.0)
+    if volume.is_nan() {
+        0.0
+    } else {
+        volume.clamp(0.0, 1.0)
+    }
 }
 
 #[cfg(test)]
@@ -99,5 +107,12 @@ mod tests {
         assert_eq!(clamp_volume(0.0), 0.0);
         assert_eq!(clamp_volume(0.3), 0.3);
         assert_eq!(clamp_volume(1.0), 1.0);
+    }
+
+    #[test]
+    fn clamp_volume_treats_nan_as_silence() {
+        // `f32::clamp` passes NaN through unchanged, so it must be handled
+        // explicitly or a non-finite value lands in shared state.
+        assert_eq!(clamp_volume(f32::NAN), 0.0);
     }
 }
