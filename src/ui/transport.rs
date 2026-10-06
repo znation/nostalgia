@@ -8,21 +8,37 @@
 
 use crate::library::Song;
 
+/// The id of the song one step from `current` in `songs`, in the given
+/// direction, wrapping around the ends: forward for Next (starting at the
+/// first song when there is no current one), backward for Previous (starting
+/// at the last). `None` when `songs` is empty. Both direction lookups share
+/// the empty guard, the current-song position scan, and the wrap-around, so
+/// the stepping logic lives here once and the two public functions below only
+/// name the direction.
+fn stepped_track_id(songs: &[Song], current: Option<&str>, forward: bool) -> Option<String> {
+    if songs.is_empty() {
+        return None;
+    }
+    let index = current.and_then(|current_id| songs.iter().position(|song| song.id == current_id));
+    let stepped = match index {
+        // No current song (or one not in the list): land on the edge the step
+        // moves toward — the first song going forward, the last going backward.
+        None if forward => 0,
+        None => songs.len() - 1,
+        // One step in the direction, wrapping at the boundary. Backward is
+        // `len - 1` forward steps mod `len`.
+        Some(i) if forward => (i + 1) % songs.len(),
+        Some(i) => (i + songs.len() - 1) % songs.len(),
+    };
+    Some(songs[stepped].id.clone())
+}
+
 /// The id of the song to play when Next is pressed: one past `current` in
 /// `songs`, wrapping from the end back to the start. `None` when there is
 /// nothing to step through (empty `songs`); with no `current` (or an unknown
 /// one), the first song.
 pub fn next_track_id(songs: &[Song], current: Option<&str>) -> Option<String> {
-    let Some(first) = songs.first() else {
-        return None;
-    };
-    let index = current.and_then(|current_id| songs.iter().position(|song| song.id == current_id));
-    match index {
-        // No current song (or one not in the list): start the album over.
-        None => Some(first.id.clone()),
-        // One past the current song, wrapping from the end back to the start.
-        Some(i) => Some(songs[(i + 1) % songs.len()].id.clone()),
-    }
+    stepped_track_id(songs, current, true)
 }
 
 /// The id of the song to play when Previous is pressed: one before `current`
@@ -30,16 +46,7 @@ pub fn next_track_id(songs: &[Song], current: Option<&str>) -> Option<String> {
 /// nothing to step through (empty `songs`); with no `current` (or an unknown
 /// one), the last song.
 pub fn previous_track_id(songs: &[Song], current: Option<&str>) -> Option<String> {
-    let Some(last) = songs.last() else {
-        return None;
-    };
-    let index = current.and_then(|current_id| songs.iter().position(|song| song.id == current_id));
-    match index {
-        // No current song (or one not in the list): land on the last song.
-        None => Some(last.id.clone()),
-        // One before the current song, wrapping from the start back to the end.
-        Some(i) => Some(songs[(i + songs.len() - 1) % songs.len()].id.clone()),
-    }
+    stepped_track_id(songs, current, false)
 }
 
 #[cfg(test)]
