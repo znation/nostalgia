@@ -60,15 +60,15 @@ struct WinampPlayer {
     artists: Vec<Artist>,
     albums: Vec<Album>,
     songs: Vec<Song>,
-    /// Each known song's id mapped to its title — the accumulated index of
-    /// every song the player has loaded across all browsed albums, so the Now
-    /// Playing bar can still name the playing track after the user browses to
-    /// a different album (whose list replaces `songs`). `store_songs` records
-    /// a freshly loaded album in O(1) per song, and `now_playing_label`
+    /// Each played song's id mapped to its title, so the Now Playing bar can
+    /// still name the playing track after the user browses to a different
+    /// album (whose list replaces `songs`). The `TrackSelected` arm records a
+    /// track's title once, when it is played, and `now_playing_label`
     /// resolves the per-frame bar label with a single get instead of scanning
-    /// a growing list on every frame. The map is the whole accumulation — no
-    /// separate song list is kept — so it is the only per-album cost of
-    /// keeping a track title known.
+    /// a growing list on every frame. Recording on play — rather than folding
+    /// every song of every browsed album into the map — keeps the map
+    /// proportional to songs actually played and takes the per-album fold off
+    /// the browse path.
     known_titles: HashMap<String, String>,
 }
 
@@ -153,34 +153,12 @@ fn played_or_reported<E>(result: Result<(), E>, report_error: impl FnOnce(&E)) -
 }
 
 /// Stores a freshly fetched list into the player's matching buffer, with no
-/// further work. The `ArtistsLoaded` and `AlbumsLoaded` update arms both
-/// just store; `SongsLoaded` records the new songs into `known_titles` first
-/// (see [`store_songs`]) and then ends in this same store. The
-/// store-and-noop shape lives here once instead of in each arm.
+/// further work. The `ArtistsLoaded`, `AlbumsLoaded`, and `SongsLoaded`
+/// update arms all just store. The store-and-noop shape lives here once
+/// instead of in each arm.
 fn store_loaded<T>(buffer: &mut Vec<T>, items: Vec<T>) -> Task<Message> {
     *buffer = items;
     Task::none()
-}
-
-/// Stores a freshly fetched song list into the player's current-album buffer
-/// and records each song's id→title pair in the accumulated
-/// [`WinampPlayer::known_titles`] index, so a later browse to a different
-/// album (which replaces `songs`) can't lose the title of the playing track.
-/// The fold is O(1) per song — one map entry, with no `Song` clone and no
-/// growing list to scan — rather than a linear scan of everything the player
-/// has ever loaded. Only `SongsLoaded` needs the extra fold — artists and
-/// albums never appear in the Now Playing bar.
-fn store_songs(player: &mut WinampPlayer, songs: Vec<Song>) -> Task<Message> {
-    for song in &songs {
-        // A known id already maps to an identical title, so `or_insert_with`
-        // keeps the existing title instead of cloning one to overwrite an
-        // equal value: revisiting an album clones only the key it probes.
-        player
-            .known_titles
-            .entry(song.id.clone())
-            .or_insert_with(|| song.title.clone());
-    }
-    store_loaded(&mut player.songs, songs)
 }
 
 /// Formats the browse-fetch failure report: names the fetch that failed
@@ -294,6 +272,21 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::NextTrack => step_track(player, transport::next_track_id),
         Message::PreviousTrack => step_track(player, transport::previous_track_id),
         Message::TrackSelected(track_id) => {
+            // Record the played track's title before handing the id to the
+            // async play: the Now Playing bar resolves its label from
+            // `known_titles`, and the entry must survive a later browse to a
+            // different album (which replaces `songs`). Recording once per
+            // play — rather than folding every song of every browsed album
+            // into the map — keeps the index proportional to songs actually
+            // played and takes the fold off the browse path. The id comes
+            // from a row of the currently loaded `songs`, so the lookup hits;
+            // the `if let` only guards a stale id defensively.
+            if let Some(song) = player.songs.iter().find(|song| song.id == track_id) {
+                player
+                    .known_titles
+                    .entry(track_id.clone())
+                    .or_insert_with(|| song.title.clone());
+            }
             let service = player.apple_music_service.clone();
             let id_for_report = track_id.clone();
             Task::perform(
@@ -344,7 +337,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         ),
         Message::ArtistsLoaded(artists) => store_loaded(&mut player.artists, artists),
         Message::AlbumsLoaded(albums) => store_loaded(&mut player.albums, albums),
-        Message::SongsLoaded(songs) => store_songs(player, songs),
+        Message::SongsLoaded(songs) => store_loaded(&mut player.songs, songs),
         Message::TrackPlayed => Task::none(),
     }
 }

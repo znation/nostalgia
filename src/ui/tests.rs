@@ -608,31 +608,33 @@ fn songs_loaded_populates_list() {
     });
 }
 
-// `store_songs` records a loaded song list's id→title pairs into the
-// accumulated `known_titles` index so the Now Playing bar keeps naming a
-// playing track after a browse away. The index must not grow on a revisit:
-// re-loading the same album re-inserts the same ids and titles, so the map
-// still holds exactly the album's songs. No other test loads overlapping
-// lists: `songs_loaded_populates_list` fills an empty buffer and the
-// browse-away test loads two disjoint albums, so the revisit branch (a
-// song arriving that the index already holds) is reachable only by loading
-// the same album twice — which this does. A regression that grew the index
-// per load would pass every other test while duplicating entries here.
+// The `known_titles` index backs the Now Playing bar's title lookup, and it
+// is populated only when a track is played — not when an album is loaded.
+// Folding a browsed album's songs into the index would make it grow with
+// every album the user visits while the bar only ever reads the playing
+// track's entry, so the browse path must leave the index untouched and
+// `TrackSelected` must record the played song's title.
 #[test]
-fn songs_loaded_does_not_grow_the_known_titles_index_on_revisit() {
+fn songs_loaded_does_not_populate_the_known_titles_index() {
     let (mut player, _state) = test_player();
 
-    let songs = stepping_songs();
-    let _ = update(&mut player, Message::SongsLoaded(songs.clone()));
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
 
-    // Re-load the same album — e.g. browsing back to it after stepping
-    // away — and the index must still hold exactly these three titles.
-    let _ = update(&mut player, Message::SongsLoaded(songs));
+    assert!(player.known_titles.is_empty());
+}
 
-    assert_eq!(player.known_titles.len(), 3);
-    for (id, title) in [("song-1", "One"), ("song-2", "Two"), ("song-3", "Three")] {
-        assert_eq!(player.known_titles.get(id).map(String::as_str), Some(title));
-    }
+#[test]
+fn track_selected_records_the_played_tracks_title() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+
+    let _ = update(&mut player, Message::TrackSelected("song-2".to_string()));
+
+    assert_eq!(
+        player.known_titles.get("song-2").map(String::as_str),
+        Some("Two")
+    );
 }
 
 // Browsing to a new album must *replace* the Songs view's buffer, not
@@ -642,7 +644,7 @@ fn songs_loaded_does_not_grow_the_known_titles_index_on_revisit() {
 // `*Loaded` tests load only into an empty buffer, and the browse-away
 // label test (`now_playing_label_keeps_the_track_name_after_browsing_to_another_album`)
 // asserts the label but never the buffer, so an
-// append-instead-of-replace regression in `store_songs` would clear every
+// append-instead-of-replace regression in `store_loaded` would clear every
 // existing test and only fail here.
 #[test]
 fn songs_loaded_replaces_the_previous_albums_songs() {
@@ -660,16 +662,18 @@ fn songs_loaded_replaces_the_previous_albums_songs() {
 // label through `WinampPlayer::now_playing_label`, so asserting that same
 // resolution after a browse-away pins the actual bar path: if the label
 // were resolved against `songs` (the currently-browsed album's list, which
-// album-2's `SongsLoaded` just replaced) instead of the accumulated
-// `known_titles`, song-1 would no longer be "known" and the label would
-// fall back to the raw id "song-1", failing this test.
+// album-2's `SongsLoaded` just replaced) instead of the `known_titles`
+// entry recorded when song-1 was played, song-1 would no longer be "known"
+// and the label would fall back to the raw id "song-1", failing this test.
 #[test]
 fn now_playing_label_keeps_the_track_name_after_browsing_to_another_album() {
     let (mut player, state) = test_player();
 
-    // Play song-1 (title "One") from album-1, then browse to album-2's
-    // songs — the flow that used to leave the bar showing "song-1".
+    // Play song-1 (title "One") from album-1 — recording its title in
+    // `known_titles` — then browse to album-2's songs, the flow that used
+    // to leave the bar showing "song-1".
     let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    let _ = update(&mut player, Message::TrackSelected("song-1".to_string()));
     state.blocking_lock().current_track = Some("song-1".to_string());
     let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
 

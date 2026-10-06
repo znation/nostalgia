@@ -384,8 +384,9 @@ mod tests {
     // (grouped with the other widget builders), so their pure label logic is
     // pinned here alongside the browse-row mappings.
 
-    /// Builds the id→title index the player's `store_songs` maintains, from
-    /// `(id, title)` pairs — the shape `now_playing_label` resolves against.
+    /// Builds the id→title index the player maintains for the Now Playing
+    /// bar, from `(id, title)` pairs — the shape `now_playing_label`
+    /// resolves against.
     fn known_titles(entries: &[(&str, &str)]) -> HashMap<String, String> {
         entries
             .iter()

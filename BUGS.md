@@ -84,19 +84,22 @@ then browse away to "Second Record" (album-2): `player.songs` is now album-2's
 list, song-1 is no longer "known", and the bar — which is meant to name the
 song for the user — falls back to the raw internal id "song-1".
 
-Fixed by accumulating every loaded song's id→title pair in the
-`known_titles` index: the `SongsLoaded` arm stores into `player.songs` (as
-before) and `store_songs` inserts each new song into `known_titles`, and
-`view` resolves the bar's label through `WinampPlayer::now_playing_label`,
-which looks the current track up in `known_titles` instead of `songs`. Every
-loaded song stays in `known_titles`, so every case that worked before still
-works, and the browse-away case now names the playing track. The regression
-test (`now_playing_label_keeps_the_track_name_after_browsing_to_another_album`)
+Fixed by resolving the bar's label through a `known_titles` id→title index
+instead of the replaceable `songs` buffer: `view` calls
+`WinampPlayer::now_playing_label`, which looks the current track up in
+`known_titles`, and the `TrackSelected` arm records the played song's
+id→title pair there before scheduling the play (the `SongsLoaded` arm only
+stores into `player.songs`). Because the index is written when a track is
+played, its entry survives a later browse to a different album (which
+replaces `songs`), and the browse-away case names the playing track. The
+regression test (`now_playing_label_keeps_the_track_name_after_browsing_to_another_album`)
 asserts the bar's label through the same `WinampPlayer::now_playing_label`
 path that `view` renders, after playing a song and browsing to another album —
 it fails with the raw id both when `known_titles` is not populated and when
 the resolution is reverted to `songs`. `cargo build`, `cargo test`, and
-`cargo fmt --check` all pass.
+`cargo fmt --check` all pass. A later same-day perf change moved the index
+population from every loaded album to each played track, so the index stays
+proportional to songs played rather than every album browsed.
 
 **Validation gap:** none — the browse-away regression is covered by
 `now_playing_label_keeps_the_track_name_after_browsing_to_another_album`,
