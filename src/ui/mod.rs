@@ -25,6 +25,7 @@ pub fn init_ui(state: Arc<Mutex<AppState>>) -> iced::Result {
 #[derive(Debug, Clone)]
 enum Message {
     PlayPause,
+    Stop,
     VolumeChange(f32),
     NextTrack,
     PreviousTrack,
@@ -142,6 +143,16 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::PlayPause => {
             let mut state = player.state.blocking_lock();
             state.toggle_playing();
+            Task::none()
+        }
+        // Stop is synchronous, exactly like PlayPause: the stub has no
+        // playback position yet, so its only observable effect is the cleared
+        // playing flag — identical to Pause today. The seam is the
+        // distinction: once real playback lands, Stop also resets the track
+        // position while Pause keeps it.
+        Message::Stop => {
+            let mut state = player.state.blocking_lock();
+            state.stop();
             Task::none()
         }
         Message::VolumeChange(volume) => {
@@ -294,6 +305,19 @@ mod tests {
         assert!(state.blocking_lock().is_playing);
 
         let _ = update(&mut player, Message::PlayPause);
+        assert!(!state.blocking_lock().is_playing);
+    }
+
+    // `Message::Stop` uses `blocking_lock`, which panics inside an async
+    // runtime, so this stays a plain test (no `#[tokio::test]`).
+    #[test]
+    fn stop_clears_is_playing() {
+        let (mut player, state) = test_player();
+
+        let _ = update(&mut player, Message::PlayPause);
+        assert!(state.blocking_lock().is_playing);
+
+        let _ = update(&mut player, Message::Stop);
         assert!(!state.blocking_lock().is_playing);
     }
 

@@ -125,12 +125,16 @@ fn play_pause_label(is_playing: bool) -> &'static str {
     if is_playing { "Pause" } else { "Play" }
 }
 
-/// The transport row: the Play/Pause, Previous, and Next buttons and the
-/// volume slider. `volume` is the slider's current value; dragging it emits
-/// `Message::VolumeChange`.
+/// The transport row: the Play/Pause, Stop, Previous, and Next buttons and
+/// the volume slider. `volume` is the slider's current value; dragging it
+/// emits `Message::VolumeChange`. The Stop label is static — Stop is always
+/// pressable, even when already stopped, as in Winamp — so no
+/// `play_pause_label`-style helper is needed.
 pub fn view_transport_controls(is_playing: bool, volume: f32) -> Element<'static, Message> {
     Row::new()
         .push(Button::new(Text::new(play_pause_label(is_playing))).on_press(Message::PlayPause))
+        .push(spacer(20.0))
+        .push(Button::new(Text::new("Stop")).on_press(Message::Stop))
         .push(spacer(20.0))
         .push(Button::new(Text::new("Previous")).on_press(Message::PreviousTrack))
         .push(spacer(20.0))

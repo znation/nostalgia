@@ -41,6 +41,16 @@ impl AppState {
     pub fn toggle_playing(&mut self) {
         self.is_playing = !self.is_playing;
     }
+
+    /// Clear the playback flag in place, leaving `current_track` in place so
+    /// the Now Playing bar keeps showing the interrupted track's title
+    /// (matching Winamp, where Stop halts the music and the title stays in
+    /// the display). The UI's Stop button is the only caller; keeping the
+    /// semantics here (rather than inlined at the call site) puts them next
+    /// to the field they mutate, like `toggle_playing`.
+    pub fn stop(&mut self) {
+        self.is_playing = false;
+    }
 }
 
 /// Clamps a volume value to the valid `[0.0, 1.0]` range.
@@ -92,6 +102,21 @@ mod tests {
 
         state.toggle_playing();
         assert!(!state.is_playing);
+    }
+
+    #[test]
+    fn stop_clears_playing_flag_and_keeps_current_track() {
+        let mut state = AppState::default();
+        state.current_track = Some("song-1".to_string());
+        state.is_playing = true;
+        let track = state.current_track.clone();
+        let volume = state.volume;
+        assert!(state.is_playing);
+
+        state.stop();
+        assert!(!state.is_playing);
+        assert_eq!(state.current_track, track);
+        assert_eq!(state.volume, volume);
     }
 
     #[test]

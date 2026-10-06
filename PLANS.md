@@ -5,7 +5,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Add a Stop button to the transport controls
+_None yet._
+
+## Done
+
+### Add a Stop button to the transport controls (done 2026-10-06)
 
 Found by plan 2026-10-06.
 
@@ -68,8 +72,6 @@ it is handled in the UI against shared state, not as a new
   "Play" (is_playing cleared) while the Now Playing bar keeps the interrupted
   track's title; pressing Play resumes it (manual check — build + tests are the
   primary gate).
-
-## Done
 
 ### Show the song's title in the Now Playing bar, not its raw id (done 2026-10-05)
 
