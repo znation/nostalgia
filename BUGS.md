@@ -7,6 +7,8 @@ reproduce, suspected cause. Move fixed bugs to Fixed.
 
 ### Review gate demanded a BUGS.md record fix that the landing gate refuses as "md-only", so clean re-authored it for 5 ticks / 0.3 h (found by telemetry 2026-10-06)
 
+**Refused 2026-10-06 by bugfix: the fix is a change to the tumwater review and landing gates, which live in the harness, not this repo, and are off-limits to this role; no nostalgia-repo change can resolve the two verdicts.**
+
 Symptom: the Fixed "Now Playing bar falls back to the raw track id after
 browsing to a different album" record was left describing the removed
 `known_songs` buffer after perf moved the Now Playing lookup to a new
