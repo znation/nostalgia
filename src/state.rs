@@ -7,10 +7,9 @@ use crate::equalizer;
 
 /// Global playback state shared between the Apple Music service and the UI.
 ///
-/// `Debug` lets the state be included in error messages and logs, `Clone`
-/// allows snapshots (e.g. for tests), and `PartialEq` supports equality
-/// assertions such as the default-state tests below.
-#[derive(Debug, Clone, PartialEq)]
+/// `Debug` and `PartialEq` support equality assertions on whole `AppState`
+/// values, such as the default-state tests below.
+#[derive(Debug, PartialEq)]
 pub struct AppState {
     pub current_track: Option<String>,
     pub is_playing: bool,
