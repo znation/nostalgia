@@ -167,8 +167,13 @@ fn step_track(
     player: &WinampPlayer,
     step: fn(&[Song], Option<&str>) -> Option<String>,
 ) -> Task<Message> {
-    let current = player.state.blocking_lock().current_track.clone();
-    match step(&player.songs, current.as_deref()) {
+    // The stepped song is computed under the state lock, borrowing the
+    // current track directly. The earlier version cloned the `current_track`
+    // `String` only to borrow it via `as_deref` — the same clone-to-borrow
+    // the per-frame now-playing path used to do — so the lock now covers the
+    // pure stepping scan (fast, and `step` never locks anything itself).
+    let state = player.state.blocking_lock();
+    match step(&player.songs, state.current_track.as_deref()) {
         Some(track_id) => Task::done(Message::TrackSelected(track_id)),
         None => Task::none(),
     }
