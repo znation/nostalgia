@@ -11,6 +11,7 @@ use std::{borrow::Cow, collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 
 mod loading;
+mod style;
 mod theme;
 mod transport;
 mod views;

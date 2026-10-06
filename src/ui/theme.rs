@@ -28,6 +28,17 @@ pub const LCD_GREEN: Color = Color::from_rgb(0.0, 1.0, 0.0);
 /// echoing Winamp's playlist selection bar (a saturated blue).
 pub const PLAYING_ROW_HIGHLIGHT: Color = Color::from_rgb(0.25, 0.5, 1.0);
 
+/// The light top/left edge of a raised panel bevel, and the dark bottom/right
+/// edge of a sunken one.
+pub const PANEL_EDGE_LIGHT: Color = Color::from_rgb(0.55, 0.55, 0.55);
+
+/// The dark bottom/right edge of a raised panel bevel, and the light top/left
+/// edge of a sunken one.
+pub const PANEL_EDGE_DARK: Color = Color::from_rgb(0.05, 0.05, 0.05);
+
+/// The near-black recess behind the green Now Playing title.
+pub const LCD_BACKGROUND: Color = Color::from_rgb(0.05, 0.05, 0.05);
+
 /// The base-skin colours as an iced [`Palette`](iced::theme::Palette): the
 /// dark window face and light text are the background/foreground pair,
 /// [`TITLE_BLUE`] drives interactive accents, and [`LCD_GREEN`] is the

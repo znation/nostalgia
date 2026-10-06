@@ -27,7 +27,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Add a Winamp two-tone bevel layer and frame the Now Playing and equalizer panels (found 2026-10-06)
+_None yet._
+
+## Done
+
+### Add a Winamp two-tone bevel layer and frame the Now Playing and equalizer panels (found 2026-10-06, done 2026-10-06)
 
 Found by plan 2026-10-06, following the steward drift note's call for custom
 widget styling. The palette landed (previous Done entry), but every panel is
@@ -60,20 +64,30 @@ chrome is a separate, later plan that styles against these same edge colours.
     `(top_left, bottom_right)` edge colours: `raised` → `(PANEL_EDGE_LIGHT,
     PANEL_EDGE_DARK)`, sunken → `(PANEL_EDGE_DARK, PANEL_EDGE_LIGHT)`. This is
     the testable heart of the bevel; the widget composition only consumes it.
-  - `fn horizontal_edge<'a>(color: Color) -> Element<'a, Message>` and
-    `fn vertical_edge<'a>(color: Color) -> Element<'a, Message>` — a 1px `Rule`
-    (`Rule::horizontal(1.0)` / `Rule::vertical(1.0)`) styled with
-    `rule::Style { color, radius: 0.0.into(), fill_mode: rule::FillMode::Full,
-    snap: true }`. `Rule`'s own layout makes the horizontal rule fill width at
-    1px tall and the vertical rule fill height at 1px wide, so the edges track
-    the panel without manual sizing.
-  - `fn beveled<'a>(content: impl Into<Element<'a, Message>>, raised: bool) ->
-    Element<'a, Message>` — a `Column` of top edge, a `Length::Fill` `Row` of
-    left edge + content + right edge, and bottom edge, coloured from
-    `bevel_edges`; the `Fill` row puts the vertical edges on the panel's outer
-    edges.
+  - `fn horizontal_edge<'a, R>(color: Color) -> Element<'a, Message, Theme, R>`
+    and `fn vertical_edge<'a, R>(color: Color) -> Element<'a, Message, Theme,
+    R>` (`R: iced::advanced::Renderer`) — a 1px `Rule` (`Rule::horizontal(1.0)`
+    / `Rule::vertical(1.0)`) styled with `rule::Style { color, radius:
+    0.0.into(), fill_mode: rule::FillMode::Full, snap: true }`. A `Rule` fills
+    whatever length it is laid out against; the [`Stack`] composition in
+    `beveled` is what constrains that to the panel's resolved size. The
+    renderer is generic so the layout test below can drive the composition
+    with iced's null `()` renderer.
+  - `fn bevel_overlay<'a, R>(top_left: Color, bottom_right: Color) ->
+    Element<'a, Message, Theme, R>` — a `Length::Fill` `Column` of top edge, a
+    `Length::Fill` `Row` of left edge + `Space::new().width(Length::Fill)` +
+    right edge, and bottom edge, coloured from `bevel_edges`; the spacer puts
+    the right edge on the panel's outer edge.
+  - `fn beveled<'a, R>(content: Element<'a, Message, Theme, R>, raised: bool)
+    -> Element<'a, Message, Theme, R>` — a `Stack` whose base layer is
+    `content` and whose overlay is `bevel_overlay`; the stack is
+    `width(Length::Fill)` and `height(Length::Shrink)`, so the panel fills the
+    available width but takes the content's intrinsic height. The `Stack`
+    sizes itself to its base layer and lays the overlay out against that
+    resolved size, so the bevel's vertical edges span the panel exactly
+    instead of the window's leftover height.
   - `pub fn lcd_well<'a>(content: impl Into<Element<'a, Message>>) ->
-    Element<'a, Message>` — wraps `content` in a `Container` with
+    Element<'a, Message>` — wraps `content` in a full-width `Container` with
     `background: LCD_BACKGROUND` and a few px of padding, then
     `beveled(.., false)`. No `text_color` is set, so the `"Now Playing: "`
     caption keeps the theme text colour and only the title's explicit
@@ -84,9 +98,12 @@ chrome is a separate, later plan that styles against these same edge colours.
   - `#[cfg(test)] mod tests`: `bevel_edges(true)` equals
     `(theme::PANEL_EDGE_LIGHT, theme::PANEL_EDGE_DARK)` and `bevel_edges(false)`
     equals the reverse; `lcd_well(Text::new("x"))` and
-    `raised_panel(Text::new("x"))` construct without panicking (the same
-    "builders construct" contract the `views` tests use, since iced `Element`s
-    expose no tree introspection).
+    `raised_panel(Text::new("x"))` build and request a `Length::Fill` width
+    with a `Length::Shrink` (content-driven) height; and
+    `beveled_tracks_content_height_and_fills_the_available_width` lays the
+    composition out with iced's null `()` renderer under a 500×400 limit and
+    asserts the resolved node is 500×7 for a 20×7 content — the height
+    regression guard the builder-only tests cannot be.
 - `src/ui/views.rs`:
   - In `view_now_playing`, wrap the existing `Row` in
     `super::style::lcd_well(..)`.
@@ -113,8 +130,6 @@ chrome is a separate, later plan that styles against these same edge colours.
 - `cargo run`: the Now Playing bar reads as a dark sunken LCD well (light
   top/left, dark bottom/right edges) and the equalizer as a raised panel (the
   reverse); manual check — the build and tests are the primary gate.
-
-## Done
 
 ### Add a Winamp 2.x base-skin palette and apply it as the app theme (done 2026-10-06)
 

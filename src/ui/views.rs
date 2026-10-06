@@ -18,7 +18,7 @@ use iced::{
 use crate::equalizer::{BAND_COUNT, BAND_FREQUENCIES, GAIN_MAX_DB, GAIN_MIN_DB};
 use crate::library::{Album, Artist, Song};
 
-use super::{CurrentView, Message};
+use super::{CurrentView, Message, style};
 
 /// A fixed-width horizontal gap between adjacent widgets.
 ///
@@ -200,10 +200,11 @@ pub fn now_playing_label<'a>(
 /// while the owned fallback is moved into the widget, so the built element
 /// never borrows a temporary.
 pub fn view_now_playing(label: Cow<'_, str>) -> Element<'_, Message> {
-    Row::new()
-        .push(Text::new("Now Playing: ").size(20))
-        .push(Text::new(label).size(20).color(super::theme::LCD_GREEN))
-        .into()
+    style::lcd_well(
+        Row::new()
+            .push(Text::new("Now Playing: ").size(20))
+            .push(Text::new(label).size(20).color(super::theme::LCD_GREEN)),
+    )
 }
 
 /// The Play/Pause button's label: "Pause" while playing, "Play" when
@@ -289,20 +290,21 @@ pub fn view_equalizer(
         );
     }
 
-    Column::new()
-        .push(labeled_button(
-            eq_enabled_label(enabled),
-            Message::ToggleEqualizer,
-        ))
-        .push(
-            Row::new().push(Text::new("Preamp")).push(
-                Slider::new(GAIN_MIN_DB..=GAIN_MAX_DB, preamp, Message::EqPreampChange)
-                    .step(1.0)
-                    .width(Length::Fixed(150.0)),
-            ),
-        )
-        .push(band_row)
-        .into()
+    style::raised_panel(
+        Column::new()
+            .push(labeled_button(
+                eq_enabled_label(enabled),
+                Message::ToggleEqualizer,
+            ))
+            .push(
+                Row::new().push(Text::new("Preamp")).push(
+                    Slider::new(GAIN_MIN_DB..=GAIN_MAX_DB, preamp, Message::EqPreampChange)
+                        .step(1.0)
+                        .width(Length::Fixed(150.0)),
+                ),
+            )
+            .push(band_row),
+    )
 }
 
 #[cfg(test)]
