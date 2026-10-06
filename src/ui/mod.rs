@@ -160,13 +160,28 @@ fn store_songs(player: &mut WinampPlayer, songs: Vec<Song>) -> Task<Message> {
     store_loaded(&mut player.songs, songs)
 }
 
+/// Formats the browse-fetch failure report: names the fetch that failed
+/// (e.g. "loading albums for artist \"artist-1\""), states the empty-list
+/// fallback, and includes the underlying error. The play path names the
+/// offending track; this names the offending query, so a failed browse tells
+/// the user which fetch failed and what it was fetching. Kept as a pure
+/// function so the report contract is testable without capturing stderr.
+fn fetch_failure_report<E: std::fmt::Debug>(context: &str, err: &E) -> String {
+    format!("music-library fetch failed ({context}); showing an empty list: {err:?}")
+}
+
 /// Runs a library-fetch future through iced's runtime, mapping its `Result`
 /// onto the matching `*Loaded` message (empty list on error, via
-/// [`loaded_or_empty`], with the error reported to stderr). Shared by the
-/// artists, albums, and songs load arms so none of them repeats the
+/// [`loaded_or_empty`], with the error reported to stderr via
+/// [`fetch_failure_report`]). `context` names the fetch — "loading favorite
+/// artists", "loading albums for artist \"artist-1\"", or "loading songs from
+/// album \"album-1\"" — so a failed browse reports *which* query failed and
+/// what it was fetching, not just that a fetch failed. Shared by the artists,
+/// albums, and songs load arms so none of them repeats the
 /// clone-the-service-then-`Task::perform` boilerplate.
 fn fetch_into<T, E, Fut>(
     service: &AppleMusicService,
+    context: String,
     fetch: impl FnOnce(AppleMusicService) -> Fut + Send + 'static,
     loaded: impl Fn(Vec<T>) -> Message + Send + 'static,
 ) -> Task<Message>
@@ -178,7 +193,7 @@ where
     let service = service.clone();
     Task::perform(async move { fetch(service).await }, move |result| {
         loaded_or_empty(result, loaded, |err| {
-            eprintln!("music-library fetch failed; showing an empty list: {err:?}")
+            eprintln!("{}", fetch_failure_report(&context, err))
         })
     })
 }
@@ -249,6 +264,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             player.current_view = CurrentView::Albums;
             fetch_into(
                 &player.apple_music_service,
+                format!("loading albums for artist {artist_id:?}"),
                 move |service| async move { service.get_albums_by_artist(&artist_id).await },
                 Message::AlbumsLoaded,
             )
@@ -257,6 +273,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             player.current_view = CurrentView::Songs;
             fetch_into(
                 &player.apple_music_service,
+                format!("loading songs from album {album_id:?}"),
                 move |service| async move { service.get_songs_from_album(&album_id).await },
                 Message::SongsLoaded,
             )
@@ -276,6 +293,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         }
         Message::LoadArtists => fetch_into(
             &player.apple_music_service,
+            "loading favorite artists".to_string(),
             |service| async move { service.get_favorite_artists().await },
             Message::ArtistsLoaded,
         ),
@@ -882,12 +900,27 @@ mod tests {
     // builds it, so the real behavior lives in the returned task. Drive that
     // task to completion and assert the mapped `*Loaded` message, as the
     // load-path arms would produce it.
+    #[test]
+    fn fetch_failure_report_names_the_fetch_and_includes_the_error() {
+        // The browse error report must identify the failing query (the fetch
+        // context plus the underlying error), not just say a fetch failed —
+        // otherwise a broken backend would log three identical lines for the
+        // artists, albums, and songs paths with no way to tell which query
+        // failed. The format is pinned here so the contract can't drift.
+        let report = fetch_failure_report("loading albums for artist \"artist-1\"", &"boom");
+        assert_eq!(
+            report,
+            "music-library fetch failed (loading albums for artist \"artist-1\"); showing an empty list: \"boom\""
+        );
+    }
+
     #[tokio::test]
     async fn fetch_into_schedules_fetch_and_maps_result_to_loaded_message() {
         let (player, _state) = test_player();
 
         let task = fetch_into(
             &player.apple_music_service,
+            "loading favorite artists".to_string(),
             |service| async move { service.get_favorite_artists().await },
             Message::ArtistsLoaded,
         );
