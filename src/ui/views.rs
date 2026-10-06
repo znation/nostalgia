@@ -46,12 +46,29 @@ fn labeled_button(label: &'static str, message: Message) -> Button<'static, Mess
         .style(|_theme, status| style::chrome_button_style(status))
 }
 
+/// The placeholder a browse view shows when its list has no rows: one wording
+/// per browse level, so an empty Artists, Albums, or Songs panel names the
+/// list rather than showing a blank panel. Pure so the per-level wording is
+/// testable without an iced renderer, like the button label helpers above.
+fn empty_list_label(view: &CurrentView) -> &'static str {
+    match view {
+        CurrentView::Artists => "No artists",
+        CurrentView::Albums => "No albums",
+        CurrentView::Songs => "No songs",
+    }
+}
+
 /// Builds a scrollable list where each item is a button showing a title
 /// followed by a secondary label, emitting the given message on press.
 /// Shared by the artists, albums, and songs views. The last tuple element
 /// marks the currently playing row: such a row gets a `▶` prefix and a
 /// highlighted background so the list reads as a playlist. Only `song_row`
 /// ever sets the flag to true.
+///
+/// When `items` yields nothing, the list renders `empty_label` in place of a
+/// blank panel. The caller picks the wording via [`empty_list_label`]; the
+/// label names the list, since the view cannot tell a genuinely empty list
+/// from one whose fetch is still in flight.
 ///
 /// The rows borrow their titles from the list the caller passes in rather
 /// than owning clones: this builder runs on every view refresh, so the
@@ -61,10 +78,13 @@ fn labeled_button(label: &'static str, message: Message) -> Button<'static, Mess
 /// allocates nothing either.
 fn scrollable_list<'a>(
     items: impl IntoIterator<Item = (&'a str, &'static str, Message, bool)>,
+    empty_label: &'static str,
 ) -> Element<'a, Message> {
     let mut column = Column::new().padding(20);
+    let mut is_empty = true;
 
     for (title, label, message, is_current) in items {
+        is_empty = false;
         let row = if is_current {
             Row::new().push(Text::new("▶ ").size(18))
         } else {
@@ -87,6 +107,10 @@ fn scrollable_list<'a>(
         } else {
             button
         });
+    }
+
+    if is_empty {
+        column = column.push(Text::new(empty_label).size(18));
     }
 
     Scrollable::new(column)
@@ -159,6 +183,7 @@ pub fn view_artists(artists: &[Artist], epoch: u64) -> Element<'_, Message> {
             .iter()
             .enumerate()
             .map(|(index, artist)| artist_row(epoch, index, artist)),
+        empty_list_label(&CurrentView::Artists),
     )
 }
 
@@ -172,6 +197,7 @@ pub fn view_albums(albums: &[Album], epoch: u64) -> Element<'_, Message> {
             .iter()
             .enumerate()
             .map(|(index, album)| album_row(epoch, index, album)),
+        empty_list_label(&CurrentView::Albums),
     )
 }
 
@@ -189,6 +215,7 @@ pub fn view_songs<'a>(
             .iter()
             .enumerate()
             .map(|(index, song)| song_row(epoch, index, song, current_track)),
+        empty_list_label(&CurrentView::Songs),
     )
 }
 
@@ -346,9 +373,10 @@ pub fn view_equalizer(
 #[cfg(test)]
 mod tests {
     use super::{
-        CurrentView, Message, album_row, artist_row, can_go_back, eq_enabled_label,
-        now_playing_label, play_pause_label, repeat_label, song_row, view_albums, view_artists,
-        view_back_button, view_equalizer, view_now_playing, view_songs, view_transport_controls,
+        CurrentView, Message, album_row, artist_row, can_go_back, empty_list_label,
+        eq_enabled_label, now_playing_label, play_pause_label, repeat_label, song_row, view_albums,
+        view_artists, view_back_button, view_equalizer, view_now_playing, view_songs,
+        view_transport_controls,
     };
     use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB};
     use crate::sample_library::sample_library;
@@ -559,6 +587,18 @@ mod tests {
         let _albums = view_albums(&[], 0);
         let _songs = view_songs(&[], 0, None);
         let _songs_marked = view_songs(&[], 0, Some("song-1"));
+    }
+
+    // Each browse level's empty buffer must render a label naming that list,
+    // not a blank panel: the panel cannot tell a genuinely empty list from one
+    // whose fetch is still in flight, so a blank panel leaves the user with no
+    // clue what is missing. `scrollable_list` renders the label it is handed;
+    // this pins the per-level wording it is handed.
+    #[test]
+    fn empty_list_label_names_the_empty_browse_level() {
+        assert_eq!(empty_list_label(&CurrentView::Artists), "No artists");
+        assert_eq!(empty_list_label(&CurrentView::Albums), "No albums");
+        assert_eq!(empty_list_label(&CurrentView::Songs), "No songs");
     }
 
     #[test]
