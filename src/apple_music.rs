@@ -302,4 +302,29 @@ mod tests {
             .unwrap();
         assert!(songs.is_empty());
     }
+
+    #[tokio::test]
+    async fn play_track_sets_current_track_and_starts_playing() {
+        let service = test_service();
+        let state = service.state.clone();
+
+        service.play_track("song-1").await.unwrap();
+
+        let state = state.lock().await;
+        assert_eq!(state.current_track.as_deref(), Some("song-1"));
+        assert!(state.is_playing);
+    }
+
+    #[tokio::test]
+    async fn pause_stops_playing_but_keeps_current_track() {
+        let service = test_service();
+        let state = service.state.clone();
+
+        service.play_track("song-1").await.unwrap();
+        service.pause().await.unwrap();
+
+        let state = state.lock().await;
+        assert!(!state.is_playing);
+        assert_eq!(state.current_track.as_deref(), Some("song-1"));
+    }
 }
