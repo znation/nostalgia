@@ -32,6 +32,15 @@ impl Default for AppState {
     }
 }
 
+impl AppState {
+    /// Flip the play/pause flag in place. The UI's Play/Pause button is the
+    /// only toggle caller; keeping the flip here (rather than inlined at the
+    /// call site) puts the toggling semantics next to the field they mutate.
+    pub fn toggle_playing(&mut self) {
+        self.is_playing = !self.is_playing;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::AppState;
@@ -47,5 +56,21 @@ mod tests {
     #[test]
     fn default_state_is_deterministic() {
         assert_eq!(AppState::default(), AppState::default());
+    }
+
+    #[test]
+    fn toggle_playing_flips_only_the_playback_flag() {
+        let mut state = AppState::default();
+        let track = state.current_track.clone();
+        let volume = state.volume;
+        assert!(!state.is_playing);
+
+        state.toggle_playing();
+        assert!(state.is_playing);
+        assert_eq!(state.current_track, track);
+        assert_eq!(state.volume, volume);
+
+        state.toggle_playing();
+        assert!(!state.is_playing);
     }
 }

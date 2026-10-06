@@ -76,7 +76,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
     match message {
         Message::PlayPause => {
             let mut state = player.state.blocking_lock();
-            state.is_playing = !state.is_playing;
+            state.toggle_playing();
             Task::none()
         }
         Message::NextTrack | Message::PreviousTrack => Task::none(),
