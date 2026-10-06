@@ -71,6 +71,7 @@ struct WinampPlayer {
 /// view renders come from the loaded `albums`/`songs` buffers, so carrying
 /// the selected ids here (as earlier versions did) only duplicated
 /// state nothing read.
+#[derive(Debug, PartialEq, Eq)]
 enum CurrentView {
     Artists,
     Albums,

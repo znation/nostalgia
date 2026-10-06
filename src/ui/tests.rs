@@ -10,6 +10,14 @@ fn test_player() -> (WinampPlayer, Arc<Mutex<AppState>>) {
     (WinampPlayer::new(state.clone()), state)
 }
 
+/// Asserts the player is showing `expected`. The tests pin the current
+/// view at each navigation step — `ArtistSelected`, `AlbumSelected`, and
+/// `Back` — and at startup, so the same view-equality check lives here
+/// once instead of spelling out a `matches!` at every site.
+fn assert_view(player: &WinampPlayer, expected: CurrentView) {
+    assert_eq!(player.current_view, expected);
+}
+
 /// Drives an iced `Task` to completion and hands its single `Output`
 /// action to `check`. `update` only schedules work as a `Task`, so a test
 /// that wants to observe the resulting message — `TrackPlayed` after
@@ -141,7 +149,7 @@ fn artist_selected_flips_to_albums_view() {
 
     let _ = update(&mut player, Message::ArtistSelected("artist-1".to_string()));
 
-    assert!(matches!(player.current_view, CurrentView::Albums));
+    assert_view(&player, CurrentView::Albums);
 }
 
 #[test]
@@ -150,7 +158,7 @@ fn album_selected_flips_to_songs_view() {
 
     let _ = update(&mut player, Message::AlbumSelected("album-3".to_string()));
 
-    assert!(matches!(player.current_view, CurrentView::Songs));
+    assert_view(&player, CurrentView::Songs);
 }
 
 // The browse hierarchy must be navigable back up (Songs → Albums →
@@ -164,10 +172,10 @@ fn back_from_albums_returns_to_artists() {
 
     let _ = update(&mut player, Message::ArtistSelected("artist-1".to_string()));
 
-    assert!(matches!(player.current_view, CurrentView::Albums));
+    assert_view(&player, CurrentView::Albums);
 
     let _ = update(&mut player, Message::Back);
-    assert!(matches!(player.current_view, CurrentView::Artists));
+    assert_view(&player, CurrentView::Artists);
 }
 
 #[test]
@@ -177,19 +185,19 @@ fn back_from_songs_returns_to_albums() {
     let _ = update(&mut player, Message::ArtistSelected("artist-1".to_string()));
     let _ = update(&mut player, Message::AlbumSelected("album-1".to_string()));
 
-    assert!(matches!(player.current_view, CurrentView::Songs));
+    assert_view(&player, CurrentView::Songs);
 
     let _ = update(&mut player, Message::Back);
-    assert!(matches!(player.current_view, CurrentView::Albums));
+    assert_view(&player, CurrentView::Albums);
 }
 
 #[test]
 fn back_from_artists_is_a_noop() {
     let (mut player, _state) = test_player();
-    assert!(matches!(player.current_view, CurrentView::Artists));
+    assert_view(&player, CurrentView::Artists);
 
     let _ = update(&mut player, Message::Back);
-    assert!(matches!(player.current_view, CurrentView::Artists));
+    assert_view(&player, CurrentView::Artists);
 }
 
 // The browse arms do two things — flip the view and fetch the next
@@ -223,7 +231,7 @@ async fn artist_selected_fetches_the_artists_albums_into_the_player() {
 
     // The arm flips to the albums view before the fetched list is fed
     // back through the update loop.
-    assert!(matches!(player.current_view, CurrentView::Albums));
+    assert_view(&player, CurrentView::Albums);
 }
 
 #[tokio::test]
@@ -248,7 +256,7 @@ async fn album_selected_fetches_the_albums_songs_into_the_player() {
 
     // As with the artist arm: the view flips to songs, and the fetched
     // list lands in the browse buffer in library order.
-    assert!(matches!(player.current_view, CurrentView::Songs));
+    assert_view(&player, CurrentView::Songs);
 }
 
 // Startup wiring: `boot` hands iced a fresh player plus the task that
@@ -262,7 +270,7 @@ async fn boot_schedules_loading_the_artist_list() {
     let state = Arc::new(Mutex::new(AppState::default()));
 
     let (player, task) = boot(state);
-    assert!(matches!(player.current_view, CurrentView::Artists));
+    assert_view(&player, CurrentView::Artists);
 
     drive_task(task, "boot", |message| {
         assert!(matches!(message, Message::LoadArtists));
@@ -768,7 +776,7 @@ async fn fetch_into_maps_a_failed_fetch_to_an_empty_loaded_message() {
 fn new_player_starts_at_artists_with_nothing_selected() {
     let (player, _state) = test_player();
 
-    assert!(matches!(player.current_view, CurrentView::Artists));
+    assert_view(&player, CurrentView::Artists);
     assert!(player.artists.is_empty());
     assert!(player.albums.is_empty());
     assert!(player.songs.is_empty());
