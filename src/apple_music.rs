@@ -14,9 +14,8 @@ struct AppleMusicToken {
 }
 
 /// The music-library service. Until the real Apple Music API lands, every
-/// browse query is answered from an in-memory [`sample_library`], so the UI
-/// and its tests share the same stub data (consistent with the existing
-/// `get_library` stub).
+/// browse query is answered from the shared [`sample_library`], so the UI
+/// and its tests agree on the same stub data.
 #[derive(Clone)]
 pub struct AppleMusicService {
     client: Client,
@@ -65,19 +64,6 @@ impl AppleMusicService {
 
         println!("Authenticating with Apple Music...");
         Ok(())
-    }
-
-    async fn get_library(&self) -> Result<Vec<String>, Error> {
-        // In a real implementation, this would:
-        // 1. Make API call to get user's library
-        // 2. Return list of tracks
-
-        println!("Fetching Apple Music library...");
-        Ok(vec![
-            "Track 1".to_string(),
-            "Track 2".to_string(),
-            "Track 3".to_string(),
-        ])
     }
 
     pub async fn play_track(&self, track_id: &str) -> Result<(), Error> {

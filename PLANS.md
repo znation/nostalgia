@@ -130,8 +130,8 @@ update, view)` builder. Independently, the UI calls
 `get_songs_from_album` and imports `Artist`, `Album`, `Song`, none of which
 `src/library.rs` defines. Land the artist → album → song library-browse
 flow end to end: add the missing model and service methods (backed by an
-in-memory sample library, matching the existing stub data in `get_library`; real
-Apple Music auth/API is a later, larger plan), port the UI to iced 0.14, and get
+in-memory sample library; real Apple Music auth/API is a later, larger plan),
+port the UI to iced 0.14, and get
 `cargo build` + `cargo test` green.
 
 **Approach.**
