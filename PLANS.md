@@ -3,21 +3,27 @@
 Planned features, written by the plan loop and implemented by the feature loop.
 Each plan: goal, approach, files touched, acceptance criteria. Move finished plans to Done.
 
-> **Steward drift note (2026-10-06).** The initial prompt names two commitments —
-> a "very close if not pixel-perfect" classic Winamp UI and Apple Music as the
-> library. The backlog plans neither. Every `## Planned`/`## Done` entry is
-> functional, and no PLANS.md entry mentions a skin, pixel fidelity, or custom
-> styling (grep for `skin`, `pixel`, `fidelity`, `chrome`, `theme`, `styling`
-> matches only `Length::Pixels`). The running UI uses iced 0.14's default widgets
-> and theme; the only custom styling outside the test suite is one highlight
-> color for the playing row (`src/ui/views.rs:35`). The library side is also all
-> stub: `AppleMusicService` answers every browse query from `sample_library()`
-> and `play_track` only mutates shared state; the iced-0.14 entry calls real
-> auth/API "a later, larger plan", but `## Planned` holds no such entry. Risk:
-> each view added on default iced chrome makes the eventual Winamp skin a rework
-> of every view rather than a layer. Recommend the plan loop schedule a Winamp
-> fidelity/skin plan (2.x metrics and colors, custom widget styling) before more
-> view work, and keep the Apple Music integration plan on the near horizon.
+> **Steward drift note (2026-10-06; updated 2026-10-06).** The initial prompt
+> names two commitments — a "very close if not pixel-perfect" classic Winamp UI
+> and Apple Music as the library. The base-skin foundation for the first has
+> landed ("Add a Winamp 2.x base-skin palette and apply it as the app theme",
+> done 2026-10-06): `src/ui/theme.rs` names the Winamp 2.x base-skin colours and
+> `init_ui` installs the custom `Winamp` theme app-wide via
+> `theme::winamp_theme`. What remains unplanned is widget-level fidelity — that
+> entry itself defers "title bar, panel bevels, playlist chrome" to later plans,
+> and `## Planned` is empty — so the window still renders iced 0.14's default
+> widget shapes with the base-skin palette, an LCD-green Now Playing title, and
+> a highlighted playing row, but no custom title bar, bevels, or playlist
+> chrome. The library side is still all stub: `AppleMusicService` answers every
+> browse query (`get_favorite_artists`, `get_albums_by_artist`,
+> `get_songs_from_album`) from `sample_library()`, `play_track` only mutates
+> shared state, and the token field is unset — and no PLANS.md entry plans the
+> real integration. Risk: each view added on default widget shapes makes the
+> eventual pixel-fidelity pass a rework of every view rather than a styling
+> layer, and the longer Apple Music stays stubbed the more UI grows around the
+> sample library's shape. Recommend the plan loop schedule a Winamp fidelity
+> plan (2.x metrics, title bar, panel bevels, playlist chrome) before more view
+> work, and keep the Apple Music integration plan on the near horizon.
 
 ## Planned
 
