@@ -81,6 +81,16 @@ fn boot(state: Arc<Mutex<AppState>>) -> (WinampPlayer, Task<Message>) {
     (WinampPlayer::new(state), Task::done(Message::LoadArtists))
 }
 
+/// Maps a library-fetch `Result` to its matching `*Loaded` message, falling
+/// back to an empty list on error. Shared by the artists, albums, and songs
+/// load paths so the error fallback stays identical in all three.
+fn loaded_or_empty<T, E>(result: Result<Vec<T>, E>, loaded: impl Fn(Vec<T>) -> Message) -> Message {
+    match result {
+        Ok(items) => loaded(items),
+        Err(_) => loaded(Vec::new()),
+    }
+}
+
 fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
     match message {
         Message::PlayPause => {
@@ -108,10 +118,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             let service = player.apple_music_service.clone();
             Task::perform(
                 async move { service.get_albums_by_artist(&artist_id).await },
-                |result| match result {
-                    Ok(albums) => Message::AlbumsLoaded(albums),
-                    Err(_) => Message::AlbumsLoaded(Vec::new()),
-                },
+                |result| loaded_or_empty(result, Message::AlbumsLoaded),
             )
         }
         Message::AlbumSelected(album_id) => {
@@ -119,20 +126,14 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             let service = player.apple_music_service.clone();
             Task::perform(
                 async move { service.get_songs_from_album(&album_id).await },
-                |result| match result {
-                    Ok(songs) => Message::SongsLoaded(songs),
-                    Err(_) => Message::SongsLoaded(Vec::new()),
-                },
+                |result| loaded_or_empty(result, Message::SongsLoaded),
             )
         }
         Message::LoadArtists => {
             let service = player.apple_music_service.clone();
             Task::perform(
                 async move { service.get_favorite_artists().await },
-                |result| match result {
-                    Ok(artists) => Message::ArtistsLoaded(artists),
-                    Err(_) => Message::ArtistsLoaded(Vec::new()),
-                },
+                |result| loaded_or_empty(result, Message::ArtistsLoaded),
             )
         }
         Message::ArtistsLoaded(artists) => {
@@ -318,6 +319,23 @@ mod tests {
         let _ = update(&mut player, Message::SongsLoaded(songs.clone()));
 
         assert_eq!(player.songs, songs);
+    }
+
+    #[test]
+    fn loaded_or_empty_maps_ok_and_err_to_loaded() {
+        let albums = vec![Album {
+            id: "album-1".to_string(),
+            title: "First Record".to_string(),
+            artist_id: "artist-1".to_string(),
+        }];
+
+        let ok_message =
+            loaded_or_empty::<Album, String>(Ok(albums.clone()), Message::AlbumsLoaded);
+        assert!(matches!(ok_message, Message::AlbumsLoaded(v) if v == albums));
+
+        let err_message =
+            loaded_or_empty::<Album, String>(Err("boom".to_string()), Message::AlbumsLoaded);
+        assert!(matches!(err_message, Message::AlbumsLoaded(v) if v.is_empty()));
     }
 
     #[test]
