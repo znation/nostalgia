@@ -13,7 +13,7 @@ Nostalgia is a (very close if not pixel-perfect) clone of the classic Winamp UI,
 
 <!-- tumwater:status:start -->
 Early skeleton (0.1.0): an iced (0.14) desktop shell — Now Playing bar, transport controls, and an
-artist → album → song browser — over a stub Apple Music service; the Apple Music API is not wired
+artist → album → song browser over an in-memory sample library; the Apple Music API is not wired
 up yet. Open work lives in PLANS.md, BUGS.md, and QUESTIONS.md.
 <!-- tumwater:status:end -->
 
