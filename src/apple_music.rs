@@ -21,10 +21,11 @@ use crate::state::AppState;
 
 /// A failed music-library or playback operation.
 ///
-/// The stub never produces one — every in-memory query and playback
-/// transition succeeds — but the seam carries this type so a real Apple
-/// Music backend can report a failure without tying the seam's public API
-/// to a specific HTTP client. The message is the human-readable cause.
+/// The stub produces one only when `play_track` is handed an empty track id;
+/// every other in-memory query and playback transition succeeds. The seam
+/// carries this type so a real Apple Music backend can report a failure
+/// without tying the seam's public API to a specific HTTP client. The
+/// message is the human-readable cause.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppleMusicError(String);
 
@@ -36,12 +37,12 @@ impl std::fmt::Display for AppleMusicError {
 
 impl std::error::Error for AppleMusicError {}
 
-// The seam's error constructor is kept for a real Apple Music backend that
-// will report failures from another module — no stub call site constructs one
-// yet — so `dead_code` is allowed on exactly this block, as it is on the
-// transport stubs and token field below. A *newly* dead item elsewhere still
-// triggers the warning the clean loop relies on to find removable code.
-#[allow(dead_code)]
+// The seam's error constructor is called by `play_track` to reject an empty
+// track id and stays public for a real Apple Music backend that will report
+// failures from another module, so it is live and needs no `dead_code`
+// allowance. The transport stubs and token field below still carry theirs; a
+// *newly* dead item elsewhere still triggers the warning the clean loop
+// relies on to find removable code.
 impl AppleMusicError {
     /// Builds a failure whose [`Display`](std::fmt::Display) output is
     /// `message` — the human-readable cause. The wrapped message is private,
@@ -132,9 +133,17 @@ impl AppleMusicService {
     }
 
     /// Plays the given track by id, recording it as the current track and
-    /// marking it playing. The stub owns only this shared-state transition —
-    /// a real implementation would add the API call that starts audio.
+    /// marking it playing. An empty `track_id` is rejected with an
+    /// [`AppleMusicError`] and leaves shared state untouched: a blank id can
+    /// never name a track, so recording it would show a blank Now Playing
+    /// entry and report playback of nothing as playing. The stub owns only
+    /// this shared-state transition — a real implementation would add the API
+    /// call that starts audio.
     pub async fn play_track(&self, track_id: &str) -> Result<(), AppleMusicError> {
+        if track_id.is_empty() {
+            return Err(AppleMusicError::new("track id must not be empty"));
+        }
+
         let mut state = self.state.lock().await;
         state.current_track = Some(track_id.to_string());
         state.is_playing = true;
@@ -387,6 +396,21 @@ mod tests {
         service.play_track("song-2").await.unwrap();
 
         assert_playback_state(&state, Some("song-2"), true).await;
+    }
+
+    // An empty id can never name a track, so the seam rejects it instead of
+    // recording a blank `current_track` and marking nothing as playing. The
+    // error path the UI's `played_or_reported` reports is pinned here, and
+    // shared state must be left untouched (the rejection happens before the
+    // state lock).
+    #[tokio::test]
+    async fn play_track_rejects_an_empty_track_id_without_touching_state() {
+        let (service, state) = test_service_with_state();
+
+        let error = service.play_track("").await.unwrap_err();
+
+        assert_eq!(error.to_string(), "track id must not be empty");
+        assert_playback_state(&state, None, false).await;
     }
 
     #[tokio::test]
