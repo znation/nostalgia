@@ -42,9 +42,9 @@ impl AppleMusicService {
     }
 
     pub async fn play_track(&self, track_id: &str) -> Result<(), Error> {
-        // In a real implementation, this would:
-        // 1. Make API call to start playback
-        // 2. Update the state with current track
+        // No real playback yet — the stub's job is the shared-state
+        // transition: record the selected track and mark it playing.
+        // A real implementation would add the API call that starts audio.
 
         let mut state = self.state.lock().await;
         state.current_track = Some(track_id.to_string());
@@ -55,9 +55,9 @@ impl AppleMusicService {
     }
 
     async fn pause(&self) -> Result<(), Error> {
-        // In a real implementation, this would:
-        // 1. Make API call to pause playback
-        // 2. Update the state
+        // As with `play_track`, the stub only owns the shared-state
+        // transition — clear the playing flag. A real implementation
+        // would add the API call that pauses audio.
 
         let mut state = self.state.lock().await;
         state.is_playing = false;
