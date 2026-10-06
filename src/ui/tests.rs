@@ -735,8 +735,19 @@ fn fetch_failure_report_names_the_fetch_and_includes_the_error() {
     let report = fetch_failure_report("loading albums for artist \"artist-1\"", &"boom");
     assert_eq!(
         report,
-        "music-library fetch failed (loading albums for artist \"artist-1\"); showing an empty list: \"boom\""
+        "music-library fetch failed (loading albums for artist \"artist-1\"); showing an empty list: boom"
     );
+}
+
+#[test]
+fn play_failure_report_names_the_track_and_includes_the_error() {
+    // The playback error report is the sibling of the browse one: it must
+    // name the offending track and include the underlying error, so a
+    // rejected play is diagnosable from the log. `Display` formatting is
+    // pinned here too — `&str` renders bare, so a regression to `Debug`
+    // would quote it as `"boom"`.
+    let report = play_failure_report("track-1", &"boom");
+    assert_eq!(report, "failed to play track \"track-1\": boom");
 }
 
 #[tokio::test]

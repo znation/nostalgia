@@ -187,8 +187,21 @@ fn store_songs(player: &mut WinampPlayer, songs: Vec<Song>) -> Task<Message> {
 /// offending track; this names the offending query, so a failed browse tells
 /// the user which fetch failed and what it was fetching. Kept as a pure
 /// function so the report contract is testable without capturing stderr.
-fn fetch_failure_report<E: std::fmt::Debug>(context: &str, err: &E) -> String {
-    format!("music-library fetch failed ({context}); showing an empty list: {err:?}")
+/// The error is formatted with `Display`, not `Debug`, so a real backend's
+/// error reads as its human-readable cause (see `AppleMusicError`'s `Display`
+/// impl) rather than a struct dump.
+fn fetch_failure_report<E: std::fmt::Display>(context: &str, err: &E) -> String {
+    format!("music-library fetch failed ({context}); showing an empty list: {err}")
+}
+
+/// Formats the playback failure report: names the offending track and
+/// includes the underlying error. The playback twin of
+/// [`fetch_failure_report`], and pure for the same reason — the play path's
+/// stderr report is testable without capturing stderr. The error is formatted
+/// with `Display` so a real backend's failure reads as its human-readable
+/// cause rather than a struct dump.
+fn play_failure_report<E: std::fmt::Display>(track_id: &str, err: &E) -> String {
+    format!("failed to play track {track_id:?}: {err}")
 }
 
 /// Runs a library-fetch future through iced's runtime, mapping its `Result`
@@ -208,7 +221,7 @@ fn fetch_into<T, E, Fut>(
 ) -> Task<Message>
 where
     T: Send + 'static,
-    E: std::fmt::Debug + Send + 'static,
+    E: std::fmt::Display + Send + 'static,
     Fut: Future<Output = Result<Vec<T>, E>> + Send + 'static,
 {
     let service = service.clone();
@@ -285,7 +298,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 async move { service.play_track(&track_id).await },
                 move |result| {
                     played_or_reported(result, |err| {
-                        eprintln!("failed to play track {id_for_report:?}: {err:?}")
+                        eprintln!("{}", play_failure_report(&id_for_report, err))
                     })
                 },
             )
