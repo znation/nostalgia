@@ -144,13 +144,13 @@ fn toggle_equalizer_flips_shared_state() {
 fn eq_preamp_change_clamps_value_before_storing() {
     let (mut player, state) = test_player();
     // Default preamp is flat (see `AppState::default`).
-    assert_eq!(state.blocking_lock().eq_preamp, 0.0);
+    assert_eq!(state.blocking_lock().eq_preamp(), 0.0);
 
     let _ = update(&mut player, Message::EqPreampChange(99.0));
-    assert_eq!(state.blocking_lock().eq_preamp, GAIN_MAX_DB);
+    assert_eq!(state.blocking_lock().eq_preamp(), GAIN_MAX_DB);
 
     let _ = update(&mut player, Message::EqPreampChange(-99.0));
-    assert_eq!(state.blocking_lock().eq_preamp, GAIN_MIN_DB);
+    assert_eq!(state.blocking_lock().eq_preamp(), GAIN_MIN_DB);
 }
 
 #[test]
@@ -158,10 +158,10 @@ fn eq_band_change_clamps_value_before_storing() {
     let (mut player, state) = test_player();
 
     let _ = update(&mut player, Message::EqBandChange(0, 99.0));
-    assert_eq!(state.blocking_lock().eq_bands[0], GAIN_MAX_DB);
+    assert_eq!(state.blocking_lock().eq_bands()[0], GAIN_MAX_DB);
 
     let _ = update(&mut player, Message::EqBandChange(1, -99.0));
-    assert_eq!(state.blocking_lock().eq_bands[1], GAIN_MIN_DB);
+    assert_eq!(state.blocking_lock().eq_bands()[1], GAIN_MIN_DB);
 }
 
 // `Message::Stop` uses `blocking_lock`, which panics inside an async

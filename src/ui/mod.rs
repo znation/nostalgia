@@ -352,8 +352,8 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
             state.volume(),
             state.repeat,
             state.eq_enabled,
-            state.eq_preamp,
-            state.eq_bands,
+            state.eq_preamp(),
+            state.eq_bands(),
         )
     };
 

@@ -26,11 +26,15 @@ pub struct AppState {
     /// gains below are stored regardless so turning it back on restores them.
     pub eq_enabled: bool,
     /// The preamp gain in decibels applied ahead of the bands, in
-    /// `[equalizer::GAIN_MIN_DB, equalizer::GAIN_MAX_DB]`.
-    pub eq_preamp: f32,
+    /// `[equalizer::GAIN_MIN_DB, equalizer::GAIN_MAX_DB]`. Kept private like
+    /// `volume`: [`AppState::set_eq_preamp`] is its only writer and clamps,
+    /// and [`AppState::eq_preamp`] is its only reader.
+    eq_preamp: f32,
     /// The gain in decibels of each of the [`equalizer::BAND_COUNT`] bands,
-    /// low frequency to high; flat (all `0.0`) by default.
-    pub eq_bands: [f32; equalizer::BAND_COUNT],
+    /// low frequency to high; flat (all `0.0`) by default. Kept private like
+    /// `volume`: [`AppState::set_eq_band`] is its only writer and clamps, and
+    /// [`AppState::eq_bands`] is its only reader.
+    eq_bands: [f32; equalizer::BAND_COUNT],
 }
 
 /// The one production `AppState` is built in the app's entry point (`main`)
@@ -93,8 +97,8 @@ impl AppState {
 
     /// Store a preamp gain, clamped to the valid range via
     /// [`equalizer::clamp_gain`]. The UI's preamp slider is the only caller;
-    /// the clamp lives in `equalizer` so the UI can never store an
-    /// out-of-range (or NaN) gain in shared state.
+    /// the field is private and this is its only writer, so the clamp holds
+    /// no matter which caller stores a gain.
     pub fn set_eq_preamp(&mut self, gain: f32) {
         self.eq_preamp = equalizer::clamp_gain(gain);
     }
@@ -102,7 +106,9 @@ impl AppState {
     /// Store a clamped gain into band `band`. An out-of-range `band` index
     /// (a stale slider message after the band count shrinks, say) is ignored
     /// rather than panicking: `get_mut` yields `None` and nothing is stored,
-    /// so a bad index can't take the window down mid-drag.
+    /// so a bad index can't take the window down mid-drag. The field is
+    /// private and this is its only writer, so every stored band gain is
+    /// clamped.
     pub fn set_eq_band(&mut self, band: usize, gain: f32) {
         if let Some(slot) = self.eq_bands.get_mut(band) {
             *slot = equalizer::clamp_gain(gain);
@@ -114,6 +120,24 @@ impl AppState {
     #[must_use]
     pub fn volume(&self) -> f32 {
         self.volume
+    }
+
+    /// The current preamp gain in decibels, always within
+    /// `[equalizer::GAIN_MIN_DB, equalizer::GAIN_MAX_DB]` (see
+    /// [`AppState::set_eq_preamp`]). The UI's `view` reads it for the preamp
+    /// slider.
+    #[must_use]
+    pub fn eq_preamp(&self) -> f32 {
+        self.eq_preamp
+    }
+
+    /// The current per-band gains in decibels, low frequency to high, each
+    /// always within `[equalizer::GAIN_MIN_DB, equalizer::GAIN_MAX_DB]` (see
+    /// [`AppState::set_eq_band`]). The UI's `view` reads them for the band
+    /// sliders.
+    #[must_use]
+    pub fn eq_bands(&self) -> [f32; equalizer::BAND_COUNT] {
+        self.eq_bands
     }
 
     /// Stores `volume`, clamped to `[0.0, 1.0]` with NaN mapped to silence by
@@ -168,8 +192,8 @@ mod tests {
         assert!(!state.repeat);
         assert_eq!(state.volume(), 0.5);
         assert!(!state.eq_enabled);
-        assert_eq!(state.eq_preamp, 0.0);
-        assert_eq!(state.eq_bands, [0.0; BAND_COUNT]);
+        assert_eq!(state.eq_preamp(), 0.0);
+        assert_eq!(state.eq_bands(), [0.0; BAND_COUNT]);
     }
 
     #[test]
@@ -206,8 +230,8 @@ mod tests {
     fn toggle_equalizer_flips_only_the_eq_flag() {
         let mut state = AppState::default();
         assert!(!state.eq_enabled);
-        let preamp = state.eq_preamp;
-        let bands = state.eq_bands;
+        let preamp = state.eq_preamp();
+        let bands = state.eq_bands();
 
         assert_keeps_track_and_volume(&mut state, AppState::toggle_equalizer);
         assert!(state.eq_enabled);
@@ -216,8 +240,8 @@ mod tests {
         assert_keeps_track_and_volume(&mut state, AppState::toggle_equalizer);
         assert!(!state.eq_enabled);
         // Toggling never disturbs the stored curve, so re-enabling restores it.
-        assert_eq!(state.eq_preamp, preamp);
-        assert_eq!(state.eq_bands, bands);
+        assert_eq!(state.eq_preamp(), preamp);
+        assert_eq!(state.eq_bands(), bands);
     }
 
     #[test]
@@ -225,13 +249,13 @@ mod tests {
         let mut state = AppState::default();
 
         assert_keeps_track_and_volume(&mut state, |state| state.set_eq_preamp(99.0));
-        assert_eq!(state.eq_preamp, GAIN_MAX_DB);
+        assert_eq!(state.eq_preamp(), GAIN_MAX_DB);
 
         assert_keeps_track_and_volume(&mut state, |state| state.set_eq_preamp(-99.0));
-        assert_eq!(state.eq_preamp, GAIN_MIN_DB);
+        assert_eq!(state.eq_preamp(), GAIN_MIN_DB);
 
         assert_keeps_track_and_volume(&mut state, |state| state.set_eq_preamp(3.5));
-        assert_eq!(state.eq_preamp, 3.5);
+        assert_eq!(state.eq_preamp(), 3.5);
     }
 
     #[test]
@@ -239,10 +263,10 @@ mod tests {
         let mut state = AppState::default();
 
         assert_keeps_track_and_volume(&mut state, |state| state.set_eq_band(0, 99.0));
-        assert_eq!(state.eq_bands[0], GAIN_MAX_DB);
+        assert_eq!(state.eq_bands()[0], GAIN_MAX_DB);
 
         assert_keeps_track_and_volume(&mut state, |state| state.set_eq_band(9, -99.0));
-        assert_eq!(state.eq_bands[9], GAIN_MIN_DB);
+        assert_eq!(state.eq_bands()[9], GAIN_MIN_DB);
     }
 
     #[test]
@@ -250,7 +274,7 @@ mod tests {
         let mut state = AppState::default();
 
         assert_keeps_track_and_volume(&mut state, |state| state.set_eq_band(BAND_COUNT, 5.0));
-        assert_eq!(state.eq_bands, [0.0; BAND_COUNT]);
+        assert_eq!(state.eq_bands(), [0.0; BAND_COUNT]);
     }
 
     #[test]
