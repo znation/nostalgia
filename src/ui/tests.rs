@@ -11,6 +11,18 @@ fn test_player() -> (WinampPlayer, Arc<Mutex<AppState>>) {
     (WinampPlayer::new(state.clone()), state)
 }
 
+/// A fresh player over the shared three-song stepping album
+/// ([`stepping_songs`]) with `current` set as the playing track — the
+/// starting shape the Next/Previous wiring tests step from. Seven tests
+/// build this same `test_player`-plus-fixture setup; only the starting
+/// track differs (or is absent), so it lives here once.
+fn player_stepping_from(current: Option<&str>) -> (WinampPlayer, Arc<Mutex<AppState>>) {
+    let (mut player, state) = test_player();
+    player.songs = stepping_songs();
+    state.blocking_lock().current_track = current.map(str::to_string);
+    (player, state)
+}
+
 /// Asserts the player is showing `expected`. The tests pin the current
 /// view at each navigation step — `ArtistSelected`, `AlbumSelected`, and
 /// `Back` — and at startup, so the same view-equality check lives here
@@ -426,9 +438,7 @@ fn assert_no_task(task: Task<Message>) {
 
 #[test]
 fn next_track_steps_to_the_following_song() {
-    let (mut player, state) = test_player();
-    player.songs = stepping_songs();
-    state.blocking_lock().current_track = Some("song-1".to_string());
+    let (mut player, _state) = player_stepping_from(Some("song-1"));
 
     let task = update(&mut player, Message::NextTrack);
 
@@ -437,9 +447,7 @@ fn next_track_steps_to_the_following_song() {
 
 #[test]
 fn previous_track_steps_to_the_preceding_song() {
-    let (mut player, state) = test_player();
-    player.songs = stepping_songs();
-    state.blocking_lock().current_track = Some("song-2".to_string());
+    let (mut player, _state) = player_stepping_from(Some("song-2"));
 
     let task = update(&mut player, Message::PreviousTrack);
 
@@ -448,8 +456,7 @@ fn previous_track_steps_to_the_preceding_song() {
 
 #[test]
 fn next_track_with_no_current_track_starts_at_the_first_song() {
-    let (mut player, _state) = test_player();
-    player.songs = stepping_songs();
+    let (mut player, _state) = player_stepping_from(None);
 
     let task = update(&mut player, Message::NextTrack);
 
@@ -466,8 +473,7 @@ fn next_track_with_no_current_track_starts_at_the_first_song() {
 // or load no songs).
 #[test]
 fn previous_track_with_no_current_track_starts_at_the_last_song() {
-    let (mut player, _state) = test_player();
-    player.songs = stepping_songs();
+    let (mut player, _state) = player_stepping_from(None);
 
     let task = update(&mut player, Message::PreviousTrack);
 
@@ -490,12 +496,10 @@ fn previous_track_with_no_current_track_starts_at_the_last_song() {
 // would clear every existing test.
 #[test]
 fn stepping_after_browsing_away_steps_within_the_new_albums_songs() {
-    let (mut player, state) = test_player();
-    player.songs = stepping_songs();
+    let (mut player, _state) = player_stepping_from(Some("song-4"));
     // Played song-4 (an album-2 song) from the library, then browsed to
     // album-1's songs (now the current buffer): the current track names a
     // song that is not in the buffer, exactly as after a browse-away.
-    state.blocking_lock().current_track = Some("song-4".to_string());
 
     let next = update(&mut player, Message::NextTrack);
     assert_track_selected(next, "song-1");
@@ -532,9 +536,7 @@ fn previous_track_with_no_songs_loaded_does_nothing() {
 // the shared flag, which no other test drives.
 #[test]
 fn next_track_follows_the_shared_repeat_flag_at_the_albums_end() {
-    let (mut player, state) = test_player();
-    player.songs = stepping_songs();
-    state.blocking_lock().current_track = Some("song-3".to_string());
+    let (mut player, state) = player_stepping_from(Some("song-3"));
 
     // Repeat off (the default): Next from the last song stays on it.
     let task = update(&mut player, Message::NextTrack);
@@ -558,9 +560,7 @@ fn next_track_follows_the_shared_repeat_flag_at_the_albums_end() {
 // would clear every existing test and only fail here.
 #[test]
 fn previous_track_follows_the_shared_repeat_flag_at_the_albums_start() {
-    let (mut player, state) = test_player();
-    player.songs = stepping_songs();
-    state.blocking_lock().current_track = Some("song-1".to_string());
+    let (mut player, state) = player_stepping_from(Some("song-1"));
 
     // Repeat off (the default): Previous from the first song stays on it.
     let task = update(&mut player, Message::PreviousTrack);
