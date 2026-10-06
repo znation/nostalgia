@@ -131,4 +131,98 @@ mod tests {
         assert!(!library.albums_by_artist.is_empty());
         assert!(!library.songs_by_album.is_empty());
     }
+
+    // The browse views render these exact names, so the library's content is
+    // the data contract the UI depends on. The service tests reach the same
+    // data but assert ids only, so a renamed or reordered artist in this
+    // source of truth would pass every existing test while showing wrong
+    // names on screen. Pin the ids and names together, in order.
+    #[test]
+    fn sample_library_exposes_the_expected_artists_in_order() {
+        let artists: Vec<(&str, &str)> = sample_library()
+            .artists
+            .iter()
+            .map(|artist| (artist.id.as_str(), artist.name.as_str()))
+            .collect();
+        assert_eq!(
+            artists,
+            vec![
+                ("artist-1", "The Sample Band"),
+                ("artist-2", "Echo Chamber"),
+                ("artist-3", "Mono Tones"),
+            ]
+        );
+    }
+
+    // `index_by` inserts only groups that exist, so an artist without albums
+    // (artist-3) gets no key — never an empty group. The key set is exactly
+    // the two artists that have albums, and each group is complete and in
+    // library order; the ids and titles are the content the albums view
+    // renders.
+    #[test]
+    fn albums_are_indexed_by_artist_in_library_order_with_no_empty_groups() {
+        let library = sample_library();
+
+        assert_eq!(library.albums_by_artist.len(), 2);
+        assert!(!library.albums_by_artist.contains_key("artist-3"));
+
+        let artist_1_albums: Vec<(&str, &str)> = library.albums_by_artist["artist-1"]
+            .iter()
+            .map(|album| (album.id.as_str(), album.title.as_str()))
+            .collect();
+        assert_eq!(
+            artist_1_albums,
+            vec![("album-1", "First Record"), ("album-2", "Second Record"),]
+        );
+
+        let artist_2_albums: Vec<(&str, &str)> = library.albums_by_artist["artist-2"]
+            .iter()
+            .map(|album| (album.id.as_str(), album.title.as_str()))
+            .collect();
+        assert_eq!(artist_2_albums, vec![("album-3", "Debut")]);
+    }
+
+    // As with albums: every album with songs gets exactly one group keyed by
+    // its id, in library order, and the group holds the titles the songs
+    // view renders.
+    #[test]
+    fn songs_are_indexed_by_album_in_library_order_with_no_empty_groups() {
+        let library = sample_library();
+
+        assert_eq!(library.songs_by_album.len(), 3);
+
+        let album_1_songs: Vec<(&str, &str)> = library.songs_by_album["album-1"]
+            .iter()
+            .map(|song| (song.id.as_str(), song.title.as_str()))
+            .collect();
+        assert_eq!(
+            album_1_songs,
+            vec![
+                ("song-1", "Opening"),
+                ("song-2", "Middle"),
+                ("song-3", "Ending"),
+            ]
+        );
+
+        let album_2_songs: Vec<(&str, &str)> = library.songs_by_album["album-2"]
+            .iter()
+            .map(|song| (song.id.as_str(), song.title.as_str()))
+            .collect();
+        assert_eq!(album_2_songs, vec![("song-4", "B-side")]);
+
+        let album_3_songs: Vec<(&str, &str)> = library.songs_by_album["album-3"]
+            .iter()
+            .map(|song| (song.id.as_str(), song.title.as_str()))
+            .collect();
+        assert_eq!(album_3_songs, vec![("song-5", "Headliner")]);
+    }
+
+    // `sample_library` is cached in a `OnceLock` so every browse query reads
+    // the same prebuilt instance instead of rebuilding the library (and its
+    // `String` allocations) per call. Pointer identity across calls is the
+    // observable guarantee of that caching.
+    #[test]
+    fn sample_library_is_cached_as_a_singleton() {
+        assert!(std::ptr::eq(sample_library(), sample_library()));
+    }
 }
