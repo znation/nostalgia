@@ -98,10 +98,11 @@ mod tests {
     use super::{AppState, clamp_volume};
 
     /// Runs `mutation` on `state` and asserts it leaves `current_track` and
-    /// `volume` untouched. Both playback mutations — `toggle_playing` and
-    /// `stop` — contract that only the playing flag changes (the Now Playing
-    /// bar keeps the interrupted track's title), so the snapshot-then-compare
-    /// sequence lives here once instead of at each call site.
+    /// `volume` untouched. The playback mutations — `toggle_playing`, `stop`,
+    /// and `toggle_repeat` — each contract that only their flag changes (the
+    /// Now Playing bar keeps the interrupted track's title), so the
+    /// snapshot-then-compare sequence lives here once instead of at each call
+    /// site.
     fn assert_keeps_track_and_volume(state: &mut AppState, mutation: impl FnOnce(&mut AppState)) {
         let track = state.current_track.clone();
         let volume = state.volume;
@@ -139,17 +140,13 @@ mod tests {
     #[test]
     fn toggle_repeat_flips_only_the_repeat_flag() {
         let mut state = AppState::default();
-        let track = state.current_track.clone();
-        let volume = state.volume;
         assert!(!state.repeat);
 
-        state.toggle_repeat();
+        assert_keeps_track_and_volume(&mut state, AppState::toggle_repeat);
         assert!(state.repeat);
-        assert_eq!(state.current_track, track);
         assert!(!state.is_playing);
-        assert_eq!(state.volume, volume);
 
-        state.toggle_repeat();
+        assert_keeps_track_and_volume(&mut state, AppState::toggle_repeat);
         assert!(!state.repeat);
     }
 
