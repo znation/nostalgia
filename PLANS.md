@@ -51,6 +51,61 @@ for any of this to run.
   shows both the emitter (`Slider` `on_changed` in `view`) and the handler in
   `update`.
 
+### Make Previous/Next step through the songs of the current album
+
+Found by plan 2026-10-04.
+
+**Goal.** The transport row renders Previous and Next buttons, but in
+`WinampPlayer::update` the `Message::NextTrack | Message::PreviousTrack` arm
+maps to `Task::none()` — pressing them does nothing. Land functional transport:
+Previous/Next advance through the songs of the currently loaded album (the
+`WinampPlayer.songs` list), reusing the existing `play_track` path so the Now
+Playing bar updates. Sequencing is a player concern, so the index logic is a
+pure, tested function beside the player, not in `AppleMusicService` (whose
+`next_track`/`previous_track` private stubs stay unused and untouched — the
+service models the library API, not the current playlist).
+
+**Approach.**
+
+- New file `src/ui/transport.rs`, a pure module mirroring `views.rs`:
+  - `pub fn next_track_id(songs: &[Song], current: Option<&str>) -> Option<String>`
+    and `pub fn previous_track_id(...) -> Option<String>`.
+  - Semantics: empty `songs` → `None` (no-op). `current` is `None` or not
+    found in `songs` → first song for next, last song for previous. `current`
+    found at index `i` → `songs[(i + 1) % len].id` for next,
+    `songs[(i + len - 1) % len].id` for previous (wrap in both directions;
+    repeat/shuffle semantics are a later plan).
+  - A `#[cfg(test)] mod tests` covering: empty list → `None`; `current` `None`
+    → first/last; unknown `current` id → first/last; mid-list advance and
+    reverse; wrap from last → first (next) and from first → last (previous).
+- `src/ui/mod.rs`:
+  - Add `mod transport;` beside `mod views;`.
+  - In `update`, split the combined arm: `Message::NextTrack` reads
+    `current_track` via `player.state.blocking_lock()`, calls
+    `transport::next_track_id(&player.songs, current.as_deref())`, and returns
+    `Task::done(Message::TrackSelected(id))` when `Some`, else `Task::none()`.
+    `Message::PreviousTrack` does the same with `previous_track_id`.
+  - Dispatching `Message::TrackSelected` (rather than calling `play_track`
+    directly) reuses the one existing play path — it performs `play_track`,
+    which sets `state.current_track`/`is_playing`, and re-renders via
+    `TrackPlayed`; the same mechanism `boot` already uses with
+    `Task::done(Message::LoadArtists)` feeds the message back into `update`.
+
+**Files touched.** `src/ui/transport.rs` (new), `src/ui/mod.rs`.
+
+**Acceptance criteria.**
+- `cargo build` succeeds.
+- `cargo test` passes, including the new `next_track_id` / `previous_track_id`
+  unit tests (empty list, no current, unknown current, mid-list advance/reverse,
+  wrap at both ends).
+- `cargo fmt --check` passes.
+- `Message::NextTrack` / `Message::PreviousTrack` are no longer dead: the
+  `update` arms no longer map to `Task::none()`.
+- `cargo run`: after loading an album's songs and playing one, Previous/Next
+  move the Now Playing track through that album's songs, wrapping at the ends;
+  at the artist/album list (no songs loaded) they do nothing (manual check —
+  build + tests are the primary gate).
+
 ## Done
 
 ### Make the app build on iced 0.14 and render a browsable sample library (done 2026-10-04)
