@@ -526,7 +526,7 @@ async fn track_selected_starts_playback_of_the_selected_track() {
 // player-local title index. `blocking_lock` panics inside an async runtime,
 // so this stays a plain test.
 #[test]
-fn track_played_handoff_is_a_noop() {
+fn track_played_handoff_schedules_no_work_and_leaves_shared_state_untouched() {
     let (mut player, state) = test_player();
 
     // A track is mid-playback when the completion handoff arrives.
