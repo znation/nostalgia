@@ -167,7 +167,7 @@ consumes the session.
     seam instead of the token stub.
 - `Cargo.toml`: the `serde` `derive` comment names `apple_music` as a user;
   after this change only `library` uses the derive, so trim the comment.
-- Tests in `src/apple_music.rs`: delete the three `AppleMusicToken` serde tests
+- Tests in `src/apple_music/tests.rs`: delete the three `AppleMusicToken` serde tests
   (`apple_music_token_round_trips_through_json`,
   `apple_music_token_deserialization_rejects_missing_required_fields`,
   `apple_music_token_deserialization_ignores_unknown_fields`), plus their now-
@@ -176,7 +176,7 @@ consumes the session.
   `assert_unknown_fields_tolerated` imports (those test-support helpers stay —
   `src/library.rs` still uses them); keep `assert_ids`. Add session tests.
 
-**Files touched.** `src/apple_music.rs`, `Cargo.toml`.
+**Files touched.** `src/apple_music.rs`, `src/apple_music/tests.rs`, `Cargo.toml`.
 
 **Acceptance criteria.**
 
