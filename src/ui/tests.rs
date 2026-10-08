@@ -1,3 +1,4 @@
+use super::views::BROWSE_VIEWS;
 use super::*;
 use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB};
 use crate::sample_library::sample_library;
@@ -1257,15 +1258,6 @@ fn new_player_starts_at_artists_with_nothing_selected() {
     assert!(!player.songs_loading);
 }
 
-/// Every browse view `view` can assemble, in hierarchy order. The full-input
-/// test below renders each one; naming the list once means a new view is added
-/// here rather than to each loop's literal.
-const BROWSE_VIEWS: [CurrentView; 3] = [
-    CurrentView::Artists,
-    CurrentView::Albums,
-    CurrentView::Songs,
-];
-
 // `view` is the per-frame assembly: it locks the shared state, resolves
 // the now-playing label, matches the current browse view onto its list
 // buffer, and stacks the Now Playing bar, the transport row, the optional
@@ -1336,11 +1328,7 @@ fn view_constructs_over_the_apps_full_input_space() {
     player.artists_error = Some("music-library fetch failed: boom".to_string());
     player.albums_error = Some("music-library fetch failed: boom".to_string());
     player.songs_error = Some("music-library fetch failed: boom".to_string());
-    for current_view in [
-        CurrentView::Artists,
-        CurrentView::Albums,
-        CurrentView::Songs,
-    ] {
+    for current_view in BROWSE_VIEWS {
         player.current_view = current_view;
         let _failed = view(&player);
     }

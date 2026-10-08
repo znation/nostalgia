@@ -430,13 +430,24 @@ pub fn view_equalizer(
     )
 }
 
+/// Every browse view the UI can assemble, in hierarchy order. The per-view
+/// tests and the full-input test in `ui::tests` all drive each level, so
+/// naming the list once means a new view is added here rather than to each
+/// loop's literal.
+#[cfg(test)]
+pub(super) const BROWSE_VIEWS: [CurrentView; 3] = [
+    CurrentView::Artists,
+    CurrentView::Albums,
+    CurrentView::Songs,
+];
+
 #[cfg(test)]
 mod tests {
     use super::{
-        CurrentView, EQ_STEP, Message, VOLUME_MAX, VOLUME_MIN, VOLUME_STEP, album_row, artist_row,
-        browse_placeholder, can_go_back, empty_list_label, eq_enabled_label, now_playing_label,
-        play_pause_label, repeat_label, song_row, view_albums, view_artists, view_back_button,
-        view_equalizer, view_now_playing, view_songs, view_transport_controls,
+        BROWSE_VIEWS, CurrentView, EQ_STEP, Message, VOLUME_MAX, VOLUME_MIN, VOLUME_STEP,
+        album_row, artist_row, browse_placeholder, can_go_back, empty_list_label, eq_enabled_label,
+        now_playing_label, play_pause_label, repeat_label, song_row, view_albums, view_artists,
+        view_back_button, view_equalizer, view_now_playing, view_songs, view_transport_controls,
     };
     use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB, clamp_gain};
     use crate::sample_library::sample_library;
@@ -676,11 +687,7 @@ mod tests {
     // to `empty_list_label`.
     #[test]
     fn browse_placeholder_distinguishes_loading_from_an_empty_list() {
-        for view in [
-            CurrentView::Artists,
-            CurrentView::Albums,
-            CurrentView::Songs,
-        ] {
+        for view in BROWSE_VIEWS {
             assert_eq!(browse_placeholder(&view, true, None), "Loading…");
             assert_eq!(
                 browse_placeholder(&view, false, None),
@@ -700,11 +707,7 @@ mod tests {
         // The error must win at every browse level, over both "Loading…"
         // (a fetch still in flight) and the per-level empty wording (a fetch
         // that already replied), so drive each view through both states.
-        for view in [
-            CurrentView::Artists,
-            CurrentView::Albums,
-            CurrentView::Songs,
-        ] {
+        for view in BROWSE_VIEWS {
             for loading in [true, false] {
                 assert_eq!(browse_placeholder(&view, loading, Some(report)), report);
             }
