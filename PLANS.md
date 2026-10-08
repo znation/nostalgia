@@ -29,7 +29,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Add Winamp window-shade ("roll up") mode (found 2026-10-08)
+_None yet._
+
+## Done
+
+### Add Winamp window-shade ("roll up") mode (found 2026-10-08, done 2026-10-08)
 
 Found by plan 2026-10-08. The README's Screenshots note still says
 "window-shade mode is not built yet", and it is the last widget-level fidelity
@@ -111,8 +115,6 @@ inner size is remembered and restored on unshade.
   `request_inner_size`, which some windowing systems ignore for a
   non-resizable window; where it is ignored the content still switches to the
   title-bar-only view, and unshading needs no restore.
-
-## Done
 
 ### Add Winamp equalizer preset curves and a preset pick list (found 2026-10-07, done 2026-10-07)
 

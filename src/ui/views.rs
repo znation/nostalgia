@@ -317,7 +317,7 @@ const TITLE_BAR_TEXT: &str = "NOSTALGIA";
 
 /// The custom title bar's height in px: short, like the classic Winamp title
 /// bar, rather than the OS frame's.
-const TITLE_BAR_HEIGHT: f32 = 24.0;
+pub(super) const TITLE_BAR_HEIGHT: f32 = 24.0;
 
 /// Each title-bar button's pinned width, so its glyph cannot resize it and
 /// reflow the drag region beside it.
@@ -325,11 +325,13 @@ const TITLE_BAR_BUTTON_WIDTH: f32 = 22.0;
 
 /// The custom Winamp title bar: the app name on a raised
 /// [`theme::TITLE_BLUE`] band, draggable to move the window, with minimize
-/// and close buttons on the right.
+/// and close buttons on the right. Double-clicking the band toggles the
+/// classic roll-up (shade) mode via [`Message::ToggleWindowShade`].
 ///
 /// The whole band except the buttons is a [`MouseArea`], so a press anywhere
 /// on it emits [`Message::WindowDragged`] and the update loop begins the OS
-/// window drag. The buttons are [`fixed_width_button`]s — the same raised
+/// window drag, while a double-click emits [`Message::ToggleWindowShade`].
+/// The buttons are [`fixed_width_button`]s — the same raised
 /// chrome as the transport row — pinned so their glyphs cannot resize them.
 /// The bar paints [`style::title_bar_style`] and wraps it in
 /// [`style::raised_panel`], so it carries the base skin's raised bevel.
@@ -341,7 +343,8 @@ pub fn view_title_bar() -> Element<'static, Message> {
             .align_y(iced::alignment::Vertical::Center)
             .padding([0, 6]),
     )
-    .on_press(Message::WindowDragged);
+    .on_press(Message::WindowDragged)
+    .on_double_click(Message::ToggleWindowShade);
 
     style::raised_panel(
         Container::new(

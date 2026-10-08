@@ -873,6 +873,104 @@ fn title_bar_window_actions_schedule_work_with_a_window_id() {
 }
 
 #[test]
+fn toggle_window_shade_flips_the_flag_and_measures_the_window() {
+    let (mut player, _state) = test_player();
+    player.window_id = Some(iced::window::Id::unique());
+    assert!(!player.shaded);
+
+    assert!(
+        iced_runtime::task::into_stream(update(&mut player, Message::ToggleWindowShade)).is_some(),
+        "shading must schedule the window-size measurement"
+    );
+    assert!(player.shaded);
+
+    // Once the pre-shade size is known, unshading resizes back to it.
+    player.unshaded_size = Some(iced::Size::new(800.0, 600.0));
+    assert!(
+        iced_runtime::task::into_stream(update(&mut player, Message::ToggleWindowShade)).is_some(),
+        "unshading must schedule the restore resize"
+    );
+    assert!(!player.shaded);
+}
+
+#[test]
+fn window_shade_measured_stores_the_size_and_resizes() {
+    let (mut player, _state) = test_player();
+    player.window_id = Some(iced::window::Id::unique());
+    player.shaded = true;
+
+    let task = update(
+        &mut player,
+        Message::WindowShadeMeasured(iced::Size::new(800.0, 600.0)),
+    );
+
+    assert_eq!(player.unshaded_size, Some(iced::Size::new(800.0, 600.0)));
+    assert!(
+        iced_runtime::task::into_stream(task).is_some(),
+        "measuring the window must schedule the resize to the shaded height"
+    );
+}
+
+#[test]
+fn window_shade_measurement_after_unshade_is_ignored() {
+    let (mut player, _state) = test_player();
+    player.window_id = Some(iced::window::Id::unique());
+
+    // Shade, then unshade before the deferred measurement lands.
+    let _ = update(&mut player, Message::ToggleWindowShade);
+    assert!(player.shaded);
+    let _ = update(&mut player, Message::ToggleWindowShade);
+    assert!(!player.shaded);
+
+    // The stale measurement must neither record the size nor clamp the
+    // restored window back down to the strip.
+    assert_message_schedules_no_work(
+        &mut player,
+        Message::WindowShadeMeasured(iced::Size::new(800.0, 600.0)),
+    );
+    assert_eq!(player.unshaded_size, None);
+}
+
+#[test]
+fn a_late_measurement_cannot_overwrite_the_captured_size() {
+    let (mut player, _state) = test_player();
+    player.window_id = Some(iced::window::Id::unique());
+
+    // The first shade captures the real pre-shade size.
+    let _ = update(&mut player, Message::ToggleWindowShade);
+    let _ = update(
+        &mut player,
+        Message::WindowShadeMeasured(iced::Size::new(800.0, 600.0)),
+    );
+    assert_eq!(player.unshaded_size, Some(iced::Size::new(800.0, 600.0)));
+
+    // Roll down, then up again: the known size rolls straight up without a
+    // fresh measurement that could read the strip a prior shade left.
+    let _ = update(&mut player, Message::ToggleWindowShade);
+    assert!(
+        iced_runtime::task::into_stream(update(&mut player, Message::ToggleWindowShade)).is_some(),
+        "re-shading must schedule the resize to the shaded height"
+    );
+
+    // A measurement from the first shade arriving now must not overwrite the
+    // captured size with the 24 px strip.
+    assert_message_schedules_no_work(
+        &mut player,
+        Message::WindowShadeMeasured(iced::Size::new(800.0, 24.0)),
+    );
+    assert_eq!(player.unshaded_size, Some(iced::Size::new(800.0, 600.0)));
+}
+
+#[test]
+fn toggle_window_shade_without_a_window_id_still_flips_the_flag() {
+    let (mut player, _state) = test_player();
+    assert_eq!(player.window_id, None);
+
+    assert_message_schedules_no_work(&mut player, Message::ToggleWindowShade);
+    assert!(player.shaded);
+}
+
+#[test]
 fn next_track_steps_to_the_following_song() {
     let (mut player, _state) = player_stepping_from(Some("song-1"));
 
@@ -1572,5 +1670,24 @@ fn view_constructs_over_the_apps_full_input_space() {
     for current_view in BROWSE_VIEWS {
         player.current_view = current_view;
         let _failed = view(&player);
+    }
+}
+
+#[test]
+fn view_constructs_when_the_window_is_shaded() {
+    let (mut player, _state) = test_player();
+    player.shaded = true;
+
+    // The rolled-up frame builds only the title bar, so it must not panic
+    // over either the pre-load empty buffers or the loaded browse lists.
+    for current_view in BROWSE_VIEWS {
+        player.current_view = current_view;
+        let _empty = view(&player);
+    }
+
+    seed_browse_lists(&mut player);
+    for current_view in BROWSE_VIEWS {
+        player.current_view = current_view;
+        let _loaded = view(&player);
     }
 }

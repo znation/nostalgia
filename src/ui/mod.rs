@@ -100,6 +100,14 @@ enum Message {
     WindowDragged,
     MinimizeWindow,
     CloseWindow,
+    // Double-clicking the title bar's drag region rolls the window up into
+    // shade mode, or restores it. The first shade measures the window so the
+    // pre-shade inner size can be restored; later shades reuse it.
+    ToggleWindowShade,
+    // The window's inner size, captured just before the first shade. The
+    // arm stores it and resizes the window down to the title-bar strip,
+    // unless a newer toggle already left shade mode or captured the size.
+    WindowShadeMeasured(iced::Size),
 }
 
 struct WinampPlayer {
@@ -109,6 +117,13 @@ struct WinampPlayer {
     /// custom title bar's drag/minimize/close messages act on this window; a
     /// `None` (before the query resolves, or if it fails) makes them no-ops.
     window_id: Option<iced::window::Id>,
+    /// Whether the window is rolled up into shade mode: `view` then renders
+    /// only the title bar and the window is resized to
+    /// [`views::TITLE_BAR_HEIGHT`].
+    shaded: bool,
+    /// The window's inner size captured just before the first shade, so
+    /// unshading can restore it. `None` until the measurement lands.
+    unshaded_size: Option<iced::Size>,
     current_view: CurrentView,
     /// The three browse levels. Each `BrowseList` owns its rows, epoch,
     /// loading flag, error report, and request counter (see `browse`).
@@ -163,6 +178,8 @@ impl WinampPlayer {
             state,
             apple_music_service: service,
             window_id: None,
+            shaded: false,
+            unshaded_size: None,
             current_view: CurrentView::Artists,
             artists: BrowseList::new(true),
             albums: BrowseList::new(false),
@@ -472,6 +489,49 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::WindowDragged => with_window_id(player, iced::window::drag),
         Message::MinimizeWindow => with_window_id(player, |id| iced::window::minimize(id, true)),
         Message::CloseWindow => with_window_id(player, iced::window::close),
+        // Shading measures the window only until the pre-shade size is
+        // known; after that it rolls straight up to the strip. Unshading
+        // resizes back to the captured size. `with_window_id` keeps both
+        // no-ops before the window id resolves, exactly like the other
+        // title-bar actions; the flag still flips so the view switches to
+        // the title-bar-only tree even where the resize is ignored.
+        Message::ToggleWindowShade => {
+            if player.shaded {
+                player.shaded = false;
+                match player.unshaded_size {
+                    Some(size) => with_window_id(player, |id| iced::window::resize(id, size)),
+                    None => Task::none(),
+                }
+            } else {
+                player.shaded = true;
+                match player.unshaded_size {
+                    // The size to restore is already known, so roll straight
+                    // up; re-measuring could read the strip a prior shade left.
+                    Some(size) => with_window_id(player, |id| {
+                        iced::window::resize(
+                            id,
+                            iced::Size::new(size.width, views::TITLE_BAR_HEIGHT),
+                        )
+                    }),
+                    // First shade: measure so the size can be restored.
+                    None => with_window_id(player, |id| {
+                        iced::window::size(id).map(Message::WindowShadeMeasured)
+                    }),
+                }
+            }
+        }
+        Message::WindowShadeMeasured(size) => {
+            // A measurement only belongs to a shade still waiting for its
+            // first capture: one that lands after an unshade would clamp the
+            // restored window and record the strip as the size to restore.
+            if !player.shaded || player.unshaded_size.is_some() {
+                return Task::none();
+            }
+            player.unshaded_size = Some(size);
+            with_window_id(player, |id| {
+                iced::window::resize(id, iced::Size::new(size.width, views::TITLE_BAR_HEIGHT))
+            })
+        }
         Message::Ignored => Task::none(),
     }
 }
@@ -481,6 +541,14 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
 /// shared playback, volume, Repeat, and EQ state — above the current browse
 /// list.
 fn view(player: &WinampPlayer) -> Element<'_, Message> {
+    // Shade mode builds only the title bar — the Now Playing bar, transport
+    // row, equalizer, and browse list are all dropped, and the window itself
+    // is resized down to this strip. Returning before the state lock keeps
+    // the rolled-up frame cheap and free of a lock the content needs.
+    if player.shaded {
+        return views::view_title_bar();
+    }
+
     // The now-playing title is resolved while the state lock is held, from a
     // borrowed `current_track` against the accumulated `known_titles` index
     // (see [`WinampPlayer::now_playing_label`]) — the label borrows the title
