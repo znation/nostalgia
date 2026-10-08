@@ -2,7 +2,7 @@
 //! writing one minimal response.
 //!
 //! These helpers know nothing about `MusicKit` — they parse a request into its
-//! method, path, and body, and write a `Connection: close` response — so the
+//! method, path, host, and body, and write a `Connection: close` response — so the
 //! sign-in flow's request routing (in the parent module) reads as application
 //! logic over a small protocol layer. The request buffer is capped at
 //! [`MAX_REQUEST_BYTES`] while reading headers *and* before the declared body
@@ -27,11 +27,12 @@ pub(super) const CONNECTION_READ_TIMEOUT: Duration = Duration::from_secs(5);
 /// arrived rather than armed.
 const MIN_READ_TIMEOUT: Duration = Duration::from_millis(1);
 
-/// A parsed HTTP request: the method, the path (query string stripped), and the
-/// body bytes.
+/// A parsed HTTP request: the method, the path (query string stripped), the
+/// `Host` header value (if any), and the body bytes.
 pub(super) struct HttpRequest {
     pub(super) method: String,
     pub(super) path: String,
+    pub(super) host: Option<String>,
     pub(super) body: Vec<u8>,
 }
 
@@ -86,13 +87,16 @@ pub(super) fn read_http_request(
     let path = target.split('?').next().unwrap_or(target).to_string();
 
     let mut content_length = 0usize;
+    let mut host = None;
     for line in lines {
-        if let Some((name, value)) = line.split_once(':')
-            && name.eq_ignore_ascii_case("content-length")
-        {
-            // A malformed length is treated as no body; the callback then
-            // fails its own validation rather than being read unbounded.
-            content_length = value.trim().parse().unwrap_or(0);
+        if let Some((name, value)) = line.split_once(':') {
+            if name.eq_ignore_ascii_case("content-length") {
+                // A malformed length is treated as no body; the callback then
+                // fails its own validation rather than being read unbounded.
+                content_length = value.trim().parse().unwrap_or(0);
+            } else if name.eq_ignore_ascii_case("host") {
+                host = Some(value.trim().to_string());
+            }
         }
     }
 
@@ -123,6 +127,7 @@ pub(super) fn read_http_request(
     Ok(Some(HttpRequest {
         method,
         path,
+        host,
         body: buffer[body_start..body_end].to_vec(),
     }))
 }

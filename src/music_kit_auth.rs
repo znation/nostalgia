@@ -14,7 +14,10 @@
 //! # Server safety
 //!
 //! The server is bound to `127.0.0.1` on an ephemeral port and accepts a single
-//! `POST /token` callback. Every request is read into a buffer capped at
+//! `POST /token` callback. A request whose `Host` header does not name
+//! `127.0.0.1` is refused, so a DNS-rebinding page — which reaches the socket
+//! under its own hostname — cannot read the sign-in page's developer token or
+//! `state` nonce. Every request is read into a buffer capped at
 //! `MAX_REQUEST_BYTES` (defined in the `http` submodule): the cap is checked
 //! while reading headers *and* before the declared body is read, so a hostile
 //! client cannot make the server allocate without bound or panic it with an
@@ -251,6 +254,22 @@ fn serve_connection(
         Ok(None) | Err(_) => return Connection::Continue,
     };
 
+    // Browsers set `Host` from the URL and forbid scripts from overriding it,
+    // so requiring the loopback address stops a DNS-rebinding page (which
+    // reaches this socket under its own hostname) from reading the sign-in
+    // page's developer token and `state` nonce. A hostile request is ignored,
+    // not fatal, so it cannot abort a sign-in the user is completing.
+    if !is_loopback_host(request.host.as_deref()) {
+        let _ = write_response(
+            stream,
+            403,
+            "Forbidden",
+            "text/plain; charset=utf-8",
+            "Forbidden",
+        );
+        return Connection::Continue;
+    }
+
     if request.method == "GET" && request.path == "/" {
         let page = render_auth_page(developer_token, nonce);
         let _ = write_response(stream, 200, "OK", "text/html; charset=utf-8", &page);
@@ -334,6 +353,16 @@ fn random_nonce() -> String {
     let mut hasher = RandomState::new().build_hasher();
     hasher.write_u8(0);
     format!("{:016x}", hasher.finish())
+}
+
+/// Whether the request's `Host` header names the loopback address the server
+/// is bound to, with or without a port.
+fn is_loopback_host(host: Option<&str>) -> bool {
+    let Some(host) = host else {
+        return false;
+    };
+    let name = host.rsplit_once(':').map_or(host, |(name, _port)| name);
+    name == "127.0.0.1"
 }
 
 /// Whether `token` is exactly three non-empty dot-separated segments of

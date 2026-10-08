@@ -247,6 +247,35 @@ fn authorize_ignores_an_unknown_request_before_the_callback() {
 }
 
 #[test]
+fn authorize_rejects_a_foreign_host_header() {
+    let observed = Arc::new(Mutex::new(String::new()));
+    let observed_for_flow = Arc::clone(&observed);
+    let (opener, handles) = background(move |port, state| {
+        // A DNS-rebinding page reaches the loopback socket under its own
+        // hostname, so its `Host` header names that hostname, not 127.0.0.1.
+        // The response must not carry the sign-in page (and its developer
+        // token), and the real callback must still complete the flow.
+        let rebound = request(port, "GET / HTTP/1.1\r\nHost: evil.example\r\n\r\n");
+        let _ = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
+        *observed_for_flow.lock().expect("observed lock") = rebound;
+    });
+
+    authorize_with_timeout(SAMPLE_DEVELOPER_TOKEN, &opener, Duration::from_secs(5))
+        .expect("a foreign host does not abort the flow");
+    join_all(&handles);
+
+    let rebound = observed.lock().expect("observed lock");
+    assert!(
+        rebound.starts_with("HTTP/1.1 403"),
+        "a foreign Host should be forbidden, got: {rebound}"
+    );
+    assert!(
+        !rebound.contains(SAMPLE_DEVELOPER_TOKEN),
+        "the sign-in page must not leak the developer token to a foreign Host"
+    );
+}
+
+#[test]
 fn authorize_survives_a_connection_that_closes_early() {
     let (opener, handles) = background(|port, state| {
         // A client that connects and closes without a complete request.
