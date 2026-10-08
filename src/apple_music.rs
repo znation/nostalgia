@@ -386,5 +386,7 @@ fn lookup<T: Clone>(index: &HashMap<String, Vec<T>>, id: &str) -> Vec<T> {
     index.get(id).cloned().unwrap_or_default()
 }
 
+pub mod rest;
+
 #[cfg(test)]
 mod tests;

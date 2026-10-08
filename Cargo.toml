@@ -26,6 +26,13 @@ iced = { version = "0.14.0", features = ["advanced"] }
 serde = { version = "1.0.228", features = ["derive"] }
 # `macros` + `rt` power the `#[tokio::test]` runtime in apple_music.
 tokio = { version = "1.48.0", features = ["sync", "macros", "rt"] }
+# The blocking HTTP client for the Apple Music REST integration (the choice
+# recorded in QUESTIONS.md `## Answered`, 2026-10-08). Default features carry
+# rustls TLS.
+ureq = "3.4"
+# The REST browse client parses Apple Music responses in production, so
+# `serde_json` is a runtime dependency, not test-only.
+serde_json = "1.0.146"
 
 [dev-dependencies]
 # Test-only: drive an iced `Task` returned by `update` to completion, as the
@@ -34,6 +41,4 @@ tokio = { version = "1.48.0", features = ["sync", "macros", "rt"] }
 # crates are introduced.
 futures = "0.3"
 iced_runtime = "0.14.0"
-# Test-only: exercise the library model's serde contract (the JSON seam the
-# real Apple Music API will populate).
-serde_json = "1.0.146"
+
