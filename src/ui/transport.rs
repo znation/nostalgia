@@ -169,7 +169,8 @@ mod tests {
     // album's edge stays on the edge song instead of wrapping: Next from the
     // last song re-lands on the last, Previous from the first on the first.
     // The wrap tests above pass `true`; these pin the off half of the
-    // boundary, which no other test drives.
+    // boundary at the unit level, while the arm-level repeat tests in
+    // `tests.rs` reach it only through `update`.
     #[test]
     fn next_stays_on_last_without_repeat() {
         assert_next(Some("song-3"), false, "song-3");
