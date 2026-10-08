@@ -185,6 +185,24 @@ fn authorize_serves_the_page_for_the_browsers_query_request() {
 }
 
 #[test]
+fn authorize_trims_surrounding_whitespace_from_the_developer_token() {
+    // `APPLE_MUSIC_DEVELOPER_TOKEN` commonly arrives with a trailing newline
+    // (read from a file) or a stray space; the strict validator would reject
+    // it as "not base64url", which does not say why. The flow trims it, so
+    // the padded token both succeeds and is stored trimmed.
+    let (opener, handles) = background(|port, state| {
+        let _ = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
+    });
+
+    let padded = format!("  {SAMPLE_DEVELOPER_TOKEN}\n");
+    let session = authorize_with_timeout(&padded, &opener, Duration::from_secs(5))
+        .expect("a token with surrounding whitespace is accepted");
+    join_all(&handles);
+
+    assert_eq!(session.developer_token, SAMPLE_DEVELOPER_TOKEN);
+}
+
+#[test]
 fn authorize_rejects_a_malformed_developer_token_without_opening() {
     let calls = Arc::new(AtomicUsize::new(0));
     let calls_for_opener = Arc::clone(&calls);

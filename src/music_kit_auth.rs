@@ -100,6 +100,12 @@ pub fn validate_developer_token(token: &str) -> Result<(), AppleMusicError> {
 /// `open_url` is called with the loopback page URL; production passes
 /// [`open_in_browser`], and tests pass a fake opener that drives the callback.
 ///
+/// Surrounding whitespace on `developer_token` — a trailing newline read from
+/// a token file, say — is trimmed before validation and before the token is
+/// used or stored: whitespace can never be part of a base64url JWT, and an
+/// environment variable commonly carries it, so rejecting it would fail a
+/// valid token for a reason the caller cannot see.
+///
 /// # Errors
 ///
 /// Returns an [`AppleMusicError`] when `developer_token` is malformed, when the
@@ -121,6 +127,12 @@ fn authorize_with_timeout(
     open_url: &dyn Fn(&str) -> io::Result<()>,
     timeout: Duration,
 ) -> Result<MusicKitSession, AppleMusicError> {
+    // Normalize at the boundary before validating or using the token: the
+    // production caller reads it from `APPLE_MUSIC_DEVELOPER_TOKEN`, where a
+    // trailing newline or a stray space is easy to introduce and impossible
+    // to see in the failure message. Whitespace is never a base64url JWT
+    // character, so trimming cannot turn a malformed token into a valid one.
+    let developer_token = developer_token.trim();
     validate_developer_token(developer_token)?;
 
     let listener = TcpListener::bind("127.0.0.1:0").map_err(|error| {
