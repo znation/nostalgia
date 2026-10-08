@@ -300,6 +300,18 @@ mod tests {
         (service, state)
     }
 
+    /// A fresh service plus its shared state with `song-1` already playing.
+    /// The tests whose subject is a *later* operation — replacing the track,
+    /// pausing, rejecting a blank or control-character id mid-playback, and
+    /// the transport stubs — all need that same starting point, so the
+    /// ordinary play (guard reporting "not superseded") lives here once and
+    /// each test names only the state it drives to.
+    async fn service_with_song_1_playing() -> (AppleMusicService, Arc<Mutex<AppState>>) {
+        let (service, state) = test_service_with_state();
+        service.play_track("song-1", || true).await.unwrap();
+        (service, state)
+    }
+
     /// Locks the shared playback state and asserts it holds `expected_track`
     /// with `expected_playing`. The playback tests below all end on that
     /// same pair — the recorded track id and the playing flag — so the
@@ -644,9 +656,8 @@ mod tests {
     // and that playback stays on across it.
     #[tokio::test]
     async fn play_track_replaces_the_current_track_when_another_song_is_played() {
-        let (service, state) = test_service_with_state();
+        let (service, state) = service_with_song_1_playing().await;
 
-        service.play_track("song-1", || true).await.unwrap();
         service.play_track("song-2", || true).await.unwrap();
 
         assert_playback_state(&state, Some("song-2"), true).await;
@@ -696,9 +707,8 @@ mod tests {
     // untouched rather than being cleared to "nothing is playing".
     #[tokio::test]
     async fn play_track_rejects_a_blank_track_id_while_a_song_is_playing() {
-        let (service, state) = test_service_with_state();
+        let (service, state) = service_with_song_1_playing().await;
 
-        service.play_track("song-1", || true).await.unwrap();
         let error = service.play_track("", || true).await.unwrap_err();
 
         assert_eq!(error.to_string(), "track id must not be blank (got \"\")");
@@ -713,9 +723,8 @@ mod tests {
     // safe to print.
     #[tokio::test]
     async fn play_track_rejects_a_control_character_track_id() {
-        let (service, state) = test_service_with_state();
+        let (service, state) = service_with_song_1_playing().await;
 
-        service.play_track("song-1", || true).await.unwrap();
         let id = "evil\u{1b}]0;pwnd\u{7}";
         assert_control_character_id_rejected(service.play_track(id, || true), IdKind::Track, id)
             .await;
@@ -725,9 +734,8 @@ mod tests {
 
     #[tokio::test]
     async fn pause_stops_playing_but_keeps_current_track() {
-        let (service, state) = test_service_with_state();
+        let (service, state) = service_with_song_1_playing().await;
 
-        service.play_track("song-1", || true).await.unwrap();
         service.pause().await.unwrap();
 
         assert_playback_state(&state, Some("song-1"), false).await;
@@ -743,9 +751,7 @@ mod tests {
     // ship silently, since no caller reaches them today.
     #[tokio::test]
     async fn next_and_previous_track_stubs_succeed_without_touching_state() {
-        let (service, state) = test_service_with_state();
-
-        service.play_track("song-1", || true).await.unwrap();
+        let (service, state) = service_with_song_1_playing().await;
 
         service.next_track().await.unwrap();
         service.previous_track().await.unwrap();
