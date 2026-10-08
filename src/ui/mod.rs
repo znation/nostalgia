@@ -41,6 +41,8 @@ pub fn init_ui(state: Arc<Mutex<AppState>>) -> iced::Result {
     iced::application(move || boot(state.clone()), update, view)
         .title("nostalgia")
         .theme(|_: &WinampPlayer| theme::winamp_theme())
+        .decorations(false)
+        .resizable(false)
         .run()
 }
 
@@ -86,11 +88,22 @@ enum Message {
     // latest completion may prune the title index; a superseded one must not
     // drop a still-pending selection's title.
     TrackPlayed { generation: u64 },
+    // The app window's id, resolved once at boot by `iced::window::latest()`.
+    // The custom title bar's drag/minimize/close actions need it; until the
+    // query resolves (or if it fails) those actions are no-ops.
+    WindowIdResolved(Option<iced::window::Id>),
+    WindowDragged,
+    MinimizeWindow,
+    CloseWindow,
 }
 
 struct WinampPlayer {
     state: Arc<Mutex<AppState>>,
     apple_music_service: AppleMusicService,
+    /// The app window's id, resolved at boot by `iced::window::latest()`. The
+    /// custom title bar's drag/minimize/close messages act on this window; a
+    /// `None` (before the query resolves, or if it fails) makes them no-ops.
+    window_id: Option<iced::window::Id>,
     current_view: CurrentView,
     artists: Vec<Artist>,
     albums: Vec<Album>,
@@ -178,6 +191,7 @@ impl WinampPlayer {
         Self {
             state,
             apple_music_service: service,
+            window_id: None,
             current_view: CurrentView::Artists,
             artists: Vec::new(),
             albums: Vec::new(),
@@ -211,7 +225,16 @@ impl WinampPlayer {
 }
 
 fn boot(state: Arc<Mutex<AppState>>) -> (WinampPlayer, Task<Message>) {
-    (WinampPlayer::new(state), Task::done(Message::LoadArtists))
+    // `iced` runs the boot task only after the window opens, so `latest()`
+    // resolves to the app window. The two run together: the artists fetch does
+    // not wait on the window id.
+    (
+        WinampPlayer::new(state),
+        Task::batch([
+            Task::done(Message::LoadArtists),
+            iced::window::latest().map(Message::WindowIdResolved),
+        ]),
+    )
 }
 
 /// Stores a freshly fetched list into the player's matching buffer, bumps
@@ -543,6 +566,25 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             }
             Task::none()
         }
+        Message::WindowIdResolved(id) => {
+            player.window_id = id;
+            Task::none()
+        }
+        // The custom title bar's three window actions all act on the resolved
+        // window id and are no-ops until it exists. Each returns the task
+        // iced schedules for the matching window operation.
+        Message::WindowDragged => match player.window_id {
+            Some(id) => iced::window::drag(id),
+            None => Task::none(),
+        },
+        Message::MinimizeWindow => match player.window_id {
+            Some(id) => iced::window::minimize(id, true),
+            None => Task::none(),
+        },
+        Message::CloseWindow => match player.window_id {
+            Some(id) => iced::window::close(id),
+            None => Task::none(),
+        },
         Message::Ignored => Task::none(),
     }
 }
@@ -601,6 +643,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     };
 
     let mut column = Column::new()
+        .push(views::view_title_bar())
         .push(views::view_now_playing(now_playing))
         .push(views::view_transport_controls(is_playing, volume, repeat))
         .push(views::view_equalizer(eq_enabled, eq_preamp, &eq_bands));

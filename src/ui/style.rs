@@ -145,6 +145,20 @@ pub fn raised_panel<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a,
     beveled(content.into(), true)
 }
 
+/// The flat base-skin title-bar fill: a solid [`theme::TITLE_BLUE`] band with
+/// the light [`theme::TEXT`] colour for the app name.
+///
+/// Unlike [`lcd_well`] and [`raised_panel`], which compose with the window face
+/// and set no text colour, the title bar paints its own opaque background and
+/// its own light text. Pure, so both fields are testable without a widget.
+pub fn title_bar_style() -> container::Style {
+    container::Style {
+        background: Some(Background::Color(theme::TITLE_BLUE)),
+        text_color: Some(theme::TEXT),
+        ..container::Style::default()
+    }
+}
+
 /// The chrome face shade for an interaction state: pressed when `pressed`,
 /// hovered when `hovered`, and the resting shade otherwise. Both chrome styles
 /// map their own status enum onto this same ladder — the button by
@@ -580,6 +594,13 @@ mod tests {
     #[test]
     fn raised_panel_constructs_with_intrinsic_height() {
         assert_intrinsic_height(raised_panel(Text::new("x")));
+    }
+
+    #[test]
+    fn title_bar_style_is_title_blue_with_light_text() {
+        let style = title_bar_style();
+        assert_eq!(style.background, Some(Background::Color(theme::TITLE_BLUE)));
+        assert_eq!(style.text_color, Some(theme::TEXT));
     }
 
     // Lays the composition out with iced's null `()` renderer (compiled under

@@ -12,13 +12,16 @@ use std::collections::HashMap;
 
 use iced::{
     Background, Element, Length,
-    widget::{Button, Column, Row, Scrollable, Slider, Space, Text, VerticalSlider, button},
+    widget::{
+        Button, Column, Container, MouseArea, Row, Scrollable, Slider, Space, Text, VerticalSlider,
+        button,
+    },
 };
 
 use crate::equalizer::{BAND_COUNT, BAND_FREQUENCIES, GAIN_MAX_DB, GAIN_MIN_DB};
 use crate::library::{Album, Artist, Song};
 
-use super::{CurrentView, Message, style};
+use super::{CurrentView, Message, style, theme};
 
 /// A fixed-width horizontal gap between adjacent widgets.
 ///
@@ -289,6 +292,58 @@ pub fn can_go_back(view: &CurrentView) -> bool {
 /// update loop turns the pressed message into the view change.
 pub fn view_back_button() -> Element<'static, Message> {
     labeled_button("Back", Message::Back).into()
+}
+
+/// The custom title bar's app name.
+const TITLE_BAR_TEXT: &str = "NOSTALGIA";
+
+/// The custom title bar's height in px: short, like the classic Winamp title
+/// bar, rather than the OS frame's.
+const TITLE_BAR_HEIGHT: f32 = 24.0;
+
+/// Each title-bar button's pinned width, so its glyph cannot resize it and
+/// reflow the drag region beside it.
+const TITLE_BAR_BUTTON_WIDTH: f32 = 22.0;
+
+/// The custom Winamp title bar: the app name on a raised
+/// [`theme::TITLE_BLUE`] band, draggable to move the window, with minimize
+/// and close buttons on the right.
+///
+/// The whole band except the buttons is a [`MouseArea`], so a press anywhere
+/// on it emits [`Message::WindowDragged`] and the update loop begins the OS
+/// window drag. The buttons are [`fixed_width_button`]s — the same raised
+/// chrome as the transport row — pinned so their glyphs cannot resize them.
+/// The bar paints [`style::title_bar_style`] and wraps it in
+/// [`style::raised_panel`], so it carries the base skin's raised bevel.
+pub fn view_title_bar() -> Element<'static, Message> {
+    let drag_region = MouseArea::new(
+        Container::new(Text::new(TITLE_BAR_TEXT).size(14).color(theme::TEXT))
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .align_y(iced::alignment::Vertical::Center)
+            .padding([0, 6]),
+    )
+    .on_press(Message::WindowDragged);
+
+    style::raised_panel(
+        Container::new(
+            Row::new()
+                .push(drag_region)
+                .push(fixed_width_button(
+                    "–",
+                    TITLE_BAR_BUTTON_WIDTH,
+                    Message::MinimizeWindow,
+                ))
+                .push(fixed_width_button(
+                    "✕",
+                    TITLE_BAR_BUTTON_WIDTH,
+                    Message::CloseWindow,
+                )),
+        )
+        .width(Length::Fill)
+        .height(Length::Fixed(TITLE_BAR_HEIGHT))
+        .style(|_theme| style::title_bar_style()),
+    )
 }
 
 /// The Now Playing bar label: the title of `current_track` when `titles`

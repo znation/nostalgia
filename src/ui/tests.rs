@@ -606,23 +606,35 @@ async fn a_slow_stale_play_does_not_overwrite_the_newer_track() {
     assert_eq!(state.lock().await.current_track.as_deref(), Some("song-2"));
 }
 
-// Startup wiring: `boot` hands iced a fresh player plus the task that
-// loads the artist list, and `update`'s `LoadArtists` arm runs that fetch
-// into the player's `artists` buffer. A regression that stopped boot from
-// emitting the task — or pointed the arm at the wrong fetch — would open
-// the app with an empty browse list, so the wiring is pinned end to end.
+// Startup wiring: `boot` hands iced a fresh player plus a batched task that
+// loads the artist list and resolves the window id, and `update`'s
+// `LoadArtists` arm runs that fetch into the player's `artists` buffer. A
+// regression that stopped boot from emitting the fetch — or pointed the arm at
+// the wrong fetch — would open the app with an empty browse list, so the
+// wiring is pinned end to end.
 
 #[tokio::test]
 async fn boot_schedules_loading_the_artist_list() {
+    use futures::StreamExt;
+
     let state = Arc::new(Mutex::new(AppState::default()));
 
     let (player, task) = boot(state);
     assert_view(&player, CurrentView::Artists);
 
-    drive_task(task, "boot", |message| {
-        assert!(matches!(message, Message::LoadArtists));
-    })
-    .await;
+    // The batched task carries both the artists fetch and the window-id query,
+    // and iced runs both after the window opens. The query yields a runtime
+    // `Action::Window` this test runtime does not service, so drive the stream
+    // until the fetch's `LoadArtists` output lands.
+    let mut stream = iced_runtime::task::into_stream(task).expect("boot must schedule work");
+    loop {
+        let action = await_or_timeout("boot", TASK_TIMEOUT, stream.next())
+            .await
+            .expect("boot task must yield the artists fetch");
+        if matches!(action, iced_runtime::Action::Output(Message::LoadArtists)) {
+            return;
+        }
+    }
 }
 
 #[tokio::test]
@@ -750,11 +762,56 @@ fn assert_no_task(task: Task<Message>) {
 
 /// Drives `message` through `update` and asserts the arm schedules no
 /// follow-up work. The no-op arms — a selection press the epoch/index guard
-/// rejects, and Next/Previous with an empty `songs` buffer — all just return
+/// rejects, Next/Previous with an empty `songs` buffer, and a title-bar
+/// window action before the window id resolves — all just return
 /// `Task::none()`, so the update-then-[`assert_no_task`] sequence lives here
 /// once and each call site names only the message it drives.
 fn assert_message_schedules_no_work(player: &mut WinampPlayer, message: Message) {
     assert_no_task(update(player, message));
+}
+
+#[test]
+fn window_id_resolved_stores_the_window_id() {
+    let (mut player, _state) = test_player();
+    assert_eq!(player.window_id, None);
+
+    let id = iced::window::Id::unique();
+    let _ = update(&mut player, Message::WindowIdResolved(Some(id)));
+    assert_eq!(player.window_id, Some(id));
+
+    let _ = update(&mut player, Message::WindowIdResolved(None));
+    assert_eq!(player.window_id, None);
+}
+
+#[test]
+fn title_bar_window_actions_are_noops_without_a_window_id() {
+    let (mut player, _state) = test_player();
+    assert_eq!(player.window_id, None);
+
+    for message in [
+        Message::WindowDragged,
+        Message::MinimizeWindow,
+        Message::CloseWindow,
+    ] {
+        assert_message_schedules_no_work(&mut player, message);
+    }
+}
+
+#[test]
+fn title_bar_window_actions_schedule_work_with_a_window_id() {
+    let (mut player, _state) = test_player();
+    player.window_id = Some(iced::window::Id::unique());
+
+    for message in [
+        Message::WindowDragged,
+        Message::MinimizeWindow,
+        Message::CloseWindow,
+    ] {
+        assert!(
+            iced_runtime::task::into_stream(update(&mut player, message)).is_some(),
+            "a title-bar window action must schedule work once the window id is known"
+        );
+    }
 }
 
 #[test]

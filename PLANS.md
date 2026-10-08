@@ -29,7 +29,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Add a Winamp custom title bar and drop the OS window frame (found 2026-10-07)
+_None yet._
+
+## Done
+
+### Add a Winamp custom title bar and drop the OS window frame (found 2026-10-07, done 2026-10-07)
 
 Found by plan 2026-10-07, taking the "custom title bar" item the steward drift
 note schedules and the base-skin Done entry lists among its later fidelity
@@ -120,8 +124,6 @@ and no change to the existing view builders.
   the top reading "NOSTALGIA" with minimize and close buttons, and dragging the
   bar moves the window while minimize and close work; manual check — the build
   and tests are the primary gate.
-
-## Done
 
 ### Frame the browse list as a sunken Winamp playlist editor (found 2026-10-07, done 2026-10-07)
 
