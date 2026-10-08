@@ -28,6 +28,15 @@
 // would not enable it, and denying it here makes the omission fail
 // `make check` like any other warning.
 #![deny(clippy::missing_errors_doc)]
+// A `dbg!` left in the tree prints to stderr and is never intended to ship;
+// the crate's intentional output goes through `println!`/`eprintln!` at named
+// sites, so a stray debug print is a mistake worth failing the build for. The
+// `dbg_macro` lint is allow-by-default (a restriction lint), so the landing
+// gate's `-D warnings` would not enable it; denying it here makes a `dbg!`
+// fail `make check` like any other warning. Unlike the panic lints below it is
+// denied in tests too: a debug print is not a test's assertion mechanism, and
+// a temporary `dbg!` left behind is exactly what this guard catches.
+#![deny(clippy::dbg_macro)]
 // Production code must not abort the player on an unexpected value: an
 // `unwrap`/`expect`/`panic`/`todo`/`unimplemented` crashes the process instead
 // of reporting the failure through the `AppleMusicError` seam or the clamps in
