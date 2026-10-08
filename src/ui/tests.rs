@@ -1287,9 +1287,10 @@ fn next_track_follows_the_shared_repeat_flag_at_the_albums_end() {
 // (`previous_wraps_from_first_to_last` and
 // `previous_stays_on_first_without_repeat`); this pins the Previous arm's
 // wiring over the shared flag, which no other test drives — the other
-// Previous wiring tests set a current track with Repeat off or load no
-// songs, so an arm that dropped the shared flag (or passed a stale one)
-// would clear every existing test and only fail here.
+// Previous wiring tests set a current track with Repeat off, start from
+// no current track, or load no songs, so an arm that dropped the shared
+// flag (or passed a stale one) would clear every existing test and only
+// fail here.
 #[test]
 fn previous_track_follows_the_shared_repeat_flag_at_the_albums_start() {
     assert_repeat_wraps_at_the_edge(Message::PreviousTrack, "song-1", 0, 2);
