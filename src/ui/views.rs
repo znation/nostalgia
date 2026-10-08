@@ -12,7 +12,7 @@ use std::collections::HashMap;
 
 use iced::{
     Background, Element, Length,
-    widget::{Button, Column, Row, Scrollable, Slider, Space, Text, VerticalSlider},
+    widget::{Button, Column, Row, Scrollable, Slider, Space, Text, VerticalSlider, button},
 };
 
 use crate::equalizer::{BAND_COUNT, BAND_FREQUENCIES, GAIN_MAX_DB, GAIN_MIN_DB};
@@ -89,6 +89,19 @@ fn browse_placeholder<'a>(view: &CurrentView, loading: bool, error: Option<&'a s
     }
 }
 
+/// The style for a browse row that is currently playing: the flat
+/// [`style::playlist_row_style`] with its background forced to
+/// [`super::theme::PLAYING_ROW_HIGHLIGHT`], so the playing row reads as a
+/// selection bar in every hover/press state instead of following the row's
+/// face ladder under the cursor. Pure, so the highlight — which iced's
+/// `Element` API gives no way to read back from the built `Button`, and whose
+/// closure runs only at render time — is testable.
+fn current_row_style(status: button::Status) -> button::Style {
+    let mut row = style::playlist_row_style(status);
+    row.background = Some(Background::Color(super::theme::PLAYING_ROW_HIGHLIGHT));
+    row
+}
+
 /// Builds a scrollable list where each item is a button showing a title
 /// followed by a secondary label, emitting the given message on press.
 /// Shared by the artists, albums, and songs views. The last tuple element
@@ -131,11 +144,7 @@ fn scrollable_list<'a>(
         // The current row keeps the playlist row's text and hover/press face
         // and only swaps the background for the highlight colour.
         column = column.push(if is_current {
-            button.style(|_theme, status| {
-                let mut style = style::playlist_row_style(status);
-                style.background = Some(Background::Color(super::theme::PLAYING_ROW_HIGHLIGHT));
-                style
-            })
+            button.style(|_theme, status| current_row_style(status))
         } else {
             button
         });
@@ -478,10 +487,10 @@ pub(super) const BROWSE_VIEWS: [CurrentView; 3] = [
 mod tests {
     use super::{
         BROWSE_VIEWS, CurrentView, EQ_STEP, Message, VOLUME_MAX, VOLUME_MIN, VOLUME_STEP,
-        album_row, artist_row, browse_placeholder, can_go_back, empty_list_label, eq_enabled_label,
-        now_playing_label, play_pause_label, repeat_label, song_row, transport_buttons,
-        view_albums, view_artists, view_back_button, view_equalizer, view_now_playing, view_songs,
-        view_transport_controls,
+        album_row, artist_row, browse_placeholder, can_go_back, current_row_style,
+        empty_list_label, eq_enabled_label, now_playing_label, play_pause_label, repeat_label,
+        song_row, transport_buttons, view_albums, view_artists, view_back_button, view_equalizer,
+        view_now_playing, view_songs, view_transport_controls,
     };
     use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB, clamp_gain};
     use crate::sample_library::sample_library;
@@ -700,6 +709,44 @@ mod tests {
         let _albums = view_albums(&[], 0, true, None);
         let _songs = view_songs(&[], 0, true, None, None);
         let _songs_marked = view_songs(&[], 0, true, None, Some("song-1"));
+    }
+
+    // The currently playing row is marked by a selection bar. iced's `Element`
+    // API exposes no way to read a built `Button`'s style, and the row-style
+    // closure only runs at render time, so building the marked row (above)
+    // never executes the override. `current_row_style` is the pure seam that
+    // pins it: every hover/press state keeps the highlight background rather
+    // than the unmarked row's face ladder, and the row's light text is kept so
+    // the title stays legible on the bar.
+    #[test]
+    fn current_row_style_paints_the_selection_bar_over_every_row_state() {
+        use iced::widget::button::Status;
+
+        for status in [
+            Status::Active,
+            Status::Hovered,
+            Status::Pressed,
+            Status::Disabled,
+        ] {
+            let marked = current_row_style(status);
+            assert_eq!(
+                marked.background,
+                Some(iced::Background::Color(
+                    crate::ui::theme::PLAYING_ROW_HIGHLIGHT
+                ))
+            );
+            assert_eq!(
+                marked.text_color,
+                super::style::playlist_row_style(status).text_color
+            );
+        }
+
+        // The bar must differ from the unmarked resting row, or the marker
+        // would be invisible against the well.
+        assert_ne!(
+            current_row_style(Status::Active).background,
+            super::style::playlist_row_style(Status::Active).background
+        );
     }
 
     // Each browse level's loaded-but-empty buffer must render a label naming
