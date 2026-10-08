@@ -27,34 +27,21 @@ pub fn bevel_edges(raised: bool) -> (Color, Color) {
     }
 }
 
-/// A 1px horizontal [`rule`] in `color` that fills the available width.
-fn horizontal_edge<'a, R>(color: Color) -> Element<'a, Message, Theme, R>
+/// A 1px [`rule`] in `color`, styled to fill the available space on its axis.
+///
+/// A bevel's horizontal and vertical edges differ only in which [`rule`]
+/// constructor draws them, so the shared full-fill styling lives here once.
+fn styled_edge<'a, R>(rule: rule::Rule<'a, Theme>, color: Color) -> Element<'a, Message, Theme, R>
 where
     R: iced::advanced::Renderer + 'a,
 {
-    rule::horizontal(1.0)
-        .style(move |_theme| rule::Style {
-            color,
-            radius: 0.0.into(),
-            fill_mode: rule::FillMode::Full,
-            snap: true,
-        })
-        .into()
-}
-
-/// A 1px vertical [`rule`] in `color` that fills the available height.
-fn vertical_edge<'a, R>(color: Color) -> Element<'a, Message, Theme, R>
-where
-    R: iced::advanced::Renderer + 'a,
-{
-    rule::vertical(1.0)
-        .style(move |_theme| rule::Style {
-            color,
-            radius: 0.0.into(),
-            fill_mode: rule::FillMode::Full,
-            snap: true,
-        })
-        .into()
+    rule.style(move |_theme| rule::Style {
+        color,
+        radius: 0.0.into(),
+        fill_mode: rule::FillMode::Full,
+        snap: true,
+    })
+    .into()
 }
 
 /// The bevel drawn as a full-size overlay: a top and bottom horizontal edge
@@ -70,16 +57,16 @@ where
     Column::new()
         .width(Length::Fill)
         .height(Length::Fill)
-        .push(horizontal_edge::<R>(top_left))
+        .push(styled_edge::<R>(rule::horizontal(1.0), top_left))
         .push(
             Row::new()
                 .width(Length::Fill)
                 .height(Length::Fill)
-                .push(vertical_edge::<R>(top_left))
+                .push(styled_edge::<R>(rule::vertical(1.0), top_left))
                 .push(Space::new().width(Length::Fill))
-                .push(vertical_edge::<R>(bottom_right)),
+                .push(styled_edge::<R>(rule::vertical(1.0), bottom_right)),
         )
-        .push(horizontal_edge::<R>(bottom_right))
+        .push(styled_edge::<R>(rule::horizontal(1.0), bottom_right))
         .into()
 }
 
