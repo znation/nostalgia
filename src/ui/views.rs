@@ -329,6 +329,24 @@ fn eq_enabled_label(enabled: bool) -> &'static str {
     if enabled { "EQ: On" } else { "EQ: Off" }
 }
 
+/// The volume slider's silence floor, the same lower bound
+/// `state::clamp_volume` clamps to. Named here so the slider spec is a
+/// testable seam; the test below ties it to the clamp so the two cannot
+/// drift apart.
+const VOLUME_MIN: f32 = 0.0;
+
+/// The volume slider's full-volume ceiling, the same upper bound
+/// `state::clamp_volume` clamps to (see [`VOLUME_MIN`]).
+const VOLUME_MAX: f32 = 1.0;
+
+/// The volume slider's drag granularity: one percent, so a drag spans the
+/// whole `[VOLUME_MIN, VOLUME_MAX]` scale in fine steps.
+const VOLUME_STEP: f32 = 0.01;
+
+/// The equalizer sliders' drag granularity: one decibel, so every preamp and
+/// band slider lands on a whole-dB gain within `GAIN_MIN_DB..=GAIN_MAX_DB`.
+const EQ_STEP: f32 = 1.0;
+
 /// The transport row: the Play/Pause, Stop, Previous, Next, and Repeat
 /// buttons and the volume slider. `volume` is the slider's current value;
 /// dragging it emits `Message::VolumeChange`. `repeat` is the shared Repeat
@@ -355,8 +373,8 @@ pub fn view_transport_controls(
         .push(labeled_button(repeat_label(repeat), Message::ToggleRepeat))
         .push(spacer(20.0))
         .push(
-            Slider::new(0.0..=1.0, volume, Message::VolumeChange)
-                .step(0.01)
+            Slider::new(VOLUME_MIN..=VOLUME_MAX, volume, Message::VolumeChange)
+                .step(VOLUME_STEP)
                 .width(Length::Fixed(100.0))
                 .style(|_theme, status| style::chrome_slider_style(status)),
         )
@@ -386,7 +404,7 @@ pub fn view_equalizer(
                     VerticalSlider::new(GAIN_MIN_DB..=GAIN_MAX_DB, bands[index], move |gain| {
                         Message::EqBandChange(index, gain)
                     })
-                    .step(1.0)
+                    .step(EQ_STEP)
                     .height(Length::Fixed(100.0))
                     .style(|_theme, status| style::chrome_slider_style(status)),
                 )
@@ -403,7 +421,7 @@ pub fn view_equalizer(
             .push(
                 Row::new().push(Text::new("Preamp")).push(
                     Slider::new(GAIN_MIN_DB..=GAIN_MAX_DB, preamp, Message::EqPreampChange)
-                        .step(1.0)
+                        .step(EQ_STEP)
                         .width(Length::Fixed(150.0))
                         .style(|_theme, status| style::chrome_slider_style(status)),
                 ),
@@ -415,13 +433,14 @@ pub fn view_equalizer(
 #[cfg(test)]
 mod tests {
     use super::{
-        CurrentView, Message, album_row, artist_row, browse_placeholder, can_go_back,
-        empty_list_label, eq_enabled_label, now_playing_label, play_pause_label, repeat_label,
-        song_row, view_albums, view_artists, view_back_button, view_equalizer, view_now_playing,
-        view_songs, view_transport_controls,
+        CurrentView, EQ_STEP, Message, VOLUME_MAX, VOLUME_MIN, VOLUME_STEP, album_row, artist_row,
+        browse_placeholder, can_go_back, empty_list_label, eq_enabled_label, now_playing_label,
+        play_pause_label, repeat_label, song_row, view_albums, view_artists, view_back_button,
+        view_equalizer, view_now_playing, view_songs, view_transport_controls,
     };
-    use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB};
+    use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB, clamp_gain};
     use crate::sample_library::sample_library;
+    use crate::state::clamp_volume;
     use crate::test_support::{sample_album, sample_artist, sample_song};
     use std::borrow::Cow;
     use std::collections::HashMap;
@@ -726,5 +745,39 @@ mod tests {
                 let _panel = view_equalizer(enabled, gain, &bands);
             }
         }
+    }
+
+    // The slider specs are literals iced exposes no way to read back, so they
+    // are named constants the builders consume and these tests pin. The
+    // important one is the tie to the shared-state clamp: the volume slider's
+    // range must equal the range `set_volume`/`clamp_volume` store. A slider
+    // bound the clamp moves means the thumb cannot reach the stored extreme;
+    // a bound the clamp accepts but the slider cannot reach leaves part of
+    // the volume scale unusable. Asserting that both endpoints survive the
+    // clamp unchanged, and that a step beyond each is clamped back, pins the
+    // two ranges equal without reading the iced widget.
+    #[test]
+    fn volume_slider_spec_matches_the_state_clamp_and_pins_its_granularity() {
+        assert_eq!(clamp_volume(VOLUME_MIN), VOLUME_MIN);
+        assert_eq!(clamp_volume(VOLUME_MAX), VOLUME_MAX);
+        assert_eq!(clamp_volume(VOLUME_MIN - VOLUME_STEP), VOLUME_MIN);
+        assert_eq!(clamp_volume(VOLUME_MAX + VOLUME_STEP), VOLUME_MAX);
+
+        // One-percent drag granularity, pinned so the step cannot silently
+        // coarsen while the endpoints stay put.
+        assert_eq!(VOLUME_STEP, 0.01);
+    }
+
+    // The equalizer twin: every preamp and band slider spans
+    // `GAIN_MIN_DB..=GAIN_MAX_DB` and must equal the range `clamp_gain`
+    // stores, so a drag to either end lands exactly on the stored extreme.
+    #[test]
+    fn equalizer_slider_spec_matches_the_gain_clamp_and_steps_whole_decibels() {
+        assert_eq!(clamp_gain(GAIN_MIN_DB), GAIN_MIN_DB);
+        assert_eq!(clamp_gain(GAIN_MAX_DB), GAIN_MAX_DB);
+        assert_eq!(clamp_gain(GAIN_MIN_DB - EQ_STEP), GAIN_MIN_DB);
+        assert_eq!(clamp_gain(GAIN_MAX_DB + EQ_STEP), GAIN_MAX_DB);
+
+        assert_eq!(EQ_STEP, 1.0);
     }
 }
