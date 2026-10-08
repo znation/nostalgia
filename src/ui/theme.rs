@@ -118,6 +118,35 @@ mod tests {
         assert_ne!(palette.danger, palette.success);
     }
 
+    // The palette tests above read the six palette slots. The playing-row
+    // highlight and the LCD well's recess are the two base-skin colours
+    // painted from constants no test reads at all: `views::scrollable_list`
+    // and `style::lcd_well` apply them inside inline style closures, which
+    // iced's `Element` API exposes no way to introspect. Their RGB values are
+    // the skin contract — a regression could turn the playlist selection bar
+    // or the recess into any other colour and clear the whole suite. Pin
+    // both, and that they keep their documented roles: the well is darker
+    // than the window face it recesses into, and the highlight stands apart
+    // from both.
+    #[test]
+    fn panel_recess_and_playing_row_highlight_keep_their_base_skin_colours() {
+        assert_eq!(LCD_BACKGROUND, Color::from_rgb(0.05, 0.05, 0.05));
+        assert_eq!(PLAYING_ROW_HIGHLIGHT, Color::from_rgb(0.25, 0.5, 1.0));
+
+        // The recess reads as sunken only if it is darker than the face it
+        // sits in. Bound to locals so the comparison is a runtime check rather
+        // than the constant assertion clippy rejects.
+        let recess = LCD_BACKGROUND;
+        let face = WINDOW_BACKGROUND;
+        assert!(recess.r < face.r);
+        assert!(recess.g < face.g);
+        assert!(recess.b < face.b);
+
+        // The selection bar must stand out from the window face and the well.
+        assert_ne!(PLAYING_ROW_HIGHLIGHT, WINDOW_BACKGROUND);
+        assert_ne!(PLAYING_ROW_HIGHLIGHT, LCD_BACKGROUND);
+    }
+
     #[test]
     fn theme_reads_as_dark() {
         // The dark face is what makes the light chrome text legible; the
