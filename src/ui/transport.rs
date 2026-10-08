@@ -79,6 +79,28 @@ mod tests {
     use super::*;
     use crate::test_support::{single_song_album, stepping_songs};
 
+    /// Asserts Next from `current` — with Repeat `repeat` — lands on
+    /// `expected` in the shared three-song fixture. The three-song tests all
+    /// drive the same `next_track_id(&stepping_songs(), ..)` comparison, so
+    /// the fixture and the `Some(..to_string())` wrapping live here once and
+    /// each test names only its input and expected id. The empty-list and
+    /// single-song tests use different fixtures and call the function
+    /// directly.
+    fn assert_next(current: Option<&str>, repeat: bool, expected: &str) {
+        assert_eq!(
+            next_track_id(&stepping_songs(), current, repeat),
+            Some(expected.to_string())
+        );
+    }
+
+    /// The Previous twin of [`assert_next`], over the same three-song fixture.
+    fn assert_previous(current: Option<&str>, repeat: bool, expected: &str) {
+        assert_eq!(
+            previous_track_id(&stepping_songs(), current, repeat),
+            Some(expected.to_string())
+        );
+    }
+
     #[test]
     fn empty_list_is_a_noop_for_both_directions() {
         assert_eq!(next_track_id(&[], Some("song-1"), false), None);
@@ -87,70 +109,43 @@ mod tests {
 
     #[test]
     fn next_without_current_starts_at_first() {
-        assert_eq!(
-            next_track_id(&stepping_songs(), None, false),
-            Some("song-1".to_string())
-        );
+        assert_next(None, false, "song-1");
     }
 
     #[test]
     fn previous_without_current_starts_at_last() {
-        assert_eq!(
-            previous_track_id(&stepping_songs(), None, false),
-            Some("song-3".to_string())
-        );
+        assert_previous(None, false, "song-3");
     }
 
     #[test]
     fn next_with_unknown_current_starts_at_first() {
-        assert_eq!(
-            next_track_id(&stepping_songs(), Some("nope"), false),
-            Some("song-1".to_string())
-        );
+        assert_next(Some("nope"), false, "song-1");
     }
 
     #[test]
     fn previous_with_unknown_current_starts_at_last() {
-        assert_eq!(
-            previous_track_id(&stepping_songs(), Some("nope"), false),
-            Some("song-3".to_string())
-        );
+        assert_previous(Some("nope"), false, "song-3");
     }
 
     #[test]
     fn next_advances_through_the_list() {
-        assert_eq!(
-            next_track_id(&stepping_songs(), Some("song-1"), false),
-            Some("song-2".to_string())
-        );
-        assert_eq!(
-            next_track_id(&stepping_songs(), Some("song-2"), false),
-            Some("song-3".to_string())
-        );
+        assert_next(Some("song-1"), false, "song-2");
+        assert_next(Some("song-2"), false, "song-3");
     }
 
     #[test]
     fn previous_reverses_through_the_list() {
-        assert_eq!(
-            previous_track_id(&stepping_songs(), Some("song-2"), false),
-            Some("song-1".to_string())
-        );
+        assert_previous(Some("song-2"), false, "song-1");
     }
 
     #[test]
     fn next_wraps_from_last_to_first() {
-        assert_eq!(
-            next_track_id(&stepping_songs(), Some("song-3"), true),
-            Some("song-1".to_string())
-        );
+        assert_next(Some("song-3"), true, "song-1");
     }
 
     #[test]
     fn previous_wraps_from_first_to_last() {
-        assert_eq!(
-            previous_track_id(&stepping_songs(), Some("song-1"), true),
-            Some("song-3".to_string())
-        );
+        assert_previous(Some("song-1"), true, "song-3");
     }
 
     // With Repeat off (the Winamp default) a step that would cross the
@@ -160,18 +155,12 @@ mod tests {
     // boundary, which no other test drives.
     #[test]
     fn next_stays_on_last_without_repeat() {
-        assert_eq!(
-            next_track_id(&stepping_songs(), Some("song-3"), false),
-            Some("song-3".to_string())
-        );
+        assert_next(Some("song-3"), false, "song-3");
     }
 
     #[test]
     fn previous_stays_on_first_without_repeat() {
-        assert_eq!(
-            previous_track_id(&stepping_songs(), Some("song-1"), false),
-            Some("song-1".to_string())
-        );
+        assert_previous(Some("song-1"), false, "song-1");
     }
 
     #[test]
@@ -220,14 +209,8 @@ mod tests {
     #[test]
     fn no_current_step_ignores_repeat() {
         for current in [None, Some("nope")] {
-            assert_eq!(
-                next_track_id(&stepping_songs(), current, true),
-                Some("song-1".to_string())
-            );
-            assert_eq!(
-                previous_track_id(&stepping_songs(), current, true),
-                Some("song-3".to_string())
-            );
+            assert_next(current, true, "song-1");
+            assert_previous(current, true, "song-3");
         }
     }
 }
