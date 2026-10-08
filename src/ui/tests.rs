@@ -713,6 +713,40 @@ async fn album_selected_fetches_the_albums_songs_into_the_player() {
     assert_view(&player, CurrentView::Songs);
 }
 
+/// Asserts the "a superseded browse reply is dropped" contract shared by
+/// `a_slow_stale_browse_reply_does_not_overwrite_the_newer_list` and
+/// `a_slow_stale_browse_failure_does_not_overwrite_the_newer_list_or_error`:
+/// once `newer` has landed and stored its list, driving the earlier `stale`
+/// reply — whether it carries a success or a failure — yields
+/// `Message::Ignored`, leaves `expected_ids` in the albums buffer, and records
+/// no error. The caller seeds the parent artists list and issues both album
+/// fetches before calling, passing the later-issued task as `newer` and the
+/// earlier one as `stale`.
+async fn assert_stale_album_reply_is_dropped(
+    player: &mut WinampPlayer,
+    newer: Task<Message>,
+    stale: Task<Message>,
+    expected_ids: &[&str],
+) {
+    let newer = task_output(newer, "newer album fetch").await;
+    let _ = update(player, newer);
+    assert_ids(
+        &player.albums.items,
+        |album| album.id.as_str(),
+        expected_ids,
+    );
+
+    let stale = task_output(stale, "stale album fetch").await;
+    assert!(matches!(stale, Message::Ignored));
+    let _ = update(player, stale);
+    assert_ids(
+        &player.albums.items,
+        |album| album.id.as_str(),
+        expected_ids,
+    );
+    assert!(player.albums.error.is_none());
+}
+
 // A browse reply can complete out of order: the user picks artist-1, then
 // artist-2, and artist-1's slower fetch lands last. Storing that reply would
 // replace artist-2's albums with artist-1's, showing the wrong artist's list.
@@ -729,24 +763,9 @@ async fn a_slow_stale_browse_reply_does_not_overwrite_the_newer_list() {
     let first = update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 });
     let second = update(&mut player, Message::ArtistSelected { epoch: 0, index: 1 });
 
-    // The newer request's reply lands first.
-    let newer = task_output(second, "newer album fetch").await;
-    let _ = update(&mut player, newer);
-    assert_ids(
-        &player.albums.items,
-        |album| album.id.as_str(),
-        &["album-3"],
-    );
-
-    // The older request's reply lands late and must be dropped, leaving the
-    // newer artist's albums in place.
-    let stale = task_output(first, "stale album fetch").await;
-    let _ = update(&mut player, stale);
-    assert_ids(
-        &player.albums.items,
-        |album| album.id.as_str(),
-        &["album-3"],
-    );
+    // The newer request's reply lands first; the older one, landing late,
+    // must be dropped and leave artist-2's albums in place.
+    assert_stale_album_reply_is_dropped(&mut player, second, first, &["album-3"]).await;
 }
 
 // The stale-reply test above pins a superseded *success*; this pins the
@@ -774,27 +793,10 @@ async fn a_slow_stale_browse_failure_does_not_overwrite_the_newer_list_or_error(
     let first = update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 });
     let second = update(&mut player, Message::ArtistSelected { epoch: 0, index: 1 });
 
-    // The newer, successful reply lands first.
-    let newer = task_output(second, "newer album fetch").await;
-    let _ = update(&mut player, newer);
-    assert_ids(
-        &player.albums.items,
-        |album| album.id.as_str(),
-        &["album-1", "album-2"],
-    );
-    assert!(player.albums.error.is_none());
-
-    // The older request's failure lands late and must be dropped: the newer
-    // artist's albums stay and no error is recorded against them.
-    let stale = task_output(first, "stale album fetch").await;
-    assert!(matches!(stale, Message::Ignored));
-    let _ = update(&mut player, stale);
-    assert_ids(
-        &player.albums.items,
-        |album| album.id.as_str(),
-        &["album-1", "album-2"],
-    );
-    assert!(player.albums.error.is_none());
+    // The newer, successful reply lands first; the older request's failure
+    // must be dropped rather than wiping the newer list and recording its
+    // error against it.
+    assert_stale_album_reply_is_dropped(&mut player, second, first, &["album-1", "album-2"]).await;
 }
 
 // A play reply can complete out of order just like a browse reply: the user
