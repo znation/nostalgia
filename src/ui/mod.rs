@@ -536,7 +536,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         }
         Message::TrackPlayed { generation } => {
             // Only the current track's title is ever read (see
-            // [`Self::known_titles`]), so the latest play's completion drops
+            // [`WinampPlayer::known_titles`]), so the latest play's completion drops
             // every other entry the selections above accumulated. A completion
             // whose play a newer selection superseded is skipped: its
             // `current_track` names the older committed track, but the newer
