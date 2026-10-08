@@ -539,7 +539,8 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
 /// Assembles the app screen: the Now Playing bar, transport row, and
 /// equalizer panel — all built in `views.rs` from the resolved title and the
 /// shared playback, volume, Repeat, and EQ state — above the current browse
-/// list.
+/// list. When the window is shaded, only [`views::view_title_bar`] is built
+/// and the rest of the screen is dropped.
 fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // Shade mode builds only the title bar — the Now Playing bar, transport
     // row, equalizer, and browse list are all dropped, and the window itself
