@@ -5,8 +5,7 @@
 //! app-wide, so this module names the base-skin colours once and exposes them
 //! as a single [`winamp_theme`] the `init_ui` builder installs. Keeping the
 //! colours as public constants — rather than inlining them in each view —
-//! lets later fidelity work (title bar, panel bevels, playlist chrome) style
-//! against the same names.
+//! lets the views and chrome styles share one named palette.
 
 use std::sync::OnceLock;
 
