@@ -381,26 +381,30 @@ mod tests {
         assert!(disabled.text_color.a < theme::TEXT.a);
     }
 
-    // The two public builders are concrete over iced's real renderer, so they
-    // cannot be laid out with the test's null `()` renderer; these assert
-    // their size strategy instead. A `Fill` height would make a panel swallow
-    // the column's leftover vertical space, so the request must be a
-    // content-driven `Shrink`. `beveled_tracks_content_height` below resolves
-    // the real layout through the generic `beveled`.
-    #[test]
-    fn lcd_well_constructs_with_intrinsic_height() {
-        let well = lcd_well(Text::new("x"));
-        let size = well.as_widget().size();
+    /// Asserts a panel builder requests the full available width but a
+    /// content-driven height.
+    ///
+    /// The two public builders are concrete over iced's real renderer, so they
+    /// cannot be laid out with the test's null `()` renderer; assert their size
+    /// strategy instead. A `Fill` height would make a panel swallow the
+    /// column's leftover vertical space, so the request must be a
+    /// content-driven `Shrink`.
+    /// `beveled_tracks_content_height_and_fills_the_available_width` below
+    /// resolves the real layout through the generic `beveled`.
+    fn assert_intrinsic_height(element: Element<'_, Message>) {
+        let size = element.as_widget().size();
         assert_eq!(size.width, Length::Fill);
         assert_eq!(size.height, Length::Shrink);
     }
 
     #[test]
+    fn lcd_well_constructs_with_intrinsic_height() {
+        assert_intrinsic_height(lcd_well(Text::new("x")));
+    }
+
+    #[test]
     fn raised_panel_constructs_with_intrinsic_height() {
-        let panel = raised_panel(Text::new("x"));
-        let size = panel.as_widget().size();
-        assert_eq!(size.width, Length::Fill);
-        assert_eq!(size.height, Length::Shrink);
+        assert_intrinsic_height(raised_panel(Text::new("x")));
     }
 
     // Lays the composition out with iced's null `()` renderer (compiled under
