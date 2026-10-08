@@ -172,20 +172,31 @@ fn authorize_with_timeout(
 ///
 /// # Errors
 ///
-/// Returns the [`std::io::Error`] from spawning the platform's opener command.
+/// Returns the [`std::io::Error`] from spawning the platform's opener command;
+/// the message names the command (e.g. `xdg-open`), so a missing opener is
+/// diagnosable rather than a bare "No such file or directory".
 // `AppleMusicService::authenticate` passes this to [`authorize`]; it is public
 // so the wiring in `apple_music` can supply the real opener.
 pub fn open_in_browser(url: &str) -> io::Result<()> {
     if cfg!(target_os = "macos") {
-        Command::new("open").arg(url).spawn().map(|_| ())
+        spawn_opener("open", &[url])
     } else if cfg!(target_os = "windows") {
-        Command::new("cmd")
-            .args(["/C", "start", "", url])
-            .spawn()
-            .map(|_| ())
+        spawn_opener("cmd", &["/C", "start", "", url])
     } else {
-        Command::new("xdg-open").arg(url).spawn().map(|_| ())
+        spawn_opener("xdg-open", &[url])
     }
+}
+
+/// Spawns `program` with `args`, naming it in any spawn error so a missing
+/// opener reads as "`xdg-open`: No such file or directory" rather than a bare
+/// OS error. The child is left to run detached — the opener exits on its own
+/// and the sign-in flow must not block waiting for it.
+fn spawn_opener(program: &str, args: &[&str]) -> io::Result<()> {
+    Command::new(program)
+        .args(args)
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| io::Error::new(error.kind(), format!("{program}: {error}")))
 }
 
 /// What serving one connection decided for the overall flow.

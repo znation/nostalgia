@@ -287,3 +287,18 @@ fn authorize_deadline_bounds_a_stalled_connection() {
 fn auth_timeout_is_the_documented_five_minutes() {
     assert_eq!(AUTH_TIMEOUT, Duration::from_secs(300));
 }
+
+// A missing opener is the most likely spawn failure on a minimal Linux
+// box, and a bare "No such file or directory" does not say which command
+// is missing. `spawn_opener` names the program in the error, so the
+// `authorize` message ("could not open the sign-in page: ...") says what
+// to install. The probe program cannot exist, so this fails without
+// starting a process on every platform.
+#[test]
+fn spawn_opener_names_the_missing_program_in_its_error() {
+    let error = spawn_opener("nostalgia-no-such-opener", &[]).unwrap_err();
+    assert!(
+        error.to_string().contains("nostalgia-no-such-opener"),
+        "the error should name the program, got {error:?}"
+    );
+}
