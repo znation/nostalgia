@@ -94,7 +94,7 @@ pub(crate) fn sample_song() -> Song {
 /// Asserts that `T` requires every field `payload` declares: for each key,
 /// removing that one key must fail deserialization, because a payload missing
 /// a required field must error rather than silently yield a half-populated
-/// value the UI would render as blank data. The model types below and
+/// value the UI would render as blank data. The model-type tests and
 /// `apple_music`'s auth-token test each hand in a full, valid payload, so the
 /// walk-every-key loop lives here once. Probing every key matters: a single
 /// named field per type leaves the others unpinned, and a `#[serde(default)]`
@@ -152,9 +152,9 @@ where
 /// Asserts that `payload` deserializes as `T` to exactly `expected`, proving
 /// serde's default tolerance of fields beyond `T`'s declared set: a real
 /// Apple Music payload carries more than the model's fields, so an unknown
-/// field must be ignored rather than failing the whole parse. The three model
-/// types below and `apple_music`'s auth-token test each probe this contract,
-/// so the `from_value`-then-`assert_eq` chain lives here once.
+/// field must be ignored rather than failing the whole parse. The three
+/// model-type tests and `apple_music`'s auth-token test each probe this
+/// contract, so the `from_value`-then-`assert_eq` chain lives here once.
 pub(crate) fn assert_unknown_fields_tolerated<T>(payload: serde_json::Value, expected: T)
 where
     T: PartialEq + std::fmt::Debug + serde::de::DeserializeOwned,
