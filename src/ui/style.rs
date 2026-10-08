@@ -123,8 +123,8 @@ pub fn raised_panel<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a,
 /// map their own status enum onto this same ladder — the button by
 /// Active/Hovered/Pressed and the slider by Active/Hovered/Dragged — so the
 /// ladder lives here once and the two stay in lockstep. `pressed` wins when
-/// both are true, though no current status is both. Pure and theme-only, so it
-/// needs no widget to test.
+/// both are true, though no current status is both. Pure, so it needs no
+/// widget to test.
 fn chrome_face(hovered: bool, pressed: bool) -> Color {
     if pressed {
         theme::BUTTON_FACE_PRESSED
@@ -141,8 +141,8 @@ fn chrome_face(hovered: bool, pressed: bool) -> Color {
 /// [`bevel_edges`]: raised, it is a 1px light border on the top/left and a dark
 /// no-blur [`Shadow`] offset down-right on the bottom/right; pressing sinks the
 /// pair. The face comes from [`chrome_face`], which darkens it on hover and
-/// sinks it while pressed. Pure and theme-free, so the colour rule is testable
-/// without building a widget.
+/// sinks it while pressed. Pure, so the colour rule is testable without
+/// building a widget.
 pub fn chrome_button_style(status: button::Status) -> button::Style {
     let (top_left, bottom_right) = bevel_edges(!matches!(status, button::Status::Pressed));
     let face = chrome_face(
@@ -181,8 +181,8 @@ pub fn chrome_button_style(status: button::Status) -> button::Style {
 /// chrome, the same light-border trick [`chrome_button_style`] uses. The rail
 /// is uniform (`LCD_BACKGROUND` on both sides of the handle) because the thumb,
 /// not a fill colour, marks the value. The handle face comes from
-/// [`chrome_face`], the same ladder [`chrome_button_style`] uses. Pure and
-/// theme-free, so the colour rule is testable without building a widget.
+/// [`chrome_face`], the same ladder [`chrome_button_style`] uses. Pure, so the
+/// colour rule is testable without building a widget.
 pub fn chrome_slider_style(status: slider::Status) -> slider::Style {
     let face = chrome_face(
         matches!(status, slider::Status::Hovered),
