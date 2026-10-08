@@ -29,7 +29,137 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Add Winamp equalizer preset curves and a preset pick list (found 2026-10-07)
+
+Found by plan 2026-10-07. The equalizer panel Done entry ("Add the Winamp
+equalizer panel: on/off, preamp, and ten band sliders") deferred "preset
+curves" to a later plan, and the README's Screenshots note still says preset
+curves are not built. `src/equalizer.rs` holds only the band labels, the gain
+range, and `clamp_gain`; `AppState` stores a flat curve with no notion of a
+named preset. This plan lands the curves and the control that applies them,
+and leaves audio processing (still stubbed) alone.
+
+**Goal.** Give the equalizer the Winamp 2.x preset curves: a `Preset` table in
+`src/equalizer.rs` (name, preamp, ten band gains), an `AppState` selection that
+applies a preset's whole curve and remembers which preset is selected, and a
+`PickList` in the equalizer panel that shows the selected preset's name (or
+`"(none)"`) and applies one on selection. Moving any preamp or band slider by
+hand makes the curve custom and clears the selection.
+
+**Approach.**
+
+- `src/equalizer.rs`:
+  - Add `#[derive(Debug, Clone, Copy, PartialEq)] pub struct Preset { pub
+    name: &'static str, pub preamp: f32, pub bands: [f32; BAND_COUNT] }` and
+    `impl std::fmt::Display for Preset` returning `self.name` (so
+    `iced::widget::PickList` can render it).
+  - Add `pub const PRESETS: [Preset; 19]` — the Winamp 2.x curves, in
+    base-skin order: `Flat`, `Classical`, `Club`, `Dance`, `Full Bass`, `Full
+    Bass & Treble`, `Full Treble`, `Headphones`, `Large Hall`, `Live`,
+    `Party`, `Pop`, `Reggae`, `Rock`, `Ska`, `Soft`, `Soft Rock`, `Techno`,
+    `Vocal`. Every `preamp` is `0.0`; the band arrays, in `BAND_FREQUENCIES`
+    order, are: Flat `[0; 10]`; Classical `[0,0,0,0,0,0,-4.4,-4.4,-4.4,-5.6]`;
+    Club `[0,0,8,5.6,5.6,5.6,3.1,0,0,0]`; Dance `[5.6,7.5,4.4,0,0,-5.6,-7.5,-7.5,0,0]`;
+    Full Bass `[8.7,8.7,8.7,5.6,1.9,-4.4,-7.5,-8.1,-8.7,-8.7]`; Full Bass &
+    Treble `[7.5,5.6,0,-7.5,-4.4,1.9,8.7,8.7,8.7,8.7]`; Full Treble
+    `[-9.4,-9.4,-9.4,-4.4,1.9,8.7,9.4,9.4,9.4,10.0]`; Headphones
+    `[4.4,7.5,5.6,0,-3.1,-1.9,1.9,5.6,8.1,8.7]`; Large Hall
+    `[8.7,8.7,5.6,5.6,0,-5.6,-5.6,-5.6,0,0]`; Live
+    `[-4.4,-1.9,0,3.1,5.6,5.6,5.6,3.1,1.9,1.9]`; Party
+    `[7.5,7.5,0,0,0,0,0,0,7.5,7.5]`; Pop
+    `[-1.9,1.9,4.4,5.6,5.6,0,-1.9,-1.9,-1.9,-1.9]`; Reggae
+    `[0,0,0,-4.4,0,4.4,4.4,0,0,0]`; Rock
+    `[8.1,4.4,-5.6,-7.5,-3.1,4.4,8.7,11.2,11.2,11.2]`; Ska
+    `[-2.5,-4.4,-2.5,0,0,0,0,-2.5,-4.4,-5.6]`; Soft
+    `[4.4,1.9,0,-1.9,-1.9,0,4.4,8.1,8.1,8.1]`; Soft Rock
+    `[4.4,4.4,1.9,-1.9,-3.1,-1.9,1.9,5.6,8.1,8.1]`; Techno
+    `[4.4,1.9,0,-1.9,-4.4,-1.9,4.4,8.1,8.1,8.1]`; Vocal
+    `[-1.9,-3.1,-3.1,1.9,5.6,5.6,5.6,3.1,0,0]`.
+  - Tests: `presets_have_unique_non_empty_names`;
+    `preset_gains_stay_within_the_clamp_range` (every `preamp` and band equals
+    `clamp_gain` of itself, so a preset can never store out of range);
+    `flat_preset_is_all_zero`; `rock_preset_pins_the_classic_curve` (name and
+    exact array).
+- `src/state.rs`:
+  - Add a private `eq_preset: Option<equalizer::Preset>` field to `AppState`,
+    documented as the applied preset or `None` for a custom curve; initialize
+    it `None` in the manual `Default` and extend the "Initial state" comment.
+  - Add `pub fn apply_eq_preset(&mut self, preset: equalizer::Preset)` — store
+    `preset.preamp` and `preset.bands` through the same clamps
+    (`equalizer::clamp_gain` and `preset.bands.map(equalizer::clamp_gain)`)
+    and set `eq_preset = Some(preset)`.
+  - Make `set_eq_preamp` and `set_eq_band` clear `eq_preset` to `None` after
+    storing (a hand-moved slider is a custom curve), and extend their doc
+    comments.
+  - Add `#[must_use] pub fn eq_preset(&self) -> Option<equalizer::Preset>`.
+  - Tests: default `eq_preset()` is `None`; `apply_eq_preset` stores the whole
+    curve and the selection and keeps track/volume (reuse
+    `assert_keeps_track_and_volume`);
+    `moving_a_slider_clears_the_preset_selection` (apply a preset, then call
+    `set_eq_preamp` and `set_eq_band`, assert `None`).
+- `src/ui/style.rs`:
+  - Add `pick_list` and `overlay::menu` to the existing `iced::widget`
+    import.
+  - Add `pub fn chrome_pick_list_style(status: pick_list::Status) ->
+    pick_list::Style` reusing `chrome_face` (opened/pressed sinks the face):
+    `text_color: theme::TEXT`, `placeholder_color: theme::PANEL_EDGE_LIGHT`,
+    `handle_color: theme::TEXT`, `background:
+    Background::Color(chrome_face(hovered, opened))`, `border:
+    square_border(theme::PANEL_EDGE_DARK)`.
+  - Add `pub fn preset_menu_style() -> menu::Style` — `background:
+    theme::BUTTON_FACE.into()`, `border:
+    square_border(theme::PANEL_EDGE_DARK)`, `text_color: theme::TEXT`,
+    `selected_text_color: theme::TEXT`, `selected_background:
+    theme::TITLE_BLUE.into()`, `shadow: Shadow::default()`.
+  - Tests: `chrome_pick_list_style_sinks_the_face_when_opened` (`Active` and
+    `Hovered` use `BUTTON_FACE`, `Opened { is_hovered: false }` uses
+    `BUTTON_FACE_PRESSED`, every status uses `TEXT` text);
+    `preset_menu_style_uses_the_base_skin_face_and_selection_blue` (face,
+    dark border, `TITLE_BLUE` selection).
+- `src/ui/views.rs`:
+  - Import `PickList` from `iced::widget` and `PRESETS`/`Preset` from
+    `crate::equalizer`.
+  - Change `view_equalizer` to take a fourth parameter `preset:
+    Option<Preset>` and, in the header `Row` after the EQ on/off button, push
+    `PickList::new(PRESETS, preset, Message::EqPresetSelected)
+    .placeholder("(none)").text_size(12).style(|_theme, status|
+    style::chrome_pick_list_style(status)).menu_style(|_theme|
+    style::preset_menu_style())`.
+  - Update `equalizer_panel_constructs_for_both_states_and_gain_endpoints` to
+    pass `None` and `Some(PRESETS[0])` across its loops.
+- `src/ui/mod.rs`:
+  - Add `EqPresetSelected(crate::equalizer::Preset)` to `Message`.
+  - Add the `update` arm `Message::EqPresetSelected(preset) =>
+    mutate_state(player, move |state| state.apply_eq_preset(preset))`.
+  - In `view`, read `state.eq_preset()` into the existing state-lock tuple and
+    pass it as `view_equalizer`'s fourth argument.
+- `src/ui/tests.rs`: add `eq_preset_selected_applies_the_curve_and_selection` —
+  drive `Message::EqPresetSelected(PRESETS[i])` through `update` and assert the
+  shared `eq_preamp()`, `eq_bands()`, and `eq_preset()` match that preset.
+- `README.md`: drop "preset curves" from the Screenshots "not built yet" note
+  (leaving window-shade mode) and add the preset pick list to the Status
+  sentence; leave the `tumwater:prompt` block untouched.
+
+**Files touched.** `src/equalizer.rs`, `src/state.rs`, `src/ui/style.rs`,
+`src/ui/views.rs`, `src/ui/mod.rs`, `src/ui/tests.rs`, `README.md`.
+
+**Acceptance criteria.**
+
+- `make check` passes (`cargo fmt --check`, `cargo clippy --all-targets -- -D
+  warnings`, `cargo doc` with rustdoc warnings denied, `cargo test`).
+- The new `equalizer`, `state`, `style`, `views`, and `ui` tests listed above
+  pass, including the `rock_preset_pins_the_classic_curve` exact-array pin and
+  the `moving_a_slider_clears_the_preset_selection` behavior.
+- No `dead_code`/unused warnings: every new constant, field, method, and style
+  function is read by the UI or its tests.
+- The existing `view_constructs_over_the_apps_full_input_space` still passes:
+  it builds `view` for every browse/playback shape, so it exercises the pick
+  list in the equalizer panel.
+- `cargo run`: the equalizer header shows the EQ on/off button and a preset
+  pick list reading "(none)"; selecting "Rock" moves the ten band sliders to
+  the Rock curve and the pick list reads "Rock"; dragging any band slider
+  afterwards makes the pick list read "(none)" again (manual check — build +
+  tests are the primary gate).
 
 ## Done
 
