@@ -48,6 +48,16 @@ fn player_in_albums() -> WinampPlayer {
     player
 }
 
+/// A fresh player with a resolved window id — the precondition the title-bar
+/// action and window-shade tests need before driving a message, since
+/// [`test_player`] leaves `window_id` as `None`. The id is unique per call,
+/// matching the one `iced::window::latest()` resolves at boot.
+fn player_with_window_id() -> (WinampPlayer, Arc<Mutex<AppState>>) {
+    let (mut player, state) = test_player();
+    player.window_id = Some(iced::window::Id::unique());
+    (player, state)
+}
+
 /// Seeds `player`'s three browse buffers with one each of the shared
 /// [`sample_artist`], [`sample_album`], and [`sample_song`] fixtures — the
 /// "loaded" browse shape. The failure-arm test and the view-construction test
@@ -1037,8 +1047,7 @@ fn title_bar_window_actions_are_noops_without_a_window_id() {
 
 #[test]
 fn title_bar_window_actions_schedule_work_with_a_window_id() {
-    let (mut player, _state) = test_player();
-    player.window_id = Some(iced::window::Id::unique());
+    let (mut player, _state) = player_with_window_id();
 
     for message in [
         Message::WindowDragged,
@@ -1051,8 +1060,7 @@ fn title_bar_window_actions_schedule_work_with_a_window_id() {
 
 #[test]
 fn toggle_window_shade_flips_the_flag_and_measures_the_window() {
-    let (mut player, _state) = test_player();
-    player.window_id = Some(iced::window::Id::unique());
+    let (mut player, _state) = player_with_window_id();
     assert!(!player.shaded);
 
     assert_message_schedules_work(&mut player, Message::ToggleWindowShade);
@@ -1066,8 +1074,7 @@ fn toggle_window_shade_flips_the_flag_and_measures_the_window() {
 
 #[test]
 fn window_shade_measured_stores_the_size_and_resizes() {
-    let (mut player, _state) = test_player();
-    player.window_id = Some(iced::window::Id::unique());
+    let (mut player, _state) = player_with_window_id();
     player.shaded = true;
 
     assert_message_schedules_work(
@@ -1080,8 +1087,7 @@ fn window_shade_measured_stores_the_size_and_resizes() {
 
 #[test]
 fn window_shade_measurement_after_unshade_is_ignored() {
-    let (mut player, _state) = test_player();
-    player.window_id = Some(iced::window::Id::unique());
+    let (mut player, _state) = player_with_window_id();
 
     // Shade, then unshade before the deferred measurement lands.
     let _ = update(&mut player, Message::ToggleWindowShade);
@@ -1100,8 +1106,7 @@ fn window_shade_measurement_after_unshade_is_ignored() {
 
 #[test]
 fn a_late_measurement_cannot_overwrite_the_captured_size() {
-    let (mut player, _state) = test_player();
-    player.window_id = Some(iced::window::Id::unique());
+    let (mut player, _state) = player_with_window_id();
 
     // The first shade captures the real pre-shade size.
     let _ = update(&mut player, Message::ToggleWindowShade);
