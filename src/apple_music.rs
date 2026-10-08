@@ -40,12 +40,12 @@ impl std::fmt::Display for AppleMusicError {
 
 impl std::error::Error for AppleMusicError {}
 
-// The seam's error constructor is called by `play_track` and the two browse
-// queries to reject a blank id, and stays public for a real Apple Music
-// backend that will report failures from another module, so it is live and
-// needs no `dead_code` allowance. The transport stubs and token field below
-// still carry theirs; a *newly* dead item elsewhere still triggers the
-// warning the clean loop relies on to find removable code.
+// The seam's error constructor is reached by `play_track` and the two browse
+// queries through `ensure_id_is_valid`, and stays public for a real Apple
+// Music backend that will report failures from another module, so it is live
+// and needs no `dead_code` allowance. The transport stubs and token field
+// below still carry theirs; a *newly* dead item elsewhere still triggers the
+// compiler's `dead_code` warning.
 impl AppleMusicError {
     /// Builds a failure whose [`Display`](std::fmt::Display) output is
     /// `message` — the human-readable cause. The wrapped message is private,
@@ -80,8 +80,8 @@ pub struct AppleMusicService {
 /// fill: pause, next, and previous are not yet wired to the UI (the
 /// transport.rs stepping helpers drive those buttons), so `dead_code` is
 /// allowed on exactly this block and the `token` field — a *newly* dead
-/// field or method elsewhere still triggers the warning the clean loop
-/// relies on to find removable code.
+/// field or method elsewhere still triggers the compiler's `dead_code`
+/// warning.
 #[allow(dead_code)]
 impl AppleMusicService {
     async fn pause(&self) -> Result<(), AppleMusicError> {
