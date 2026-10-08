@@ -287,11 +287,29 @@ pub fn can_go_back(view: &CurrentView) -> bool {
     !matches!(view, CurrentView::Artists)
 }
 
+/// Whether the Artists view should offer its Retry button. Only the
+/// top-level artists fetch is unrecoverable by navigation, so Retry belongs
+/// to the Artists view and only while that fetch has failed; the Albums and
+/// Songs levels recover by navigating back into them. The update loop's
+/// `LoadArtists` arm clears the failure and re-issues the fetch.
+pub fn can_retry_artists(view: &CurrentView, error: Option<&str>) -> bool {
+    matches!(view, CurrentView::Artists) && error.is_some()
+}
+
 /// The browse view's Back button, stepping the hierarchy one level up (Songs
 /// → Albums → Artists). Rendered only where [`can_go_back`] is true; the
 /// update loop turns the pressed message into the view change.
 pub fn view_back_button() -> Element<'static, Message> {
     labeled_button("Back", Message::Back).into()
+}
+
+/// The Artists view's Retry button, re-running the top-level artists fetch
+/// after it failed. Rendered only where [`can_retry_artists`] is true; the
+/// update loop's `LoadArtists` arm clears the failure and re-issues the
+/// fetch, so the button turns the otherwise unrecoverable failed startup
+/// fetch — no navigation re-issues it — into a retry.
+pub fn view_retry_button() -> Element<'static, Message> {
+    labeled_button("Retry", Message::LoadArtists).into()
 }
 
 /// The custom title bar's app name.
@@ -557,10 +575,10 @@ pub(super) const BROWSE_VIEWS: [CurrentView; 3] = [
 mod tests {
     use super::{
         BROWSE_VIEWS, CurrentView, EQ_STEP, Message, VOLUME_MAX, VOLUME_MIN, VOLUME_STEP,
-        album_row, artist_row, browse_placeholder, can_go_back, current_row_style,
-        empty_list_label, eq_enabled_label, now_playing_label, play_pause_label, repeat_label,
-        song_row, transport_buttons, view_albums, view_artists, view_back_button, view_equalizer,
-        view_now_playing, view_songs, view_transport_controls,
+        album_row, artist_row, browse_placeholder, can_go_back, can_retry_artists,
+        current_row_style, empty_list_label, eq_enabled_label, now_playing_label, play_pause_label,
+        repeat_label, song_row, transport_buttons, view_albums, view_artists, view_back_button,
+        view_equalizer, view_now_playing, view_retry_button, view_songs, view_transport_controls,
     };
     use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, clamp_gain};
     use crate::sample_library::sample_library;
@@ -652,6 +670,17 @@ mod tests {
         assert!(!can_go_back(&CurrentView::Artists));
         assert!(can_go_back(&CurrentView::Albums));
         assert!(can_go_back(&CurrentView::Songs));
+    }
+
+    // Retry exists only for the one failed fetch navigation cannot re-issue:
+    // the top-level artists fetch. The predicate is pinned alongside the other
+    // pure browse helpers.
+    #[test]
+    fn retry_button_is_available_only_for_a_failed_artists_fetch() {
+        assert!(can_retry_artists(&CurrentView::Artists, Some("boom")));
+        assert!(!can_retry_artists(&CurrentView::Artists, None));
+        assert!(!can_retry_artists(&CurrentView::Albums, Some("boom")));
+        assert!(!can_retry_artists(&CurrentView::Songs, Some("boom")));
     }
 
     // The Now Playing bar and transport controls are built in this module
@@ -867,9 +896,10 @@ mod tests {
     }
 
     #[test]
-    fn now_playing_bar_and_back_button_construct() {
+    fn now_playing_bar_and_browse_action_buttons_construct() {
         let _bar = view_now_playing("Opening".into());
         let _back = view_back_button();
+        let _retry = view_retry_button();
     }
 
     // The transport row is rebuilt every frame, and the Play/Pause and Repeat

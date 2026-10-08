@@ -402,6 +402,11 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::LoadArtists => {
+            // `boot` schedules this once, so this is also the Retry button's
+            // arm: clearing first drops any earlier failure report and shows
+            // "Loading…" while the re-fetch is in flight, exactly as the
+            // navigation arms clear their level before re-fetching.
+            player.artists.clear();
             let generation = player.artists.begin_fetch();
             fetch_into(
                 &player.apple_music_service,
@@ -536,6 +541,13 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // the hierarchy has a level above to return to (see `views::can_go_back`).
     if views::can_go_back(&player.current_view) {
         column = column.push(views::view_back_button());
+    }
+    // A failed top-level artists fetch is a dead end: no navigation re-issues
+    // it, so the Artists view offers a Retry that re-runs `LoadArtists`. The
+    // Albums and Songs levels recover by navigating back into them, so their
+    // failures need no button.
+    if views::can_retry_artists(&player.current_view, player.artists.error.as_deref()) {
+        column = column.push(views::view_retry_button());
     }
     column.push(main_content).into()
 }

@@ -9,11 +9,10 @@
 //! `clear`, `fail`, `begin_fetch`) instead of spelling out the parallel-field
 //! bookkeeping at each site.
 //!
-//! Eight `update` arms go through `store`/`clear`/`fail`: the three
+//! Nine `update` arms go through `store`/`clear`/`fail`: the three
 //! `*Loaded` arms call `store`, the three `*LoadFailed` arms call `fail`, and
-//! the two navigation arms call `clear` before `begin_fetch`. `LoadArtists`
-//! calls `begin_fetch` for the first fetch, and `select` resolves the three
-//! selection arms' presses.
+//! the two navigation arms plus `LoadArtists` call `clear` before
+//! `begin_fetch`. `select` resolves the three selection arms' presses.
 
 use std::sync::{Arc, atomic::AtomicU64};
 
@@ -33,13 +32,13 @@ pub(super) struct BrowseList<T> {
     pub(super) epoch: u64,
     /// True while a fetch for this level is waiting on a reply: it starts
     /// true for the artists fetch `boot` schedules, and [`Self::clear`] sets
-    /// it when a navigation empties the rows for a new fetch. [`Self::store`]
+    /// it whenever the rows are emptied for a new fetch. [`Self::store`]
     /// clears it. The view reads it to show "Loading…" instead of the
     /// list's empty wording (see `views::browse_placeholder`).
     pub(super) loading: bool,
     /// The formatted report of this level's most recent failed fetch, or
     /// `None` when it has not failed. [`Self::fail`] sets it (and clears
-    /// `loading`); a navigation clears it before the retry, and a successful
+    /// `loading`); [`Self::clear`] drops it before a retry, and a successful
     /// reply clears it. The view shows it in place of the empty-list wording
     /// (see `views::browse_placeholder`), so a backend failure is not
     /// mistaken for an empty library.

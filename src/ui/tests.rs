@@ -690,6 +690,27 @@ async fn load_artists_fetches_favorite_artists_into_the_player() {
     .await;
 }
 
+// A failed artists fetch is a dead end: `boot` issues `LoadArtists` once and
+// no navigation re-issues it, so the Artists view's Retry button sends
+// `LoadArtists` again. The arm must clear the stored failure before the
+// re-fetch, or the view would keep showing the old error (and never
+// "Loading…") while the retry is in flight. Pin the clear alongside the
+// empty buffer and the loading flag.
+#[test]
+fn load_artists_clears_a_prior_failure_before_refetching() {
+    let (mut player, _state) = test_player();
+    player.artists.items = vec![sample_artist()];
+    player.artists.error =
+        Some("music-library fetch failed (loading favorite artists): boom".to_string());
+    player.artists.loading = false;
+
+    let _task = update(&mut player, Message::LoadArtists);
+
+    assert!(player.artists.items.is_empty());
+    assert!(player.artists.loading);
+    assert!(player.artists.error.is_none());
+}
+
 // `Message::TrackSelected` wraps playback in a `Task`; the arm itself only
 // schedules it, so the real behavior lives in the returned task. Drive that
 // task to completion (as the iced runtime would) and assert the shared
