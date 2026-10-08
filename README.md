@@ -15,8 +15,9 @@ Nostalgia is a (very close if not pixel-perfect) clone of the classic Winamp UI,
 Early skeleton (0.1.0): an iced (0.14) desktop shell themed with a Winamp 2.x base-skin palette —
 a custom raised title bar with minimize, close, and window-shade roll-up, a Now Playing LCD bar,
 chrome transport controls with Repeat, a volume slider, an equalizer panel with a preset pick
-list, and an artist → album → song browser over an in-memory sample library; the Apple Music API
-is not wired up yet. Open work lives in PLANS.md, BUGS.md, and QUESTIONS.md.
+list, and an artist → album → song browser. A MusicKit loopback sign-in runs at startup when
+`APPLE_MUSIC_DEVELOPER_TOKEN` is set, but the browse queries and playback still answer from the
+in-memory sample library. Open work lives in PLANS.md, BUGS.md, and QUESTIONS.md.
 <!-- tumwater:status:end -->
 
 ## Screenshots
@@ -48,9 +49,10 @@ Play/Pause/Stop/Previous/Next controls, a Repeat toggle, a volume slider, an equ
 (an EQ on/off button, a preset pick list, a preamp slider, and ten band sliders), and a browse
 list. Double-clicking the title bar rolls the window up to just that title bar, and double-clicking
 it again restores it. With the window focused, the classic Winamp keys drive playback: Z and B
-step back and forward, X plays, C pauses, V stops, and the up/down arrows nudge the volume. There
-are no CLI
-flags or config files yet.
+step back and forward, X plays, C pauses, V stops, and the up/down arrows nudge the volume. At
+launch, setting the `APPLE_MUSIC_DEVELOPER_TOKEN` environment variable starts a browser-based
+MusicKit sign-in; with it unset the built-in sample library is used. There are no CLI flags or
+config files yet.
 
 ## Development
 
