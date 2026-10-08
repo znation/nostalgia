@@ -151,9 +151,10 @@ pub fn raised_panel<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a,
 /// The flat base-skin title-bar fill: a solid [`theme::TITLE_BLUE`] band with
 /// the light [`theme::TEXT`] colour for the app name.
 ///
-/// Unlike [`lcd_well`] and [`raised_panel`], which compose with the window face
-/// and set no text colour, the title bar paints its own opaque background and
-/// its own light text. Pure, so both fields are testable without a widget.
+/// [`raised_panel`] composes with the window face and [`lcd_well`] paints its
+/// own background, but neither sets a text colour; the title bar paints both
+/// its own opaque background and its own light text. Pure, so both fields are
+/// testable without a widget.
 pub fn title_bar_style() -> container::Style {
     container::Style {
         background: Some(Background::Color(theme::TITLE_BLUE)),
