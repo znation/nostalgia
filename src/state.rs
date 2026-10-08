@@ -242,11 +242,12 @@ mod tests {
     use crate::test_support::rock_preset;
 
     /// Runs `mutation` on `state` and asserts it leaves `current_track` and
-    /// `volume` untouched. Every `AppState` mutation but `set_volume` uses
-    /// this helper — the playback flips (`toggle_playing`, `stop`,
-    /// `toggle_repeat`) and the equalizer setters (`toggle_equalizer`,
-    /// `set_eq_preamp`, `set_eq_band`, `apply_eq_preset`) — so the snapshot-then-compare
-    /// sequence lives here once instead of at each call site. Each test pins
+    /// `volume` untouched. Every `AppState` mutation but `play`, `pause`, and
+    /// `set_volume` uses this helper — the playback setters (`toggle_playing`,
+    /// `stop`, `toggle_repeat`) and the equalizer setters (`toggle_equalizer`,
+    /// `set_eq_preamp`, `set_eq_band`, `apply_eq_preset`) — so the
+    /// snapshot-then-compare sequence lives here once instead of at each call
+    /// site. Each test pins
     /// its own field's new value separately; this helper only pins the two
     /// fields the mutation must not disturb.
     fn assert_keeps_track_and_volume(state: &mut AppState, mutation: impl FnOnce(&mut AppState)) {
