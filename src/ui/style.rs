@@ -31,11 +31,11 @@ pub fn bevel_edges(raised: bool) -> (Color, Color) {
 ///
 /// A bevel's horizontal and vertical edges differ only in which [`rule`]
 /// constructor draws them, so the shared full-fill styling lives here once.
-fn styled_edge<'a, R>(rule: rule::Rule<'a, Theme>, color: Color) -> Element<'a, Message, Theme, R>
+fn styled_edge<'a, R>(edge: rule::Rule<'a, Theme>, color: Color) -> Element<'a, Message, Theme, R>
 where
     R: iced::advanced::Renderer + 'a,
 {
-    rule.style(move |_theme| rule::Style {
+    edge.style(move |_theme| rule::Style {
         color,
         radius: 0.0.into(),
         fill_mode: rule::FillMode::Full,
