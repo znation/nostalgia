@@ -287,6 +287,18 @@ fn with_window_id(
     }
 }
 
+/// Rolls the window up to the shade strip at `width`: the title-bar height,
+/// keeping the window's current width so the rolled-up window matches the one
+/// it replaces. Both shade paths — rolling straight up with a known size, and
+/// the first shade once its measurement lands — resize this way, so the
+/// expression lives here once. A no-op before the window id resolves, via
+/// [`with_window_id`], like the other title-bar actions.
+fn resize_to_shade(player: &WinampPlayer, width: f32) -> Task<Message> {
+    with_window_id(player, |id| {
+        iced::window::resize(id, iced::Size::new(width, views::TITLE_BAR_HEIGHT))
+    })
+}
+
 fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
     match message {
         Message::PlayPause => mutate_state(player, AppState::toggle_playing),
@@ -507,12 +519,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 match player.unshaded_size {
                     // The size to restore is already known, so roll straight
                     // up; re-measuring could read the strip a prior shade left.
-                    Some(size) => with_window_id(player, |id| {
-                        iced::window::resize(
-                            id,
-                            iced::Size::new(size.width, views::TITLE_BAR_HEIGHT),
-                        )
-                    }),
+                    Some(size) => resize_to_shade(player, size.width),
                     // First shade: measure so the size can be restored.
                     None => with_window_id(player, |id| {
                         iced::window::size(id).map(Message::WindowShadeMeasured)
@@ -528,9 +535,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 return Task::none();
             }
             player.unshaded_size = Some(size);
-            with_window_id(player, |id| {
-                iced::window::resize(id, iced::Size::new(size.width, views::TITLE_BAR_HEIGHT))
-            })
+            resize_to_shade(player, size.width)
         }
         Message::Ignored => Task::none(),
     }
