@@ -120,28 +120,17 @@ pub fn raised_panel<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a,
 
 /// The raised (Active/Hovered) and sunken (Pressed) chrome style for a button.
 ///
-/// iced's [`Border`] carries a single colour, so — as with the panel bevel —
-/// the two-tone edge is composed from a 1px light border on the top/left and a
-/// dark no-blur [`Shadow`] offset down-right on the bottom/right; pressing
-/// reverses the pair. The face darkens on hover and sinks while pressed. Pure
-/// and theme-free, so the colour rule is testable without building a widget.
+/// iced's [`Border`] carries a single colour, so the two-tone edge reuses
+/// [`bevel_edges`]: raised, it is a 1px light border on the top/left and a dark
+/// no-blur [`Shadow`] offset down-right on the bottom/right; pressing sinks the
+/// pair. The face darkens on hover and sinks while pressed. Pure and
+/// theme-free, so the colour rule is testable without building a widget.
 pub fn chrome_button_style(status: button::Status) -> button::Style {
-    let (top_left, bottom_right, face) = match status {
-        button::Status::Active | button::Status::Disabled => (
-            theme::PANEL_EDGE_LIGHT,
-            theme::PANEL_EDGE_DARK,
-            theme::BUTTON_FACE,
-        ),
-        button::Status::Hovered => (
-            theme::PANEL_EDGE_LIGHT,
-            theme::PANEL_EDGE_DARK,
-            theme::BUTTON_FACE_HOVERED,
-        ),
-        button::Status::Pressed => (
-            theme::PANEL_EDGE_DARK,
-            theme::PANEL_EDGE_LIGHT,
-            theme::BUTTON_FACE_PRESSED,
-        ),
+    let (top_left, bottom_right) = bevel_edges(!matches!(status, button::Status::Pressed));
+    let face = match status {
+        button::Status::Active | button::Status::Disabled => theme::BUTTON_FACE,
+        button::Status::Hovered => theme::BUTTON_FACE_HOVERED,
+        button::Status::Pressed => theme::BUTTON_FACE_PRESSED,
     };
 
     let text_color = match status {
