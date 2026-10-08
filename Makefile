@@ -30,11 +30,10 @@ lint:
 ## Builds the docs, failing on any rustdoc warning.
 ##
 ## `-D warnings` is what turns a broken intra-doc link or bare URL into a
-## failed run instead of a printed warning. rustdoc only checks the doc
-## comments of the items it documents, and without `--document-private-items`
-## that is the public surface: a broken link in a private item's docs is not
-## reported. Passing the flag both renders private items into the generated
-## HTML and extends the link check to them.
+## failed run instead of a printed warning. Cargo already passes
+## `--document-private-items` for this binary crate (`cargo doc -v` shows it
+## in the rustdoc invocation), so rustdoc documents and checks the crate's
+## private items too; no extra flag is needed.
 docs:
 	RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
 
