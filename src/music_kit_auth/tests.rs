@@ -103,6 +103,23 @@ fn validate_developer_token_rejects_blank_and_malformed_values() {
 }
 
 #[test]
+fn percent_decode_decodes_form_escapes_and_leaves_bad_ones_literal() {
+    // The callback body is form-urlencoded by the browser's `fetch`, so a
+    // `+` is a space and `%XX` is the decoded byte (upper- or lowercase hex).
+    assert_eq!(percent_decode("a+b"), "a b");
+    assert_eq!(percent_decode("a%20b"), "a b");
+    assert_eq!(percent_decode("%2E"), ".");
+    assert_eq!(percent_decode("%2e"), ".");
+    // Multi-byte UTF-8 arrives as several escapes and decodes as one char.
+    assert_eq!(percent_decode("%C3%A9"), "\u{e9}");
+    // A non-hex, incomplete, or trailing escape stays literal rather than
+    // being dropped or panicking.
+    assert_eq!(percent_decode("%zz"), "%zz");
+    assert_eq!(percent_decode("100%"), "100%");
+    assert_eq!(percent_decode("%2"), "%2");
+}
+
+#[test]
 fn debug_redacts_both_tokens() {
     let session = MusicKitSession {
         developer_token: SAMPLE_DEVELOPER_TOKEN.to_string(),
@@ -140,6 +157,31 @@ fn authorize_returns_a_session_on_a_matching_callback() {
     assert!(page.contains(SAMPLE_DEVELOPER_TOKEN));
     assert!(page.contains(state));
     assert!(observed[2].starts_with("HTTP/1.1 200"));
+}
+
+#[test]
+fn authorize_serves_the_page_for_the_browsers_query_request() {
+    // The browser opens `/?state=<nonce>`, so the page route matches `/`
+    // only because the reader strips the query string. A regression there
+    // would 404 the page and the sign-in would never start.
+    let observed = Arc::new(Mutex::new(String::new()));
+    let observed_for_flow = Arc::clone(&observed);
+    let (opener, handles) = background(move |port, state| {
+        let page = request(
+            port,
+            &format!("GET /?state={state} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"),
+        );
+        let _ = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
+        *observed_for_flow.lock().expect("observed lock") = page;
+    });
+
+    authorize_with_timeout(SAMPLE_DEVELOPER_TOKEN, &opener, Duration::from_secs(5))
+        .expect("the real callback still succeeds");
+    join_all(&handles);
+
+    let page = observed.lock().expect("observed lock");
+    assert!(page.starts_with("HTTP/1.1 200"));
+    assert!(page.contains(SAMPLE_DEVELOPER_TOKEN));
 }
 
 #[test]
