@@ -184,7 +184,10 @@ fn authorize_returns_a_session_on_a_matching_callback() {
     let observed = Arc::new(Mutex::new(Vec::<String>::new()));
     let observed_for_flow = Arc::clone(&observed);
     let session = authorize_with_flow(move |port, state| {
-        let page = request(port, "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
+        let page = request(
+            port,
+            &format!("GET /?state={state} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"),
+        );
         let response = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
         let mut observed = observed_for_flow.lock().expect("observed lock");
         observed.push(state);
@@ -206,9 +209,10 @@ fn authorize_returns_a_session_on_a_matching_callback() {
 
 #[test]
 fn authorize_serves_the_page_for_the_browsers_query_request() {
-    // The browser opens `/?state=<nonce>`, so the page route matches `/`
-    // only because the reader strips the query string. A regression there
-    // would 404 the page and the sign-in would never start.
+    // The browser opens `/?state=<nonce>`, so the page route must both match
+    // `/` (the reader strips the query from the path) and carry the nonce. A
+    // regression in either would refuse the page and the sign-in would never
+    // start.
     let observed = Arc::new(Mutex::new(String::new()));
     let observed_for_flow = Arc::clone(&observed);
     authorize_with_flow(move |port, state| {
@@ -258,6 +262,44 @@ fn authorize_rejects_a_malformed_developer_token_without_opening() {
 
     assert!(error.to_string().contains("developer token"));
     assert_eq!(calls.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn authorize_refuses_the_page_without_the_state_nonce() {
+    let observed = Arc::new(Mutex::new(Vec::<String>::new()));
+    let observed_for_flow = Arc::clone(&observed);
+    let (opener, handles) = background(move |port, state| {
+        // A local client that does not present the per-flow nonce — here with
+        // a guess and with no query at all — must not be served the page,
+        // which embeds the developer token. The real browser request carries
+        // the nonce, so the flow still completes.
+        let guessed = request(
+            port,
+            "GET /?state=not-the-nonce HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n",
+        );
+        let absent = request(port, "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
+        let mut observed = observed_for_flow.lock().expect("observed lock");
+        observed.push(guessed);
+        observed.push(absent);
+        drop(observed);
+        let _ = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
+    });
+
+    authorize_with_timeout(SAMPLE_DEVELOPER_TOKEN, &opener, Duration::from_secs(5))
+        .expect("a page request without the nonce does not abort the flow");
+    join_all(&handles);
+
+    let observed = observed.lock().expect("observed lock");
+    for response in observed.iter() {
+        assert!(
+            response.starts_with("HTTP/1.1 403"),
+            "a page request without the state nonce should be forbidden, got: {response}"
+        );
+        assert!(
+            !response.contains(SAMPLE_DEVELOPER_TOKEN),
+            "the sign-in page must not leak the developer token without the nonce"
+        );
+    }
 }
 
 #[test]

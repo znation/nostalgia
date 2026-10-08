@@ -17,7 +17,11 @@
 //! `POST /token` callback. A request whose `Host` header does not name
 //! `127.0.0.1` is refused, so a DNS-rebinding page — which reaches the socket
 //! under its own hostname — cannot read the sign-in page's developer token or
-//! `state` nonce. Every request is read into a buffer capped at
+//! `state` nonce. The page route itself is served only to a request that
+//! presents this flow's `state` nonce (the browser was opened at
+//! `/?state=<nonce>`), so another local client — which can reach the loopback
+//! port but does not know the nonce — cannot read the developer token the page
+//! embeds. Every request is read into a buffer capped at
 //! `MAX_REQUEST_BYTES` (defined in the `http` submodule): the cap is checked
 //! while reading headers *and* before the declared body is read, so a hostile
 //! client cannot make the server allocate without bound or panic it with an
@@ -285,6 +289,22 @@ fn serve_connection(
     }
 
     if request.method == "GET" && request.path == "/" {
+        // The page embeds the owner-side developer token, and the browser was
+        // opened at `/?state=<nonce>`, so the legitimate page request already
+        // presents the per-flow nonce. Refuse any request that does not: a
+        // local client that can reach the loopback port but does not know the
+        // nonce would otherwise read the developer token and the nonce, then
+        // forge a callback.
+        if !page_query_carries_nonce(request.query.as_deref(), nonce) {
+            let _ = write_response(
+                stream,
+                403,
+                "Forbidden",
+                "text/plain; charset=utf-8",
+                "Forbidden",
+            );
+            return Connection::Continue;
+        }
         let page = render_auth_page(developer_token, nonce);
         let _ = write_response(stream, 200, "OK", "text/html; charset=utf-8", &page);
         return Connection::Continue;
@@ -302,6 +322,21 @@ fn serve_connection(
         "Not found",
     );
     Connection::Continue
+}
+
+/// Whether the page request's query carries this flow's `state` nonce.
+///
+/// The browser is opened at `/?state=<nonce>`, so the legitimate page request
+/// already presents the per-flow secret. Requiring it here means a local
+/// client that reaches the loopback port without knowing the nonce is refused
+/// the sign-in page and the developer token it embeds.
+fn page_query_carries_nonce(query: Option<&str>, nonce: &str) -> bool {
+    query.is_some_and(|query| {
+        query.split('&').any(|pair| {
+            pair.split_once('=')
+                .is_some_and(|(key, value)| key == "state" && percent_decode(value) == nonce)
+        })
+    })
 }
 
 /// Handles the `POST /token` callback: validates `state` and `userToken` and

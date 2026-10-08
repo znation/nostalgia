@@ -2,7 +2,7 @@
 //! writing one minimal response.
 //!
 //! These helpers know nothing about `MusicKit` — they parse a request into its
-//! method, path, host, and body, and write a `Connection: close` response — so the
+//! method, path, query, host, and body, and write a `Connection: close` response — so the
 //! sign-in flow's request routing (in the parent module) reads as application
 //! logic over a small protocol layer. The request buffer is capped at
 //! [`MAX_REQUEST_BYTES`] while reading headers *and* before the declared body
@@ -28,10 +28,13 @@ pub(super) const CONNECTION_READ_TIMEOUT: Duration = Duration::from_secs(5);
 const MIN_READ_TIMEOUT: Duration = Duration::from_millis(1);
 
 /// A parsed HTTP request: the method, the path (query string stripped), the
-/// `Host` header value (if any), and the body bytes.
+/// raw query string (if the target carried one), the `Host` header value (if
+/// any), and the body bytes.
 pub(super) struct HttpRequest {
     pub(super) method: String,
     pub(super) path: String,
+    /// Everything after the first `?` in the request target, undecoded.
+    pub(super) query: Option<String>,
     pub(super) host: Option<String>,
     pub(super) body: Vec<u8>,
 }
@@ -84,7 +87,10 @@ pub(super) fn read_http_request(
     let target = parts
         .next()
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing target"))?;
-    let path = target.split('?').next().unwrap_or(target).to_string();
+    let (path, query) = match target.split_once('?') {
+        Some((path, query)) => (path.to_string(), Some(query.to_string())),
+        None => (target.to_string(), None),
+    };
 
     let mut content_length = 0usize;
     let mut host = None;
@@ -127,6 +133,7 @@ pub(super) fn read_http_request(
     Ok(Some(HttpRequest {
         method,
         path,
+        query,
         host,
         body: buffer[body_start..body_end].to_vec(),
     }))
