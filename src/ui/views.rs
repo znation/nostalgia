@@ -580,8 +580,9 @@ mod tests {
         BROWSE_VIEWS, CurrentView, EQ_STEP, Message, VOLUME_MAX, VOLUME_MIN, VOLUME_STEP,
         album_row, artist_row, browse_placeholder, can_go_back, can_retry_artists,
         current_row_style, empty_list_label, eq_enabled_label, now_playing_label, play_pause_label,
-        repeat_label, song_row, transport_buttons, view_albums, view_artists, view_back_button,
-        view_equalizer, view_now_playing, view_retry_button, view_songs, view_transport_controls,
+        repeat_label, song_row, style, theme, transport_buttons, view_albums, view_artists,
+        view_back_button, view_equalizer, view_now_playing, view_retry_button, view_songs,
+        view_transport_controls,
     };
     use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, clamp_gain};
     use crate::sample_library::sample_library;
@@ -833,13 +834,11 @@ mod tests {
             let marked = current_row_style(status);
             assert_eq!(
                 marked.background,
-                Some(iced::Background::Color(
-                    crate::ui::theme::PLAYING_ROW_HIGHLIGHT
-                ))
+                Some(iced::Background::Color(theme::PLAYING_ROW_HIGHLIGHT))
             );
             assert_eq!(
                 marked.text_color,
-                super::style::playlist_row_style(status).text_color
+                style::playlist_row_style(status).text_color
             );
         }
 
@@ -847,7 +846,7 @@ mod tests {
         // would be invisible against the well.
         assert_ne!(
             current_row_style(Status::Active).background,
-            super::style::playlist_row_style(Status::Active).background
+            style::playlist_row_style(Status::Active).background
         );
     }
 
