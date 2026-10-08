@@ -29,7 +29,152 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Add the Apple Music REST browse client (found 2026-10-08)
+
+The auth seam landed (`AppleMusicService` stores a `MusicKitSession`), but the
+browse queries still answer from `sample_library()`. This entry adds the client
+that turns a session plus the Apple Music REST API into the model's
+`Artist`/`Album`/`Song` lists, behind a transport trait so its tests run
+without a network. It changes no app behavior on its own; its sibling "Answer
+the browse queries from the Apple Music REST API when signed in" wires it into
+`AppleMusicService`.
+
+**Depends on.** Nothing. The sibling wiring entry depends on this one.
+
+**Goal.** A new `apple_music::rest` module with a synchronous `RestLibrary`
+that issues the three library browse queries over the Apple Music API and maps
+each JSON response onto `Vec<Artist>`/`Vec<Album>`/`Vec<Song>`, tested against
+an in-memory stub transport with no network.
+
+**Approach.**
+
+- `Cargo.toml`: add `ureq = "3.4"` to `[dependencies]` with a comment naming
+  it the blocking HTTP client for this integration (the choice recorded in
+  `QUESTIONS.md` `## Answered`, 2026-10-08), leaving its default features
+  (rustls TLS). Move `serde_json = "1.0.146"` from `[dev-dependencies]` to
+  `[dependencies]` (the REST client parses responses in production now) and
+  update its now-stale "Test-only" comment.
+- A new `rest` submodule of `apple_music`, declared `pub mod rest;` in
+  `src/apple_music.rs` beside its existing `#[cfg(test)] mod tests;`:
+  - `pub trait HttpTransport: Send + Sync` with
+    `fn get(&self, url: &str, session: &MusicKitSession) -> Result<String, AppleMusicError>`
+    — the narrow seam the tests stub.
+  - `pub struct UreqTransport;` implementing it: `ureq::get(url)` with an
+    `Authorization: Bearer <developer_token>` header and a
+    `Music-User-Token: <user_token>` header, `.call()`, map any `ureq::Error`
+    to `AppleMusicError::new(...)`, then `response.body_mut().read_to_string()`.
+    ureq 3's default `http_status_as_error` makes a 4xx/5xx an `Err` here, so a
+    rejected request never parses as data. No error message includes a token.
+  - `pub struct RestLibrary { transport: Box<dyn HttpTransport> }` with
+    `pub fn new(transport: Box<dyn HttpTransport>) -> Self` and three
+    synchronous methods, each taking `&MusicKitSession`:
+    - `get_favorite_artists` → `GET {API_BASE}/me/library/artists`; map each
+      resource's `id` and `attributes.name` to `Artist { id, name }`.
+    - `get_albums_by_artist(session, artist_id)` →
+      `GET {API_BASE}/me/library/artists/{artist_id}/albums`; map
+      `attributes.name` to `Album::title` and set `Album::artist_id` to the
+      `artist_id` argument (the query already scopes the results to it).
+    - `get_songs_from_album(session, album_id)` →
+      `GET {API_BASE}/me/library/albums/{album_id}/tracks`; map
+      `attributes.name` to `Song::title` and set `Song::album_id` to the
+      `album_id` argument.
+  - `const API_BASE: &str = "https://api.music.apple.com/v1";` — the library
+    endpoints need no storefront, so none is fetched.
+  - Private serde DTOs for the `{ "data": [ ... ] }` envelope: a generic
+    `Envelope<T> { data: Vec<T> }`, a `Resource { id: String, attributes: Option<Attributes> }`,
+    and `Attributes { name: Option<String> }`. A resource whose `attributes.name`
+    is absent or blank is an `AppleMusicError` naming its `id` rather than a
+    blank row.
+  - Each method runs `transport.get(...)`, then
+    `serde_json::from_str::<Envelope<Resource>>(...)`, then maps; every failure
+    (transport, JSON, a nameless resource) is an `AppleMusicError` whose
+    message names the query.
+  - Only the first page is read: the API's `next` link is ignored, documented
+    as a known limit (Apple caps a page at 100 items).
+  - The id is interpolated into the URL directly. The service layer (the
+    sibling entry) runs the existing `ensure_id_is_valid` guard before calling
+    here, and the ids are Apple-generated or from the sample library.
+- Tests in the `rest` module's own `#[cfg(test)] mod tests;` child (mirroring
+  how `apple_music` holds its tests): a `StubTransport` that records
+  each `(url, session)` and returns a canned body or an `Err`, plus tests that
+  each query maps canned library JSON to the expected model values, that the
+  stub observes the expected URL and both session tokens, that a transport
+  `Err`, malformed JSON, and a resource missing `attributes.name` each return
+  an `AppleMusicError`, and that unknown extra attributes are tolerated.
+
+**Files touched.** `Cargo.toml`, `src/apple_music.rs` (one `pub mod rest;`
+line), and the new `rest` module and its tests submodule beside it.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- `RestLibrary` maps canned Apple Music library JSON to the model for all
+  three queries, and the stub observes the request URL and both session tokens.
+- A transport error, malformed JSON, or a resource without a name returns an
+  `AppleMusicError`; no test touches the network.
+- `AppleMusicService` and the app are unchanged by this entry: the existing
+  sample-library browse tests still pass.
+
+### Answer the browse queries from the Apple Music REST API when signed in (found 2026-10-08)
+
+The sibling entry "Add the Apple Music REST browse client" produces
+`RestLibrary`; this entry makes `AppleMusicService` use it whenever a
+`MusicKitSession` is stored, and keep the sample library otherwise. It lands
+independently once that module's public API exists.
+
+**Depends on.** "Add the Apple Music REST browse client" (`RestLibrary`,
+`HttpTransport`, `UreqTransport`).
+
+**Goal.** The three browse queries answer from the signed-in user's Apple
+Music library when a session is stored and from `sample_library()` when not,
+and the blocking HTTP call runs off iced's executor so it cannot freeze the UI.
+
+**Approach.**
+
+- `src/apple_music.rs`:
+  - Add `rest: Arc<rest::RestLibrary>` to `AppleMusicService`.
+  - `pub fn new(state)` builds it with `rest::UreqTransport`; add
+    `pub fn with_transport(state, transport: Box<dyn rest::HttpTransport>) -> Self`
+    and have `new` delegate to it, so tests inject a stub transport.
+  - Each browse method: after the existing `ensure_id_is_valid`, match
+    `self.session()`. `Some(session)` clones the `Arc<RestLibrary>` and the id,
+    then runs `off_thread(move || rest.get_...(&session, &id)).await`; `None`
+    runs the existing sample-library lookup. A REST failure propagates as an
+    `AppleMusicError` (no silent fallback to the sample library), so the UI's
+    existing `*LoadFailed`/Retry path reports it.
+  - Add a private
+    `async fn off_thread<T: Send + 'static>(work: impl FnOnce() -> Result<T, AppleMusicError> + Send + 'static) -> Result<T, AppleMusicError>`
+    that spawns a `std::thread`, sends the result through a
+    `tokio::sync::oneshot`, and awaits the receiver; a dropped sender (the
+    thread panicked) becomes an `AppleMusicError`. This mirrors
+    `init_service`'s sign-in thread and avoids `tokio::task::spawn_blocking`,
+    which needs a tokio runtime iced's executor does not provide (see
+    `ui::loading::with_timeout`).
+  - Remove the now-live `#[allow(dead_code)]` from `session()` and update its
+    doc, and update the module doc to say the browse queries use the session
+    when one is stored.
+- Tests in `src/apple_music/tests.rs`: keep `test_service()` on
+  `AppleMusicService::new` (no session), so the existing sample-library tests
+  pass unchanged. Add a helper that builds a service with a stub transport via
+  `with_transport`, stores a session with `authenticate_with`, and then asserts
+  each browse query returns the stub's mapped rows rather than the sample
+  library and that a stub `Err` propagates; add a test that a session-less
+  service still returns sample data even with a transport installed.
+
+**Files touched.** `src/apple_music.rs`, `src/apple_music/tests.rs`.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- With no session, all three browse queries return the sample library (the
+  existing tests pass unchanged).
+- With a stored session and a stub transport, each query returns the stub's
+  parsed rows, the stub observes the URL and both tokens, and a transport `Err`
+  propagates as an `AppleMusicError`.
+- `session()` carries no `#[allow(dead_code)]`.
+- Manual check (`cargo run` with a real `APPLE_MUSIC_DEVELOPER_TOKEN` and a
+  completed sign-in): the artist → album → song browser shows the signed-in
+  user's library; without the variable it still shows the sample library.
 
 ## Done
 
