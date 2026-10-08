@@ -7,7 +7,11 @@
 //! the shared `AppState` and the `AppleMusicService` seam. Its unit tests live
 //! in the `tests` submodule.
 
-use iced::{Element, Task, widget::Column};
+use iced::{
+    Element, Task,
+    keyboard::{self, Event, Key, Modifiers, key},
+    widget::Column,
+};
 use std::{
     borrow::Cow,
     collections::HashMap,
@@ -48,15 +52,24 @@ pub fn init_ui(state: Arc<Mutex<AppState>>) -> iced::Result {
         .theme(|_: &WinampPlayer| theme::winamp_theme())
         .decorations(false)
         .resizable(false)
+        .subscription(|_player| keyboard::listen().filter_map(message_for))
         .run()
 }
 
 #[derive(Debug, Clone)]
 enum Message {
     PlayPause,
+    // The explicit Play and Pause key bindings (X and C). Unlike `PlayPause`
+    // they are idempotent: pressing X always plays, C always pauses.
+    Play,
+    Pause,
     Stop,
     ToggleRepeat,
     VolumeChange(f32),
+    // Arrow-key volume nudges: one `views::VOLUME_STEP` up or down, clamped
+    // by `AppState::set_volume`.
+    VolumeUp,
+    VolumeDown,
     ToggleEqualizer,
     EqPreampChange(f32),
     EqBandChange(usize, f32),
@@ -300,9 +313,51 @@ fn resize_to_shade(player: &WinampPlayer, width: f32) -> Task<Message> {
     })
 }
 
+/// Maps a keyboard event to the classic Winamp transport shortcut, or `None`
+/// for every event that binds nothing: a key release, a modifier-only change,
+/// an unbound key, or a key pressed with a chord modifier. `init_ui` installs
+/// this as the window subscription's mapper, so the key-to-message table
+/// lives here once and the subscription stays a plain `filter_map`.
+fn message_for(event: Event) -> Option<Message> {
+    match event {
+        Event::KeyPressed { key, modifiers, .. } => shortcut(&key, modifiers),
+        Event::KeyReleased { .. } | Event::ModifiersChanged(_) => None,
+    }
+}
+
+/// The classic Winamp main-window bindings: Z previous, X play, C pause, V
+/// stop, B next, and the arrow keys nudge the volume. A Control, Alt, or Logo
+/// chord is left to the OS and window manager, so those modifiers yield
+/// `None`; Shift is allowed, and the letter match ignores ASCII case, so
+/// Shift+Z steps back exactly like Z.
+fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
+    if modifiers.control() || modifiers.alt() || modifiers.logo() {
+        return None;
+    }
+
+    match key {
+        Key::Character(character) if character.eq_ignore_ascii_case("z") => {
+            Some(Message::PreviousTrack)
+        }
+        Key::Character(character) if character.eq_ignore_ascii_case("x") => Some(Message::Play),
+        Key::Character(character) if character.eq_ignore_ascii_case("c") => Some(Message::Pause),
+        Key::Character(character) if character.eq_ignore_ascii_case("v") => Some(Message::Stop),
+        Key::Character(character) if character.eq_ignore_ascii_case("b") => {
+            Some(Message::NextTrack)
+        }
+        Key::Named(key::Named::ArrowUp) => Some(Message::VolumeUp),
+        Key::Named(key::Named::ArrowDown) => Some(Message::VolumeDown),
+        _ => None,
+    }
+}
+
 fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
     match message {
         Message::PlayPause => mutate_state(player, AppState::toggle_playing),
+        // The keyboard's X and C keys: explicit, idempotent play/pause rather
+        // than the button's toggle.
+        Message::Play => mutate_state(player, AppState::play),
+        Message::Pause => mutate_state(player, AppState::pause),
         // Stop is synchronous, exactly like PlayPause: the stub has no
         // playback position yet, so its only observable effect is the cleared
         // playing flag — identical to Pause today. The seam is the
@@ -311,6 +366,16 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::Stop => mutate_state(player, AppState::stop),
         Message::ToggleRepeat => mutate_state(player, AppState::toggle_repeat),
         Message::VolumeChange(volume) => mutate_state(player, |state| state.set_volume(volume)),
+        // The arrow keys nudge the slider's value by its own step, so the
+        // keyboard and the drag share one granularity; the setter clamps.
+        Message::VolumeUp => mutate_state(player, |state| {
+            let volume = state.volume() + views::VOLUME_STEP;
+            state.set_volume(volume);
+        }),
+        Message::VolumeDown => mutate_state(player, |state| {
+            let volume = state.volume() - views::VOLUME_STEP;
+            state.set_volume(volume);
+        }),
         // The equalizer mutators all store clamped gains in shared state, so
         // the sliders can never write an out-of-range value; the clamp itself
         // lives in `equalizer::clamp_gain`, called by the `AppState` setters.

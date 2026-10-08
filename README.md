@@ -47,7 +47,9 @@ Build and run with `cargo run`; the player opens an iced window showing the Now 
 Play/Pause/Stop/Previous/Next controls, a Repeat toggle, a volume slider, an equalizer panel
 (an EQ on/off button, a preset pick list, a preamp slider, and ten band sliders), and a browse
 list. Double-clicking the title bar rolls the window up to just that title bar, and double-clicking
-it again restores it. There are no CLI
+it again restores it. With the window focused, the classic Winamp keys drive playback: Z and B
+step back and forward, X plays, C pauses, V stops, and the up/down arrows nudge the volume. There
+are no CLI
 flags or config files yet.
 
 ## Development

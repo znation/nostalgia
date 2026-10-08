@@ -102,6 +102,26 @@ impl AppState {
         self.is_playing = false;
     }
 
+    /// Set the playback flag, leaving `current_track` in place so the Now
+    /// Playing bar keeps naming the track. The keyboard's X key calls this
+    /// (through `Message::Play`); unlike [`AppState::toggle_playing`] it is an
+    /// explicit, idempotent set, so a second X press keeps playing rather
+    /// than pausing. Pause and [`AppState::stop`] are the same flag change
+    /// today; the seam is the distinction — once real playback lands, Pause
+    /// keeps the track position while Stop resets it.
+    pub fn play(&mut self) {
+        self.is_playing = true;
+    }
+
+    /// Clear the playback flag, leaving `current_track` in place so the Now
+    /// Playing bar keeps showing the interrupted track's title (matching
+    /// Winamp). The keyboard's C key calls this (through `Message::Pause`);
+    /// unlike [`AppState::toggle_playing`] it is an explicit, idempotent set,
+    /// so a second C press keeps the player paused rather than resuming.
+    pub fn pause(&mut self) {
+        self.is_playing = false;
+    }
+
     /// Flip the equalizer's on/off flag in place. The UI's EQ button is the
     /// only toggle caller; keeping the flip here (rather than inlined at the
     /// call site) puts the toggling semantics next to the field they mutate,

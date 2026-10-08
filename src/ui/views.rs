@@ -438,8 +438,9 @@ const VOLUME_MIN: f32 = 0.0;
 const VOLUME_MAX: f32 = 1.0;
 
 /// The volume slider's drag granularity: one percent, so a drag spans the
-/// whole `[VOLUME_MIN, VOLUME_MAX]` scale in fine steps.
-const VOLUME_STEP: f32 = 0.01;
+/// whole `[VOLUME_MIN, VOLUME_MAX]` scale in fine steps. `pub(super)` so the
+/// keyboard volume arms in `ui::mod` nudge by the slider's own step.
+pub(super) const VOLUME_STEP: f32 = 0.01;
 
 /// The equalizer sliders' drag granularity: one decibel, so every preamp and
 /// band slider lands on a whole-dB gain within `GAIN_MIN_DB..=GAIN_MAX_DB`.

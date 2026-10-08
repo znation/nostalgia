@@ -29,7 +29,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Add classic Winamp main-window keyboard shortcuts for transport and volume (found 2026-10-08)
+_None yet._
+
+## Done
+
+### Add classic Winamp main-window keyboard shortcuts for transport and volume (found 2026-10-08, done 2026-10-08)
 
 Winamp is driven from the keyboard as much as the mouse: Z previous, X play,
 C pause, V stop, B next, ArrowUp/ArrowDown volume. Nostalgia's transport and
@@ -100,8 +104,6 @@ the volume by `views::VOLUME_STEP`, clamped to `[0.0, 1.0]` by the existing
 - Manual check (`cargo run`): with the window focused, Z/B step tracks, X/C/V
   play/pause/stop, and the arrow keys move the volume slider; typing a letter
   in no other widget is affected because there are no text inputs yet.
-
-## Done
 
 ### Add Winamp window-shade ("roll up") mode (found 2026-10-08, done 2026-10-08)
 

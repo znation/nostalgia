@@ -312,6 +312,175 @@ fn stop_clears_is_playing() {
     assert!(!state.blocking_lock().is_playing);
 }
 
+/// Builds a `KeyPressed` event for `key` with `modifiers`. The fields the
+/// shortcut mapper ignores (`modified_key`, `physical_key`, `location`,
+/// `text`, `repeat`) are filled with neutral values, so each mapping test
+/// names only the key and modifiers it cares about.
+fn key_pressed(key: Key, modifiers: Modifiers) -> Event {
+    Event::KeyPressed {
+        key: key.clone(),
+        modified_key: key,
+        physical_key: key::Physical::Code(key::Code::KeyA),
+        location: iced::keyboard::Location::Standard,
+        modifiers,
+        text: None,
+        repeat: false,
+    }
+}
+
+#[test]
+fn message_for_maps_each_bound_letter() {
+    assert!(matches!(
+        message_for(key_pressed(Key::Character("z".into()), Modifiers::NONE)),
+        Some(Message::PreviousTrack)
+    ));
+    assert!(matches!(
+        message_for(key_pressed(Key::Character("x".into()), Modifiers::NONE)),
+        Some(Message::Play)
+    ));
+    assert!(matches!(
+        message_for(key_pressed(Key::Character("c".into()), Modifiers::NONE)),
+        Some(Message::Pause)
+    ));
+    assert!(matches!(
+        message_for(key_pressed(Key::Character("v".into()), Modifiers::NONE)),
+        Some(Message::Stop)
+    ));
+    assert!(matches!(
+        message_for(key_pressed(Key::Character("b".into()), Modifiers::NONE)),
+        Some(Message::NextTrack)
+    ));
+}
+
+#[test]
+fn message_for_maps_the_arrow_keys() {
+    assert!(matches!(
+        message_for(key_pressed(
+            Key::Named(key::Named::ArrowUp),
+            Modifiers::NONE
+        )),
+        Some(Message::VolumeUp)
+    ));
+    assert!(matches!(
+        message_for(key_pressed(
+            Key::Named(key::Named::ArrowDown),
+            Modifiers::NONE
+        )),
+        Some(Message::VolumeDown)
+    ));
+}
+
+#[test]
+fn shortcut_matches_letters_case_insensitively() {
+    // Uppercase characters map the same as lowercase, whether the case comes
+    // from the character itself or the Shift modifier held over a lowercase
+    // one; Shift is allowed, unlike the chord modifiers below.
+    assert!(matches!(
+        shortcut(&Key::Character("Z".into()), Modifiers::SHIFT),
+        Some(Message::PreviousTrack)
+    ));
+    assert!(matches!(
+        shortcut(&Key::Character("X".into()), Modifiers::SHIFT),
+        Some(Message::Play)
+    ));
+    assert!(matches!(
+        shortcut(&Key::Character("C".into()), Modifiers::SHIFT),
+        Some(Message::Pause)
+    ));
+    assert!(matches!(
+        shortcut(&Key::Character("V".into()), Modifiers::SHIFT),
+        Some(Message::Stop)
+    ));
+    assert!(matches!(
+        shortcut(&Key::Character("B".into()), Modifiers::SHIFT),
+        Some(Message::NextTrack)
+    ));
+}
+
+#[test]
+fn shortcut_ignores_chord_modifiers() {
+    // Control, Alt, and Logo chords belong to the OS and window manager.
+    for modifiers in [Modifiers::CTRL, Modifiers::ALT, Modifiers::LOGO] {
+        for key in [
+            Key::Character("z".into()),
+            Key::Character("x".into()),
+            Key::Named(key::Named::ArrowUp),
+            Key::Named(key::Named::ArrowDown),
+        ] {
+            assert!(
+                shortcut(&key, modifiers).is_none(),
+                "{key:?} with {modifiers:?} must not map"
+            );
+        }
+    }
+}
+
+#[test]
+fn message_for_ignores_unbound_keys_and_non_press_events() {
+    // An unbound character and an unbound named key both map to nothing.
+    assert!(message_for(key_pressed(Key::Character("q".into()), Modifiers::NONE)).is_none());
+    assert!(message_for(key_pressed(Key::Named(key::Named::Escape), Modifiers::NONE)).is_none());
+
+    // A key release and a modifier-only change bind nothing either.
+    assert!(
+        message_for(Event::KeyReleased {
+            key: Key::Character("z".into()),
+            modified_key: Key::Character("z".into()),
+            physical_key: key::Physical::Code(key::Code::KeyZ),
+            location: iced::keyboard::Location::Standard,
+            modifiers: Modifiers::NONE,
+        })
+        .is_none()
+    );
+    assert!(message_for(Event::ModifiersChanged(Modifiers::SHIFT)).is_none());
+}
+
+#[test]
+fn play_and_pause_set_the_playback_flag_explicitly() {
+    let (mut player, state) = test_player();
+
+    // X plays even when already playing, unlike the Play/Pause toggle.
+    assert_message_schedules_no_work(&mut player, Message::Play);
+    assert!(state.blocking_lock().is_playing);
+    assert_message_schedules_no_work(&mut player, Message::Play);
+    assert!(state.blocking_lock().is_playing);
+
+    // C pauses even when already paused.
+    assert_message_schedules_no_work(&mut player, Message::Pause);
+    assert!(!state.blocking_lock().is_playing);
+    assert_message_schedules_no_work(&mut player, Message::Pause);
+    assert!(!state.blocking_lock().is_playing);
+}
+
+#[test]
+fn volume_up_and_down_nudge_by_the_slider_step() {
+    let (mut player, state) = test_player();
+
+    let start = state.blocking_lock().volume();
+    assert_message_schedules_no_work(&mut player, Message::VolumeUp);
+    let raised = state.blocking_lock().volume();
+    assert!((raised - (start + views::VOLUME_STEP)).abs() < f32::EPSILON);
+
+    assert_message_schedules_no_work(&mut player, Message::VolumeDown);
+    let lowered = state.blocking_lock().volume();
+    assert!((lowered - start).abs() < f32::EPSILON);
+}
+
+#[test]
+fn volume_keys_clamp_at_the_ends() {
+    let (mut player, state) = test_player();
+
+    for _ in 0..200 {
+        assert_message_schedules_no_work(&mut player, Message::VolumeUp);
+    }
+    assert_eq!(state.blocking_lock().volume(), 1.0);
+
+    for _ in 0..200 {
+        assert_message_schedules_no_work(&mut player, Message::VolumeDown);
+    }
+    assert_eq!(state.blocking_lock().volume(), 0.0);
+}
+
 #[test]
 fn volume_change_clamps_value_before_storing() {
     // Out-of-range slider values are clamped by the update arm.
