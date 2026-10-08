@@ -157,7 +157,7 @@ impl AppleMusicService {
         track_id: &str,
         is_current: impl FnOnce() -> bool,
     ) -> Result<(), AppleMusicError> {
-        ensure_id_is_valid(track_id, "track")?;
+        ensure_id_is_valid(track_id, IdKind::Track)?;
 
         let mut state = self.state.lock().await;
         if !is_current() {
@@ -187,7 +187,7 @@ impl AppleMusicService {
         &self,
         artist_id: &str,
     ) -> Result<Vec<Album>, AppleMusicError> {
-        ensure_id_is_valid(artist_id, "artist")?;
+        ensure_id_is_valid(artist_id, IdKind::Artist)?;
         Ok(lookup(&sample_library().albums_by_artist, artist_id))
     }
 
@@ -197,8 +197,31 @@ impl AppleMusicService {
     /// terminal control character is rejected with an [`AppleMusicError`], the
     /// album-query twin of [`AppleMusicService::get_albums_by_artist`].
     pub async fn get_songs_from_album(&self, album_id: &str) -> Result<Vec<Song>, AppleMusicError> {
-        ensure_id_is_valid(album_id, "album")?;
+        ensure_id_is_valid(album_id, IdKind::Album)?;
         Ok(lookup(&sample_library().songs_by_album, album_id))
+    }
+}
+
+/// The resource an id names, so the seam's validation error can label it.
+///
+/// [`ensure_id_is_valid`] serves the three id-taking queries; naming the id
+/// kinds as a closed enum (rather than passing a `&str`) makes a misspelled
+/// label impossible to compile and keeps the three kinds the only ones the
+/// guard accepts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum IdKind {
+    Track,
+    Artist,
+    Album,
+}
+
+impl std::fmt::Display for IdKind {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(match self {
+            Self::Track => "track",
+            Self::Artist => "artist",
+            Self::Album => "album",
+        })
     }
 }
 
@@ -209,7 +232,7 @@ impl AppleMusicService {
 /// Every id in the library names a real Apple Music resource, so a blank id
 /// is a caller bug rather than the ordinary "unknown id" case the browse
 /// queries answer with an empty list. `kind` names the id in the message
-/// ("track", "artist", or "album"). A whitespace-only id is rejected too:
+/// (see [`IdKind`]). A whitespace-only id is rejected too:
 /// like an empty one it can name nothing, and letting it through would record
 /// a blank-looking Now Playing entry or report the bug as an ordinary empty
 /// result. A control character (`\u{1b}`, `\n`, and the rest) is rejected
@@ -217,7 +240,7 @@ impl AppleMusicService {
 /// a hostile id from the library could inject escape sequences there. The
 /// message quotes the value with `{id:?}`, so both a whitespace-only id and a
 /// control-character id read as escaped text rather than as invisible bytes.
-fn ensure_id_is_valid(id: &str, kind: &str) -> Result<(), AppleMusicError> {
+fn ensure_id_is_valid(id: &str, kind: IdKind) -> Result<(), AppleMusicError> {
     if id.trim().is_empty() {
         return Err(AppleMusicError::new(format!(
             "{kind} id must not be blank (got {id:?})"
@@ -303,7 +326,7 @@ mod tests {
     async fn assert_blank_id_rejected<T: std::fmt::Debug>(
         empty: impl std::future::Future<Output = Result<T, AppleMusicError>>,
         whitespace: impl std::future::Future<Output = Result<T, AppleMusicError>>,
-        kind: &str,
+        kind: IdKind,
     ) {
         let error = empty.await.unwrap_err().to_string();
         assert_eq!(error, format!("{kind} id must not be blank (got \"\")"));
@@ -318,7 +341,7 @@ mod tests {
     /// of its blank-id test, so the assertion shape lives here once.
     async fn assert_control_character_id_rejected<T: std::fmt::Debug>(
         result: impl std::future::Future<Output = Result<T, AppleMusicError>>,
-        kind: &str,
+        kind: IdKind,
         id: &str,
     ) {
         let error = result.await.unwrap_err().to_string();
@@ -374,17 +397,21 @@ mod tests {
         // message quotes the value so the whitespace case is visible rather
         // than reading as an empty string.
         assert_eq!(
-            ensure_id_is_valid("", "track").unwrap_err().to_string(),
+            ensure_id_is_valid("", IdKind::Track)
+                .unwrap_err()
+                .to_string(),
             "track id must not be blank (got \"\")"
         );
         assert_eq!(
-            ensure_id_is_valid("\t", "artist").unwrap_err().to_string(),
+            ensure_id_is_valid("\t", IdKind::Artist)
+                .unwrap_err()
+                .to_string(),
             "artist id must not be blank (got \"\\t\")"
         );
         // A nameable id passes through untouched, including one with an
         // internal space; only a wholly blank id is rejected.
-        assert!(ensure_id_is_valid("song-1", "track").is_ok());
-        assert!(ensure_id_is_valid("a b", "album").is_ok());
+        assert!(ensure_id_is_valid("song-1", IdKind::Track).is_ok());
+        assert!(ensure_id_is_valid("a b", IdKind::Album).is_ok());
     }
 
     #[test]
@@ -395,7 +422,9 @@ mod tests {
         // it and quotes the value with `{id:?}`, so the error message itself
         // cannot carry the raw control bytes.
         let escape = "evil\u{1b}]0;pwnd\u{7}";
-        let error = ensure_id_is_valid(escape, "track").unwrap_err().to_string();
+        let error = ensure_id_is_valid(escape, IdKind::Track)
+            .unwrap_err()
+            .to_string();
         assert_eq!(
             error,
             "track id must not contain control characters (got \"evil\\u{1b}]0;pwnd\\u{7}\")"
@@ -404,8 +433,8 @@ mod tests {
         assert!(!error.contains('\u{7}'));
         // A newline is a control character too, so an id cannot forge a
         // second log line; a plain id still passes.
-        assert!(ensure_id_is_valid("song\n1", "track").is_err());
-        assert!(ensure_id_is_valid("song-1", "track").is_ok());
+        assert!(ensure_id_is_valid("song\n1", IdKind::Track).is_err());
+        assert!(ensure_id_is_valid("song-1", IdKind::Track).is_ok());
     }
 
     // The success log line is the second terminal sink for a track id, and the
@@ -497,7 +526,7 @@ mod tests {
         assert_blank_id_rejected(
             service.get_albums_by_artist(""),
             service.get_albums_by_artist("   "),
-            "artist",
+            IdKind::Artist,
         )
         .await;
     }
@@ -513,7 +542,8 @@ mod tests {
     async fn get_albums_by_artist_rejects_a_control_character_artist_id() {
         let service = test_service();
         let id = "artist\u{1b}1";
-        assert_control_character_id_rejected(service.get_albums_by_artist(id), "artist", id).await;
+        assert_control_character_id_rejected(service.get_albums_by_artist(id), IdKind::Artist, id)
+            .await;
     }
 
     #[tokio::test]
@@ -570,7 +600,7 @@ mod tests {
         assert_blank_id_rejected(
             service.get_songs_from_album(""),
             service.get_songs_from_album("   "),
-            "album",
+            IdKind::Album,
         )
         .await;
     }
@@ -580,7 +610,8 @@ mod tests {
     async fn get_songs_from_album_rejects_a_control_character_album_id() {
         let service = test_service();
         let id = "album\u{1b}1";
-        assert_control_character_id_rejected(service.get_songs_from_album(id), "album", id).await;
+        assert_control_character_id_rejected(service.get_songs_from_album(id), IdKind::Album, id)
+            .await;
     }
 
     #[tokio::test]
@@ -650,7 +681,7 @@ mod tests {
         assert_blank_id_rejected(
             service.play_track("", || true),
             service.play_track("   ", || true),
-            "track",
+            IdKind::Track,
         )
         .await;
 
@@ -686,7 +717,8 @@ mod tests {
 
         service.play_track("song-1", || true).await.unwrap();
         let id = "evil\u{1b}]0;pwnd\u{7}";
-        assert_control_character_id_rejected(service.play_track(id, || true), "track", id).await;
+        assert_control_character_id_rejected(service.play_track(id, || true), IdKind::Track, id)
+            .await;
 
         assert_playback_state(&state, Some("song-1"), true).await;
     }
