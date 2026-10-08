@@ -436,24 +436,29 @@ mod tests {
         assert_eq!(state.eq_bands(), preset.bands);
     }
 
+    /// Applies `rock_preset` and then runs `move_slider`, asserting the
+    /// selection clears: nudging either slider by hand makes the curve custom,
+    /// so the pick list must stop naming the preset. The preamp and band
+    /// setters share that apply→assert-selected→move→assert-cleared sequence,
+    /// so it lives here once and each call names its own setter.
+    fn assert_slider_clears_the_preset_selection(move_slider: impl FnOnce(&mut AppState)) {
+        let mut state = AppState::default();
+        let preset = rock_preset();
+
+        state.apply_eq_preset(preset);
+        assert_eq!(state.eq_preset(), Some(preset));
+        move_slider(&mut state);
+        assert_eq!(state.eq_preset(), None);
+    }
+
     // Selecting a preset and then nudging either slider by hand makes the
     // curve custom, so the selection must clear; otherwise the pick list
     // would keep naming a preset the sliders no longer match. Cover both
     // slider setters.
     #[test]
     fn moving_a_slider_clears_the_preset_selection() {
-        let mut state = AppState::default();
-        let preset = rock_preset();
-
-        state.apply_eq_preset(preset);
-        assert_eq!(state.eq_preset(), Some(preset));
-        state.set_eq_preamp(1.0);
-        assert_eq!(state.eq_preset(), None);
-
-        state.apply_eq_preset(preset);
-        assert_eq!(state.eq_preset(), Some(preset));
-        state.set_eq_band(0, 1.0);
-        assert_eq!(state.eq_preset(), None);
+        assert_slider_clears_the_preset_selection(|state| state.set_eq_preamp(1.0));
+        assert_slider_clears_the_preset_selection(|state| state.set_eq_band(0, 1.0));
     }
 
     #[test]
