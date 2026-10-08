@@ -221,23 +221,39 @@ fn song_row<'a>(
     )
 }
 
+/// Builds a browse list from its rows: the shared body of [`view_artists`],
+/// [`view_albums`], and [`view_songs`]. `rows` yields each item's
+/// `(title, label, message, current-track)` tuple (see [`scrollable_list`]),
+/// and `view` selects the empty-list wording via [`browse_placeholder`]; a
+/// fetch failure wins.
+fn browse_view<'a>(
+    view: CurrentView,
+    rows: impl IntoIterator<Item = (&'a str, &'static str, Message, bool)>,
+    loading: bool,
+    error: Option<&'a str>,
+) -> Element<'a, Message> {
+    scrollable_list(rows, browse_placeholder(&view, loading, error))
+}
+
 /// The Artists browse view: one row per artist, in the order given, each
 /// emitting [`Message::ArtistSelected`] with the artist's index in the list
 /// and the list's `epoch`. `loading` and `error` select the placeholder
 /// wording (see [`browse_placeholder`]); a fetch failure wins. Built by
-/// [`scrollable_list`] from the [`artist_row`] mapping.
+/// [`browse_view`] from the [`artist_row`] mapping.
 pub fn view_artists<'a>(
     artists: &'a [Artist],
     epoch: u64,
     loading: bool,
     error: Option<&'a str>,
 ) -> Element<'a, Message> {
-    scrollable_list(
+    browse_view(
+        CurrentView::Artists,
         artists
             .iter()
             .enumerate()
             .map(|(index, artist)| artist_row(epoch, index, artist)),
-        browse_placeholder(&CurrentView::Artists, loading, error),
+        loading,
+        error,
     )
 }
 
@@ -245,19 +261,21 @@ pub fn view_artists<'a>(
 /// emitting [`Message::AlbumSelected`] with the album's index in the list and
 /// the list's `epoch`. `loading` and `error` select the placeholder wording
 /// (see [`browse_placeholder`]); a fetch failure wins. Built by
-/// [`scrollable_list`] from the [`album_row`] mapping.
+/// [`browse_view`] from the [`album_row`] mapping.
 pub fn view_albums<'a>(
     albums: &'a [Album],
     epoch: u64,
     loading: bool,
     error: Option<&'a str>,
 ) -> Element<'a, Message> {
-    scrollable_list(
+    browse_view(
+        CurrentView::Albums,
         albums
             .iter()
             .enumerate()
             .map(|(index, album)| album_row(epoch, index, album)),
-        browse_placeholder(&CurrentView::Albums, loading, error),
+        loading,
+        error,
     )
 }
 
@@ -265,7 +283,7 @@ pub fn view_albums<'a>(
 /// [`Message::TrackSelected`] with the song's index in the list and the
 /// list's `epoch`; the row whose id is `current_track` is marked as playing.
 /// `loading` and `error` select the placeholder wording (see
-/// [`browse_placeholder`]); a fetch failure wins. Built by [`scrollable_list`]
+/// [`browse_placeholder`]); a fetch failure wins. Built by [`browse_view`]
 /// from the [`song_row`] mapping.
 pub fn view_songs<'a>(
     songs: &'a [Song],
@@ -274,12 +292,14 @@ pub fn view_songs<'a>(
     error: Option<&'a str>,
     current_track: Option<&str>,
 ) -> Element<'a, Message> {
-    scrollable_list(
+    browse_view(
+        CurrentView::Songs,
         songs
             .iter()
             .enumerate()
             .map(|(index, song)| song_row(epoch, index, song, current_track)),
-        browse_placeholder(&CurrentView::Songs, loading, error),
+        loading,
+        error,
     )
 }
 
