@@ -48,7 +48,7 @@ fn labeled_button(label: &'static str, message: Message) -> Button<'static, Mess
 /// The placeholder a browse view shows when its list has no rows: one wording
 /// per browse level, so an empty Artists, Albums, or Songs panel names the
 /// list rather than showing a blank panel. Pure so the per-level wording is
-/// testable without an iced renderer, like the button label helpers above.
+/// testable without an iced renderer, like the button label helpers below.
 fn empty_list_label(view: &CurrentView) -> &'static str {
     match view {
         CurrentView::Artists => "No artists",
