@@ -54,6 +54,7 @@ pub mod apple_music;
 pub mod clamp;
 pub mod equalizer;
 pub mod library;
+pub mod music_kit_auth;
 pub mod sample_library;
 pub mod state;
 #[cfg(test)]

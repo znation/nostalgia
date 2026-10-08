@@ -29,7 +29,77 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Add the MusicKit loopback authorization module (found 2026-10-08)
+### Wire the MusicKit session into `AppleMusicService` (found 2026-10-08)
+
+The sibling entry "Add the MusicKit loopback authorization module" produces a
+`MusicKitSession`; this entry stores it on the service and lets the app obtain
+one at startup. It lands independently once that module's public API exists.
+
+**Depends on.** "Add the MusicKit loopback authorization module"
+(`MusicKitSession`, `authorize`, `open_in_browser`, `validate_developer_token`).
+
+**Goal.** `AppleMusicService` holds the authenticated MusicKit session and can
+obtain one from `APPLE_MUSIC_DEVELOPER_TOKEN` off the UI thread; the
+sample-library queries keep answering until a later REST-integration plan
+consumes the session.
+
+**Approach.**
+
+- `src/apple_music.rs`:
+  - Remove `struct AppleMusicToken` and the `use serde::{Deserialize, Serialize};`
+    import (the struct was its only serde user), and replace the
+    `token: Option<AppleMusicToken>` field with
+    `session: Arc<std::sync::Mutex<Option<crate::music_kit_auth::MusicKitSession>>>`
+    so the blocking flow runs on a `std::thread` without a tokio runtime. Drop
+    the old field's `#[allow(dead_code)]`.
+  - `AppleMusicService::new` starts `session` as `None`.
+  - `pub fn authenticate(&self, developer_token: &str) -> Result<(), AppleMusicError>`
+    delegates to a private
+    `authenticate_with(&self, developer_token, authorize: &dyn Fn(&str) -> Result<MusicKitSession, AppleMusicError>)`
+    that stores the returned session under the mutex and leaves any previous
+    session in place on error. The public method passes the real flow
+    (`|dt| crate::music_kit_auth::authorize(dt, &crate::music_kit_auth::open_in_browser)`).
+    Both are synchronous and blocking by design; callers run them off the UI
+    thread.
+  - `pub fn session(&self) -> Option<MusicKitSession>` clones the stored session;
+    it carries an `#[allow(dead_code)]` comment naming the future REST plan as
+    its caller, matching the existing seam style.
+  - `init_service(state)`: read `APPLE_MUSIC_DEVELOPER_TOKEN`; when it is set
+    and non-blank, spawn a `std::thread` that builds `AppleMusicService::new(state)`,
+    calls `authenticate`, and logs success or the error; otherwise log that
+    sign-in is skipped and the sample library stays in use. The UI thread never
+    blocks.
+  - Update the module doc and `AppleMusicError` docs to describe the session
+    seam instead of the token stub.
+- `Cargo.toml`: the `serde` `derive` comment names `apple_music` as a user;
+  after this change only `library` uses the derive, so trim the comment.
+- Tests in `src/apple_music/tests.rs`: delete the three `AppleMusicToken` serde tests
+  (`apple_music_token_round_trips_through_json`,
+  `apple_music_token_deserialization_rejects_missing_required_fields`,
+  `apple_music_token_deserialization_ignores_unknown_fields`), plus their now-
+  unused `sample_token`, `token_payload`, `use serde_json::json;`, and
+  `assert_every_field_required` / `assert_serializes_as` /
+  `assert_unknown_fields_tolerated` imports (those test-support helpers stay —
+  `src/library.rs` still uses them); keep `assert_ids`. Add session tests.
+
+**Files touched.** `src/apple_music.rs`, `src/apple_music/tests.rs`, `Cargo.toml`.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- `AppleMusicService::new` has `session()` `None`.
+- `authenticate_with` stores the `MusicKitSession` returned by a stub flow, so
+  `session()` returns it; a stub flow returning `Err` propagates the
+  `AppleMusicError` and leaves an already-stored session unchanged.
+- The existing browse and playback tests still pass unchanged (the
+  sample-library seam is untouched).
+- Manual check (`cargo run` with a real developer token): the browser opens, a
+  completed sign-in logs that the session was stored, and the browse UI behaves
+  as before.
+
+## Done
+
+### Add the MusicKit loopback authorization module (found 2026-10-08, done 2026-10-08)
 
 Answer to "How should Nostalgia authenticate to Apple Music?" chose the
 MusicKit authorization flow (see QUESTIONS.md `## Answered`, decision
@@ -122,76 +192,6 @@ a `MusicKitSession` (developer token + user token).
 - Manual check (`cargo run` once the sibling wiring plan lands): with a real
   `APPLE_MUSIC_DEVELOPER_TOKEN`, the system browser opens the sign-in page, and
   completing sign-in logs that a session was stored.
-
-### Wire the MusicKit session into `AppleMusicService` (found 2026-10-08)
-
-The sibling entry "Add the MusicKit loopback authorization module" produces a
-`MusicKitSession`; this entry stores it on the service and lets the app obtain
-one at startup. It lands independently once that module's public API exists.
-
-**Depends on.** "Add the MusicKit loopback authorization module"
-(`MusicKitSession`, `authorize`, `open_in_browser`, `validate_developer_token`).
-
-**Goal.** `AppleMusicService` holds the authenticated MusicKit session and can
-obtain one from `APPLE_MUSIC_DEVELOPER_TOKEN` off the UI thread; the
-sample-library queries keep answering until a later REST-integration plan
-consumes the session.
-
-**Approach.**
-
-- `src/apple_music.rs`:
-  - Remove `struct AppleMusicToken` and the `use serde::{Deserialize, Serialize};`
-    import (the struct was its only serde user), and replace the
-    `token: Option<AppleMusicToken>` field with
-    `session: Arc<std::sync::Mutex<Option<crate::music_kit_auth::MusicKitSession>>>`
-    so the blocking flow runs on a `std::thread` without a tokio runtime. Drop
-    the old field's `#[allow(dead_code)]`.
-  - `AppleMusicService::new` starts `session` as `None`.
-  - `pub fn authenticate(&self, developer_token: &str) -> Result<(), AppleMusicError>`
-    delegates to a private
-    `authenticate_with(&self, developer_token, authorize: &dyn Fn(&str) -> Result<MusicKitSession, AppleMusicError>)`
-    that stores the returned session under the mutex and leaves any previous
-    session in place on error. The public method passes the real flow
-    (`|dt| crate::music_kit_auth::authorize(dt, &crate::music_kit_auth::open_in_browser)`).
-    Both are synchronous and blocking by design; callers run them off the UI
-    thread.
-  - `pub fn session(&self) -> Option<MusicKitSession>` clones the stored session;
-    it carries an `#[allow(dead_code)]` comment naming the future REST plan as
-    its caller, matching the existing seam style.
-  - `init_service(state)`: read `APPLE_MUSIC_DEVELOPER_TOKEN`; when it is set
-    and non-blank, spawn a `std::thread` that builds `AppleMusicService::new(state)`,
-    calls `authenticate`, and logs success or the error; otherwise log that
-    sign-in is skipped and the sample library stays in use. The UI thread never
-    blocks.
-  - Update the module doc and `AppleMusicError` docs to describe the session
-    seam instead of the token stub.
-- `Cargo.toml`: the `serde` `derive` comment names `apple_music` as a user;
-  after this change only `library` uses the derive, so trim the comment.
-- Tests in `src/apple_music/tests.rs`: delete the three `AppleMusicToken` serde tests
-  (`apple_music_token_round_trips_through_json`,
-  `apple_music_token_deserialization_rejects_missing_required_fields`,
-  `apple_music_token_deserialization_ignores_unknown_fields`), plus their now-
-  unused `sample_token`, `token_payload`, `use serde_json::json;`, and
-  `assert_every_field_required` / `assert_serializes_as` /
-  `assert_unknown_fields_tolerated` imports (those test-support helpers stay —
-  `src/library.rs` still uses them); keep `assert_ids`. Add session tests.
-
-**Files touched.** `src/apple_music.rs`, `src/apple_music/tests.rs`, `Cargo.toml`.
-
-**Acceptance criteria.**
-
-- `make check` passes.
-- `AppleMusicService::new` has `session()` `None`.
-- `authenticate_with` stores the `MusicKitSession` returned by a stub flow, so
-  `session()` returns it; a stub flow returning `Err` propagates the
-  `AppleMusicError` and leaves an already-stored session unchanged.
-- The existing browse and playback tests still pass unchanged (the
-  sample-library seam is untouched).
-- Manual check (`cargo run` with a real developer token): the browser opens, a
-  completed sign-in logs that the session was stored, and the browse UI behaves
-  as before.
-
-## Done
 
 ### Add classic Winamp main-window keyboard shortcuts for transport and volume (found 2026-10-08, done 2026-10-08)
 
