@@ -1242,6 +1242,69 @@ async fn fetch_into_maps_a_hanging_fetch_to_an_empty_loaded_message() {
     .await;
 }
 
+// The play path has the same unbounded-wait failure as the browse path: a
+// backend that never answers leaves the play's task pending forever, so its
+// `TrackPlayed` completion never fires and `update`'s title-index prune never
+// runs. `play_into` bounds the play with its `timeout`; the real service
+// always answers, so the hang is reachable only by injecting a pending play
+// closure. The short timeout keeps the test fast, and the completion must
+// still arrive.
+#[tokio::test]
+async fn play_into_maps_a_hanging_play_to_a_completed_message() {
+    let (player, _state) = test_player();
+    let generation = RequestGeneration::issue(&Arc::new(AtomicU64::new(0)));
+    let expected = generation.issued();
+
+    let task = play_into(
+        &player.apple_music_service,
+        "song-1".to_string(),
+        generation,
+        std::time::Duration::from_millis(50),
+        |_service, _id, _generation| std::future::pending::<Result<(), String>>(),
+        |_err| {},
+    );
+    drive_task(task, "hanging play", |message| {
+        assert!(matches!(
+            message,
+            Message::TrackPlayed { generation } if generation == expected
+        ));
+    })
+    .await;
+}
+
+// The play path's error is handed to `play_into`'s injected reporter; the real
+// service rejects only a blank id, which the `update`-level test covers, so
+// this injects a failing play closure and pins that the reporter sees the
+// error while the completion still arrives. A swallowed error would leave a
+// rejected play looking like it worked.
+#[tokio::test]
+async fn play_into_reports_a_failed_play_and_still_completes() {
+    let (player, _state) = test_player();
+    let generation = RequestGeneration::issue(&Arc::new(AtomicU64::new(0)));
+    let expected = generation.issued();
+    let (reported, received) = std::sync::mpsc::channel();
+
+    let task = play_into(
+        &player.apple_music_service,
+        "song-1".to_string(),
+        generation,
+        std::time::Duration::from_secs(1),
+        |_service, _id, _generation| async { Err::<(), String>("boom".to_string()) },
+        move |err| {
+            let _ = reported.send(err.clone());
+        },
+    );
+    drive_task(task, "failed play", |message| {
+        assert!(matches!(
+            message,
+            Message::TrackPlayed { generation } if generation == expected
+        ));
+    })
+    .await;
+
+    assert_eq!(received.try_recv().ok().as_deref(), Some("boom"));
+}
+
 #[test]
 fn new_player_starts_at_artists_with_nothing_selected() {
     let (player, _state) = test_player();

@@ -22,25 +22,50 @@ use crate::apple_music::AppleMusicService;
 
 use super::Message;
 
-/// Maps a playback `Result` to the `TrackPlayed` completion message, handing
-/// any error to `report_error` first so a failed play is never dropped
-/// silently — a backend that rejects a track would otherwise look like the
-/// button did nothing. The playback twin of [`fetch_into`]'s failure mapping,
-/// which cannot serve here: it maps `Result<Vec<T>, _>` onto a `*Loaded`
-/// message, while a play has no payload to load, only a completion. `report_error`
-/// is injected rather than hardcoded so the reporting contract is testable
-/// without capturing stderr. `generation` is the play's place in the playback
-/// stream; the completion carries it so `update` can skip pruning the title
-/// index on a play a newer selection has superseded.
-pub(super) fn played_or_reported<E>(
-    result: Result<(), E>,
-    generation: u64,
-    report_error: impl FnOnce(&E),
-) -> Message {
-    if let Err(err) = result {
-        report_error(&err);
-    }
-    Message::TrackPlayed { generation }
+/// Runs a playback future through iced's runtime, bounding it with
+/// [`with_timeout`] and mapping it to the `TrackPlayed` completion message.
+///
+/// The playback twin of [`fetch_into`]: a play has no payload to load, only a
+/// completion, so success maps straight to `TrackPlayed` while an error is
+/// handed to `report_error` first so a failed play is never dropped silently —
+/// a backend that rejects a track would otherwise look like the button did
+/// nothing. A backend that never answers is the failure `timeout` exists to
+/// bound: without it the play's task would stay pending forever and never emit
+/// its completion, so the title recorded for it would linger until some later
+/// play pruned it. A timeout is reported with [`play_timeout_report`] and still
+/// emits `TrackPlayed`, so the completion path is never stranded. `generation`
+/// is the play's place in the playback stream; the completion carries it so
+/// `update` can skip pruning the title index on a play a newer selection has
+/// superseded. `play` is injected — rather than calling the service directly —
+/// so a test can hang it and prove the bound.
+pub(super) fn play_into<E, Fut>(
+    service: &AppleMusicService,
+    track_id: String,
+    generation: RequestGeneration,
+    timeout: Duration,
+    play: impl FnOnce(AppleMusicService, String, RequestGeneration) -> Fut + Send + 'static,
+    report_error: impl FnOnce(&E) + Send + 'static,
+) -> Task<Message>
+where
+    E: Send + 'static,
+    Fut: Future<Output = Result<(), E>> + Send + 'static,
+{
+    let service = service.clone();
+    let play_generation = generation.issued();
+    let report_id = track_id.clone();
+    Task::perform(
+        async move { with_timeout(timeout, play(service, track_id, generation)).await },
+        move |result| {
+            match result {
+                Some(Ok(())) => {}
+                Some(Err(err)) => report_error(&err),
+                None => eprintln!("{}", play_timeout_report(&report_id, timeout)),
+            }
+            Message::TrackPlayed {
+                generation: play_generation,
+            }
+        },
+    )
 }
 
 /// Formats the browse-fetch failure report: names the fetch that failed
@@ -116,6 +141,16 @@ impl RequestGeneration {
 /// empty-list fallback, exactly as a returned error does.
 pub(super) const FETCH_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// The longest a playback call may run before the UI gives up on it.
+///
+/// The play path has no loading flag to strand, but a backend that never
+/// answers would leave the play's task pending forever, so its `TrackPlayed`
+/// completion never fires and the title recorded for it lingers in the
+/// player's title index until some later play prunes it. Bounding the wait
+/// turns that silent hang into a reported failure and still delivers the
+/// completion, exactly as a returned error does.
+pub(super) const PLAY_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Awaits `future`, returning `None` when `timeout` elapses first.
 ///
 /// A service fetch with no bound would hang the browse panel indefinitely
@@ -154,6 +189,17 @@ pub(super) async fn with_timeout<F: Future>(timeout: Duration, future: F) -> Opt
 fn fetch_timeout_report(context: &str, timeout: Duration) -> String {
     format!(
         "music-library fetch failed ({context}); timed out after {timeout:?}, showing an empty list"
+    )
+}
+
+/// Formats the playback timeout report: names the track that was being played
+/// and states that no track change was committed, mirroring
+/// [`fetch_timeout_report`] so a hung backend is as diagnosable from the log as
+/// one that returned an error. Pure, like the other report formatters, so the
+/// contract is testable without capturing stderr.
+fn play_timeout_report(track_id: &str, timeout: Duration) -> String {
+    format!(
+        "playback failed (playing track {track_id:?}); timed out after {timeout:?}, leaving the current track unchanged"
     )
 }
 
@@ -214,28 +260,16 @@ where
 mod tests {
     use super::*;
 
+    // The playback twin of `fetch_timeout_report`'s test: a hung play's report
+    // must name the track and the bound that expired, so it is as diagnosable
+    // from the log as a returned error. Pinned so the wording can't drift.
     #[test]
-    fn played_or_reported_reports_a_failed_play_and_still_completes() {
-        // A failed play must not vanish silently: the playback path reports
-        // the error (to stderr in production; here to a recording closure)
-        // and still emits the `TrackPlayed` completion so the UI's handoff
-        // stays intact. `played_or_reported` takes the reporter as a
-        // parameter so this contract is testable without capturing stderr.
-        let mut reported: Option<String> = None;
-        let message = played_or_reported::<String>(Err("boom".to_string()), 7, |err| {
-            reported = Some(err.clone());
-        });
-
-        assert_eq!(reported.as_deref(), Some("boom"));
-        assert!(matches!(message, Message::TrackPlayed { generation: 7 }));
-
-        // The Ok path completes with the same message and reports nothing.
-        let mut reported_ok: Option<String> = None;
-        let ok_message = played_or_reported::<String>(Ok(()), 8, |err| {
-            reported_ok = Some(err.clone());
-        });
-        assert!(reported_ok.is_none());
-        assert!(matches!(ok_message, Message::TrackPlayed { generation: 8 }));
+    fn play_timeout_report_names_the_track_and_the_bound() {
+        let report = play_timeout_report("song-1", Duration::from_secs(30));
+        assert_eq!(
+            report,
+            "playback failed (playing track \"song-1\"); timed out after 30s, leaving the current track unchanged"
+        );
     }
 
     #[test]

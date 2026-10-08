@@ -640,7 +640,7 @@ mod tests {
 
     // A blank id can never name a track, so the seam rejects it instead of
     // recording a blank `current_track` and marking nothing as playing. The
-    // error path the UI's `played_or_reported` reports is pinned here, and
+    // error path the UI's `play_into` reports is pinned here, and
     // shared state must be left untouched (the rejection happens before the
     // state lock). Both an empty and a whitespace-only id are blank.
     #[tokio::test]

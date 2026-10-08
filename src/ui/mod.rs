@@ -29,7 +29,7 @@ use crate::{
     state::AppState,
 };
 use loading::{
-    FETCH_TIMEOUT, RequestGeneration, fetch_into, play_failure_report, played_or_reported,
+    FETCH_TIMEOUT, PLAY_TIMEOUT, RequestGeneration, fetch_into, play_failure_report, play_into,
 };
 
 /// Runs the UI, blocking until the window is closed.
@@ -388,20 +388,16 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             // older play cannot overwrite the newer track. The browse path
             // uses the same [`RequestGeneration`] for the same reason.
             let generation = RequestGeneration::issue(&player.plays_generation);
-            let play_generation = generation.issued();
-            let service = player.apple_music_service.clone();
             let id_for_report = track_id.clone();
-            Task::perform(
-                async move {
-                    service
-                        .play_track(&track_id, || generation.is_current())
-                        .await
+            play_into(
+                &player.apple_music_service,
+                track_id,
+                generation,
+                PLAY_TIMEOUT,
+                move |service, id, generation| async move {
+                    service.play_track(&id, || generation.is_current()).await
                 },
-                move |result| {
-                    played_or_reported(result, play_generation, |err| {
-                        eprintln!("{}", play_failure_report(&id_for_report, err))
-                    })
-                },
+                move |err| eprintln!("{}", play_failure_report(&id_for_report, err)),
             )
         }
         Message::ArtistSelected { epoch, index } => {
