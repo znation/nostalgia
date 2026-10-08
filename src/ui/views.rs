@@ -478,12 +478,15 @@ pub fn view_transport_controls(
     .into()
 }
 
-/// The equalizer panel: an on/off button, a preamp slider, and a row of the
-/// [`BAND_COUNT`] vertical band sliders labelled from [`BAND_FREQUENCIES`].
+/// The equalizer panel: an on/off button, a preset pick list, a preamp slider,
+/// and a row of the [`BAND_COUNT`] vertical band sliders labelled from
+/// [`BAND_FREQUENCIES`].
 ///
 /// `enabled` is the shared EQ on/off flag shown on the button and toggled by
-/// pressing it; `preamp` and `bands` are the stored gains the sliders start
-/// from. Every slider spans `GAIN_MIN_DB..=GAIN_MAX_DB` in 1 dB steps and
+/// pressing it; `preset` is the applied curve the pick list shows (or `None`,
+/// drawn as the "(none)" custom-curve placeholder), and picking one emits
+/// [`Message::EqPresetSelected`]; `preamp` and `bands` are the stored gains the
+/// sliders start from. Every slider spans `GAIN_MIN_DB..=GAIN_MAX_DB` in 1 dB steps and
 /// emits its own change message, so dragging one routes a clamped gain back
 /// into shared state. The band row is built by index so each slider's closure
 /// captures its own band number — the vertical twin of the volume slider in
