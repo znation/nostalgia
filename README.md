@@ -14,13 +14,13 @@ Nostalgia is a (very close if not pixel-perfect) clone of the classic Winamp UI,
 <!-- tumwater:status:start -->
 Early skeleton (0.1.0): an iced (0.14) desktop shell, themed with a Winamp 2.x base-skin
 colour palette (dark window face, light chrome text, a green LCD Now Playing title) — a Now
-Playing bar (framed as a sunken LCD well) showing the real song title, transport controls with
-Play/Pause/Stop and Previous/Next stepping through the current album (a Winamp-style Repeat
-toggle, off by default, makes them wrap at the album's ends), a Winamp-style volume slider, and
-a Winamp-style equalizer panel (framed as a raised chrome panel; an EQ on/off toggle, a preamp
-slider, and ten band sliders, off and flat by default) — and an artist → album → song browser with
-Back navigation that marks the currently playing song in the Songs view over an in-memory sample
-library; the Apple Music API is not wired up yet. Open work lives in PLANS.md, BUGS.md, and
+Playing bar (framed as a sunken LCD well) showing the real song title, transport controls drawn
+as raised Winamp chrome buttons with Play/Pause/Stop and Previous/Next stepping through the
+current album (a Winamp-style Repeat toggle, off by default, makes them wrap at the album's
+ends), a Winamp-style volume slider, and a Winamp-style equalizer panel (framed as a raised chrome
+panel; an EQ on/off toggle, a preamp slider, and ten band sliders, off and flat by default) — and
+an artist → album → song browser with a raised-chrome Back button that marks the currently playing
+song in the Songs view over an in-memory sample library; the Apple Music API is not wired up yet. Open work lives in PLANS.md, BUGS.md, and
 QUESTIONS.md.
 <!-- tumwater:status:end -->
 

@@ -8,8 +8,8 @@
 //! [`lcd_well`] and [`raised_panel`] are the two panel shapes the views use.
 
 use iced::{
-    Color, Element, Length, Theme,
-    widget::{Column, Container, Row, Space, Stack, container, rule},
+    Background, Border, Color, Element, Length, Shadow, Theme, Vector,
+    widget::{Column, Container, Row, Space, Stack, button, container, rule},
 };
 
 use super::{Message, theme};
@@ -131,6 +131,54 @@ pub fn raised_panel<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a,
     beveled(content.into(), true)
 }
 
+/// The raised (Active/Hovered) and sunken (Pressed) chrome style for a button.
+///
+/// iced's [`Border`] carries a single colour, so — as with the panel bevel —
+/// the two-tone edge is composed from a 1px light border on the top/left and a
+/// dark no-blur [`Shadow`] offset down-right on the bottom/right; pressing
+/// reverses the pair. The face darkens on hover and sinks while pressed. Pure
+/// and theme-free, so the colour rule is testable without building a widget.
+pub fn chrome_button_style(status: button::Status) -> button::Style {
+    let (top_left, bottom_right, face) = match status {
+        button::Status::Active | button::Status::Disabled => (
+            theme::PANEL_EDGE_LIGHT,
+            theme::PANEL_EDGE_DARK,
+            theme::BUTTON_FACE,
+        ),
+        button::Status::Hovered => (
+            theme::PANEL_EDGE_LIGHT,
+            theme::PANEL_EDGE_DARK,
+            theme::BUTTON_FACE_HOVERED,
+        ),
+        button::Status::Pressed => (
+            theme::PANEL_EDGE_DARK,
+            theme::PANEL_EDGE_LIGHT,
+            theme::BUTTON_FACE_PRESSED,
+        ),
+    };
+
+    let text_color = match status {
+        button::Status::Disabled => theme::TEXT.scale_alpha(0.5),
+        _ => theme::TEXT,
+    };
+
+    button::Style {
+        background: Some(Background::Color(face)),
+        text_color,
+        border: Border {
+            color: top_left,
+            width: 1.0,
+            radius: 0.0.into(),
+        },
+        shadow: Shadow {
+            color: bottom_right,
+            offset: Vector::new(1.0, 1.0),
+            blur_radius: 0.0,
+        },
+        ..button::Style::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -154,6 +202,54 @@ mod tests {
             bevel_edges(false),
             (theme::PANEL_EDGE_DARK, theme::PANEL_EDGE_LIGHT)
         );
+    }
+
+    #[test]
+    fn chrome_button_style_active_is_raised_chrome() {
+        let style = chrome_button_style(button::Status::Active);
+        assert_eq!(
+            style.background,
+            Some(Background::Color(theme::BUTTON_FACE))
+        );
+        assert_eq!(style.text_color, theme::TEXT);
+        assert_eq!(style.border.color, theme::PANEL_EDGE_LIGHT);
+        assert_eq!(style.border.width, 1.0);
+        assert_eq!(style.shadow.color, theme::PANEL_EDGE_DARK);
+        assert_eq!(style.shadow.offset, Vector::new(1.0, 1.0));
+        assert_eq!(style.shadow.blur_radius, 0.0);
+    }
+
+    #[test]
+    fn chrome_button_style_hovered_lifts_the_face() {
+        let active = chrome_button_style(button::Status::Active);
+        let hovered = chrome_button_style(button::Status::Hovered);
+        assert_eq!(
+            hovered.background,
+            Some(Background::Color(theme::BUTTON_FACE_HOVERED))
+        );
+        assert_eq!(hovered.border.color, active.border.color);
+        assert_eq!(hovered.shadow.color, active.shadow.color);
+    }
+
+    #[test]
+    fn chrome_button_style_pressed_sinks_and_reverses_the_edge() {
+        let pressed = chrome_button_style(button::Status::Pressed);
+        assert_eq!(
+            pressed.background,
+            Some(Background::Color(theme::BUTTON_FACE_PRESSED))
+        );
+        assert_eq!(pressed.border.color, theme::PANEL_EDGE_DARK);
+        assert_eq!(pressed.shadow.color, theme::PANEL_EDGE_LIGHT);
+    }
+
+    #[test]
+    fn chrome_button_style_disabled_dims_the_text_but_keeps_the_edges() {
+        let active = chrome_button_style(button::Status::Active);
+        let disabled = chrome_button_style(button::Status::Disabled);
+        assert_eq!(disabled.border.color, active.border.color);
+        assert_eq!(disabled.shadow.color, active.shadow.color);
+        assert_eq!(disabled.background, active.background);
+        assert!(disabled.text_color.a < theme::TEXT.a);
     }
 
     // The two public builders are concrete over iced's real renderer, so they

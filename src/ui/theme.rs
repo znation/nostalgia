@@ -36,6 +36,16 @@ pub const PANEL_EDGE_LIGHT: Color = Color::from_rgb(0.55, 0.55, 0.55);
 /// edge of a sunken one.
 pub const PANEL_EDGE_DARK: Color = Color::from_rgb(0.05, 0.05, 0.05);
 
+/// The raised chrome button face, lighter than [`WINDOW_BACKGROUND`] so the
+/// button reads as raised off the window face.
+pub const BUTTON_FACE: Color = Color::from_rgb(0.30, 0.30, 0.30);
+
+/// The button face while hovered.
+pub const BUTTON_FACE_HOVERED: Color = Color::from_rgb(0.38, 0.38, 0.38);
+
+/// The pressed (sunken) button face, darker than the resting face.
+pub const BUTTON_FACE_PRESSED: Color = Color::from_rgb(0.22, 0.22, 0.22);
+
 /// The near-black recess behind the green Now Playing title.
 pub const LCD_BACKGROUND: Color = Color::from_rgb(0.05, 0.05, 0.05);
 

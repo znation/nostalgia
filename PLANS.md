@@ -27,7 +27,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Style the transport buttons as raised Winamp chrome (found 2026-10-07)
+_None yet._
+
+## Done
+
+### Style the transport buttons as raised Winamp chrome (found 2026-10-07, done 2026-10-07)
 
 Found by plan 2026-10-07, taking the "transport button and slider chrome"
 follow-up the bevel Done entry defers. The bevel layer (`src/ui/style.rs`:
@@ -118,8 +122,6 @@ chrome is a separate, later plan (as the bevel entry notes).
   chrome with a light top/left and dark bottom/right edge, darkening on hover
   and reading sunken while pressed; manual check — the build and tests are the
   primary gate.
-
-## Done
 
 ### Add a Winamp two-tone bevel layer and frame the Now Playing and equalizer panels (found 2026-10-06, done 2026-10-06)
 

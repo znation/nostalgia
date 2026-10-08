@@ -41,7 +41,9 @@ fn spacer(width: f32) -> Space {
 /// returns — so the resulting button is `'static` like the view builders
 /// that push it.
 fn labeled_button(label: &'static str, message: Message) -> Button<'static, Message> {
-    Button::new(Text::new(label)).on_press(message)
+    Button::new(Text::new(label))
+        .on_press(message)
+        .style(|_theme, status| style::chrome_button_style(status))
 }
 
 /// Builds a scrollable list where each item is a button showing a title
