@@ -347,6 +347,27 @@ mod tests {
         assert_eq!(state.eq_bands(), [0.0; BAND_COUNT]);
     }
 
+    // The out-of-range guard must leave the applied preset selection alone: a
+    // stale slider message for a band index that no longer exists stores
+    // nothing, so the pick list must keep naming the preset. The test above
+    // starts with no selection, so a regression that cleared `eq_preset`
+    // before the `get_mut` guard would pass it while silently deselecting the
+    // preset mid-drag; pin the selection and the untouched curve here.
+    #[test]
+    fn set_eq_band_out_of_range_keeps_the_preset_selection() {
+        let mut state = AppState::default();
+        let preset = *PRESETS
+            .iter()
+            .find(|preset| preset.name == "Rock")
+            .expect("the preset table must contain Rock");
+
+        state.apply_eq_preset(preset);
+        assert_keeps_track_and_volume(&mut state, |state| state.set_eq_band(BAND_COUNT, 5.0));
+
+        assert_eq!(state.eq_preset(), Some(preset));
+        assert_eq!(state.eq_bands(), preset.bands);
+    }
+
     // The `set_eq_band` tests above use only out-of-range gains and assert
     // only the addressed slot, so neither the in-range pass-through nor the
     // untouched neighbours are pinned. A regression that stored the gain into
