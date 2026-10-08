@@ -676,22 +676,18 @@ mod tests {
     fn browse_placeholder_shows_the_fetch_error_instead_of_the_empty_wording() {
         let report = "music-library fetch failed (loading favorite artists): boom";
 
-        assert_eq!(
-            browse_placeholder(&CurrentView::Artists, true, Some(report)),
-            report
-        );
-        assert_eq!(
-            browse_placeholder(&CurrentView::Artists, false, Some(report)),
-            report
-        );
-        assert_eq!(
-            browse_placeholder(&CurrentView::Albums, false, Some(report)),
-            report
-        );
-        assert_eq!(
-            browse_placeholder(&CurrentView::Songs, false, Some(report)),
-            report
-        );
+        // The error must win at every browse level, over both "Loading…"
+        // (a fetch still in flight) and the per-level empty wording (a fetch
+        // that already replied), so drive each view through both states.
+        for view in [
+            CurrentView::Artists,
+            CurrentView::Albums,
+            CurrentView::Songs,
+        ] {
+            for loading in [true, false] {
+                assert_eq!(browse_placeholder(&view, loading, Some(report)), report);
+            }
+        }
     }
 
     #[test]
