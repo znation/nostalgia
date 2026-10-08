@@ -34,6 +34,7 @@ use browse::BrowseList;
 
 use crate::{
     apple_music::AppleMusicService,
+    equalizer::Preset,
     library::{Album, Artist, Song},
     state::AppState,
 };
@@ -73,7 +74,7 @@ enum Message {
     ToggleEqualizer,
     EqPreampChange(f32),
     EqBandChange(usize, f32),
-    EqPresetSelected(crate::equalizer::Preset),
+    EqPresetSelected(Preset),
     NextTrack,
     PreviousTrack,
     // The selection messages carry a row's index into the list that rendered
