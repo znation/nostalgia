@@ -45,7 +45,9 @@ an unrelated code edit. (Telemetry's BUGS.md-only edits do land, e.g. 3738f29,
 so the "md-only" block is role-scoped.) The role re-authors the same change
 until the "3 consecutive tick failures" breaker trips.
 
-### Transport buttons resize to their label text, so pressing Play/Pause reflows the whole control row (found by qa 2026-10-07)
+## Fixed
+
+### Transport buttons resize to their label text, so pressing Play/Pause reflows the whole control row (found by qa 2026-10-07, fixed 2026-10-07)
 
 Symptom: the Play/Pause, Repeat, and EQ on/off buttons size to their text
 (`labeled_button` builds `Button::new(Text::new(label))` with no width), so a
@@ -78,7 +80,19 @@ so one label's width change reflows the row. A fixed-width transport/EQ button
 (or a fixed-width icon) would keep the row stable, as a pixel-perfect Winamp
 transport expects.
 
-## Fixed
+Fixed by pinning each transport button to the fixed face width of its widest
+label (`transport_buttons` + `fixed_width_button` in `src/ui/views.rs`):
+Play/Pause is 65px and Repeat is 104px in both states, so swapping a label
+leaves the button's footprint, and the row after it, in place. The EQ on/off
+button is left text-sized — it sits alone in a column, so its ~1px label change
+moves nothing after it. The regression test
+`transport_buttons_keep_a_fixed_width_across_label_changes` pins that every
+transport button requests a fixed width and that the widths are equal across
+play and repeat states.
+
+**Validation gap:** real-run-needed — the reflow was only observable by running
+the GUI and diffing screenshots; no offline test measured a label-driven button
+width until this regression test.
 
 ### Main's test target stopped compiling after perf changed `TrackSelected` to a struct variant (found 2026-10-06, fixed 2026-10-06)
 

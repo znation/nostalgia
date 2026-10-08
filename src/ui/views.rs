@@ -45,6 +45,16 @@ fn labeled_button(label: &'static str, message: Message) -> Button<'static, Mess
         .style(|_theme, status| style::chrome_button_style(status))
 }
 
+/// A [`labeled_button`] pinned to `width`, so changing its label cannot
+/// resize it and reflow the widgets beside it in a row.
+fn fixed_width_button(
+    label: &'static str,
+    width: f32,
+    message: Message,
+) -> Button<'static, Message> {
+    labeled_button(label, message).width(Length::Fixed(width))
+}
+
 /// The placeholder a browse view shows when its list has no rows: one wording
 /// per browse level, so an empty Artists, Albums, or Songs panel names the
 /// list rather than showing a blank panel. Pure so the per-level wording is
@@ -347,6 +357,39 @@ const VOLUME_STEP: f32 = 0.01;
 /// band slider lands on a whole-dB gain within `GAIN_MIN_DB..=GAIN_MAX_DB`.
 const EQ_STEP: f32 = 1.0;
 
+/// The transport row's five chrome buttons, in row order: Play/Pause, Stop,
+/// Previous, Next, and Repeat. `is_playing` and `repeat` resolve the two
+/// labels that change with state; the other three are static literals.
+///
+/// Each button is pinned to the fixed face width of its widest label, so a
+/// label swap — Play for Pause, or Repeat: Off for Repeat: On — cannot resize
+/// the button and reflow every widget after it in the row. Returned as
+/// `Element`s so the width each button requests is observable in a test.
+fn transport_buttons(is_playing: bool, repeat: bool) -> [Element<'static, Message>; 5] {
+    // The widths, in pixels, of each button's widest label: Play/Pause must
+    // fit "Pause" and Repeat must fit "Repeat: Off". They are the face widths
+    // measured from the running window (see the qa reproduction), so at rest
+    // each button keeps the width its label already had.
+    const PLAY_PAUSE_WIDTH: f32 = 65.0;
+    const STOP_WIDTH: f32 = 54.0;
+    const PREVIOUS_WIDTH: f32 = 84.0;
+    const NEXT_WIDTH: f32 = 54.0;
+    const REPEAT_WIDTH: f32 = 104.0;
+
+    [
+        fixed_width_button(
+            play_pause_label(is_playing),
+            PLAY_PAUSE_WIDTH,
+            Message::PlayPause,
+        )
+        .into(),
+        fixed_width_button("Stop", STOP_WIDTH, Message::Stop).into(),
+        fixed_width_button("Previous", PREVIOUS_WIDTH, Message::PreviousTrack).into(),
+        fixed_width_button("Next", NEXT_WIDTH, Message::NextTrack).into(),
+        fixed_width_button(repeat_label(repeat), REPEAT_WIDTH, Message::ToggleRepeat).into(),
+    ]
+}
+
 /// The transport row: the Play/Pause, Stop, Previous, Next, and Repeat
 /// buttons and the volume slider. `volume` is the slider's current value;
 /// dragging it emits `Message::VolumeChange`. `repeat` is the shared Repeat
@@ -358,27 +401,17 @@ pub fn view_transport_controls(
     volume: f32,
     repeat: bool,
 ) -> Element<'static, Message> {
-    Row::new()
-        .push(labeled_button(
-            play_pause_label(is_playing),
-            Message::PlayPause,
-        ))
-        .push(spacer(20.0))
-        .push(labeled_button("Stop", Message::Stop))
-        .push(spacer(20.0))
-        .push(labeled_button("Previous", Message::PreviousTrack))
-        .push(spacer(20.0))
-        .push(labeled_button("Next", Message::NextTrack))
-        .push(spacer(20.0))
-        .push(labeled_button(repeat_label(repeat), Message::ToggleRepeat))
-        .push(spacer(20.0))
-        .push(
-            Slider::new(VOLUME_MIN..=VOLUME_MAX, volume, Message::VolumeChange)
-                .step(VOLUME_STEP)
-                .width(Length::Fixed(100.0))
-                .style(|_theme, status| style::chrome_slider_style(status)),
-        )
-        .into()
+    let mut row = Row::new();
+    for button in transport_buttons(is_playing, repeat) {
+        row = row.push(button).push(spacer(20.0));
+    }
+    row.push(
+        Slider::new(VOLUME_MIN..=VOLUME_MAX, volume, Message::VolumeChange)
+            .step(VOLUME_STEP)
+            .width(Length::Fixed(100.0))
+            .style(|_theme, status| style::chrome_slider_style(status)),
+    )
+    .into()
 }
 
 /// The equalizer panel: an on/off button, a preamp slider, and a row of the
@@ -446,13 +479,15 @@ mod tests {
     use super::{
         BROWSE_VIEWS, CurrentView, EQ_STEP, Message, VOLUME_MAX, VOLUME_MIN, VOLUME_STEP,
         album_row, artist_row, browse_placeholder, can_go_back, empty_list_label, eq_enabled_label,
-        now_playing_label, play_pause_label, repeat_label, song_row, view_albums, view_artists,
-        view_back_button, view_equalizer, view_now_playing, view_songs, view_transport_controls,
+        now_playing_label, play_pause_label, repeat_label, song_row, transport_buttons,
+        view_albums, view_artists, view_back_button, view_equalizer, view_now_playing, view_songs,
+        view_transport_controls,
     };
     use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB, clamp_gain};
     use crate::sample_library::sample_library;
     use crate::state::clamp_volume;
     use crate::test_support::{sample_album, sample_artist, sample_song};
+    use iced::Length;
     use std::borrow::Cow;
     use std::collections::HashMap;
 
@@ -718,6 +753,33 @@ mod tests {
     fn now_playing_bar_and_back_button_construct() {
         let _bar = view_now_playing("Opening".into());
         let _back = view_back_button();
+    }
+
+    // The transport row is rebuilt every frame, and the Play/Pause and Repeat
+    // labels change with state. A button that sizes to its text resizes when
+    // its label changes, reflowing every widget after it in the row (the qa
+    // reproduction measured a 14-15px shift when Play swapped to the wider
+    // Pause). Pin that every transport button requests a fixed width and that
+    // the widths do not depend on the play or repeat state, so a label swap
+    // cannot move the row.
+    #[test]
+    fn transport_buttons_keep_a_fixed_width_across_label_changes() {
+        let stopped = transport_buttons(false, false);
+        let playing = transport_buttons(true, false);
+        let repeat_on = transport_buttons(false, true);
+
+        for (index, button) in stopped.iter().enumerate() {
+            assert!(
+                matches!(button.as_widget().size().width, Length::Fixed(_)),
+                "transport button {index} is not fixed-width"
+            );
+        }
+        for (a, b) in stopped.iter().zip(playing.iter()) {
+            assert_eq!(a.as_widget().size().width, b.as_widget().size().width);
+        }
+        for (a, b) in stopped.iter().zip(repeat_on.iter()) {
+            assert_eq!(a.as_widget().size().width, b.as_widget().size().width);
+        }
     }
 
     #[test]
