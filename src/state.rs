@@ -33,13 +33,17 @@ pub struct AppState {
     pub eq_enabled: bool,
     /// The preamp gain in decibels applied ahead of the bands, in
     /// `[equalizer::GAIN_MIN_DB, equalizer::GAIN_MAX_DB]`. Kept private like
-    /// `volume`: [`AppState::set_eq_preamp`] is its only writer and clamps,
-    /// and [`AppState::eq_preamp`] is its only reader.
+    /// `volume`: [`AppState::set_eq_preamp`] and
+    /// [`AppState::apply_eq_preset`] are its writers, both through
+    /// [`equalizer::clamp_gain`], and [`AppState::eq_preamp`] is its only
+    /// reader.
     eq_preamp: f32,
     /// The gain in decibels of each of the [`equalizer::BAND_COUNT`] bands,
     /// low frequency to high; flat (all `0.0`) by default. Kept private like
-    /// `volume`: [`AppState::set_eq_band`] is its only writer and clamps, and
-    /// [`AppState::eq_bands`] is its only reader.
+    /// `volume`: [`AppState::set_eq_band`] and
+    /// [`AppState::apply_eq_preset`] are its writers, both through
+    /// [`equalizer::clamp_gain`], and [`AppState::eq_bands`] is its only
+    /// reader.
     eq_bands: [f32; equalizer::BAND_COUNT],
     /// The preset whose whole curve is currently applied, or `None` for a
     /// custom curve. [`AppState::apply_eq_preset`] is its only setter to
@@ -110,8 +114,9 @@ impl AppState {
 
     /// Store a preamp gain, clamped to the valid range via
     /// [`equalizer::clamp_gain`]. The UI's preamp slider is the only caller;
-    /// the field is private and this is its only writer, so the clamp holds
-    /// no matter which caller stores a gain. A hand-moved slider is a custom
+    /// the field is private and both writers go through `clamp_gain` (this
+    /// setter and [`AppState::apply_eq_preset`]), so the clamp holds no
+    /// matter which caller stores a gain. A hand-moved slider is a custom
     /// curve, so this clears any applied preset selection.
     pub fn set_eq_preamp(&mut self, gain: f32) {
         self.eq_preamp = equalizer::clamp_gain(gain);
@@ -122,8 +127,9 @@ impl AppState {
     /// (a stale slider message after the band count shrinks, say) is ignored
     /// rather than panicking: `get_mut` yields `None` and nothing is stored,
     /// so a bad index can't take the window down mid-drag. The field is
-    /// private and this is its only writer, so every stored band gain is
-    /// clamped. A hand-moved slider is a custom curve, so a stored gain clears
+    /// private and both writers go through `clamp_gain` (this setter and
+    /// [`AppState::apply_eq_preset`]), so every stored band gain is clamped.
+    /// A hand-moved slider is a custom curve, so a stored gain clears
     /// any applied preset selection; an ignored out-of-range index stores
     /// nothing and leaves the selection alone.
     pub fn set_eq_band(&mut self, band: usize, gain: f32) {
@@ -312,7 +318,7 @@ mod tests {
 
     // `set_volume`'s NaN-to-silence mapping is pinned at the state level, but
     // the preamp setter's NaN mapping is only pinned in `clamp_gain`'s own
-    // test. `set_eq_preamp` is the field's only writer, so pin the flat
+    // test. `set_eq_preamp` stores a caller-supplied gain, so pin the flat
     // fallback here too: a refactor that bypassed `clamp_gain` (an inline
     // `gain.clamp(..)`, say) would still pass the out-of-range tests above
     // while letting NaN into shared state and the preamp slider.
@@ -361,9 +367,9 @@ mod tests {
         assert_eq!(state.eq_preamp(), 0.0);
     }
 
-    // The band twin of `set_eq_preamp_maps_nan_to_flat`: `set_eq_band` is the
-    // only writer of the band array, so pin that a NaN gain lands as flat
-    // rather than in the stored curve.
+    // The band twin of `set_eq_preamp_maps_nan_to_flat`: `set_eq_band` stores
+    // a caller-supplied gain, so pin that a NaN gain lands as flat rather
+    // than in the stored curve.
     #[test]
     fn set_eq_band_maps_nan_to_flat() {
         let mut state = AppState::default();
