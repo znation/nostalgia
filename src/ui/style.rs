@@ -339,6 +339,18 @@ mod tests {
         );
         assert_eq!(hovered.rail, active.rail);
         assert_eq!(dragged.rail, active.rail);
+        // The name's "only" is the contract: hovering and dragging swap the
+        // handle face and nothing else. The Active test above pins the handle's
+        // shape and border for the shared fields; assert the two non-resting
+        // statuses keep them unchanged too, or a change that made (say) the
+        // dragged thumb's border a status-dependent colour would clear every
+        // other test while the thumb gained a colour no test read.
+        assert_eq!(hovered.handle.shape, active.handle.shape);
+        assert_eq!(dragged.handle.shape, active.handle.shape);
+        assert_eq!(hovered.handle.border_width, active.handle.border_width);
+        assert_eq!(dragged.handle.border_width, active.handle.border_width);
+        assert_eq!(hovered.handle.border_color, active.handle.border_color);
+        assert_eq!(dragged.handle.border_color, active.handle.border_color);
     }
 
     #[test]
