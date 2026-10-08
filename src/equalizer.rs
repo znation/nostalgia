@@ -258,6 +258,21 @@ mod tests {
         }
     }
 
+    // The test above reads the `name` field directly, and the
+    // `view_equalizer` construction test never lays the widget out, so
+    // nothing in the crate ever calls `Preset`'s `Display`. That impl is
+    // what iced's `PickList` actually renders for the selected preset and
+    // for every menu option (see the struct doc), so a `Display` that
+    // returned anything but `name` — a debug repr, say — would leave the
+    // whole suite green while the pick list showed the wrong label. Pin the
+    // rendered label for every preset.
+    #[test]
+    fn preset_display_renders_the_name() {
+        for preset in PRESETS {
+            assert_eq!(preset.to_string(), preset.name);
+        }
+    }
+
     // The curves are raw Winamp data, but `apply_eq_preset` still runs every
     // gain through `clamp_gain` before storing. A preset with a value outside
     // the slider range would then be silently altered on selection, so pin
