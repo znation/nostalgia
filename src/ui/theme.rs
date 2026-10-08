@@ -122,4 +122,26 @@ mod tests {
     fn winamp_theme_is_cached_as_a_singleton() {
         assert!(std::ptr::eq(cached_theme(), cached_theme()));
     }
+
+    // The singleton test above pins `cached_theme`'s address, which the
+    // `OnceLock` guarantees on its own. The public contract is that
+    // `winamp_theme` *uses* that cache: iced calls it on every UI rebuild, so
+    // it must return a clone of the one cached `Theme::Custom` rather than
+    // constructing a fresh one. A regression inlining
+    // `Theme::custom("Winamp", palette())` into `winamp_theme` would leave
+    // `cached_theme`'s identity intact and pass every existing test while
+    // rebuilding the theme (an allocation plus extended-palette generation)
+    // on each frame. The inner `Arc` is the shared allocation, so pointer
+    // identity across two public calls is the observable guarantee.
+    #[test]
+    fn winamp_theme_returns_clones_of_the_cached_theme() {
+        let first = winamp_theme();
+        let second = winamp_theme();
+        match (&first, &second) {
+            (Theme::Custom(first), Theme::Custom(second)) => {
+                assert!(std::sync::Arc::ptr_eq(first, second));
+            }
+            _ => panic!("the Winamp theme must be a custom theme"),
+        }
+    }
 }
