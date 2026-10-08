@@ -24,6 +24,20 @@ fn player_stepping_from(current: Option<&str>) -> (WinampPlayer, Arc<Mutex<AppSt
     (player, state)
 }
 
+/// A fresh player showing the Albums view: it seeds the one
+/// [`sample_artist`] and drives the `ArtistSelected` press that artist's
+/// first row emits (index 0 of epoch 0), the step the view-flip and
+/// back-navigation tests all start from. The fetch task the arm schedules is
+/// dropped — those tests pin the view transition, not the fetch, which
+/// `artist_selected_fetches_the_artists_albums_into_the_player` covers with
+/// its own `update` call.
+fn player_in_albums() -> WinampPlayer {
+    let (mut player, _state) = test_player();
+    player.artists = vec![sample_artist()];
+    let _ = update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 });
+    player
+}
+
 /// Asserts the player is showing `expected`. The tests pin the current
 /// view at each navigation step — `ArtistSelected`, `AlbumSelected`, and
 /// `Back` — and at startup, so the same view-equality check lives here
@@ -192,10 +206,7 @@ fn volume_change_clamps_value_before_storing() {
 
 #[test]
 fn artist_selected_flips_to_albums_view() {
-    let (mut player, _state) = test_player();
-    player.artists = vec![sample_artist()];
-
-    let _ = update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 });
+    let player = player_in_albums();
 
     assert_view(&player, CurrentView::Albums);
 }
@@ -311,10 +322,7 @@ fn selection_messages_with_a_stale_epoch_or_index_do_nothing() {
 // like the view-flip tests above.
 #[test]
 fn back_from_albums_returns_to_artists() {
-    let (mut player, _state) = test_player();
-    player.artists = vec![sample_artist()];
-
-    let _ = update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 });
+    let mut player = player_in_albums();
 
     assert_view(&player, CurrentView::Albums);
 
@@ -324,10 +332,7 @@ fn back_from_albums_returns_to_artists() {
 
 #[test]
 fn back_from_songs_returns_to_albums() {
-    let (mut player, _state) = test_player();
-    player.artists = vec![sample_artist()];
-
-    let _ = update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 });
+    let mut player = player_in_albums();
     // `ArtistSelected` clears the albums buffer, so feed the fetch reply the
     // iced loop would before stepping into the album.
     let _ = update(&mut player, Message::AlbumsLoaded(vec![sample_album()]));
