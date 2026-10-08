@@ -101,6 +101,23 @@ mod tests {
         assert_eq!(palette.success, LCD_GREEN);
     }
 
+    // The named-colour test above pins four of the palette's six slots; the
+    // remaining two, `warning` and `danger`, are inline literals rather than
+    // named constants, so nothing read them and an accidental swap or edit
+    // would clear the whole suite while iced's extended palette rendered the
+    // wrong amber/red ramp for a future error state. Pin the documented
+    // conventional values, and that the two stay distinct from each other and
+    // from the success green.
+    #[test]
+    fn palette_keeps_conventional_warning_and_danger_colours() {
+        let palette = winamp_theme().palette();
+        assert_eq!(palette.warning, Color::from_rgb(1.0, 0.65, 0.0));
+        assert_eq!(palette.danger, Color::from_rgb(1.0, 0.2, 0.2));
+        assert_ne!(palette.warning, palette.danger);
+        assert_ne!(palette.warning, palette.success);
+        assert_ne!(palette.danger, palette.success);
+    }
+
     #[test]
     fn theme_reads_as_dark() {
         // The dark face is what makes the light chrome text legible; the
