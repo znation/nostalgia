@@ -20,8 +20,9 @@ current album (a Winamp-style Repeat toggle, off by default, makes them wrap at 
 ends), a Winamp-style volume slider, and a Winamp-style equalizer panel (framed as a raised chrome
 panel; an EQ on/off toggle, a preamp slider, and ten band sliders — the volume, preamp, and
 band sliders all drawn as sunken grooves with raised chrome thumbs — off and flat by default) — and
-an artist → album → song browser with a raised-chrome Back button that marks the currently playing
-song in the Songs view over an in-memory sample library; the Apple Music API is not wired up yet. Open work lives in PLANS.md, BUGS.md, and
+an artist → album → song browser framed as a sunken Winamp playlist well with chrome rows, with a
+raised-chrome Back button that marks the currently playing song in the Songs view over an in-memory
+sample library; the Apple Music API is not wired up yet. Open work lives in PLANS.md, BUGS.md, and
 QUESTIONS.md.
 <!-- tumwater:status:end -->
 

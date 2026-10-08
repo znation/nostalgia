@@ -29,7 +29,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Frame the browse list as a sunken Winamp playlist editor (found 2026-10-07)
+_None yet._
+
+## Done
+
+### Frame the browse list as a sunken Winamp playlist editor (found 2026-10-07, done 2026-10-07)
 
 Found by plan 2026-10-07, taking the "playlist chrome" half of the widget-level
 fidelity the steward drift note schedules after slider chrome. The bevel layer
@@ -128,8 +132,6 @@ selection highlight. No new theme colours and no signature changes.
   track scrollbar and a chrome scroller, its rows show light text that lifts on
   hover and sinks on press, and the playing row keeps its blue selection bar;
   manual check — the build and tests are the primary gate.
-
-## Done
 
 ### Style the volume and equalizer sliders as sunken Winamp grooves with raised chrome thumbs (found 2026-10-07, done 2026-10-07)
 

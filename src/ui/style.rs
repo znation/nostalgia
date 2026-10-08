@@ -9,7 +9,7 @@
 
 use iced::{
     Background, Border, Color, Element, Length, Shadow, Theme, Vector,
-    widget::{Column, Container, Row, Space, Stack, button, container, rule, slider},
+    widget::{Column, Container, Row, Space, Stack, button, container, rule, scrollable, slider},
 };
 
 use super::{Message, theme};
@@ -214,6 +214,94 @@ pub fn chrome_slider_style(status: slider::Status) -> slider::Style {
     }
 }
 
+/// The flat playlist-entry style for a browse row.
+///
+/// The base skin's playlist rows are flat light text on the near-black well:
+/// no bevel, so the resting and disabled faces are transparent and let the
+/// well show through, while hover lifts the row to [`theme::BUTTON_FACE`] and
+/// press sinks it to [`theme::BUTTON_FACE_PRESSED`] — the same face ladder
+/// [`chrome_face`] names. Pure and status-driven, so the row rule is testable
+/// without building a widget.
+pub fn playlist_row_style(status: button::Status) -> button::Style {
+    let background = match status {
+        button::Status::Hovered => Some(Background::Color(theme::BUTTON_FACE)),
+        button::Status::Pressed => Some(Background::Color(theme::BUTTON_FACE_PRESSED)),
+        button::Status::Active | button::Status::Disabled => None,
+    };
+
+    button::Style {
+        background,
+        text_color: theme::TEXT,
+        ..button::Style::default()
+    }
+}
+
+/// The sunken-playlist-well style for the browse list's [`scrollable::Style`].
+///
+/// The base skin's playlist editor is a near-black recess with a dark track
+/// scrollbar carrying a raised chrome scroller. iced's [`scrollable::Style`]
+/// has no `Default`, so this builds every field: the `container` paints the
+/// [`theme::LCD_BACKGROUND`] well with the same dark-border + light-offset
+/// sunken edge [`chrome_button_style`] uses for its pressed state, both rails
+/// sit in [`theme::WINDOW_BACKGROUND`] with a [`theme::BUTTON_FACE`] scroller
+/// bordered light, and the touch `auto_scroll` overlay matches the well.
+/// Classic Winamp scrollbars give no hover/drag feedback, so the style ignores
+/// the [`scrollable::Status`] iced passes. Pure, so the colour rule is
+/// testable without building a widget.
+pub fn playlist_scrollable_style() -> scrollable::Style {
+    let rail = scrollable::Rail {
+        background: Some(Background::Color(theme::WINDOW_BACKGROUND)),
+        border: Border {
+            color: theme::PANEL_EDGE_DARK,
+            width: 1.0,
+            radius: 0.0.into(),
+        },
+        scroller: scrollable::Scroller {
+            background: Background::Color(theme::BUTTON_FACE),
+            border: Border {
+                color: theme::PANEL_EDGE_LIGHT,
+                width: 1.0,
+                radius: 0.0.into(),
+            },
+        },
+    };
+
+    scrollable::Style {
+        container: container::Style {
+            text_color: Some(theme::TEXT),
+            background: Some(theme::LCD_BACKGROUND.into()),
+            border: Border {
+                color: theme::PANEL_EDGE_DARK,
+                width: 1.0,
+                radius: 0.0.into(),
+            },
+            shadow: Shadow {
+                color: theme::PANEL_EDGE_LIGHT,
+                offset: Vector::new(1.0, 1.0),
+                blur_radius: 0.0,
+            },
+            snap: false,
+        },
+        vertical_rail: rail,
+        horizontal_rail: rail,
+        gap: None,
+        auto_scroll: scrollable::AutoScroll {
+            background: Background::Color(theme::LCD_BACKGROUND),
+            border: Border {
+                color: theme::PANEL_EDGE_LIGHT,
+                width: 1.0,
+                radius: 0.0.into(),
+            },
+            shadow: Shadow {
+                color: theme::PANEL_EDGE_DARK,
+                offset: Vector::new(1.0, 1.0),
+                blur_radius: 0.0,
+            },
+            icon: theme::TEXT,
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -395,6 +483,86 @@ mod tests {
         assert_eq!(disabled.border.radius, active.border.radius);
         assert_eq!(disabled.shadow.offset, active.shadow.offset);
         assert_eq!(disabled.shadow.blur_radius, active.shadow.blur_radius);
+    }
+
+    #[test]
+    fn playlist_row_style_is_a_flat_entry_that_lifts_and_sinks() {
+        assert_eq!(playlist_row_style(button::Status::Active).background, None);
+        assert_eq!(
+            playlist_row_style(button::Status::Hovered).background,
+            Some(Background::Color(theme::BUTTON_FACE))
+        );
+        assert_eq!(
+            playlist_row_style(button::Status::Pressed).background,
+            Some(Background::Color(theme::BUTTON_FACE_PRESSED))
+        );
+        assert_eq!(
+            playlist_row_style(button::Status::Disabled).background,
+            None
+        );
+
+        // Playlist rows are flat: they carry no bevel of their own, so the
+        // well's near-black shows through at rest. Pin that the border and
+        // shadow stay at the iced default rather than a raised or sunken edge.
+        let active = playlist_row_style(button::Status::Active);
+        let default = button::Style::default();
+        assert_eq!(active.border, default.border);
+        assert_eq!(active.shadow, default.shadow);
+
+        for status in [
+            button::Status::Active,
+            button::Status::Hovered,
+            button::Status::Pressed,
+            button::Status::Disabled,
+        ] {
+            assert_eq!(playlist_row_style(status).text_color, theme::TEXT);
+        }
+    }
+
+    #[test]
+    fn playlist_scrollable_style_sinks_the_well_and_raises_the_scroller() {
+        let style = playlist_scrollable_style();
+
+        assert_eq!(
+            style.container.background,
+            Some(Background::Color(theme::LCD_BACKGROUND))
+        );
+        assert_eq!(style.container.text_color, Some(theme::TEXT));
+        assert_eq!(style.container.border.color, theme::PANEL_EDGE_DARK);
+        assert_eq!(style.container.border.width, 1.0);
+        assert_eq!(style.container.border.radius, 0.0.into());
+        assert_eq!(style.container.shadow.color, theme::PANEL_EDGE_LIGHT);
+        assert_eq!(style.container.shadow.offset, Vector::new(1.0, 1.0));
+        assert_eq!(style.container.shadow.blur_radius, 0.0);
+        assert!(!style.container.snap);
+        assert_eq!(style.gap, None);
+
+        // Both rails are the same dark track with a raised chrome scroller; a
+        // change that styled only one axis would leave a bare track on the
+        // other. Pin each field of each rail.
+        assert_eq!(style.vertical_rail, style.horizontal_rail);
+        for rail in [style.vertical_rail, style.horizontal_rail] {
+            assert_eq!(
+                rail.background,
+                Some(Background::Color(theme::WINDOW_BACKGROUND))
+            );
+            assert_eq!(rail.border.color, theme::PANEL_EDGE_DARK);
+            assert_eq!(rail.border.width, 1.0);
+            assert_eq!(
+                rail.scroller.background,
+                Background::Color(theme::BUTTON_FACE)
+            );
+            assert_eq!(rail.scroller.border.color, theme::PANEL_EDGE_LIGHT);
+            assert_eq!(rail.scroller.border.width, 1.0);
+        }
+
+        // The touch auto-scroll overlay matches the well it scrolls.
+        assert_eq!(
+            style.auto_scroll.background,
+            Background::Color(theme::LCD_BACKGROUND)
+        );
+        assert_eq!(style.auto_scroll.border.color, theme::PANEL_EDGE_LIGHT);
+        assert_eq!(style.auto_scroll.icon, theme::TEXT);
     }
 
     /// Asserts a panel builder requests the full available width but a

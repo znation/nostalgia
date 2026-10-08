@@ -116,12 +116,13 @@ fn scrollable_list<'a>(
                 .push(spacer(10.0))
                 .push(Text::new(label).size(14)),
         )
-        .on_press(message);
-        // The current row keeps the theme's hover/pressed/text styling and
-        // only swaps the background for the highlight colour.
+        .on_press(message)
+        .style(|_theme, status| style::playlist_row_style(status));
+        // The current row keeps the playlist row's text and hover/press face
+        // and only swaps the background for the highlight colour.
         column = column.push(if is_current {
-            button.style(|theme, status| {
-                let mut style = iced::widget::button::background(theme, status);
+            button.style(|_theme, status| {
+                let mut style = style::playlist_row_style(status);
                 style.background = Some(Background::Color(super::theme::PLAYING_ROW_HIGHLIGHT));
                 style
             })
@@ -137,6 +138,7 @@ fn scrollable_list<'a>(
     Scrollable::new(column)
         .width(Length::Fill)
         .height(Length::FillPortion(3))
+        .style(|_theme, _status| style::playlist_scrollable_style())
         .into()
 }
 
