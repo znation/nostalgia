@@ -67,7 +67,7 @@ enum Message {
     ToggleRepeat,
     VolumeChange(f32),
     // Arrow-key volume nudges: one `views::VOLUME_STEP` up or down, clamped
-    // by `AppState::set_volume`.
+    // by `AppState::nudge_volume`.
     VolumeUp,
     VolumeDown,
     ToggleEqualizer,
@@ -368,15 +368,11 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::ToggleRepeat => mutate_state(player, AppState::toggle_repeat),
         Message::VolumeChange(volume) => mutate_state(player, |state| state.set_volume(volume)),
         // The arrow keys nudge the slider's value by its own step, so the
-        // keyboard and the drag share one granularity; the setter clamps.
-        Message::VolumeUp => mutate_state(player, |state| {
-            let volume = state.volume() + views::VOLUME_STEP;
-            state.set_volume(volume);
-        }),
-        Message::VolumeDown => mutate_state(player, |state| {
-            let volume = state.volume() - views::VOLUME_STEP;
-            state.set_volume(volume);
-        }),
+        // keyboard and the drag share one granularity; `nudge_volume` clamps.
+        Message::VolumeUp => mutate_state(player, |state| state.nudge_volume(views::VOLUME_STEP)),
+        Message::VolumeDown => {
+            mutate_state(player, |state| state.nudge_volume(-views::VOLUME_STEP))
+        }
         // The equalizer mutators all store clamped gains in shared state, so
         // the sliders can never write an out-of-range value; the clamp itself
         // lives in `equalizer::clamp_gain`, called by the `AppState` setters.

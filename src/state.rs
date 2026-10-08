@@ -205,9 +205,17 @@ impl AppState {
     /// Stores `volume`, clamped to `[0.0, 1.0]` with NaN mapped to silence by
     /// [`clamp_volume`]. The field is private and this is its only writer, so
     /// the clamped invariant holds no matter which caller (today, the UI's
-    /// `VolumeChange` arm) sets it.
+    /// `VolumeChange` arm and [`AppState::nudge_volume`]) sets it.
     pub fn set_volume(&mut self, volume: f32) {
         self.volume = clamp_volume(volume);
+    }
+
+    /// Moves the volume by `delta`, clamped to the valid range by
+    /// [`AppState::set_volume`]. The UI's arrow-key arms call this with
+    /// `+views::VOLUME_STEP` and `-views::VOLUME_STEP`, so the keyboard and
+    /// the slider share one granularity and one clamp.
+    pub fn nudge_volume(&mut self, delta: f32) {
+        self.set_volume(self.volume + delta);
     }
 }
 
@@ -476,6 +484,22 @@ mod tests {
     fn set_volume_maps_nan_to_silence() {
         let mut state = AppState::default();
         state.set_volume(f32::NAN);
+        assert_eq!(state.volume(), 0.0);
+    }
+
+    #[test]
+    fn nudge_volume_moves_by_the_delta_and_clamps() {
+        let mut state = AppState::default();
+        state.set_volume(0.5);
+
+        state.nudge_volume(0.01);
+        assert_eq!(state.volume(), 0.51);
+        state.nudge_volume(-0.01);
+        assert_eq!(state.volume(), 0.5);
+
+        state.nudge_volume(1.0);
+        assert_eq!(state.volume(), 1.0);
+        state.nudge_volume(-2.0);
         assert_eq!(state.volume(), 0.0);
     }
 
