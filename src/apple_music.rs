@@ -292,6 +292,42 @@ mod tests {
         assert_eq!(state.is_playing, expected_playing);
     }
 
+    /// Asserts that both blank forms of an id — empty and whitespace-only —
+    /// are rejected by the query, each with the seam's blank-id error naming
+    /// `kind`. `ensure_id_is_valid` rejects the two forms through the same
+    /// branch, and a query that dropped the guard would answer with its
+    /// ordinary empty list instead; pinning both keeps the whitespace case
+    /// from silently reading as an unknown id. The three public id-taking
+    /// queries each repeat this two-case assertion, so it lives here once and
+    /// each test names its query and kind.
+    async fn assert_blank_id_rejected<T: std::fmt::Debug>(
+        empty: impl std::future::Future<Output = Result<T, AppleMusicError>>,
+        whitespace: impl std::future::Future<Output = Result<T, AppleMusicError>>,
+        kind: &str,
+    ) {
+        let error = empty.await.unwrap_err().to_string();
+        assert_eq!(error, format!("{kind} id must not be blank (got \"\")"));
+
+        let error = whitespace.await.unwrap_err().to_string();
+        assert_eq!(error, format!("{kind} id must not be blank (got \"   \")"));
+    }
+
+    /// Asserts that a query rejects an id carrying a terminal control
+    /// character with the seam's control-character error naming `kind` and
+    /// quoting `id`. Each public id-taking query has a control-character twin
+    /// of its blank-id test, so the assertion shape lives here once.
+    async fn assert_control_character_id_rejected<T: std::fmt::Debug>(
+        result: impl std::future::Future<Output = Result<T, AppleMusicError>>,
+        kind: &str,
+        id: &str,
+    ) {
+        let error = result.await.unwrap_err().to_string();
+        assert_eq!(
+            error,
+            format!("{kind} id must not contain control characters (got {id:?})")
+        );
+    }
+
     /// The representative Apple Music token the three token tests share: a full,
     /// valid payload for the round-trip, missing-field, and unknown-field
     /// contracts. Each test used to spell out the same three field values — twice
@@ -457,17 +493,13 @@ mod tests {
     // guard as the empty one.
     #[tokio::test]
     async fn get_albums_by_artist_rejects_a_blank_artist_id() {
-        let error = test_service().get_albums_by_artist("").await.unwrap_err();
-        assert_eq!(error.to_string(), "artist id must not be blank (got \"\")");
-
-        let error = test_service()
-            .get_albums_by_artist("   ")
-            .await
-            .unwrap_err();
-        assert_eq!(
-            error.to_string(),
-            "artist id must not be blank (got \"   \")"
-        );
+        let service = test_service();
+        assert_blank_id_rejected(
+            service.get_albums_by_artist(""),
+            service.get_albums_by_artist("   "),
+            "artist",
+        )
+        .await;
     }
 
     // The security twin of the blank-id rejection above: an artist id carrying
@@ -479,14 +511,9 @@ mod tests {
     // guard) cannot ship silently.
     #[tokio::test]
     async fn get_albums_by_artist_rejects_a_control_character_artist_id() {
-        let error = test_service()
-            .get_albums_by_artist("artist\u{1b}1")
-            .await
-            .unwrap_err();
-        assert_eq!(
-            error.to_string(),
-            "artist id must not contain control characters (got \"artist\\u{1b}1\")"
-        );
+        let service = test_service();
+        let id = "artist\u{1b}1";
+        assert_control_character_id_rejected(service.get_albums_by_artist(id), "artist", id).await;
     }
 
     #[tokio::test]
@@ -539,30 +566,21 @@ mod tests {
     // case included.
     #[tokio::test]
     async fn get_songs_from_album_rejects_a_blank_album_id() {
-        let error = test_service().get_songs_from_album("").await.unwrap_err();
-        assert_eq!(error.to_string(), "album id must not be blank (got \"\")");
-
-        let error = test_service()
-            .get_songs_from_album("   ")
-            .await
-            .unwrap_err();
-        assert_eq!(
-            error.to_string(),
-            "album id must not be blank (got \"   \")"
-        );
+        let service = test_service();
+        assert_blank_id_rejected(
+            service.get_songs_from_album(""),
+            service.get_songs_from_album("   "),
+            "album",
+        )
+        .await;
     }
 
     // The album-query twin of the control-character artist-id rejection above.
     #[tokio::test]
     async fn get_songs_from_album_rejects_a_control_character_album_id() {
-        let error = test_service()
-            .get_songs_from_album("album\u{1b}1")
-            .await
-            .unwrap_err();
-        assert_eq!(
-            error.to_string(),
-            "album id must not contain control characters (got \"album\\u{1b}1\")"
-        );
+        let service = test_service();
+        let id = "album\u{1b}1";
+        assert_control_character_id_rejected(service.get_songs_from_album(id), "album", id).await;
     }
 
     #[tokio::test]
@@ -629,14 +647,12 @@ mod tests {
     async fn play_track_rejects_a_blank_track_id_without_touching_state() {
         let (service, state) = test_service_with_state();
 
-        let error = service.play_track("", || true).await.unwrap_err();
-        assert_eq!(error.to_string(), "track id must not be blank (got \"\")");
-
-        let error = service.play_track("   ", || true).await.unwrap_err();
-        assert_eq!(
-            error.to_string(),
-            "track id must not be blank (got \"   \")"
-        );
+        assert_blank_id_rejected(
+            service.play_track("", || true),
+            service.play_track("   ", || true),
+            "track",
+        )
+        .await;
 
         assert_playback_state(&state, None, false).await;
     }
@@ -669,15 +685,9 @@ mod tests {
         let (service, state) = test_service_with_state();
 
         service.play_track("song-1", || true).await.unwrap();
-        let error = service
-            .play_track("evil\u{1b}]0;pwnd\u{7}", || true)
-            .await
-            .unwrap_err();
+        let id = "evil\u{1b}]0;pwnd\u{7}";
+        assert_control_character_id_rejected(service.play_track(id, || true), "track", id).await;
 
-        assert_eq!(
-            error.to_string(),
-            "track id must not contain control characters (got \"evil\\u{1b}]0;pwnd\\u{7}\")"
-        );
         assert_playback_state(&state, Some("song-1"), true).await;
     }
 
