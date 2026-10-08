@@ -60,15 +60,14 @@ fn empty_list_label(view: &CurrentView) -> &'static str {
 /// The placeholder a browse view shows when its list has no rows, choosing
 /// between "still loading" and "loaded, but empty".
 ///
-/// `epoch` is the list's load epoch (see `store_loaded` in `ui`): 0 means no
-/// reply has ever populated this buffer, so the fetch the navigation just
-/// scheduled is still in flight and the panel reads as loading rather than
-/// as an empty library; a bumped epoch means a reply landed — possibly an
-/// empty one — so [`empty_list_label`] names the list. Pure, like
-/// [`empty_list_label`], so both wordings are testable without an iced
-/// renderer.
-fn browse_placeholder(view: &CurrentView, epoch: u64) -> &'static str {
-    if epoch == 0 {
+/// `loading` is the list's load state (see `store_loaded`/`clear_loaded` in
+/// `ui`): true means the reply the navigation just scheduled is still in
+/// flight, so the panel reads as loading rather than as an empty library;
+/// false means a reply landed — possibly an empty one — so
+/// [`empty_list_label`] names the list. Pure, like [`empty_list_label`], so
+/// both wordings are testable without an iced renderer.
+fn browse_placeholder(view: &CurrentView, loading: bool) -> &'static str {
+    if loading {
         "Loading…"
     } else {
         empty_list_label(view)
@@ -192,39 +191,44 @@ fn song_row<'a>(
 
 /// The Artists browse view: one row per artist, in the order given, each
 /// emitting [`Message::ArtistSelected`] with the artist's index in the list
-/// and the list's `epoch`. Built by [`scrollable_list`] from the
-/// [`artist_row`] mapping.
-pub fn view_artists(artists: &[Artist], epoch: u64) -> Element<'_, Message> {
+/// and the list's `epoch`. `loading` selects the placeholder wording while
+/// the first reply is in flight (see [`browse_placeholder`]). Built by
+/// [`scrollable_list`] from the [`artist_row`] mapping.
+pub fn view_artists(artists: &[Artist], epoch: u64, loading: bool) -> Element<'_, Message> {
     scrollable_list(
         artists
             .iter()
             .enumerate()
             .map(|(index, artist)| artist_row(epoch, index, artist)),
-        browse_placeholder(&CurrentView::Artists, epoch),
+        browse_placeholder(&CurrentView::Artists, loading),
     )
 }
 
 /// The Albums browse view: one row per album, in the order given, each
 /// emitting [`Message::AlbumSelected`] with the album's index in the list and
-/// the list's `epoch`. Built by [`scrollable_list`] from the [`album_row`]
-/// mapping.
-pub fn view_albums(albums: &[Album], epoch: u64) -> Element<'_, Message> {
+/// the list's `epoch`. `loading` selects the placeholder wording while the
+/// fetch is in flight (see [`browse_placeholder`]). Built by
+/// [`scrollable_list`] from the [`album_row`] mapping.
+pub fn view_albums(albums: &[Album], epoch: u64, loading: bool) -> Element<'_, Message> {
     scrollable_list(
         albums
             .iter()
             .enumerate()
             .map(|(index, album)| album_row(epoch, index, album)),
-        browse_placeholder(&CurrentView::Albums, epoch),
+        browse_placeholder(&CurrentView::Albums, loading),
     )
 }
 
 /// The Songs browse view: one row per song, in the order given, each emitting
 /// [`Message::TrackSelected`] with the song's index in the list and the
 /// list's `epoch`; the row whose id is `current_track` is marked as playing.
-/// Built by [`scrollable_list`] from the [`song_row`] mapping.
+/// `loading` selects the placeholder wording while the fetch is in flight
+/// (see [`browse_placeholder`]). Built by [`scrollable_list`] from the
+/// [`song_row`] mapping.
 pub fn view_songs<'a>(
     songs: &'a [Song],
     epoch: u64,
+    loading: bool,
     current_track: Option<&str>,
 ) -> Element<'a, Message> {
     scrollable_list(
@@ -232,7 +236,7 @@ pub fn view_songs<'a>(
             .iter()
             .enumerate()
             .map(|(index, song)| song_row(epoch, index, song, current_track)),
-        browse_placeholder(&CurrentView::Songs, epoch),
+        browse_placeholder(&CurrentView::Songs, loading),
     )
 }
 
@@ -592,10 +596,11 @@ mod tests {
         // messages into buttons. Rendered both with no current track (no
         // marker) and with one set (the `▶`/highlight marker builds).
         let library = sample_library();
-        let _artists = view_artists(&library.artists, 0);
-        let _albums = view_albums(&library.albums_by_artist["artist-1"], 0);
-        let _songs = view_songs(&library.songs_by_album["album-1"], 0, None);
-        let _songs_marked = view_songs(&library.songs_by_album["album-1"], 0, Some("song-1"));
+        let _artists = view_artists(&library.artists, 1, false);
+        let _albums = view_albums(&library.albums_by_artist["artist-1"], 1, false);
+        let _songs = view_songs(&library.songs_by_album["album-1"], 1, false, None);
+        let _songs_marked =
+            view_songs(&library.songs_by_album["album-1"], 1, false, Some("song-1"));
     }
 
     #[test]
@@ -603,10 +608,10 @@ mod tests {
         // Every browse view renders its pre-load state — an empty buffer —
         // before the first fetch lands, so `scrollable_list` must build a
         // scrollable over zero rows, with or without a current track set.
-        let _artists = view_artists(&[], 0);
-        let _albums = view_albums(&[], 0);
-        let _songs = view_songs(&[], 0, None);
-        let _songs_marked = view_songs(&[], 0, Some("song-1"));
+        let _artists = view_artists(&[], 0, true);
+        let _albums = view_albums(&[], 0, true);
+        let _songs = view_songs(&[], 0, true, None);
+        let _songs_marked = view_songs(&[], 0, true, Some("song-1"));
     }
 
     // Each browse level's loaded-but-empty buffer must render a label naming
@@ -621,18 +626,20 @@ mod tests {
     }
 
     // The placeholder distinguishes a list whose first reply has not landed
-    // yet from one that loaded empty: epoch 0 is "never populated", so the
-    // panel says it is loading instead of claiming the library is empty; a
-    // bumped epoch means a reply landed (possibly an empty one), so the
-    // per-level wording applies.
+    // yet from one that loaded empty: while `loading` is true the panel says
+    // it is loading instead of claiming the library is empty; once a reply
+    // lands (possibly an empty one) the per-level wording applies.
     #[test]
     fn browse_placeholder_distinguishes_loading_from_an_empty_list() {
-        assert_eq!(browse_placeholder(&CurrentView::Artists, 0), "Loading…");
-        assert_eq!(browse_placeholder(&CurrentView::Albums, 0), "Loading…");
-        assert_eq!(browse_placeholder(&CurrentView::Songs, 0), "Loading…");
-        assert_eq!(browse_placeholder(&CurrentView::Artists, 1), "No artists");
-        assert_eq!(browse_placeholder(&CurrentView::Albums, 1), "No albums");
-        assert_eq!(browse_placeholder(&CurrentView::Songs, 1), "No songs");
+        assert_eq!(browse_placeholder(&CurrentView::Artists, true), "Loading…");
+        assert_eq!(browse_placeholder(&CurrentView::Albums, true), "Loading…");
+        assert_eq!(browse_placeholder(&CurrentView::Songs, true), "Loading…");
+        assert_eq!(
+            browse_placeholder(&CurrentView::Artists, false),
+            "No artists"
+        );
+        assert_eq!(browse_placeholder(&CurrentView::Albums, false), "No albums");
+        assert_eq!(browse_placeholder(&CurrentView::Songs, false), "No songs");
     }
 
     #[test]

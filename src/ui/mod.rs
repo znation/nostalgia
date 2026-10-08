@@ -89,13 +89,24 @@ struct WinampPlayer {
     /// proportional to songs actually played and takes the per-album fold off
     /// the browse path.
     known_titles: HashMap<String, String>,
-    /// Monotonic counters bumped whenever a fetched list replaces its buffer
-    /// (see [`store_loaded`]). A selection message carries the epoch of the
-    /// list that rendered its row, so `update` can reject a press that
-    /// outlived that list instead of resolving its index against the new one.
+    /// Counters naming the list that rendered a row, bumped whenever a fetched
+    /// list replaces its buffer (see [`store_loaded`]). A selection message
+    /// carries the epoch of the list that rendered its row, so `update` can
+    /// reject a press that outlived that list instead of resolving its index
+    /// against the new one. A navigation clears a buffer without touching its
+    /// epoch (see [`clear_loaded`]), so the epoch a replacing list gets is
+    /// bumped past the cleared list's rather than reusing it.
     artists_epoch: u64,
     albums_epoch: u64,
     songs_epoch: u64,
+    /// True while a list is waiting on a reply: it starts true for the artists
+    /// fetch [`boot`] schedules, and [`clear_loaded`] sets it when a
+    /// navigation empties a list for a new fetch. [`store_loaded`] clears it.
+    /// The view reads it to show "Loading…" instead of the list's empty
+    /// wording (see `views::browse_placeholder`).
+    artists_loading: bool,
+    albums_loading: bool,
+    songs_loading: bool,
     /// Per-list browse-request counters. Each list's counter is bumped when a
     /// request for that list is issued, so a reply that completes after a
     /// newer request for the same list is recognized as stale (see
@@ -144,6 +155,9 @@ impl WinampPlayer {
             artists_epoch: 0,
             albums_epoch: 0,
             songs_epoch: 0,
+            artists_loading: true,
+            albums_loading: false,
+            songs_loading: false,
             artists_generation: Arc::new(AtomicU64::new(0)),
             albums_generation: Arc::new(AtomicU64::new(0)),
             songs_generation: Arc::new(AtomicU64::new(0)),
@@ -166,20 +180,42 @@ fn boot(state: Arc<Mutex<AppState>>) -> (WinampPlayer, Task<Message>) {
     (WinampPlayer::new(state), Task::done(Message::LoadArtists))
 }
 
-/// Stores a freshly fetched list into the player's matching buffer and bumps
-/// that buffer's epoch, with no further work. The `ArtistsLoaded`,
-/// `AlbumsLoaded`, and `SongsLoaded` update arms all just store. The
-/// store-and-noop shape lives here once instead of in each arm.
+/// Stores a freshly fetched list into the player's matching buffer, bumps
+/// that buffer's epoch, and marks it loaded, with no further work. The
+/// `ArtistsLoaded`, `AlbumsLoaded`, and `SongsLoaded` update arms all just
+/// store. The store-and-noop shape lives here once instead of in each arm.
 ///
 /// The epoch is what makes the index-carrying selection messages safe: a row
 /// rendered from the old list carries the old epoch, so if the list is
 /// replaced before the press is processed, the epoch no longer matches and
 /// the stale press is ignored rather than resolving its index against the
-/// new list.
-fn store_loaded<T>(buffer: &mut Vec<T>, epoch: &mut u64, items: Vec<T>) -> Task<Message> {
+/// new list. A navigation clears a buffer without resetting its epoch, so the
+/// replacing list's epoch is bumped past the cleared one's and differs from
+/// it.
+fn store_loaded<T>(
+    buffer: &mut Vec<T>,
+    epoch: &mut u64,
+    loading: &mut bool,
+    items: Vec<T>,
+) -> Task<Message> {
     *buffer = items;
     *epoch = epoch.wrapping_add(1);
+    *loading = false;
     Task::none()
+}
+
+/// Clears a browse buffer and marks it loading before a new fetch for that
+/// level is issued. The `ArtistSelected` and `AlbumSelected` arms call this
+/// so the view never shows — or lets the user press — the previous
+/// selection's rows while the new fetch is in flight. Clearing removes the
+/// stale rows and `loading` makes the view show "Loading…" instead of the
+/// list's empty wording (see `views::browse_placeholder`); the buffer's epoch
+/// is deliberately left alone, so the reply that replaces it still gets a
+/// bumped epoch that differs from the cleared list's and a press rendered
+/// from the old rows cannot match the new list.
+fn clear_loaded<T>(buffer: &mut Vec<T>, loading: &mut bool) {
+    buffer.clear();
+    *loading = true;
 }
 
 /// The list entry a selection message names, or `None` when the press is
@@ -320,6 +356,10 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 return Task::none();
             };
             player.current_view = CurrentView::Albums;
+            // Drop the previous artist's albums before the new fetch lands:
+            // otherwise the Albums view renders them, and a press during the
+            // fetch resolves against the wrong artist's list.
+            clear_loaded(&mut player.albums, &mut player.albums_loading);
             let generation = RequestGeneration::issue(&player.albums_generation);
             fetch_into(
                 &player.apple_music_service,
@@ -338,6 +378,10 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 return Task::none();
             };
             player.current_view = CurrentView::Songs;
+            // The songs twin of the artist arm above: clear the previous
+            // album's songs so they cannot be shown or pressed while the new
+            // album's fetch is in flight.
+            clear_loaded(&mut player.songs, &mut player.songs_loading);
             let generation = RequestGeneration::issue(&player.songs_generation);
             fetch_into(
                 &player.apple_music_service,
@@ -370,15 +414,24 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 Message::ArtistsLoaded,
             )
         }
-        Message::ArtistsLoaded(artists) => {
-            store_loaded(&mut player.artists, &mut player.artists_epoch, artists)
-        }
-        Message::AlbumsLoaded(albums) => {
-            store_loaded(&mut player.albums, &mut player.albums_epoch, albums)
-        }
-        Message::SongsLoaded(songs) => {
-            store_loaded(&mut player.songs, &mut player.songs_epoch, songs)
-        }
+        Message::ArtistsLoaded(artists) => store_loaded(
+            &mut player.artists,
+            &mut player.artists_epoch,
+            &mut player.artists_loading,
+            artists,
+        ),
+        Message::AlbumsLoaded(albums) => store_loaded(
+            &mut player.albums,
+            &mut player.albums_epoch,
+            &mut player.albums_loading,
+            albums,
+        ),
+        Message::SongsLoaded(songs) => store_loaded(
+            &mut player.songs,
+            &mut player.songs_epoch,
+            &mut player.songs_loading,
+            songs,
+        ),
         Message::TrackPlayed | Message::Ignored => Task::none(),
     }
 }
@@ -407,8 +460,14 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     };
 
     let main_content = match &player.current_view {
-        CurrentView::Artists => views::view_artists(&player.artists, player.artists_epoch),
-        CurrentView::Albums => views::view_albums(&player.albums, player.albums_epoch),
+        CurrentView::Artists => views::view_artists(
+            &player.artists,
+            player.artists_epoch,
+            player.artists_loading,
+        ),
+        CurrentView::Albums => {
+            views::view_albums(&player.albums, player.albums_epoch, player.albums_loading)
+        }
         // A second short lock (like the label block above) hands the current
         // track's id to the Songs view so it can mark the playing row. The
         // borrowed id is compared inside `song_row` and the guard drops at
@@ -419,6 +478,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
             views::view_songs(
                 &player.songs,
                 player.songs_epoch,
+                player.songs_loading,
                 state.current_track.as_deref(),
             )
         }

@@ -210,6 +210,69 @@ fn album_selected_flips_to_songs_view() {
     assert_view(&player, CurrentView::Songs);
 }
 
+// Navigating down must clear the level being entered: after browsing one
+// artist's albums, selecting a second artist must not leave the first
+// artist's albums on screen (or pressable) while the new fetch is in flight.
+// Clearing empties the buffer and marks it loading, so the view shows
+// "Loading…" and a press from the old rows finds no entry. The epoch is left
+// alone — not reset — so the reply that replaces the list gets a fresh epoch
+// and a press still carrying the old list's epoch cannot match the new list.
+#[test]
+fn artist_selected_clears_the_previous_artists_albums() {
+    let (mut player, _state) = test_player();
+    player.artists = vec![sample_artist()];
+    let _ = update(&mut player, Message::AlbumsLoaded(vec![sample_album()]));
+    let previous_epoch = player.albums_epoch;
+
+    let _ = update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 });
+
+    assert!(player.albums.is_empty());
+    assert!(player.albums_loading);
+
+    // The reply the fetch schedules lands with an epoch this list has never
+    // used, and a press from the previous list is rejected rather than
+    // resolving its index against the new one.
+    let _ = update(&mut player, Message::AlbumsLoaded(vec![sample_album()]));
+    assert!(!player.albums_loading);
+    assert_ne!(player.albums_epoch, previous_epoch);
+    assert_no_task(update(
+        &mut player,
+        Message::AlbumSelected {
+            epoch: previous_epoch,
+            index: 0,
+        },
+    ));
+    assert_view(&player, CurrentView::Albums);
+}
+
+// The songs twin of the test above: stepping into an album clears the
+// previous album's songs rather than leaving them to be shown or pressed
+// while the new album's fetch is in flight, and the next reply gets a fresh
+// epoch so a press from the old list cannot match it.
+#[test]
+fn album_selected_clears_the_previous_albums_songs() {
+    let (mut player, _state) = test_player();
+    player.albums = vec![sample_album()];
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    let previous_epoch = player.songs_epoch;
+
+    let _ = update(&mut player, Message::AlbumSelected { epoch: 0, index: 0 });
+
+    assert!(player.songs.is_empty());
+    assert!(player.songs_loading);
+
+    let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
+    assert!(!player.songs_loading);
+    assert_ne!(player.songs_epoch, previous_epoch);
+    assert_no_task(update(
+        &mut player,
+        Message::TrackSelected {
+            epoch: previous_epoch,
+            index: 0,
+        },
+    ));
+}
+
 // The selection messages carry a row index and the epoch of the list that
 // rendered the row. An index past the end of the current buffer can only
 // come from a stale message, so every selection arm must no-op rather than
@@ -263,10 +326,12 @@ fn back_from_albums_returns_to_artists() {
 fn back_from_songs_returns_to_albums() {
     let (mut player, _state) = test_player();
     player.artists = vec![sample_artist()];
-    player.albums = vec![sample_album()];
 
     let _ = update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 });
-    let _ = update(&mut player, Message::AlbumSelected { epoch: 0, index: 0 });
+    // `ArtistSelected` clears the albums buffer, so feed the fetch reply the
+    // iced loop would before stepping into the album.
+    let _ = update(&mut player, Message::AlbumsLoaded(vec![sample_album()]));
+    let _ = update(&mut player, Message::AlbumSelected { epoch: 1, index: 0 });
 
     assert_view(&player, CurrentView::Songs);
 
