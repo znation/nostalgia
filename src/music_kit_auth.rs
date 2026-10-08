@@ -82,16 +82,18 @@ impl std::fmt::Debug for MusicKitSession {
 /// # Errors
 ///
 /// Returns an [`AppleMusicError`] when `token` is not exactly three non-empty
-/// dot-separated segments of base64url characters.
+/// dot-separated segments of base64url characters. The message names the
+/// defect — the wrong number of segments, an empty segment, or a character
+/// outside the base64url alphabet — without echoing the token, which is a
+/// secret, so the caller learns what to fix without the value reaching a log.
 // `authorize` below is this function's caller; it is public so the wiring in
 // `apple_music` can validate the developer token before storing it.
 pub fn validate_developer_token(token: &str) -> Result<(), AppleMusicError> {
-    if is_jwt_shaped(token) {
-        Ok(())
-    } else {
-        Err(AppleMusicError::new(
-            "the developer token must be a three-segment base64url JWT",
-        ))
+    match jwt_shape_problem(token) {
+        None => Ok(()),
+        Some(problem) => Err(AppleMusicError::new(format!(
+            "the developer token must be a three-segment base64url JWT, but {problem}"
+        ))),
     }
 }
 
@@ -380,23 +382,35 @@ fn is_loopback_host(host: Option<&str>) -> bool {
 /// Whether `token` is exactly three non-empty dot-separated segments of
 /// `[A-Za-z0-9_-]`.
 fn is_jwt_shaped(token: &str) -> bool {
-    let valid = |segment: &str| {
-        !segment.is_empty()
-            && segment.chars().all(|character| {
-                character.is_ascii_alphanumeric() || matches!(character, '-' | '_')
-            })
+    jwt_shape_problem(token).is_none()
+}
+
+/// Why `token` is not a three-segment base64url JWT, or `None` when it is.
+///
+/// The reason is a fixed phrase — never the token itself, which is a secret
+/// and must not reach a log — so [`validate_developer_token`] can name the
+/// defect without echoing the value. The checks run from the most structural
+/// to the most specific: the segment count, then emptiness, then the alphabet.
+fn jwt_shape_problem(token: &str) -> Option<&'static str> {
+    let mut parts = token.split('.');
+    let (Some(first), Some(second), Some(third), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return Some("it does not have exactly three dot-separated segments");
     };
-    let mut segments = token.split('.');
-    matches!(
-        (
-            segments.next(),
-            segments.next(),
-            segments.next(),
-            segments.next(),
-        ),
-        (Some(first), Some(second), Some(third), None)
-            if valid(first) && valid(second) && valid(third)
-    )
+
+    let segments = [first, second, third];
+    if segments.iter().any(|segment| segment.is_empty()) {
+        return Some("one of its segments is empty");
+    }
+    if segments.iter().any(|segment| {
+        !segment
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
+    }) {
+        return Some("it contains a character outside the base64url alphabet");
+    }
+    None
 }
 
 /// Decodes a form-urlencoded value (`+` for space, `%XX` escapes).

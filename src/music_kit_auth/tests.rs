@@ -103,6 +103,37 @@ fn validate_developer_token_rejects_blank_and_malformed_values() {
 }
 
 #[test]
+fn validate_developer_token_names_the_specific_defect() {
+    // Every malformed token used to get the same "must be a three-segment
+    // base64url JWT" message, which does not say which part is wrong. Each
+    // defect now gets its own phrase, so a user with, say, a pasted payload
+    // can tell the segment count is the problem rather than the alphabet.
+    let cases = [
+        ("a.b", "exactly three dot-separated segments"),
+        ("a.b.c.d", "exactly three dot-separated segments"),
+        ("a..c", "one of its segments is empty"),
+        ("a.b.c\"", "outside the base64url alphabet"),
+        ("a.b.\\c", "outside the base64url alphabet"),
+    ];
+    for (token, expected) in cases {
+        let error = validate_developer_token(token).expect_err("a malformed token is rejected");
+        assert!(
+            error.to_string().contains(expected),
+            "expected {token:?} to report {expected:?}, got {error}"
+        );
+    }
+}
+
+#[test]
+fn validate_developer_token_does_not_echo_the_token() {
+    // The developer token is a secret, so the defect phrase must never quote
+    // the offending value into the message that `sign_in` logs to stderr.
+    let secret = "topsecret.payload.sig!";
+    let error = validate_developer_token(secret).expect_err("a malformed token is rejected");
+    assert!(!error.to_string().contains("topsecret"), "got {error}");
+}
+
+#[test]
 fn percent_decode_decodes_form_escapes_and_leaves_bad_ones_literal() {
     // The callback body is form-urlencoded by the browser's `fetch`, so a
     // `+` is a space and `%XX` is the decoded byte (upper- or lowercase hex).
