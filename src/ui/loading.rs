@@ -265,7 +265,12 @@ mod tests {
     // from the log as a returned error. Pinned so the wording can't drift.
     #[test]
     fn play_timeout_report_names_the_track_and_the_bound() {
-        let report = play_timeout_report("song-1", Duration::from_secs(30));
+        // Format with the production `PLAY_TIMEOUT`, not a test-local
+        // literal: the report the app logs must describe the bound the app
+        // actually applies, so the expected wording below pins the constant
+        // too. A test-local 30s would pass even if the production constant
+        // changed, leaving the log naming a bound nothing enforces.
+        let report = play_timeout_report("song-1", PLAY_TIMEOUT);
         assert_eq!(
             report,
             "playback failed (playing track \"song-1\"); timed out after 30s, leaving the current track unchanged"
@@ -323,10 +328,27 @@ mod tests {
     // error. Pinned so the wording can't drift.
     #[test]
     fn fetch_timeout_report_names_the_fetch_and_the_bound() {
-        let report = fetch_timeout_report("loading favorite artists", Duration::from_secs(30));
+        // The playback report's twin: format with the production
+        // `FETCH_TIMEOUT` so the wording pins the bound the browse path
+        // actually applies.
+        let report = fetch_timeout_report("loading favorite artists", FETCH_TIMEOUT);
         assert_eq!(
             report,
             "music-library fetch failed (loading favorite artists); timed out after 30s, showing an empty list"
         );
+    }
+
+    // `FETCH_TIMEOUT` and `PLAY_TIMEOUT` are production behavior — how long a
+    // hung backend may run before the UI gives up and falls back (an empty
+    // list, or the current track left unchanged) — and every fetch and play
+    // in `ui` passes one of them. Nothing read them: the report tests above
+    // used to pass their own `Duration::from_secs(30)`, so a change to either
+    // constant (a zero bound would abandon every fetch and play instantly)
+    // would clear the whole suite while production applied the new bound.
+    // Pin the documented 30 seconds for both.
+    #[test]
+    fn fetch_and_play_timeouts_are_the_documented_thirty_seconds() {
+        assert_eq!(FETCH_TIMEOUT, Duration::from_secs(30));
+        assert_eq!(PLAY_TIMEOUT, Duration::from_secs(30));
     }
 }
