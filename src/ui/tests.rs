@@ -1780,6 +1780,19 @@ fn new_player_starts_at_artists_with_nothing_selected() {
     assert!(!player.songs.loading);
 }
 
+/// Builds `view` once per browse level — the pre-load, loaded, and failed
+/// shapes all need the per-frame assembly driven at every level, and iced
+/// `Element`s expose no tree introspection, so the observable contract is
+/// that `view` builds its tree without panicking over the app's input
+/// space. Shared by the two construction tests below so a new browse level
+/// is exercised in both at once.
+fn construct_view_in_every_browse_view(player: &mut WinampPlayer) {
+    for current_view in BROWSE_VIEWS {
+        player.current_view = current_view;
+        let _ = view(player);
+    }
+}
+
 // `view` is the per-frame assembly: it locks the shared state, resolves
 // the now-playing label, matches the current browse view onto its list
 // buffer, and stacks the Now Playing bar, the transport row, the optional
@@ -1804,10 +1817,7 @@ fn view_constructs_over_the_apps_full_input_space() {
     // The pre-load shape: nothing fetched, no current track. This is what
     // the window shows before the first `LoadArtists` fetch lands, in
     // every browse view.
-    for current_view in BROWSE_VIEWS {
-        player.current_view = current_view;
-        let _empty = view(&player);
-    }
+    construct_view_in_every_browse_view(&mut player);
 
     // The loaded shape: artists, albums, and songs in the browse buffers,
     // rendered for every now-playing resolution a session can reach.
@@ -1849,10 +1859,7 @@ fn view_constructs_over_the_apps_full_input_space() {
     player.artists.error = Some("music-library fetch failed: boom".to_string());
     player.albums.error = Some("music-library fetch failed: boom".to_string());
     player.songs.error = Some("music-library fetch failed: boom".to_string());
-    for current_view in BROWSE_VIEWS {
-        player.current_view = current_view;
-        let _failed = view(&player);
-    }
+    construct_view_in_every_browse_view(&mut player);
 }
 
 #[test]
@@ -1862,14 +1869,8 @@ fn view_constructs_when_the_window_is_shaded() {
 
     // The rolled-up frame builds only the title bar, so it must not panic
     // over either the pre-load empty buffers or the loaded browse lists.
-    for current_view in BROWSE_VIEWS {
-        player.current_view = current_view;
-        let _empty = view(&player);
-    }
+    construct_view_in_every_browse_view(&mut player);
 
     seed_browse_lists(&mut player);
-    for current_view in BROWSE_VIEWS {
-        player.current_view = current_view;
-        let _loaded = view(&player);
-    }
+    construct_view_in_every_browse_view(&mut player);
 }
