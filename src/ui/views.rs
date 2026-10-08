@@ -90,8 +90,8 @@ fn browse_placeholder(view: &CurrentView, loading: bool) -> &'static str {
 /// than owning clones: this builder runs on every view refresh, so the
 /// borrowed title avoids a `String` allocation per row per frame. The
 /// playing row's `▶` marker is pushed as its own static label beside the
-/// borrowed title rather than formatted into an owned one, so the marked row
-/// allocates nothing either.
+/// borrowed title rather than formatted into an owned one, so the marker
+/// adds no `String` allocation per frame either.
 fn scrollable_list<'a>(
     items: impl IntoIterator<Item = (&'a str, &'static str, Message, bool)>,
     empty_label: &'static str,
