@@ -27,7 +27,97 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Style the transport buttons as raised Winamp chrome (found 2026-10-07)
+
+Found by plan 2026-10-07, taking the "transport button and slider chrome"
+follow-up the bevel Done entry defers. The bevel layer (`src/ui/style.rs`:
+`bevel_edges`, `lcd_well`, `raised_panel`) frames the panels, but
+`labeled_button` in `src/ui/views.rs` still builds a default-styled `Button`,
+so the Play/Pause, Stop, Previous, Next, and Repeat controls and the browse
+Back button render with iced's theme button (the palette's `TITLE_BLUE`
+primary) instead of the base skin's raised chrome. iced 0.14's `button::Style`
+carries a single-colour `Border` and a `Shadow` (`iced_core/src/border.rs`:
+`color`, `width`, `radius`; `iced_core/src/shadow.rs`: `color`, `offset`,
+`blur_radius`), so — as with the panel bevel — the two-tone edge is composed
+from a light border plus a dark offset shadow.
+
+**Goal.** Add one pure `chrome_button_style(status)` to `src/ui/style.rs` that
+maps iced's `button::Status` to the base skin's raised (Active/Hovered) and
+sunken (Pressed) chrome, and route every `labeled_button` through it, so the
+five transport buttons and the Back button read as Winamp chrome. Slider
+chrome is a separate, later plan (as the bevel entry notes).
+
+**Approach.**
+
+- `src/ui/theme.rs`: add three public `Color` constants beside the existing
+  base-skin colours, each `Color::from_rgb`, in the module's existing
+  doc-comment style:
+  - `BUTTON_FACE` — the raised chrome button face,
+    `Color::from_rgb(0.30, 0.30, 0.30)` (lighter than `WINDOW_BACKGROUND` so
+    the button reads as raised).
+  - `BUTTON_FACE_HOVERED` — the hover face,
+    `Color::from_rgb(0.38, 0.38, 0.38)`.
+  - `BUTTON_FACE_PRESSED` — the pressed (sunken) face,
+    `Color::from_rgb(0.22, 0.22, 0.22)`.
+- `src/ui/style.rs`: import `button`, `Background`, `Border`, `Shadow`, and
+  `Vector` from `iced` (all re-exported at the crate root). Add:
+  - `pub fn chrome_button_style(status: button::Status) -> button::Style` —
+    pure, needs no theme, the testable heart (like `bevel_edges`). Match
+    `status`:
+    - `Active` → edges `(PANEL_EDGE_LIGHT, PANEL_EDGE_DARK)`, face
+      `BUTTON_FACE`.
+    - `Hovered` → the same edges, face `BUTTON_FACE_HOVERED`.
+    - `Pressed` → reversed edges `(PANEL_EDGE_DARK, PANEL_EDGE_LIGHT)`, face
+      `BUTTON_FACE_PRESSED`.
+    - `Disabled` → the `Active` chrome with `theme::TEXT.scale_alpha(0.5)` as
+      `text_color` (no button in this app is disabled, but the match must be
+      exhaustive).
+
+    Build
+    `button::Style { background: Some(Background::Color(face)), text_color:
+    theme::TEXT, border: Border { color: top_left, width: 1.0, radius:
+    0.0.into() }, shadow: Shadow { color: bottom_right, offset:
+    Vector::new(1.0, 1.0), blur_radius: 0.0 }, ..button::Style::default() }`.
+    The 1px light border shows on the top/left and the dark (or, when pressed,
+    light) no-blur shadow offset down-right shows on the bottom/right — the
+    same two-tone edge the panel bevel draws, approximated within `Border`'s
+    single colour.
+  - `#[cfg(test)] mod tests` additions: `chrome_button_style(Active)` has
+    `background == Some(Background::Color(BUTTON_FACE))`, `text_color ==
+    TEXT`, `border.color == PANEL_EDGE_LIGHT`, `border.width == 1.0`,
+    `shadow.color == PANEL_EDGE_DARK`, `shadow.offset == Vector::new(1.0,
+    1.0)`, `shadow.blur_radius == 0.0`; `Hovered` differs from `Active` in
+    `background == BUTTON_FACE_HOVERED`; `Pressed` reverses to `border.color ==
+    PANEL_EDGE_DARK` / `shadow.color == PANEL_EDGE_LIGHT` with `background ==
+    BUTTON_FACE_PRESSED`; `Disabled` keeps the Active edges and sets
+    `text_color.a < TEXT.a`.
+- `src/ui/views.rs`: in `labeled_button`, chain `.style(|_theme, status|
+  style::chrome_button_style(status))` onto the button. `labeled_button` is the
+  single builder behind all five transport buttons (`view_transport_controls`)
+  and the Back button (`view_back_button`), so both pick up the chrome with no
+  signature change; the browse row buttons in `scrollable_list` keep their own
+  highlight style and are untouched.
+- `README.md`: refresh the Status sentence to say the transport controls and
+  Back button are drawn as raised Winamp chrome buttons; leave the
+  `tumwater:prompt` block untouched.
+
+**Files touched.** `src/ui/style.rs`, `src/ui/theme.rs`, `src/ui/views.rs`,
+`README.md`.
+
+**Acceptance criteria.**
+
+- `make check` passes (`cargo fmt --check`, `cargo clippy --all-targets -- -D
+  warnings`, `cargo doc` with rustdoc warnings denied, `cargo test`).
+- The new `chrome_button_style` tests pass, pinning the raised/sunken edge
+  colours, the three face shades, and the disabled text dimming.
+- The existing `views` tests still pass unchanged —
+  `transport_controls_construct_for_both_play_states_volume_endpoints_and_repeat_states`
+  and `now_playing_bar_and_back_button_construct` build the same widget trees
+  through the restyled `labeled_button`.
+- `cargo run`: the transport buttons and Back button render as raised gray
+  chrome with a light top/left and dark bottom/right edge, darkening on hover
+  and reading sunken while pressed; manual check — the build and tests are the
+  primary gate.
 
 ## Done
 
