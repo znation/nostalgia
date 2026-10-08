@@ -29,7 +29,88 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Add Winamp window-shade ("roll up") mode (found 2026-10-08)
+
+Found by plan 2026-10-08. The README's Screenshots note still says
+"window-shade mode is not built yet", and it is the last widget-level fidelity
+item the steward drift note and the title-bar Done entry leave unplanned. The
+custom title bar already owns the drag/minimize/close actions; this plan adds
+the classic double-click roll-up: the window shrinks to just the title bar and
+its content, and double-clicking again restores it.
+
+**Goal.** Double-clicking the title bar toggles shade mode. Shaded, the window
+renders only the title bar and is resized to `TITLE_BAR_HEIGHT`; the pre-shade
+inner size is remembered and restored on unshade.
+
+**Approach.**
+
+- `src/ui/views.rs`:
+  - Make `TITLE_BAR_HEIGHT` `pub(super)` so the update loop can size the shaded
+    window to it; keep its value `24.0`.
+  - On the title bar's `drag_region` `MouseArea`, add
+    `.on_double_click(Message::ToggleWindowShade)` beside the existing
+    `.on_press(Message::WindowDragged)`, and extend `view_title_bar`'s doc
+    comment to name the roll-up gesture.
+- `src/ui/mod.rs`:
+  - Add two `WinampPlayer` fields: `shaded: bool` (the window is rolled up)
+    and `unshaded_size: Option<iced::Size>` (the inner size captured just
+    before the first shade, so unshade can restore it); initialize both in
+    `WinampPlayer::new` (`false`, `None`).
+  - Add `ToggleWindowShade` and `WindowShadeMeasured(iced::Size)` to
+    `Message`.
+  - `update` arms:
+    - `ToggleWindowShade`: when `shaded`, clear it and, if `unshaded_size` is
+      `Some(size)`, schedule `iced::window::resize(id, size)` through
+      `with_window_id`; otherwise set `shaded` and schedule
+      `iced::window::size(id).map(Message::WindowShadeMeasured)` through
+      `with_window_id`. Without a resolved window id the flag still flips and
+      no resize is scheduled — the same guard the other title-bar actions
+      use.
+    - `WindowShadeMeasured(size)`: store `Some(size)` and schedule
+      `iced::window::resize(id, iced::Size::new(size.width,
+      views::TITLE_BAR_HEIGHT))` through `with_window_id`.
+  - In `view`, return `views::view_title_bar()` immediately when
+    `player.shaded`, before the state lock and the content column, so shade
+    mode builds only the title bar.
+- `src/ui/tests.rs`:
+  - `toggle_window_shade_flips_the_flag_and_measures_the_window`: with a
+    window id, drive `ToggleWindowShade`, assert `player.shaded` is true and
+    the task schedules work (`iced_runtime::task::into_stream(..).is_some()`);
+    drive it again, assert `shaded` is false and work is still scheduled once
+    `unshaded_size` is set.
+  - `window_shade_measured_stores_the_size_and_resizes`: with a window id,
+    drive `WindowShadeMeasured(iced::Size::new(800.0, 600.0))`, assert
+    `player.unshaded_size == Some(iced::Size::new(800.0, 600.0))` and work is
+    scheduled.
+  - `toggle_window_shade_without_a_window_id_still_flips_the_flag`: with no
+    window id, drive `ToggleWindowShade`, assert `shaded` is true and no work
+    is scheduled (the `assert_message_schedules_no_work` probe).
+  - `view_constructs_when_the_window_is_shaded`: set `player.shaded = true`
+    and build `view` for each `BROWSE_VIEWS` entry, empty and seeded — the
+    same no-panic contract as
+    `view_constructs_over_the_apps_full_input_space`.
+- `README.md`: drop "window-shade mode is not built yet" from the Screenshots
+  note, add window-shade mode to the Status sentence, and name it in Usage;
+  leave the `tumwater:prompt` block untouched.
+
+**Files touched.** `src/ui/views.rs`, `src/ui/mod.rs`, `src/ui/tests.rs`,
+`README.md`.
+
+**Acceptance criteria.**
+
+- `make check` passes (`cargo fmt --check`, `cargo clippy --all-targets -- -D
+  warnings`, `cargo doc` with rustdoc warnings denied, `cargo test`).
+- The four new tests above pass, and
+  `view_constructs_over_the_apps_full_input_space` still passes unchanged.
+- No `dead_code`/unused warnings: the new fields, messages, and `pub(super)`
+  constant are all read by the update loop or its tests.
+- Manual check (`cargo run`): double-clicking the title bar rolls the window
+  up to a title-bar-height strip showing only the title bar; double-clicking
+  again restores it; dragging the title bar still moves the window. The resize
+  is best-effort: `iced` maps `window::resize` to winit's
+  `request_inner_size`, which some windowing systems ignore for a
+  non-resizable window; where it is ignored the content still switches to the
+  title-bar-only view, and unshading needs no restore.
 
 ## Done
 
