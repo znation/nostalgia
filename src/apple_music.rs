@@ -21,10 +21,11 @@ use crate::state::AppState;
 
 /// A failed music-library or playback operation.
 ///
-/// The stub produces one only when handed a blank id: `play_track` rejects a
-/// blank track id, and `get_albums_by_artist` / `get_songs_from_album` reject
-/// a blank artist/album id (an id is blank when it is empty or only
-/// whitespace). Every other in-memory query and playback transition succeeds.
+/// The stub produces one only when handed an invalid id: `play_track` rejects
+/// a blank or control-character track id, and `get_albums_by_artist` /
+/// `get_songs_from_album` reject a blank or control-character artist/album id
+/// (an id is blank when it is empty or only whitespace). Every other in-memory
+/// query and playback transition succeeds.
 /// The seam carries this type so a real Apple Music
 /// backend can report a failure without tying the seam's public API to a
 /// specific HTTP client. The message is the human-readable cause.
@@ -135,14 +136,15 @@ impl AppleMusicService {
     }
 
     /// Plays the given track by id, recording it as the current track and
-    /// marking it playing. A blank `track_id` — empty or only whitespace — is
-    /// rejected with an [`AppleMusicError`] and leaves shared state untouched:
-    /// a blank id can never name a track, so recording it would show a blank
-    /// Now Playing entry and report playback of nothing as playing. The stub
-    /// owns only this shared-state transition — a real implementation would
-    /// add the API call that starts audio.
+    /// marking it playing. A blank `track_id` — empty or only whitespace — or
+    /// one carrying a terminal control character is rejected with an
+    /// [`AppleMusicError`] and leaves shared state untouched: a blank id can
+    /// never name a track, and a control-character id would inject escape
+    /// sequences into the playback log line below. The stub owns only this
+    /// shared-state transition — a real implementation would add the API call
+    /// that starts audio.
     pub async fn play_track(&self, track_id: &str) -> Result<(), AppleMusicError> {
-        ensure_id_is_not_blank(track_id, "track")?;
+        ensure_id_is_valid(track_id, "track")?;
 
         let mut state = self.state.lock().await;
         state.current_track = Some(track_id.to_string());
@@ -159,32 +161,34 @@ impl AppleMusicService {
 
     /// Albums by the given artist; unknown artists yield an empty list.
     ///
-    /// A blank `artist_id` — empty or only whitespace — is rejected with an
-    /// [`AppleMusicError`] instead of looked up: no artist has a blank id, so
-    /// a blank id is a caller bug, and returning the empty list would report
-    /// it as the ordinary "no albums" case. The same blank-id guard
+    /// A blank `artist_id` — empty or only whitespace — or one carrying a
+    /// terminal control character is rejected with an [`AppleMusicError`]
+    /// instead of looked up: no artist has a blank id, so a blank id is a
+    /// caller bug, and returning the empty list would report it as the
+    /// ordinary "no albums" case. The same id guard
     /// [`AppleMusicService::play_track`] applies to its track id.
     pub async fn get_albums_by_artist(
         &self,
         artist_id: &str,
     ) -> Result<Vec<Album>, AppleMusicError> {
-        ensure_id_is_not_blank(artist_id, "artist")?;
+        ensure_id_is_valid(artist_id, "artist")?;
         Ok(lookup(&sample_library().albums_by_artist, artist_id))
     }
 
     /// Songs on the given album; unknown albums yield an empty list.
     ///
-    /// A blank `album_id` — empty or only whitespace — is rejected with an
-    /// [`AppleMusicError`], the album-query twin of
-    /// [`AppleMusicService::get_albums_by_artist`].
+    /// A blank `album_id` — empty or only whitespace — or one carrying a
+    /// terminal control character is rejected with an [`AppleMusicError`], the
+    /// album-query twin of [`AppleMusicService::get_albums_by_artist`].
     pub async fn get_songs_from_album(&self, album_id: &str) -> Result<Vec<Song>, AppleMusicError> {
-        ensure_id_is_not_blank(album_id, "album")?;
+        ensure_id_is_valid(album_id, "album")?;
         Ok(lookup(&sample_library().songs_by_album, album_id))
     }
 }
 
-/// Rejects a blank id at the seam: `Ok` when `id` names a resource, `Err`
-/// naming the offending value when it is empty or only whitespace.
+/// Validates an id at the seam: `Ok` when `id` names a resource, `Err` naming
+/// the offending value when it is blank or carries a terminal control
+/// character.
 ///
 /// Every id in the library names a real Apple Music resource, so a blank id
 /// is a caller bug rather than the ordinary "unknown id" case the browse
@@ -192,12 +196,20 @@ impl AppleMusicService {
 /// ("track", "artist", or "album"). A whitespace-only id is rejected too:
 /// like an empty one it can name nothing, and letting it through would record
 /// a blank-looking Now Playing entry or report the bug as an ordinary empty
-/// result. The message quotes the value with `{id:?}`, so a whitespace-only
-/// id reads as `"   "` rather than as an invisible empty string.
-fn ensure_id_is_not_blank(id: &str, kind: &str) -> Result<(), AppleMusicError> {
+/// result. A control character (`\u{1b}`, `\n`, and the rest) is rejected
+/// because `play_track` writes the id to the terminal log; without this check
+/// a hostile id from the library could inject escape sequences there. The
+/// message quotes the value with `{id:?}`, so both a whitespace-only id and a
+/// control-character id read as escaped text rather than as invisible bytes.
+fn ensure_id_is_valid(id: &str, kind: &str) -> Result<(), AppleMusicError> {
     if id.trim().is_empty() {
         return Err(AppleMusicError::new(format!(
             "{kind} id must not be blank (got {id:?})"
+        )));
+    }
+    if id.chars().any(char::is_control) {
+        return Err(AppleMusicError::new(format!(
+            "{kind} id must not contain control characters (got {id:?})"
         )));
     }
     Ok(())
@@ -289,25 +301,44 @@ mod tests {
     }
 
     #[test]
-    fn ensure_id_is_not_blank_rejects_empty_and_whitespace_ids() {
+    fn ensure_id_is_valid_rejects_empty_and_whitespace_ids() {
         // An id names a real Apple Music resource, so a blank one is a caller
         // bug. Both an empty id and a whitespace-only id are blank; the
         // message quotes the value so the whitespace case is visible rather
         // than reading as an empty string.
         assert_eq!(
-            ensure_id_is_not_blank("", "track").unwrap_err().to_string(),
+            ensure_id_is_valid("", "track").unwrap_err().to_string(),
             "track id must not be blank (got \"\")"
         );
         assert_eq!(
-            ensure_id_is_not_blank("\t", "artist")
-                .unwrap_err()
-                .to_string(),
+            ensure_id_is_valid("\t", "artist").unwrap_err().to_string(),
             "artist id must not be blank (got \"\\t\")"
         );
         // A nameable id passes through untouched, including one with an
         // internal space; only a wholly blank id is rejected.
-        assert!(ensure_id_is_not_blank("song-1", "track").is_ok());
-        assert!(ensure_id_is_not_blank("a b", "album").is_ok());
+        assert!(ensure_id_is_valid("song-1", "track").is_ok());
+        assert!(ensure_id_is_valid("a b", "album").is_ok());
+    }
+
+    #[test]
+    fn ensure_id_is_valid_rejects_terminal_control_characters() {
+        // `play_track` writes the track id to the terminal, so an id carrying
+        // an escape sequence (`\u{1b}`) or other control byte would let a
+        // hostile library entry manipulate the log stream. The guard rejects
+        // it and quotes the value with `{id:?}`, so the error message itself
+        // cannot carry the raw control bytes.
+        let escape = "evil\u{1b}]0;pwnd\u{7}";
+        let error = ensure_id_is_valid(escape, "track").unwrap_err().to_string();
+        assert_eq!(
+            error,
+            "track id must not contain control characters (got \"evil\\u{1b}]0;pwnd\\u{7}\")"
+        );
+        assert!(!error.contains('\u{1b}'));
+        assert!(!error.contains('\u{7}'));
+        // A newline is a control character too, so an id cannot forge a
+        // second log line; a plain id still passes.
+        assert!(ensure_id_is_valid("song\n1", "track").is_err());
+        assert!(ensure_id_is_valid("song-1", "track").is_ok());
     }
 
     // "All favorite artists" is the service's content contract, not just a
@@ -514,6 +545,29 @@ mod tests {
         let error = service.play_track("").await.unwrap_err();
 
         assert_eq!(error.to_string(), "track id must not be blank (got \"\")");
+        assert_playback_state(&state, Some("song-1"), true).await;
+    }
+
+    // A track id carrying a terminal control character would inject an escape
+    // sequence into the `Playing track: {id}` log line (and into the
+    // `current_track` the Now Playing bar later renders). The seam rejects it
+    // exactly as it rejects a blank id, leaving shared state untouched; the
+    // error message escapes the value with `{id:?}` so the report itself is
+    // safe to print.
+    #[tokio::test]
+    async fn play_track_rejects_a_control_character_track_id() {
+        let (service, state) = test_service_with_state();
+
+        service.play_track("song-1").await.unwrap();
+        let error = service
+            .play_track("evil\u{1b}]0;pwnd\u{7}")
+            .await
+            .unwrap_err();
+
+        assert_eq!(
+            error.to_string(),
+            "track id must not contain control characters (got \"evil\\u{1b}]0;pwnd\\u{7}\")"
+        );
         assert_playback_state(&state, Some("song-1"), true).await;
     }
 
