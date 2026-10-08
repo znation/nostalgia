@@ -380,6 +380,33 @@ async fn a_slow_stale_browse_reply_does_not_overwrite_the_newer_list() {
     assert_ids(&player.albums, |album| album.id.as_str(), &["album-3"]);
 }
 
+// A play reply can complete out of order just like a browse reply: the user
+// clicks song-1, then song-2, and song-1's slower play lands last. The
+// playback counter's guard, evaluated inside `play_track` under the state
+// lock, rejects the superseded play so it cannot overwrite the newer track —
+// without it the Now Playing bar would name song-1 after the user's last
+// click was song-2. This drives the two `TrackSelected` tasks in the reverse
+// of their issue order, the completion order a slow backend produces.
+#[tokio::test]
+async fn a_slow_stale_play_does_not_overwrite_the_newer_track() {
+    let (mut player, state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+
+    // Issue two plays: song-1 (index 0), then song-2 (index 1). The songs
+    // list is not replaced, so both presses carry epoch 1.
+    let first = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+    let second = update(&mut player, Message::TrackSelected { epoch: 1, index: 1 });
+
+    // The newer play's reply lands first.
+    drive_task(second, "newer play", |_| {}).await;
+    assert_eq!(state.lock().await.current_track.as_deref(), Some("song-2"));
+
+    // The older play's reply lands late and must be dropped, leaving the
+    // newer track playing.
+    drive_task(first, "stale play", |_| {}).await;
+    assert_eq!(state.lock().await.current_track.as_deref(), Some("song-2"));
+}
+
 // Startup wiring: `boot` hands iced a fresh player plus the task that
 // loads the artist list, and `update`'s `LoadArtists` arm runs that fetch
 // into the player's `artists` buffer. A regression that stopped boot from

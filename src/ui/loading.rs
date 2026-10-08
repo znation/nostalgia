@@ -111,7 +111,7 @@ impl RequestGeneration {
 
     /// Whether this request is still the latest issued for its list. A later
     /// request for the same list makes an earlier completion stale.
-    fn is_current(&self) -> bool {
+    pub(super) fn is_current(&self) -> bool {
         self.issued == self.latest.load(Ordering::SeqCst)
     }
 }

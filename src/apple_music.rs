@@ -145,10 +145,24 @@ impl AppleMusicService {
     /// guard does not reject cannot reach the terminal raw. The stub owns only
     /// this shared-state transition — a real implementation would add the API
     /// call that starts audio.
-    pub async fn play_track(&self, track_id: &str) -> Result<(), AppleMusicError> {
+    ///
+    /// `is_current` guards the commit: it is evaluated while the state lock is
+    /// held, and when it returns `false` the track is left uncommitted because
+    /// a newer play has superseded this one. A slow backend can complete two
+    /// plays out of order, and without the guard the older reply would
+    /// overwrite the newer track in shared state; the UI passes the guard from
+    /// its playback-request counter, exactly as the browse path does.
+    pub async fn play_track(
+        &self,
+        track_id: &str,
+        is_current: impl FnOnce() -> bool,
+    ) -> Result<(), AppleMusicError> {
         ensure_id_is_valid(track_id, "track")?;
 
         let mut state = self.state.lock().await;
+        if !is_current() {
+            return Ok(());
+        }
         state.current_track = Some(track_id.to_string());
         state.is_playing = true;
 
@@ -525,7 +539,7 @@ mod tests {
     async fn play_track_sets_current_track_and_starts_playing() {
         let (service, state) = test_service_with_state();
 
-        service.play_track("song-1").await.unwrap();
+        service.play_track("song-1", || true).await.unwrap();
 
         assert_playback_state(&state, Some("song-1"), true).await;
     }
@@ -541,8 +555,25 @@ mod tests {
     async fn play_track_replaces_the_current_track_when_another_song_is_played() {
         let (service, state) = test_service_with_state();
 
-        service.play_track("song-1").await.unwrap();
-        service.play_track("song-2").await.unwrap();
+        service.play_track("song-1", || true).await.unwrap();
+        service.play_track("song-2", || true).await.unwrap();
+
+        assert_playback_state(&state, Some("song-2"), true).await;
+    }
+
+    // A play reply can complete out of order: the user clicks song-1, then
+    // song-2, and song-1's slower play lands last. Committing that older
+    // reply would replace the newer track in shared state. The guard is
+    // evaluated under the state lock, so a superseded play leaves the newer
+    // track untouched — the seam half of the UI's out-of-order-play guard.
+    #[tokio::test]
+    async fn a_superseded_play_leaves_the_newer_track_in_place() {
+        let (service, state) = test_service_with_state();
+
+        // The newer play commits, then the older one completes late with a
+        // guard reporting it has been superseded.
+        service.play_track("song-2", || true).await.unwrap();
+        service.play_track("song-1", || false).await.unwrap();
 
         assert_playback_state(&state, Some("song-2"), true).await;
     }
@@ -556,10 +587,10 @@ mod tests {
     async fn play_track_rejects_a_blank_track_id_without_touching_state() {
         let (service, state) = test_service_with_state();
 
-        let error = service.play_track("").await.unwrap_err();
+        let error = service.play_track("", || true).await.unwrap_err();
         assert_eq!(error.to_string(), "track id must not be blank (got \"\")");
 
-        let error = service.play_track("   ").await.unwrap_err();
+        let error = service.play_track("   ", || true).await.unwrap_err();
         assert_eq!(
             error.to_string(),
             "track id must not be blank (got \"   \")"
@@ -578,8 +609,8 @@ mod tests {
     async fn play_track_rejects_a_blank_track_id_while_a_song_is_playing() {
         let (service, state) = test_service_with_state();
 
-        service.play_track("song-1").await.unwrap();
-        let error = service.play_track("").await.unwrap_err();
+        service.play_track("song-1", || true).await.unwrap();
+        let error = service.play_track("", || true).await.unwrap_err();
 
         assert_eq!(error.to_string(), "track id must not be blank (got \"\")");
         assert_playback_state(&state, Some("song-1"), true).await;
@@ -595,9 +626,9 @@ mod tests {
     async fn play_track_rejects_a_control_character_track_id() {
         let (service, state) = test_service_with_state();
 
-        service.play_track("song-1").await.unwrap();
+        service.play_track("song-1", || true).await.unwrap();
         let error = service
-            .play_track("evil\u{1b}]0;pwnd\u{7}")
+            .play_track("evil\u{1b}]0;pwnd\u{7}", || true)
             .await
             .unwrap_err();
 
@@ -612,7 +643,7 @@ mod tests {
     async fn pause_stops_playing_but_keeps_current_track() {
         let (service, state) = test_service_with_state();
 
-        service.play_track("song-1").await.unwrap();
+        service.play_track("song-1", || true).await.unwrap();
         service.pause().await.unwrap();
 
         assert_playback_state(&state, Some("song-1"), false).await;
@@ -630,7 +661,7 @@ mod tests {
     async fn next_and_previous_track_stubs_succeed_without_touching_state() {
         let (service, state) = test_service_with_state();
 
-        service.play_track("song-1").await.unwrap();
+        service.play_track("song-1", || true).await.unwrap();
 
         service.next_track().await.unwrap();
         service.previous_track().await.unwrap();

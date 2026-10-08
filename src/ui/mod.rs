@@ -105,6 +105,14 @@ struct WinampPlayer {
     artists_generation: Arc<AtomicU64>,
     albums_generation: Arc<AtomicU64>,
     songs_generation: Arc<AtomicU64>,
+    /// The playback-request counter. Each `TrackSelected` bumps it and
+    /// carries its value into the async play as a guard: `play_track`
+    /// evaluates the guard while holding the state lock and commits the
+    /// track only if no newer play has been issued. Without it, two rapid
+    /// selections whose plays complete out of order let the older play
+    /// overwrite the newer one, so the Now Playing bar names the wrong
+    /// track.
+    plays_generation: Arc<AtomicU64>,
 }
 
 /// Which browse screen is showing. Payload-free: the albums and songs the
@@ -139,6 +147,7 @@ impl WinampPlayer {
             artists_generation: Arc::new(AtomicU64::new(0)),
             albums_generation: Arc::new(AtomicU64::new(0)),
             songs_generation: Arc::new(AtomicU64::new(0)),
+            plays_generation: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -278,10 +287,20 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 .known_titles
                 .entry(track_id.clone())
                 .or_insert_with(|| song.title.clone());
+            // A newer selection must win even when an older play's backend
+            // call finishes later: issue a generation and hand its guard to
+            // `play_track`, which evaluates it under the state lock so the
+            // older play cannot overwrite the newer track. The browse path
+            // uses the same [`RequestGeneration`] for the same reason.
+            let generation = RequestGeneration::issue(&player.plays_generation);
             let service = player.apple_music_service.clone();
             let id_for_report = track_id.clone();
             Task::perform(
-                async move { service.play_track(&track_id).await },
+                async move {
+                    service
+                        .play_track(&track_id, || generation.is_current())
+                        .await
+                },
                 move |result| {
                     played_or_reported(result, |err| {
                         eprintln!("{}", play_failure_report(&id_for_report, err))
