@@ -518,71 +518,75 @@ fn album_selected_flips_to_songs_view() {
     assert_view(&player, CurrentView::Songs);
 }
 
-// Navigating down must clear the level being entered: after browsing one
-// artist's albums, selecting a second artist must not leave the first
-// artist's albums on screen (or pressable) while the new fetch is in flight.
-// Clearing empties the buffer and marks it loading, so the view shows
-// "Loading…" and a press from the old rows finds no entry. The epoch is left
-// alone — not reset — so the reply that replaces the list gets a fresh epoch
-// and a press still carrying the old list's epoch cannot match the new list.
+/// Asserts the "entering a level clears it" contract shared by
+/// `artist_selected_clears_the_previous_artists_albums` and
+/// `album_selected_clears_the_previous_albums_songs`: the row press empties
+/// the child buffer and marks it loading, dropping any error; the reply that
+/// replaces the list gets a fresh epoch; and a press still carrying the old
+/// list's epoch schedules no work rather than resolving its index against the
+/// new list. `child` names the buffer under test, `select` is the row press,
+/// `next_reply` the `*Loaded` message that replaces the list, and
+/// `stale_press` builds the old-epoch press from the captured epoch. The
+/// caller seeds the parent list and the child's first reply before calling.
+fn assert_entering_a_level_clears_the_child_list<T>(
+    player: &mut WinampPlayer,
+    child: impl Fn(&mut WinampPlayer) -> &mut BrowseList<T>,
+    select: Message,
+    next_reply: Message,
+    stale_press: impl Fn(u64) -> Message,
+) {
+    let previous_epoch = child(player).epoch;
+
+    let _ = update(player, select);
+
+    assert!(child(player).items.is_empty());
+    assert!(child(player).loading);
+    assert!(child(player).error.is_none());
+
+    // The reply the fetch schedules lands with an epoch this list has never
+    // used, and a press from the previous list is rejected rather than
+    // resolving its index against the new one.
+    let _ = update(player, next_reply);
+    assert!(!child(player).loading);
+    assert_ne!(child(player).epoch, previous_epoch);
+    assert_no_task(update(player, stale_press(previous_epoch)));
+}
+
 #[test]
 fn artist_selected_clears_the_previous_artists_albums() {
     let (mut player, _state) = test_player();
     player.artists.items = vec![sample_artist()];
     let _ = update(&mut player, Message::AlbumsLoaded(vec![sample_album()]));
     player.albums.error = Some("music-library fetch failed: boom".to_string());
-    let previous_epoch = player.albums.epoch;
 
-    let _ = update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 });
-
-    assert!(player.albums.items.is_empty());
-    assert!(player.albums.loading);
-    assert!(player.albums.error.is_none());
-
-    // The reply the fetch schedules lands with an epoch this list has never
-    // used, and a press from the previous list is rejected rather than
-    // resolving its index against the new one.
-    let _ = update(&mut player, Message::AlbumsLoaded(vec![sample_album()]));
-    assert!(!player.albums.loading);
-    assert_ne!(player.albums.epoch, previous_epoch);
-    assert_no_task(update(
+    assert_entering_a_level_clears_the_child_list(
         &mut player,
-        Message::AlbumSelected {
-            epoch: previous_epoch,
-            index: 0,
-        },
-    ));
+        |player| &mut player.albums,
+        Message::ArtistSelected { epoch: 0, index: 0 },
+        Message::AlbumsLoaded(vec![sample_album()]),
+        |epoch| Message::AlbumSelected { epoch, index: 0 },
+    );
+
     assert_view(&player, CurrentView::Albums);
 }
 
-// The songs twin of the test above: stepping into an album clears the
-// previous album's songs rather than leaving them to be shown or pressed
-// while the new album's fetch is in flight, and the next reply gets a fresh
-// epoch so a press from the old list cannot match it.
+// The songs twin: stepping into an album clears the previous album's songs
+// rather than leaving them to be shown or pressed while the new album's
+// fetch is in flight.
 #[test]
 fn album_selected_clears_the_previous_albums_songs() {
     let (mut player, _state) = test_player();
     player.albums.items = vec![sample_album()];
     let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
     player.songs.error = Some("music-library fetch failed: boom".to_string());
-    let previous_epoch = player.songs.epoch;
 
-    let _ = update(&mut player, Message::AlbumSelected { epoch: 0, index: 0 });
-
-    assert!(player.songs.items.is_empty());
-    assert!(player.songs.loading);
-    assert!(player.songs.error.is_none());
-
-    let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
-    assert!(!player.songs.loading);
-    assert_ne!(player.songs.epoch, previous_epoch);
-    assert_no_task(update(
+    assert_entering_a_level_clears_the_child_list(
         &mut player,
-        Message::TrackSelected {
-            epoch: previous_epoch,
-            index: 0,
-        },
-    ));
+        |player| &mut player.songs,
+        Message::AlbumSelected { epoch: 0, index: 0 },
+        Message::SongsLoaded(second_album_songs()),
+        |epoch| Message::TrackSelected { epoch, index: 0 },
+    );
 }
 
 // The selection messages carry a row index and the epoch of the list that
