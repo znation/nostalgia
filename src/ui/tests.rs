@@ -1002,11 +1002,15 @@ fn assert_no_task(task: Task<Message>) {
 }
 
 /// Drives `message` through `update` and asserts the arm schedules no
-/// follow-up work. The no-op arms — a selection press the epoch/index guard
-/// rejects, Next/Previous with an empty `songs` buffer, and a title-bar
-/// window action before the window id resolves — all just return
-/// `Task::none()`, so the update-then-[`assert_no_task`] sequence lives here
-/// once and each call site names only the message it drives.
+/// follow-up work. Some arms are true no-ops — a selection press the
+/// epoch/index guard rejects, Next/Previous with an empty `songs` buffer, a
+/// title-bar window action before the window id resolves, and a shade
+/// measurement that arrives after the shade it belongs to — while others
+/// (`Play`, `Pause`, the volume nudges, and a shade toggle whose resize the
+/// missing window id skips) still mutate the shared state and only skip the
+/// follow-up task. Both kinds repeat the update-then-[`assert_no_task`]
+/// sequence, so it lives here once and each call site names only the message
+/// it drives.
 fn assert_message_schedules_no_work(player: &mut WinampPlayer, message: Message) {
     assert_no_task(update(player, message));
 }
