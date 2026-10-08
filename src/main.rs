@@ -20,6 +20,14 @@
 // the crate root, so the production modules below are declared `pub mod`: a
 // `pub` item inside a private module is unreachable and would go unchecked.
 #![deny(missing_docs)]
+// A public function returning a `Result` documents when it returns `Err`, so
+// a caller of the Apple Music seam can read the failure contract without
+// tracing the body. The `missing_errors_doc` lint keeps a new fallible public
+// function from landing without its `# Errors` section; it is
+// allow-by-default (a pedantic lint), so the landing gate's `-D warnings`
+// would not enable it, and denying it here makes the omission fail
+// `make check` like any other warning.
+#![deny(clippy::missing_errors_doc)]
 // Production code must not abort the player on an unexpected value: an
 // `unwrap`/`expect`/`panic`/`todo`/`unimplemented` crashes the process instead
 // of reporting the failure through the `AppleMusicError` seam or the clamps in

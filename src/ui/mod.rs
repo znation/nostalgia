@@ -47,6 +47,11 @@ use loading::{
 /// `main` must call this from a plain (non-async) context: iced drives its
 /// event loop synchronously on the calling thread, and `update`/`view` use
 /// `blocking_lock` on the shared state, which panics inside a runtime.
+///
+/// # Errors
+///
+/// Returns the error iced reports when the application fails to start, such
+/// as a window that cannot be created.
 pub fn init_ui(state: Arc<Mutex<AppState>>) -> iced::Result {
     iced::application(move || boot(state.clone()), update, view)
         .title("nostalgia")

@@ -153,6 +153,11 @@ impl AppleMusicService {
     /// plays out of order, and without the guard the older reply would
     /// overwrite the newer track in shared state; the UI passes the guard from
     /// its playback-request counter, exactly as the browse path does.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when `track_id` is blank (empty or only
+    /// whitespace) or carries a control character.
     pub async fn play_track(
         &self,
         track_id: &str,
@@ -172,6 +177,11 @@ impl AppleMusicService {
     }
 
     /// All favorite artists (every artist in the sample library).
+    ///
+    /// # Errors
+    ///
+    /// The stub never fails; the `Result` is the seam a real Apple Music
+    /// backend reports a failed request through.
     pub async fn get_favorite_artists(&self) -> Result<Vec<Artist>, AppleMusicError> {
         Ok(sample_library().artists.clone())
     }
@@ -184,6 +194,11 @@ impl AppleMusicService {
     /// caller bug, and returning the empty list would report it as the
     /// ordinary "no albums" case. The same id guard
     /// [`AppleMusicService::play_track`] applies to its track id.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when `artist_id` is blank (empty or only
+    /// whitespace) or carries a control character.
     pub async fn get_albums_by_artist(
         &self,
         artist_id: &str,
@@ -197,6 +212,11 @@ impl AppleMusicService {
     /// A blank `album_id` — empty or only whitespace — or one carrying a
     /// terminal control character is rejected with an [`AppleMusicError`], the
     /// album-query twin of [`AppleMusicService::get_albums_by_artist`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when `album_id` is blank (empty or only
+    /// whitespace) or carries a control character.
     pub async fn get_songs_from_album(&self, album_id: &str) -> Result<Vec<Song>, AppleMusicError> {
         ensure_id_is_valid(album_id, IdKind::Album)?;
         Ok(lookup(&sample_library().songs_by_album, album_id))
