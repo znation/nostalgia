@@ -649,33 +649,23 @@ mod tests {
     // The placeholder distinguishes a list whose first reply has not landed
     // yet from one that loaded empty: while `loading` is true the panel says
     // it is loading instead of claiming the library is empty; once a reply
-    // lands (possibly an empty one) the per-level wording applies.
+    // lands (possibly an empty one) the per-level wording applies. The exact
+    // wording is pinned by `empty_list_label_names_the_empty_browse_level`,
+    // so here the loaded branch only pins that `browse_placeholder` delegates
+    // to `empty_list_label`.
     #[test]
     fn browse_placeholder_distinguishes_loading_from_an_empty_list() {
-        assert_eq!(
-            browse_placeholder(&CurrentView::Artists, true, None),
-            "Loading…"
-        );
-        assert_eq!(
-            browse_placeholder(&CurrentView::Albums, true, None),
-            "Loading…"
-        );
-        assert_eq!(
-            browse_placeholder(&CurrentView::Songs, true, None),
-            "Loading…"
-        );
-        assert_eq!(
-            browse_placeholder(&CurrentView::Artists, false, None),
-            "No artists"
-        );
-        assert_eq!(
-            browse_placeholder(&CurrentView::Albums, false, None),
-            "No albums"
-        );
-        assert_eq!(
-            browse_placeholder(&CurrentView::Songs, false, None),
-            "No songs"
-        );
+        for view in [
+            CurrentView::Artists,
+            CurrentView::Albums,
+            CurrentView::Songs,
+        ] {
+            assert_eq!(browse_placeholder(&view, true, None), "Loading…");
+            assert_eq!(
+                browse_placeholder(&view, false, None),
+                empty_list_label(&view)
+            );
+        }
     }
 
     // A failed fetch must read as a failure, not as an empty library: when an
