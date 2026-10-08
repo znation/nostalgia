@@ -87,6 +87,23 @@ fn token_request(state: &str, user_token: &str) -> String {
     )
 }
 
+/// Drives one `authorize_with_timeout` run against `flow` as the browser
+/// opener: starts `flow` in the background with [`background`], calls the real
+/// `authorize_with_timeout` with the sample developer token and the standard
+/// five-second deadline, joins the opener threads, and returns the result.
+///
+/// Tests that inject their own token or deadline call `authorize_with_timeout`
+/// directly instead.
+fn authorize_with_flow<F>(flow: F) -> Result<MusicKitSession, AppleMusicError>
+where
+    F: FnOnce(u16, String) + Send + 'static,
+{
+    let (opener, handles) = background(flow);
+    let result = authorize_with_timeout(SAMPLE_DEVELOPER_TOKEN, &opener, Duration::from_secs(5));
+    join_all(&handles);
+    result
+}
+
 #[test]
 fn validate_developer_token_accepts_a_three_segment_jwt() {
     assert!(validate_developer_token(SAMPLE_DEVELOPER_TOKEN).is_ok());
@@ -166,18 +183,15 @@ fn debug_redacts_both_tokens() {
 fn authorize_returns_a_session_on_a_matching_callback() {
     let observed = Arc::new(Mutex::new(Vec::<String>::new()));
     let observed_for_flow = Arc::clone(&observed);
-    let (opener, handles) = background(move |port, state| {
+    let session = authorize_with_flow(move |port, state| {
         let page = request(port, "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
         let response = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
         let mut observed = observed_for_flow.lock().expect("observed lock");
         observed.push(state);
         observed.push(page);
         observed.push(response);
-    });
-
-    let session = authorize_with_timeout(SAMPLE_DEVELOPER_TOKEN, &opener, Duration::from_secs(5))
-        .expect("authorize succeeds");
-    join_all(&handles);
+    })
+    .expect("authorize succeeds");
 
     assert_eq!(session.developer_token, SAMPLE_DEVELOPER_TOKEN);
     assert_eq!(session.user_token, SAMPLE_USER_TOKEN);
@@ -197,18 +211,15 @@ fn authorize_serves_the_page_for_the_browsers_query_request() {
     // would 404 the page and the sign-in would never start.
     let observed = Arc::new(Mutex::new(String::new()));
     let observed_for_flow = Arc::clone(&observed);
-    let (opener, handles) = background(move |port, state| {
+    authorize_with_flow(move |port, state| {
         let page = request(
             port,
             &format!("GET /?state={state} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"),
         );
         let _ = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
         *observed_for_flow.lock().expect("observed lock") = page;
-    });
-
-    authorize_with_timeout(SAMPLE_DEVELOPER_TOKEN, &opener, Duration::from_secs(5))
-        .expect("the real callback still succeeds");
-    join_all(&handles);
+    })
+    .expect("the real callback still succeeds");
 
     let page = observed.lock().expect("observed lock");
     assert!(page.starts_with("HTTP/1.1 200"));
@@ -251,25 +262,19 @@ fn authorize_rejects_a_malformed_developer_token_without_opening() {
 
 #[test]
 fn authorize_rejects_a_callback_with_the_wrong_state() {
-    let (opener, handles) = background(|port, _state| {
+    let error = authorize_with_flow(|port, _state| {
         let _ = request(port, &token_request("wrong-state", SAMPLE_USER_TOKEN));
-    });
-
-    let error = authorize_with_timeout(SAMPLE_DEVELOPER_TOKEN, &opener, Duration::from_secs(5))
-        .expect_err("a wrong state is rejected");
-    join_all(&handles);
+    })
+    .expect_err("a wrong state is rejected");
     assert!(error.to_string().contains("state"));
 }
 
 #[test]
 fn authorize_rejects_a_callback_with_an_empty_user_token() {
-    let (opener, handles) = background(|port, state| {
+    let error = authorize_with_flow(|port, state| {
         let _ = request(port, &token_request(&state, ""));
-    });
-
-    let error = authorize_with_timeout(SAMPLE_DEVELOPER_TOKEN, &opener, Duration::from_secs(5))
-        .expect_err("an empty user token is rejected");
-    join_all(&handles);
+    })
+    .expect_err("an empty user token is rejected");
     assert!(error.to_string().contains("user token"));
 }
 
@@ -277,15 +282,12 @@ fn authorize_rejects_a_callback_with_an_empty_user_token() {
 fn authorize_ignores_an_unknown_request_before_the_callback() {
     let observed = Arc::new(Mutex::new(String::new()));
     let observed_for_flow = Arc::clone(&observed);
-    let (opener, handles) = background(move |port, state| {
+    authorize_with_flow(move |port, state| {
         let missing = request(port, "GET /nope HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
         let _ = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
         *observed_for_flow.lock().expect("observed lock") = missing;
-    });
-
-    authorize_with_timeout(SAMPLE_DEVELOPER_TOKEN, &opener, Duration::from_secs(5))
-        .expect("the real callback still succeeds");
-    join_all(&handles);
+    })
+    .expect("the real callback still succeeds");
 
     assert!(
         observed
@@ -299,7 +301,7 @@ fn authorize_ignores_an_unknown_request_before_the_callback() {
 fn authorize_rejects_a_foreign_host_header() {
     let observed = Arc::new(Mutex::new(String::new()));
     let observed_for_flow = Arc::clone(&observed);
-    let (opener, handles) = background(move |port, state| {
+    authorize_with_flow(move |port, state| {
         // A DNS-rebinding page reaches the loopback socket under its own
         // hostname, so its `Host` header names that hostname, not 127.0.0.1.
         // The response must not carry the sign-in page (and its developer
@@ -307,11 +309,8 @@ fn authorize_rejects_a_foreign_host_header() {
         let rebound = request(port, "GET / HTTP/1.1\r\nHost: evil.example\r\n\r\n");
         let _ = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
         *observed_for_flow.lock().expect("observed lock") = rebound;
-    });
-
-    authorize_with_timeout(SAMPLE_DEVELOPER_TOKEN, &opener, Duration::from_secs(5))
-        .expect("a foreign host does not abort the flow");
-    join_all(&handles);
+    })
+    .expect("a foreign host does not abort the flow");
 
     let rebound = observed.lock().expect("observed lock");
     assert!(
@@ -326,31 +325,25 @@ fn authorize_rejects_a_foreign_host_header() {
 
 #[test]
 fn authorize_survives_a_connection_that_closes_early() {
-    let (opener, handles) = background(|port, state| {
+    authorize_with_flow(|port, state| {
         // A client that connects and closes without a complete request.
         drop(TcpStream::connect(("127.0.0.1", port)).expect("connect"));
         // Then the real callback.
         let _ = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
-    });
-
-    authorize_with_timeout(SAMPLE_DEVELOPER_TOKEN, &opener, Duration::from_secs(5))
-        .expect("an aborted connection does not abort the flow");
-    join_all(&handles);
+    })
+    .expect("an aborted connection does not abort the flow");
 }
 
 #[test]
 fn authorize_survives_an_oversized_content_length() {
-    let (opener, handles) = background(|port, state| {
+    authorize_with_flow(|port, state| {
         // `Content-Length: usize::MAX` overflows a naive `body_start + len`.
         let oversized = "POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 18446744073709551615\r\n\r\n";
         let _ = request(port, oversized);
         // Then the real callback.
         let _ = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
-    });
-
-    authorize_with_timeout(SAMPLE_DEVELOPER_TOKEN, &opener, Duration::from_secs(5))
-        .expect("an oversized Content-Length does not abort the flow");
-    join_all(&handles);
+    })
+    .expect("an oversized Content-Length does not abort the flow");
 }
 
 /// A connected loopback pair: the server side handed to `read_http_request`
