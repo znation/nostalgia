@@ -45,6 +45,39 @@ an unrelated code edit. (Telemetry's BUGS.md-only edits do land, e.g. 3738f29,
 so the "md-only" block is role-scoped.) The role re-authors the same change
 until the "3 consecutive tick failures" breaker trips.
 
+### Transport buttons resize to their label text, so pressing Play/Pause reflows the whole control row (found by qa 2026-10-07)
+
+Symptom: the Play/Pause, Repeat, and EQ on/off buttons size to their text
+(`labeled_button` builds `Button::new(Text::new(label))` with no width), so a
+label change resizes its button and shifts everything after it. Pressing Play
+swaps "Play" for the wider "Pause": the button grows 15px and Stop, Previous,
+Next, Repeat, and the volume slider all jump 14-15px right. Pressing it again
+swaps back and the row returns to its rest layout exactly. Repeat ("Repeat:
+Off" ↔ "Repeat: On") and EQ ("EQ: Off" ↔ "EQ: On") change their labels too,
+but each moves its button only ~1px, so Play/Pause is the visible case.
+
+How to reproduce (Xwayland, `DISPLAY=:1`, `WAYLAND_DISPLAY` unset; the window
+is 1024x768 at root (1408, 683); the transport row's rest baseline is window
+y=45, i.e. root y=728):
+- Build and run the binary, capture the window with
+  `xwd -display :1 -id <wid> -out w.xwd && convert w.xwd w.png`, then click the
+  Play button (root ~1432,728) and capture again.
+- Rest state, button face x-ranges at y=45: Play 0..49, Stop 71..124,
+  Previous 145..228, Next 250..303, Repeat 325..428, volume slider groove
+  starts at 496.
+- After the Play click (label "Pause"): Play/Pause 0..64, Stop 85..138,
+  Previous 159..243, Next 264..319, Repeat 340..443, slider groove starts at
+  510.
+- Clicking Play/Pause again restores the rest-state x-ranges (transport-row
+  pixel diff 0).
+
+Suspected cause: `labeled_button` (`src/ui/views.rs`) gives every text-labelled
+chrome button no explicit width, so iced sizes it to its label;
+`view_transport_controls` and `view_equalizer` place those buttons in a `Row`,
+so one label's width change reflows the row. A fixed-width transport/EQ button
+(or a fixed-width icon) would keep the row stable, as a pixel-perfect Winamp
+transport expects.
+
 ## Fixed
 
 ### Main's test target stopped compiling after perf changed `TrackSelected` to a struct variant (found 2026-10-06, fixed 2026-10-06)
