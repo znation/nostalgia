@@ -29,7 +29,167 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Add the MusicKit loopback authorization module (found 2026-10-08)
+
+Answer to "How should Nostalgia authenticate to Apple Music?" chose the
+MusicKit authorization flow (see QUESTIONS.md `## Answered`, decision
+2026-10-08). The mechanism decided here is MusicKit JS served from a loopback
+page opened in the system browser, not an embedded webview: the project's
+principles prefer the standard library over a new dependency, native MusicKit
+is macOS-only and cannot build on the Linux landing gate, and an embedded
+webview would add a platform-specific dependency and have to be driven on
+iced's winit event loop. The developer token stays owner-side
+(`APPLE_MUSIC_DEVELOPER_TOKEN`, wired by the sibling plan) because signing the
+ES256 JWT is a secret-keeping concern. This entry delivers the flow; the
+sibling entry "Wire the MusicKit session into `AppleMusicService`" stores its
+result.
+
+**Depends on.** Nothing; the sibling wiring plan depends on this one.
+
+**Goal.** A synchronous, standard-library-only module obtains a MusicKit *user
+token* by running MusicKit JS `authorize()` in the user's browser and capturing
+the token Apple's page posts back to a one-shot loopback HTTP server, returning
+a `MusicKitSession` (developer token + user token).
+
+**Approach.**
+
+- A new `music_kit_auth` module beside `src/apple_music.rs`, declared
+  `mod music_kit_auth;` in `src/main.rs` beside the other module declarations.
+- `pub struct MusicKitSession { pub developer_token: String, pub user_token: String }`
+  derives `Clone, PartialEq, Eq` and implements `Debug` by hand, printing
+  `"<redacted>"` for both token fields so a session never leaks into a log or a
+  failed-assertion message.
+- `pub fn validate_developer_token(token: &str) -> Result<(), AppleMusicError>`:
+  accepts exactly three non-empty dot-separated segments of `[A-Za-z0-9_-]`
+  (a JWT shape). This rejects a blank or malformed token and guarantees the
+  value is safe to interpolate into the page's JavaScript string.
+- `pub fn authorize(developer_token: &str, open_url: &dyn Fn(&str) -> std::io::Result<()>) -> Result<MusicKitSession, AppleMusicError>`
+  delegates to a private `authorize_with_timeout(developer_token, open_url, AUTH_TIMEOUT)`
+  where `const AUTH_TIMEOUT: Duration = Duration::from_secs(300)`, so a test can
+  pass a short deadline.
+  - `validate_developer_token` first.
+  - Binds `std::net::TcpListener` to `127.0.0.1:0`, reads the assigned port,
+    and builds a `state` nonce by hex-formatting
+    `std::collections::hash_map::RandomState::new().build_hasher().finish()`
+    (std-only randomness).
+  - Calls `open_url(&format!("http://127.0.0.1:{port}/?state={nonce}"))`; an
+    `Err` becomes an `AppleMusicError`.
+  - Sets the listener non-blocking and loops `accept()` with a short
+    `thread::sleep` until `POST /token` arrives or the deadline passes (a
+    deadline error otherwise).
+  - `GET /` answers `200` with `AUTH_PAGE`, a `const &str` whose
+    `{{DEVELOPER_TOKEN}}` and `{{STATE}}` placeholders are replaced by the real
+    values. The page loads
+    `https://js-cdn.music.apple.com/musickit/v3/musickit.js`, on `musickitloaded`
+    calls `MusicKit.configure({ developerToken, app: { name: "Nostalgia", build: env!("CARGO_PKG_VERSION") } })`
+    then `MusicKit.getInstance().authorize()`, and POSTs
+    `state=<nonce>&userToken=<token>` (form-urlencoded) to `/token`. The
+    loopback origin is a browser secure context, so no TLS is needed; if Apple
+    rejects the origin, the page's error is surfaced and the token's `origin`
+    claim is the first thing to check.
+  - `POST /token` parses the request line, headers, and `Content-Length` body by
+    hand (std-only; `serde_json` is test-only), reads `state` and `userToken`,
+    and returns the session only when `state` equals the nonce and `userToken`
+    is a non-empty JWT by `validate_developer_token`'s segment rule. Any other
+    request gets `404` and the loop continues; a bad callback gets `400`. The
+    success body tells the user the browser tab can be closed.
+- `pub fn open_in_browser(url: &str) -> std::io::Result<()>` dispatches on
+  `cfg!(target_os = "macos")` → `open`, `cfg!(target_os = "windows")` →
+  `cmd /C start "" <url>`, otherwise `xdg-open`, returning the spawn result.
+- `authorize`, `open_in_browser`, and `validate_developer_token` carry an
+  item-level `#[allow(dead_code)]` with a comment naming the sibling wiring plan
+  as the caller, matching the existing seam allowances in `src/apple_music.rs`;
+  the wiring plan removes it.
+- Module tests live in the `music_kit_auth` module and drive the callback with
+  a fake `open_url` closure that spawns a `std::thread`.
+
+**Files touched.** the new `music_kit_auth` module, `src/main.rs`.
+
+**Acceptance criteria.**
+
+- `make check` passes (`cargo fmt --check`, `cargo clippy --all-targets -- -D
+  warnings`, `cargo doc` with rustdoc warnings denied, `cargo test`).
+- `validate_developer_token` accepts a three-segment base64url JWT and rejects a
+  blank value, a one-segment value, and a value containing `"` or `\`.
+- `MusicKitSession`'s `Debug` output contains neither token.
+- With a fake opener that GETs `/` and then POSTs the matching `state` and a
+  sample JWT `userToken`, `authorize` returns a session carrying both tokens,
+  and the served page contains the developer token and the nonce.
+- `authorize` rejects a blank or malformed developer token; rejects a callback
+  whose `state` differs from the nonce and one whose `userToken` is empty; and a
+  fake opener that never calls back makes `authorize_with_timeout` return a
+  timeout error within a short test deadline instead of hanging.
+- Manual check (`cargo run` once the sibling wiring plan lands): with a real
+  `APPLE_MUSIC_DEVELOPER_TOKEN`, the system browser opens the sign-in page, and
+  completing sign-in logs that a session was stored.
+
+### Wire the MusicKit session into `AppleMusicService` (found 2026-10-08)
+
+The sibling entry "Add the MusicKit loopback authorization module" produces a
+`MusicKitSession`; this entry stores it on the service and lets the app obtain
+one at startup. It lands independently once that module's public API exists.
+
+**Depends on.** "Add the MusicKit loopback authorization module"
+(`MusicKitSession`, `authorize`, `open_in_browser`, `validate_developer_token`).
+
+**Goal.** `AppleMusicService` holds the authenticated MusicKit session and can
+obtain one from `APPLE_MUSIC_DEVELOPER_TOKEN` off the UI thread; the
+sample-library queries keep answering until a later REST-integration plan
+consumes the session.
+
+**Approach.**
+
+- `src/apple_music.rs`:
+  - Remove `struct AppleMusicToken` and the `use serde::{Deserialize, Serialize};`
+    import (the struct was its only serde user), and replace the
+    `token: Option<AppleMusicToken>` field with
+    `session: Arc<std::sync::Mutex<Option<crate::music_kit_auth::MusicKitSession>>>`
+    so the blocking flow runs on a `std::thread` without a tokio runtime. Drop
+    the old field's `#[allow(dead_code)]`.
+  - `AppleMusicService::new` starts `session` as `None`.
+  - `pub fn authenticate(&self, developer_token: &str) -> Result<(), AppleMusicError>`
+    delegates to a private
+    `authenticate_with(&self, developer_token, authorize: &dyn Fn(&str) -> Result<MusicKitSession, AppleMusicError>)`
+    that stores the returned session under the mutex and leaves any previous
+    session in place on error. The public method passes the real flow
+    (`|dt| crate::music_kit_auth::authorize(dt, &crate::music_kit_auth::open_in_browser)`).
+    Both are synchronous and blocking by design; callers run them off the UI
+    thread.
+  - `pub fn session(&self) -> Option<MusicKitSession>` clones the stored session;
+    it carries an `#[allow(dead_code)]` comment naming the future REST plan as
+    its caller, matching the existing seam style.
+  - `init_service(state)`: read `APPLE_MUSIC_DEVELOPER_TOKEN`; when it is set
+    and non-blank, spawn a `std::thread` that builds `AppleMusicService::new(state)`,
+    calls `authenticate`, and logs success or the error; otherwise log that
+    sign-in is skipped and the sample library stays in use. The UI thread never
+    blocks.
+  - Update the module doc and `AppleMusicError` docs to describe the session
+    seam instead of the token stub.
+- `Cargo.toml`: the `serde` `derive` comment names `apple_music` as a user;
+  after this change only `library` uses the derive, so trim the comment.
+- Tests in `src/apple_music.rs`: delete the three `AppleMusicToken` serde tests
+  (`apple_music_token_round_trips_through_json`,
+  `apple_music_token_deserialization_rejects_missing_required_fields`,
+  `apple_music_token_deserialization_ignores_unknown_fields`), plus their now-
+  unused `sample_token`, `token_payload`, `use serde_json::json;`, and
+  `assert_every_field_required` / `assert_serializes_as` /
+  `assert_unknown_fields_tolerated` imports (those test-support helpers stay —
+  `src/library.rs` still uses them); keep `assert_ids`. Add session tests.
+
+**Files touched.** `src/apple_music.rs`, `Cargo.toml`.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- `AppleMusicService::new` has `session()` `None`.
+- `authenticate_with` stores the `MusicKitSession` returned by a stub flow, so
+  `session()` returns it; a stub flow returning `Err` propagates the
+  `AppleMusicError` and leaves an already-stored session unchanged.
+- The existing browse and playback tests still pass unchanged (the
+  sample-library seam is untouched).
+- Manual check (`cargo run` with a real developer token): the browser opens, a
+  completed sign-in logs that the session was stored, and the browse UI behaves
+  as before.
 
 ## Done
 

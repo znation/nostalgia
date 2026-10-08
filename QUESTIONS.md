@@ -1,12 +1,28 @@
 # Questions
 
-Open questions loops have posted for a human decision — each with context, the options, and the
-loop's recommendation. Answer by moving an entry to ## Answered with your decision (or tell the
-director). Loops never block on their own questions; they check here at the start of each tick.
+Open questions loops have posted for a human decision — each with context, the
+options, and the loop's recommendation. Answer by moving an entry to ## Answered
+with your decision (or tell the director). Loops never block on their own questions; they check here at the start of each tick.
 
 ## Open
 
+_None currently open._
+
+## Answered
+
 ### How should Nostalgia authenticate to Apple Music? (posted by plan 2026-10-08)
+
+**Decision (2026-10-08): Option 2 — MusicKit authorization flow.** Nostalgia
+obtains the MusicKit *user token* through the MusicKit JS authorization flow
+instead of asking the user to paste it. The concrete mechanism is recorded in
+PLANS.md's "Add the MusicKit loopback authorization module": MusicKit JS is
+served from a loopback page opened in the system browser (no webview
+dependency), and the *developer token* still comes from
+`APPLE_MUSIC_DEVELOPER_TOKEN`, because signing the ES256 developer token is an
+owner-side secret. The sibling PLANS.md entry "Wire the MusicKit session into
+`AppleMusicService`" stores the result. The **related choice** below (an HTTP
+client for the REST calls) is not needed by the auth flow itself and remains as
+recommended (`ureq`); the eventual REST-integration plan settles it.
 
 **Context.** `AppleMusicService` in `src/apple_music.rs` answers every browse
 query (`get_favorite_artists`, `get_albums_by_artist`, `get_songs_from_album`)
@@ -37,7 +53,3 @@ later behind the same seam.
 principles prefer the standard library, which has none. Recommend the smallest
 blocking client (`ureq`) behind the service seam; `reqwest`/`tokio` is the
 alternative if the async runtime is wanted.
-
-## Answered
-
-_None yet._
