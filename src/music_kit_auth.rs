@@ -21,7 +21,9 @@
 //! overflowing `Content-Length`. Per-connection failures — a client that closes
 //! early, stalls, or declares an oversized body — are ignored and the server
 //! keeps waiting for the real callback; only a well-formed callback with the
-//! wrong `state` or an invalid user token ends the flow with an error.
+//! wrong `state` or an invalid user token ends the flow with an error. Each
+//! connection's reads are capped by the time left before [`AUTH_TIMEOUT`], so a
+//! client that dribbles bytes cannot hold the flow past its deadline.
 
 use std::collections::hash_map::RandomState;
 use std::hash::{BuildHasher, Hasher};
@@ -36,7 +38,7 @@ use crate::apple_music::AppleMusicError;
 mod http;
 mod page;
 
-use http::{CONNECTION_READ_TIMEOUT, read_http_request, write_response};
+use http::{read_http_request, write_response};
 use page::{SUCCESS_PAGE, render_auth_page};
 
 /// How long [`authorize`] waits for the browser callback before giving up:
@@ -148,7 +150,7 @@ fn authorize_with_timeout(
         }
         match listener.accept() {
             Ok((mut stream, _address)) => {
-                match serve_connection(&mut stream, developer_token, &nonce) {
+                match serve_connection(&mut stream, developer_token, &nonce, deadline) {
                     Connection::Authorized(session) => return Ok(session),
                     Connection::Continue => {}
                     Connection::Rejected(error) => return Err(error),
@@ -198,15 +200,19 @@ enum Connection {
 
 /// Serves one accepted connection, turning transport-level failures into
 /// [`Connection::Continue`] so a bad connection never aborts the sign-in.
-fn serve_connection(stream: &mut TcpStream, developer_token: &str, nonce: &str) -> Connection {
+fn serve_connection(
+    stream: &mut TcpStream,
+    developer_token: &str,
+    nonce: &str,
+    deadline: Instant,
+) -> Connection {
     // The accepted socket is blocking on the platforms this runs on, but be
     // explicit: the reader relies on a blocking read with a timeout.
     if stream.set_nonblocking(false).is_err() {
         return Connection::Continue;
     }
-    let _ = stream.set_read_timeout(Some(CONNECTION_READ_TIMEOUT));
 
-    let request = match read_http_request(stream) {
+    let request = match read_http_request(stream, deadline) {
         Ok(Some(request)) => request,
         // A connection that closed early, stalled, or declared an oversized
         // request is not the callback; keep waiting for the real one.

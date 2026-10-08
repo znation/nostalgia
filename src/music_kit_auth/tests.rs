@@ -248,6 +248,37 @@ fn authorize_times_out_without_a_callback_and_names_the_bound() {
     );
 }
 
+#[test]
+fn authorize_deadline_bounds_a_stalled_connection() {
+    // A client that connects and sends a partial request, then stalls,
+    // must not outlive the flow's deadline: `AUTH_TIMEOUT` bounds the
+    // whole flow, not just the accept loop. Before the read timeout was
+    // capped by the deadline, this waited out `CONNECTION_READ_TIMEOUT`
+    // (five seconds) despite the much shorter injected deadline.
+    let (opener, handles) = background(|port, _state| {
+        let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect");
+        // A header that never completes: no `\r\n\r\n`, then hold.
+        stream
+            .write_all(b"POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\n")
+            .expect("write a partial request");
+        // Block until the server gives up and closes the connection.
+        let mut sink = [0u8; 64];
+        let _ = stream.read(&mut sink);
+    });
+
+    let start = Instant::now();
+    let error = authorize_with_timeout(SAMPLE_DEVELOPER_TOKEN, &opener, Duration::from_millis(150))
+        .expect_err("a stalled connection still times out");
+    let elapsed = start.elapsed();
+    join_all(&handles);
+
+    assert!(error.to_string().contains("timed out"));
+    assert!(
+        elapsed < Duration::from_secs(1),
+        "the flow waited {elapsed:?} for a stalled connection"
+    );
+}
+
 // `AUTH_TIMEOUT` is production behavior — how long `authorize` waits for
 // the browser callback — but `authorize` is its only reader and the
 // timeout tests above inject their own deadline, so a changed constant
