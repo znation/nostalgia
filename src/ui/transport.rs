@@ -101,6 +101,23 @@ mod tests {
         );
     }
 
+    /// Asserts both directions on the one-song fixture step to its only song
+    /// from `current`. The two single-song tests differ only in the starting
+    /// current — the song itself, or none at all — so the fixture and the
+    /// two-direction assertion live here once and each test names only the
+    /// branch it pins.
+    fn assert_single_song_steps_to_itself(current: Option<&str>) {
+        let songs = single_song_album();
+        assert_eq!(
+            next_track_id(&songs, current, false),
+            Some("song-1".to_string())
+        );
+        assert_eq!(
+            previous_track_id(&songs, current, false),
+            Some("song-1".to_string())
+        );
+    }
+
     #[test]
     fn empty_list_is_a_noop_for_both_directions() {
         assert_eq!(next_track_id(&[], Some("song-1"), false), None);
@@ -165,15 +182,7 @@ mod tests {
 
     #[test]
     fn single_song_steps_to_itself_in_both_directions() {
-        let songs = single_song_album();
-        assert_eq!(
-            next_track_id(&songs, Some("song-1"), false),
-            Some("song-1".to_string())
-        );
-        assert_eq!(
-            previous_track_id(&songs, Some("song-1"), false),
-            Some("song-1".to_string())
-        );
+        assert_single_song_steps_to_itself(Some("song-1"));
     }
 
     // The no-current branch on a one-song list is the one intersection the
@@ -188,15 +197,7 @@ mod tests {
     // other test and only fail here.
     #[test]
     fn single_song_with_no_current_steps_to_itself_in_both_directions() {
-        let songs = single_song_album();
-        assert_eq!(
-            next_track_id(&songs, None, false),
-            Some("song-1".to_string())
-        );
-        assert_eq!(
-            previous_track_id(&songs, None, false),
-            Some("song-1".to_string())
-        );
+        assert_single_song_steps_to_itself(None);
     }
 
     // The documented no-current contract is direction-only — the first song
