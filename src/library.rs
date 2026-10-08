@@ -50,6 +50,29 @@ mod tests {
     };
     use serde_json::json;
 
+    /// The full, valid JSON wire payload for an [`Artist`]: the hand-written
+    /// shape a real Apple Music response would carry. Used both to pin the
+    /// serialized field names (`artist_serializes_field_names_and_round_trips`)
+    /// and as the full payload the missing-field probe omits one key from.
+    /// Hand-written rather than derived from [`sample_artist`], so the
+    /// serialized field names stay pinned: a `#[serde(rename)]` would change
+    /// `to_value(sample_artist())` but not this literal.
+    fn artist_payload() -> serde_json::Value {
+        json!({ "id": "artist-1", "name": "The Sample Band" })
+    }
+
+    /// The [`Album`] twin of [`artist_payload`]: the full, valid wire payload
+    /// the album round-trip and missing-field tests share.
+    fn album_payload() -> serde_json::Value {
+        json!({ "id": "album-1", "title": "First Record", "artist_id": "artist-1" })
+    }
+
+    /// The [`Song`] twin of [`artist_payload`]: the full, valid wire payload
+    /// the song round-trip and missing-field tests share.
+    fn song_payload() -> serde_json::Value {
+        json!({ "id": "song-1", "title": "Opening", "album_id": "album-1" })
+    }
+
     /// The real Apple Music API will hand these types to the app as JSON, so
     /// the round-trip (out and back through `serde_json`) is the contract that
     /// lets a live service replace the stub without touching the model or UI.
@@ -57,10 +80,7 @@ mod tests {
     fn artist_serializes_field_names_and_round_trips() {
         // Field names are serialized as-is (no renames): the wire contract a
         // real Apple Music payload must satisfy.
-        assert_serializes_as(
-            sample_artist(),
-            json!({ "id": "artist-1", "name": "The Sample Band" }),
-        );
+        assert_serializes_as(sample_artist(), artist_payload());
     }
 
     #[test]
@@ -69,19 +89,13 @@ mod tests {
         // wire contract a real Apple Music payload must satisfy. The
         // round-trip alone passes for *any* field names, so the exact JSON
         // shape is pinned before it.
-        assert_serializes_as(
-            sample_album(),
-            json!({ "id": "album-1", "title": "First Record", "artist_id": "artist-1" }),
-        );
+        assert_serializes_as(sample_album(), album_payload());
     }
 
     #[test]
     fn song_serializes_field_names_and_round_trips() {
         // The Song twin of the Album and Artist field-name pins.
-        assert_serializes_as(
-            sample_song(),
-            json!({ "id": "song-1", "title": "Opening", "album_id": "album-1" }),
-        );
+        assert_serializes_as(sample_song(), song_payload());
     }
 
     #[test]
@@ -135,9 +149,7 @@ mod tests {
     fn deserialization_rejects_missing_required_fields() {
         // A payload missing any required field must error, not silently yield
         // a half-populated model the UI would render as blank data.
-        assert_every_field_required::<Artist>(
-            json!({ "id": "artist-1", "name": "The Sample Band" }),
-        );
+        assert_every_field_required::<Artist>(artist_payload());
     }
 
     // The missing-field contract holds for every model type, not just Artist:
@@ -148,15 +160,11 @@ mod tests {
     // rendering blank data. Each gets the same every-field probe as Artist.
     #[test]
     fn album_deserialization_rejects_missing_required_fields() {
-        assert_every_field_required::<Album>(
-            json!({ "id": "album-1", "title": "First Record", "artist_id": "artist-1" }),
-        );
+        assert_every_field_required::<Album>(album_payload());
     }
 
     #[test]
     fn song_deserialization_rejects_missing_required_fields() {
-        assert_every_field_required::<Song>(
-            json!({ "id": "song-1", "title": "Opening", "album_id": "album-1" }),
-        );
+        assert_every_field_required::<Song>(song_payload());
     }
 }
