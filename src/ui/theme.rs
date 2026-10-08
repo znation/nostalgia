@@ -147,6 +147,43 @@ mod tests {
         assert_ne!(PLAYING_ROW_HIGHLIGHT, LCD_BACKGROUND);
     }
 
+    // The tests above read each palette slot against the named constant that
+    // feeds it, so a constant and its reader can drift together and clear the
+    // suite. The base-skin RGB values are this project's visual contract — a
+    // Winamp 2.x clone lives or dies on its palette — and the remaining named
+    // colours are read only constant-to-constant (or by inline widget
+    // closures iced exposes no way to introspect). Pin every literal here,
+    // plus the bevel and button-face orderings their doc comments promise, so
+    // an accidental recolour is caught rather than shipped.
+    #[test]
+    fn base_skin_colours_keep_their_documented_literal_values() {
+        assert_eq!(WINDOW_BACKGROUND, Color::from_rgb(0.18, 0.18, 0.18));
+        assert_eq!(TEXT, Color::from_rgb(0.87, 0.87, 0.87));
+        assert_eq!(TITLE_BLUE, Color::from_rgb(0.0, 0.0, 0.55));
+        assert_eq!(LCD_GREEN, Color::from_rgb(0.0, 1.0, 0.0));
+        assert_eq!(PANEL_EDGE_LIGHT, Color::from_rgb(0.55, 0.55, 0.55));
+        assert_eq!(PANEL_EDGE_DARK, Color::from_rgb(0.05, 0.05, 0.05));
+        assert_eq!(BUTTON_FACE, Color::from_rgb(0.30, 0.30, 0.30));
+        assert_eq!(BUTTON_FACE_HOVERED, Color::from_rgb(0.38, 0.38, 0.38));
+        assert_eq!(BUTTON_FACE_PRESSED, Color::from_rgb(0.22, 0.22, 0.22));
+
+        // The bevel's two edges must stay distinct, with the light edge
+        // actually lighter, or a raised panel reads flat and a sunken one
+        // disappears. Bound to locals so each comparison is a runtime check
+        // rather than the constant assertion clippy rejects.
+        let (light, dark) = (PANEL_EDGE_LIGHT, PANEL_EDGE_DARK);
+        assert!(light.r > dark.r);
+
+        // The button face must sit above the window face and darken on hover,
+        // then sink below the resting face while pressed — the doc comments'
+        // promised ordering, which drives whether a button reads as raised.
+        let (face, hovered, pressed) = (BUTTON_FACE, BUTTON_FACE_HOVERED, BUTTON_FACE_PRESSED);
+        let window = WINDOW_BACKGROUND;
+        assert!(face.r > window.r);
+        assert!(hovered.r > face.r);
+        assert!(pressed.r < face.r);
+    }
+
     #[test]
     fn theme_reads_as_dark() {
         // The dark face is what makes the light chrome text legible; the
