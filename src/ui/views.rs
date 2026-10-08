@@ -609,6 +609,7 @@ mod tests {
         view_transport_controls,
     };
     use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, clamp_gain};
+    use crate::library::{Album, Artist, Song};
     use crate::sample_library::sample_library;
     use crate::state::clamp_volume;
     use crate::test_support::{sample_album, sample_artist, sample_song};
@@ -815,15 +816,12 @@ mod tests {
         // messages into buttons. Rendered both with no current track (no
         // marker) and with one set (the `▶`/highlight marker builds).
         let library = sample_library();
-        let _artists = view_artists(&library.artists, 1, false, None);
-        let _albums = view_albums(&library.albums_by_artist["artist-1"], 1, false, None);
-        let _songs = view_songs(&library.songs_by_album["album-1"], 1, false, None, None);
-        let _songs_marked = view_songs(
+        construct_every_browse_view(
+            &library.artists,
+            &library.albums_by_artist["artist-1"],
             &library.songs_by_album["album-1"],
             1,
             false,
-            None,
-            Some("song-1"),
         );
     }
 
@@ -832,10 +830,27 @@ mod tests {
         // Every browse view renders its pre-load state — an empty buffer —
         // before the first fetch lands, so `scrollable_list` must build a
         // scrollable over zero rows, with or without a current track set.
-        let _artists = view_artists(&[], 0, true, None);
-        let _albums = view_albums(&[], 0, true, None);
-        let _songs = view_songs(&[], 0, true, None, None);
-        let _songs_marked = view_songs(&[], 0, true, None, Some("song-1"));
+        construct_every_browse_view(&[], &[], &[], 0, true);
+    }
+
+    /// Builds every browse view over `artists`, `albums`, and `songs`, each
+    /// with the given `epoch`, `loading`, and no error: the Artists, Albums,
+    /// and Songs views, the last once with no current track and once with
+    /// `song-1` marked as playing. iced `Element`s expose no tree
+    /// introspection, so the only observable contract is that each builder
+    /// constructs without panicking; the two tests above call this over the
+    /// loaded sample library and over the pre-load empty buffers.
+    fn construct_every_browse_view(
+        artists: &[Artist],
+        albums: &[Album],
+        songs: &[Song],
+        epoch: u64,
+        loading: bool,
+    ) {
+        let _artists = view_artists(artists, epoch, loading, None);
+        let _albums = view_albums(albums, epoch, loading, None);
+        let _songs = view_songs(songs, epoch, loading, None, None);
+        let _songs_marked = view_songs(songs, epoch, loading, None, Some("song-1"));
     }
 
     // The currently playing row is marked by a selection bar. iced's `Element`
