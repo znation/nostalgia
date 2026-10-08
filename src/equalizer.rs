@@ -68,6 +68,26 @@ mod tests {
         );
     }
 
+    // `GAIN_MIN_DB`/`GAIN_MAX_DB` are the equalizer's user-visible range:
+    // every band slider spans them (`view_equalizer`) and both `clamp_gain`
+    // and `AppState` clamp to them. The tests around this one only compare the
+    // constants to themselves or to values they themselves define, so editing
+    // either literal would pass the whole suite while the panel silently
+    // changed range. Pin the documented -12 dB..=+12 dB span and the ordering
+    // it promises: min below flat, flat below max, symmetric about 0.
+    #[test]
+    fn gain_range_is_the_documented_twelve_db_span() {
+        assert_eq!(GAIN_MIN_DB, -12.0);
+        assert_eq!(GAIN_MAX_DB, 12.0);
+        // Bound the constants to locals: `assert!` on a bare constant trips
+        // `clippy::assertions_on_constants`.
+        let min = GAIN_MIN_DB;
+        let max = GAIN_MAX_DB;
+        assert!(min < 0.0);
+        assert!(0.0 < max);
+        assert_eq!(min, -max);
+    }
+
     #[test]
     fn clamp_gain_caps_at_the_upper_bound() {
         assert_eq!(clamp_gain(99.0), GAIN_MAX_DB);
