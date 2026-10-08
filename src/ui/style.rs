@@ -327,6 +327,12 @@ mod tests {
         assert_eq!(style.rail.width, 4.0);
         assert_eq!(style.rail.border.color, theme::PANEL_EDGE_DARK);
         assert_eq!(style.rail.border.width, 1.0);
+        // The rail's blocky 1px outline: a Winamp sunken groove reads as chrome
+        // only with square corners. The whole-`Rail` equality in the
+        // hovered/dragged test pins only that the radius is status-independent,
+        // not its literal value, so a shared-code change to a rounded groove
+        // would clear every other test while the rail lost its chrome shape.
+        assert_eq!(style.rail.border.radius, 0.0.into());
         assert_eq!(
             style.handle.shape,
             slider::HandleShape::Rectangle {
