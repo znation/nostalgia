@@ -12,7 +12,7 @@
 # mid-check and passing on a dependency set nobody committed. (`cargo fmt`
 # is the exception — it resolves no dependencies and takes no `--locked`.)
 
-.PHONY: check test fmt lint docs run clean
+.PHONY: check test fmt lint fix docs run clean
 
 ## The full landing gate: formatting, lints, docs, then tests.
 check: fmt lint docs test
@@ -32,6 +32,20 @@ fmt:
 ## `make check`, misreporting a change as merge-ready.
 lint:
 	cargo clippy --locked --all-targets -- -D warnings
+
+## Applies formatting and clippy's machine-applicable fixes in place.
+##
+## The writing twin of `fmt`/`lint`: a contributor runs it mid-change to
+## apply what those read-only targets would otherwise report. The two
+## `--allow-*` flags let it rewrite a tree with uncommitted or staged edits,
+## which is the point of running it before committing. `cargo fmt` runs last
+## so the tree is formatted after any clippy rewrite, and the lockfile flag
+## keeps the committed Cargo.lock authoritative as in the other cargo
+## targets. It does not fail on a lint clippy cannot fix automatically; run
+## `make lint` or `make check` after it to see what remains.
+fix:
+	cargo clippy --locked --fix --allow-dirty --allow-staged --all-targets
+	cargo fmt
 
 ## Builds the docs, failing on any rustdoc warning.
 ##
