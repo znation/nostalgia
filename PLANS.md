@@ -29,7 +29,92 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Style the volume and equalizer sliders as sunken Winamp grooves with raised chrome thumbs (found 2026-10-07)
+
+Found by plan 2026-10-07, taking the slider half of the "transport button and
+slider chrome" follow-up the bevel Done entry defers and the transport-button
+Done entry leaves open ("Slider chrome is a separate, later plan"). The
+bevel layer (`src/ui/style.rs`: `bevel_edges`, `lcd_well`, `raised_panel`)
+and `style::chrome_button_style` now dress the panels and buttons, but every
+`Slider` / `VerticalSlider` in `src/ui/views.rs` — the volume slider, the
+preamp slider, and the ten EQ band sliders — still renders with iced's
+default theme slider, a thin rail and a round handle, not the base skin's
+dark sunken groove with a blocky raised chrome thumb.
+
+**Goal.** Add one pure `chrome_slider_style(status)` to `src/ui/style.rs` that
+maps iced's `slider::Status` to the base skin's groove and thumb, and route
+every slider through it, so the volume, preamp, and ten band sliders read as
+Winamp chrome. No new theme colours and no signature changes: the function
+reuses the existing base-skin constants, exactly as `chrome_button_style`
+does.
+
+**Approach.**
+
+- `src/ui/style.rs`: add `slider` to the existing `iced::widget::{...}`
+  import (`Slider`/`VerticalSlider` share one `slider::Style`, `slider::Rail`,
+  `slider::Handle`, and `slider::HandleShape` — `iced_widget`'s
+  `vertical_slider` re-exports the slider types, so both widgets take the same
+  style function). Add:
+  - `pub fn chrome_slider_style(status: slider::Status) -> slider::Style` —
+    pure, needs no theme, the testable heart (like `chrome_button_style`).
+    Build:
+    - `rail`: `slider::Rail { backgrounds: (Background::Color(theme::LCD_BACKGROUND),
+      Background::Color(theme::LCD_BACKGROUND)), width: 4.0, border: Border
+      { color: theme::PANEL_EDGE_DARK, width: 1.0, radius: 0.0.into() } }`.
+      iced draws `backgrounds.0` as the segment left of / below the handle and
+      `backgrounds.1` as the remainder (`iced_widget-0.14.2/src/slider.rs`);
+      both are the near-black `LCD_BACKGROUND`, so the rail is one uniform
+      sunken groove and the thumb — not a fill colour — is the value
+      indicator, as in the base skin. `Rail` carries a single-colour `Border`
+      and no shadow, so the sunken edge is approximated by the dark 1px rail
+      outline.
+    - `handle`: `slider::Handle { shape: slider::HandleShape::Rectangle {
+      width: 8, border_radius: 0.0.into() }, background:
+      Background::Color(face), border_width: 1.0, border_color:
+      theme::PANEL_EDGE_LIGHT }`. The 8px rectangle gives a blocky thumb
+      (full slider width, 8px thick on the long axis) and the light 1px
+      border approximates the raised chrome edge — the same light-border
+      trick `chrome_button_style` uses within iced's single-colour `Border`.
+      `face` matches `status`, reusing the button face shades: `Active` →
+      `BUTTON_FACE`, `Hovered` → `BUTTON_FACE_HOVERED`, `Dragged` →
+      `BUTTON_FACE_PRESSED` (the match is exhaustive — `slider::Status` has
+      no `Disabled`).
+  - `#[cfg(test)] mod tests` additions: `chrome_slider_style(Active)` has
+    `rail.backgrounds == (Background::Color(LCD_BACKGROUND),
+    Background::Color(LCD_BACKGROUND))`, `rail.width == 4.0`,
+    `rail.border.color == PANEL_EDGE_DARK`, `rail.border.width == 1.0`,
+    `handle.shape == HandleShape::Rectangle { width: 8, border_radius:
+    0.0.into() }`, `handle.background == Background::Color(BUTTON_FACE)`,
+    `handle.border_width == 1.0`, `handle.border_color == PANEL_EDGE_LIGHT`;
+    `Hovered` and `Dragged` keep the rail unchanged and swap only the handle
+    face to `BUTTON_FACE_HOVERED` / `BUTTON_FACE_PRESSED`.
+- `src/ui/views.rs`: chain `.style(|_theme, status|
+  style::chrome_slider_style(status))` onto the volume `Slider` in
+  `view_transport_controls`, the preamp `Slider`, and the `VerticalSlider` in
+  `view_equalizer`'s band loop. These are the only `Slider` /
+  `VerticalSlider` call sites in the crate, so all three slider kinds pick up
+  the chrome with no builder or signature change; the browse row buttons in
+  `scrollable_list` keep their own highlight style and are untouched.
+- `README.md`: in the Status block, say the volume slider and the equalizer's
+  preamp and ten band sliders are drawn as sunken grooves with raised chrome
+  thumbs; leave the `tumwater:prompt` block untouched.
+
+**Files touched.** `src/ui/style.rs`, `src/ui/views.rs`, `README.md`.
+
+**Acceptance criteria.**
+
+- `make check` passes (`cargo fmt --check`, `cargo clippy --all-targets -- -D
+  warnings`, `cargo doc` with rustdoc warnings denied, `cargo test`).
+- The new `chrome_slider_style` tests pass, pinning the uniform dark rail, its
+  4px width and dark 1px border, the 8px rectangular handle with its light
+  border, and the three status-driven handle faces.
+- The existing `views` tests still pass unchanged —
+  `transport_controls_construct_for_both_play_states_volume_endpoints_and_repeat_states`
+  and `equalizer_panel_constructs_for_both_states_and_gain_endpoints` build
+  the same widget trees through the restyled sliders.
+- `cargo run`: the volume, preamp, and EQ band sliders render as dark sunken
+  grooves with a blocky grey thumb that lightens on hover and darkens while
+  dragging; manual check — the build and tests are the primary gate.
 
 ## Done
 
