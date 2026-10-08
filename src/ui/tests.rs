@@ -1603,8 +1603,9 @@ fn new_player_starts_at_artists_with_nothing_selected() {
 // the now-playing label, matches the current browse view onto its list
 // buffer, and stacks the Now Playing bar, the transport row, the optional
 // Back button (only below the artist list), and the browse list. No other
-// test reaches it — the `views.rs` tests stop at the individual builders
-// and the `update` tests stop before the view layer — so a regression
+// test reaches this assembly — the shade test stops at `view`'s title-bar
+// early return, the `views.rs` tests stop at the individual builders, and
+// the `update` tests stop before the view layer — so a regression
 // that made this assembly panic (a bad slider range, a `view_*` builder
 // failing over the input the app produces) would take the window down on
 // every refresh with no test catching it. iced `Element`s expose no tree
