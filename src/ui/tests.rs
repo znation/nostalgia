@@ -78,6 +78,41 @@ fn assert_message_clamps(message: Message, read: impl Fn(&AppState) -> f32, expe
     assert_eq!(read(&state.blocking_lock()), expected);
 }
 
+/// The longest a driven `Task` is allowed to take before its test fails.
+///
+/// A task that never yields its completion message — a hung service future,
+/// say — would otherwise block `drive_task` forever and stall the whole test
+/// run with no indication of which task hung. This bound turns that stall
+/// into a named failure.
+const TASK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Awaits `future`, panicking if it does not resolve within `timeout`.
+///
+/// `drive_task` uses this to bound its wait on a task's completion message.
+/// The timer is a detached thread that sleeps for `timeout` and wakes the
+/// wait through a oneshot channel, so the bound works both under
+/// `futures::executor::block_on` and inside a `#[tokio::test]` runtime
+/// without depending on a runtime timer. `what` names the awaited task in the
+/// panic message so a hang is diagnosable.
+async fn await_or_timeout<F: std::future::Future>(
+    what: &str,
+    timeout: std::time::Duration,
+    future: F,
+) -> F::Output {
+    let (timer, fired) = futures::channel::oneshot::channel::<()>();
+    let _handle = std::thread::spawn(move || {
+        std::thread::sleep(timeout);
+        let _ = timer.send(());
+    });
+    futures::pin_mut!(future);
+    match futures::future::select(future, fired).await {
+        futures::future::Either::Left((output, _)) => output,
+        futures::future::Either::Right(_) => {
+            panic!("{what} task did not complete within {timeout:?}")
+        }
+    }
+}
+
 /// Drives an iced `Task` to completion and hands its single `Output`
 /// action to `check`. `update` only schedules work as a `Task`, so a test
 /// that wants to observe the resulting message — `TrackPlayed` after
@@ -85,19 +120,43 @@ fn assert_message_clamps(message: Message, read: impl Fn(&AppState) -> f32, expe
 /// step — must run the task itself the way the iced runtime would. The
 /// playback, fetch, and (through `assert_track_selected`) stepping tests
 /// do exactly that, so the stream plumbing and the "exactly one `Output`"
-/// assertion live here once instead of at each call site.
+/// assertion live here once instead of at each call site. The wait is bounded
+/// by [`TASK_TIMEOUT`], so a task that hangs fails this test by name rather
+/// than stalling the suite.
 async fn drive_task(task: Task<Message>, what: &str, mut check: impl FnMut(Message)) {
     use futures::StreamExt;
 
     let mut stream = iced_runtime::task::into_stream(task).expect("task must schedule a stream");
-    let action = stream
-        .next()
+    let action = await_or_timeout(what, TASK_TIMEOUT, stream.next())
         .await
         .expect("task must yield a completion message");
     match action {
         iced_runtime::Action::Output(message) => check(message),
         other => panic!("unexpected {what} task output: {other:?}"),
     }
+}
+
+#[test]
+fn await_or_timeout_returns_the_output_when_the_future_completes() {
+    let output = futures::executor::block_on(await_or_timeout(
+        "quick",
+        std::time::Duration::from_secs(1),
+        async { 7 },
+    ));
+    assert_eq!(output, 7);
+}
+
+// A task that never completes is the failure `await_or_timeout` exists to
+// bound: without the timeout this test would hang forever, taking the whole
+// suite with it. The panic names the awaited task, so the hang is diagnosable.
+#[test]
+#[should_panic(expected = "hung task did not complete within")]
+fn await_or_timeout_fails_loudly_when_the_future_never_completes() {
+    futures::executor::block_on(await_or_timeout(
+        "hung",
+        std::time::Duration::from_millis(10),
+        futures::future::pending::<()>(),
+    ));
 }
 
 /// Drives the task a browse arm schedules, feeds the resulting `*Loaded`
