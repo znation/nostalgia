@@ -49,15 +49,18 @@ fn loaded_or_empty<T, E>(
 /// cannot serve here: it maps `Result<Vec<T>, _>` onto a `*Loaded` message,
 /// while a play has no payload to load, only a completion. `report_error`
 /// is injected rather than hardcoded so the reporting contract is testable
-/// without capturing stderr.
+/// without capturing stderr. `generation` is the play's place in the playback
+/// stream; the completion carries it so `update` can skip pruning the title
+/// index on a play a newer selection has superseded.
 pub(super) fn played_or_reported<E>(
     result: Result<(), E>,
+    generation: u64,
     report_error: impl FnOnce(&E),
 ) -> Message {
     if let Err(err) = result {
         report_error(&err);
     }
-    Message::TrackPlayed
+    Message::TrackPlayed { generation }
 }
 
 /// Formats the browse-fetch failure report: names the fetch that failed
@@ -107,6 +110,13 @@ impl RequestGeneration {
             issued: latest.fetch_add(1, Ordering::SeqCst) + 1,
             latest: Arc::clone(latest),
         }
+    }
+
+    /// The generation this request was issued as. Carried through to a play's
+    /// completion message so `update` can compare it against the shared
+    /// counter and recognize a superseded completion.
+    pub(super) fn issued(&self) -> u64 {
+        self.issued
     }
 
     /// Whether this request is still the latest issued for its list. A later
@@ -201,20 +211,20 @@ mod tests {
         // stays intact. `played_or_reported` takes the reporter as a
         // parameter so this contract is testable without capturing stderr.
         let mut reported: Option<String> = None;
-        let message = played_or_reported::<String>(Err("boom".to_string()), |err| {
+        let message = played_or_reported::<String>(Err("boom".to_string()), 7, |err| {
             reported = Some(err.clone());
         });
 
         assert_eq!(reported.as_deref(), Some("boom"));
-        assert!(matches!(message, Message::TrackPlayed));
+        assert!(matches!(message, Message::TrackPlayed { generation: 7 }));
 
         // The Ok path completes with the same message and reports nothing.
         let mut reported_ok: Option<String> = None;
-        let ok_message = played_or_reported::<String>(Ok(()), |err| {
+        let ok_message = played_or_reported::<String>(Ok(()), 8, |err| {
             reported_ok = Some(err.clone());
         });
         assert!(reported_ok.is_none());
-        assert!(matches!(ok_message, Message::TrackPlayed));
+        assert!(matches!(ok_message, Message::TrackPlayed { generation: 8 }));
     }
 
     #[test]

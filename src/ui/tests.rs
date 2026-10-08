@@ -506,7 +506,7 @@ async fn track_selected_starts_playback_of_the_selected_track() {
 
     let task = update(&mut player, Message::TrackSelected { epoch: 0, index: 0 });
     drive_task(task, "playback", |message| {
-        assert!(matches!(message, Message::TrackPlayed));
+        assert!(matches!(message, Message::TrackPlayed { .. }));
     })
     .await;
 
@@ -521,9 +521,10 @@ async fn track_selected_starts_playback_of_the_selected_track() {
 // (it drives the task and asserts its output); nothing feeds `TrackPlayed`
 // back through `update`, so this arm — the one update branch the suite
 // never reaches — could drift (e.g. scheduling a follow-up task or touching
-// shared state) with no test catching it. Pin the arm's no-op contract: it
-// schedules no work and leaves the shared state untouched. `blocking_lock`
-// panics inside an async runtime, so this stays a plain test.
+// shared state) with no test catching it. Pin the arm's contract: it
+// schedules no work and leaves the shared state untouched, pruning only the
+// player-local title index. `blocking_lock` panics inside an async runtime,
+// so this stays a plain test.
 #[test]
 fn track_played_handoff_is_a_noop() {
     let (mut player, state) = test_player();
@@ -536,7 +537,7 @@ fn track_played_handoff_is_a_noop() {
         state.set_volume(0.7);
     }
 
-    let task = update(&mut player, Message::TrackPlayed);
+    let task = update(&mut player, Message::TrackPlayed { generation: 0 });
 
     // The arm schedules no follow-up work...
     assert_no_task(task);
@@ -849,6 +850,82 @@ fn track_selected_stale_press_leaves_known_titles_untouched() {
 
     // The Now Playing bar still names the playing track rather than its id.
     assert_eq!(player.now_playing_label(Some("song-1")), "One");
+}
+
+// A play completion can reach `update` after the user has already selected a
+// newer track but before that newer play commits. Pruning the title index on
+// that stale completion would delete the pending track's title, and once the
+// pending play committed the bar would fall back to the raw id for good. The
+// completion carries its play's generation, so `update` prunes only when it is
+// still the latest play; a superseded completion leaves the index alone.
+#[test]
+fn a_stale_play_completion_does_not_prune_a_pending_selection() {
+    let (mut player, state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+
+    // song-1 plays and commits, but its completion has not reached `update`.
+    let first = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+    let mut first_done: Option<Message> = None;
+    futures::executor::block_on(drive_task(first, "first play", |message| {
+        first_done = Some(message)
+    }));
+    assert_eq!(
+        state.blocking_lock().current_track.as_deref(),
+        Some("song-1")
+    );
+
+    // The user switches to song-3 before song-1's completion is processed.
+    let second = update(&mut player, Message::TrackSelected { epoch: 1, index: 2 });
+
+    // The stale completion must not prune song-3's still-pending title.
+    let _ = update(&mut player, first_done.expect("first play must complete"));
+    assert_eq!(
+        player.known_titles.get("song-3").map(String::as_str),
+        Some("Three")
+    );
+
+    // song-3's own completion is the latest, so it prunes the index to it.
+    let mut second_done: Option<Message> = None;
+    futures::executor::block_on(drive_task(second, "second play", |message| {
+        second_done = Some(message)
+    }));
+    assert_eq!(
+        state.blocking_lock().current_track.as_deref(),
+        Some("song-3")
+    );
+    let _ = update(&mut player, second_done.expect("second play must complete"));
+
+    assert_eq!(player.known_titles.len(), 1);
+    assert_eq!(player.now_playing_label(Some("song-3")), "Three");
+}
+
+// When the latest play fails before committing a track, `current_track` is
+// still `None`, so no entry the bar can read should remain. The completion
+// must clear the index rather than leave the failed selection's title behind
+// — the `None` case is exactly where an unbounded map would otherwise start.
+#[test]
+fn a_failed_play_completion_clears_the_index_when_nothing_committed() {
+    let (mut player, state) = test_player();
+    // A song with a blank id is rejected by the service seam, so the play
+    // fails without committing `current_track`.
+    player.songs = vec![Song {
+        id: String::new(),
+        title: "Blank".to_string(),
+        album_id: "album-1".to_string(),
+    }];
+
+    let task = update(&mut player, Message::TrackSelected { epoch: 0, index: 0 });
+    assert_eq!(player.known_titles.len(), 1);
+
+    let mut done: Option<Message> = None;
+    futures::executor::block_on(drive_task(task, "failed play", |message| {
+        done = Some(message)
+    }));
+
+    let _ = update(&mut player, done.expect("a failed play still completes"));
+
+    assert_eq!(state.blocking_lock().current_track, None);
+    assert!(player.known_titles.is_empty());
 }
 
 // Browsing to a new album must *replace* the Songs view's buffer, not

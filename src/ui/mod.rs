@@ -10,7 +10,10 @@ use iced::{Element, Task, widget::Column};
 use std::{
     borrow::Cow,
     collections::HashMap,
-    sync::{Arc, atomic::AtomicU64},
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 use tokio::sync::Mutex;
 
@@ -69,7 +72,11 @@ enum Message {
     // `fetch_into` emits this instead of the `*Loaded` message so the stale
     // reply never reaches `store_loaded`; the arm below is a no-op.
     Ignored,
-    TrackPlayed,
+    // The play's completion carries the generation its selection issued, so
+    // the arm can tell whether a newer selection has superseded it. Only the
+    // latest completion may prune the title index; a superseded one must not
+    // drop a still-pending selection's title.
+    TrackPlayed { generation: u64 },
 }
 
 struct WinampPlayer {
@@ -87,7 +94,13 @@ struct WinampPlayer {
     /// a growing list on every frame. Recording on play — rather than folding
     /// every song of every browsed album into the map — keeps the map
     /// proportional to songs actually played and takes the per-album fold off
-    /// the browse path.
+    /// the browse path. Only the current track's entry is ever read, so the
+    /// latest play's completion prunes the map back to that entry (or clears
+    /// it when nothing committed): without the prune the map would grow by one
+    /// entry for every distinct track ever played. A completion whose play a
+    /// newer selection superseded leaves the map alone — the newer selection's
+    /// title is still pending, and pruning to the older committed track would
+    /// drop it.
     known_titles: HashMap<String, String>,
     /// Counters naming the list that rendered a row, bumped whenever a fetched
     /// list replaces its buffer (see [`store_loaded`]). A selection message
@@ -329,6 +342,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             // older play cannot overwrite the newer track. The browse path
             // uses the same [`RequestGeneration`] for the same reason.
             let generation = RequestGeneration::issue(&player.plays_generation);
+            let play_generation = generation.issued();
             let service = player.apple_music_service.clone();
             let id_for_report = track_id.clone();
             Task::perform(
@@ -338,7 +352,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                         .await
                 },
                 move |result| {
-                    played_or_reported(result, |err| {
+                    played_or_reported(result, play_generation, |err| {
                         eprintln!("{}", play_failure_report(&id_for_report, err))
                     })
                 },
@@ -432,7 +446,27 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             &mut player.songs_loading,
             songs,
         ),
-        Message::TrackPlayed | Message::Ignored => Task::none(),
+        Message::TrackPlayed { generation } => {
+            // Only the current track's title is ever read (see
+            // [`Self::known_titles`]), so the latest play's completion drops
+            // every other entry the selections above accumulated. A completion
+            // whose play a newer selection superseded is skipped: its
+            // `current_track` names the older committed track, but the newer
+            // selection's title is still pending, and pruning to the older
+            // track would delete it. When this completion is the latest, no
+            // newer selection is pending, so reducing to `current_track` is
+            // safe — and when nothing committed, clearing the map keeps it
+            // bounded rather than leaving the failed selection's entry.
+            if generation == player.plays_generation.load(Ordering::SeqCst) {
+                let state = player.state.blocking_lock();
+                match state.current_track.as_deref() {
+                    Some(current) => player.known_titles.retain(|id, _| id == current),
+                    None => player.known_titles.clear(),
+                }
+            }
+            Task::none()
+        }
+        Message::Ignored => Task::none(),
     }
 }
 
