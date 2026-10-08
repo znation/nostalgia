@@ -118,20 +118,37 @@ pub fn raised_panel<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a,
     beveled(content.into(), true)
 }
 
+/// The chrome face shade for an interaction state: pressed when `pressed`,
+/// hovered when `hovered`, and the resting shade otherwise. Both chrome styles
+/// map their own status enum onto this same ladder — the button by
+/// Active/Hovered/Pressed and the slider by Active/Hovered/Dragged — so the
+/// ladder lives here once and the two stay in lockstep. `pressed` wins when
+/// both are true, though no current status is both. Pure and theme-only, so it
+/// needs no widget to test.
+fn chrome_face(hovered: bool, pressed: bool) -> Color {
+    if pressed {
+        theme::BUTTON_FACE_PRESSED
+    } else if hovered {
+        theme::BUTTON_FACE_HOVERED
+    } else {
+        theme::BUTTON_FACE
+    }
+}
+
 /// The raised (Active/Hovered) and sunken (Pressed) chrome style for a button.
 ///
 /// iced's [`Border`] carries a single colour, so the two-tone edge reuses
 /// [`bevel_edges`]: raised, it is a 1px light border on the top/left and a dark
 /// no-blur [`Shadow`] offset down-right on the bottom/right; pressing sinks the
-/// pair. The face darkens on hover and sinks while pressed. Pure and
-/// theme-free, so the colour rule is testable without building a widget.
+/// pair. The face comes from [`chrome_face`], which darkens it on hover and
+/// sinks it while pressed. Pure and theme-free, so the colour rule is testable
+/// without building a widget.
 pub fn chrome_button_style(status: button::Status) -> button::Style {
     let (top_left, bottom_right) = bevel_edges(!matches!(status, button::Status::Pressed));
-    let face = match status {
-        button::Status::Active | button::Status::Disabled => theme::BUTTON_FACE,
-        button::Status::Hovered => theme::BUTTON_FACE_HOVERED,
-        button::Status::Pressed => theme::BUTTON_FACE_PRESSED,
-    };
+    let face = chrome_face(
+        matches!(status, button::Status::Hovered),
+        matches!(status, button::Status::Pressed),
+    );
 
     let text_color = match status {
         button::Status::Disabled => theme::TEXT.scale_alpha(0.5),
@@ -163,15 +180,14 @@ pub fn chrome_button_style(status: button::Status) -> button::Style {
 /// [`slider::Handle`] carries the light 1px border that reads as raised
 /// chrome, the same light-border trick [`chrome_button_style`] uses. The rail
 /// is uniform (`LCD_BACKGROUND` on both sides of the handle) because the thumb,
-/// not a fill colour, marks the value. The handle face matches `status`, reusing
-/// the button face shades. Pure and theme-free, so the colour rule is testable
-/// without building a widget.
+/// not a fill colour, marks the value. The handle face comes from
+/// [`chrome_face`], the same ladder [`chrome_button_style`] uses. Pure and
+/// theme-free, so the colour rule is testable without building a widget.
 pub fn chrome_slider_style(status: slider::Status) -> slider::Style {
-    let face = match status {
-        slider::Status::Active => theme::BUTTON_FACE,
-        slider::Status::Hovered => theme::BUTTON_FACE_HOVERED,
-        slider::Status::Dragged => theme::BUTTON_FACE_PRESSED,
-    };
+    let face = chrome_face(
+        matches!(status, slider::Status::Hovered),
+        matches!(status, slider::Status::Dragged),
+    );
 
     slider::Style {
         rail: slider::Rail {
@@ -221,6 +237,16 @@ mod tests {
             bevel_edges(false),
             (theme::PANEL_EDGE_DARK, theme::PANEL_EDGE_LIGHT)
         );
+    }
+
+    #[test]
+    fn chrome_face_is_the_rest_hover_press_ladder() {
+        assert_eq!(chrome_face(false, false), theme::BUTTON_FACE);
+        assert_eq!(chrome_face(true, false), theme::BUTTON_FACE_HOVERED);
+        assert_eq!(chrome_face(false, true), theme::BUTTON_FACE_PRESSED);
+        // No current status is both hovered and pressed, so pin the precedence
+        // here rather than through a style.
+        assert_eq!(chrome_face(true, true), theme::BUTTON_FACE_PRESSED);
     }
 
     #[test]
