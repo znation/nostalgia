@@ -111,9 +111,17 @@ pub(super) struct RequestGeneration {
 impl RequestGeneration {
     /// Records a new request as the latest for its list and returns the
     /// generation that request's completion must still match to be stored.
+    ///
+    /// The `+ 1` wraps rather than overflowing: `fetch_add` already wraps the
+    /// counter at `u64::MAX` back to `0`, so a plain `+ 1` on the value it
+    /// returns would panic in a debug build at that boundary. Wrapping keeps
+    /// `issued` equal to the counter `fetch_add` just stored (and matches
+    /// `browse::BrowseList::store`'s epoch bump). Reaching the boundary takes
+    /// `2^64` requests, but the two counters should not disagree on how they
+    /// step.
     pub(super) fn issue(latest: &Arc<AtomicU64>) -> Self {
         Self {
-            issued: latest.fetch_add(1, Ordering::SeqCst) + 1,
+            issued: latest.fetch_add(1, Ordering::SeqCst).wrapping_add(1),
             latest: Arc::clone(latest),
         }
     }
@@ -350,5 +358,19 @@ mod tests {
     fn fetch_and_play_timeouts_are_the_documented_thirty_seconds() {
         assert_eq!(FETCH_TIMEOUT, Duration::from_secs(30));
         assert_eq!(PLAY_TIMEOUT, Duration::from_secs(30));
+    }
+
+    // The counter wraps at `u64::MAX` instead of overflowing. `fetch_add`
+    // already wraps the atomic back to `0`, so the `+ 1` that derives `issued`
+    // from the value it returns must wrap too, or a debug build would panic at
+    // the boundary and leave `issued` disagreeing with the counter. Seeded at
+    // `u64::MAX` because that is the only value the next `fetch_add` wraps
+    // from, and pinning `is_current` keeps the wrapped generation usable.
+    #[test]
+    fn issue_wraps_the_generation_counter_at_the_maximum() {
+        let latest = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(u64::MAX));
+        let generation = RequestGeneration::issue(&latest);
+        assert_eq!(generation.issued(), 0);
+        assert!(generation.is_current());
     }
 }
