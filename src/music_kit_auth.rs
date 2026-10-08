@@ -30,7 +30,9 @@
 //! keeps waiting for the real callback; only a well-formed callback with the
 //! wrong `state` or an invalid user token ends the flow with an error. Each
 //! connection's reads are capped by the time left before [`AUTH_TIMEOUT`], so a
-//! client that dribbles bytes cannot hold the flow past its deadline.
+//! client that dribbles bytes cannot hold the flow past its deadline, and each
+//! response write carries a bounded timeout, so a client that stops reading
+//! cannot hold it there either.
 
 use std::collections::hash_map::RandomState;
 use std::hash::{BuildHasher, Hasher};

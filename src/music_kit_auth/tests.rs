@@ -230,6 +230,30 @@ fn authorize_serves_the_page_for_the_browsers_query_request() {
     assert!(page.contains(SAMPLE_DEVELOPER_TOKEN));
 }
 
+// A response larger than the socket send buffer, written to a client that stops
+// reading, blocks `write_all` with no timeout — holding the sign-in flow past
+// `AUTH_TIMEOUT`. `write_response` must arm a bounded write timeout first (a
+// `None` timeout means "block forever"); the read path's deadline cap has its
+// own test above, and this pins the write side.
+#[test]
+fn write_response_arms_a_bounded_write_timeout() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind a loopback listener");
+    let address = listener.local_addr().expect("read the listener address");
+    let _client = TcpStream::connect(address).expect("connect a client");
+    let (mut server, _) = listener.accept().expect("accept the client");
+
+    write_response(&mut server, 200, "OK", "text/plain; charset=utf-8", "hello")
+        .expect("write the response");
+
+    assert!(
+        server
+            .write_timeout()
+            .expect("read the stream's write timeout")
+            .is_some(),
+        "write_response must arm a bounded write timeout, not leave it unbounded"
+    );
+}
+
 #[test]
 fn authorize_trims_surrounding_whitespace_from_the_developer_token() {
     // `APPLE_MUSIC_DEVELOPER_TOKEN` commonly arrives with a trailing newline

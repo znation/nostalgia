@@ -7,7 +7,9 @@
 //! logic over a small protocol layer. The request buffer is capped at
 //! [`MAX_REQUEST_BYTES`] while reading headers *and* before the declared body
 //! is read, so a hostile client cannot make the server allocate without bound
-//! or panic it with an overflowing `Content-Length`.
+//! or panic it with an overflowing `Content-Length`. Each response write is
+//! bounded by [`CONNECTION_WRITE_TIMEOUT`], so a client that stops reading
+//! cannot block the server indefinitely.
 
 use std::io::{self, Read, Write};
 use std::net::TcpStream;
@@ -21,6 +23,15 @@ pub(super) const MAX_REQUEST_BYTES: usize = 16 * 1024;
 /// dropped as a stalled client. Each read is capped further by the time left
 /// before the flow's deadline.
 pub(super) const CONNECTION_READ_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// How long a single response write may take before it is abandoned as a
+/// stalled client. A client that stops reading — or a response larger than the
+/// socket send buffer, which the caller controls through the developer token it
+/// embeds in the page — would otherwise block `write_all` indefinitely. The
+/// bound is fixed rather than tied to the flow deadline because a response is
+/// written in one call, not a loop of reads, so one timeout is enough to keep
+/// the flow from hanging.
+pub(super) const CONNECTION_WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The smallest read timeout to arm. A zero (or sub-granularity) timeout means
 /// "block forever", so a deadline closer than this is treated as already
@@ -140,6 +151,10 @@ pub(super) fn read_http_request(
 }
 
 /// Writes a minimal HTTP/1.1 response and closes the connection.
+///
+/// Arms [`CONNECTION_WRITE_TIMEOUT`] first, so a client that stops reading
+/// cannot block `write_all` — and with it the sign-in flow — indefinitely. A
+/// small response to a live browser is unaffected.
 pub(super) fn write_response(
     stream: &mut TcpStream,
     status: u16,
@@ -147,6 +162,7 @@ pub(super) fn write_response(
     content_type: &str,
     body: &str,
 ) -> io::Result<()> {
+    stream.set_write_timeout(Some(CONNECTION_WRITE_TIMEOUT))?;
     let response = format!(
         "HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
         body.len()
