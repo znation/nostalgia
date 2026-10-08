@@ -259,6 +259,7 @@ mod tests {
         assert_eq!(style.text_color, theme::TEXT);
         assert_eq!(style.border.color, theme::PANEL_EDGE_LIGHT);
         assert_eq!(style.border.width, 1.0);
+        assert_eq!(style.border.radius, 0.0.into());
         assert_eq!(style.shadow.color, theme::PANEL_EDGE_DARK);
         assert_eq!(style.shadow.offset, Vector::new(1.0, 1.0));
         assert_eq!(style.shadow.blur_radius, 0.0);
@@ -379,6 +380,15 @@ mod tests {
         assert_eq!(disabled.shadow.color, active.shadow.color);
         assert_eq!(disabled.background, active.background);
         assert!(disabled.text_color.a < theme::TEXT.a);
+        // "Keeps the edges" is the name's contract: Disabled dims only the
+        // text, so the face and both edge colours (asserted above) and the 1px
+        // geometry all stay. Assert the geometry too, or a status-dependent
+        // width, radius, or shadow offset could pass every other test while the
+        // disabled bevel changed shape.
+        assert_eq!(disabled.border.width, active.border.width);
+        assert_eq!(disabled.border.radius, active.border.radius);
+        assert_eq!(disabled.shadow.offset, active.shadow.offset);
+        assert_eq!(disabled.shadow.blur_radius, active.shadow.blur_radius);
     }
 
     /// Asserts a panel builder requests the full available width but a
