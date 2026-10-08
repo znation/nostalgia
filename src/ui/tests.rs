@@ -137,6 +137,21 @@ async fn drive_task(task: Task<Message>, what: &str, mut check: impl FnMut(Messa
     }
 }
 
+/// Drives `task` to completion and returns its single output message — the
+/// message the iced runtime would deliver. [`drive_task`] hands a task's
+/// output to a callback for inspection; the tests that must feed that output
+/// back through `update` (the two stale-reply tests, the known-title tests,
+/// and [`drive_fetch_and_assert_loaded`]) instead need the message itself, so
+/// the capture-and-return plumbing lives here once. `what` names the task in
+/// `drive_task`'s timeout panic. Callers on a plain thread reach this through
+/// `futures::executor::block_on`, the same way the stepping tests drive
+/// `drive_task`.
+async fn task_output(task: Task<Message>, what: &str) -> Message {
+    let mut output: Option<Message> = None;
+    drive_task(task, what, |message| output = Some(message)).await;
+    output.expect("drive_task must pass the output to its callback")
+}
+
 #[test]
 fn await_or_timeout_returns_the_output_when_the_future_completes() {
     let output = futures::executor::block_on(await_or_timeout(
@@ -186,10 +201,7 @@ async fn drive_fetch_and_assert_loaded<T, Buffer, Key>(
     Buffer: Fn(&mut WinampPlayer) -> &mut Vec<T>,
     Key: Fn(&T) -> &str,
 {
-    let mut output: Option<Message> = None;
-    drive_task(task, what, |message| output = Some(message)).await;
-
-    let message = output.expect("browse task must yield a *Loaded message");
+    let message = task_output(task, what).await;
     let _ = update(player, message);
     assert_ids(buffer(player).as_slice(), key, expected_ids);
 }
@@ -490,16 +502,14 @@ async fn a_slow_stale_browse_reply_does_not_overwrite_the_newer_list() {
     let second = update(&mut player, Message::ArtistSelected { epoch: 0, index: 1 });
 
     // The newer request's reply lands first.
-    let mut newer: Option<Message> = None;
-    drive_task(second, "newer album fetch", |message| newer = Some(message)).await;
-    let _ = update(&mut player, newer.expect("the newer fetch must complete"));
+    let newer = task_output(second, "newer album fetch").await;
+    let _ = update(&mut player, newer);
     assert_ids(&player.albums, |album| album.id.as_str(), &["album-3"]);
 
     // The older request's reply lands late and must be dropped, leaving the
     // newer artist's albums in place.
-    let mut stale: Option<Message> = None;
-    drive_task(first, "stale album fetch", |message| stale = Some(message)).await;
-    let _ = update(&mut player, stale.expect("the stale fetch must complete"));
+    let stale = task_output(first, "stale album fetch").await;
+    let _ = update(&mut player, stale);
     assert_ids(&player.albums, |album| album.id.as_str(), &["album-3"]);
 }
 
@@ -1042,10 +1052,7 @@ fn a_stale_play_completion_does_not_prune_a_pending_selection() {
 
     // song-1 plays and commits, but its completion has not reached `update`.
     let first = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
-    let mut first_done: Option<Message> = None;
-    futures::executor::block_on(drive_task(first, "first play", |message| {
-        first_done = Some(message)
-    }));
+    let first_done = futures::executor::block_on(task_output(first, "first play"));
     assert_eq!(
         state.blocking_lock().current_track.as_deref(),
         Some("song-1")
@@ -1055,22 +1062,19 @@ fn a_stale_play_completion_does_not_prune_a_pending_selection() {
     let second = update(&mut player, Message::TrackSelected { epoch: 1, index: 2 });
 
     // The stale completion must not prune song-3's still-pending title.
-    let _ = update(&mut player, first_done.expect("first play must complete"));
+    let _ = update(&mut player, first_done);
     assert_eq!(
         player.known_titles.get("song-3").map(String::as_str),
         Some("Three")
     );
 
     // song-3's own completion is the latest, so it prunes the index to it.
-    let mut second_done: Option<Message> = None;
-    futures::executor::block_on(drive_task(second, "second play", |message| {
-        second_done = Some(message)
-    }));
+    let second_done = futures::executor::block_on(task_output(second, "second play"));
     assert_eq!(
         state.blocking_lock().current_track.as_deref(),
         Some("song-3")
     );
-    let _ = update(&mut player, second_done.expect("second play must complete"));
+    let _ = update(&mut player, second_done);
 
     assert_eq!(player.known_titles.len(), 1);
     assert_eq!(player.now_playing_label(Some("song-3")), "Three");
@@ -1094,12 +1098,9 @@ fn a_failed_play_completion_clears_the_index_when_nothing_committed() {
     let task = update(&mut player, Message::TrackSelected { epoch: 0, index: 0 });
     assert_eq!(player.known_titles.len(), 1);
 
-    let mut done: Option<Message> = None;
-    futures::executor::block_on(drive_task(task, "failed play", |message| {
-        done = Some(message)
-    }));
+    let done = futures::executor::block_on(task_output(task, "failed play"));
 
-    let _ = update(&mut player, done.expect("a failed play still completes"));
+    let _ = update(&mut player, done);
 
     assert_eq!(state.blocking_lock().current_track, None);
     assert!(player.known_titles.is_empty());
