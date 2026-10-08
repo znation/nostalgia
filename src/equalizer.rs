@@ -261,10 +261,10 @@ mod tests {
 
     // The test above reads the `name` field directly, and the
     // `view_equalizer` construction test never lays the widget out, so
-    // nothing in the crate ever calls `Preset`'s `Display`. That impl is
-    // what iced's `PickList` actually renders for the selected preset and
-    // for every menu option (see the struct doc), so a `Display` that
-    // returned anything but `name` — a debug repr, say — would leave the
+    // nothing in the crate exercised `Preset`'s `Display` before this test.
+    // That impl is what iced's `PickList` actually renders for the selected
+    // preset and for every menu option (see the struct doc), so a `Display`
+    // that returned anything but `name` — a debug repr, say — would leave the
     // whole suite green while the pick list showed the wrong label. Pin the
     // rendered label for every preset.
     #[test]
