@@ -23,10 +23,9 @@ pub struct AppState {
     /// Whether Previous/Next wrap around the current album's ends (Repeat on)
     /// or stop at the edge (Repeat off). Starts off, as in Winamp.
     pub repeat: bool,
-    /// Playback volume in `[0.0, 1.0]`, never NaN. Kept private — unlike the
-    /// other fields, which have no validity range — so the only way to change
-    /// it is [`AppState::set_volume`], which clamps. Read it with
-    /// [`AppState::volume`].
+    /// Playback volume in `[0.0, 1.0]`, never NaN. Kept private so the only
+    /// way to change it is [`AppState::set_volume`], which clamps. Read it
+    /// with [`AppState::volume`].
     volume: f32,
     /// Whether the equalizer is engaged. Starts off, as in Winamp; the band
     /// gains below are stored regardless so turning it back on restores them.
