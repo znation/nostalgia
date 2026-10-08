@@ -1,9 +1,10 @@
 use super::views::BROWSE_VIEWS;
 use super::*;
-use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB, PRESETS};
+use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB};
 use crate::sample_library::sample_library;
 use crate::test_support::{
-    assert_ids, sample_album, sample_artist, sample_song, second_album_songs, stepping_songs,
+    assert_ids, rock_preset, sample_album, sample_artist, sample_song, second_album_songs,
+    stepping_songs,
 };
 
 /// A fresh player over its own shared state, so a test can inspect the
@@ -288,10 +289,7 @@ fn eq_band_change_clamps_value_before_storing() {
 #[test]
 fn eq_preset_selected_applies_the_curve_and_selection() {
     let (mut player, state) = test_player();
-    let preset = *PRESETS
-        .iter()
-        .find(|preset| preset.name == "Rock")
-        .expect("the preset table must contain Rock");
+    let preset = rock_preset();
 
     let _ = update(&mut player, Message::EqPresetSelected(preset));
 

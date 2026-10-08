@@ -210,7 +210,8 @@ pub fn clamp_volume(volume: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{AppState, clamp_volume};
-    use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS};
+    use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB};
+    use crate::test_support::rock_preset;
 
     /// Runs `mutation` on `state` and asserts it leaves `current_track` and
     /// `volume` untouched. Every `AppState` mutation but `set_volume` uses
@@ -356,10 +357,7 @@ mod tests {
     #[test]
     fn set_eq_band_out_of_range_keeps_the_preset_selection() {
         let mut state = AppState::default();
-        let preset = *PRESETS
-            .iter()
-            .find(|preset| preset.name == "Rock")
-            .expect("the preset table must contain Rock");
+        let preset = rock_preset();
 
         state.apply_eq_preset(preset);
         assert_keeps_track_and_volume(&mut state, |state| state.set_eq_band(BAND_COUNT, 5.0));
@@ -400,10 +398,7 @@ mod tests {
     #[test]
     fn apply_eq_preset_stores_the_whole_curve_and_the_selection() {
         let mut state = AppState::default();
-        let preset = *PRESETS
-            .iter()
-            .find(|preset| preset.name == "Rock")
-            .expect("the preset table must contain Rock");
+        let preset = rock_preset();
 
         assert_keeps_track_and_volume(&mut state, |state| state.apply_eq_preset(preset));
 
@@ -419,10 +414,7 @@ mod tests {
     #[test]
     fn moving_a_slider_clears_the_preset_selection() {
         let mut state = AppState::default();
-        let preset = *PRESETS
-            .iter()
-            .find(|preset| preset.name == "Rock")
-            .expect("the preset table must contain Rock");
+        let preset = rock_preset();
 
         state.apply_eq_preset(preset);
         assert_eq!(state.eq_preset(), Some(preset));

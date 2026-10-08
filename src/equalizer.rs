@@ -175,6 +175,7 @@ pub fn clamp_gain(gain: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{BAND_COUNT, BAND_FREQUENCIES, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, clamp_gain};
+    use crate::test_support::rock_preset;
 
     #[test]
     fn band_frequencies_match_the_band_count() {
@@ -302,10 +303,7 @@ mod tests {
     // exact-array check.
     #[test]
     fn rock_preset_pins_the_classic_curve() {
-        let rock = PRESETS
-            .iter()
-            .find(|preset| preset.name == "Rock")
-            .expect("the preset table must contain Rock");
+        let rock = rock_preset();
         assert_eq!(rock.preamp, 0.0);
         assert_eq!(
             rock.bands,

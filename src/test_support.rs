@@ -5,6 +5,7 @@
 //! live in one named module rather than inside `library` so the data model
 //! module stays only the model; every item here is compiled only for tests.
 
+use crate::equalizer::{PRESETS, Preset};
 use crate::library::{Album, Artist, Song};
 
 /// The three songs on `album-1` that the Previous/Next stepping tests step
@@ -89,6 +90,19 @@ pub(crate) fn sample_song() -> Song {
         title: "Opening".to_string(),
         album_id: "album-1".to_string(),
     }
+}
+
+/// The classic "Rock" preset from [`PRESETS`], shared by the `equalizer`,
+/// `state`, and `ui` test suites. Each suite used to look it up inline with
+/// the same `.find(|preset| preset.name == "Rock").expect(...)` — a rename in
+/// the table would then fail in five places, each repeating the panic
+/// message — so the lookup lives here once and each test only names the curve
+/// it wants.
+pub(crate) fn rock_preset() -> Preset {
+    *PRESETS
+        .iter()
+        .find(|preset| preset.name == "Rock")
+        .expect("the preset table must contain Rock")
 }
 
 /// Asserts that `T` requires every field `payload` declares: for each key,
