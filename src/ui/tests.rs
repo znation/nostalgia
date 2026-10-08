@@ -1,5 +1,6 @@
 use super::*;
 use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB};
+use crate::sample_library::sample_library;
 use crate::test_support::{
     assert_ids, sample_album, sample_artist, sample_song, second_album_songs, stepping_songs,
 };
@@ -347,6 +348,36 @@ async fn album_selected_fetches_the_albums_songs_into_the_player() {
     // As with the artist arm: the view flips to songs, and the fetched
     // list lands in the browse buffer in library order.
     assert_view(&player, CurrentView::Songs);
+}
+
+// A browse reply can complete out of order: the user picks artist-1, then
+// artist-2, and artist-1's slower fetch lands last. Storing that reply would
+// replace artist-2's albums with artist-1's, showing the wrong artist's list.
+// The per-list request generation rejects the superseded reply. This test
+// holds the first task and drives it after the second has landed, which is
+// the completion order a slow backend produces.
+#[tokio::test]
+async fn a_slow_stale_browse_reply_does_not_overwrite_the_newer_list() {
+    let (mut player, _state) = test_player();
+    player.artists = sample_library().artists.clone();
+
+    // Issue two album fetches: artist-1 (index 0), then artist-2 (index 1).
+    // The artists list is not replaced, so both presses carry epoch 0.
+    let first = update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 });
+    let second = update(&mut player, Message::ArtistSelected { epoch: 0, index: 1 });
+
+    // The newer request's reply lands first.
+    let mut newer: Option<Message> = None;
+    drive_task(second, "newer album fetch", |message| newer = Some(message)).await;
+    let _ = update(&mut player, newer.expect("the newer fetch must complete"));
+    assert_ids(&player.albums, |album| album.id.as_str(), &["album-3"]);
+
+    // The older request's reply lands late and must be dropped, leaving the
+    // newer artist's albums in place.
+    let mut stale: Option<Message> = None;
+    drive_task(first, "stale album fetch", |message| stale = Some(message)).await;
+    let _ = update(&mut player, stale.expect("the stale fetch must complete"));
+    assert_ids(&player.albums, |album| album.id.as_str(), &["album-3"]);
 }
 
 // Startup wiring: `boot` hands iced a fresh player plus the task that
@@ -787,9 +818,11 @@ fn now_playing_label_keeps_the_track_name_after_browsing_to_another_album() {
 async fn fetch_into_schedules_fetch_and_maps_result_to_loaded_message() {
     let (player, _state) = test_player();
 
+    let generation = RequestGeneration::issue(&Arc::new(AtomicU64::new(0)));
     let task = fetch_into(
         &player.apple_music_service,
         "loading favorite artists".to_string(),
+        generation,
         |service| async move { service.get_favorite_artists().await },
         Message::ArtistsLoaded,
     );
@@ -817,9 +850,11 @@ async fn fetch_into_schedules_fetch_and_maps_result_to_loaded_message() {
 async fn fetch_into_maps_a_failed_fetch_to_an_empty_loaded_message() {
     let (player, _state) = test_player();
 
+    let generation = RequestGeneration::issue(&Arc::new(AtomicU64::new(0)));
     let task = fetch_into(
         &player.apple_music_service,
         "loading albums for artist \"artist-1\"".to_string(),
+        generation,
         |_service| async { Err::<Vec<Album>, String>("boom".to_string()) },
         Message::AlbumsLoaded,
     );

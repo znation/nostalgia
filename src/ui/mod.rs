@@ -7,7 +7,11 @@
 //! seam. Its unit tests live in the `tests` submodule.
 
 use iced::{Element, Task, widget::Column};
-use std::{borrow::Cow, collections::HashMap, sync::Arc};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    sync::{Arc, atomic::AtomicU64},
+};
 use tokio::sync::Mutex;
 
 mod loading;
@@ -21,7 +25,7 @@ use crate::{
     library::{Album, Artist, Song},
     state::AppState,
 };
-use loading::{fetch_into, play_failure_report, played_or_reported};
+use loading::{RequestGeneration, fetch_into, play_failure_report, played_or_reported};
 
 /// Runs the UI, blocking until the window is closed.
 ///
@@ -61,6 +65,10 @@ enum Message {
     ArtistsLoaded(Vec<Artist>),
     AlbumsLoaded(Vec<Album>),
     SongsLoaded(Vec<Song>),
+    // A browse reply that a newer request for the same list has superseded.
+    // `fetch_into` emits this instead of the `*Loaded` message so the stale
+    // reply never reaches `store_loaded`; the arm below is a no-op.
+    Ignored,
     TrackPlayed,
 }
 
@@ -88,6 +96,15 @@ struct WinampPlayer {
     artists_epoch: u64,
     albums_epoch: u64,
     songs_epoch: u64,
+    /// Per-list browse-request counters. Each list's counter is bumped when a
+    /// request for that list is issued, so a reply that completes after a
+    /// newer request for the same list is recognized as stale (see
+    /// [`loading::RequestGeneration`]) and does not overwrite the newer list.
+    /// The counters are shared (`Arc`) with the fetch tasks, which complete on
+    /// iced's executor while this player's UI thread issues later requests.
+    artists_generation: Arc<AtomicU64>,
+    albums_generation: Arc<AtomicU64>,
+    songs_generation: Arc<AtomicU64>,
 }
 
 /// Which browse screen is showing. Payload-free: the albums and songs the
@@ -119,6 +136,9 @@ impl WinampPlayer {
             artists_epoch: 0,
             albums_epoch: 0,
             songs_epoch: 0,
+            artists_generation: Arc::new(AtomicU64::new(0)),
+            albums_generation: Arc::new(AtomicU64::new(0)),
+            songs_generation: Arc::new(AtomicU64::new(0)),
         }
     }
 
@@ -281,9 +301,11 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 return Task::none();
             };
             player.current_view = CurrentView::Albums;
+            let generation = RequestGeneration::issue(&player.albums_generation);
             fetch_into(
                 &player.apple_music_service,
                 format!("loading albums for artist {artist_id:?}"),
+                generation,
                 move |service| async move { service.get_albums_by_artist(&artist_id).await },
                 Message::AlbumsLoaded,
             )
@@ -297,9 +319,11 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 return Task::none();
             };
             player.current_view = CurrentView::Songs;
+            let generation = RequestGeneration::issue(&player.songs_generation);
             fetch_into(
                 &player.apple_music_service,
                 format!("loading songs from album {album_id:?}"),
+                generation,
                 move |service| async move { service.get_songs_from_album(&album_id).await },
                 Message::SongsLoaded,
             )
@@ -317,12 +341,16 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             };
             Task::none()
         }
-        Message::LoadArtists => fetch_into(
-            &player.apple_music_service,
-            "loading favorite artists".to_string(),
-            |service| async move { service.get_favorite_artists().await },
-            Message::ArtistsLoaded,
-        ),
+        Message::LoadArtists => {
+            let generation = RequestGeneration::issue(&player.artists_generation);
+            fetch_into(
+                &player.apple_music_service,
+                "loading favorite artists".to_string(),
+                generation,
+                |service| async move { service.get_favorite_artists().await },
+                Message::ArtistsLoaded,
+            )
+        }
         Message::ArtistsLoaded(artists) => {
             store_loaded(&mut player.artists, &mut player.artists_epoch, artists)
         }
@@ -332,7 +360,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::SongsLoaded(songs) => {
             store_loaded(&mut player.songs, &mut player.songs_epoch, songs)
         }
-        Message::TrackPlayed => Task::none(),
+        Message::TrackPlayed | Message::Ignored => Task::none(),
     }
 }
 

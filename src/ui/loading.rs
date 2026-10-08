@@ -4,12 +4,16 @@
 //! A library fetch or playback call returns a `Result`; the `update` loop
 //! needs a `Message`. These helpers are the seam between the two: they map a
 //! successful result to its `*Loaded`/`TrackPlayed` message, fall back to an
-//! empty list on error, and format the stderr report. They are pure or
-//! generic — they know the `AppleMusicService` seam and the `Message` type,
-//! not the `WinampPlayer` event loop — so they live in their own module,
-//! mirroring `views` and `transport`.
+//! empty list on error, and format the stderr report. The fetch helper also
+//! carries each browse request's [`RequestGeneration`] so a reply a newer
+//! request has superseded is dropped rather than stored. They know the
+//! `AppleMusicService` seam and the `Message` type, not the `WinampPlayer`
+//! event loop, so they live in their own module, mirroring `views` and
+//! `transport`.
 
 use std::future::Future;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use iced::Task;
 
@@ -79,18 +83,55 @@ pub(super) fn play_failure_report<E: std::fmt::Display>(track_id: &str, err: &E)
     format!("failed to play track {track_id:?}: {err}")
 }
 
+/// The sequence position of one browse request within its list's request
+/// stream, paired with the shared counter naming the list's latest request.
+///
+/// A slow fetch can finish after a newer request for the same list has
+/// already landed; storing that older reply would replace the newer list
+/// with stale data — the wrong artist's albums, say. The counter is bumped
+/// when a request is issued, so [`Self::is_current`] lets the completion
+/// tell whether it is still the newest request and its result may be stored.
+/// The counter is an `Arc<AtomicU64>` because the completion runs on iced's
+/// executor while the player's UI thread issues later requests against the
+/// same counter.
+pub(super) struct RequestGeneration {
+    issued: u64,
+    latest: Arc<AtomicU64>,
+}
+
+impl RequestGeneration {
+    /// Records a new request as the latest for its list and returns the
+    /// generation that request's completion must still match to be stored.
+    pub(super) fn issue(latest: &Arc<AtomicU64>) -> Self {
+        Self {
+            issued: latest.fetch_add(1, Ordering::SeqCst) + 1,
+            latest: Arc::clone(latest),
+        }
+    }
+
+    /// Whether this request is still the latest issued for its list. A later
+    /// request for the same list makes an earlier completion stale.
+    fn is_current(&self) -> bool {
+        self.issued == self.latest.load(Ordering::SeqCst)
+    }
+}
+
 /// Runs a library-fetch future through iced's runtime, mapping its `Result`
 /// onto the matching `*Loaded` message (empty list on error, via
 /// [`loaded_or_empty`], with the error reported to stderr via
 /// [`fetch_failure_report`]). `context` names the fetch — "loading favorite
 /// artists", "loading albums for artist \"artist-1\"", or "loading songs from
 /// album \"album-1\"" — so a failed browse reports *which* query failed and
-/// what it was fetching, not just that a fetch failed. Shared by the artists,
-/// albums, and songs load arms so none of them repeats the
-/// clone-the-service-then-`Task::perform` boilerplate.
+/// what it was fetching, not just that a fetch failed. `generation` names the
+/// request's place in its list's stream: when a newer request for the same
+/// list has been issued by the time this fetch completes, the reply is
+/// superseded and becomes [`Message::Ignored`] instead of overwriting the
+/// newer list. Shared by the artists, albums, and songs load arms so none of
+/// them repeats the clone-the-service-then-`Task::perform` boilerplate.
 pub(super) fn fetch_into<T, E, Fut>(
     service: &AppleMusicService,
     context: String,
+    generation: RequestGeneration,
     fetch: impl FnOnce(AppleMusicService) -> Fut + Send + 'static,
     loaded: impl Fn(Vec<T>) -> Message + Send + 'static,
 ) -> Task<Message>
@@ -101,6 +142,9 @@ where
 {
     let service = service.clone();
     Task::perform(async move { fetch(service).await }, move |result| {
+        if !generation.is_current() {
+            return Message::Ignored;
+        }
         loaded_or_empty(result, loaded, |err| {
             eprintln!("{}", fetch_failure_report(&context, err))
         })
