@@ -321,6 +321,31 @@ fn authorize_deadline_bounds_a_stalled_connection() {
     );
 }
 
+// The browser opener is a short-lived launcher. Dropping its `Child` without
+// waiting leaves a zombie for the rest of the app's life, one per sign-in;
+// `reap_in_background` waits on a detached thread so the child is reaped
+// without blocking the caller. A real child plus `/proc` is the only way to
+// observe reaping: before the wait was added, the pid stayed a zombie and this
+// loop timed out.
+#[cfg(target_os = "linux")]
+#[test]
+fn reap_in_background_reaps_the_child() {
+    let child = Command::new("sh")
+        .args(["-c", "exit 0"])
+        .spawn()
+        .expect("spawn a short-lived child");
+    let pid = child.id();
+    reap_in_background(child);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while std::path::Path::new(&format!("/proc/{pid}")).exists() {
+        assert!(
+            Instant::now() < deadline,
+            "child {pid} was still present five seconds after reap_in_background"
+        );
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
 // `AUTH_TIMEOUT` is production behavior — how long `authorize` waits for
 // the browser callback — but `authorize` is its only reader and the
 // timeout tests above inject their own deadline, so a changed constant

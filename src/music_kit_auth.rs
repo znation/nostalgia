@@ -170,6 +170,10 @@ fn authorize_with_timeout(
 
 /// Opens `url` in the system's default browser.
 ///
+/// The opener is a short-lived launcher, so it is reaped on a detached thread
+/// (see [`spawn_opener`]) rather than left as a zombie for the rest of the
+/// app's life.
+///
 /// # Errors
 ///
 /// Returns the [`std::io::Error`] from spawning the platform's opener command;
@@ -189,14 +193,31 @@ pub fn open_in_browser(url: &str) -> io::Result<()> {
 
 /// Spawns `program` with `args`, naming it in any spawn error so a missing
 /// opener reads as "`xdg-open`: No such file or directory" rather than a bare
-/// OS error. The child is left to run detached — the opener exits on its own
-/// and the sign-in flow must not block waiting for it.
+/// OS error.
+///
+/// The opener exits as soon as it has handed the URL to the browser, but a
+/// [`std::process::Child`] dropped without a wait leaves a zombie for the rest
+/// of the app's life, one per sign-in. Waiting here would block the sign-in
+/// flow before it starts accepting callbacks, so [`reap_in_background`] waits
+/// on its own thread and the flow continues immediately.
 fn spawn_opener(program: &str, args: &[&str]) -> io::Result<()> {
-    Command::new(program)
+    let child = Command::new(program)
         .args(args)
         .spawn()
-        .map(|_| ())
-        .map_err(|error| io::Error::new(error.kind(), format!("{program}: {error}")))
+        .map_err(|error| io::Error::new(error.kind(), format!("{program}: {error}")))?;
+    reap_in_background(child);
+    Ok(())
+}
+
+/// Waits on `child` on a detached thread so it is reaped without blocking the
+/// caller. A failed wait is reported: the child could not be reaped, which is
+/// worth a line on stderr rather than silence.
+fn reap_in_background(mut child: std::process::Child) {
+    thread::spawn(move || {
+        if let Err(error) = child.wait() {
+            eprintln!("could not reap the browser opener process: {error}");
+        }
+    });
 }
 
 /// What serving one connection decided for the overall flow.
