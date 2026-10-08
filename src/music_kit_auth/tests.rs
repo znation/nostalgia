@@ -1,6 +1,6 @@
 use super::*;
 use std::io::{Read, Write};
-use std::net::TcpStream;
+use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -320,6 +320,73 @@ fn authorize_survives_an_oversized_content_length() {
     authorize_with_timeout(SAMPLE_DEVELOPER_TOKEN, &opener, Duration::from_secs(5))
         .expect("an oversized Content-Length does not abort the flow");
     join_all(&handles);
+}
+
+/// A connected loopback pair: the server side handed to `read_http_request`
+/// and the client side used to send raw bytes.
+fn connected_pair() -> (TcpStream, TcpStream) {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind a loopback listener");
+    let port = listener.local_addr().expect("listener address").port();
+    let client = TcpStream::connect(("127.0.0.1", port)).expect("connect to the listener");
+    let (server, _) = listener.accept().expect("accept the client");
+    (server, client)
+}
+
+// `read_http_request` promises a hostile client cannot make the server
+// allocate without bound. The flow test above covers a `Content-Length` that
+// overflows `usize`; these cover the large-but-parseable declared body and
+// the never-terminated header, which the `MAX_REQUEST_BYTES` guards reject.
+#[test]
+fn read_http_request_refuses_a_declared_body_past_the_cap() {
+    let (mut server, mut client) = connected_pair();
+    // Send the full declared body: a server that refused only after reading it
+    // would return the request instead of `None`.
+    let raw = format!(
+        "POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: {}\r\n\r\n{}",
+        http::MAX_REQUEST_BYTES + 1,
+        "x".repeat(http::MAX_REQUEST_BYTES + 1)
+    );
+    let writer = std::thread::spawn(move || {
+        let _ = client.write_all(raw.as_bytes());
+    });
+
+    let request = read_http_request(&mut server, Instant::now() + Duration::from_secs(5))
+        .expect("a large declared body is not an I/O error");
+    assert!(request.is_none(), "a body past the cap must be refused");
+
+    drop(server);
+    let _ = writer.join();
+}
+
+#[test]
+fn read_http_request_refuses_headers_past_the_cap() {
+    let (mut server, mut client) = connected_pair();
+    // A header line longer than the cap, with no `\r\n\r\n` terminator, and a
+    // client that stays connected: the server must give up as soon as it has
+    // buffered the cap instead of waiting out the deadline.
+    let raw = format!(
+        "GET / HTTP/1.1\r\nX-Fill: {}\r\n",
+        "x".repeat(http::MAX_REQUEST_BYTES)
+    );
+    let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+    let writer = std::thread::spawn(move || {
+        let _ = client.write_all(raw.as_bytes());
+        let _ = release_rx.recv();
+    });
+
+    let started = Instant::now();
+    let request = read_http_request(&mut server, Instant::now() + Duration::from_secs(5))
+        .expect("oversized headers are not an I/O error");
+    let elapsed = started.elapsed();
+    assert!(request.is_none(), "headers past the cap must be refused");
+    assert!(
+        elapsed < Duration::from_secs(1),
+        "the header cap must be refused without waiting out the deadline (took {elapsed:?})"
+    );
+
+    drop(server);
+    let _ = release_tx.send(());
+    let _ = writer.join();
 }
 
 #[test]

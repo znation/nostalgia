@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 
 /// The largest HTTP request, headers and body combined, the loopback server
 /// will buffer. A request larger than this is dropped without being read.
-const MAX_REQUEST_BYTES: usize = 16 * 1024;
+pub(super) const MAX_REQUEST_BYTES: usize = 16 * 1024;
 
 /// How long a single connection may take to send its request before it is
 /// dropped as a stalled client. Each read is capped further by the time left
