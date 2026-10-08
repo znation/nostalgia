@@ -57,6 +57,24 @@ fn empty_list_label(view: &CurrentView) -> &'static str {
     }
 }
 
+/// The placeholder a browse view shows when its list has no rows, choosing
+/// between "still loading" and "loaded, but empty".
+///
+/// `epoch` is the list's load epoch (see `store_loaded` in `ui`): 0 means no
+/// reply has ever populated this buffer, so the fetch the navigation just
+/// scheduled is still in flight and the panel reads as loading rather than
+/// as an empty library; a bumped epoch means a reply landed — possibly an
+/// empty one — so [`empty_list_label`] names the list. Pure, like
+/// [`empty_list_label`], so both wordings are testable without an iced
+/// renderer.
+fn browse_placeholder(view: &CurrentView, epoch: u64) -> &'static str {
+    if epoch == 0 {
+        "Loading…"
+    } else {
+        empty_list_label(view)
+    }
+}
+
 /// Builds a scrollable list where each item is a button showing a title
 /// followed by a secondary label, emitting the given message on press.
 /// Shared by the artists, albums, and songs views. The last tuple element
@@ -65,9 +83,9 @@ fn empty_list_label(view: &CurrentView) -> &'static str {
 /// ever sets the flag to true.
 ///
 /// When `items` yields nothing, the list renders `empty_label` in place of a
-/// blank panel. The caller picks the wording via [`empty_list_label`]; the
-/// label names the list, since the view cannot tell a genuinely empty list
-/// from one whose fetch is still in flight.
+/// blank panel. The caller picks the wording via [`browse_placeholder`],
+/// which distinguishes a buffer no reply has populated yet (still loading)
+/// from one that loaded empty and names the list.
 ///
 /// The rows borrow their titles from the list the caller passes in rather
 /// than owning clones: this builder runs on every view refresh, so the
@@ -182,7 +200,7 @@ pub fn view_artists(artists: &[Artist], epoch: u64) -> Element<'_, Message> {
             .iter()
             .enumerate()
             .map(|(index, artist)| artist_row(epoch, index, artist)),
-        empty_list_label(&CurrentView::Artists),
+        browse_placeholder(&CurrentView::Artists, epoch),
     )
 }
 
@@ -196,7 +214,7 @@ pub fn view_albums(albums: &[Album], epoch: u64) -> Element<'_, Message> {
             .iter()
             .enumerate()
             .map(|(index, album)| album_row(epoch, index, album)),
-        empty_list_label(&CurrentView::Albums),
+        browse_placeholder(&CurrentView::Albums, epoch),
     )
 }
 
@@ -214,7 +232,7 @@ pub fn view_songs<'a>(
             .iter()
             .enumerate()
             .map(|(index, song)| song_row(epoch, index, song, current_track)),
-        empty_list_label(&CurrentView::Songs),
+        browse_placeholder(&CurrentView::Songs, epoch),
     )
 }
 
@@ -372,10 +390,10 @@ pub fn view_equalizer(
 #[cfg(test)]
 mod tests {
     use super::{
-        CurrentView, Message, album_row, artist_row, can_go_back, empty_list_label,
-        eq_enabled_label, now_playing_label, play_pause_label, repeat_label, song_row, view_albums,
-        view_artists, view_back_button, view_equalizer, view_now_playing, view_songs,
-        view_transport_controls,
+        CurrentView, Message, album_row, artist_row, browse_placeholder, can_go_back,
+        empty_list_label, eq_enabled_label, now_playing_label, play_pause_label, repeat_label,
+        song_row, view_albums, view_artists, view_back_button, view_equalizer, view_now_playing,
+        view_songs, view_transport_controls,
     };
     use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB};
     use crate::sample_library::sample_library;
@@ -588,16 +606,30 @@ mod tests {
         let _songs_marked = view_songs(&[], 0, Some("song-1"));
     }
 
-    // Each browse level's empty buffer must render a label naming that list,
-    // not a blank panel: the panel cannot tell a genuinely empty list from one
-    // whose fetch is still in flight, so a blank panel leaves the user with no
-    // clue what is missing. `scrollable_list` renders the label it is handed;
-    // this pins the per-level wording it is handed.
+    // Each browse level's loaded-but-empty buffer must render a label naming
+    // that list, not a blank panel, so the user has a clue what is missing.
+    // `browse_placeholder` chooses between this wording and "Loading…"; this
+    // pins the per-level empty wording `empty_list_label` hands back.
     #[test]
     fn empty_list_label_names_the_empty_browse_level() {
         assert_eq!(empty_list_label(&CurrentView::Artists), "No artists");
         assert_eq!(empty_list_label(&CurrentView::Albums), "No albums");
         assert_eq!(empty_list_label(&CurrentView::Songs), "No songs");
+    }
+
+    // The placeholder distinguishes a list whose first reply has not landed
+    // yet from one that loaded empty: epoch 0 is "never populated", so the
+    // panel says it is loading instead of claiming the library is empty; a
+    // bumped epoch means a reply landed (possibly an empty one), so the
+    // per-level wording applies.
+    #[test]
+    fn browse_placeholder_distinguishes_loading_from_an_empty_list() {
+        assert_eq!(browse_placeholder(&CurrentView::Artists, 0), "Loading…");
+        assert_eq!(browse_placeholder(&CurrentView::Albums, 0), "Loading…");
+        assert_eq!(browse_placeholder(&CurrentView::Songs, 0), "Loading…");
+        assert_eq!(browse_placeholder(&CurrentView::Artists, 1), "No artists");
+        assert_eq!(browse_placeholder(&CurrentView::Albums, 1), "No albums");
+        assert_eq!(browse_placeholder(&CurrentView::Songs, 1), "No songs");
     }
 
     #[test]
