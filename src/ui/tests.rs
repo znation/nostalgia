@@ -47,6 +47,17 @@ fn player_in_albums() -> WinampPlayer {
     player
 }
 
+/// Seeds `player`'s three browse buffers with one each of the shared
+/// [`sample_artist`], [`sample_album`], and [`sample_song`] fixtures — the
+/// "loaded" browse shape. The failure-arm test and the view-construction test
+/// both build this same three-buffer setup before exercising their own
+/// contract, so it lives here once.
+fn seed_browse_lists(player: &mut WinampPlayer) {
+    player.artists = vec![sample_artist()];
+    player.albums = vec![sample_album()];
+    player.songs = vec![sample_song()];
+}
+
 /// Asserts the player is showing `expected`. The tests pin the current
 /// view at each navigation step — `ArtistSelected`, `AlbumSelected`, and
 /// `Back` — and at startup, so the same view-equality check lives here
@@ -938,9 +949,7 @@ fn albums_load_failed_stores_the_error_until_the_next_load() {
 #[test]
 fn each_browse_failure_stores_its_report_in_its_own_list() {
     let (mut player, _state) = test_player();
-    player.artists = vec![sample_artist()];
-    player.albums = vec![sample_album()];
-    player.songs = vec![sample_song()];
+    seed_browse_lists(&mut player);
     player.artists_loading = true;
     player.albums_loading = true;
     player.songs_loading = true;
@@ -1363,9 +1372,7 @@ fn view_constructs_over_the_apps_full_input_space() {
 
     // The loaded shape: artists, albums, and songs in the browse buffers,
     // rendered for every now-playing resolution a session can reach.
-    player.artists = vec![sample_artist()];
-    player.albums = vec![sample_album()];
-    player.songs = vec![sample_song()];
+    seed_browse_lists(&mut player);
 
     let now_playing_options = [None, Some("song-1"), Some("no-such-song")];
     let play_states = [false, true];
