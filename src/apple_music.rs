@@ -269,7 +269,7 @@ mod tests {
 
     /// A fresh service plus a handle to the shared state it mutates, so a
     /// playback test can drive the service and then inspect the resulting
-    /// `AppState`. The six playback tests below all start with this same
+    /// `AppState`. The playback tests below all start with this same
     /// service-and-state pair, so it lives here once.
     fn test_service_with_state() -> (AppleMusicService, Arc<Mutex<AppState>>) {
         let service = test_service();
@@ -278,7 +278,7 @@ mod tests {
     }
 
     /// Locks the shared playback state and asserts it holds `expected_track`
-    /// with `expected_playing`. The six playback tests below all end on that
+    /// with `expected_playing`. The playback tests below all end on that
     /// same pair — the recorded track id and the playing flag — so the
     /// lock-and-compare sequence lives here once and each test only names the
     /// state it drove to.
