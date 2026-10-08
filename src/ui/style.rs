@@ -27,6 +27,19 @@ pub fn bevel_edges(raised: bool) -> (Color, Color) {
     }
 }
 
+/// A 1px square-cornered [`Border`] in `color`.
+///
+/// The base skin's chrome edges are square 1px outlines; iced's [`Border`]
+/// carries no `Default`, so this shared shape lives here rather than as a
+/// struct literal at each style site. Pure, so it needs no widget to test.
+fn square_border(color: Color) -> Border {
+    Border {
+        color,
+        width: 1.0,
+        radius: 0.0.into(),
+    }
+}
+
 /// A 1px [`rule`] in `color`, styled to fill the available space on its axis.
 ///
 /// A bevel's horizontal and vertical edges differ only in which [`rule`]
@@ -158,11 +171,7 @@ pub fn chrome_button_style(status: button::Status) -> button::Style {
     button::Style {
         background: Some(Background::Color(face)),
         text_color,
-        border: Border {
-            color: top_left,
-            width: 1.0,
-            radius: 0.0.into(),
-        },
+        border: square_border(top_left),
         shadow: Shadow {
             color: bottom_right,
             offset: Vector::new(1.0, 1.0),
@@ -196,11 +205,7 @@ pub fn chrome_slider_style(status: slider::Status) -> slider::Style {
                 Background::Color(theme::LCD_BACKGROUND),
             ),
             width: 4.0,
-            border: Border {
-                color: theme::PANEL_EDGE_DARK,
-                width: 1.0,
-                radius: 0.0.into(),
-            },
+            border: square_border(theme::PANEL_EDGE_DARK),
         },
         handle: slider::Handle {
             shape: slider::HandleShape::Rectangle {
@@ -251,18 +256,10 @@ pub fn playlist_row_style(status: button::Status) -> button::Style {
 pub fn playlist_scrollable_style() -> scrollable::Style {
     let rail = scrollable::Rail {
         background: Some(Background::Color(theme::WINDOW_BACKGROUND)),
-        border: Border {
-            color: theme::PANEL_EDGE_DARK,
-            width: 1.0,
-            radius: 0.0.into(),
-        },
+        border: square_border(theme::PANEL_EDGE_DARK),
         scroller: scrollable::Scroller {
             background: Background::Color(theme::BUTTON_FACE),
-            border: Border {
-                color: theme::PANEL_EDGE_LIGHT,
-                width: 1.0,
-                radius: 0.0.into(),
-            },
+            border: square_border(theme::PANEL_EDGE_LIGHT),
         },
     };
 
@@ -270,11 +267,7 @@ pub fn playlist_scrollable_style() -> scrollable::Style {
         container: container::Style {
             text_color: Some(theme::TEXT),
             background: Some(theme::LCD_BACKGROUND.into()),
-            border: Border {
-                color: theme::PANEL_EDGE_DARK,
-                width: 1.0,
-                radius: 0.0.into(),
-            },
+            border: square_border(theme::PANEL_EDGE_DARK),
             shadow: Shadow {
                 color: theme::PANEL_EDGE_LIGHT,
                 offset: Vector::new(1.0, 1.0),
@@ -287,11 +280,7 @@ pub fn playlist_scrollable_style() -> scrollable::Style {
         gap: None,
         auto_scroll: scrollable::AutoScroll {
             background: Background::Color(theme::LCD_BACKGROUND),
-            border: Border {
-                color: theme::PANEL_EDGE_LIGHT,
-                width: 1.0,
-                radius: 0.0.into(),
-            },
+            border: square_border(theme::PANEL_EDGE_LIGHT),
             shadow: Shadow {
                 color: theme::PANEL_EDGE_DARK,
                 offset: Vector::new(1.0, 1.0),
