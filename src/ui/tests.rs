@@ -11,7 +11,8 @@ use crate::test_support::{
 /// same `AppState` the player mutates.
 fn test_player() -> (WinampPlayer, Arc<Mutex<AppState>>) {
     let state = Arc::new(Mutex::new(AppState::default()));
-    (WinampPlayer::new(state.clone()), state)
+    let service = AppleMusicService::new(state.clone());
+    (WinampPlayer::new(state.clone(), service), state)
 }
 
 /// A fresh request generation over its own counter — the starting
@@ -838,8 +839,9 @@ async fn boot_schedules_loading_the_artist_list() {
     use futures::StreamExt;
 
     let state = Arc::new(Mutex::new(AppState::default()));
+    let service = AppleMusicService::new(state.clone());
 
-    let (player, task) = boot(state);
+    let (player, task) = boot(state, service);
     assert_view(&player, CurrentView::Artists);
 
     // The batched task carries both the artists fetch and the window-id query,

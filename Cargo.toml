@@ -19,7 +19,7 @@ repository = "https://github.com/znation/nostalgia"
 # style tests can lay a panel out and assert its resolved size. The feature
 # only un-gates modules; it adds no crates.
 iced = { version = "0.14.0", features = ["advanced"] }
-# `derive` is requested explicitly: `library` and `apple_music` use
+# `derive` is requested explicitly: `library` uses
 # `#[derive(Serialize, Deserialize)]`, and without this the crate would compile
 # only because a transitive iced dependency (zbus) happens to enable the
 # feature. Naming it here keeps the derive macros ours, not a side effect.

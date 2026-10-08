@@ -1,8 +1,5 @@
 use super::*;
-use crate::test_support::{
-    assert_every_field_required, assert_ids, assert_serializes_as, assert_unknown_fields_tolerated,
-};
-use serde_json::json;
+use crate::test_support::assert_ids;
 
 fn test_service() -> AppleMusicService {
     AppleMusicService::new(Arc::new(Mutex::new(AppState::default())))
@@ -79,29 +76,6 @@ async fn assert_control_character_id_rejected<T: std::fmt::Debug>(
         error,
         format!("{kind} id must not contain control characters (got {id:?})")
     );
-}
-
-/// The representative Apple Music token the three token tests share: a full,
-/// valid payload for the round-trip, missing-field, and unknown-field
-/// contracts. Each test used to spell out the same three field values — twice
-/// as a struct literal and three times as the equivalent JSON object — so the
-/// fixture lives here once and each test only names the contract it pins.
-fn sample_token() -> AppleMusicToken {
-    AppleMusicToken {
-        access_token: "abc123".to_string(),
-        expires_in: 3600,
-        refresh_token: "refresh-me".to_string(),
-    }
-}
-
-/// The token's JSON wire shape, the payload the token tests deserialize. Kept
-/// a hand-written literal rather than derived from `sample_token`, so
-/// `apple_music_token_round_trips_through_json` still pins the serialized
-/// field names — a `#[serde(rename)]` would change `to_value(sample_token())`
-/// but not this object. The missing- and unknown-field probes hand it in as
-/// the full, valid payload.
-fn token_payload() -> serde_json::Value {
-    json!({ "access_token": "abc123", "expires_in": 3600, "refresh_token": "refresh-me" })
 }
 
 #[test]
@@ -475,16 +449,16 @@ async fn next_and_previous_track_stubs_succeed_without_touching_state() {
     assert_playback_state(&state, Some("song-1"), true).await;
 }
 
-// `init_service` is the startup seam `main` calls before the UI boots,
-// and the hook a real Apple Music backend will authenticate and load the
-// library through. Today's stub only prints that it is ready, and no test
-// reaches it. Pin the one contract the stub carries — it leaves the
-// shared playback state exactly as it found it — so a regression that
-// wired the startup hook into `AppState` (or reused `pause`'s
-// clear-the-flag logic) can't ship silently. The stub takes the handle a
-// real implementation will use, so the untouched state is the observable
-// contract, as with `next_track`/`previous_track` above. `blocking_lock`
-// panics inside an async runtime, so this stays a plain test.
+// `init_service` is the startup seam `main` calls before the UI boots.
+// When `APPLE_MUSIC_DEVELOPER_TOKEN` is unset it skips sign-in and returns a
+// service with no session; when it is set it spawns a sign-in thread on a
+// clone that only touches the service's own session, never the shared playback
+// state. Pin the contract both paths keep — the shared state is exactly as
+// `init_service` found it and the returned service is the one the UI shares —
+// so a regression that wired the startup hook into `AppState` (or reused
+// `pause`'s clear-the-flag logic) can't ship silently. `blocking_lock` panics
+// inside an async runtime, so this stays a plain test. CI leaves
+// `APPLE_MUSIC_DEVELOPER_TOKEN` unset, so this takes the skip path.
 #[test]
 fn init_service_leaves_the_shared_state_untouched() {
     let state = Arc::new(Mutex::new(AppState::default()));
@@ -496,8 +470,9 @@ fn init_service_leaves_the_shared_state_untouched() {
         state.set_volume(0.7);
     }
 
-    init_service(state.clone());
+    let service = init_service(state.clone());
 
+    assert!(service.session().is_none());
     let state = state.blocking_lock();
     assert_eq!(state.current_track.as_deref(), Some("song-1"));
     assert!(state.is_playing);
@@ -505,39 +480,82 @@ fn init_service_leaves_the_shared_state_untouched() {
     assert_eq!(state.volume(), 0.7);
 }
 
-// `AppleMusicToken` is the auth payload the real Apple Music API will
-// hand back, so its wire contract is pinned the same way the model types
-// in `library.rs` are: field names serialize as-is, the value round-trips
-// through `serde_json`, unknown fields are tolerated, and a payload
-// missing a required field is rejected.
-
-// The token's JSON shape is the contract: field names serialize as-is and
-// the value survives an out-and-back trip through `serde_json` unchanged.
+// The startup wiring: `init_service` builds one service, returns it for the
+// UI, and runs the blocking sign-in on a clone. The session that sign-in
+// stores must be visible through the returned service and must outlive the
+// signing clone — the regression test for an earlier version that built a
+// throwaway service inside the sign-in thread and dropped the session with it.
+// `sign_in` is the synchronous body that thread runs; driving it directly
+// exercises the startup path without the real browser flow. `init_service`
+// itself reads the environment and spawns the thread, so only that thin wrapper
+// is not driven here.
 #[test]
-fn apple_music_token_round_trips_through_json() {
-    assert_serializes_as(sample_token(), token_payload());
+fn startup_sign_in_stores_the_session_on_the_shared_service() {
+    let service = test_service();
+    let sign_in_service = service.clone();
+    let expected = MusicKitSession {
+        developer_token: "dev-token".to_string(),
+        user_token: "user-token".to_string(),
+    };
+
+    sign_in_service.sign_in("dev-token", &|token| {
+        assert_eq!(token, "dev-token");
+        Ok(expected.clone())
+    });
+    drop(sign_in_service);
+
+    assert_eq!(service.session(), Some(expected));
 }
 
-// As with the model types: a payload missing any required field must
-// error, not silently yield a half-populated token.
+// The session seam: `new` starts with no session, `authenticate_with`
+// stores the session its flow returns, and a failed flow propagates the
+// error without disturbing an already-stored session. The real
+// `authenticate` wraps the browser flow and is covered by the manual check
+// in PLANS.md; these tests drive `authenticate_with` with a stub.
+
 #[test]
-fn apple_music_token_deserialization_rejects_missing_required_fields() {
-    assert_every_field_required::<AppleMusicToken>(token_payload());
+fn a_new_service_has_no_session() {
+    assert!(test_service().session().is_none());
 }
 
-// The unknown-field half of the token's deserialization contract: a real
-// token payload carries fields beyond the declared three (the OAuth 2.0
-// token response includes a `token_type`, for one), and serde's default
-// must tolerate the extras rather than failing the whole parse. No other
-// test deserializes the token with an extra field, so a
-// `#[serde(deny_unknown_fields)]` added here would clear every existing
-// test while breaking real authentication.
 #[test]
-fn apple_music_token_deserialization_ignores_unknown_fields() {
-    let mut payload = token_payload();
-    payload
-        .as_object_mut()
-        .expect("the token payload is a JSON object")
-        .insert("token_type".to_string(), json!("Bearer"));
-    assert_unknown_fields_tolerated::<AppleMusicToken>(payload, sample_token());
+fn authenticate_with_stores_the_session_its_flow_returns() {
+    let service = test_service();
+    let expected = MusicKitSession {
+        developer_token: "dev-token".to_string(),
+        user_token: "user-token".to_string(),
+    };
+
+    service
+        .authenticate_with("dev-token", &|token| {
+            assert_eq!(token, "dev-token");
+            Ok(expected.clone())
+        })
+        .unwrap();
+
+    // `session` clones, so a second read returns the same value rather
+    // than consuming the stored session.
+    assert_eq!(service.session(), Some(expected.clone()));
+    assert_eq!(service.session(), Some(expected));
+}
+
+#[test]
+fn a_failed_authentication_leaves_a_stored_session_unchanged() {
+    let service = test_service();
+    let stored = MusicKitSession {
+        developer_token: "dev-token".to_string(),
+        user_token: "user-token".to_string(),
+    };
+    service
+        .authenticate_with("dev-token", &|_| Ok(stored.clone()))
+        .unwrap();
+
+    let error = service
+        .authenticate_with("dev-token", &|_| {
+            Err(AppleMusicError::new("sign-in failed"))
+        })
+        .unwrap_err();
+
+    assert_eq!(error.to_string(), "sign-in failed");
+    assert_eq!(service.session(), Some(stored));
 }

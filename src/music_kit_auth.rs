@@ -78,9 +78,8 @@ impl std::fmt::Debug for MusicKitSession {
 ///
 /// Returns an [`AppleMusicError`] when `token` is not exactly three non-empty
 /// dot-separated segments of base64url characters.
-// The wiring plan in PLANS.md is this function's caller; it is public so that
-// plan can validate the developer token before storing it.
-#[allow(dead_code)]
+// `authorize` below is this function's caller; it is public so the wiring in
+// `apple_music` can validate the developer token before storing it.
 pub fn validate_developer_token(token: &str) -> Result<(), AppleMusicError> {
     if is_jwt_shaped(token) {
         Ok(())
@@ -101,9 +100,8 @@ pub fn validate_developer_token(token: &str) -> Result<(), AppleMusicError> {
 /// Returns an [`AppleMusicError`] when `developer_token` is malformed, when the
 /// browser cannot be opened, when a callback carries the wrong `state` or an
 /// invalid user token, or when no callback arrives before [`AUTH_TIMEOUT`].
-// The wiring plan in PLANS.md is this function's caller; it is public so that
-// plan can obtain a session at startup.
-#[allow(dead_code)]
+// `AppleMusicService::authenticate` is this function's caller; it is public so
+// the wiring in `apple_music` can obtain a session at startup.
 pub fn authorize(
     developer_token: &str,
     open_url: &dyn Fn(&str) -> io::Result<()>,
@@ -173,9 +171,8 @@ fn authorize_with_timeout(
 /// # Errors
 ///
 /// Returns the [`std::io::Error`] from spawning the platform's opener command.
-// The wiring plan in PLANS.md is this function's caller; it is public so that
-// plan can pass it to [`authorize`].
-#[allow(dead_code)]
+// `AppleMusicService::authenticate` passes this to [`authorize`]; it is public
+// so the wiring in `apple_music` can supply the real opener.
 pub fn open_in_browser(url: &str) -> io::Result<()> {
     if cfg!(target_os = "macos") {
         Command::new("open").arg(url).spawn().map(|_| ())

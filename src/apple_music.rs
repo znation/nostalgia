@@ -6,26 +6,37 @@
 //! ([`crate::sample_library::sample_library`]) and stubs playback as
 //! shared-state transitions: `play_track` records the selected track and
 //! marks it playing, `pause` clears the flag. The still-unimplemented stubs
-//! (`next_track`, `previous_track`, and the `token` field with its
-//! `AppleMusicToken` type) stay so a real implementation has a surface to
-//! land on.
+//! (`next_track` and `previous_track`) stay so a real implementation has a
+//! surface to land on.
+//!
+//! The service also holds the authenticated `MusicKit` session
+//! ([`crate::music_kit_auth::MusicKitSession`]) obtained by [`init_service`]
+//! from `APPLE_MUSIC_DEVELOPER_TOKEN`; [`AppleMusicService::authenticate`]
+//! stores it and [`AppleMusicService::session`] hands it to the future REST
+//! integration. [`init_service`] returns the one service the app shares, so the
+//! session stored at startup is the session the UI later reads. Until that
+//! integration lands, the browse queries keep answering from the sample
+//! library.
 
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::library::{Album, Artist, Song};
+use crate::music_kit_auth::MusicKitSession;
 use crate::sample_library::sample_library;
 use crate::state::AppState;
 
-/// A failed music-library or playback operation.
+/// A failed music-library, playback, or sign-in operation.
 ///
-/// The stub produces one only when handed an invalid id: `play_track` rejects
-/// a blank or control-character track id, and `get_albums_by_artist` /
-/// `get_songs_from_album` reject a blank or control-character artist/album id
-/// (an id is blank when it is empty or only whitespace). Every other in-memory
-/// query and playback transition succeeds.
+/// The sample-library stub produces one when handed an invalid id:
+/// `play_track` rejects a blank or control-character track id, and
+/// `get_albums_by_artist` / `get_songs_from_album` reject a blank or
+/// control-character artist/album id (an id is blank when it is empty or only
+/// whitespace). [`AppleMusicService::authenticate`] reports a malformed
+/// developer token, a browser that will not open, a rejected callback, or a
+/// timeout through this type as well. Every other in-memory query and playback
+/// transition succeeds.
 /// The seam carries this type so a real Apple Music
 /// backend can report a failure without tying the seam's public API to a
 /// specific HTTP client. The message is the human-readable cause.
@@ -43,10 +54,10 @@ impl std::error::Error for AppleMusicError {}
 // The seam's error constructor is reached by `play_track` and the two browse
 // queries through `ensure_id_is_valid`, and stays public for a real Apple
 // Music backend that will report failures from another module, so it is live
-// and needs no `dead_code` allowance. The transport stubs and token field
-// below still carry theirs; a *newly* dead private item elsewhere still
-// triggers the compiler's `dead_code` warning. (A `pub` item in a `pub mod` is
-// reachable from the crate root and so is never reported as dead.)
+// and needs no `dead_code` allowance. The transport stubs below still carry
+// theirs; a *newly* dead private item elsewhere still triggers the compiler's
+// `dead_code` warning. (A `pub` item in a `pub mod` is reachable from the
+// crate root and so is never reported as dead.)
 impl AppleMusicError {
     /// Builds a failure whose [`Display`](std::fmt::Display) output is
     /// `message` — the human-readable cause. The wrapped message is private,
@@ -59,30 +70,22 @@ impl AppleMusicError {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-struct AppleMusicToken {
-    access_token: String,
-    expires_in: u64,
-    refresh_token: String,
-}
-
 /// The music-library service. Until the real Apple Music API lands, every
 /// browse query is answered from the shared [`crate::sample_library::sample_library`],
-/// so the UI and its tests agree on the same stub data.
+/// so the UI and its tests agree on the same stub data. It also carries the
+/// authenticated `MusicKit` session once [`AppleMusicService::authenticate`]
+/// has stored one.
 #[derive(Clone)]
 pub struct AppleMusicService {
-    // Unused until a real Apple Music API sets it during authentication.
-    #[allow(dead_code)]
-    token: Option<AppleMusicToken>,
+    session: Arc<std::sync::Mutex<Option<MusicKitSession>>>,
     state: Arc<Mutex<AppState>>,
 }
 
 /// Transport stubs kept as the seam a real Apple Music implementation will
 /// fill: pause, next, and previous are not yet wired to the UI (the
 /// transport.rs stepping helpers drive those buttons), so `dead_code` is
-/// allowed on exactly this block and the `token` field — a *newly* dead
-/// private field or method elsewhere still triggers the compiler's
-/// `dead_code` warning.
+/// allowed on exactly this block — a *newly* dead private field or method
+/// elsewhere still triggers the compiler's `dead_code` warning.
 #[allow(dead_code)]
 impl AppleMusicService {
     async fn pause(&self) -> Result<(), AppleMusicError> {
@@ -116,24 +119,109 @@ impl AppleMusicService {
     }
 }
 
-/// Initializes the service.
+/// Initializes the service and starts the `MusicKit` sign-in when a developer
+/// token is available.
 ///
-/// In a real implementation, this would:
-/// 1. Authenticate with Apple Music
-/// 2. Get user's library
-/// 3. Set up event listeners
-///
-/// The stub only records that the service is ready; `_state` is kept as the
-/// handle a real implementation will use.
-pub fn init_service(_state: Arc<Mutex<AppState>>) {
-    println!("Apple Music service initialized");
+/// Builds the one [`AppleMusicService`] the app shares, reads
+/// `APPLE_MUSIC_DEVELOPER_TOKEN`, and — when it is set and non-blank — spawns a
+/// `std::thread` that runs the blocking sign-in on a clone, so the UI thread
+/// never blocks. Returns the service so the caller hands that same instance to
+/// the UI: a clone shares the session handle, so the session stored at startup
+/// is visible through [`AppleMusicService::session`] on the UI's service. When
+/// the variable is unset or blank, sign-in is skipped and the sample library
+/// stays in use.
+pub fn init_service(state: Arc<Mutex<AppState>>) -> AppleMusicService {
+    let service = AppleMusicService::new(state);
+    let developer_token = std::env::var("APPLE_MUSIC_DEVELOPER_TOKEN").unwrap_or_default();
+    if developer_token.trim().is_empty() {
+        println!("Apple Music sign-in skipped: APPLE_MUSIC_DEVELOPER_TOKEN is not set");
+        return service;
+    }
+    let sign_in_service = service.clone();
+    std::thread::spawn(move || sign_in_service.sign_in(&developer_token, &browser_sign_in));
+    service
+}
+
+/// The production sign-in flow: opens the system browser and waits for the
+/// loopback callback. Single-sourced so [`AppleMusicService::authenticate`]
+/// and [`init_service`] run the same flow.
+fn browser_sign_in(developer_token: &str) -> Result<MusicKitSession, AppleMusicError> {
+    crate::music_kit_auth::authorize(developer_token, &crate::music_kit_auth::open_in_browser)
 }
 
 impl AppleMusicService {
-    /// Wraps the shared [`AppState`] in a new service; the token field starts
-    /// unset (authentication is stubbed until a real Apple Music API lands).
+    /// Wraps the shared [`AppState`] in a new service; the session starts
+    /// unset until [`AppleMusicService::authenticate`] stores one.
     pub fn new(state: Arc<Mutex<AppState>>) -> Self {
-        Self { token: None, state }
+        Self {
+            session: Arc::new(std::sync::Mutex::new(None)),
+            state,
+        }
+    }
+
+    /// Runs the blocking `MusicKit` sign-in flow and stores the resulting
+    /// session.
+    ///
+    /// This is synchronous and blocks the calling thread — it opens the system
+    /// browser and waits for the callback — so callers run it off the UI
+    /// thread. [`init_service`] runs the same flow through [`Self::sign_in`],
+    /// which also logs the outcome. On error the previously stored session, if
+    /// any, is left in place.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the developer token is malformed,
+    /// the browser cannot be opened, the callback is rejected, or no callback
+    /// arrives before the flow times out.
+    pub fn authenticate(&self, developer_token: &str) -> Result<(), AppleMusicError> {
+        self.authenticate_with(developer_token, &browser_sign_in)
+    }
+
+    /// [`authenticate`](Self::authenticate) with an injectable sign-in flow,
+    /// so tests can store a session without a browser. Stores the session the
+    /// flow returns under the mutex; a flow that returns `Err` propagates it
+    /// and leaves any previously stored session unchanged.
+    fn authenticate_with(
+        &self,
+        developer_token: &str,
+        authorize: &dyn Fn(&str) -> Result<MusicKitSession, AppleMusicError>,
+    ) -> Result<(), AppleMusicError> {
+        let session = authorize(developer_token)?;
+        let mut stored = self
+            .session
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *stored = Some(session);
+        Ok(())
+    }
+
+    /// Runs `authorize` for `developer_token` on this service and logs whether
+    /// the session was stored.
+    ///
+    /// This is the blocking body [`init_service`] runs on its own thread. It is
+    /// kept synchronous and separate from the thread spawn so a test can drive
+    /// the startup path with a stub flow and observe the stored session.
+    fn sign_in(
+        &self,
+        developer_token: &str,
+        authorize: &dyn Fn(&str) -> Result<MusicKitSession, AppleMusicError>,
+    ) {
+        match self.authenticate_with(developer_token, authorize) {
+            Ok(()) => println!("Apple Music session stored"),
+            Err(error) => eprintln!("Apple Music sign-in failed: {error}"),
+        }
+    }
+
+    /// The stored `MusicKit` session, or `None` before a successful sign-in.
+    ///
+    /// Clones the session out from under the mutex so the caller owns it; the
+    /// future REST integration is the caller this seam is kept for.
+    #[allow(dead_code)]
+    pub fn session(&self) -> Option<MusicKitSession> {
+        self.session
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     /// Plays the given track by id, recording it as the current track and

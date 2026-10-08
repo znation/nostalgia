@@ -44,16 +44,19 @@ use loading::{
 
 /// Runs the UI, blocking until the window is closed.
 ///
-/// `main` must call this from a plain (non-async) context: iced drives its
-/// event loop synchronously on the calling thread, and `update`/`view` use
-/// `blocking_lock` on the shared state, which panics inside a runtime.
+/// `service` is the [`AppleMusicService`] `main` built and ran the startup
+/// sign-in on; the UI stores a clone, so the session that sign-in stores is the
+/// session the UI later reads. `main` must call this from a plain (non-async)
+/// context: iced drives its event loop synchronously on the calling thread, and
+/// `update`/`view` use `blocking_lock` on the shared state, which panics inside
+/// a runtime.
 ///
 /// # Errors
 ///
 /// Returns the error iced reports when the application fails to start, such
 /// as a window that cannot be created.
-pub fn init_ui(state: Arc<Mutex<AppState>>) -> iced::Result {
-    iced::application(move || boot(state.clone()), update, view)
+pub fn init_ui(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> iced::Result {
+    iced::application(move || boot(state.clone(), service.clone()), update, view)
         .title("nostalgia")
         .theme(|_: &WinampPlayer| theme::winamp_theme())
         .decorations(false)
@@ -188,12 +191,13 @@ enum CurrentView {
 }
 
 impl WinampPlayer {
-    /// The initial player over the given shared state: nothing selected, no
-    /// lists loaded. Both `boot` and the tests start a player this way, so the
-    /// starting shape lives here instead of being repeated at each site — a new
-    /// field has only one spot to get its startup value.
-    fn new(state: Arc<Mutex<AppState>>) -> Self {
-        let service = AppleMusicService::new(state.clone());
+    /// The initial player over the given shared state and Apple Music service:
+    /// nothing selected, no lists loaded. Both `boot` and the tests start a
+    /// player this way, so the starting shape lives here instead of being
+    /// repeated at each site — a new field has only one spot to get its startup
+    /// value. The service is passed in rather than built here so the UI shares
+    /// the instance `main` ran the startup sign-in on.
+    fn new(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> Self {
         Self {
             state,
             apple_music_service: service,
@@ -220,12 +224,12 @@ impl WinampPlayer {
     }
 }
 
-fn boot(state: Arc<Mutex<AppState>>) -> (WinampPlayer, Task<Message>) {
+fn boot(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> (WinampPlayer, Task<Message>) {
     // `iced` runs the boot task only after the window opens, so `latest()`
     // resolves to the app window. The two run together: the artists fetch does
     // not wait on the window id.
     (
-        WinampPlayer::new(state),
+        WinampPlayer::new(state, service),
         Task::batch([
             Task::done(Message::LoadArtists),
             iced::window::latest().map(Message::WindowIdResolved),

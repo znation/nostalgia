@@ -29,7 +29,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Wire the MusicKit session into `AppleMusicService` (found 2026-10-08)
+_None yet._
+
+## Done
+
+### Wire the MusicKit session into `AppleMusicService` (found 2026-10-08, done 2026-10-08)
 
 The sibling entry "Add the MusicKit loopback authorization module" produces a
 `MusicKitSession`; this entry stores it on the service and lets the app obtain
@@ -57,18 +61,32 @@ consumes the session.
     delegates to a private
     `authenticate_with(&self, developer_token, authorize: &dyn Fn(&str) -> Result<MusicKitSession, AppleMusicError>)`
     that stores the returned session under the mutex and leaves any previous
-    session in place on error. The public method passes the real flow
-    (`|dt| crate::music_kit_auth::authorize(dt, &crate::music_kit_auth::open_in_browser)`).
+    session in place on error. The public method passes `browser_sign_in`, a
+    private free function that calls
+    `crate::music_kit_auth::authorize(dt, &crate::music_kit_auth::open_in_browser)`,
+    so `authenticate` and `init_service` share one definition of the real flow.
     Both are synchronous and blocking by design; callers run them off the UI
     thread.
   - `pub fn session(&self) -> Option<MusicKitSession>` clones the stored session;
     it carries an `#[allow(dead_code)]` comment naming the future REST plan as
     its caller, matching the existing seam style.
-  - `init_service(state)`: read `APPLE_MUSIC_DEVELOPER_TOKEN`; when it is set
-    and non-blank, spawn a `std::thread` that builds `AppleMusicService::new(state)`,
-    calls `authenticate`, and logs success or the error; otherwise log that
-    sign-in is skipped and the sample library stays in use. The UI thread never
-    blocks.
+  - `init_service(state) -> AppleMusicService`: build the one service, read
+    `APPLE_MUSIC_DEVELOPER_TOKEN`; when it is set and non-blank, spawn a
+    `std::thread` that runs the blocking sign-in on a *clone* via a private
+    `sign_in` (which logs success or the error); otherwise log that sign-in is
+    skipped and the sample library stays in use. The UI thread never blocks.
+    Return the service so `main` hands that same instance to the UI — a clone
+    shares the session handle, so the session stored at startup is the session
+    the UI reads (the earlier version built a throwaway service inside the
+    thread and dropped the session with it). `sign_in` is synchronous and
+    separate from the spawn so a test can drive the startup path with a stub
+    flow.
+  - `src/main.rs`: capture the service `init_service` returns and pass it to
+    `ui::init_ui`.
+  - `src/ui/mod.rs`: `init_ui`, `boot`, and `WinampPlayer::new` take the
+    service instead of each building one, so the UI shares the startup
+    instance; `src/ui/tests.rs`'s `test_player` builds its own service for the
+    UI tests.
   - Update the module doc and `AppleMusicError` docs to describe the session
     seam instead of the token stub.
 - `Cargo.toml`: the `serde` `derive` comment names `apple_music` as a user;
@@ -82,7 +100,11 @@ consumes the session.
   `assert_unknown_fields_tolerated` imports (those test-support helpers stay —
   `src/library.rs` still uses them); keep `assert_ids`. Add session tests.
 
-**Files touched.** `src/apple_music.rs`, `src/apple_music/tests.rs`, `Cargo.toml`.
+**Files touched.** `src/apple_music.rs`, `src/apple_music/tests.rs`, `Cargo.toml`,
+`src/music_kit_auth.rs` (removed the three now-stale `#[allow(dead_code)]`
+markers and their wiring-plan comments, since the flow is live now),
+`src/main.rs`, `src/ui/mod.rs`, `src/ui/tests.rs` (thread the one service
+instance to the UI so its clone shares the startup session).
 
 **Acceptance criteria.**
 
@@ -91,13 +113,15 @@ consumes the session.
 - `authenticate_with` stores the `MusicKitSession` returned by a stub flow, so
   `session()` returns it; a stub flow returning `Err` propagates the
   `AppleMusicError` and leaves an already-stored session unchanged.
+- The startup sign-in (`sign_in`, the body `init_service` runs on its thread)
+  stores the session on the shared service: a clone survives the signing
+  clone's drop and still reports the session, and `init_service` returns the
+  service the UI is handed.
 - The existing browse and playback tests still pass unchanged (the
   sample-library seam is untouched).
 - Manual check (`cargo run` with a real developer token): the browser opens, a
   completed sign-in logs that the session was stored, and the browse UI behaves
   as before.
-
-## Done
 
 ### Add the MusicKit loopback authorization module (found 2026-10-08, done 2026-10-08)
 
