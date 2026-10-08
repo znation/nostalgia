@@ -29,7 +29,97 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Add a Winamp custom title bar and drop the OS window frame (found 2026-10-07)
+
+Found by plan 2026-10-07, taking the "custom title bar" item the steward drift
+note schedules and the base-skin Done entry lists among its later fidelity
+plans. The bevel layer, buttons, sliders, and playlist chrome are done, but the
+window still wears the OS title bar: `init_ui` in `src/ui/mod.rs` never sets
+window settings, so the top of the app does not read as Winamp. `theme.rs`
+already names `TITLE_BLUE` for the title bar and `style::raised_panel` already
+supplies the raised bevel it needs.
+
+**Goal.** Replace the OS window frame with a Winamp-style title bar: a
+full-width raised `TITLE_BLUE` bar at the top of the window showing the app
+name, draggable to move the window, with chrome minimize and close buttons on
+the right. The window opens undecorated and fixed-size. No new theme colours
+and no change to the existing view builders.
+
+**Approach.**
+
+- `src/ui/style.rs`: add `pub fn title_bar_style() -> container::Style`
+  returning `container::Style { background: Some(Background::Color(
+  theme::TITLE_BLUE)), text_color: Some(theme::TEXT),
+  ..container::Style::default() }` — the flat base-skin title-bar fill and its
+  light text, reusing the existing constants exactly as the other style
+  functions do. Add a `#[cfg(test)]` test
+  `title_bar_style_is_title_blue_with_light_text` pinning both fields.
+- `src/ui/views.rs`: add module-level `const TITLE_BAR_TEXT: &str =
+  "NOSTALGIA";` and `const TITLE_BAR_HEIGHT: f32 = 24.0;`, plus
+  `pub fn view_title_bar() -> Element<'static, Message>`. It builds a `Row`
+  of:
+  - the drag region: `MouseArea::new(Container::new(Text::new(TITLE_BAR_TEXT)
+    .size(14).color(theme::TEXT)).width(Length::Fill).height(Length::Fill)
+    .align_y(iced::alignment::Vertical::Center).padding([0, 6]))
+    .on_press(Message::WindowDragged)` — a `MouseArea` so a press anywhere on
+    the bar (but not on the buttons) begins a window drag;
+  - two `fixed_width_button`s ("–" → `Message::MinimizeWindow`, "✕" →
+    `Message::CloseWindow`), each chrome-styled and width-pinned so the glyph
+    cannot resize them.
+  Wrap the `Row` in a `Container` with `.width(Length::Fill)` and
+  `.height(Length::Fixed(TITLE_BAR_HEIGHT))` styled with
+  `|_theme| style::title_bar_style()`, then in `style::raised_panel(..)` so the
+  bar carries the same raised bevel as the other chrome. Add `MouseArea` to
+  the `iced::widget::{..}` import.
+- `src/ui/mod.rs`:
+  - Add `window_id: Option<iced::window::Id>` to `WinampPlayer` and
+    initialize it `None` in `WinampPlayer::new`.
+  - Add `Message` variants `WindowIdResolved(Option<iced::window::Id>)`,
+    `WindowDragged`, `MinimizeWindow`, and `CloseWindow`.
+  - `boot`: batch the existing `Task::done(Message::LoadArtists)` with
+    `iced::window::latest().map(Message::WindowIdResolved)`. iced runs the boot
+    task only after the window opens (`iced_winit`'s `run` chains it onto
+    `runtime::window::open`), so `latest()` resolves to the app window.
+  - `update` arms: `WindowIdResolved(id)` stores `player.window_id = id` and
+    returns `Task::none()`; the three window actions match on
+    `player.window_id` and return `iced::window::drag(id)` /
+    `iced::window::minimize(id, true)` / `iced::window::close(id)` when it is
+    set, and `Task::none()` when it is not.
+  - In `view`, push `views::view_title_bar()` as the first item of the
+    `column`, above `view_now_playing`.
+  - In `init_ui`, chain `.decorations(false)` and `.resizable(false)` onto the
+    `iced::application(..)` builder so the OS frame is gone and the fixed size
+    leaves no resize affordance the undecorated window cannot honour.
+- `src/ui/tests.rs`: add `window_id_resolved_stores_the_window_id` (update with
+  `Some(iced::window::Id::unique())`, assert `player.window_id` equals it, then
+  with `None` and assert it clears) and
+  `title_bar_window_actions_are_noops_without_a_window_id` (for each of the
+  three action messages, assert `iced_runtime::task::into_stream(update(&mut
+  player, message)).is_none()`), plus
+  `title_bar_window_actions_schedule_work_with_a_window_id` (set the id, then
+  assert each action's task stream is `Some`).
+- `README.md`: add the custom title bar to the Status sentence; leave the
+  `tumwater:prompt` block untouched.
+
+**Files touched.** `src/ui/style.rs`, `src/ui/views.rs`, `src/ui/mod.rs`,
+`src/ui/tests.rs`, `README.md`.
+
+**Acceptance criteria.**
+
+- `make check` passes (`cargo fmt --check`, `cargo clippy --all-targets -- -D
+  warnings`, `cargo doc` with rustdoc warnings denied, `cargo test`).
+- `title_bar_style_is_title_blue_with_light_text` passes, pinning the
+  `TITLE_BLUE` background and `TEXT` text colour.
+- `window_id_resolved_stores_the_window_id`,
+  `title_bar_window_actions_are_noops_without_a_window_id`, and
+  `title_bar_window_actions_schedule_work_with_a_window_id` pass.
+- The existing `view_constructs_over_the_apps_full_input_space` still passes:
+  it builds `view` for every browse/playback shape, so it exercises the new
+  title bar in the column.
+- `cargo run`: the window opens with no OS frame, a blue raised title bar at
+  the top reading "NOSTALGIA" with minimize and close buttons, and dragging the
+  bar moves the window while minimize and close work; manual check — the build
+  and tests are the primary gate.
 
 ## Done
 
