@@ -33,7 +33,8 @@ use std::time::{Duration, Instant};
 
 use crate::apple_music::AppleMusicError;
 
-/// How long [`authorize`] waits for the browser callback before giving up.
+/// How long [`authorize`] waits for the browser callback before giving up:
+/// five minutes, enough for a sign-in the user completes by hand.
 const AUTH_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// The largest HTTP request, headers and body combined, the loopback server
@@ -142,9 +143,12 @@ fn authorize_with_timeout(
     let deadline = Instant::now() + timeout;
     loop {
         if Instant::now() >= deadline {
-            return Err(AppleMusicError::new(
-                "timed out waiting for the Apple Music sign-in callback",
-            ));
+            // Name the bound that expired, as the fetch and play timeout
+            // reports do (`ui::loading`), so a user who waited can tell how
+            // long the flow waited before giving up.
+            return Err(AppleMusicError::new(format!(
+                "timed out waiting for the Apple Music sign-in callback after {timeout:?}"
+            )));
         }
         match listener.accept() {
             Ok((mut stream, _address)) => {
@@ -785,12 +789,27 @@ mod tests {
     }
 
     #[test]
-    fn authorize_times_out_without_a_callback() {
+    fn authorize_times_out_without_a_callback_and_names_the_bound() {
         let opener = |_url: &str| Ok(());
 
         let error =
             authorize_with_timeout(SAMPLE_DEVELOPER_TOKEN, &opener, Duration::from_millis(120))
                 .expect_err("no callback times out");
-        assert!(error.to_string().contains("timed out"));
+        // The report names the bound that expired, like the fetch and play
+        // timeout reports in `ui::loading`, so the message says how long the
+        // flow waited, not just that it gave up.
+        assert_eq!(
+            error.to_string(),
+            "timed out waiting for the Apple Music sign-in callback after 120ms"
+        );
+    }
+
+    // `AUTH_TIMEOUT` is production behavior — how long `authorize` waits for
+    // the browser callback — but `authorize` is its only reader and the
+    // timeout tests above inject their own deadline, so a changed constant
+    // would clear the suite. Pin the documented five minutes.
+    #[test]
+    fn auth_timeout_is_the_documented_five_minutes() {
+        assert_eq!(AUTH_TIMEOUT, Duration::from_secs(300));
     }
 }
