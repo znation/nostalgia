@@ -14,6 +14,7 @@
 use std::future::Future;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 use iced::Task;
 
@@ -106,6 +107,56 @@ impl RequestGeneration {
     }
 }
 
+/// The longest a browse fetch may run before the UI gives up on it.
+///
+/// The `loading` flag a navigation sets (see `clear_loaded` in `ui`) only
+/// clears when the reply lands, so a backend that never answers would leave
+/// the browse panel stuck on "Loading…" forever with no way back. Bounding
+/// the wait turns that silent hang into a reported failure and the ordinary
+/// empty-list fallback, exactly as a returned error does.
+pub(super) const FETCH_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Awaits `future`, returning `None` when `timeout` elapses first.
+///
+/// A service fetch with no bound would hang the browse panel indefinitely
+/// (see [`FETCH_TIMEOUT`]); this races the future against a timer and reports
+/// which one finished. The timer is a detached thread that waits on a channel
+/// with `recv_timeout`, so it exits as soon as the future completes instead
+/// of sleeping the full `timeout`, and no runtime timer is required — the
+/// future runs under iced's executor, which has none. `tokio::select!` only
+/// polls the two futures, so it works outside a tokio runtime too.
+pub(super) async fn with_timeout<F: Future>(timeout: Duration, future: F) -> Option<F::Output> {
+    let (fired, timer) = tokio::sync::oneshot::channel::<()>();
+    let (done, finished) = std::sync::mpsc::channel::<()>();
+    std::thread::spawn(move || {
+        // Wake early when the request finishes; fire the timer only if
+        // `timeout` elapses first. A completed request leaves no thread
+        // sleeping for the full bound.
+        if finished.recv_timeout(timeout).is_err() {
+            let _ = fired.send(());
+        }
+    });
+    tokio::select! {
+        biased;
+        output = future => {
+            let _ = done.send(());
+            Some(output)
+        }
+        _ = timer => None,
+    }
+}
+
+/// Formats the browse-fetch timeout report: names the fetch that timed out
+/// and states the empty-list fallback, mirroring [`fetch_failure_report`] so
+/// a hung backend is as diagnosable from the log as one that returned an
+/// error. Pure, like the other report formatters, so the contract is
+/// testable without capturing stderr.
+fn fetch_timeout_report(context: &str, timeout: Duration) -> String {
+    format!(
+        "music-library fetch failed ({context}); timed out after {timeout:?}, showing an empty list"
+    )
+}
+
 /// Runs a library-fetch future through iced's runtime, mapping its `Result`
 /// onto the matching message: the `*Loaded` message built by `loaded` on
 /// success, or the `*LoadFailed` message built by `failed` on error (after
@@ -117,13 +168,16 @@ impl RequestGeneration {
 /// `generation` names the request's place in its list's stream: when a newer
 /// request for the same list has been issued by the time this fetch completes,
 /// the reply is superseded and becomes [`Message::Ignored`] instead of
-/// overwriting the newer list. Shared by the artists, albums, and songs load
-/// arms so none of them repeats the clone-the-service-then-`Task::perform`
+/// overwriting the newer list. `timeout` bounds the wait via [`with_timeout`],
+/// so a backend that never answers falls back to the empty list instead of
+/// leaving the panel on "Loading…". Shared by the artists, albums, and songs
+/// load arms so none of them repeats the clone-the-service-then-`Task::perform`
 /// boilerplate.
 pub(super) fn fetch_into<T, E, Fut>(
     service: &AppleMusicService,
     context: String,
     generation: RequestGeneration,
+    timeout: Duration,
     fetch: impl FnOnce(AppleMusicService) -> Fut + Send + 'static,
     loaded: impl Fn(Vec<T>) -> Message + Send + 'static,
     failed: impl Fn(String) -> Message + Send + 'static,
@@ -134,19 +188,26 @@ where
     Fut: Future<Output = Result<Vec<T>, E>> + Send + 'static,
 {
     let service = service.clone();
-    Task::perform(async move { fetch(service).await }, move |result| {
-        if !generation.is_current() {
-            return Message::Ignored;
-        }
-        match result {
-            Ok(items) => loaded(items),
-            Err(err) => {
-                let report = fetch_failure_report(&context, &err);
-                eprintln!("{report}");
-                failed(report)
+    Task::perform(
+        async move { with_timeout(timeout, fetch(service)).await },
+        move |result| {
+            if !generation.is_current() {
+                return Message::Ignored;
             }
-        }
-    })
+            match result {
+                Some(Ok(items)) => loaded(items),
+                Some(Err(err)) => {
+                    let report = fetch_failure_report(&context, &err);
+                    eprintln!("{report}");
+                    failed(report)
+                }
+                None => {
+                    eprintln!("{}", fetch_timeout_report(&context, timeout));
+                    loaded(Vec::new())
+                }
+            }
+        },
+    )
 }
 
 #[cfg(test)]
@@ -200,5 +261,38 @@ mod tests {
         // would quote it as `"boom"`.
         let report = play_failure_report("track-1", &"boom");
         assert_eq!(report, "failed to play track \"track-1\": boom");
+    }
+
+    // `with_timeout` is the bound `fetch_into` puts on a backend reply. The
+    // completing half: a future that resolves must yield its output, not the
+    // timeout's `None`.
+    #[test]
+    fn with_timeout_returns_the_output_when_the_future_completes() {
+        let output = futures::executor::block_on(with_timeout(Duration::from_secs(1), async { 7 }));
+        assert_eq!(output, Some(7));
+    }
+
+    // The failing half: a future that never resolves must yield `None` rather
+    // than hang the caller, which is what leaves the browse panel on
+    // "Loading…" forever without the bound.
+    #[test]
+    fn with_timeout_returns_none_when_the_future_never_completes() {
+        let output = futures::executor::block_on(with_timeout(
+            Duration::from_millis(10),
+            std::future::pending::<()>(),
+        ));
+        assert_eq!(output, None);
+    }
+
+    // The timeout report names the fetch and the bound that expired, so a
+    // hung backend is as diagnosable from the log as one that returned an
+    // error. Pinned so the wording can't drift.
+    #[test]
+    fn fetch_timeout_report_names_the_fetch_and_the_bound() {
+        let report = fetch_timeout_report("loading favorite artists", Duration::from_secs(30));
+        assert_eq!(
+            report,
+            "music-library fetch failed (loading favorite artists); timed out after 30s, showing an empty list"
+        );
     }
 }

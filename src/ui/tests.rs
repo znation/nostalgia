@@ -1114,6 +1114,7 @@ async fn fetch_into_schedules_fetch_and_maps_result_to_loaded_message() {
         &player.apple_music_service,
         "loading favorite artists".to_string(),
         generation,
+        std::time::Duration::from_secs(1),
         |service| async move { service.get_favorite_artists().await },
         Message::ArtistsLoaded,
         Message::ArtistsLoadFailed,
@@ -1147,6 +1148,7 @@ async fn fetch_into_maps_a_failed_fetch_to_a_load_failed_message() {
         &player.apple_music_service,
         "loading albums for artist \"artist-1\"".to_string(),
         generation,
+        std::time::Duration::from_secs(1),
         |_service| async { Err::<Vec<Album>, String>("boom".to_string()) },
         Message::AlbumsLoaded,
         Message::AlbumsLoadFailed,
@@ -1157,6 +1159,36 @@ async fn fetch_into_maps_a_failed_fetch_to_a_load_failed_message() {
             Message::AlbumsLoadFailed(report)
                 if report
                     == "music-library fetch failed (loading albums for artist \"artist-1\"): boom"
+        ));
+    })
+    .await;
+}
+
+// A fetch that never answers is the failure `with_timeout` exists to bound:
+// without it the browse panel stays on "Loading…" forever, because `loading`
+// only clears when the reply lands. The real service always answers, so the
+// hang is reachable only by injecting a pending fetch closure; the short
+// timeout keeps the test fast. A timeout clears the loading state with the
+// `*Loaded` message carrying an empty list (a returned error is reported
+// through the `*LoadFailed` path instead), so the panel becomes usable.
+#[tokio::test]
+async fn fetch_into_maps_a_hanging_fetch_to_an_empty_loaded_message() {
+    let (player, _state) = test_player();
+
+    let generation = RequestGeneration::issue(&Arc::new(AtomicU64::new(0)));
+    let task = fetch_into(
+        &player.apple_music_service,
+        "loading favorite artists".to_string(),
+        generation,
+        std::time::Duration::from_millis(50),
+        |_service| std::future::pending::<Result<Vec<Artist>, String>>(),
+        Message::ArtistsLoaded,
+        Message::ArtistsLoadFailed,
+    );
+    drive_task(task, "hanging fetch", |message| {
+        assert!(matches!(
+            message,
+            Message::ArtistsLoaded(artists) if artists.is_empty()
         ));
     })
     .await;

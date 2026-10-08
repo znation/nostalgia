@@ -28,7 +28,9 @@ use crate::{
     library::{Album, Artist, Song},
     state::AppState,
 };
-use loading::{RequestGeneration, fetch_into, play_failure_report, played_or_reported};
+use loading::{
+    FETCH_TIMEOUT, RequestGeneration, fetch_into, play_failure_report, played_or_reported,
+};
 
 /// Runs the UI, blocking until the window is closed.
 ///
@@ -427,6 +429,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 &player.apple_music_service,
                 format!("loading albums for artist {artist_id:?}"),
                 generation,
+                FETCH_TIMEOUT,
                 move |service| async move { service.get_albums_by_artist(&artist_id).await },
                 Message::AlbumsLoaded,
                 Message::AlbumsLoadFailed,
@@ -454,6 +457,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 &player.apple_music_service,
                 format!("loading songs from album {album_id:?}"),
                 generation,
+                FETCH_TIMEOUT,
                 move |service| async move { service.get_songs_from_album(&album_id).await },
                 Message::SongsLoaded,
                 Message::SongsLoadFailed,
@@ -478,6 +482,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 &player.apple_music_service,
                 "loading favorite artists".to_string(),
                 generation,
+                FETCH_TIMEOUT,
                 |service| async move { service.get_favorite_artists().await },
                 Message::ArtistsLoaded,
                 Message::ArtistsLoadFailed,
