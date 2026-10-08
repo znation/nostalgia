@@ -68,6 +68,13 @@ enum Message {
     ArtistsLoaded(Vec<Artist>),
     AlbumsLoaded(Vec<Album>),
     SongsLoaded(Vec<Song>),
+    // A browse fetch that returned an error. The payload is the formatted
+    // report (see `loading::fetch_failure_report`): it names the failed fetch
+    // and carries the backend's cause, so the browse panel can show why the
+    // list is empty instead of misreading the failure as an empty library.
+    ArtistsLoadFailed(String),
+    AlbumsLoadFailed(String),
+    SongsLoadFailed(String),
     // A browse reply that a newer request for the same list has superseded.
     // `fetch_into` emits this instead of the `*Loaded` message so the stale
     // reply never reaches `store_loaded`; the arm below is a no-op.
@@ -120,6 +127,15 @@ struct WinampPlayer {
     artists_loading: bool,
     albums_loading: bool,
     songs_loading: bool,
+    /// The formatted report of each list's most recent failed fetch, or `None`
+    /// when that list has not failed. A failed fetch sets it (and clears
+    /// `loading`); a navigation clears it before the retry, and a successful
+    /// reply clears it. The view shows it in place of the empty-list wording
+    /// (see `views::browse_placeholder`), so a backend failure is not
+    /// mistaken for an empty library.
+    artists_error: Option<String>,
+    albums_error: Option<String>,
+    songs_error: Option<String>,
     /// Per-list browse-request counters. Each list's counter is bumped when a
     /// request for that list is issued, so a reply that completes after a
     /// newer request for the same list is recognized as stale (see
@@ -171,6 +187,9 @@ impl WinampPlayer {
             artists_loading: true,
             albums_loading: false,
             songs_loading: false,
+            artists_error: None,
+            albums_error: None,
+            songs_error: None,
             artists_generation: Arc::new(AtomicU64::new(0)),
             albums_generation: Arc::new(AtomicU64::new(0)),
             songs_generation: Arc::new(AtomicU64::new(0)),
@@ -194,9 +213,10 @@ fn boot(state: Arc<Mutex<AppState>>) -> (WinampPlayer, Task<Message>) {
 }
 
 /// Stores a freshly fetched list into the player's matching buffer, bumps
-/// that buffer's epoch, and marks it loaded, with no further work. The
-/// `ArtistsLoaded`, `AlbumsLoaded`, and `SongsLoaded` update arms all just
-/// store. The store-and-noop shape lives here once instead of in each arm.
+/// that buffer's epoch, marks it loaded, and clears any earlier fetch
+/// failure for that list, with no further work. The `ArtistsLoaded`,
+/// `AlbumsLoaded`, and `SongsLoaded` update arms all just store. The
+/// store-and-noop shape lives here once instead of in each arm.
 ///
 /// The epoch is what makes the index-carrying selection messages safe: a row
 /// rendered from the old list carries the old epoch, so if the list is
@@ -209,11 +229,13 @@ fn store_loaded<T>(
     buffer: &mut Vec<T>,
     epoch: &mut u64,
     loading: &mut bool,
+    error: &mut Option<String>,
     items: Vec<T>,
 ) -> Task<Message> {
     *buffer = items;
     *epoch = epoch.wrapping_add(1);
     *loading = false;
+    *error = None;
     Task::none()
 }
 
@@ -225,10 +247,32 @@ fn store_loaded<T>(
 /// list's empty wording (see `views::browse_placeholder`); the buffer's epoch
 /// is deliberately left alone, so the reply that replaces it still gets a
 /// bumped epoch that differs from the cleared list's and a press rendered
-/// from the old rows cannot match the new list.
-fn clear_loaded<T>(buffer: &mut Vec<T>, loading: &mut bool) {
+/// from the old rows cannot match the new list. Any earlier failure for the
+/// list is cleared too, so the retry shows "Loading…" rather than the stale
+/// error.
+fn clear_loaded<T>(buffer: &mut Vec<T>, loading: &mut bool, error: &mut Option<String>) {
     buffer.clear();
     *loading = true;
+    *error = None;
+}
+
+/// Stores a failed browse fetch's report: clears the buffer (a navigation
+/// already emptied it via [`clear_loaded`], but a failure must never leave
+/// stale rows behind), marks the list not-loading, and records the report so
+/// the view can show it (see `views::browse_placeholder`). The
+/// `ArtistsLoadFailed`, `AlbumsLoadFailed`, and `SongsLoadFailed` update
+/// arms all just store. The store-and-noop shape lives here once instead of
+/// in each arm.
+fn store_load_failed<T>(
+    buffer: &mut Vec<T>,
+    loading: &mut bool,
+    error: &mut Option<String>,
+    report: String,
+) -> Task<Message> {
+    buffer.clear();
+    *loading = false;
+    *error = Some(report);
+    Task::none()
 }
 
 /// The list entry a selection message names, or `None` when the press is
@@ -373,7 +417,11 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             // Drop the previous artist's albums before the new fetch lands:
             // otherwise the Albums view renders them, and a press during the
             // fetch resolves against the wrong artist's list.
-            clear_loaded(&mut player.albums, &mut player.albums_loading);
+            clear_loaded(
+                &mut player.albums,
+                &mut player.albums_loading,
+                &mut player.albums_error,
+            );
             let generation = RequestGeneration::issue(&player.albums_generation);
             fetch_into(
                 &player.apple_music_service,
@@ -381,6 +429,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 generation,
                 move |service| async move { service.get_albums_by_artist(&artist_id).await },
                 Message::AlbumsLoaded,
+                Message::AlbumsLoadFailed,
             )
         }
         Message::AlbumSelected { epoch, index } => {
@@ -395,7 +444,11 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             // The songs twin of the artist arm above: clear the previous
             // album's songs so they cannot be shown or pressed while the new
             // album's fetch is in flight.
-            clear_loaded(&mut player.songs, &mut player.songs_loading);
+            clear_loaded(
+                &mut player.songs,
+                &mut player.songs_loading,
+                &mut player.songs_error,
+            );
             let generation = RequestGeneration::issue(&player.songs_generation);
             fetch_into(
                 &player.apple_music_service,
@@ -403,6 +456,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 generation,
                 move |service| async move { service.get_songs_from_album(&album_id).await },
                 Message::SongsLoaded,
+                Message::SongsLoadFailed,
             )
         }
         // The browse hierarchy is navigable both ways: ArtistSelected and
@@ -426,25 +480,47 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 generation,
                 |service| async move { service.get_favorite_artists().await },
                 Message::ArtistsLoaded,
+                Message::ArtistsLoadFailed,
             )
         }
         Message::ArtistsLoaded(artists) => store_loaded(
             &mut player.artists,
             &mut player.artists_epoch,
             &mut player.artists_loading,
+            &mut player.artists_error,
             artists,
         ),
         Message::AlbumsLoaded(albums) => store_loaded(
             &mut player.albums,
             &mut player.albums_epoch,
             &mut player.albums_loading,
+            &mut player.albums_error,
             albums,
         ),
         Message::SongsLoaded(songs) => store_loaded(
             &mut player.songs,
             &mut player.songs_epoch,
             &mut player.songs_loading,
+            &mut player.songs_error,
             songs,
+        ),
+        Message::ArtistsLoadFailed(report) => store_load_failed(
+            &mut player.artists,
+            &mut player.artists_loading,
+            &mut player.artists_error,
+            report,
+        ),
+        Message::AlbumsLoadFailed(report) => store_load_failed(
+            &mut player.albums,
+            &mut player.albums_loading,
+            &mut player.albums_error,
+            report,
+        ),
+        Message::SongsLoadFailed(report) => store_load_failed(
+            &mut player.songs,
+            &mut player.songs_loading,
+            &mut player.songs_error,
+            report,
         ),
         Message::TrackPlayed { generation } => {
             // Only the current track's title is ever read (see
@@ -498,10 +574,14 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
             &player.artists,
             player.artists_epoch,
             player.artists_loading,
+            player.artists_error.as_deref(),
         ),
-        CurrentView::Albums => {
-            views::view_albums(&player.albums, player.albums_epoch, player.albums_loading)
-        }
+        CurrentView::Albums => views::view_albums(
+            &player.albums,
+            player.albums_epoch,
+            player.albums_loading,
+            player.albums_error.as_deref(),
+        ),
         // A second short lock (like the label block above) hands the current
         // track's id to the Songs view so it can mark the playing row. The
         // borrowed id is compared inside `song_row` and the guard drops at
@@ -513,6 +593,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
                 &player.songs,
                 player.songs_epoch,
                 player.songs_loading,
+                player.songs_error.as_deref(),
                 state.current_track.as_deref(),
             )
         }

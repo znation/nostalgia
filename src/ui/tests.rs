@@ -293,12 +293,14 @@ fn artist_selected_clears_the_previous_artists_albums() {
     let (mut player, _state) = test_player();
     player.artists = vec![sample_artist()];
     let _ = update(&mut player, Message::AlbumsLoaded(vec![sample_album()]));
+    player.albums_error = Some("music-library fetch failed: boom".to_string());
     let previous_epoch = player.albums_epoch;
 
     let _ = update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 });
 
     assert!(player.albums.is_empty());
     assert!(player.albums_loading);
+    assert!(player.albums_error.is_none());
 
     // The reply the fetch schedules lands with an epoch this list has never
     // used, and a press from the previous list is rejected rather than
@@ -325,12 +327,14 @@ fn album_selected_clears_the_previous_albums_songs() {
     let (mut player, _state) = test_player();
     player.albums = vec![sample_album()];
     let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    player.songs_error = Some("music-library fetch failed: boom".to_string());
     let previous_epoch = player.songs_epoch;
 
     let _ = update(&mut player, Message::AlbumSelected { epoch: 0, index: 0 });
 
     assert!(player.songs.is_empty());
     assert!(player.songs_loading);
+    assert!(player.songs_error.is_none());
 
     let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
     assert!(!player.songs_loading);
@@ -868,6 +872,47 @@ fn songs_loaded_populates_list() {
     );
 }
 
+// A failed browse fetch must not read as an empty library: the failure's
+// report is stored for the list (so the view can show it), the list is marked
+// not-loading, and the buffer stays empty. A later successful reply clears the
+// stored error, so the panel returns to the list's rows.
+#[test]
+fn albums_load_failed_stores_the_error_until_the_next_load() {
+    let (mut player, _state) = test_player();
+    player.albums = vec![sample_album()];
+    player.albums_loading = true;
+
+    let report = "music-library fetch failed (loading albums for artist \"artist-1\"): boom";
+    let _ = update(&mut player, Message::AlbumsLoadFailed(report.to_string()));
+
+    assert!(player.albums.is_empty());
+    assert!(!player.albums_loading);
+    assert_eq!(player.albums_error.as_deref(), Some(report));
+
+    let _ = update(&mut player, Message::AlbumsLoaded(vec![sample_album()]));
+
+    assert!(player.albums_error.is_none());
+}
+
+// `clear_loaded` runs on every navigation step and must reset all three
+// pieces of the entered list's state: the stale rows, the loading flag (so
+// the panel shows "Loading…"), and any earlier fetch failure (so the retry
+// does not keep showing the old error). This pins the error reset in
+// particular — a regression that dropped `*error = None` would leave the
+// previous failure on screen for the whole retry.
+#[test]
+fn clear_loaded_clears_the_buffer_loading_and_error() {
+    let mut buffer = vec![sample_album()];
+    let mut loading = false;
+    let mut error = Some("music-library fetch failed: boom".to_string());
+
+    clear_loaded(&mut buffer, &mut loading, &mut error);
+
+    assert!(buffer.is_empty());
+    assert!(loading);
+    assert!(error.is_none());
+}
+
 // The `known_titles` index backs the Now Playing bar's title lookup, and it
 // is populated only when a track is played — not when an album is loaded.
 // Folding a browsed album's songs into the index would make it grow with
@@ -1071,6 +1116,7 @@ async fn fetch_into_schedules_fetch_and_maps_result_to_loaded_message() {
         generation,
         |service| async move { service.get_favorite_artists().await },
         Message::ArtistsLoaded,
+        Message::ArtistsLoadFailed,
     );
     drive_task(task, "fetch", |message| {
         assert!(matches!(
@@ -1083,17 +1129,17 @@ async fn fetch_into_schedules_fetch_and_maps_result_to_loaded_message() {
 
 // The success path above proves `fetch_into` delivers a `*Loaded` message
 // for a successful fetch; this pins the error path — a fetch that returns
-// `Err` must still yield the matching `*Loaded` message with an empty
-// list, so the browse view falls back to an empty list instead of waiting
-// forever on a list that never arrives. `loaded_or_empty`'s error branch
-// is tested in `loading`'s test module, but no test drives a failing fetch *through*
-// `fetch_into` — the real service always succeeds, so the error path is
-// reachable only by injecting a failing fetch closure, which is exactly
-// what this does. A regression that swallowed the error (or failed to
-// emit any message) would leave the browse view stuck, and only this
-// test would catch it.
+// `Err` must yield the matching `*LoadFailed` message carrying the formatted
+// report (which names the failed query and includes the backend's cause),
+// not a `*Loaded` message with an empty list that the panel would misread as
+// an empty library. `fetch_failure_report` is tested in `loading`'s test
+// module, but no test drives a failing fetch *through* `fetch_into` — the real
+// service always succeeds, so the error path is reachable only by injecting a
+// failing fetch closure, which is exactly what this does. A regression that
+// swallowed the error would leave the browse panel claiming the library is
+// empty, and only this test would catch it.
 #[tokio::test]
-async fn fetch_into_maps_a_failed_fetch_to_an_empty_loaded_message() {
+async fn fetch_into_maps_a_failed_fetch_to_a_load_failed_message() {
     let (player, _state) = test_player();
 
     let generation = RequestGeneration::issue(&Arc::new(AtomicU64::new(0)));
@@ -1103,11 +1149,14 @@ async fn fetch_into_maps_a_failed_fetch_to_an_empty_loaded_message() {
         generation,
         |_service| async { Err::<Vec<Album>, String>("boom".to_string()) },
         Message::AlbumsLoaded,
+        Message::AlbumsLoadFailed,
     );
     drive_task(task, "failed fetch", |message| {
         assert!(matches!(
             message,
-            Message::AlbumsLoaded(albums) if albums.is_empty()
+            Message::AlbumsLoadFailed(report)
+                if report
+                    == "music-library fetch failed (loading albums for artist \"artist-1\"): boom"
         ));
     })
     .await;
@@ -1195,5 +1244,25 @@ fn view_constructs_over_the_apps_full_input_space() {
                 }
             }
         }
+    }
+
+    // The fetch-failure shape: a list that failed to load is empty and
+    // carries an error report, and `view` must render the report rather than
+    // an empty-list label. Clearing the buffers matters: `scrollable_list`
+    // only shows the placeholder when there are no rows, so with the loaded
+    // rows still present the error branch would never render.
+    player.artists.clear();
+    player.albums.clear();
+    player.songs.clear();
+    player.artists_error = Some("music-library fetch failed: boom".to_string());
+    player.albums_error = Some("music-library fetch failed: boom".to_string());
+    player.songs_error = Some("music-library fetch failed: boom".to_string());
+    for current_view in [
+        CurrentView::Artists,
+        CurrentView::Albums,
+        CurrentView::Songs,
+    ] {
+        player.current_view = current_view;
+        let _failed = view(&player);
     }
 }

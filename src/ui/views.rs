@@ -58,16 +58,21 @@ fn empty_list_label(view: &CurrentView) -> &'static str {
 }
 
 /// The placeholder a browse view shows when its list has no rows, choosing
-/// between "still loading" and "loaded, but empty".
+/// between a fetch failure, "still loading", and "loaded, but empty".
 ///
-/// `loading` is the list's load state (see `store_loaded`/`clear_loaded` in
-/// `ui`): true means the reply the navigation just scheduled is still in
-/// flight, so the panel reads as loading rather than as an empty library;
-/// false means a reply landed — possibly an empty one — so
-/// [`empty_list_label`] names the list. Pure, like [`empty_list_label`], so
-/// both wordings are testable without an iced renderer.
-fn browse_placeholder(view: &CurrentView, loading: bool) -> &'static str {
-    if loading {
+/// `error` is the list's most recent fetch-failure report (see
+/// `store_load_failed`/`clear_loaded` in `ui`): when present it wins, so a
+/// backend failure is shown rather than misread as an empty library.
+/// Otherwise `loading` is the list's load state: true means the reply the
+/// navigation just scheduled is still in flight, so the panel reads as
+/// loading rather than as an empty library; false means a reply landed —
+/// possibly an empty one — so [`empty_list_label`] names the list. Pure, like
+/// [`empty_list_label`], so every wording is testable without an iced
+/// renderer.
+fn browse_placeholder<'a>(view: &CurrentView, loading: bool, error: Option<&'a str>) -> &'a str {
+    if let Some(error) = error {
+        error
+    } else if loading {
         "Loading…"
     } else {
         empty_list_label(view)
@@ -83,8 +88,8 @@ fn browse_placeholder(view: &CurrentView, loading: bool) -> &'static str {
 ///
 /// When `items` yields nothing, the list renders `empty_label` in place of a
 /// blank panel. The caller picks the wording via [`browse_placeholder`],
-/// which distinguishes a buffer no reply has populated yet (still loading)
-/// from one that loaded empty and names the list.
+/// which distinguishes a fetch failure, a buffer no reply has populated yet
+/// (still loading), and one that loaded empty and names the list.
 ///
 /// The rows borrow their titles from the list the caller passes in rather
 /// than owning clones: this builder runs on every view refresh, so the
@@ -94,7 +99,7 @@ fn browse_placeholder(view: &CurrentView, loading: bool) -> &'static str {
 /// adds no `String` allocation per frame either.
 fn scrollable_list<'a>(
     items: impl IntoIterator<Item = (&'a str, &'static str, Message, bool)>,
-    empty_label: &'static str,
+    empty_label: &'a str,
 ) -> Element<'a, Message> {
     let mut column = Column::new().padding(20);
     let mut is_empty = true;
@@ -191,44 +196,55 @@ fn song_row<'a>(
 
 /// The Artists browse view: one row per artist, in the order given, each
 /// emitting [`Message::ArtistSelected`] with the artist's index in the list
-/// and the list's `epoch`. `loading` selects the placeholder wording while
-/// the first reply is in flight (see [`browse_placeholder`]). Built by
+/// and the list's `epoch`. `loading` and `error` select the placeholder
+/// wording (see [`browse_placeholder`]); a fetch failure wins. Built by
 /// [`scrollable_list`] from the [`artist_row`] mapping.
-pub fn view_artists(artists: &[Artist], epoch: u64, loading: bool) -> Element<'_, Message> {
+pub fn view_artists<'a>(
+    artists: &'a [Artist],
+    epoch: u64,
+    loading: bool,
+    error: Option<&'a str>,
+) -> Element<'a, Message> {
     scrollable_list(
         artists
             .iter()
             .enumerate()
             .map(|(index, artist)| artist_row(epoch, index, artist)),
-        browse_placeholder(&CurrentView::Artists, loading),
+        browse_placeholder(&CurrentView::Artists, loading, error),
     )
 }
 
 /// The Albums browse view: one row per album, in the order given, each
 /// emitting [`Message::AlbumSelected`] with the album's index in the list and
-/// the list's `epoch`. `loading` selects the placeholder wording while the
-/// fetch is in flight (see [`browse_placeholder`]). Built by
+/// the list's `epoch`. `loading` and `error` select the placeholder wording
+/// (see [`browse_placeholder`]); a fetch failure wins. Built by
 /// [`scrollable_list`] from the [`album_row`] mapping.
-pub fn view_albums(albums: &[Album], epoch: u64, loading: bool) -> Element<'_, Message> {
+pub fn view_albums<'a>(
+    albums: &'a [Album],
+    epoch: u64,
+    loading: bool,
+    error: Option<&'a str>,
+) -> Element<'a, Message> {
     scrollable_list(
         albums
             .iter()
             .enumerate()
             .map(|(index, album)| album_row(epoch, index, album)),
-        browse_placeholder(&CurrentView::Albums, loading),
+        browse_placeholder(&CurrentView::Albums, loading, error),
     )
 }
 
 /// The Songs browse view: one row per song, in the order given, each emitting
 /// [`Message::TrackSelected`] with the song's index in the list and the
 /// list's `epoch`; the row whose id is `current_track` is marked as playing.
-/// `loading` selects the placeholder wording while the fetch is in flight
-/// (see [`browse_placeholder`]). Built by [`scrollable_list`] from the
-/// [`song_row`] mapping.
+/// `loading` and `error` select the placeholder wording (see
+/// [`browse_placeholder`]); a fetch failure wins. Built by [`scrollable_list`]
+/// from the [`song_row`] mapping.
 pub fn view_songs<'a>(
     songs: &'a [Song],
     epoch: u64,
     loading: bool,
+    error: Option<&'a str>,
     current_track: Option<&str>,
 ) -> Element<'a, Message> {
     scrollable_list(
@@ -236,7 +252,7 @@ pub fn view_songs<'a>(
             .iter()
             .enumerate()
             .map(|(index, song)| song_row(epoch, index, song, current_track)),
-        browse_placeholder(&CurrentView::Songs, loading),
+        browse_placeholder(&CurrentView::Songs, loading, error),
     )
 }
 
@@ -596,11 +612,16 @@ mod tests {
         // messages into buttons. Rendered both with no current track (no
         // marker) and with one set (the `▶`/highlight marker builds).
         let library = sample_library();
-        let _artists = view_artists(&library.artists, 1, false);
-        let _albums = view_albums(&library.albums_by_artist["artist-1"], 1, false);
-        let _songs = view_songs(&library.songs_by_album["album-1"], 1, false, None);
-        let _songs_marked =
-            view_songs(&library.songs_by_album["album-1"], 1, false, Some("song-1"));
+        let _artists = view_artists(&library.artists, 1, false, None);
+        let _albums = view_albums(&library.albums_by_artist["artist-1"], 1, false, None);
+        let _songs = view_songs(&library.songs_by_album["album-1"], 1, false, None, None);
+        let _songs_marked = view_songs(
+            &library.songs_by_album["album-1"],
+            1,
+            false,
+            None,
+            Some("song-1"),
+        );
     }
 
     #[test]
@@ -608,10 +629,10 @@ mod tests {
         // Every browse view renders its pre-load state — an empty buffer —
         // before the first fetch lands, so `scrollable_list` must build a
         // scrollable over zero rows, with or without a current track set.
-        let _artists = view_artists(&[], 0, true);
-        let _albums = view_albums(&[], 0, true);
-        let _songs = view_songs(&[], 0, true, None);
-        let _songs_marked = view_songs(&[], 0, true, Some("song-1"));
+        let _artists = view_artists(&[], 0, true, None);
+        let _albums = view_albums(&[], 0, true, None);
+        let _songs = view_songs(&[], 0, true, None, None);
+        let _songs_marked = view_songs(&[], 0, true, None, Some("song-1"));
     }
 
     // Each browse level's loaded-but-empty buffer must render a label naming
@@ -631,15 +652,56 @@ mod tests {
     // lands (possibly an empty one) the per-level wording applies.
     #[test]
     fn browse_placeholder_distinguishes_loading_from_an_empty_list() {
-        assert_eq!(browse_placeholder(&CurrentView::Artists, true), "Loading…");
-        assert_eq!(browse_placeholder(&CurrentView::Albums, true), "Loading…");
-        assert_eq!(browse_placeholder(&CurrentView::Songs, true), "Loading…");
         assert_eq!(
-            browse_placeholder(&CurrentView::Artists, false),
+            browse_placeholder(&CurrentView::Artists, true, None),
+            "Loading…"
+        );
+        assert_eq!(
+            browse_placeholder(&CurrentView::Albums, true, None),
+            "Loading…"
+        );
+        assert_eq!(
+            browse_placeholder(&CurrentView::Songs, true, None),
+            "Loading…"
+        );
+        assert_eq!(
+            browse_placeholder(&CurrentView::Artists, false, None),
             "No artists"
         );
-        assert_eq!(browse_placeholder(&CurrentView::Albums, false), "No albums");
-        assert_eq!(browse_placeholder(&CurrentView::Songs, false), "No songs");
+        assert_eq!(
+            browse_placeholder(&CurrentView::Albums, false, None),
+            "No albums"
+        );
+        assert_eq!(
+            browse_placeholder(&CurrentView::Songs, false, None),
+            "No songs"
+        );
+    }
+
+    // A failed fetch must read as a failure, not as an empty library: when an
+    // error report is present it wins over both "Loading…" and the per-level
+    // empty wording, and the exact report (not a generic label) is shown so
+    // the panel names the failed query and the backend's cause.
+    #[test]
+    fn browse_placeholder_shows_the_fetch_error_instead_of_the_empty_wording() {
+        let report = "music-library fetch failed (loading favorite artists): boom";
+
+        assert_eq!(
+            browse_placeholder(&CurrentView::Artists, true, Some(report)),
+            report
+        );
+        assert_eq!(
+            browse_placeholder(&CurrentView::Artists, false, Some(report)),
+            report
+        );
+        assert_eq!(
+            browse_placeholder(&CurrentView::Albums, false, Some(report)),
+            report
+        );
+        assert_eq!(
+            browse_placeholder(&CurrentView::Songs, false, Some(report)),
+            report
+        );
     }
 
     #[test]

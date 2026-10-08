@@ -3,13 +3,13 @@
 //!
 //! A library fetch or playback call returns a `Result`; the `update` loop
 //! needs a `Message`. These helpers are the seam between the two: they map a
-//! successful result to its `*Loaded`/`TrackPlayed` message, fall back to an
-//! empty list on error, and format the stderr report. The fetch helper also
-//! carries each browse request's [`RequestGeneration`] so a reply a newer
-//! request has superseded is dropped rather than stored. They know the
-//! `AppleMusicService` seam and the `Message` type, not the `WinampPlayer`
-//! event loop, so they live in their own module, mirroring `views` and
-//! `transport`.
+//! successful result to its `*Loaded`/`TrackPlayed` message, map a failed
+//! fetch to its `*LoadFailed` message, and format the stderr report. The
+//! fetch helper also carries each browse request's [`RequestGeneration`] so a
+//! reply a newer request has superseded is dropped rather than stored. They
+//! know the `AppleMusicService` seam and the `Message` type, not the
+//! `WinampPlayer` event loop, so they live in their own module, mirroring
+//! `views` and `transport`.
 
 use std::future::Future;
 use std::sync::Arc;
@@ -21,33 +21,12 @@ use crate::apple_music::AppleMusicService;
 
 use super::Message;
 
-/// Maps a library-fetch `Result` to its matching `*Loaded` message: the
-/// fetched items on success, an empty list on error — after handing the
-/// error to `report_error`, so a failed fetch is never dropped silently.
-/// Shared by the artists, albums, and songs load paths so the error fallback
-/// (and its reporting) stays identical in all three. `report_error` is
-/// injected rather than hardcoded so the reporting contract is testable
-/// without capturing stderr.
-fn loaded_or_empty<T, E>(
-    result: Result<Vec<T>, E>,
-    loaded: impl Fn(Vec<T>) -> Message,
-    report_error: impl FnOnce(&E),
-) -> Message {
-    match result {
-        Ok(items) => loaded(items),
-        Err(err) => {
-            report_error(&err);
-            loaded(Vec::new())
-        }
-    }
-}
-
 /// Maps a playback `Result` to the `TrackPlayed` completion message, handing
 /// any error to `report_error` first so a failed play is never dropped
 /// silently — a backend that rejects a track would otherwise look like the
-/// button did nothing. The playback twin of [`loaded_or_empty`], which
-/// cannot serve here: it maps `Result<Vec<T>, _>` onto a `*Loaded` message,
-/// while a play has no payload to load, only a completion. `report_error`
+/// button did nothing. The playback twin of [`fetch_into`]'s failure mapping,
+/// which cannot serve here: it maps `Result<Vec<T>, _>` onto a `*Loaded`
+/// message, while a play has no payload to load, only a completion. `report_error`
 /// is injected rather than hardcoded so the reporting contract is testable
 /// without capturing stderr. `generation` is the play's place in the playback
 /// stream; the completion carries it so `update` can skip pruning the title
@@ -64,16 +43,17 @@ pub(super) fn played_or_reported<E>(
 }
 
 /// Formats the browse-fetch failure report: names the fetch that failed
-/// (e.g. "loading albums for artist \"artist-1\""), states the empty-list
-/// fallback, and includes the underlying error. The play path names the
-/// offending track; this names the offending query, so a failed browse tells
-/// the user which fetch failed and what it was fetching. Kept as a pure
-/// function so the report contract is testable without capturing stderr.
-/// The error is formatted with `Display`, not `Debug`, so a real backend's
-/// error reads as its human-readable cause (see `AppleMusicError`'s `Display`
-/// impl) rather than a struct dump.
+/// (e.g. "loading albums for artist \"artist-1\"") and includes the underlying
+/// error. The play path names the offending track; this names the offending
+/// query, so a failed browse tells the user which fetch failed and what it
+/// was fetching. The same report is both written to stderr and shown in the
+/// browse panel (via the `*LoadFailed` message). Kept as a pure function so
+/// the report contract is testable without capturing stderr. The error is
+/// formatted with `Display`, not `Debug`, so a real backend's error reads as
+/// its human-readable cause (see `AppleMusicError`'s `Display` impl) rather
+/// than a struct dump.
 fn fetch_failure_report<E: std::fmt::Display>(context: &str, err: &E) -> String {
-    format!("music-library fetch failed ({context}); showing an empty list: {err}")
+    format!("music-library fetch failed ({context}): {err}")
 }
 
 /// Formats the playback failure report: names the offending track and
@@ -127,23 +107,26 @@ impl RequestGeneration {
 }
 
 /// Runs a library-fetch future through iced's runtime, mapping its `Result`
-/// onto the matching `*Loaded` message (empty list on error, via
-/// [`loaded_or_empty`], with the error reported to stderr via
-/// [`fetch_failure_report`]). `context` names the fetch — "loading favorite
-/// artists", "loading albums for artist \"artist-1\"", or "loading songs from
-/// album \"album-1\"" — so a failed browse reports *which* query failed and
-/// what it was fetching, not just that a fetch failed. `generation` names the
-/// request's place in its list's stream: when a newer request for the same
-/// list has been issued by the time this fetch completes, the reply is
-/// superseded and becomes [`Message::Ignored`] instead of overwriting the
-/// newer list. Shared by the artists, albums, and songs load arms so none of
-/// them repeats the clone-the-service-then-`Task::perform` boilerplate.
+/// onto the matching message: the `*Loaded` message built by `loaded` on
+/// success, or the `*LoadFailed` message built by `failed` on error (after
+/// the error is reported to stderr via [`fetch_failure_report`], whose
+/// report is the string handed to `failed`). `context` names the fetch —
+/// "loading favorite artists", "loading albums for artist \"artist-1\"", or
+/// "loading songs from album \"album-1\"" — so a failed browse reports *which*
+/// query failed and what it was fetching, not just that a fetch failed.
+/// `generation` names the request's place in its list's stream: when a newer
+/// request for the same list has been issued by the time this fetch completes,
+/// the reply is superseded and becomes [`Message::Ignored`] instead of
+/// overwriting the newer list. Shared by the artists, albums, and songs load
+/// arms so none of them repeats the clone-the-service-then-`Task::perform`
+/// boilerplate.
 pub(super) fn fetch_into<T, E, Fut>(
     service: &AppleMusicService,
     context: String,
     generation: RequestGeneration,
     fetch: impl FnOnce(AppleMusicService) -> Fut + Send + 'static,
     loaded: impl Fn(Vec<T>) -> Message + Send + 'static,
+    failed: impl Fn(String) -> Message + Send + 'static,
 ) -> Task<Message>
 where
     T: Send + 'static,
@@ -155,53 +138,20 @@ where
         if !generation.is_current() {
             return Message::Ignored;
         }
-        loaded_or_empty(result, loaded, |err| {
-            eprintln!("{}", fetch_failure_report(&context, err))
-        })
+        match result {
+            Ok(items) => loaded(items),
+            Err(err) => {
+                let report = fetch_failure_report(&context, &err);
+                eprintln!("{report}");
+                failed(report)
+            }
+        }
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::library::Album;
-    use crate::test_support::sample_album;
-
-    #[test]
-    fn loaded_or_empty_maps_ok_and_err_to_loaded() {
-        let albums = vec![sample_album()];
-
-        let ok_message =
-            loaded_or_empty::<Album, String>(Ok(albums.clone()), Message::AlbumsLoaded, |_| {
-                unreachable!("ok path must not report an error")
-            });
-        assert!(matches!(ok_message, Message::AlbumsLoaded(v) if v == albums));
-
-        let err_message = loaded_or_empty::<Album, String>(
-            Err("boom".to_string()),
-            Message::AlbumsLoaded,
-            |_| {},
-        );
-        assert!(matches!(err_message, Message::AlbumsLoaded(v) if v.is_empty()));
-    }
-
-    #[test]
-    fn loaded_or_empty_reports_the_error_before_falling_back_to_empty() {
-        // A failed browse fetch must not vanish silently: the load path
-        // reports the error (to stderr in production; here to a recording
-        // closure) and still falls back to an empty list so the UI stays
-        // usable. `loaded_or_empty` takes the reporter as a parameter so this
-        // contract is testable without capturing stderr.
-        let mut reported: Option<String> = None;
-        let message = loaded_or_empty::<Album, String>(
-            Err("boom".to_string()),
-            Message::AlbumsLoaded,
-            |err| reported = Some(err.clone()),
-        );
-
-        assert_eq!(reported.as_deref(), Some("boom"));
-        assert!(matches!(message, Message::AlbumsLoaded(v) if v.is_empty()));
-    }
 
     #[test]
     fn played_or_reported_reports_a_failed_play_and_still_completes() {
@@ -237,7 +187,7 @@ mod tests {
         let report = fetch_failure_report("loading albums for artist \"artist-1\"", &"boom");
         assert_eq!(
             report,
-            "music-library fetch failed (loading albums for artist \"artist-1\"); showing an empty list: boom"
+            "music-library fetch failed (loading albums for artist \"artist-1\"): boom"
         );
     }
 
