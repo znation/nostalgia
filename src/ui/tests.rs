@@ -531,6 +531,54 @@ async fn a_slow_stale_browse_reply_does_not_overwrite_the_newer_list() {
     assert_ids(&player.albums, |album| album.id.as_str(), &["album-3"]);
 }
 
+// The stale-reply test above pins a superseded *success*; this pins the
+// failure case. `fetch_into` checks the request generation before it matches
+// the result, so a slow backend error is dropped exactly like a slow success:
+// without that placement, a stale failure would run `store_load_failed` and
+// wipe the newer artist's albums and record its error against them, so the
+// panel would show the wrong artist's failure. Drive the failing request's
+// task after the newer one has landed.
+#[tokio::test]
+async fn a_slow_stale_browse_failure_does_not_overwrite_the_newer_list_or_error() {
+    let (mut player, _state) = test_player();
+    // Index 0 is an artist whose blank id the service seam rejects, so its
+    // fetch fails; index 1 is a real artist whose fetch succeeds.
+    player.artists = vec![
+        Artist {
+            id: String::new(),
+            name: "Blank".to_string(),
+        },
+        sample_artist(),
+    ];
+
+    // Issue two album fetches: the failing artist-0, then the valid artist-1.
+    // The artists list is not replaced, so both presses carry epoch 0.
+    let first = update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 });
+    let second = update(&mut player, Message::ArtistSelected { epoch: 0, index: 1 });
+
+    // The newer, successful reply lands first.
+    let newer = task_output(second, "newer album fetch").await;
+    let _ = update(&mut player, newer);
+    assert_ids(
+        &player.albums,
+        |album| album.id.as_str(),
+        &["album-1", "album-2"],
+    );
+    assert!(player.albums_error.is_none());
+
+    // The older request's failure lands late and must be dropped: the newer
+    // artist's albums stay and no error is recorded against them.
+    let stale = task_output(first, "stale album fetch").await;
+    assert!(matches!(stale, Message::Ignored));
+    let _ = update(&mut player, stale);
+    assert_ids(
+        &player.albums,
+        |album| album.id.as_str(),
+        &["album-1", "album-2"],
+    );
+    assert!(player.albums_error.is_none());
+}
+
 // A play reply can complete out of order just like a browse reply: the user
 // clicks song-1, then song-2, and song-1's slower play lands last. The
 // playback counter's guard, evaluated inside `play_track` under the state
