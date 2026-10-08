@@ -134,7 +134,7 @@ impl RequestGeneration {
 
 /// The longest a browse fetch may run before the UI gives up on it.
 ///
-/// The `loading` flag a navigation sets (see `clear_loaded` in `ui`) only
+/// The `loading` flag a navigation sets (see `browse::BrowseList::clear`) only
 /// clears when the reply lands, so a backend that never answers would leave
 /// the browse panel stuck on "Loading…" forever with no way back. Bounding
 /// the wait turns that silent hang into a reported failure and the ordinary

@@ -74,7 +74,7 @@ fn empty_list_label(view: &CurrentView) -> &'static str {
 /// between a fetch failure, "still loading", and "loaded, but empty".
 ///
 /// `error` is the list's most recent fetch-failure report (see
-/// `store_load_failed`/`clear_loaded` in `ui`): when present it wins, so a
+/// `browse::BrowseList::fail`/`browse::BrowseList::clear`): when present it wins, so a
 /// backend failure is shown rather than misread as an empty library.
 /// Otherwise `loading` is the list's load state: true means the reply the
 /// navigation just scheduled is still in flight, so the panel reads as

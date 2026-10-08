@@ -2,9 +2,10 @@
 //! type, and the `update`/`view` loop `init_ui` hands to iced. Widget
 //! construction lives in the `views` submodule (browse lists, Now Playing bar,
 //! transport controls, equalizer panel), the Previous/Next stepping arithmetic
-//! in `transport`, and the library-fetch/error-reporting adapter in `loading`;
-//! this module wires those to the shared `AppState` and the `AppleMusicService`
-//! seam. Its unit tests live in the `tests` submodule.
+//! in `transport`, the library-fetch/error-reporting adapter in `loading`, and
+//! the per-level browse state machine in `browse`; this module wires those to
+//! the shared `AppState` and the `AppleMusicService` seam. Its unit tests live
+//! in the `tests` submodule.
 
 use iced::{Element, Task, widget::Column};
 use std::{
@@ -17,11 +18,14 @@ use std::{
 };
 use tokio::sync::Mutex;
 
+mod browse;
 mod loading;
 mod style;
 mod theme;
 mod transport;
 mod views;
+
+use browse::BrowseList;
 
 use crate::{
     apple_music::AppleMusicService,
@@ -82,7 +86,7 @@ enum Message {
     SongsLoadFailed(String),
     // A browse reply that a newer request for the same list has superseded.
     // `fetch_into` emits this instead of the `*Loaded` message so the stale
-    // reply never reaches `store_loaded`; the arm below is a no-op.
+    // reply never reaches `BrowseList::store`; the arm below is a no-op.
     Ignored,
     // The play's completion carries the generation its selection issued, so
     // the arm can tell whether a newer selection has superseded it. Only the
@@ -106,12 +110,14 @@ struct WinampPlayer {
     /// `None` (before the query resolves, or if it fails) makes them no-ops.
     window_id: Option<iced::window::Id>,
     current_view: CurrentView,
-    artists: Vec<Artist>,
-    albums: Vec<Album>,
-    songs: Vec<Song>,
+    /// The three browse levels. Each `BrowseList` owns its rows, epoch,
+    /// loading flag, error report, and request counter (see `browse`).
+    artists: BrowseList<Artist>,
+    albums: BrowseList<Album>,
+    songs: BrowseList<Song>,
     /// Each played song's id mapped to its title, so the Now Playing bar can
     /// still name the playing track after the user browses to a different
-    /// album (whose list replaces `songs`). The `TrackSelected` arm records a
+    /// album (whose list replaces `songs.items`). The `TrackSelected` arm records a
     /// track's title once, when it is played, and `now_playing_label`
     /// resolves the per-frame bar label with a single get instead of scanning
     /// a growing list on every frame. Recording on play — rather than folding
@@ -125,42 +131,6 @@ struct WinampPlayer {
     /// title is still pending, and pruning to the older committed track would
     /// drop it.
     known_titles: HashMap<String, String>,
-    /// Counters naming the list that rendered a row, bumped whenever a fetched
-    /// list replaces its buffer (see [`store_loaded`]). A selection message
-    /// carries the epoch of the list that rendered its row, so `update` can
-    /// reject a press that outlived that list instead of resolving its index
-    /// against the new one. A navigation clears a buffer without touching its
-    /// epoch (see [`clear_loaded`]), so the epoch a replacing list gets is
-    /// bumped past the cleared list's rather than reusing it.
-    artists_epoch: u64,
-    albums_epoch: u64,
-    songs_epoch: u64,
-    /// True while a list is waiting on a reply: it starts true for the artists
-    /// fetch [`boot`] schedules, and [`clear_loaded`] sets it when a
-    /// navigation empties a list for a new fetch. [`store_loaded`] clears it.
-    /// The view reads it to show "Loading…" instead of the list's empty
-    /// wording (see `views::browse_placeholder`).
-    artists_loading: bool,
-    albums_loading: bool,
-    songs_loading: bool,
-    /// The formatted report of each list's most recent failed fetch, or `None`
-    /// when that list has not failed. A failed fetch sets it (and clears
-    /// `loading`); a navigation clears it before the retry, and a successful
-    /// reply clears it. The view shows it in place of the empty-list wording
-    /// (see `views::browse_placeholder`), so a backend failure is not
-    /// mistaken for an empty library.
-    artists_error: Option<String>,
-    albums_error: Option<String>,
-    songs_error: Option<String>,
-    /// Per-list browse-request counters. Each list's counter is bumped when a
-    /// request for that list is issued, so a reply that completes after a
-    /// newer request for the same list is recognized as stale (see
-    /// [`loading::RequestGeneration`]) and does not overwrite the newer list.
-    /// The counters are shared (`Arc`) with the fetch tasks, which complete on
-    /// iced's executor while this player's UI thread issues later requests.
-    artists_generation: Arc<AtomicU64>,
-    albums_generation: Arc<AtomicU64>,
-    songs_generation: Arc<AtomicU64>,
     /// The playback-request counter. Each `TrackSelected` bumps it and
     /// carries its value into the async play as a guard: `play_track`
     /// evaluates the guard while holding the state lock and commits the
@@ -172,7 +142,7 @@ struct WinampPlayer {
 }
 
 /// Which browse screen is showing. Payload-free: the albums and songs the
-/// view renders come from the loaded `albums`/`songs` buffers, so carrying
+/// view renders come from the loaded `albums`/`songs` lists, so carrying
 /// the selected ids here (as earlier versions did) only duplicated
 /// state that nothing read.
 #[derive(Debug, PartialEq, Eq)]
@@ -194,22 +164,10 @@ impl WinampPlayer {
             apple_music_service: service,
             window_id: None,
             current_view: CurrentView::Artists,
-            artists: Vec::new(),
-            albums: Vec::new(),
-            songs: Vec::new(),
+            artists: BrowseList::new(true),
+            albums: BrowseList::new(false),
+            songs: BrowseList::new(false),
             known_titles: HashMap::new(),
-            artists_epoch: 0,
-            albums_epoch: 0,
-            songs_epoch: 0,
-            artists_loading: true,
-            albums_loading: false,
-            songs_loading: false,
-            artists_error: None,
-            albums_error: None,
-            songs_error: None,
-            artists_generation: Arc::new(AtomicU64::new(0)),
-            albums_generation: Arc::new(AtomicU64::new(0)),
-            songs_generation: Arc::new(AtomicU64::new(0)),
             plays_generation: Arc::new(AtomicU64::new(0)),
         }
     }
@@ -238,83 +196,6 @@ fn boot(state: Arc<Mutex<AppState>>) -> (WinampPlayer, Task<Message>) {
     )
 }
 
-/// Stores a freshly fetched list into the player's matching buffer, bumps
-/// that buffer's epoch, marks it loaded, and clears any earlier fetch
-/// failure for that list, with no further work. The `ArtistsLoaded`,
-/// `AlbumsLoaded`, and `SongsLoaded` update arms all just store. The
-/// store-and-noop shape lives here once instead of in each arm.
-///
-/// The epoch is what makes the index-carrying selection messages safe: a row
-/// rendered from the old list carries the old epoch, so if the list is
-/// replaced before the press is processed, the epoch no longer matches and
-/// the stale press is ignored rather than resolving its index against the
-/// new list. A navigation clears a buffer without resetting its epoch, so the
-/// replacing list's epoch is bumped past the cleared one's and differs from
-/// it.
-fn store_loaded<T>(
-    buffer: &mut Vec<T>,
-    epoch: &mut u64,
-    loading: &mut bool,
-    error: &mut Option<String>,
-    items: Vec<T>,
-) -> Task<Message> {
-    *buffer = items;
-    *epoch = epoch.wrapping_add(1);
-    *loading = false;
-    *error = None;
-    Task::none()
-}
-
-/// Clears a browse buffer and marks it loading before a new fetch for that
-/// level is issued. The `ArtistSelected` and `AlbumSelected` arms call this
-/// so the view never shows — or lets the user press — the previous
-/// selection's rows while the new fetch is in flight. Clearing removes the
-/// stale rows and `loading` makes the view show "Loading…" instead of the
-/// list's empty wording (see `views::browse_placeholder`); the buffer's epoch
-/// is deliberately left alone, so the reply that replaces it still gets a
-/// bumped epoch that differs from the cleared list's and a press rendered
-/// from the old rows cannot match the new list. Any earlier failure for the
-/// list is cleared too, so the retry shows "Loading…" rather than the stale
-/// error.
-fn clear_loaded<T>(buffer: &mut Vec<T>, loading: &mut bool, error: &mut Option<String>) {
-    buffer.clear();
-    *loading = true;
-    *error = None;
-}
-
-/// Stores a failed browse fetch's report: clears the buffer (a navigation
-/// already emptied it via [`clear_loaded`], but a failure must never leave
-/// stale rows behind), marks the list not-loading, and records the report so
-/// the view can show it (see `views::browse_placeholder`). The
-/// `ArtistsLoadFailed`, `AlbumsLoadFailed`, and `SongsLoadFailed` update
-/// arms all just store. The store-and-noop shape lives here once instead of
-/// in each arm.
-fn store_load_failed<T>(
-    buffer: &mut Vec<T>,
-    loading: &mut bool,
-    error: &mut Option<String>,
-    report: String,
-) -> Task<Message> {
-    buffer.clear();
-    *loading = false;
-    *error = Some(report);
-    Task::none()
-}
-
-/// The list entry a selection message names, or `None` when the press is
-/// stale. A selection message carries a row's index in the list that rendered
-/// it plus that list's epoch; `epoch` must still match `current_epoch` (the
-/// list was not replaced after the row was rendered) and `index` must still
-/// name an entry. Either failure means the press outlived its list and must be
-/// a no-op, so the epoch check and the bounds check live here once instead of
-/// in each of the three selection arms.
-fn selected_entry<T>(items: &[T], epoch: u64, current_epoch: u64, index: usize) -> Option<&T> {
-    if epoch != current_epoch {
-        return None;
-    }
-    items.get(index)
-}
-
 /// The task the Next/Previous buttons schedule: step the current track
 /// through the player's loaded songs in the given direction — via the
 /// `transport::next_track_id`/`previous_track_id` stepping function passed
@@ -335,15 +216,24 @@ fn step_track(
     // the per-frame now-playing path used to do — so the lock now covers the
     // pure stepping scan (fast, and `step` never locks anything itself).
     let state = player.state.blocking_lock();
-    let epoch = player.songs_epoch;
-    match step(&player.songs, state.current_track.as_deref(), state.repeat) {
+    let epoch = player.songs.epoch;
+    match step(
+        &player.songs.items,
+        state.current_track.as_deref(),
+        state.repeat,
+    ) {
         // `transport` answers with the stepped song's id, but the selection
         // message carries the song's index and the epoch of the list that
         // rendered the row (see `TrackSelected`), so resolve the id to its
         // position in this same buffer. This scan runs once per button press,
         // not per view refresh, and the stepped id always names a song in
         // this buffer.
-        Some(track_id) => match player.songs.iter().position(|song| song.id == track_id) {
+        Some(track_id) => match player
+            .songs
+            .items
+            .iter()
+            .position(|song| song.id == track_id)
+        {
             Some(index) => Task::done(Message::TrackSelected { epoch, index }),
             None => Task::none(),
         },
@@ -409,15 +299,15 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             // list was replaced after the row was rendered, so the index names
             // a different song now — ignore the stale press. An out-of-range
             // index likewise names no track and is a no-op rather than a bogus
-            // play. `selected_entry` applies both checks.
-            let Some(song) = selected_entry(&player.songs, epoch, player.songs_epoch, index) else {
+            // play. `songs.select` applies both checks.
+            let Some(song) = player.songs.select(epoch, index) else {
                 return Task::none();
             };
             let track_id = song.id.clone();
             // Record the played track's title before handing the id to the
             // async play: the Now Playing bar resolves its label from
             // `known_titles`, and the entry must survive a later browse to a
-            // different album (which replaces `songs`). Recording once per
+            // different album (which replaces `songs.items`). Recording once per
             // play — rather than folding every song of every browsed album
             // into the map — keeps the index proportional to songs actually
             // played and takes the fold off the browse path.
@@ -447,10 +337,11 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             // As with `TrackSelected`: the row message carries the artist's
             // index and its list's epoch. A mismatched epoch is a stale press
             // from a replaced list; an out-of-range index has no artist to
-            // browse. `selected_entry` rejects both.
-            let Some(artist_id) =
-                selected_entry(&player.artists, epoch, player.artists_epoch, index)
-                    .map(|artist| artist.id.clone())
+            // browse. `artists.select` rejects both.
+            let Some(artist_id) = player
+                .artists
+                .select(epoch, index)
+                .map(|artist| artist.id.clone())
             else {
                 return Task::none();
             };
@@ -458,12 +349,8 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             // Drop the previous artist's albums before the new fetch lands:
             // otherwise the Albums view renders them, and a press during the
             // fetch resolves against the wrong artist's list.
-            clear_loaded(
-                &mut player.albums,
-                &mut player.albums_loading,
-                &mut player.albums_error,
-            );
-            let generation = RequestGeneration::issue(&player.albums_generation);
+            player.albums.clear();
+            let generation = player.albums.begin_fetch();
             fetch_into(
                 &player.apple_music_service,
                 format!("loading albums for artist {artist_id:?}"),
@@ -475,9 +362,11 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             )
         }
         Message::AlbumSelected { epoch, index } => {
-            // The album twin of the artist arm above; `selected_entry`
+            // The album twin of the artist arm above; `albums.select`
             // rejects the same stale-epoch and out-of-range presses.
-            let Some(album_id) = selected_entry(&player.albums, epoch, player.albums_epoch, index)
+            let Some(album_id) = player
+                .albums
+                .select(epoch, index)
                 .map(|album| album.id.clone())
             else {
                 return Task::none();
@@ -486,12 +375,8 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             // The songs twin of the artist arm above: clear the previous
             // album's songs so they cannot be shown or pressed while the new
             // album's fetch is in flight.
-            clear_loaded(
-                &mut player.songs,
-                &mut player.songs_loading,
-                &mut player.songs_error,
-            );
-            let generation = RequestGeneration::issue(&player.songs_generation);
+            player.songs.clear();
+            let generation = player.songs.begin_fetch();
             fetch_into(
                 &player.apple_music_service,
                 format!("loading songs from album {album_id:?}"),
@@ -516,7 +401,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::LoadArtists => {
-            let generation = RequestGeneration::issue(&player.artists_generation);
+            let generation = player.artists.begin_fetch();
             fetch_into(
                 &player.apple_music_service,
                 "loading favorite artists".to_string(),
@@ -527,45 +412,30 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 Message::ArtistsLoadFailed,
             )
         }
-        Message::ArtistsLoaded(artists) => store_loaded(
-            &mut player.artists,
-            &mut player.artists_epoch,
-            &mut player.artists_loading,
-            &mut player.artists_error,
-            artists,
-        ),
-        Message::AlbumsLoaded(albums) => store_loaded(
-            &mut player.albums,
-            &mut player.albums_epoch,
-            &mut player.albums_loading,
-            &mut player.albums_error,
-            albums,
-        ),
-        Message::SongsLoaded(songs) => store_loaded(
-            &mut player.songs,
-            &mut player.songs_epoch,
-            &mut player.songs_loading,
-            &mut player.songs_error,
-            songs,
-        ),
-        Message::ArtistsLoadFailed(report) => store_load_failed(
-            &mut player.artists,
-            &mut player.artists_loading,
-            &mut player.artists_error,
-            report,
-        ),
-        Message::AlbumsLoadFailed(report) => store_load_failed(
-            &mut player.albums,
-            &mut player.albums_loading,
-            &mut player.albums_error,
-            report,
-        ),
-        Message::SongsLoadFailed(report) => store_load_failed(
-            &mut player.songs,
-            &mut player.songs_loading,
-            &mut player.songs_error,
-            report,
-        ),
+        Message::ArtistsLoaded(artists) => {
+            player.artists.store(artists);
+            Task::none()
+        }
+        Message::AlbumsLoaded(albums) => {
+            player.albums.store(albums);
+            Task::none()
+        }
+        Message::SongsLoaded(songs) => {
+            player.songs.store(songs);
+            Task::none()
+        }
+        Message::ArtistsLoadFailed(report) => {
+            player.artists.fail(report);
+            Task::none()
+        }
+        Message::AlbumsLoadFailed(report) => {
+            player.albums.fail(report);
+            Task::none()
+        }
+        Message::SongsLoadFailed(report) => {
+            player.songs.fail(report);
+            Task::none()
+        }
         Message::TrackPlayed { generation } => {
             // Only the current track's title is ever read (see
             // [`Self::known_titles`]), so the latest play's completion drops
@@ -626,16 +496,16 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
 
     let main_content = match &player.current_view {
         CurrentView::Artists => views::view_artists(
-            &player.artists,
-            player.artists_epoch,
-            player.artists_loading,
-            player.artists_error.as_deref(),
+            &player.artists.items,
+            player.artists.epoch,
+            player.artists.loading,
+            player.artists.error.as_deref(),
         ),
         CurrentView::Albums => views::view_albums(
-            &player.albums,
-            player.albums_epoch,
-            player.albums_loading,
-            player.albums_error.as_deref(),
+            &player.albums.items,
+            player.albums.epoch,
+            player.albums.loading,
+            player.albums.error.as_deref(),
         ),
         // A second short lock (like the label block above) hands the current
         // track's id to the Songs view so it can mark the playing row. The
@@ -645,10 +515,10 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
         CurrentView::Songs => {
             let state = player.state.blocking_lock();
             views::view_songs(
-                &player.songs,
-                player.songs_epoch,
-                player.songs_loading,
-                player.songs_error.as_deref(),
+                &player.songs.items,
+                player.songs.epoch,
+                player.songs.loading,
+                player.songs.error.as_deref(),
                 state.current_track.as_deref(),
             )
         }

@@ -27,7 +27,7 @@ fn test_generation() -> RequestGeneration {
 /// the starting track differs (or is absent), so it lives here once.
 fn player_stepping_from(current: Option<&str>) -> (WinampPlayer, Arc<Mutex<AppState>>) {
     let (mut player, state) = test_player();
-    player.songs = stepping_songs();
+    player.songs.items = stepping_songs();
     state.blocking_lock().current_track = current.map(str::to_string);
     (player, state)
 }
@@ -42,7 +42,7 @@ fn player_stepping_from(current: Option<&str>) -> (WinampPlayer, Arc<Mutex<AppSt
 /// its own `update` call.
 fn player_in_albums() -> WinampPlayer {
     let (mut player, _state) = test_player();
-    player.artists = vec![sample_artist()];
+    player.artists.items = vec![sample_artist()];
     let _ = update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 });
     player
 }
@@ -53,9 +53,9 @@ fn player_in_albums() -> WinampPlayer {
 /// both build this same three-buffer setup before exercising their own
 /// contract, so it lives here once.
 fn seed_browse_lists(player: &mut WinampPlayer) {
-    player.artists = vec![sample_artist()];
-    player.albums = vec![sample_album()];
-    player.songs = vec![sample_song()];
+    player.artists.items = vec![sample_artist()];
+    player.albums.items = vec![sample_album()];
+    player.songs.items = vec![sample_song()];
 }
 
 /// Asserts the player has no rows in any of its three browse buffers. The
@@ -63,9 +63,9 @@ fn seed_browse_lists(player: &mut WinampPlayer) {
 /// begins with all three empty) both pin this same "nothing loaded" shape, so
 /// the three-field check lives here once.
 fn assert_browse_lists_empty(player: &WinampPlayer) {
-    assert!(player.artists.is_empty());
-    assert!(player.albums.is_empty());
-    assert!(player.songs.is_empty());
+    assert!(player.artists.items.is_empty());
+    assert!(player.albums.items.is_empty());
+    assert!(player.songs.items.is_empty());
 }
 
 /// Asserts the player is showing `expected`. The tests pin the current
@@ -334,7 +334,7 @@ fn artist_selected_flips_to_albums_view() {
 #[test]
 fn album_selected_flips_to_songs_view() {
     let (mut player, _state) = test_player();
-    player.albums = vec![sample_album()];
+    player.albums.items = vec![sample_album()];
 
     let _ = update(&mut player, Message::AlbumSelected { epoch: 0, index: 0 });
 
@@ -351,23 +351,23 @@ fn album_selected_flips_to_songs_view() {
 #[test]
 fn artist_selected_clears_the_previous_artists_albums() {
     let (mut player, _state) = test_player();
-    player.artists = vec![sample_artist()];
+    player.artists.items = vec![sample_artist()];
     let _ = update(&mut player, Message::AlbumsLoaded(vec![sample_album()]));
-    player.albums_error = Some("music-library fetch failed: boom".to_string());
-    let previous_epoch = player.albums_epoch;
+    player.albums.error = Some("music-library fetch failed: boom".to_string());
+    let previous_epoch = player.albums.epoch;
 
     let _ = update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 });
 
-    assert!(player.albums.is_empty());
-    assert!(player.albums_loading);
-    assert!(player.albums_error.is_none());
+    assert!(player.albums.items.is_empty());
+    assert!(player.albums.loading);
+    assert!(player.albums.error.is_none());
 
     // The reply the fetch schedules lands with an epoch this list has never
     // used, and a press from the previous list is rejected rather than
     // resolving its index against the new one.
     let _ = update(&mut player, Message::AlbumsLoaded(vec![sample_album()]));
-    assert!(!player.albums_loading);
-    assert_ne!(player.albums_epoch, previous_epoch);
+    assert!(!player.albums.loading);
+    assert_ne!(player.albums.epoch, previous_epoch);
     assert_no_task(update(
         &mut player,
         Message::AlbumSelected {
@@ -385,20 +385,20 @@ fn artist_selected_clears_the_previous_artists_albums() {
 #[test]
 fn album_selected_clears_the_previous_albums_songs() {
     let (mut player, _state) = test_player();
-    player.albums = vec![sample_album()];
+    player.albums.items = vec![sample_album()];
     let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
-    player.songs_error = Some("music-library fetch failed: boom".to_string());
-    let previous_epoch = player.songs_epoch;
+    player.songs.error = Some("music-library fetch failed: boom".to_string());
+    let previous_epoch = player.songs.epoch;
 
     let _ = update(&mut player, Message::AlbumSelected { epoch: 0, index: 0 });
 
-    assert!(player.songs.is_empty());
-    assert!(player.songs_loading);
-    assert!(player.songs_error.is_none());
+    assert!(player.songs.items.is_empty());
+    assert!(player.songs.loading);
+    assert!(player.songs.error.is_none());
 
     let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
-    assert!(!player.songs_loading);
-    assert_ne!(player.songs_epoch, previous_epoch);
+    assert!(!player.songs.loading);
+    assert_ne!(player.songs.epoch, previous_epoch);
     assert_no_task(update(
         &mut player,
         Message::TrackSelected {
@@ -489,14 +489,14 @@ fn back_from_artists_is_a_noop() {
 #[tokio::test]
 async fn artist_selected_fetches_the_artists_albums_into_the_player() {
     let (mut player, _state) = test_player();
-    player.artists = vec![sample_artist()];
+    player.artists.items = vec![sample_artist()];
 
     let task = update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 });
     drive_fetch_and_assert_loaded(
         &mut player,
         task,
         "load albums",
-        |player| &mut player.albums,
+        |player| &mut player.albums.items,
         |album| album.id.as_str(),
         &["album-1", "album-2"],
     )
@@ -510,7 +510,7 @@ async fn artist_selected_fetches_the_artists_albums_into_the_player() {
 #[tokio::test]
 async fn album_selected_fetches_the_albums_songs_into_the_player() {
     let (mut player, _state) = test_player();
-    player.albums = vec![Album {
+    player.albums.items = vec![Album {
         id: "album-3".to_string(),
         title: "Debut".to_string(),
         artist_id: "artist-2".to_string(),
@@ -521,7 +521,7 @@ async fn album_selected_fetches_the_albums_songs_into_the_player() {
         &mut player,
         task,
         "load songs",
-        |player| &mut player.songs,
+        |player| &mut player.songs.items,
         |song| song.id.as_str(),
         &["song-5"],
     )
@@ -541,7 +541,7 @@ async fn album_selected_fetches_the_albums_songs_into_the_player() {
 #[tokio::test]
 async fn a_slow_stale_browse_reply_does_not_overwrite_the_newer_list() {
     let (mut player, _state) = test_player();
-    player.artists = sample_library().artists.clone();
+    player.artists.items = sample_library().artists.clone();
 
     // Issue two album fetches: artist-1 (index 0), then artist-2 (index 1).
     // The artists list is not replaced, so both presses carry epoch 0.
@@ -551,19 +551,27 @@ async fn a_slow_stale_browse_reply_does_not_overwrite_the_newer_list() {
     // The newer request's reply lands first.
     let newer = task_output(second, "newer album fetch").await;
     let _ = update(&mut player, newer);
-    assert_ids(&player.albums, |album| album.id.as_str(), &["album-3"]);
+    assert_ids(
+        &player.albums.items,
+        |album| album.id.as_str(),
+        &["album-3"],
+    );
 
     // The older request's reply lands late and must be dropped, leaving the
     // newer artist's albums in place.
     let stale = task_output(first, "stale album fetch").await;
     let _ = update(&mut player, stale);
-    assert_ids(&player.albums, |album| album.id.as_str(), &["album-3"]);
+    assert_ids(
+        &player.albums.items,
+        |album| album.id.as_str(),
+        &["album-3"],
+    );
 }
 
 // The stale-reply test above pins a superseded *success*; this pins the
 // failure case. `fetch_into` checks the request generation before it matches
 // the result, so a slow backend error is dropped exactly like a slow success:
-// without that placement, a stale failure would run `store_load_failed` and
+// without that placement, a stale failure would run `BrowseList::fail` and
 // wipe the newer artist's albums and record its error against them, so the
 // panel would show the wrong artist's failure. Drive the failing request's
 // task after the newer one has landed.
@@ -572,7 +580,7 @@ async fn a_slow_stale_browse_failure_does_not_overwrite_the_newer_list_or_error(
     let (mut player, _state) = test_player();
     // Index 0 is an artist whose blank id the service seam rejects, so its
     // fetch fails; index 1 is a real artist whose fetch succeeds.
-    player.artists = vec![
+    player.artists.items = vec![
         Artist {
             id: String::new(),
             name: "Blank".to_string(),
@@ -589,11 +597,11 @@ async fn a_slow_stale_browse_failure_does_not_overwrite_the_newer_list_or_error(
     let newer = task_output(second, "newer album fetch").await;
     let _ = update(&mut player, newer);
     assert_ids(
-        &player.albums,
+        &player.albums.items,
         |album| album.id.as_str(),
         &["album-1", "album-2"],
     );
-    assert!(player.albums_error.is_none());
+    assert!(player.albums.error.is_none());
 
     // The older request's failure lands late and must be dropped: the newer
     // artist's albums stay and no error is recorded against them.
@@ -601,11 +609,11 @@ async fn a_slow_stale_browse_failure_does_not_overwrite_the_newer_list_or_error(
     assert!(matches!(stale, Message::Ignored));
     let _ = update(&mut player, stale);
     assert_ids(
-        &player.albums,
+        &player.albums.items,
         |album| album.id.as_str(),
         &["album-1", "album-2"],
     );
-    assert!(player.albums_error.is_none());
+    assert!(player.albums.error.is_none());
 }
 
 // A play reply can complete out of order just like a browse reply: the user
@@ -675,7 +683,7 @@ async fn load_artists_fetches_favorite_artists_into_the_player() {
         &mut player,
         task,
         "load artists",
-        |player| &mut player.artists,
+        |player| &mut player.artists.items,
         |artist| artist.id.as_str(),
         &["artist-1", "artist-2", "artist-3"],
     )
@@ -689,7 +697,7 @@ async fn load_artists_fetches_favorite_artists_into_the_player() {
 #[tokio::test]
 async fn track_selected_starts_playback_of_the_selected_track() {
     let (mut player, state) = test_player();
-    player.songs = vec![sample_song()];
+    player.songs.items = vec![sample_song()];
 
     let task = update(&mut player, Message::TrackSelected { epoch: 0, index: 0 });
     drive_task(task, "playback", |message| {
@@ -887,7 +895,7 @@ fn previous_track_with_no_current_track_starts_at_the_last_song() {
     assert_track_selected(task, 0, 2);
 }
 
-// Browsing to a different album replaces `player.songs` with the new
+// Browsing to a different album replaces `player.songs.items` with the new
 // album's list while the shared `current_track` still names a song from
 // the album just left — the same browse-away state the now-playing-label
 // regression (`now_playing_label_keeps_the_track_name_after_browsing_to_another_album`)
@@ -898,7 +906,7 @@ fn previous_track_with_no_current_track_starts_at_the_last_song() {
 // (`next_with_unknown_current_starts_at_first` and
 // `previous_with_unknown_current_starts_at_last`), but no arm-level test
 // drives this exact browse-away-then-step flow: the other stepping wiring
-// tests set a current track that IS in `player.songs` or load no songs, so
+// tests set a current track that IS in `player.songs.items` or load no songs, so
 // a guard in `step_track` that bailed on a current unknown to this album
 // would clear every existing test.
 #[test]
@@ -988,7 +996,7 @@ fn previous_track_follows_the_shared_repeat_flag_at_the_albums_start() {
 
 /// Feeds a `*Loaded` message built from `items` back through `update` and
 /// asserts the list lands in `buffer` unchanged and that the matching
-/// `loading` flag is cleared — `store_loaded` is the only writer that turns
+/// `loading` flag is cleared — `BrowseList::store` is the only writer that turns
 /// a list's "Loading…" placeholder off (see `views::browse_placeholder`), so
 /// a `*Loaded` reply must leave that list not-loading. The three
 /// `*_loaded_populates_list` tests — artists, albums, songs — each used
@@ -997,7 +1005,7 @@ fn previous_track_follows_the_shared_repeat_flag_at_the_albums_start() {
 /// loading flag it clears; the message constructor, the buffer, and the
 /// flag reader come in as parameters so the flow lives here once and each
 /// test only names its fixture and target.
-fn assert_store_loaded<T: Clone + PartialEq + std::fmt::Debug>(
+fn assert_loaded_populates_list<T: Clone + PartialEq + std::fmt::Debug>(
     player: &mut WinampPlayer,
     items: Vec<T>,
     loaded: impl Fn(Vec<T>) -> Message,
@@ -1014,12 +1022,12 @@ fn artists_loaded_populates_list() {
     let (mut player, _state) = test_player();
     let artists = vec![sample_artist()];
 
-    assert_store_loaded(
+    assert_loaded_populates_list(
         &mut player,
         artists,
         Message::ArtistsLoaded,
-        |player| &mut player.artists,
-        |player| player.artists_loading,
+        |player| &mut player.artists.items,
+        |player| player.artists.loading,
     );
 }
 
@@ -1028,12 +1036,12 @@ fn albums_loaded_populates_list() {
     let (mut player, _state) = test_player();
     let albums = vec![sample_album()];
 
-    assert_store_loaded(
+    assert_loaded_populates_list(
         &mut player,
         albums,
         Message::AlbumsLoaded,
-        |player| &mut player.albums,
-        |player| player.albums_loading,
+        |player| &mut player.albums.items,
+        |player| player.albums.loading,
     );
 }
 
@@ -1042,12 +1050,12 @@ fn songs_loaded_populates_list() {
     let (mut player, _state) = test_player();
     let songs = vec![sample_song()];
 
-    assert_store_loaded(
+    assert_loaded_populates_list(
         &mut player,
         songs,
         Message::SongsLoaded,
-        |player| &mut player.songs,
-        |player| player.songs_loading,
+        |player| &mut player.songs.items,
+        |player| player.songs.loading,
     );
 }
 
@@ -1058,25 +1066,25 @@ fn songs_loaded_populates_list() {
 #[test]
 fn albums_load_failed_stores_the_error_until_the_next_load() {
     let (mut player, _state) = test_player();
-    player.albums = vec![sample_album()];
-    player.albums_loading = true;
+    player.albums.items = vec![sample_album()];
+    player.albums.loading = true;
 
     let report = "music-library fetch failed (loading albums for artist \"artist-1\"): boom";
     let _ = update(&mut player, Message::AlbumsLoadFailed(report.to_string()));
 
-    assert!(player.albums.is_empty());
-    assert!(!player.albums_loading);
-    assert_eq!(player.albums_error.as_deref(), Some(report));
+    assert!(player.albums.items.is_empty());
+    assert!(!player.albums.loading);
+    assert_eq!(player.albums.error.as_deref(), Some(report));
 
     let _ = update(&mut player, Message::AlbumsLoaded(vec![sample_album()]));
 
-    assert!(player.albums_error.is_none());
+    assert!(player.albums.error.is_none());
 }
 
 // The Artists and Songs failure arms are distinct `update` arms from the
 // Albums one (each handles its own message variant), so driving only
 // `AlbumsLoadFailed` leaves the other two unpinned — a copy-paste that routed
-// a songs failure into `artists_error`, say, would still compile and pass the
+// a songs failure into `artists.error`, say, would still compile and pass the
 // suite. This drives all three and asserts each report lands in its own
 // list's error field with the other two untouched, and that each failure
 // clears its own buffer and loading flag.
@@ -1084,9 +1092,9 @@ fn albums_load_failed_stores_the_error_until_the_next_load() {
 fn each_browse_failure_stores_its_report_in_its_own_list() {
     let (mut player, _state) = test_player();
     seed_browse_lists(&mut player);
-    player.artists_loading = true;
-    player.albums_loading = true;
-    player.songs_loading = true;
+    player.artists.loading = true;
+    player.albums.loading = true;
+    player.songs.loading = true;
 
     let artists_report = "music-library fetch failed (loading favorite artists): artists boom";
     let albums_report =
@@ -1108,31 +1116,31 @@ fn each_browse_failure_stores_its_report_in_its_own_list() {
     );
 
     assert_browse_lists_empty(&player);
-    assert!(!player.artists_loading);
-    assert!(!player.albums_loading);
-    assert!(!player.songs_loading);
-    assert_eq!(player.artists_error.as_deref(), Some(artists_report));
-    assert_eq!(player.albums_error.as_deref(), Some(albums_report));
-    assert_eq!(player.songs_error.as_deref(), Some(songs_report));
+    assert!(!player.artists.loading);
+    assert!(!player.albums.loading);
+    assert!(!player.songs.loading);
+    assert_eq!(player.artists.error.as_deref(), Some(artists_report));
+    assert_eq!(player.albums.error.as_deref(), Some(albums_report));
+    assert_eq!(player.songs.error.as_deref(), Some(songs_report));
 }
 
-// `clear_loaded` runs on every navigation step and must reset all three
+// `BrowseList::clear` runs on every navigation step and must reset all three
 // pieces of the entered list's state: the stale rows, the loading flag (so
 // the panel shows "Loading…"), and any earlier fetch failure (so the retry
 // does not keep showing the old error). This pins the error reset in
 // particular — a regression that dropped `*error = None` would leave the
 // previous failure on screen for the whole retry.
 #[test]
-fn clear_loaded_clears_the_buffer_loading_and_error() {
-    let mut buffer = vec![sample_album()];
-    let mut loading = false;
-    let mut error = Some("music-library fetch failed: boom".to_string());
+fn browse_list_clear_clears_the_buffer_loading_and_error() {
+    let mut list = BrowseList::new(false);
+    list.items = vec![sample_album()];
+    list.error = Some("music-library fetch failed: boom".to_string());
 
-    clear_loaded(&mut buffer, &mut loading, &mut error);
+    list.clear();
 
-    assert!(buffer.is_empty());
-    assert!(loading);
-    assert!(error.is_none());
+    assert!(list.items.is_empty());
+    assert!(list.loading);
+    assert!(list.error.is_none());
 }
 
 // The `known_titles` index backs the Now Playing bar's title lookup, and it
@@ -1253,7 +1261,7 @@ fn a_failed_play_completion_clears_the_index_when_nothing_committed() {
     let (mut player, state) = test_player();
     // A song with a blank id is rejected by the service seam, so the play
     // fails without committing `current_track`.
-    player.songs = vec![Song {
+    player.songs.items = vec![Song {
         id: String::new(),
         title: "Blank".to_string(),
         album_id: "album-1".to_string(),
@@ -1272,12 +1280,12 @@ fn a_failed_play_completion_clears_the_index_when_nothing_committed() {
 
 // Browsing to a new album must *replace* the Songs view's buffer, not
 // append to it: after loading album-1's songs and then browsing to
-// album-2, `player.songs` holds only album-2's song — otherwise the
+// album-2, `player.songs.items` holds only album-2's song — otherwise the
 // Songs view would render stale rows from every album visited. The other
 // `*Loaded` tests load only into an empty buffer, and the browse-away
 // label test (`now_playing_label_keeps_the_track_name_after_browsing_to_another_album`)
 // asserts the label but never the buffer, so an
-// append-instead-of-replace regression in `store_loaded` would clear every
+// append-instead-of-replace regression in `BrowseList::store` would clear every
 // existing test and only fail here.
 #[test]
 fn songs_loaded_replaces_the_previous_albums_songs() {
@@ -1287,7 +1295,7 @@ fn songs_loaded_replaces_the_previous_albums_songs() {
     let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
     let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
 
-    assert_ids(&player.songs, |song| song.id.as_str(), &["song-4"]);
+    assert_ids(&player.songs.items, |song| song.id.as_str(), &["song-4"]);
 }
 
 // The Now Playing bar must keep naming the playing track, not its raw id,
@@ -1467,9 +1475,9 @@ fn new_player_starts_at_artists_with_nothing_selected() {
     // The artists fetch `boot` schedules is in flight, so the panel shows
     // "Loading…" rather than claiming an empty library (see
     // `views::browse_placeholder`); the two lower lists are not loading.
-    assert!(player.artists_loading);
-    assert!(!player.albums_loading);
-    assert!(!player.songs_loading);
+    assert!(player.artists.loading);
+    assert!(!player.albums.loading);
+    assert!(!player.songs.loading);
 }
 
 // `view` is the per-frame assembly: it locks the shared state, resolves
@@ -1534,12 +1542,12 @@ fn view_constructs_over_the_apps_full_input_space() {
     // an empty-list label. Clearing the buffers matters: `scrollable_list`
     // only shows the placeholder when there are no rows, so with the loaded
     // rows still present the error branch would never render.
-    player.artists.clear();
-    player.albums.clear();
-    player.songs.clear();
-    player.artists_error = Some("music-library fetch failed: boom".to_string());
-    player.albums_error = Some("music-library fetch failed: boom".to_string());
-    player.songs_error = Some("music-library fetch failed: boom".to_string());
+    player.artists.items.clear();
+    player.albums.items.clear();
+    player.songs.items.clear();
+    player.artists.error = Some("music-library fetch failed: boom".to_string());
+    player.albums.error = Some("music-library fetch failed: boom".to_string());
+    player.songs.error = Some("music-library fetch failed: boom".to_string());
     for current_view in BROWSE_VIEWS {
         player.current_view = current_view;
         let _failed = view(&player);
