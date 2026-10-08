@@ -61,6 +61,11 @@ fn stepped_track_id(
 /// (the default), stays on the last song. `None` when there is nothing to
 /// step through (empty `songs`); with no `current` (or an unknown one), the
 /// first song regardless of `repeat`.
+///
+/// `#[must_use]`: the returned id is the call's entire purpose, so a caller
+/// that drops it has silently done nothing — the Next button would not step.
+/// The attribute turns that mistake into a compile-time warning.
+#[must_use]
 pub fn next_track_id(songs: &[Song], current: Option<&str>, repeat: bool) -> Option<String> {
     stepped_track_id(songs, current, true, repeat)
 }
@@ -70,6 +75,10 @@ pub fn next_track_id(songs: &[Song], current: Option<&str>, repeat: bool) -> Opt
 /// it (the default), stays on the first song. `None` when there is nothing to
 /// step through (empty `songs`); with no `current` (or an unknown one), the
 /// last song regardless of `repeat`.
+///
+/// `#[must_use]`: the Previous twin of [`next_track_id`], guarded for the same
+/// reason — a discarded id means the button silently did nothing.
+#[must_use]
 pub fn previous_track_id(songs: &[Song], current: Option<&str>, repeat: bool) -> Option<String> {
     stepped_track_id(songs, current, false, repeat)
 }

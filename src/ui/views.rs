@@ -306,6 +306,10 @@ pub fn view_songs<'a>(
 /// Whether the browse view has a level above it to return to. The Albums and
 /// Songs views do — the Back button is shown above their lists — while the
 /// top-level Artists list has nothing to go back to.
+///
+/// `#[must_use]`: a discarded result is a logic bug — the caller that decides
+/// whether to show the Back button would silently never show it.
+#[must_use]
 pub fn can_go_back(view: &CurrentView) -> bool {
     !matches!(view, CurrentView::Artists)
 }
@@ -315,6 +319,10 @@ pub fn can_go_back(view: &CurrentView) -> bool {
 /// to the Artists view and only while that fetch has failed; the Albums and
 /// Songs levels recover by navigating back into them. The update loop's
 /// `LoadArtists` arm clears the failure and re-issues the fetch.
+///
+/// `#[must_use]`: a discarded result is a logic bug — the caller that decides
+/// whether to show the Retry button would silently never show it.
+#[must_use]
 pub fn can_retry_artists(view: &CurrentView, error: Option<&str>) -> bool {
     matches!(view, CurrentView::Artists) && error.is_some()
 }
