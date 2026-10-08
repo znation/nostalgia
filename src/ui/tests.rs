@@ -224,18 +224,9 @@ fn album_selected_flips_to_songs_view() {
 fn selection_messages_with_a_stale_epoch_or_index_do_nothing() {
     let (mut player, state) = test_player();
 
-    assert_no_task(update(
-        &mut player,
-        Message::ArtistSelected { epoch: 0, index: 0 },
-    ));
-    assert_no_task(update(
-        &mut player,
-        Message::AlbumSelected { epoch: 0, index: 0 },
-    ));
-    assert_no_task(update(
-        &mut player,
-        Message::TrackSelected { epoch: 0, index: 0 },
-    ));
+    assert_message_schedules_no_work(&mut player, Message::ArtistSelected { epoch: 0, index: 0 });
+    assert_message_schedules_no_work(&mut player, Message::AlbumSelected { epoch: 0, index: 0 });
+    assert_message_schedules_no_work(&mut player, Message::TrackSelected { epoch: 0, index: 0 });
 
     assert_view(&player, CurrentView::Artists);
     assert!(state.blocking_lock().current_track.is_none());
@@ -246,10 +237,7 @@ fn selection_messages_with_a_stale_epoch_or_index_do_nothing() {
     // from playing the wrong song.
     let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
     let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
-    assert_no_task(update(
-        &mut player,
-        Message::TrackSelected { epoch: 1, index: 0 },
-    ));
+    assert_message_schedules_no_work(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
     assert!(state.blocking_lock().current_track.is_none());
 }
 
@@ -531,6 +519,15 @@ fn assert_no_task(task: Task<Message>) {
     assert!(iced_runtime::task::into_stream(task).is_none());
 }
 
+/// Drives `message` through `update` and asserts the arm schedules no
+/// follow-up work. The no-op arms — a selection press the epoch/index guard
+/// rejects, and Next/Previous with an empty `songs` buffer — all just return
+/// `Task::none()`, so the update-then-[`assert_no_task`] sequence lives here
+/// once and each call site names only the message it drives.
+fn assert_message_schedules_no_work(player: &mut WinampPlayer, message: Message) {
+    assert_no_task(update(player, message));
+}
+
 #[test]
 fn next_track_steps_to_the_following_song() {
     let (mut player, _state) = player_stepping_from(Some("song-1"));
@@ -609,18 +606,14 @@ fn stepping_after_browsing_away_steps_within_the_new_albums_songs() {
 fn next_track_with_no_songs_loaded_does_nothing() {
     let (mut player, _state) = test_player();
 
-    let task = update(&mut player, Message::NextTrack);
-
-    assert_no_task(task);
+    assert_message_schedules_no_work(&mut player, Message::NextTrack);
 }
 
 #[test]
 fn previous_track_with_no_songs_loaded_does_nothing() {
     let (mut player, _state) = test_player();
 
-    let task = update(&mut player, Message::PreviousTrack);
-
-    assert_no_task(task);
+    assert_message_schedules_no_work(&mut player, Message::PreviousTrack);
 }
 
 /// Drives a step `message` twice from `start` — once with Repeat off (the
