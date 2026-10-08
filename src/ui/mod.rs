@@ -273,9 +273,9 @@ fn step_track(
 }
 
 /// Locks the shared playback state, applies `mutation` to it, and returns no
-/// task. The eight synchronous arms — Play/Pause, Stop, ToggleRepeat,
-/// VolumeChange, ToggleEqualizer, EqPreampChange, EqBandChange, and
-/// EqPresetSelected — all repeat the same shared-state update —
+/// task. The eight synchronous arms — `Play/Pause`, `Stop`, `ToggleRepeat`,
+/// `VolumeChange`, `ToggleEqualizer`, `EqPreampChange`, `EqBandChange`, and
+/// `EqPresetSelected` — all repeat the same shared-state update —
 /// `blocking_lock`, one mutation, then `Task::none()` — so the lock-and-noop
 /// shape lives here once and each arm only names its mutation. Asynchronous
 /// work (fetches) goes through [`fetch_into`] instead.

@@ -88,7 +88,7 @@ fn assert_view(player: &WinampPlayer, expected: CurrentView) {
 }
 
 /// Asserts `message` flips the shared-state flag `read_flag` from false to
-/// true and back: the PlayPause, ToggleRepeat, and ToggleEqualizer update
+/// true and back: the `PlayPause`, `ToggleRepeat`, and `ToggleEqualizer` update
 /// arms all do the same one-flag flip, differing only in which flag they
 /// read, so the lock-read-update sequence lives here once. The arms use
 /// `blocking_lock`, which panics inside an async runtime, so this stays a
@@ -105,8 +105,8 @@ fn assert_toggles_shared_state(message: Message, read_flag: impl Fn(&AppState) -
 }
 
 /// Drives a slider-change message through `update` and asserts the clamped
-/// value lands in shared state. The VolumeChange, EqPreampChange, and
-/// EqBandChange arms all do the same one-value write — the setter clamps the
+/// value lands in shared state. The `VolumeChange`, `EqPreampChange`, and
+/// `EqBandChange` arms all do the same one-value write — the setter clamps the
 /// slider's value before storing it — so the lock-read-assert sequence lives
 /// here once and each call only names its message, the field read back, and
 /// the clamped value. The arms use `blocking_lock`, which panics inside an

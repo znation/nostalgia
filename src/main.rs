@@ -5,6 +5,12 @@
 //! block added here is a mistake worth failing the build for rather than
 //! catching in review.
 #![forbid(unsafe_code)]
+// Doc comments name code items (`Message` variants, types, functions); the
+// `doc_markdown` lint keeps those identifiers backticked so rustdoc renders
+// them as code. It is allow-by-default, so the landing gate's `-D warnings`
+// would not enable it; denying it here makes an unbackticked identifier fail
+// `make check` like any other warning.
+#![deny(clippy::doc_markdown)]
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
