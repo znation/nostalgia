@@ -362,6 +362,22 @@ fn mutate_state(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> 
     Task::none()
 }
 
+/// Runs `action` with the resolved window id, or returns no task when it has
+/// not resolved yet. The title bar's drag, minimize, and close arms all guard
+/// on `WinampPlayer::window_id` the same way — a `None` (before boot's
+/// `iced::window::latest()` query resolves, or if it fails) makes the action a
+/// no-op — so the guard lives here once and each arm only names the
+/// `iced::window` call it schedules.
+fn with_window_id(
+    player: &WinampPlayer,
+    action: impl FnOnce(iced::window::Id) -> Task<Message>,
+) -> Task<Message> {
+    match player.window_id {
+        Some(id) => action(id),
+        None => Task::none(),
+    }
+}
+
 fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
     match message {
         Message::PlayPause => mutate_state(player, AppState::toggle_playing),
@@ -571,20 +587,11 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             Task::none()
         }
         // The custom title bar's three window actions all act on the resolved
-        // window id and are no-ops until it exists. Each returns the task
-        // iced schedules for the matching window operation.
-        Message::WindowDragged => match player.window_id {
-            Some(id) => iced::window::drag(id),
-            None => Task::none(),
-        },
-        Message::MinimizeWindow => match player.window_id {
-            Some(id) => iced::window::minimize(id, true),
-            None => Task::none(),
-        },
-        Message::CloseWindow => match player.window_id {
-            Some(id) => iced::window::close(id),
-            None => Task::none(),
-        },
+        // window id and are no-ops until it exists; `with_window_id` holds that
+        // guard, so each arm names only the `iced::window` call it schedules.
+        Message::WindowDragged => with_window_id(player, iced::window::drag),
+        Message::MinimizeWindow => with_window_id(player, |id| iced::window::minimize(id, true)),
+        Message::CloseWindow => with_window_id(player, iced::window::close),
         Message::Ignored => Task::none(),
     }
 }
