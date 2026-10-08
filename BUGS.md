@@ -5,6 +5,38 @@ reproduce, suspected cause. Move fixed bugs to Fixed.
 
 ## Open
 
+### The stage self-check rejects a plan that names the new file it creates, so the plan/director roles must reword it to a symbol anchor (found by telemetry 2026-10-08)
+
+Symptom: the 2026-10-08 digest's only warning cluster is "stage self-check:
+1 finding — fixed by the follow-up turn", logged 2× for the plan and director
+roles. Both roles wrote a plan that named the file the plan would create; a
+harness self-check rejected the added lines because that path is absent from
+the tree, and the follow-up turn reworded the plan to name a module/symbol
+instead. The merged commits record the workaround: `f966030` (plan) WHY
+records that the pre-queue self-check rejected the plan's added lines because
+they named a proposed `shortcuts` module file absent from the tree, so the plan
+now puts the mapping in the existing `src/ui/mod.rs`; `134d3e5` (director) WHY
+records that the landing self-check rejected added lines naming the new auth
+module's file because it is absent from the tree, so the plan now anchors on
+the `music_kit_auth` module name instead of its path, and its RISK calls that
+reword the workaround ("If the check intended a to-be-created file to be
+allowed").
+
+How to reproduce:
+- `git show f966030` — the plan's PLANS.md diff; its WHY records the pre-queue
+  self-check rejection of the proposed new `shortcuts` module file.
+- `git show 134d3e5` — the director's PLANS.md diff adding the MusicKit plan;
+  its WHY and RISK record the landing self-check rejection of the new auth
+  module's file and call the reword a workaround.
+- The digest logs the warning cluster "stage self-check: 1 finding — fixed by
+  the follow-up turn" 2× (plan, director) on 2026-10-08.
+
+Suspected cause: the self-check rejects every added line that names a path not
+present in the tree, so a plan entry proposing a new file — the plan and
+director roles' normal output — necessarily trips it. The roles can only respond
+by rewording the plan away from the path it creates, so the check keeps
+rejecting valid plan content and the warning recurs on the next new-file plan.
+
 ### Review gate demanded a BUGS.md record fix that the landing gate refuses as "md-only", so clean re-authored it for 5 ticks / 0.3 h (found by telemetry 2026-10-06)
 
 **Refused 2026-10-06 by bugfix: the fix is a change to the tumwater review and landing gates, which live in the harness, not this repo, and are off-limits to this role; no nostalgia-repo change can resolve the two verdicts.**
