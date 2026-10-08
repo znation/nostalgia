@@ -11,6 +11,15 @@
 // would not enable it; denying it here makes an unbackticked identifier fail
 // `make check` like any other warning.
 #![deny(clippy::doc_markdown)]
+// Every public item carries a doc comment (the seam and the model document
+// their contracts), and rustdoc renders those comments as the crate's API
+// reference; the `missing_docs` lint keeps a new public item from landing
+// undocumented. It is allow-by-default, so the landing gate's `-D warnings`
+// would not enable it; denying it here makes an undocumented public item fail
+// `make check` like any other warning. The lint sees only items reachable from
+// the crate root, so the production modules below are declared `pub mod`: a
+// `pub` item inside a private module is unreachable and would go unchecked.
+#![deny(missing_docs)]
 // Production code must not abort the player on an unexpected value: an
 // `unwrap`/`expect`/`panic`/`todo`/`unimplemented` crashes the process instead
 // of reporting the failure through the `AppleMusicError` seam or the clamps in
@@ -33,15 +42,15 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-mod apple_music;
-mod clamp;
-mod equalizer;
-mod library;
-mod sample_library;
-mod state;
+pub mod apple_music;
+pub mod clamp;
+pub mod equalizer;
+pub mod library;
+pub mod sample_library;
+pub mod state;
 #[cfg(test)]
 mod test_support;
-mod ui;
+pub mod ui;
 
 use crate::state::AppState;
 
