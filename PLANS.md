@@ -612,7 +612,7 @@ hand makes the curve custom and clears the selection.
     Option<Preset>`; the panel previously pushed the EQ on/off button
     straight into its column, so wrap the button and the pick list in a
     header `Row` and push
-    `PickList::new(PRESETS, preset, Message::EqPresetSelected)
+    `PickList::new(PRESETS.as_slice(), preset, Message::EqPresetSelected)
     .placeholder("(none)").text_size(12).style(|_theme, status|
     style::chrome_pick_list_style(status)).menu_style(|_theme|
     style::preset_menu_style())`.

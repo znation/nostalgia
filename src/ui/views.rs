@@ -576,7 +576,12 @@ pub fn view_equalizer(
                     ))
                     .push(spacer(8.0))
                     .push(
-                        PickList::new(PRESETS, preset, Message::EqPresetSelected)
+                        // `PickList` stores its options by value, so passing the
+                        // `[Preset; 19]` array copies ~1.2 KB into the widget on
+                        // every rebuild; passing the slice borrows the static
+                        // array instead. The pick list only ever reads the options
+                        // through `Borrow<[Preset]>`, so the slice is equivalent.
+                        PickList::new(PRESETS.as_slice(), preset, Message::EqPresetSelected)
                             .placeholder("(none)")
                             .text_size(12)
                             .style(|_theme, status| style::chrome_pick_list_style(status))
