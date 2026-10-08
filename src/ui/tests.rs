@@ -1115,9 +1115,9 @@ fn previous_track_follows_the_shared_repeat_flag_at_the_albums_start() {
 
 /// Feeds a `*Loaded` message built from `items` back through `update` and
 /// asserts the list lands in `buffer` unchanged and that the matching
-/// `loading` flag is cleared — `BrowseList::store` is the only writer that turns
-/// a list's "Loading…" placeholder off (see `views::browse_placeholder`), so
-/// a `*Loaded` reply must leave that list not-loading. The three
+/// `loading` flag is cleared — a `*Loaded` reply reaches `BrowseList::store`,
+/// which clears the flag (see `views::browse_placeholder`), so the reply must
+/// leave that list not-loading. The three
 /// `*_loaded_populates_list` tests — artists, albums, songs — each used
 /// to repeat the same update-then-compare flow, differing only in the
 /// fixture, the `*Loaded` message variant, the buffer it fills, and the
