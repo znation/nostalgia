@@ -894,6 +894,53 @@ fn albums_load_failed_stores_the_error_until_the_next_load() {
     assert!(player.albums_error.is_none());
 }
 
+// The Artists and Songs failure arms are distinct `update` arms from the
+// Albums one (each handles its own message variant), so driving only
+// `AlbumsLoadFailed` leaves the other two unpinned — a copy-paste that routed
+// a songs failure into `artists_error`, say, would still compile and pass the
+// suite. This drives all three and asserts each report lands in its own
+// list's error field with the other two untouched, and that each failure
+// clears its own buffer and loading flag.
+#[test]
+fn each_browse_failure_stores_its_report_in_its_own_list() {
+    let (mut player, _state) = test_player();
+    player.artists = vec![sample_artist()];
+    player.albums = vec![sample_album()];
+    player.songs = vec![sample_song()];
+    player.artists_loading = true;
+    player.albums_loading = true;
+    player.songs_loading = true;
+
+    let artists_report = "music-library fetch failed (loading favorite artists): artists boom";
+    let albums_report =
+        "music-library fetch failed (loading albums for artist \"artist-1\"): albums boom";
+    let songs_report =
+        "music-library fetch failed (loading songs from album \"album-1\"): songs boom";
+
+    let _ = update(
+        &mut player,
+        Message::ArtistsLoadFailed(artists_report.to_string()),
+    );
+    let _ = update(
+        &mut player,
+        Message::AlbumsLoadFailed(albums_report.to_string()),
+    );
+    let _ = update(
+        &mut player,
+        Message::SongsLoadFailed(songs_report.to_string()),
+    );
+
+    assert!(player.artists.is_empty());
+    assert!(player.albums.is_empty());
+    assert!(player.songs.is_empty());
+    assert!(!player.artists_loading);
+    assert!(!player.albums_loading);
+    assert!(!player.songs_loading);
+    assert_eq!(player.artists_error.as_deref(), Some(artists_report));
+    assert_eq!(player.albums_error.as_deref(), Some(albums_report));
+    assert_eq!(player.songs_error.as_deref(), Some(songs_report));
+}
+
 // `clear_loaded` runs on every navigation step and must reset all three
 // pieces of the entered list's state: the stale rows, the loading flag (so
 // the panel shows "Loading…"), and any earlier fetch failure (so the retry
