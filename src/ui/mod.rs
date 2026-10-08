@@ -126,11 +126,11 @@ enum CurrentView {
     Songs,
 }
 
-/// The initial player over the given shared state: nothing selected, no
-/// lists loaded. Both `boot` and the tests start a player this way, so the
-/// starting shape lives here instead of being repeated at each site — a new
-/// field has only one spot to get its startup value.
 impl WinampPlayer {
+    /// The initial player over the given shared state: nothing selected, no
+    /// lists loaded. Both `boot` and the tests start a player this way, so the
+    /// starting shape lives here instead of being repeated at each site — a new
+    /// field has only one spot to get its startup value.
     fn new(state: Arc<Mutex<AppState>>) -> Self {
         let service = AppleMusicService::new(state.clone());
         Self {
