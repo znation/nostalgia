@@ -26,8 +26,9 @@ fn player_stepping_from(current: Option<&str>) -> (WinampPlayer, Arc<Mutex<AppSt
 
 /// A fresh player showing the Albums view: it seeds the one
 /// [`sample_artist`] and drives the `ArtistSelected` press that artist's
-/// first row emits (index 0 of epoch 0), the step the view-flip and
-/// back-navigation tests all start from. The fetch task the arm schedules is
+/// first row emits (index 0 of epoch 0), the step
+/// `artist_selected_flips_to_albums_view` and the back-navigation tests that
+/// start from Albums share. The fetch task the arm schedules is
 /// dropped — those tests pin the view transition, not the fetch, which
 /// `artist_selected_fetches_the_artists_albums_into_the_player` covers with
 /// its own `update` call.
