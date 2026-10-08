@@ -7,6 +7,8 @@ reproduce, suspected cause. Move fixed bugs to Fixed.
 
 ### The stage self-check rejects a plan that names the new file it creates, so the plan/director roles must reword it to a symbol anchor (found by telemetry 2026-10-08)
 
+**Refused 2026-10-08 by bugfix: the pre-queue/landing self-check that flags added lines naming paths absent from the tree is tumwater harness code, off-limits to this role, so no change in this nostalgia repo can fix the false positive.**
+
 Symptom: the 2026-10-08 digest's only warning cluster is "stage self-check:
 1 finding — fixed by the follow-up turn", logged 2× for the plan and director
 roles. Both roles wrote a plan that named the file the plan would create; a
