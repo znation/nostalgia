@@ -94,14 +94,14 @@ fn browse_placeholder<'a>(view: &CurrentView, loading: bool, error: Option<&'a s
 
 /// The style for a browse row that is currently playing: the flat
 /// [`style::playlist_row_style`] with its background forced to
-/// [`super::theme::PLAYING_ROW_HIGHLIGHT`], so the playing row reads as a
+/// [`theme::PLAYING_ROW_HIGHLIGHT`], so the playing row reads as a
 /// selection bar in every hover/press state instead of following the row's
 /// face ladder under the cursor. Pure, so the highlight — which iced's
 /// `Element` API gives no way to read back from the built `Button`, and whose
 /// closure runs only at render time — is testable.
 fn current_row_style(status: button::Status) -> button::Style {
     let mut row = style::playlist_row_style(status);
-    row.background = Some(Background::Color(super::theme::PLAYING_ROW_HIGHLIGHT));
+    row.background = Some(Background::Color(theme::PLAYING_ROW_HIGHLIGHT));
     row
 }
 
@@ -397,7 +397,7 @@ pub fn view_now_playing(label: Cow<'_, str>) -> Element<'_, Message> {
     style::lcd_well(
         Row::new()
             .push(Text::new("Now Playing: ").size(20))
-            .push(Text::new(label).size(20).color(super::theme::LCD_GREEN)),
+            .push(Text::new(label).size(20).color(theme::LCD_GREEN)),
     )
 }
 
