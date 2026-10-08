@@ -280,10 +280,20 @@ mod tests {
         // Hovered too, or a match split that dimmed Hovered would clear every
         // other test while the hovered label faded.
         assert_eq!(hovered.text_color, theme::TEXT);
+        // "Lifts the face" is the name's contract: hovering swaps only the
+        // background. The edge colours are asserted unchanged above; assert the
+        // geometry too, or a change that made (say) a hovered button's border
+        // thicker or its shadow offset would clear every other test while the
+        // chrome distorted under the cursor.
+        assert_eq!(hovered.border.width, active.border.width);
+        assert_eq!(hovered.border.radius, active.border.radius);
+        assert_eq!(hovered.shadow.offset, active.shadow.offset);
+        assert_eq!(hovered.shadow.blur_radius, active.shadow.blur_radius);
     }
 
     #[test]
     fn chrome_button_style_pressed_sinks_and_reverses_the_edge() {
+        let active = chrome_button_style(button::Status::Active);
         let pressed = chrome_button_style(button::Status::Pressed);
         assert_eq!(
             pressed.background,
@@ -293,6 +303,14 @@ mod tests {
         assert_eq!(pressed.shadow.color, theme::PANEL_EDGE_LIGHT);
         // The Pressed twin of the Hovered text-colour assertion above.
         assert_eq!(pressed.text_color, theme::TEXT);
+        // "Sinks and reverses the edge" is the name's contract: pressing swaps
+        // the two edge colours and the face, but the 1px geometry stays. Assert
+        // it, or a status-dependent border width, radius, or shadow offset
+        // could pass every test while the pressed bevel changed shape.
+        assert_eq!(pressed.border.width, active.border.width);
+        assert_eq!(pressed.border.radius, active.border.radius);
+        assert_eq!(pressed.shadow.offset, active.shadow.offset);
+        assert_eq!(pressed.shadow.blur_radius, active.shadow.blur_radius);
     }
 
     #[test]
