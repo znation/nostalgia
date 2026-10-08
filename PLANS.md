@@ -29,7 +29,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Style the volume and equalizer sliders as sunken Winamp grooves with raised chrome thumbs (found 2026-10-07)
+_None yet._
+
+## Done
+
+### Style the volume and equalizer sliders as sunken Winamp grooves with raised chrome thumbs (found 2026-10-07, done 2026-10-07)
 
 Found by plan 2026-10-07, taking the slider half of the "transport button and
 slider chrome" follow-up the bevel Done entry defers and the transport-button
@@ -115,8 +119,6 @@ does.
 - `cargo run`: the volume, preamp, and EQ band sliders render as dark sunken
   grooves with a blocky grey thumb that lightens on hover and darkens while
   dragging; manual check — the build and tests are the primary gate.
-
-## Done
 
 ### Style the transport buttons as raised Winamp chrome (found 2026-10-07, done 2026-10-07)
 

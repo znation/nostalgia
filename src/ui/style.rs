@@ -9,7 +9,7 @@
 
 use iced::{
     Background, Border, Color, Element, Length, Shadow, Theme, Vector,
-    widget::{Column, Container, Row, Space, Stack, button, container, rule},
+    widget::{Column, Container, Row, Space, Stack, button, container, rule, slider},
 };
 
 use super::{Message, theme};
@@ -155,6 +155,49 @@ pub fn chrome_button_style(status: button::Status) -> button::Style {
     }
 }
 
+/// The sunken-groove / raised-thumb chrome style for a slider.
+///
+/// The base skin's slider is a dark recess with a blocky chrome thumb. iced's
+/// [`slider::Rail`] paints a single-colour [`Border`] and no shadow, so the
+/// sunken edge is the dark 1px outline around a near-black groove; the
+/// [`slider::Handle`] carries the light 1px border that reads as raised
+/// chrome, the same light-border trick [`chrome_button_style`] uses. The rail
+/// is uniform (`LCD_BACKGROUND` on both sides of the handle) because the thumb,
+/// not a fill colour, marks the value. The handle face matches `status`, reusing
+/// the button face shades. Pure and theme-free, so the colour rule is testable
+/// without building a widget.
+pub fn chrome_slider_style(status: slider::Status) -> slider::Style {
+    let face = match status {
+        slider::Status::Active => theme::BUTTON_FACE,
+        slider::Status::Hovered => theme::BUTTON_FACE_HOVERED,
+        slider::Status::Dragged => theme::BUTTON_FACE_PRESSED,
+    };
+
+    slider::Style {
+        rail: slider::Rail {
+            backgrounds: (
+                Background::Color(theme::LCD_BACKGROUND),
+                Background::Color(theme::LCD_BACKGROUND),
+            ),
+            width: 4.0,
+            border: Border {
+                color: theme::PANEL_EDGE_DARK,
+                width: 1.0,
+                radius: 0.0.into(),
+            },
+        },
+        handle: slider::Handle {
+            shape: slider::HandleShape::Rectangle {
+                width: 8,
+                border_radius: 0.0.into(),
+            },
+            background: Background::Color(face),
+            border_width: 1.0,
+            border_color: theme::PANEL_EDGE_LIGHT,
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -216,6 +259,52 @@ mod tests {
         );
         assert_eq!(pressed.border.color, theme::PANEL_EDGE_DARK);
         assert_eq!(pressed.shadow.color, theme::PANEL_EDGE_LIGHT);
+    }
+
+    #[test]
+    fn chrome_slider_style_active_is_a_sunken_groove_with_a_raised_thumb() {
+        let style = chrome_slider_style(slider::Status::Active);
+        assert_eq!(
+            style.rail.backgrounds,
+            (
+                Background::Color(theme::LCD_BACKGROUND),
+                Background::Color(theme::LCD_BACKGROUND)
+            )
+        );
+        assert_eq!(style.rail.width, 4.0);
+        assert_eq!(style.rail.border.color, theme::PANEL_EDGE_DARK);
+        assert_eq!(style.rail.border.width, 1.0);
+        assert_eq!(
+            style.handle.shape,
+            slider::HandleShape::Rectangle {
+                width: 8,
+                border_radius: 0.0.into()
+            }
+        );
+        assert_eq!(
+            style.handle.background,
+            Background::Color(theme::BUTTON_FACE)
+        );
+        assert_eq!(style.handle.border_width, 1.0);
+        assert_eq!(style.handle.border_color, theme::PANEL_EDGE_LIGHT);
+    }
+
+    #[test]
+    fn chrome_slider_style_hovered_and_dragged_only_swap_the_handle_face() {
+        let active = chrome_slider_style(slider::Status::Active);
+        let hovered = chrome_slider_style(slider::Status::Hovered);
+        let dragged = chrome_slider_style(slider::Status::Dragged);
+
+        assert_eq!(
+            hovered.handle.background,
+            Background::Color(theme::BUTTON_FACE_HOVERED)
+        );
+        assert_eq!(
+            dragged.handle.background,
+            Background::Color(theme::BUTTON_FACE_PRESSED)
+        );
+        assert_eq!(hovered.rail, active.rail);
+        assert_eq!(dragged.rail, active.rail);
     }
 
     #[test]

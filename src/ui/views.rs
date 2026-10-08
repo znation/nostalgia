@@ -335,7 +335,8 @@ pub fn view_transport_controls(
         .push(
             Slider::new(0.0..=1.0, volume, Message::VolumeChange)
                 .step(0.01)
-                .width(Length::Fixed(100.0)),
+                .width(Length::Fixed(100.0))
+                .style(|_theme, status| style::chrome_slider_style(status)),
         )
         .into()
 }
@@ -364,7 +365,8 @@ pub fn view_equalizer(
                         Message::EqBandChange(index, gain)
                     })
                     .step(1.0)
-                    .height(Length::Fixed(100.0)),
+                    .height(Length::Fixed(100.0))
+                    .style(|_theme, status| style::chrome_slider_style(status)),
                 )
                 .push(Text::new(*frequency).size(12)),
         );
@@ -380,7 +382,8 @@ pub fn view_equalizer(
                 Row::new().push(Text::new("Preamp")).push(
                     Slider::new(GAIN_MIN_DB..=GAIN_MAX_DB, preamp, Message::EqPreampChange)
                         .step(1.0)
-                        .width(Length::Fixed(150.0)),
+                        .width(Length::Fixed(150.0))
+                        .style(|_theme, status| style::chrome_slider_style(status)),
                 ),
             )
             .push(band_row),
