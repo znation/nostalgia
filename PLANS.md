@@ -29,7 +29,105 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Frame the browse list as a sunken Winamp playlist editor (found 2026-10-07)
+
+Found by plan 2026-10-07, taking the "playlist chrome" half of the widget-level
+fidelity the steward drift note schedules after slider chrome. The bevel layer
+(`src/ui/style.rs`) now dresses the panels, buttons, and sliders, but the browse
+list — the app's playlist-editor stand-in — is still a plain `Scrollable` on the
+window face: `scrollable_list` in `src/ui/views.rs` builds default-iced `Button`
+rows (their hover/press is the theme's `TITLE_BLUE` primary) on no background,
+and `Scrollable::new(column)` uses iced's default scrollbar rails. The base
+skin's playlist editor is a near-black sunken panel with light rows and a
+selection bar.
+
+**Goal.** Give the artist/album/song browse list the playlist editor's chrome:
+one pure `playlist_scrollable_style()` in `src/ui/style.rs` frames the list in a
+sunken near-black well and restyles the scrollbar rails, and one pure
+`playlist_row_style(status)` dresses the rows as flat playlist entries (light
+text, chrome-face hover/press) while the currently playing row keeps its
+selection highlight. No new theme colours and no signature changes.
+
+**Approach.**
+
+- `src/ui/style.rs`: add `scrollable` to the existing `iced::widget::{...}`
+  import (the `container`, `Border`, `Shadow`, `Vector`, and `Background` types
+  are already imported). Add two pure functions, both reusing the base-skin
+  constants exactly as `chrome_button_style` and `chrome_slider_style` do:
+  - `pub fn playlist_scrollable_style() -> scrollable::Style` — builds the whole
+    struct (no `Default` impl exists for `scrollable::Style`, so all five fields
+    are set):
+    - `container`: `container::Style { text_color: Some(theme::TEXT),
+      background: Some(theme::LCD_BACKGROUND.into()), border: Border { color:
+      theme::PANEL_EDGE_DARK, width: 1.0, radius: 0.0.into() }, shadow: Shadow {
+      color: theme::PANEL_EDGE_LIGHT, offset: Vector::new(1.0, 1.0), blur_radius:
+      0.0 }, snap: false }` — the near-black recess with the same dark-border +
+      light-offset-shadow sunken edge approximation `chrome_button_style` uses
+      for its pressed state.
+    - `vertical_rail` and `horizontal_rail`: `scrollable::Rail { background:
+      Some(Background::Color(theme::WINDOW_BACKGROUND)), border: Border { color:
+      theme::PANEL_EDGE_DARK, width: 1.0, radius: 0.0.into() }, scroller:
+      scrollable::Scroller { background: Background::Color(theme::BUTTON_FACE),
+      border: Border { color: theme::PANEL_EDGE_LIGHT, width: 1.0, radius:
+      0.0.into() } } }` — a dark track with a raised chrome scroller, so the
+      scrollbar reads on the well.
+    - `gap: None`.
+    - `auto_scroll`: `scrollable::AutoScroll { background:
+      Background::Color(theme::LCD_BACKGROUND), border: Border { color:
+      theme::PANEL_EDGE_LIGHT, width: 1.0, radius: 0.0.into() }, shadow: Shadow
+      { color: theme::PANEL_EDGE_DARK, offset: Vector::new(1.0, 1.0),
+      blur_radius: 0.0 }, icon: theme::TEXT }` (only drawn during touch
+      auto-scroll, but the struct is total). Pure and status-independent:
+      classic Winamp scrollbars give no hover/drag feedback, so the closure
+      ignores the `scrollable::Status` iced passes.
+  - `pub fn playlist_row_style(status: button::Status) -> button::Style` —
+    `background: None` for `Active`/`Disabled`, `Some(Background::Color(
+    theme::BUTTON_FACE))` for `Hovered`, `Some(Background::Color(
+    theme::BUTTON_FACE_PRESSED))` for `Pressed`; `text_color: theme::TEXT`;
+    everything else from `button::Style::default()` (no border or shadow —
+    playlist rows are flat). The transparent Active face lets the well's
+    near-black show through; hover/press lift and sink the row using the same
+    faces `chrome_face` names.
+  - `#[cfg(test)] mod tests` additions: a `playlist_row_style` ladder test
+    (`Active` background `None`, `Hovered` `BUTTON_FACE`, `Pressed`
+    `BUTTON_FACE_PRESSED`, every status `text_color == TEXT`), and a
+    `playlist_scrollable_style` test pinning the container's `LCD_BACKGROUND`
+    background, `PANEL_EDGE_DARK` border and `PANEL_EDGE_LIGHT` offset shadow,
+    plus the rails' `BUTTON_FACE` scroller.
+- `src/ui/views.rs`: in `scrollable_list`, replace the default-styled `Button`
+  rows and the `iced::widget::button::background(theme, status)` current-row
+  override with the new styles: every row gets `.style(|_theme, status|
+  style::playlist_row_style(status))`, and the current row overrides only
+  `background` to `Background::Color(super::theme::PLAYING_ROW_HIGHLIGHT)` on
+  top of `playlist_row_style(status)` (keeping its light text and hover/press
+  face, exactly as before). Add `.style(|_theme, _status|
+  style::playlist_scrollable_style())` to the `Scrollable`, whose `width` /
+  `height` stay `Fill` / `FillPortion(3)`. `scrollable_list` is the single
+  builder behind `view_artists`, `view_albums`, and `view_songs`, so all three
+  browse levels pick up the chrome with no signature change.
+- `README.md`: extend the Status sentence to say the browse list is framed as a
+  sunken Winamp playlist well with chrome rows; leave the `tumwater:prompt`
+  block untouched.
+
+**Files touched.** `src/ui/style.rs`, `src/ui/views.rs`, `README.md`.
+
+**Acceptance criteria.**
+
+- `make check` passes (`cargo fmt --check`, `cargo clippy --all-targets -- -D
+  warnings`, `cargo doc` with rustdoc warnings denied, `cargo test`).
+- The new `playlist_row_style` and `playlist_scrollable_style` tests pass,
+  pinning the row background ladder, the well's background/border/shadow
+  colours, and the rails' scroller face.
+- The existing browse tests still pass unchanged —
+  `browse_views_construct_over_the_loaded_library`,
+  `browse_views_construct_over_an_empty_list`,
+  `empty_list_label_names_the_empty_browse_level`, and
+  `browse_placeholder_distinguishes_loading_from_an_empty_list` build the same
+  widget trees through the restyled `scrollable_list`.
+- `cargo run`: the browse list sits in a near-black sunken well with a dark
+  track scrollbar and a chrome scroller, its rows show light text that lifts on
+  hover and sinks on press, and the playing row keeps its blue selection bar;
+  manual check — the build and tests are the primary gate.
 
 ## Done
 
