@@ -1,6 +1,6 @@
 use super::views::BROWSE_VIEWS;
 use super::*;
-use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB};
+use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB, PRESETS};
 use crate::sample_library::sample_library;
 use crate::test_support::{
     assert_ids, sample_album, sample_artist, sample_song, second_album_songs, stepping_songs,
@@ -280,6 +280,25 @@ fn eq_band_change_clamps_value_before_storing() {
         |state| state.eq_bands()[1],
         GAIN_MIN_DB,
     );
+}
+
+// The EqPresetSelected arm writes a whole curve and records the selection,
+// which the one-value slider-arm tests above do not cover. Drive a preset
+// through `update` and read all three shared-state fields back.
+#[test]
+fn eq_preset_selected_applies_the_curve_and_selection() {
+    let (mut player, state) = test_player();
+    let preset = *PRESETS
+        .iter()
+        .find(|preset| preset.name == "Rock")
+        .expect("the preset table must contain Rock");
+
+    let _ = update(&mut player, Message::EqPresetSelected(preset));
+
+    let state = state.blocking_lock();
+    assert_eq!(state.eq_preamp(), preset.preamp);
+    assert_eq!(state.eq_bands(), preset.bands);
+    assert_eq!(state.eq_preset(), Some(preset));
 }
 
 // `Message::Stop` uses `blocking_lock`, which panics inside an async

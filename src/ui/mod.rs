@@ -55,6 +55,7 @@ enum Message {
     ToggleEqualizer,
     EqPreampChange(f32),
     EqBandChange(usize, f32),
+    EqPresetSelected(crate::equalizer::Preset),
     NextTrack,
     PreviousTrack,
     // The selection messages carry a row's index into the list that rendered
@@ -397,6 +398,9 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::EqBandChange(band, gain) => {
             mutate_state(player, |state| state.set_eq_band(band, gain))
         }
+        Message::EqPresetSelected(preset) => {
+            mutate_state(player, |state| state.apply_eq_preset(preset))
+        }
         Message::NextTrack => step_track(player, transport::next_track_id),
         Message::PreviousTrack => step_track(player, transport::previous_track_id),
         Message::TrackSelected { epoch, index } => {
@@ -606,7 +610,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // (see [`WinampPlayer::now_playing_label`]) — the label borrows the title
     // from `known_titles` (or the `"Nothing"` literal), so the per-frame path
     // allocates only in the unknown-id fallback, not the common cases.
-    let (now_playing, is_playing, volume, repeat, eq_enabled, eq_preamp, eq_bands) = {
+    let (now_playing, is_playing, volume, repeat, eq_enabled, eq_preamp, eq_bands, eq_preset) = {
         let state = player.state.blocking_lock();
         (
             player.now_playing_label(state.current_track.as_deref()),
@@ -616,6 +620,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
             state.eq_enabled,
             state.eq_preamp(),
             state.eq_bands(),
+            state.eq_preset(),
         )
     };
 
@@ -653,7 +658,9 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
         .push(views::view_title_bar())
         .push(views::view_now_playing(now_playing))
         .push(views::view_transport_controls(is_playing, volume, repeat))
-        .push(views::view_equalizer(eq_enabled, eq_preamp, &eq_bands));
+        .push(views::view_equalizer(
+            eq_enabled, eq_preamp, &eq_bands, eq_preset,
+        ));
     // The Back button sits above the list it navigates and exists only where
     // the hierarchy has a level above to return to (see `views::can_go_back`).
     if views::can_go_back(&player.current_view) {

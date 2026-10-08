@@ -41,6 +41,12 @@ pub struct AppState {
     /// `volume`: [`AppState::set_eq_band`] is its only writer and clamps, and
     /// [`AppState::eq_bands`] is its only reader.
     eq_bands: [f32; equalizer::BAND_COUNT],
+    /// The preset whose whole curve is currently applied, or `None` for a
+    /// custom curve. [`AppState::apply_eq_preset`] is its only setter to
+    /// `Some`; the hand-moved sliders (`set_eq_preamp`, `set_eq_band`) clear
+    /// it to `None`, since a manual move makes the curve custom. Read it with
+    /// [`AppState::eq_preset`].
+    eq_preset: Option<equalizer::Preset>,
 }
 
 /// The one production `AppState` is built in the app's entry point (`main`)
@@ -51,7 +57,7 @@ pub struct AppState {
 /// volume is 0.5, not the derived 0.0, so a manual impl is required.
 ///
 /// Initial state: nothing loaded, stopped, Repeat off, at 50% volume, and the
-/// equalizer off with a flat (all-zero) curve.
+/// equalizer off with a flat (all-zero) curve and no preset selected.
 impl Default for AppState {
     fn default() -> Self {
         Self {
@@ -62,6 +68,7 @@ impl Default for AppState {
             eq_enabled: false,
             eq_preamp: 0.0,
             eq_bands: [0.0; equalizer::BAND_COUNT],
+            eq_preset: None,
         }
     }
 }
@@ -104,9 +111,11 @@ impl AppState {
     /// Store a preamp gain, clamped to the valid range via
     /// [`equalizer::clamp_gain`]. The UI's preamp slider is the only caller;
     /// the field is private and this is its only writer, so the clamp holds
-    /// no matter which caller stores a gain.
+    /// no matter which caller stores a gain. A hand-moved slider is a custom
+    /// curve, so this clears any applied preset selection.
     pub fn set_eq_preamp(&mut self, gain: f32) {
         self.eq_preamp = equalizer::clamp_gain(gain);
+        self.eq_preset = None;
     }
 
     /// Store a clamped gain into band `band`. An out-of-range `band` index
@@ -114,11 +123,26 @@ impl AppState {
     /// rather than panicking: `get_mut` yields `None` and nothing is stored,
     /// so a bad index can't take the window down mid-drag. The field is
     /// private and this is its only writer, so every stored band gain is
-    /// clamped.
+    /// clamped. A hand-moved slider is a custom curve, so a stored gain clears
+    /// any applied preset selection; an ignored out-of-range index stores
+    /// nothing and leaves the selection alone.
     pub fn set_eq_band(&mut self, band: usize, gain: f32) {
         if let Some(slot) = self.eq_bands.get_mut(band) {
             *slot = equalizer::clamp_gain(gain);
+            self.eq_preset = None;
         }
+    }
+
+    /// Apply a whole preset curve: store its preamp and every band gain
+    /// (each still through [`equalizer::clamp_gain`], so a preset can never
+    /// push shared state out of range) and remember the selection. The UI's
+    /// equalizer pick list is the only caller; a later hand move of the
+    /// preamp or a band clears the selection (see [`AppState::set_eq_preamp`]
+    /// and [`AppState::set_eq_band`]).
+    pub fn apply_eq_preset(&mut self, preset: equalizer::Preset) {
+        self.eq_preamp = equalizer::clamp_gain(preset.preamp);
+        self.eq_bands = preset.bands.map(equalizer::clamp_gain);
+        self.eq_preset = Some(preset);
     }
 
     /// The current playback volume, always in `[0.0, 1.0]` (see
@@ -144,6 +168,13 @@ impl AppState {
     #[must_use]
     pub fn eq_bands(&self) -> [f32; equalizer::BAND_COUNT] {
         self.eq_bands
+    }
+
+    /// The applied equalizer preset, or `None` for a custom curve. The UI's
+    /// `view` reads it to show the selected preset's name in the pick list.
+    #[must_use]
+    pub fn eq_preset(&self) -> Option<equalizer::Preset> {
+        self.eq_preset
     }
 
     /// Stores `volume`, clamped to `[0.0, 1.0]` with NaN mapped to silence by
@@ -174,7 +205,7 @@ pub fn clamp_volume(volume: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{AppState, clamp_volume};
-    use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB};
+    use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS};
 
     /// Runs `mutation` on `state` and asserts it leaves `current_track` and
     /// `volume` untouched. Every `AppState` mutation but `set_volume` uses
@@ -214,6 +245,7 @@ mod tests {
         assert!(!state.eq_enabled);
         assert_eq!(state.eq_preamp(), 0.0);
         assert_eq!(state.eq_bands(), [0.0; BAND_COUNT]);
+        assert_eq!(state.eq_preset(), None);
     }
 
     #[test]
@@ -337,6 +369,44 @@ mod tests {
         let mut state = AppState::default();
         state.set_eq_band(0, f32::NAN);
         assert_eq!(state.eq_bands()[0], 0.0);
+    }
+
+    #[test]
+    fn apply_eq_preset_stores_the_whole_curve_and_the_selection() {
+        let mut state = AppState::default();
+        let preset = *PRESETS
+            .iter()
+            .find(|preset| preset.name == "Rock")
+            .expect("the preset table must contain Rock");
+
+        assert_keeps_track_and_volume(&mut state, |state| state.apply_eq_preset(preset));
+
+        assert_eq!(state.eq_preset(), Some(preset));
+        assert_eq!(state.eq_preamp(), preset.preamp);
+        assert_eq!(state.eq_bands(), preset.bands);
+    }
+
+    // Selecting a preset and then nudging either slider by hand makes the
+    // curve custom, so the selection must clear; otherwise the pick list
+    // would keep naming a preset the sliders no longer match. Cover both
+    // slider setters.
+    #[test]
+    fn moving_a_slider_clears_the_preset_selection() {
+        let mut state = AppState::default();
+        let preset = *PRESETS
+            .iter()
+            .find(|preset| preset.name == "Rock")
+            .expect("the preset table must contain Rock");
+
+        state.apply_eq_preset(preset);
+        assert_eq!(state.eq_preset(), Some(preset));
+        state.set_eq_preamp(1.0);
+        assert_eq!(state.eq_preset(), None);
+
+        state.apply_eq_preset(preset);
+        assert_eq!(state.eq_preset(), Some(preset));
+        state.set_eq_band(0, 1.0);
+        assert_eq!(state.eq_preset(), None);
     }
 
     #[test]

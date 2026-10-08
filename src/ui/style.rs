@@ -9,7 +9,10 @@
 
 use iced::{
     Background, Border, Color, Element, Length, Shadow, Theme, Vector,
-    widget::{Column, Container, Row, Space, Stack, button, container, rule, scrollable, slider},
+    widget::{
+        Column, Container, Row, Space, Stack, button, container, overlay::menu, pick_list, rule,
+        scrollable, slider,
+    },
 };
 
 use super::{Message, theme};
@@ -202,6 +205,48 @@ pub fn chrome_button_style(status: button::Status) -> button::Style {
         border: square_border(top_left),
         shadow: square_shadow(bottom_right),
         ..button::Style::default()
+    }
+}
+
+/// The chrome style for the equalizer's preset pick list.
+///
+/// The closed control is flat chrome, like the transport buttons: a
+/// [`theme::BUTTON_FACE`] face with the dark 1px outline and [`theme::TEXT`]
+/// label. Unlike the buttons and sliders, hovering the closed control does
+/// not lift the face — the base skin's combo boxes give no hover feedback —
+/// but opening the menu sinks the face to [`theme::BUTTON_FACE_PRESSED`]
+/// through [`chrome_face`], the same press shade the other chrome uses. The
+/// placeholder (the `(none)` custom-curve label) is drawn in the lighter
+/// [`theme::PANEL_EDGE_LIGHT`] so an unselected list reads as empty. Pure, so
+/// the colour rule is testable without building a widget.
+pub fn chrome_pick_list_style(status: pick_list::Status) -> pick_list::Style {
+    let opened = matches!(status, pick_list::Status::Opened { .. });
+
+    pick_list::Style {
+        text_color: theme::TEXT,
+        placeholder_color: theme::PANEL_EDGE_LIGHT,
+        handle_color: theme::TEXT,
+        background: Background::Color(chrome_face(false, opened)),
+        border: square_border(theme::PANEL_EDGE_DARK),
+    }
+}
+
+/// The base-skin style for the preset pick list's open menu.
+///
+/// The dropdown is a [`theme::BUTTON_FACE`] panel with the dark 1px chrome
+/// outline; its options are [`theme::TEXT`] on that face, and the highlighted
+/// option uses the title-bar [`theme::TITLE_BLUE`] with the same light text,
+/// matching Winamp's selection blue. No drop shadow, so the menu stays flat
+/// like the rest of the base-skin chrome. Pure, so the colour rule is
+/// testable without building a widget.
+pub fn preset_menu_style() -> menu::Style {
+    menu::Style {
+        background: theme::BUTTON_FACE.into(),
+        border: square_border(theme::PANEL_EDGE_DARK),
+        text_color: theme::TEXT,
+        selected_text_color: theme::TEXT,
+        selected_background: theme::TITLE_BLUE.into(),
+        shadow: Shadow::default(),
     }
 }
 
@@ -622,5 +667,45 @@ mod tests {
         let node = panel.as_widget_mut().layout(&mut tree, &(), &limits);
 
         assert_eq!(node.size(), Size::new(500.0, 7.0));
+    }
+
+    #[test]
+    fn chrome_pick_list_style_sinks_the_face_when_opened() {
+        let active = chrome_pick_list_style(pick_list::Status::Active);
+        assert_eq!(active.background, Background::Color(theme::BUTTON_FACE));
+        assert_eq!(active.text_color, theme::TEXT);
+        assert_eq!(active.placeholder_color, theme::PANEL_EDGE_LIGHT);
+        assert_eq!(active.handle_color, theme::TEXT);
+        assert_eq!(active.border.color, theme::PANEL_EDGE_DARK);
+        assert_eq!(active.border.width, 1.0);
+        assert_eq!(active.border.radius, 0.0.into());
+
+        // Hovering the closed control gives no lift: the pick list only
+        // changes face when the menu opens.
+        let hovered = chrome_pick_list_style(pick_list::Status::Hovered);
+        assert_eq!(hovered.background, Background::Color(theme::BUTTON_FACE));
+        assert_eq!(hovered.text_color, theme::TEXT);
+
+        let opened = chrome_pick_list_style(pick_list::Status::Opened { is_hovered: false });
+        assert_eq!(
+            opened.background,
+            Background::Color(theme::BUTTON_FACE_PRESSED)
+        );
+        assert_eq!(opened.text_color, theme::TEXT);
+    }
+
+    #[test]
+    fn preset_menu_style_uses_the_base_skin_face_and_selection_blue() {
+        let style = preset_menu_style();
+        assert_eq!(style.background, Background::Color(theme::BUTTON_FACE));
+        assert_eq!(style.border.color, theme::PANEL_EDGE_DARK);
+        assert_eq!(style.border.width, 1.0);
+        assert_eq!(style.text_color, theme::TEXT);
+        assert_eq!(style.selected_text_color, theme::TEXT);
+        assert_eq!(
+            style.selected_background,
+            Background::Color(theme::TITLE_BLUE)
+        );
+        assert_eq!(style.shadow, Shadow::default());
     }
 }

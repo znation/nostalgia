@@ -13,12 +13,12 @@ use std::collections::HashMap;
 use iced::{
     Background, Element, Length,
     widget::{
-        Button, Column, Container, MouseArea, Row, Scrollable, Slider, Space, Text, VerticalSlider,
-        button,
+        Button, Column, Container, MouseArea, PickList, Row, Scrollable, Slider, Space, Text,
+        VerticalSlider, button,
     },
 };
 
-use crate::equalizer::{BAND_COUNT, BAND_FREQUENCIES, GAIN_MAX_DB, GAIN_MIN_DB};
+use crate::equalizer::{BAND_COUNT, BAND_FREQUENCIES, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, Preset};
 use crate::library::{Album, Artist, Song};
 
 use super::{CurrentView, Message, style, theme};
@@ -492,6 +492,7 @@ pub fn view_equalizer(
     enabled: bool,
     preamp: f32,
     bands: &[f32; BAND_COUNT],
+    preset: Option<Preset>,
 ) -> Element<'static, Message> {
     let mut band_row = Row::new();
     for (index, frequency) in BAND_FREQUENCIES.iter().enumerate() {
@@ -511,10 +512,21 @@ pub fn view_equalizer(
 
     style::raised_panel(
         Column::new()
-            .push(labeled_button(
-                eq_enabled_label(enabled),
-                Message::ToggleEqualizer,
-            ))
+            .push(
+                Row::new()
+                    .push(labeled_button(
+                        eq_enabled_label(enabled),
+                        Message::ToggleEqualizer,
+                    ))
+                    .push(spacer(8.0))
+                    .push(
+                        PickList::new(PRESETS, preset, Message::EqPresetSelected)
+                            .placeholder("(none)")
+                            .text_size(12)
+                            .style(|_theme, status| style::chrome_pick_list_style(status))
+                            .menu_style(|_theme| style::preset_menu_style()),
+                    ),
+            )
             .push(
                 Row::new().push(Text::new("Preamp")).push(
                     Slider::new(GAIN_MIN_DB..=GAIN_MAX_DB, preamp, Message::EqPreampChange)
@@ -547,7 +559,7 @@ mod tests {
         song_row, transport_buttons, view_albums, view_artists, view_back_button, view_equalizer,
         view_now_playing, view_songs, view_transport_controls,
     };
-    use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB, clamp_gain};
+    use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, clamp_gain};
     use crate::sample_library::sample_library;
     use crate::state::clamp_volume;
     use crate::test_support::{sample_album, sample_artist, sample_song};
@@ -908,8 +920,10 @@ mod tests {
         // panicking over the input space the app produces.
         for enabled in [false, true] {
             for gain in [GAIN_MIN_DB, 0.0, GAIN_MAX_DB] {
-                let bands = [gain; BAND_COUNT];
-                let _panel = view_equalizer(enabled, gain, &bands);
+                for preset in [None, Some(PRESETS[0])] {
+                    let bands = [gain; BAND_COUNT];
+                    let _panel = view_equalizer(enabled, gain, &bands, preset);
+                }
             }
         }
     }

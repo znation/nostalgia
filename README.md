@@ -14,7 +14,8 @@ Nostalgia is a (very close if not pixel-perfect) clone of the classic Winamp UI,
 <!-- tumwater:status:start -->
 Early skeleton (0.1.0): an iced (0.14) desktop shell themed with a Winamp 2.x base-skin palette —
 a custom raised title bar with minimize and close, a Now Playing LCD bar, chrome transport
-controls with Repeat, a volume slider, an equalizer panel, and an artist → album → song browser
+controls with Repeat, a volume slider, an equalizer panel with a preset pick list, and an
+artist → album → song browser
 over an in-memory sample library; the Apple Music API is not wired up yet. Open work lives in
 PLANS.md, BUGS.md, and QUESTIONS.md.
 <!-- tumwater:status:end -->
@@ -23,7 +24,8 @@ PLANS.md, BUGS.md, and QUESTIONS.md.
 
 Design mockups of the look Nostalgia is aiming for, matched against the classic Winamp 2.x base
 skin and shown with the built-in sample library. The running app builds the transport controls
-(Repeat included) and the equalizer panel; preset curves and window-shade mode are not built yet.
+(Repeat included) and the equalizer panel (preset curves included); window-shade mode is not
+built yet.
 
 ![Main window, equalizer and library window docked together](docs/screenshots/hero.png)
 
@@ -45,7 +47,8 @@ The player on its own: [docs/screenshots/player.png](docs/screenshots/player.png
 
 Build and run with `cargo run`; the player opens an iced window showing the Now Playing bar, the
 Play/Pause/Stop/Previous/Next controls, a Repeat toggle, a volume slider, an equalizer panel
-(an EQ on/off button, a preamp slider, and ten band sliders), and a browse list. There are no CLI
+(an EQ on/off button, a preset pick list, a preamp slider, and ten band sliders), and a browse
+list. There are no CLI
 flags or config files yet.
 
 ## Development

@@ -29,7 +29,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Add Winamp equalizer preset curves and a preset pick list (found 2026-10-07)
+_None yet._
+
+## Done
+
+### Add Winamp equalizer preset curves and a preset pick list (found 2026-10-07, done 2026-10-07)
 
 Found by plan 2026-10-07. The equalizer panel Done entry ("Add the Winamp
 equalizer panel: on/off, preamp, and ten band sliders") deferred "preset
@@ -104,7 +108,8 @@ hand makes the curve custom and clears the selection.
     pick_list::Style` reusing `chrome_face` (opened/pressed sinks the face):
     `text_color: theme::TEXT`, `placeholder_color: theme::PANEL_EDGE_LIGHT`,
     `handle_color: theme::TEXT`, `background:
-    Background::Color(chrome_face(hovered, opened))`, `border:
+    Background::Color(chrome_face(false, opened))` (the closed control keeps
+    the resting face; only the open menu sinks it), `border:
     square_border(theme::PANEL_EDGE_DARK)`.
   - Add `pub fn preset_menu_style() -> menu::Style` — `background:
     theme::BUTTON_FACE.into()`, `border:
@@ -120,7 +125,9 @@ hand makes the curve custom and clears the selection.
   - Import `PickList` from `iced::widget` and `PRESETS`/`Preset` from
     `crate::equalizer`.
   - Change `view_equalizer` to take a fourth parameter `preset:
-    Option<Preset>` and, in the header `Row` after the EQ on/off button, push
+    Option<Preset>`; the panel previously pushed the EQ on/off button
+    straight into its column, so wrap the button and the pick list in a
+    header `Row` and push
     `PickList::new(PRESETS, preset, Message::EqPresetSelected)
     .placeholder("(none)").text_size(12).style(|_theme, status|
     style::chrome_pick_list_style(status)).menu_style(|_theme|
@@ -160,8 +167,6 @@ hand makes the curve custom and clears the selection.
   the Rock curve and the pick list reads "Rock"; dragging any band slider
   afterwards makes the pick list read "(none)" again (manual check — build +
   tests are the primary gate).
-
-## Done
 
 ### Add a Winamp custom title bar and drop the OS window frame (found 2026-10-07, done 2026-10-07)
 
