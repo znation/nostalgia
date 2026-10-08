@@ -29,7 +29,77 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Add classic Winamp main-window keyboard shortcuts for transport and volume (found 2026-10-08)
+
+Winamp is driven from the keyboard as much as the mouse: Z previous, X play,
+C pause, V stop, B next, ArrowUp/ArrowDown volume. Nostalgia's transport and
+volume are mouse-only today — `src/ui/mod.rs`'s `init_ui` installs no
+subscription and nothing in `src/` reads `iced::keyboard` — so this adds the
+classic bindings on top of the existing transport messages.
+
+**Goal.** With the player window focused, the classic Winamp keys perform the
+same actions as the transport buttons and volume slider: Z steps back, B
+steps forward, X plays, C pauses, V stops, and ArrowUp/ArrowDown raise/lower
+the volume by `views::VOLUME_STEP`, clamped to `[0.0, 1.0]` by the existing
+`AppState::set_volume`.
+
+**Approach.**
+
+- `src/ui/mod.rs`:
+  - Add the pure key→message mapping beside `with_window_id`/`mutate_state`,
+    where the module already keeps its message-wiring helpers:
+    - `fn message_for(event: iced::keyboard::Event) -> Option<Message>`:
+      matches `Event::KeyPressed { key, modifiers, .. }` and returns
+      `shortcut(&key, modifiers)`; every other event (`KeyReleased`,
+      `ModifiersChanged`) returns `None`.
+    - `fn shortcut(key: &iced::keyboard::Key, modifiers: iced::keyboard::Modifiers) -> Option<Message>`:
+      returns `None` when `modifiers.control() || modifiers.alt() ||
+      modifiers.logo()`, so OS/browser chords are left alone; Shift is allowed
+      and the character match uses `eq_ignore_ascii_case`, so Shift+Z works.
+      - `Key::Character(c)`: `"z"` → `PreviousTrack`, `"x"` → `Play`, `"c"` →
+        `Pause`, `"v"` → `Stop`, `"b"` → `NextTrack`.
+      - `Key::Named(key::Named::ArrowUp)` → `VolumeUp`,
+        `Key::Named(key::Named::ArrowDown)` → `VolumeDown`.
+  - Add `Play`, `Pause`, `VolumeUp`, `VolumeDown` to `Message`.
+  - `update` arms, all through the existing `mutate_state` helper so each
+    schedules no follow-up work: `Play` → `AppState::play`, `Pause` →
+    `AppState::pause`, and `VolumeUp`/`VolumeDown` → a closure that reads
+    `state.volume()`, adds/subtracts `views::VOLUME_STEP`, and passes the
+    result to `state.set_volume(..)` (the setter clamps).
+  - In `init_ui`, add
+    `.subscription(|_player| iced::keyboard::listen().filter_map(message_for))`.
+    `message_for` is a plain fn item, which is the non-capturing, zero-sized
+    mapper `Subscription::filter_map` requires.
+- `src/ui/views.rs`: change `const VOLUME_STEP` to `pub(super) const
+  VOLUME_STEP` so the update loop reuses the slider's step instead of a second
+  copy.
+- `src/state.rs`: add `pub fn play(&mut self)` (sets `is_playing = true`) and
+  `pub fn pause(&mut self)` (sets `is_playing = false`) beside
+  `toggle_playing`/`stop`, with doc comments naming the keyboard's X and C as
+  the explicit callers and noting that Pause and Stop are the same flag change
+  today (the real-playback seam the `Stop` doc already names).
+- `src/ui/tests.rs`: the mapping and update-arm tests (below).
+- `README.md`: name the keys in Usage.
+
+**Files touched.** `src/ui/mod.rs`, `src/ui/views.rs`, `src/state.rs`,
+`src/ui/tests.rs`, `README.md`.
+
+**Acceptance criteria.**
+
+- `make check` passes (`cargo fmt --check`, `cargo clippy --all-targets -- -D
+  warnings`, `cargo doc` with rustdoc warnings denied, `cargo test`).
+- `src/ui/tests.rs` mapping tests: each bound key maps to its message
+  (`matches!` on the returned `Option<Message>`); the uppercase forms map the
+  same; a `Modifiers::CTRL`, `ALT`, or `LOGO` modifier yields `None`; an
+  unbound key, a `KeyReleased`, and a `ModifiersChanged` event yield `None`;
+  and one full `Event::KeyPressed` drives `message_for` end to end.
+- `src/ui/tests.rs`: driving `Message::Play` sets `state.is_playing` and
+  `Message::Pause` clears it; `Message::VolumeUp`/`VolumeDown` move
+  `state.volume()` by `views::VOLUME_STEP` and clamp at `1.0`/`0.0`; all four
+  arms schedule no follow-up work via `assert_message_schedules_no_work`.
+- Manual check (`cargo run`): with the window focused, Z/B step tracks, X/C/V
+  play/pause/stop, and the arrow keys move the volume slider; typing a letter
+  in no other widget is affected because there are no text inputs yet.
 
 ## Done
 
