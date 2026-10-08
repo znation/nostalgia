@@ -58,6 +58,16 @@ fn seed_browse_lists(player: &mut WinampPlayer) {
     player.songs = vec![sample_song()];
 }
 
+/// Asserts the player has no rows in any of its three browse buffers. The
+/// failure-arm test (which clears all three) and the startup test (which
+/// begins with all three empty) both pin this same "nothing loaded" shape, so
+/// the three-field check lives here once.
+fn assert_browse_lists_empty(player: &WinampPlayer) {
+    assert!(player.artists.is_empty());
+    assert!(player.albums.is_empty());
+    assert!(player.songs.is_empty());
+}
+
 /// Asserts the player is showing `expected`. The tests pin the current
 /// view at each navigation step — `ArtistSelected`, `AlbumSelected`, and
 /// `Back` — and at startup, so the same view-equality check lives here
@@ -1078,9 +1088,7 @@ fn each_browse_failure_stores_its_report_in_its_own_list() {
         Message::SongsLoadFailed(songs_report.to_string()),
     );
 
-    assert!(player.artists.is_empty());
-    assert!(player.albums.is_empty());
-    assert!(player.songs.is_empty());
+    assert_browse_lists_empty(&player);
     assert!(!player.artists_loading);
     assert!(!player.albums_loading);
     assert!(!player.songs_loading);
@@ -1436,9 +1444,7 @@ fn new_player_starts_at_artists_with_nothing_selected() {
     let (player, _state) = test_player();
 
     assert_view(&player, CurrentView::Artists);
-    assert!(player.artists.is_empty());
-    assert!(player.albums.is_empty());
-    assert!(player.songs.is_empty());
+    assert_browse_lists_empty(&player);
     // The artists fetch `boot` schedules is in flight, so the panel shows
     // "Loading…" rather than claiming an empty library (see
     // `views::browse_placeholder`); the two lower lists are not loading.
