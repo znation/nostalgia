@@ -40,6 +40,20 @@ fn square_border(color: Color) -> Border {
     }
 }
 
+/// A 1px down-right [`Shadow`] in `color`, the bottom/right half of a bevel.
+///
+/// iced's [`Border`] draws a single colour all around, so the other half of a
+/// two-tone bevel is a no-blur shadow offset one pixel down and right; the
+/// shared geometry lives here rather than as a struct literal at each style
+/// site. Pure, so it needs no widget to test.
+fn square_shadow(color: Color) -> Shadow {
+    Shadow {
+        color,
+        offset: Vector::new(1.0, 1.0),
+        blur_radius: 0.0,
+    }
+}
+
 /// A 1px [`rule`] in `color`, styled to fill the available space on its axis.
 ///
 /// A bevel's horizontal and vertical edges differ only in which [`rule`]
@@ -172,11 +186,7 @@ pub fn chrome_button_style(status: button::Status) -> button::Style {
         background: Some(Background::Color(face)),
         text_color,
         border: square_border(top_left),
-        shadow: Shadow {
-            color: bottom_right,
-            offset: Vector::new(1.0, 1.0),
-            blur_radius: 0.0,
-        },
+        shadow: square_shadow(bottom_right),
         ..button::Style::default()
     }
 }
@@ -268,11 +278,7 @@ pub fn playlist_scrollable_style() -> scrollable::Style {
             text_color: Some(theme::TEXT),
             background: Some(theme::LCD_BACKGROUND.into()),
             border: square_border(theme::PANEL_EDGE_DARK),
-            shadow: Shadow {
-                color: theme::PANEL_EDGE_LIGHT,
-                offset: Vector::new(1.0, 1.0),
-                blur_radius: 0.0,
-            },
+            shadow: square_shadow(theme::PANEL_EDGE_LIGHT),
             snap: false,
         },
         vertical_rail: rail,
@@ -281,11 +287,7 @@ pub fn playlist_scrollable_style() -> scrollable::Style {
         auto_scroll: scrollable::AutoScroll {
             background: Background::Color(theme::LCD_BACKGROUND),
             border: square_border(theme::PANEL_EDGE_LIGHT),
-            shadow: Shadow {
-                color: theme::PANEL_EDGE_DARK,
-                offset: Vector::new(1.0, 1.0),
-                blur_radius: 0.0,
-            },
+            shadow: square_shadow(theme::PANEL_EDGE_DARK),
             icon: theme::TEXT,
         },
     }
