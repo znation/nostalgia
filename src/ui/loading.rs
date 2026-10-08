@@ -145,8 +145,8 @@ impl RequestGeneration {
 /// The `loading` flag a navigation sets (see `browse::BrowseList::clear`) only
 /// clears when the reply lands, so a backend that never answers would leave
 /// the browse panel stuck on "Loading…" forever with no way back. Bounding
-/// the wait turns that silent hang into a reported failure and the ordinary
-/// empty-list fallback, exactly as a returned error does.
+/// the wait turns that silent hang into a reported failure, exactly as a
+/// returned error does.
 pub(super) const FETCH_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// The longest a playback call may run before the UI gives up on it.
@@ -190,14 +190,12 @@ pub(super) async fn with_timeout<F: Future>(timeout: Duration, future: F) -> Opt
 }
 
 /// Formats the browse-fetch timeout report: names the fetch that timed out
-/// and states the empty-list fallback, mirroring [`fetch_failure_report`] so
-/// a hung backend is as diagnosable from the log as one that returned an
-/// error. Pure, like the other report formatters, so the contract is
-/// testable without capturing stderr.
+/// and the bound that expired, mirroring [`fetch_failure_report`] so a hung
+/// backend is as diagnosable from the log as one that returned an error, and
+/// so the panel it is shown in names the failed query. Pure, like the other
+/// report formatters, so the contract is testable without capturing stderr.
 fn fetch_timeout_report(context: &str, timeout: Duration) -> String {
-    format!(
-        "music-library fetch failed ({context}); timed out after {timeout:?}, showing an empty list"
-    )
+    format!("music-library fetch failed ({context}); timed out after {timeout:?}")
 }
 
 /// Formats the playback timeout report: names the track that was being played
@@ -213,9 +211,10 @@ fn play_timeout_report(track_id: &str, timeout: Duration) -> String {
 
 /// Runs a library-fetch future through iced's runtime, mapping its `Result`
 /// onto the matching message: the `*Loaded` message built by `loaded` on
-/// success, or the `*LoadFailed` message built by `failed` on error (after
-/// the error is reported to stderr via [`fetch_failure_report`], whose
-/// report is the string handed to `failed`). `context` names the fetch —
+/// success, or the `*LoadFailed` message built by `failed` on a returned
+/// error or a timeout (after the cause is reported to stderr via
+/// [`fetch_failure_report`] or [`fetch_timeout_report`], whose report is the
+/// string handed to `failed`). `context` names the fetch —
 /// "loading favorite artists", "loading albums for artist \"artist-1\"", or
 /// "loading songs from album \"album-1\"" — so a failed browse reports *which*
 /// query failed and what it was fetching, not just that a fetch failed.
@@ -223,7 +222,7 @@ fn play_timeout_report(track_id: &str, timeout: Duration) -> String {
 /// request for the same list has been issued by the time this fetch completes,
 /// the reply is superseded and becomes [`Message::Ignored`] instead of
 /// overwriting the newer list. `timeout` bounds the wait via [`with_timeout`],
-/// so a backend that never answers falls back to the empty list instead of
+/// so a backend that never answers is reported as a failed fetch instead of
 /// leaving the panel on "Loading…". Shared by the artists, albums, and songs
 /// load arms so none of them repeats the clone-the-service-then-`Task::perform`
 /// boilerplate.
@@ -256,8 +255,9 @@ where
                     failed(report)
                 }
                 None => {
-                    eprintln!("{}", fetch_timeout_report(&context, timeout));
-                    loaded(Vec::new())
+                    let report = fetch_timeout_report(&context, timeout);
+                    eprintln!("{report}");
+                    failed(report)
                 }
             }
         },
@@ -342,13 +342,13 @@ mod tests {
         let report = fetch_timeout_report("loading favorite artists", FETCH_TIMEOUT);
         assert_eq!(
             report,
-            "music-library fetch failed (loading favorite artists); timed out after 30s, showing an empty list"
+            "music-library fetch failed (loading favorite artists); timed out after 30s"
         );
     }
 
     // `FETCH_TIMEOUT` and `PLAY_TIMEOUT` are production behavior — how long a
-    // hung backend may run before the UI gives up and falls back (an empty
-    // list, or the current track left unchanged) — and every fetch and play
+    // hung backend may run before the UI gives up (reporting the fetch as
+    // failed, or leaving the current track unchanged) — and every fetch and play
     // in `ui` passes one of them. Nothing read them: the report tests above
     // used to pass their own `Duration::from_secs(30)`, so a change to either
     // constant (a zero bound would abandon every fetch and play instantly)

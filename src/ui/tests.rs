@@ -1508,11 +1508,12 @@ async fn fetch_into_maps_a_failed_fetch_to_a_load_failed_message() {
 // without it the browse panel stays on "Loading…" forever, because `loading`
 // only clears when the reply lands. The real service always answers, so the
 // hang is reachable only by injecting a pending fetch closure; the short
-// timeout keeps the test fast. A timeout clears the loading state with the
-// `*Loaded` message carrying an empty list (a returned error is reported
-// through the `*LoadFailed` path instead), so the panel becomes usable.
+// timeout keeps the test fast. A timeout is reported through the `*LoadFailed`
+// path, exactly like a returned error, so the panel names the failed fetch
+// (and, for the top-level artists fetch, offers the Retry button) instead of
+// misreading the hang as an empty library.
 #[tokio::test]
-async fn fetch_into_maps_a_hanging_fetch_to_an_empty_loaded_message() {
+async fn fetch_into_maps_a_hanging_fetch_to_a_failed_message() {
     let (player, _state) = test_player();
 
     let generation = test_generation();
@@ -1528,7 +1529,9 @@ async fn fetch_into_maps_a_hanging_fetch_to_an_empty_loaded_message() {
     drive_task(task, "hanging fetch", |message| {
         assert!(matches!(
             message,
-            Message::ArtistsLoaded(artists) if artists.is_empty()
+            Message::ArtistsLoadFailed(report)
+                if report
+                    == "music-library fetch failed (loading favorite artists); timed out after 50ms"
         ));
     })
     .await;
