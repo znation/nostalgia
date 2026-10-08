@@ -18,6 +18,7 @@ use std::{
 };
 use tokio::sync::Mutex;
 
+mod bevel;
 mod browse;
 mod loading;
 mod style;

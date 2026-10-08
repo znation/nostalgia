@@ -21,7 +21,7 @@ use iced::{
 use crate::equalizer::{BAND_COUNT, BAND_FREQUENCIES, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, Preset};
 use crate::library::{Album, Artist, Song};
 
-use super::{CurrentView, Message, style, theme};
+use super::{CurrentView, Message, bevel, style, theme};
 
 /// A fixed-width horizontal gap between adjacent widgets.
 ///
@@ -337,7 +337,7 @@ const TITLE_BAR_BUTTON_WIDTH: f32 = 22.0;
 /// The buttons are [`fixed_width_button`]s — the same raised
 /// chrome as the transport row — pinned so their glyphs cannot resize them.
 /// The bar paints [`style::title_bar_style`] and wraps it in
-/// [`style::raised_panel`], so it carries the base skin's raised bevel.
+/// [`bevel::raised_panel`], so it carries the base skin's raised bevel.
 pub fn view_title_bar() -> Element<'static, Message> {
     let drag_region = MouseArea::new(
         Container::new(Text::new(TITLE_BAR_TEXT).size(14).color(theme::TEXT))
@@ -349,7 +349,7 @@ pub fn view_title_bar() -> Element<'static, Message> {
     .on_press(Message::WindowDragged)
     .on_double_click(Message::ToggleWindowShade);
 
-    style::raised_panel(
+    bevel::raised_panel(
         Container::new(
             Row::new()
                 .push(drag_region)
@@ -400,7 +400,7 @@ pub fn now_playing_label<'a>(
 /// while the owned fallback is moved into the widget, so the built element
 /// never borrows a temporary.
 pub fn view_now_playing(label: Cow<'_, str>) -> Element<'_, Message> {
-    style::lcd_well(
+    bevel::lcd_well(
         Row::new()
             .push(Text::new("Now Playing: ").size(20))
             .push(Text::new(label).size(20).color(theme::LCD_GREEN)),
@@ -537,7 +537,7 @@ pub fn view_equalizer(
         );
     }
 
-    style::raised_panel(
+    bevel::raised_panel(
         Column::new()
             .push(
                 Row::new()

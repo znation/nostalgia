@@ -120,7 +120,7 @@ mod tests {
     // The palette tests above read the six palette slots. The playing-row
     // highlight and the LCD well's recess are the two base-skin colours
     // painted from constants no test reads at all: `views::scrollable_list`
-    // and `style::lcd_well` apply them inside inline style closures, which
+    // and `bevel::lcd_well` apply them inside inline style closures, which
     // iced's `Element` API exposes no way to introspect. Their RGB values are
     // the skin contract — a regression could turn the playlist selection bar
     // or the recess into any other colour and clear the whole suite. Pin

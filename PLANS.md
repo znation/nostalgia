@@ -9,8 +9,8 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 > palette landed ("Add a Winamp 2.x base-skin palette and apply it as the app
 > theme", done 2026-10-06), and the reusable bevel layer followed ("Add a
 > Winamp two-tone bevel layer and frame the Now Playing and equalizer panels",
-> done 2026-10-06), framing those two panels through `style::lcd_well` and
-> `style::raised_panel` in `src/ui/style.rs`. `## Planned` is no longer empty:
+> done 2026-10-06), framing those two panels through `bevel::lcd_well` and
+> `bevel::raised_panel` in `src/ui/bevel.rs`. `## Planned` is no longer empty:
 > it holds "Style the transport buttons as raised Winamp chrome", which
 > restyles the five transport buttons and the browse Back button — all built
 > through `labeled_button`, still a default iced `Button`. Still unplanned is
@@ -328,7 +328,7 @@ note schedules and the base-skin Done entry lists among its later fidelity
 plans. The bevel layer, buttons, sliders, and playlist chrome are done, but the
 window still wears the OS title bar: `init_ui` in `src/ui/mod.rs` never sets
 window settings, so the top of the app does not read as Winamp. `theme.rs`
-already names `TITLE_BLUE` for the title bar and `style::raised_panel` already
+already names `TITLE_BLUE` for the title bar and `bevel::raised_panel` already
 supplies the raised bevel it needs.
 
 **Goal.** Replace the OS window frame with a Winamp-style title bar: a
@@ -360,7 +360,7 @@ and no change to the existing view builders.
     cannot resize them.
   Wrap the `Row` in a `Container` with `.width(Length::Fill)` and
   `.height(Length::Fixed(TITLE_BAR_HEIGHT))` styled with
-  `|_theme| style::title_bar_style()`, then in `style::raised_panel(..)` so the
+  `|_theme| style::title_bar_style()`, then in `bevel::raised_panel(..)` so the
   bar carries the same raised bevel as the other chrome. Add `MouseArea` to
   the `iced::widget::{..}` import.
 - `src/ui/mod.rs`:
@@ -417,7 +417,8 @@ and no change to the existing view builders.
 
 Found by plan 2026-10-07, taking the "playlist chrome" half of the widget-level
 fidelity the steward drift note schedules after slider chrome. The bevel layer
-(`src/ui/style.rs`) now dresses the panels, buttons, and sliders, but the browse
+(`src/ui/bevel.rs`) and the widget chrome styles (`src/ui/style.rs`) now dress
+the panels, buttons, and sliders, but the browse
 list — the app's playlist-editor stand-in — is still a plain `Scrollable` on the
 window face: `scrollable_list` in `src/ui/views.rs` builds default-iced `Button`
 rows (their hover/press is the theme's `TITLE_BLUE` primary) on no background,
@@ -518,7 +519,7 @@ selection highlight. No new theme colours and no signature changes.
 Found by plan 2026-10-07, taking the slider half of the "transport button and
 slider chrome" follow-up the bevel Done entry defers and the transport-button
 Done entry leaves open ("Slider chrome is a separate, later plan"). The
-bevel layer (`src/ui/style.rs`: `bevel_edges`, `lcd_well`, `raised_panel`)
+bevel layer (`src/ui/bevel.rs`: `bevel_edges`, `lcd_well`, `raised_panel`)
 and `style::chrome_button_style` now dress the panels and buttons, but every
 `Slider` / `VerticalSlider` in `src/ui/views.rs` — the volume slider, the
 preamp slider, and the ten EQ band sliders — still renders with iced's
@@ -603,7 +604,7 @@ does.
 ### Style the transport buttons as raised Winamp chrome (found 2026-10-07, done 2026-10-07)
 
 Found by plan 2026-10-07, taking the "transport button and slider chrome"
-follow-up the bevel Done entry defers. The bevel layer (`src/ui/style.rs`:
+follow-up the bevel Done entry defers. The bevel layer (`src/ui/bevel.rs`:
 `bevel_edges`, `lcd_well`, `raised_panel`) frames the panels, but
 `labeled_button` in `src/ui/views.rs` still builds a default-styled `Button`,
 so the Play/Pause, Stop, Previous, Next, and Repeat controls and the browse
@@ -694,6 +695,14 @@ chrome is a separate, later plan (as the bevel entry notes).
 
 ### Add a Winamp two-tone bevel layer and frame the Now Playing and equalizer panels (found 2026-10-06, done 2026-10-06)
 
+**Update (2026-10-08, organize).** The bevel composition primitives this entry
+created (`bevel_edges`, `styled_edge`, `bevel_overlay`, `beveled`, `lcd_well`,
+`raised_panel`) and their tests moved to a new `src/ui/bevel.rs`;
+`src/ui/style.rs` now holds only the widget chrome styles that consume them
+(the title bar, buttons, pick list/menu, sliders, and playlist rows/well). The
+split gives the reusable bevel layer its own module and keeps `style.rs` to
+per-widget `Status` → `Style` builders.
+
 Found by plan 2026-10-06, following the steward drift note's call for custom
 widget styling. The palette landed (previous Done entry), but every panel is
 still flat: iced 0.14's `Border` is a single colour of uniform width
@@ -767,9 +776,9 @@ chrome is a separate, later plan that styles against these same edge colours.
     regression guard the builder-only tests cannot be.
 - `src/ui/views.rs`:
   - In `view_now_playing`, wrap the existing `Row` in
-    `super::style::lcd_well(..)`.
+    `super::bevel::lcd_well(..)`.
   - In `view_equalizer`, wrap the existing `Column` in
-    `super::style::raised_panel(..)`.
+    `super::bevel::raised_panel(..)`.
   - Add `use super::style;`; no signature changes, so the existing view
     construction tests compile and pass unchanged.
 - `README.md`: refresh the Status sentence to say the Now Playing bar and
