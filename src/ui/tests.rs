@@ -662,6 +662,22 @@ fn assert_track_selected(task: Task<Message>, expected_epoch: u64, expected_inde
     }));
 }
 
+/// Drives `task` to its single output and asserts it is a `TrackPlayed`
+/// completion carrying `expected_generation`, as the iced runtime would
+/// deliver the play task's completion. The two `play_into` tests both drive a
+/// play to completion and pin the same contract — the completion carries the
+/// generation the play was issued as, so `update` can tell a superseded play's
+/// completion from the current one — so the drive-and-assert block lives here
+/// once. Async, unlike [`assert_track_selected`], because the `play_into`
+/// tests run inside a tokio runtime.
+async fn assert_track_played(task: Task<Message>, expected_generation: u64) {
+    drive_task(task, "play", |message| match message {
+        Message::TrackPlayed { generation } => assert_eq!(generation, expected_generation),
+        other => panic!("unexpected play task output: {other:?}"),
+    })
+    .await;
+}
+
 /// Asserts that an update arm scheduled no follow-up work: `update`
 /// returns `Task::none()` for an arm with nothing to run, and iced's `Task`
 /// represents that as no stream to run. The arms this pins — `TrackPlayed`
@@ -1271,13 +1287,7 @@ async fn play_into_maps_a_hanging_play_to_a_completed_message() {
         |_service, _id, _generation| std::future::pending::<Result<(), String>>(),
         |_err| {},
     );
-    drive_task(task, "hanging play", |message| {
-        assert!(matches!(
-            message,
-            Message::TrackPlayed { generation } if generation == expected
-        ));
-    })
-    .await;
+    assert_track_played(task, expected).await;
 }
 
 // The play path's error is handed to `play_into`'s injected reporter; the real
@@ -1302,13 +1312,7 @@ async fn play_into_reports_a_failed_play_and_still_completes() {
             let _ = reported.send(err.clone());
         },
     );
-    drive_task(task, "failed play", |message| {
-        assert!(matches!(
-            message,
-            Message::TrackPlayed { generation } if generation == expected
-        ));
-    })
-    .await;
+    assert_track_played(task, expected).await;
 
     assert_eq!(received.try_recv().ok().as_deref(), Some("boom"));
 }
