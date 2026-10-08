@@ -505,7 +505,7 @@ move as you step. This player has no such cue: the Songs view renders every row
 identically, so after clicking a song (or pressing Next/Previous) there is no
 way to tell which song in the album is current. Mark the row whose id equals the
 shared `current_track` — a `▶` prefix on its title and a highlighted button
-background — so the album list reads as a playlist. The marker is pure data
+background — so the song list reads as a playlist. The marker is pure data
 derived state (current id vs. the displayed songs), so it stays in the view
 layer like the rest of `views.rs` and never touches the service seam.
 

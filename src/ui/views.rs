@@ -174,7 +174,7 @@ fn album_row(epoch: u64, index: usize, album: &Album) -> (&str, &'static str, Me
 /// (true only when `current_track` names this song). `epoch` and `index` are
 /// the loaded-list epoch and the song's position in that list, carried so
 /// building a row never clones the song's id (see [`artist_row`]). The flag
-/// feeds `scrollable_list`'s `▶` + highlight marker, so the album list reads
+/// feeds `scrollable_list`'s `▶` + highlight marker, so the song list reads
 /// as a playlist.
 fn song_row<'a>(
     epoch: u64,
