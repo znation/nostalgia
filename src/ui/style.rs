@@ -274,6 +274,12 @@ mod tests {
         );
         assert_eq!(hovered.border.color, active.border.color);
         assert_eq!(hovered.shadow.color, active.shadow.color);
+        // Only Disabled dims the text (its own test pins the alpha drop), so a
+        // hovered button keeps full-strength chrome text. The Active test above
+        // pins `TEXT` for the shared `_` arm's first status; assert it here for
+        // Hovered too, or a match split that dimmed Hovered would clear every
+        // other test while the hovered label faded.
+        assert_eq!(hovered.text_color, theme::TEXT);
     }
 
     #[test]
@@ -285,6 +291,8 @@ mod tests {
         );
         assert_eq!(pressed.border.color, theme::PANEL_EDGE_DARK);
         assert_eq!(pressed.shadow.color, theme::PANEL_EDGE_LIGHT);
+        // The Pressed twin of the Hovered text-colour assertion above.
+        assert_eq!(pressed.text_color, theme::TEXT);
     }
 
     #[test]
