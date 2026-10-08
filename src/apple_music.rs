@@ -139,10 +139,12 @@ impl AppleMusicService {
     /// marking it playing. A blank `track_id` — empty or only whitespace — or
     /// one carrying a terminal control character is rejected with an
     /// [`AppleMusicError`] and leaves shared state untouched: a blank id can
-    /// never name a track, and a control-character id would inject escape
-    /// sequences into the playback log line below. The stub owns only this
-    /// shared-state transition — a real implementation would add the API call
-    /// that starts audio.
+    /// never name a track, and a control-character id must not reach shared
+    /// state. The playback log below escapes the id with `Debug` (see
+    /// [`play_log_line`]), so even a non-control Unicode format character the
+    /// guard does not reject cannot reach the terminal raw. The stub owns only
+    /// this shared-state transition — a real implementation would add the API
+    /// call that starts audio.
     pub async fn play_track(&self, track_id: &str) -> Result<(), AppleMusicError> {
         ensure_id_is_valid(track_id, "track")?;
 
@@ -150,7 +152,7 @@ impl AppleMusicService {
         state.current_track = Some(track_id.to_string());
         state.is_playing = true;
 
-        println!("Playing track: {}", track_id);
+        println!("{}", play_log_line(track_id));
         Ok(())
     }
 
@@ -213,6 +215,21 @@ fn ensure_id_is_valid(id: &str, kind: &str) -> Result<(), AppleMusicError> {
         )));
     }
     Ok(())
+}
+
+/// The playback log line for `track_id`, escaped so a hostile library id
+/// cannot inject terminal output.
+///
+/// `play_track` writes this line to stdout. The id is formatted with `Debug`,
+/// not `Display`: `Display` passes every byte through raw, so an id carrying a
+/// control character (`\u{1b}`) or a Unicode format character — the
+/// right-to-left override `\u{202e}`, say, which `char::is_control` does not
+/// classify as a control — would reach the terminal verbatim, while `Debug`
+/// renders both as `\u{...}` escapes. This matches the failure report, which
+/// already quotes the id with `{track_id:?}`. Kept pure so the escaping
+/// contract is testable without capturing stdout.
+fn play_log_line(track_id: &str) -> String {
+    format!("Playing track: {track_id:?}")
 }
 
 /// The group stored under `id` in `index`, or an empty list when the id is
@@ -339,6 +356,26 @@ mod tests {
         // second log line; a plain id still passes.
         assert!(ensure_id_is_valid("song\n1", "track").is_err());
         assert!(ensure_id_is_valid("song-1", "track").is_ok());
+    }
+
+    // The success log line is the second terminal sink for a track id, and the
+    // guard does not close it: `char::is_control` is true only for the Cc
+    // category, so a Unicode format character such as the right-to-left
+    // override (`\u{202e}`, category Cf) passes `ensure_id_is_valid`. The sink
+    // must therefore escape the id itself; `play_log_line` formats with
+    // `Debug`, which renders both the control and the format character as
+    // `\u{...}`. The helper is pure so this contract is testable without
+    // capturing stdout.
+    #[test]
+    fn play_log_line_escapes_control_and_format_characters() {
+        let line = play_log_line("evil\u{1b}]0;pwnd\u{7}");
+        assert_eq!(line, "Playing track: \"evil\\u{1b}]0;pwnd\\u{7}\"");
+        assert!(!line.contains('\u{1b}'));
+        assert!(!line.contains('\u{7}'));
+
+        let line = play_log_line("a\u{202e}b");
+        assert_eq!(line, "Playing track: \"a\\u{202e}b\"");
+        assert!(!line.contains('\u{202e}'));
     }
 
     // "All favorite artists" is the service's content contract, not just a
