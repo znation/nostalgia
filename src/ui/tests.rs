@@ -13,6 +13,13 @@ fn test_player() -> (WinampPlayer, Arc<Mutex<AppState>>) {
     (WinampPlayer::new(state.clone()), state)
 }
 
+/// A fresh request generation over its own counter — the starting
+/// generation the `fetch_into` and `play_into` tests issue before driving
+/// their task, so no two tests share a counter.
+fn test_generation() -> RequestGeneration {
+    RequestGeneration::issue(&Arc::new(AtomicU64::new(0)))
+}
+
 /// A fresh player over the shared three-song stepping album
 /// ([`stepping_songs`]) with `current` recorded as the shared state's
 /// current track — the starting shape the Next/Previous wiring tests step
@@ -1158,7 +1165,7 @@ fn now_playing_label_keeps_the_track_name_after_browsing_to_another_album() {
 async fn fetch_into_schedules_fetch_and_maps_result_to_loaded_message() {
     let (player, _state) = test_player();
 
-    let generation = RequestGeneration::issue(&Arc::new(AtomicU64::new(0)));
+    let generation = test_generation();
     let task = fetch_into(
         &player.apple_music_service,
         "loading favorite artists".to_string(),
@@ -1192,7 +1199,7 @@ async fn fetch_into_schedules_fetch_and_maps_result_to_loaded_message() {
 async fn fetch_into_maps_a_failed_fetch_to_a_load_failed_message() {
     let (player, _state) = test_player();
 
-    let generation = RequestGeneration::issue(&Arc::new(AtomicU64::new(0)));
+    let generation = test_generation();
     let task = fetch_into(
         &player.apple_music_service,
         "loading albums for artist \"artist-1\"".to_string(),
@@ -1224,7 +1231,7 @@ async fn fetch_into_maps_a_failed_fetch_to_a_load_failed_message() {
 async fn fetch_into_maps_a_hanging_fetch_to_an_empty_loaded_message() {
     let (player, _state) = test_player();
 
-    let generation = RequestGeneration::issue(&Arc::new(AtomicU64::new(0)));
+    let generation = test_generation();
     let task = fetch_into(
         &player.apple_music_service,
         "loading favorite artists".to_string(),
@@ -1253,7 +1260,7 @@ async fn fetch_into_maps_a_hanging_fetch_to_an_empty_loaded_message() {
 #[tokio::test]
 async fn play_into_maps_a_hanging_play_to_a_completed_message() {
     let (player, _state) = test_player();
-    let generation = RequestGeneration::issue(&Arc::new(AtomicU64::new(0)));
+    let generation = test_generation();
     let expected = generation.issued();
 
     let task = play_into(
@@ -1281,7 +1288,7 @@ async fn play_into_maps_a_hanging_play_to_a_completed_message() {
 #[tokio::test]
 async fn play_into_reports_a_failed_play_and_still_completes() {
     let (player, _state) = test_player();
-    let generation = RequestGeneration::issue(&Arc::new(AtomicU64::new(0)));
+    let generation = test_generation();
     let expected = generation.issued();
     let (reported, received) = std::sync::mpsc::channel();
 
