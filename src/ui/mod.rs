@@ -153,6 +153,20 @@ fn store_loaded<T>(buffer: &mut Vec<T>, epoch: &mut u64, items: Vec<T>) -> Task<
     Task::none()
 }
 
+/// The list entry a selection message names, or `None` when the press is
+/// stale. A selection message carries a row's index in the list that rendered
+/// it plus that list's epoch; `epoch` must still match `current_epoch` (the
+/// list was not replaced after the row was rendered) and `index` must still
+/// name an entry. Either failure means the press outlived its list and must be
+/// a no-op, so the epoch check and the bounds check live here once instead of
+/// in each of the three selection arms.
+fn selected_entry<T>(items: &[T], epoch: u64, current_epoch: u64, index: usize) -> Option<&T> {
+    if epoch != current_epoch {
+        return None;
+    }
+    items.get(index)
+}
+
 /// The task the Next/Previous buttons schedule: step the current track
 /// through the player's loaded songs in the given direction — via the
 /// `transport::next_track_id`/`previous_track_id` stepping function passed
@@ -228,11 +242,8 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             // list was replaced after the row was rendered, so the index names
             // a different song now — ignore the stale press. An out-of-range
             // index likewise names no track and is a no-op rather than a bogus
-            // play.
-            if epoch != player.songs_epoch {
-                return Task::none();
-            }
-            let Some(song) = player.songs.get(index) else {
+            // play. `selected_entry` applies both checks.
+            let Some(song) = selected_entry(&player.songs, epoch, player.songs_epoch, index) else {
                 return Task::none();
             };
             let track_id = song.id.clone();
@@ -262,11 +273,11 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             // As with `TrackSelected`: the row message carries the artist's
             // index and its list's epoch. A mismatched epoch is a stale press
             // from a replaced list; an out-of-range index has no artist to
-            // browse. Both are no-ops.
-            if epoch != player.artists_epoch {
-                return Task::none();
-            }
-            let Some(artist_id) = player.artists.get(index).map(|artist| artist.id.clone()) else {
+            // browse. `selected_entry` rejects both.
+            let Some(artist_id) =
+                selected_entry(&player.artists, epoch, player.artists_epoch, index)
+                    .map(|artist| artist.id.clone())
+            else {
                 return Task::none();
             };
             player.current_view = CurrentView::Albums;
@@ -278,11 +289,11 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             )
         }
         Message::AlbumSelected { epoch, index } => {
-            // The album twin of the artist arm above.
-            if epoch != player.albums_epoch {
-                return Task::none();
-            }
-            let Some(album_id) = player.albums.get(index).map(|album| album.id.clone()) else {
+            // The album twin of the artist arm above; `selected_entry`
+            // rejects the same stale-epoch and out-of-range presses.
+            let Some(album_id) = selected_entry(&player.albums, epoch, player.albums_epoch, index)
+                .map(|album| album.id.clone())
+            else {
                 return Task::none();
             };
             player.current_view = CurrentView::Songs;
