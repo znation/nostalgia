@@ -828,6 +828,19 @@ fn assert_message_schedules_no_work(player: &mut WinampPlayer, message: Message)
     assert_no_task(update(player, message));
 }
 
+/// Drives `message` through `update` and asserts the arm schedules follow-up
+/// work. The arms that must run a task once their guard passes — a title-bar
+/// window action with a resolved window id, a shade or unshade transition,
+/// and a recorded shade measurement — each used to repeat the same
+/// `into_stream(update(..)).is_some()` probe, so it lives here once and each
+/// call site names only the message it drives.
+fn assert_message_schedules_work(player: &mut WinampPlayer, message: Message) {
+    assert!(
+        iced_runtime::task::into_stream(update(player, message)).is_some(),
+        "the update arm must schedule follow-up work"
+    );
+}
+
 #[test]
 fn window_id_resolved_stores_the_window_id() {
     let (mut player, _state) = test_player();
@@ -865,10 +878,7 @@ fn title_bar_window_actions_schedule_work_with_a_window_id() {
         Message::MinimizeWindow,
         Message::CloseWindow,
     ] {
-        assert!(
-            iced_runtime::task::into_stream(update(&mut player, message)).is_some(),
-            "a title-bar window action must schedule work once the window id is known"
-        );
+        assert_message_schedules_work(&mut player, message);
     }
 }
 
@@ -878,18 +888,12 @@ fn toggle_window_shade_flips_the_flag_and_measures_the_window() {
     player.window_id = Some(iced::window::Id::unique());
     assert!(!player.shaded);
 
-    assert!(
-        iced_runtime::task::into_stream(update(&mut player, Message::ToggleWindowShade)).is_some(),
-        "shading must schedule the window-size measurement"
-    );
+    assert_message_schedules_work(&mut player, Message::ToggleWindowShade);
     assert!(player.shaded);
 
     // Once the pre-shade size is known, unshading resizes back to it.
     player.unshaded_size = Some(iced::Size::new(800.0, 600.0));
-    assert!(
-        iced_runtime::task::into_stream(update(&mut player, Message::ToggleWindowShade)).is_some(),
-        "unshading must schedule the restore resize"
-    );
+    assert_message_schedules_work(&mut player, Message::ToggleWindowShade);
     assert!(!player.shaded);
 }
 
@@ -899,16 +903,12 @@ fn window_shade_measured_stores_the_size_and_resizes() {
     player.window_id = Some(iced::window::Id::unique());
     player.shaded = true;
 
-    let task = update(
+    assert_message_schedules_work(
         &mut player,
         Message::WindowShadeMeasured(iced::Size::new(800.0, 600.0)),
     );
 
     assert_eq!(player.unshaded_size, Some(iced::Size::new(800.0, 600.0)));
-    assert!(
-        iced_runtime::task::into_stream(task).is_some(),
-        "measuring the window must schedule the resize to the shaded height"
-    );
 }
 
 #[test]
@@ -947,10 +947,7 @@ fn a_late_measurement_cannot_overwrite_the_captured_size() {
     // Roll down, then up again: the known size rolls straight up without a
     // fresh measurement that could read the strip a prior shade left.
     let _ = update(&mut player, Message::ToggleWindowShade);
-    assert!(
-        iced_runtime::task::into_stream(update(&mut player, Message::ToggleWindowShade)).is_some(),
-        "re-shading must schedule the resize to the shaded height"
-    );
+    assert_message_schedules_work(&mut player, Message::ToggleWindowShade);
 
     // A measurement from the first shade arriving now must not overwrite the
     // captured size with the 24 px strip.
