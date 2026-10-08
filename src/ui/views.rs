@@ -25,9 +25,10 @@ use super::{CurrentView, Message, style, theme};
 
 /// A fixed-width horizontal gap between adjacent widgets.
 ///
-/// The browse rows (a 10px gap between the title and the secondary label)
-/// and the transport row (a 20px gap between each control) all construct
-/// the same `Space`, so the `Space::new().width(Length::Fixed(..))`
+/// The browse rows (a 10px gap between the title and the secondary label),
+/// the transport row (a 20px gap between each control), and the equalizer
+/// header (an 8px gap between its on/off button and preset pick list) all
+/// construct the same `Space`, so the `Space::new().width(Length::Fixed(..))`
 /// expression lives here once instead of being repeated at every call site.
 fn spacer(width: f32) -> Space {
     Space::new().width(Length::Fixed(width))
