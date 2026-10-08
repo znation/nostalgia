@@ -192,6 +192,18 @@ mod tests {
         assert_eq!(state.volume(), volume);
     }
 
+    /// A state with `song-1` loaded and playing — the non-default starting
+    /// point the `stop` and `set_volume` isolation tests both need, so the
+    /// mutation has a current track and a set playback flag to preserve.
+    /// Building it here once keeps the two fixtures in lockstep.
+    fn playing_state() -> AppState {
+        AppState {
+            current_track: Some("song-1".to_string()),
+            is_playing: true,
+            ..Default::default()
+        }
+    }
+
     #[test]
     fn default_state_is_stopped_at_half_volume() {
         let state = AppState::default();
@@ -329,11 +341,7 @@ mod tests {
 
     #[test]
     fn stop_clears_playing_flag_and_keeps_current_track() {
-        let mut state = AppState {
-            current_track: Some("song-1".to_string()),
-            is_playing: true,
-            ..Default::default()
-        };
+        let mut state = playing_state();
         assert!(state.is_playing);
 
         assert_keeps_track_and_volume(&mut state, AppState::stop);
@@ -372,11 +380,9 @@ mod tests {
     #[test]
     fn set_volume_changes_only_the_volume() {
         let mut state = AppState {
-            current_track: Some("song-1".to_string()),
-            is_playing: true,
             repeat: true,
             eq_enabled: true,
-            ..Default::default()
+            ..playing_state()
         };
         state.set_eq_preamp(3.0);
         state.set_eq_band(4, 5.0);
