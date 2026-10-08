@@ -11,6 +11,24 @@
 // would not enable it; denying it here makes an unbackticked identifier fail
 // `make check` like any other warning.
 #![deny(clippy::doc_markdown)]
+// Production code must not abort the player on an unexpected value: an
+// `unwrap`/`expect`/`panic`/`todo`/`unimplemented` crashes the process instead
+// of reporting the failure through the `AppleMusicError` seam or the clamps in
+// `state`/`equalizer`. These restriction lints are allow-by-default, so the
+// landing gate's `-D warnings` would not enable them; denying them here makes
+// a production panic fail `make check`. They are denied only for the non-test
+// build: the `#[cfg(test)]` modules use `unwrap`/`expect`/`panic!` to assert,
+// which is what a test is for.
+#![cfg_attr(
+    not(test),
+    deny(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::todo,
+        clippy::unimplemented
+    )
+)]
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
