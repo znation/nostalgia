@@ -738,20 +738,26 @@ fn previous_track_follows_the_shared_repeat_flag_at_the_albums_start() {
 }
 
 /// Feeds a `*Loaded` message built from `items` back through `update` and
-/// asserts the list lands in `buffer` unchanged. The three
+/// asserts the list lands in `buffer` unchanged and that the matching
+/// `loading` flag is cleared — `store_loaded` is the only writer that turns
+/// a list's "Loading…" placeholder off (see `views::browse_placeholder`), so
+/// a `*Loaded` reply must leave that list not-loading. The three
 /// `*_loaded_populates_list` tests — artists, albums, songs — each used
 /// to repeat the same update-then-compare flow, differing only in the
-/// fixture, the `*Loaded` message variant, and the buffer it fills; the
-/// message constructor and the buffer come in as parameters so the flow
-/// lives here once and each test only names its fixture and target.
+/// fixture, the `*Loaded` message variant, the buffer it fills, and the
+/// loading flag it clears; the message constructor, the buffer, and the
+/// flag reader come in as parameters so the flow lives here once and each
+/// test only names its fixture and target.
 fn assert_store_loaded<T: Clone + PartialEq + std::fmt::Debug>(
     player: &mut WinampPlayer,
     items: Vec<T>,
     loaded: impl Fn(Vec<T>) -> Message,
     buffer: impl Fn(&mut WinampPlayer) -> &mut Vec<T>,
+    loading: impl Fn(&WinampPlayer) -> bool,
 ) {
     let _ = update(player, loaded(items.clone()));
     assert_eq!(&*buffer(player), &items);
+    assert!(!loading(player));
 }
 
 #[test]
@@ -759,9 +765,13 @@ fn artists_loaded_populates_list() {
     let (mut player, _state) = test_player();
     let artists = vec![sample_artist()];
 
-    assert_store_loaded(&mut player, artists, Message::ArtistsLoaded, |player| {
-        &mut player.artists
-    });
+    assert_store_loaded(
+        &mut player,
+        artists,
+        Message::ArtistsLoaded,
+        |player| &mut player.artists,
+        |player| player.artists_loading,
+    );
 }
 
 #[test]
@@ -769,9 +779,13 @@ fn albums_loaded_populates_list() {
     let (mut player, _state) = test_player();
     let albums = vec![sample_album()];
 
-    assert_store_loaded(&mut player, albums, Message::AlbumsLoaded, |player| {
-        &mut player.albums
-    });
+    assert_store_loaded(
+        &mut player,
+        albums,
+        Message::AlbumsLoaded,
+        |player| &mut player.albums,
+        |player| player.albums_loading,
+    );
 }
 
 #[test]
@@ -779,9 +793,13 @@ fn songs_loaded_populates_list() {
     let (mut player, _state) = test_player();
     let songs = vec![sample_song()];
 
-    assert_store_loaded(&mut player, songs, Message::SongsLoaded, |player| {
-        &mut player.songs
-    });
+    assert_store_loaded(
+        &mut player,
+        songs,
+        Message::SongsLoaded,
+        |player| &mut player.songs,
+        |player| player.songs_loading,
+    );
 }
 
 // The `known_titles` index backs the Now Playing bar's title lookup, and it
@@ -1037,6 +1055,12 @@ fn new_player_starts_at_artists_with_nothing_selected() {
     assert!(player.artists.is_empty());
     assert!(player.albums.is_empty());
     assert!(player.songs.is_empty());
+    // The artists fetch `boot` schedules is in flight, so the panel shows
+    // "Loading…" rather than claiming an empty library (see
+    // `views::browse_placeholder`); the two lower lists are not loading.
+    assert!(player.artists_loading);
+    assert!(!player.albums_loading);
+    assert!(!player.songs_loading);
 }
 
 // `view` is the per-frame assembly: it locks the shared state, resolves
