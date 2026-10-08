@@ -1031,16 +1031,23 @@ fn window_id_resolved_stores_the_window_id() {
     assert_eq!(player.window_id, None);
 }
 
+/// The three custom-title-bar window actions, in the order the title bar
+/// renders them: the draggable band, minimize, and close. The two tests below
+/// drive this same set against the two window-id states — no-ops before
+/// `boot`'s query resolves, work after — so a fourth title-bar action is
+/// added here once rather than to both loops.
+const TITLE_BAR_WINDOW_ACTIONS: [Message; 3] = [
+    Message::WindowDragged,
+    Message::MinimizeWindow,
+    Message::CloseWindow,
+];
+
 #[test]
 fn title_bar_window_actions_are_noops_without_a_window_id() {
     let (mut player, _state) = test_player();
     assert_eq!(player.window_id, None);
 
-    for message in [
-        Message::WindowDragged,
-        Message::MinimizeWindow,
-        Message::CloseWindow,
-    ] {
+    for message in TITLE_BAR_WINDOW_ACTIONS {
         assert_message_schedules_no_work(&mut player, message);
     }
 }
@@ -1049,11 +1056,7 @@ fn title_bar_window_actions_are_noops_without_a_window_id() {
 fn title_bar_window_actions_schedule_work_with_a_window_id() {
     let (mut player, _state) = player_with_window_id();
 
-    for message in [
-        Message::WindowDragged,
-        Message::MinimizeWindow,
-        Message::CloseWindow,
-    ] {
+    for message in TITLE_BAR_WINDOW_ACTIONS {
         assert_message_schedules_work(&mut player, message);
     }
 }
