@@ -470,6 +470,25 @@ mod tests {
         );
     }
 
+    // The security twin of the blank-id rejection above: an artist id carrying
+    // a terminal control character — the shape a hostile Apple Music reply
+    // could supply — must be rejected rather than looked up. The guard's own
+    // test pins the check with kind "track"; this pins that the public browse
+    // query reaches it for artist ids, so a regression that dropped the
+    // control-character check from this path (or fell back to a blank-only
+    // guard) cannot ship silently.
+    #[tokio::test]
+    async fn get_albums_by_artist_rejects_a_control_character_artist_id() {
+        let error = test_service()
+            .get_albums_by_artist("artist\u{1b}1")
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "artist id must not contain control characters (got \"artist\\u{1b}1\")"
+        );
+    }
+
     #[tokio::test]
     async fn get_albums_by_artist_returns_single_album_artists_album() {
         // The empty (artist-3) and multi-album (artist-1) groups are pinned
@@ -516,11 +535,34 @@ mod tests {
         assert!(songs.is_empty());
     }
 
-    // The album-query twin of the blank-artist-id rejection above.
+    // The album-query twin of the blank-artist-id rejection above, whitespace
+    // case included.
     #[tokio::test]
     async fn get_songs_from_album_rejects_a_blank_album_id() {
         let error = test_service().get_songs_from_album("").await.unwrap_err();
         assert_eq!(error.to_string(), "album id must not be blank (got \"\")");
+
+        let error = test_service()
+            .get_songs_from_album("   ")
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "album id must not be blank (got \"   \")"
+        );
+    }
+
+    // The album-query twin of the control-character artist-id rejection above.
+    #[tokio::test]
+    async fn get_songs_from_album_rejects_a_control_character_album_id() {
+        let error = test_service()
+            .get_songs_from_album("album\u{1b}1")
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "album id must not contain control characters (got \"album\\u{1b}1\")"
+        );
     }
 
     #[tokio::test]
