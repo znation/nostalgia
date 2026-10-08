@@ -35,13 +35,15 @@ fn spacer(width: f32) -> Space {
 
 /// A button showing a single text label that emits `message` on press.
 ///
-/// The transport row's five buttons (Play/Pause, Stop, Previous, Next,
-/// Repeat), the equalizer panel's on/off button, and the browse Back button
-/// all build the same `Button::new(Text::new(..)).on_press(..)` widget, so
-/// that expression lives here once instead of being repeated at every call
-/// site. The label is `'static` — a literal, or a `&'static str` such as
-/// [`play_pause_label`] returns — so the resulting button is `'static` like
-/// the view builders that push it.
+/// The browse Back and Retry buttons and the equalizer panel's on/off button
+/// call this directly; the transport row's five buttons (Play/Pause, Stop,
+/// Previous, Next, Repeat) and the title bar's minimize and close buttons
+/// reach it through [`fixed_width_button`]. They all build the same
+/// `Button::new(Text::new(..)).on_press(..)` widget, so that expression lives
+/// here once instead of being repeated at every call site. The label is
+/// `'static` — a literal, or a `&'static str` such as [`play_pause_label`]
+/// returns — so the resulting button is `'static` like the view builders that
+/// push it.
 fn labeled_button(label: &'static str, message: Message) -> Button<'static, Message> {
     Button::new(Text::new(label))
         .on_press(message)
