@@ -569,6 +569,20 @@ fn api_error_cause_falls_through_a_causeless_entry_to_a_later_cause() {
     );
 }
 
+// Entries are searched in order, and the `detail`-before-`title` preference
+// holds only *within* an entry: an earlier entry's non-blank `title` is the
+// cause even when a later entry carries a non-blank `detail`. Apple lists its
+// errors most-significant-first, so a refactor that pooled every entry's
+// `detail` ahead of every `title` (a two-pass search) would report a secondary
+// error's detail instead of the primary error's title. The causeless-entry
+// test above never reaches this case, because its first entry has no cause at
+// all; pin the cross-entry ordering.
+#[test]
+fn api_error_cause_prefers_an_earlier_entrys_title_to_a_later_detail() {
+    let body = r#"{"errors":[{"title":"Unauthorized"},{"detail":"Invalid developer token"}]}"#;
+    assert_eq!(api_error_cause(body), Some("Unauthorized".to_string()));
+}
+
 // With every field present but blank there is no cause to add, so the
 // transport reports the status alone rather than "HTTP 401: ".
 #[test]
