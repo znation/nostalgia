@@ -153,24 +153,41 @@ impl AudioOutput for GatedAudio {
     }
 }
 
-/// The one transport command a [`RejectingAudio`] backend refuses.
+/// The one backend command a [`RejectingAudio`] backend refuses.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum RejectedCommand {
     Pause,
     Resume,
     Stop,
+    SetVolume,
 }
 
-/// An audio backend that loads and starts a preview normally but refuses one
-/// chosen transport command, so a test can reach a live transport and then pin
-/// that the service reports the backend's failure *before* shared state
-/// changes. `play` and `set_volume` always succeed, so the service arrives at
-/// the state the rejected command must leave untouched.
-struct RejectingAudio(RejectedCommand);
+/// An audio backend that records every command and refuses one chosen command,
+/// so a test can reach a live transport and then pin that the service reports
+/// the backend's failure *before* shared state changes. Every other command
+/// succeeds, so the service arrives at the state the rejected command must
+/// leave untouched, and the recorded calls let a test prove a command was
+/// *not* issued — for example, that a rejected `set_volume` keeps `play_track`
+/// from starting the preview at all.
+struct RejectingAudio {
+    rejected: RejectedCommand,
+    calls: std::sync::Mutex<Vec<AudioCall>>,
+}
 
 impl RejectingAudio {
+    fn new(rejected: RejectedCommand) -> Self {
+        Self {
+            rejected,
+            calls: std::sync::Mutex::new(Vec::new()),
+        }
+    }
+
+    fn calls(&self) -> Vec<AudioCall> {
+        self.calls.lock().unwrap().clone()
+    }
+
     fn check(&self, command: RejectedCommand) -> Result<(), AppleMusicError> {
-        if self.0 == command {
+        if self.rejected == command {
             Err(AppleMusicError::new("the audio device is gone"))
         } else {
             Ok(())
@@ -179,24 +196,35 @@ impl RejectingAudio {
 }
 
 impl AudioOutput for RejectingAudio {
-    fn play(&self, _url: &str) -> Result<(), AppleMusicError> {
+    fn play(&self, url: &str) -> Result<(), AppleMusicError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(AudioCall::Play(url.to_string()));
         Ok(())
     }
 
     fn pause(&self) -> Result<(), AppleMusicError> {
+        self.calls.lock().unwrap().push(AudioCall::Pause);
         self.check(RejectedCommand::Pause)
     }
 
     fn resume(&self) -> Result<(), AppleMusicError> {
+        self.calls.lock().unwrap().push(AudioCall::Resume);
         self.check(RejectedCommand::Resume)
     }
 
     fn stop(&self) -> Result<(), AppleMusicError> {
+        self.calls.lock().unwrap().push(AudioCall::Stop);
         self.check(RejectedCommand::Stop)
     }
 
-    fn set_volume(&self, _volume: f32) -> Result<(), AppleMusicError> {
-        Ok(())
+    fn set_volume(&self, volume: f32) -> Result<(), AppleMusicError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(AudioCall::SetVolume(volume));
+        self.check(RejectedCommand::SetVolume)
     }
 }
 
@@ -744,6 +772,27 @@ async fn play_track_rollback_leaves_a_newer_plays_flag_alone() {
     assert_eq!(calls.get(), 2);
 }
 
+// `play_track` starts the preview only after the backend accepts the starting
+// volume: `set_volume` and `play` are chained, so a backend that cannot set the
+// gain must not start the preview at rodio's full-volume default. Pin both the
+// surfaced error and the exact command sequence — a regression that issued
+// `play` anyway (or set the volume best-effort) would sound the preview while
+// reporting failure, and only the recorded calls can catch that.
+#[tokio::test]
+async fn play_track_does_not_start_the_preview_when_the_volume_cannot_be_set() {
+    let audio = Arc::new(RejectingAudio::new(RejectedCommand::SetVolume));
+    let (service, state) = service_with_audio(Arc::clone(&audio) as Arc<dyn AudioOutput>);
+
+    let error = service
+        .play_track("song-1", Some(PREVIEW_URL), || true)
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.to_string(), "the audio device is gone");
+    assert_playback_state(&state, Some("song-1"), false).await;
+    assert_eq!(audio.calls(), vec![AudioCall::SetVolume(0.5)]);
+}
+
 // `pause` pauses the injected backend as well as clearing the shared playing
 // flag; the test pins both halves of that contract.
 #[tokio::test]
@@ -901,7 +950,7 @@ async fn stop_stops_the_audio_backend() {
 #[tokio::test]
 async fn pause_reports_a_backend_failure_without_clearing_playing() {
     let (service, state) =
-        service_with_preview_playing(Arc::new(RejectingAudio(RejectedCommand::Pause))).await;
+        service_with_preview_playing(Arc::new(RejectingAudio::new(RejectedCommand::Pause))).await;
 
     let error = service.pause().await.unwrap_err();
 
@@ -915,7 +964,7 @@ async fn pause_reports_a_backend_failure_without_clearing_playing() {
 #[tokio::test]
 async fn stop_reports_a_backend_failure_without_clearing_playing() {
     let (service, state) =
-        service_with_preview_playing(Arc::new(RejectingAudio(RejectedCommand::Stop))).await;
+        service_with_preview_playing(Arc::new(RejectingAudio::new(RejectedCommand::Stop))).await;
 
     let error = service.stop().await.unwrap_err();
 
@@ -930,7 +979,7 @@ async fn stop_reports_a_backend_failure_without_clearing_playing() {
 #[tokio::test]
 async fn resume_reports_a_backend_failure_without_claiming_playback() {
     let (service, state) =
-        service_with_preview_playing(Arc::new(RejectingAudio(RejectedCommand::Resume))).await;
+        service_with_preview_playing(Arc::new(RejectingAudio::new(RejectedCommand::Resume))).await;
     service.pause().await.unwrap();
 
     let error = service.resume().await.unwrap_err();
