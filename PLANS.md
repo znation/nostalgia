@@ -85,17 +85,19 @@ failure and a mistyped name distinctly.
 - `README.md`: add `make test-one TEST=<name>` to the individual stages in the
   Development section.
 - `Makefile`: `test-one-guard-test` invokes the recipe through `$(MAKE)` with
-  `CARGO=false` (a failed build) and `CARGO=true` (a successful build that
-  names no test), asserting each cause is reported distinctly, so removing
-  either branch fails `make check`.
+  an empty `TEST=` (the usage guard), `CARGO=false` (a failed build), and
+  `CARGO=true` (a successful build that names no test), asserting each cause
+  is reported distinctly, so removing any of the three guards fails
+  `make check`.
 
 **Acceptance criteria.**
 
 - `make check` passes.
 - `make test-one TEST=zzz_no_such_test` reports the no-match cause rather
   than the build-failure one.
-- `make test-one-guard-test` exercises both the build-failure and no-match
-  branches of the recipe and fails if either message regresses.
+- `make test-one-guard-test` exercises the empty-`TEST` usage guard and both
+  the build-failure and no-match branches of the recipe and fails if any
+  message regresses.
 
 **Files touched.** `Makefile`, `README.md`.
 

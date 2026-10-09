@@ -60,13 +60,18 @@ test-one:
 ## Exercises the `test-one` guards. The first two lines test the match pattern
 ## against synthetic `--list` output: a line naming a test matches, and the
 ## trailing summary alone does not, using the same `TEST_LIST_HAS_TEST` variable
-## as the target. The last two invoke the recipe itself through `$(MAKE)` with
-## `CARGO` stubbed to a command that fails (`false`) and one that prints no test
-## names (`true`), asserting each cause is reported distinctly. No real build
-## runs, so it is cheap enough to run inside `make check`.
+## as the target. The last three invoke the recipe itself through `$(MAKE)`:
+## an empty `TEST=` (the usage guard), `CARGO` stubbed to a command that fails
+## (`false`), and one that prints no test names (`true`), asserting each cause
+## is reported distinctly. `TEST=` is passed explicitly so a `TEST` inherited
+## from the outer command line cannot mask the empty case. No real build runs,
+## so it is cheap enough to run inside `make check`.
 test-one-guard-test:
 	@printf 'a::b: test\n\n1 test, 0 benchmarks\n' | $(TEST_LIST_HAS_TEST) || { echo "test-one guard rejected a real test name"; exit 1; }
 	@printf '0 tests, 0 benchmarks\n' | $(TEST_LIST_HAS_TEST) && { echo "test-one guard accepted a summary-only list"; exit 1; } || true
+	@out=$$($(MAKE) --no-print-directory test-one TEST= CARGO=true 2>&1); st=$$?; \
+		if [ $$st -eq 0 ] || ! printf '%s\n' "$$out" | grep -q 'usage: make test-one TEST=<name>'; then \
+			echo "test-one accepted an empty TEST instead of printing usage"; exit 1; fi
 	@out=$$($(MAKE) --no-print-directory test-one TEST=anything CARGO=false 2>&1); st=$$?; \
 		if [ $$st -eq 0 ] || ! printf '%s\n' "$$out" | grep -q 'make test-one: the test build failed' || printf '%s\n' "$$out" | grep -q 'no test name contains'; then \
 			echo "test-one did not report a failed build distinctly"; exit 1; fi
