@@ -285,13 +285,11 @@ impl AppleMusicService {
     /// Returns an [`AppleMusicError`] when the signed-in request fails; with
     /// no session the sample-library lookup never fails.
     pub async fn get_favorite_artists(&self) -> Result<Vec<Artist>, AppleMusicError> {
-        match self.session() {
-            Some(session) => {
-                let rest = Arc::clone(&self.rest);
-                off_thread(move || rest.get_favorite_artists(&session)).await
-            }
-            None => Ok(sample_library().artists.clone()),
-        }
+        self.browse(
+            |rest, session| rest.get_favorite_artists(session),
+            || sample_library().artists.clone(),
+        )
+        .await
     }
 
     /// Albums by the given artist: the signed-in user's library albums when a
@@ -315,14 +313,12 @@ impl AppleMusicService {
         artist_id: &str,
     ) -> Result<Vec<Album>, AppleMusicError> {
         ensure_id_is_valid(artist_id, IdKind::Artist)?;
-        match self.session() {
-            Some(session) => {
-                let rest = Arc::clone(&self.rest);
-                let artist_id = artist_id.to_string();
-                off_thread(move || rest.get_albums_by_artist(&session, &artist_id)).await
-            }
-            None => Ok(lookup(&sample_library().albums_by_artist, artist_id)),
-        }
+        let id = artist_id.to_string();
+        self.browse(
+            move |rest, session| rest.get_albums_by_artist(session, &id),
+            || lookup(&sample_library().albums_by_artist, artist_id),
+        )
+        .await
     }
 
     /// Songs on the given album: the signed-in user's library songs when a
@@ -340,13 +336,34 @@ impl AppleMusicService {
     /// fails.
     pub async fn get_songs_from_album(&self, album_id: &str) -> Result<Vec<Song>, AppleMusicError> {
         ensure_id_is_valid(album_id, IdKind::Album)?;
+        let id = album_id.to_string();
+        self.browse(
+            move |rest, session| rest.get_songs_from_album(session, &id),
+            || lookup(&sample_library().songs_by_album, album_id),
+        )
+        .await
+    }
+
+    /// Answers a browse query from the signed-in REST library when a session
+    /// is stored, and from `sample` otherwise.
+    ///
+    /// `call` runs on a worker thread through `off_thread`, so the REST
+    /// client's blocking HTTP request never stalls iced's executor; `sample`
+    /// runs on the caller's thread and only when no session is stored, so the
+    /// offline path never touches the REST client.
+    async fn browse<T: Send + 'static>(
+        &self,
+        call: impl FnOnce(&rest::RestLibrary, &MusicKitSession) -> Result<Vec<T>, AppleMusicError>
+        + Send
+        + 'static,
+        sample: impl FnOnce() -> Vec<T>,
+    ) -> Result<Vec<T>, AppleMusicError> {
         match self.session() {
             Some(session) => {
                 let rest = Arc::clone(&self.rest);
-                let album_id = album_id.to_string();
-                off_thread(move || rest.get_songs_from_album(&session, &album_id)).await
+                off_thread(move || call(&rest, &session)).await
             }
-            None => Ok(lookup(&sample_library().songs_by_album, album_id)),
+            None => Ok(sample()),
         }
     }
 }
