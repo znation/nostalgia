@@ -180,6 +180,10 @@ fn bootstrap_page_is_private_and_carries_the_sign_in_url() {
     let url = "http://127.0.0.1:4321/?state=deadbeefdeadbeef";
     let page = BootstrapPage::write(url).expect("write the bootstrap page");
     let path = page.path_string();
+    let directory = std::path::Path::new(&path)
+        .parent()
+        .expect("the bootstrap page has a directory")
+        .to_path_buf();
     let html = std::fs::read_to_string(&path).expect("read the bootstrap page");
     assert!(
         html.contains(url),
@@ -198,10 +202,7 @@ fn bootstrap_page_is_private_and_carries_the_sign_in_url() {
             0,
             "the bootstrap page must be owner-only, mode {file_mode:o}"
         );
-        let directory = std::path::Path::new(&path)
-            .parent()
-            .expect("the bootstrap page has a directory");
-        let dir_mode = std::fs::metadata(directory)
+        let dir_mode = std::fs::metadata(&directory)
             .expect("bootstrap directory metadata")
             .permissions()
             .mode();
@@ -216,6 +217,11 @@ fn bootstrap_page_is_private_and_carries_the_sign_in_url() {
     assert!(
         !std::path::Path::new(&path).exists(),
         "dropping the bootstrap page removes it"
+    );
+    assert!(
+        !directory.exists(),
+        "dropping the bootstrap page removes its private directory, got: {}",
+        directory.display()
     );
 }
 
