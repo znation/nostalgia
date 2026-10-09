@@ -31,6 +31,28 @@ fn player_with_audio(
     (WinampPlayer::new(state.clone(), service), state)
 }
 
+/// The preview URL the transport tests load and assert on. The UI test suite
+/// has no other preview asset, so the literal lives here once.
+const PREVIEW_URL: &str = "https://example.test/preview.m4a";
+
+/// A fresh player over `recording`, already playing `song-1`'s
+/// [`PREVIEW_URL`] — the precondition the transport-test setups build before
+/// driving a Play/Pause/Stop message. The player construction, the preview
+/// load, and the URL live here once; a test that asserts on the recording
+/// keeps its own `Arc` clone.
+async fn player_playing_preview(
+    recording: Arc<RecordingAudio>,
+) -> (WinampPlayer, Arc<Mutex<AppState>>) {
+    let (player, state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    player
+        .apple_music_service
+        .play_track("song-1", Some(PREVIEW_URL), || true)
+        .await
+        .unwrap();
+    (player, state)
+}
+
 /// A fresh request generation over its own counter — the starting
 /// generation the `fetch_into` and `play_into` tests issue before driving
 /// their task, so no two tests share a counter.
@@ -283,13 +305,8 @@ async fn drive_fetch_and_assert_loaded<T, Buffer, Key>(
 // drives the audio backend), so it has its own `#[tokio::test]` below.
 #[tokio::test]
 async fn play_pause_toggles_is_playing() {
-    let (mut player, state) = player_with_audio(Arc::new(RecordingAudio::default()));
     // Load a preview so the toggle has audio to pause and resume.
-    player
-        .apple_music_service
-        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
-        .await
-        .unwrap();
+    let (mut player, state) = player_playing_preview(Arc::new(RecordingAudio::default())).await;
     assert!(state.lock().await.is_playing);
 
     let task = update(&mut player, Message::PlayPause);
@@ -364,12 +381,7 @@ fn eq_preset_selected_applies_the_curve_and_selection() {
 // async runtime and `drive_task`.
 #[tokio::test]
 async fn stop_clears_is_playing() {
-    let (mut player, state) = player_with_audio(Arc::new(RecordingAudio::default()));
-    player
-        .apple_music_service
-        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
-        .await
-        .unwrap();
+    let (mut player, state) = player_playing_preview(Arc::new(RecordingAudio::default())).await;
     assert!(state.lock().await.is_playing);
 
     let task = update(&mut player, Message::Stop);
@@ -379,12 +391,7 @@ async fn stop_clears_is_playing() {
 
 #[tokio::test]
 async fn play_and_pause_set_the_playback_flag_explicitly() {
-    let (mut player, state) = player_with_audio(Arc::new(RecordingAudio::default()));
-    player
-        .apple_music_service
-        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
-        .await
-        .unwrap();
+    let (mut player, state) = player_playing_preview(Arc::new(RecordingAudio::default())).await;
 
     // X plays even when already playing, unlike the Play/Pause toggle.
     let task = update(&mut player, Message::Play);
@@ -410,23 +417,15 @@ async fn play_and_pause_set_the_playback_flag_explicitly() {
 // the synchronous `AppState` mutator would flip the flag but record no call.
 #[tokio::test]
 async fn transport_messages_drive_the_audio_backend() {
-    const URL: &str = "https://example.test/preview.m4a";
-
     // Play (the X key): resume a paused preview.
     let recording = Arc::new(RecordingAudio::default());
-    let (mut player, state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
-    player
-        .apple_music_service
-        .play_track("song-1", Some(URL), || true)
-        .await
-        .unwrap();
+    let (mut player, state) = player_playing_preview(Arc::clone(&recording)).await;
     player.apple_music_service.pause().await.unwrap();
     assert_transport_settled(update(&mut player, Message::Play), "play").await;
     assert_eq!(
         recording.calls(),
         vec![
-            AudioCall::Play(URL.to_string()),
+            AudioCall::Play(PREVIEW_URL.to_string()),
             AudioCall::Pause,
             AudioCall::Resume
         ]
@@ -435,49 +434,31 @@ async fn transport_messages_drive_the_audio_backend() {
 
     // Pause (the C key).
     let recording = Arc::new(RecordingAudio::default());
-    let (mut player, state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
-    player
-        .apple_music_service
-        .play_track("song-1", Some(URL), || true)
-        .await
-        .unwrap();
+    let (mut player, state) = player_playing_preview(Arc::clone(&recording)).await;
     assert_transport_settled(update(&mut player, Message::Pause), "pause").await;
     assert_eq!(
         recording.calls(),
-        vec![AudioCall::Play(URL.to_string()), AudioCall::Pause]
+        vec![AudioCall::Play(PREVIEW_URL.to_string()), AudioCall::Pause]
     );
     assert!(!state.lock().await.is_playing);
 
     // Stop.
     let recording = Arc::new(RecordingAudio::default());
-    let (mut player, state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
-    player
-        .apple_music_service
-        .play_track("song-1", Some(URL), || true)
-        .await
-        .unwrap();
+    let (mut player, state) = player_playing_preview(Arc::clone(&recording)).await;
     assert_transport_settled(update(&mut player, Message::Stop), "stop").await;
     assert_eq!(
         recording.calls(),
-        vec![AudioCall::Play(URL.to_string()), AudioCall::Stop]
+        vec![AudioCall::Play(PREVIEW_URL.to_string()), AudioCall::Stop]
     );
     assert!(!state.lock().await.is_playing);
 
     // PlayPause while playing: pauses.
     let recording = Arc::new(RecordingAudio::default());
-    let (mut player, state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
-    player
-        .apple_music_service
-        .play_track("song-1", Some(URL), || true)
-        .await
-        .unwrap();
+    let (mut player, state) = player_playing_preview(Arc::clone(&recording)).await;
     assert_transport_settled(update(&mut player, Message::PlayPause), "toggle").await;
     assert_eq!(
         recording.calls(),
-        vec![AudioCall::Play(URL.to_string()), AudioCall::Pause]
+        vec![AudioCall::Play(PREVIEW_URL.to_string()), AudioCall::Pause]
     );
     assert!(!state.lock().await.is_playing);
 }
