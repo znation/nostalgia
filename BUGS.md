@@ -153,6 +153,45 @@ the service API, `boot`, and the `Message` set, larger than one robustness
 tick. The same notification would let the UI distinguish the sample fallback
 from the signed-in library.
 
+### A browse reply is stored after a newer request was issued, so a navigation shows the previous level's rows (found by robustness 2026-10-08)
+
+Symptom: `loading::fetch_into` checks `RequestGeneration::is_current()` inside
+the `Task::perform` completion closure, which iced runs on its executor thread,
+and then returns the `*Loaded`/`*LoadFailed` message. The message carries no
+generation, and `update` runs on the UI thread. If the user presses an artist
+row (or the Retry button) after that check but before `update` processes the
+reply, `update` first runs the navigation arm — `albums.clear()` then
+`albums.begin_fetch()`, which bumps the generation and shows "Loading…" — and
+then runs the stale `Message::AlbumsLoaded`, whose arm calls
+`player.albums.store(albums)` with the *previous* artist's albums. The panel
+shows the wrong artist's albums (and a press on one fetches that album's
+songs, not the selected artist's) until the newer fetch lands or its 30s
+timeout expires. The same window affects `ArtistsLoaded`/`SongsLoaded` and the
+three `*LoadFailed` arms, which store a stale error over a newer in-flight
+fetch.
+
+How to reproduce:
+- Code path: the completion closure's `generation.is_current()` check is in
+  `fetch_into` (`src/ui/loading.rs:247`); the `loaded`/`failed` closures build
+  the messages there. The six variants (`src/ui/mod.rs:103-112`) carry no
+  generation, and their `update` arms (`src/ui/mod.rs:538-560`) call
+  `store`/`fail` unconditionally. The navigation and Retry arms call `clear()`
+  then `begin_fetch()` (`src/ui/mod.rs:470`, `:496`, `:526`), bumping the
+  counter after a reply may already have passed its `is_current` check.
+- Deterministic test: drive a `fetch_into` task to completion to obtain its
+  `ArtistsLoaded` message; then call `update` with `Message::LoadArtists`
+  (which clears the list and issues a newer generation); then call `update`
+  with the saved message. The stale message repopulates the list and clears
+  `loading`; the fixed code must reject it.
+
+Suspected cause: the generation guard is evaluated at reply time on the
+executor thread, not at store time on the UI thread, and the reply does not
+carry its generation, so the check cannot be re-evaluated once the message is
+dispatched. A fix carries the `RequestGeneration` (or its `issued` value) into
+the six `*Loaded`/`*LoadFailed` variants and re-checks it in each `update` arm
+before `store`/`fail`; that touches six variants and the ~59 construction
+sites across `ui` and its tests, larger than one robustness tick.
+
 ## Fixed
 
 ### The sign-in nonce travels in the browser opener's command line, so another local user can read it and fetch the page's developer token (found by security 2026-10-08, fixed 2026-10-08)
