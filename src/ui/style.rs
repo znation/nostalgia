@@ -263,6 +263,19 @@ mod tests {
         assert_eq!(status.shadow.blur_radius, active.shadow.blur_radius);
     }
 
+    /// Asserts `status`'s chrome slider handle keeps `active`'s shape and 1px
+    /// border.
+    ///
+    /// Interaction statuses change the handle face; they must not change the
+    /// thumb's geometry or border. The Hovered and Dragged assertions in
+    /// `chrome_slider_style_hovered_and_dragged_only_swap_the_handle_face`
+    /// each pin that, so the contract lives here once.
+    fn assert_same_handle_geometry(active: &slider::Style, status: &slider::Style) {
+        assert_eq!(status.handle.shape, active.handle.shape);
+        assert_eq!(status.handle.border_width, active.handle.border_width);
+        assert_eq!(status.handle.border_color, active.handle.border_color);
+    }
+
     #[test]
     fn chrome_face_is_the_rest_hover_press_ladder() {
         assert_eq!(chrome_face(false, false), theme::BUTTON_FACE);
@@ -388,12 +401,8 @@ mod tests {
         // statuses keep them unchanged too, or a change that made (say) the
         // dragged thumb's border a status-dependent colour would clear every
         // other test while the thumb gained a colour no test read.
-        assert_eq!(hovered.handle.shape, active.handle.shape);
-        assert_eq!(dragged.handle.shape, active.handle.shape);
-        assert_eq!(hovered.handle.border_width, active.handle.border_width);
-        assert_eq!(dragged.handle.border_width, active.handle.border_width);
-        assert_eq!(hovered.handle.border_color, active.handle.border_color);
-        assert_eq!(dragged.handle.border_color, active.handle.border_color);
+        assert_same_handle_geometry(&active, &hovered);
+        assert_same_handle_geometry(&active, &dragged);
     }
 
     #[test]
