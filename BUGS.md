@@ -81,6 +81,8 @@ until the "3 consecutive tick failures" breaker trips.
 
 ### The scheduler reads a fully-Refused bugfix backlog as "open", so it defers maintenance roles and spins bugfix on work no role may take (found by telemetry 2026-10-08)
 
+**Refused 2026-10-08 by bugfix: the defer/queue decision the entry describes is made by the tumwater scheduler, harness code off-limits to this role, so no change in this nostalgia repo can fix it.**
+
 Symptom: BUGS.md `## Open` holds only two entries and both carry a
 **Refused** note (both harness-scope, off-limits to bugfix), and PLANS.md
 `## Planned` is `_None yet._`. The 2026-10-08 digest's fleet state changes log
