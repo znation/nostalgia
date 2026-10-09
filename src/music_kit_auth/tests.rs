@@ -225,6 +225,43 @@ fn bootstrap_page_is_private_and_carries_the_sign_in_url() {
     );
 }
 
+// A failed page write must not leak the private directory the guard created:
+// the guard owns the directory from the moment `create_private_dir` succeeds,
+// so a write error (a full disk, say) drops it and removes the directory
+// rather than leaving a `nostalgia-auth-*` entry and a partial page behind.
+// `write_private_file` cannot be made to fail deterministically in a test, so
+// `write_with` injects the failure; the production `write` calls the same
+// helper with the real writer.
+#[test]
+fn a_failed_bootstrap_write_removes_the_private_directory() {
+    let written_to = Mutex::new(None);
+    let result = BootstrapPage::write_with(
+        "http://127.0.0.1:1/?state=deadbeefdeadbeef",
+        &|file, _contents| {
+            *written_to.lock().expect("record lock") = Some(file.to_path_buf());
+            Err(io::Error::other("simulated write failure"))
+        },
+    );
+
+    assert!(result.is_err(), "the write failure must propagate");
+    let file = written_to
+        .lock()
+        .expect("record lock")
+        .clone()
+        .expect("the page writer was called");
+    assert!(
+        !file.exists(),
+        "the partial bootstrap page must be removed, got: {}",
+        file.display()
+    );
+    let directory = file.parent().expect("the page has a parent directory");
+    assert!(
+        !directory.exists(),
+        "the private directory must be removed when the page write fails, got: {}",
+        directory.display()
+    );
+}
+
 // `render_auth_page` fills every template placeholder. The flow tests assert
 // that the served page carries the developer token and the per-flow nonce, but
 // nothing pins the build version the page hands MusicKit's `configure` as

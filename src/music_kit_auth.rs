@@ -299,6 +299,21 @@ impl BootstrapPage {
     /// Writes a redirect page carrying `url` into a fresh owner-only temp
     /// directory and returns the guard that owns it.
     fn write(url: &str) -> io::Result<Self> {
+        Self::write_with(url, &write_private_file)
+    }
+
+    /// [`Self::write`] with an injectable page writer, so a test can make the
+    /// write fail and prove the guard still cleans up the directory it made.
+    ///
+    /// The guard is built as soon as the directory exists, *before* the page
+    /// is written: if the write fails, that guard is dropped as the error
+    /// propagates and removes the directory, so a failed sign-in never leaves
+    /// a `nostalgia-auth-*` entry (and a partial page) behind in the temp
+    /// directory.
+    fn write_with(
+        url: &str,
+        write_page: &dyn Fn(&Path, &str) -> io::Result<()>,
+    ) -> io::Result<Self> {
         // Retry on the vanishingly unlikely name collision so a stale entry
         // cannot wedge the flow; `create_dir` refuses an existing path, so a
         // pre-planted file or symlink is never followed.
@@ -306,9 +321,12 @@ impl BootstrapPage {
             let directory = env::temp_dir().join(format!("nostalgia-auth-{}", random_nonce()));
             match create_private_dir(&directory) {
                 Ok(()) => {
+                    // Own the directory before writing, so a failed write
+                    // drops this guard and removes it rather than leaking it.
                     let file = directory.join("sign-in.html");
-                    write_private_file(&file, &render_bootstrap_page(url))?;
-                    return Ok(Self { directory, file });
+                    let page = Self { directory, file };
+                    write_page(&page.file, &render_bootstrap_page(url))?;
+                    return Ok(page);
                 }
                 Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
                 Err(error) => return Err(error),
