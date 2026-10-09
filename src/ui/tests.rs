@@ -41,8 +41,9 @@ fn test_generation() -> RequestGeneration {
 /// A fresh player over the shared three-song stepping album
 /// ([`stepping_songs`]) with `current` recorded as the shared state's
 /// current track — the starting shape the Next/Previous wiring tests step
-/// from. Seven tests build this same `test_player`-plus-fixture setup; only
-/// the starting track differs (or is absent), so it lives here once.
+/// from. Nine tests build this same `test_player`-plus-fixture setup; they
+/// differ in the starting track (or its absence) and, for the two Shuffle
+/// tests, the shared Shuffle flag, so it lives here once.
 fn player_stepping_from(current: Option<&str>) -> (WinampPlayer, Arc<Mutex<AppState>>) {
     let (mut player, state) = test_player();
     player.songs.items = stepping_songs();
