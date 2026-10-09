@@ -269,10 +269,29 @@ impl RestLibrary {
         session: &MusicKitSession,
     ) -> Result<Vec<Resource>, AppleMusicError> {
         let body = self.transport.get(url, session)?;
-        let envelope: Envelope<Resource> = serde_json::from_str(&body).map_err(|error| {
-            AppleMusicError::new(format!("response was not valid JSON: {error}"))
-        })?;
+        let envelope: Envelope<Resource> = serde_json::from_str(&body)
+            .map_err(|error| AppleMusicError::new(describe_parse_failure(&error)))?;
         Ok(envelope.data)
+    }
+}
+
+/// Describes why parsing an Apple Music collection response failed.
+///
+/// `serde_json` reports two distinct failures through the same error type: a
+/// body that is not JSON at all, and a body that parses as JSON but does not
+/// match the `{ "data": [ ... ] }` envelope (a missing `data` array, say).
+/// Calling both "not valid JSON" misdescribes the second — the bytes are valid
+/// JSON; the envelope is what does not match — so the message names the defect
+/// `serde_json` classified: a `Data` error is a shape mismatch and every other
+/// category keeps the invalid-JSON wording. `Category::Io` cannot arise from a
+/// `from_str` parse of an in-memory body, so it shares that wording rather
+/// than going unreported.
+fn describe_parse_failure(error: &serde_json::Error) -> String {
+    match error.classify() {
+        serde_json::error::Category::Data => {
+            format!("response did not match the Apple Music collection envelope: {error}")
+        }
+        _ => format!("response was not valid JSON: {error}"),
     }
 }
 

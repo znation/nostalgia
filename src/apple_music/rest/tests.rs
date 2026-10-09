@@ -193,6 +193,28 @@ fn malformed_json_surfaces_the_parse_error() {
     assert!(error.starts_with("response was not valid JSON:"), "{error}");
 }
 
+// A response can be valid JSON and still not be the `{ "data": [ ... ] }`
+// envelope the client expects (an unexpected shape, or an `errors` envelope on
+// a 2xx the status check never inspected). `serde_json` classifies that as a
+// `Data` error, distinct from a syntax error; the report must say the envelope
+// does not match rather than mislabeling valid JSON as invalid. Pin the
+// distinct wording, and that it still carries `serde_json`'s own detail.
+#[test]
+fn valid_json_that_is_not_the_collection_envelope_names_the_envelope() {
+    let stub = StubTransport::returning(r#"{"artists":[]}"#);
+    let library = library_over(&stub);
+
+    let error = library
+        .get_albums_by_artist(&session(), "artist-9")
+        .unwrap_err()
+        .to_string();
+
+    assert!(
+        error.starts_with("response did not match the Apple Music collection envelope:"),
+        "{error}"
+    );
+}
+
 #[test]
 fn nameless_artist_is_an_error_naming_its_id() {
     let stub = StubTransport::returning(r#"{"data":[{"id":"artist-1","attributes":{}}]}"#);

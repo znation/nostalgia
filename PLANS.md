@@ -33,6 +33,34 @@ _None yet._
 
 ## Done
 
+### Name the envelope, not "invalid JSON", when a valid-JSON body does not match (found 2026-10-08, done 2026-10-08)
+
+`RestLibrary::fetch` reported every parse failure as `"response was not
+valid JSON: ..."`, but `serde_json` uses that one error type for two different
+failures: a body that is not JSON at all, and a body that is valid JSON but
+not the `{ "data": [ ... ] }` envelope (a missing `data` array, say). The
+second message was false about the bytes and hid the actual defect.
+
+**Goal.** Report a shape mismatch as a shape mismatch, and keep the
+invalid-JSON wording for a body that does not parse.
+
+**Approach.**
+
+- `src/apple_music/rest.rs`: `fetch` hands its `serde_json::Error` to the new
+`describe_parse_failure`, which uses `Error::classify()`: a `Data` error (valid
+JSON, wrong shape) reports that the response did not match the Apple Music
+collection envelope; every other category keeps the "not valid JSON" wording.
+- `src/apple_music/rest/tests.rs`:
+`valid_json_that_is_not_the_collection_envelope_names_the_envelope` pins the
+shape-mismatch wording end to end; the existing
+`malformed_json_surfaces_the_parse_error` still pins the invalid-JSON wording.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- A valid-JSON body missing the `data` array reports the envelope mismatch,
+not "not valid JSON".
+
 ### Report just the HTTP status when an Apple Music error body's cause is blank (found 2026-10-08, done 2026-10-08)
 
 `api_error_cause` preferred the error envelope's `detail` with `Option::or`
