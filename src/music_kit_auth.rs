@@ -46,7 +46,7 @@ use std::process::Command;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::apple_music::AppleMusicError;
+use crate::music_error::AppleMusicError;
 
 mod http;
 mod page;
