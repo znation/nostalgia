@@ -15,6 +15,18 @@ fn test_service_with_state() -> (AppleMusicService, Arc<Mutex<AppState>>) {
     (service, state)
 }
 
+/// The session the browser sign-in flow returns in the tests below, with
+/// recognizable tokens so a test can assert the service stored exactly what
+/// the flow produced. The startup, `authenticate_with`, and failed-auth
+/// tests all build this same session, so it lives here once and each test
+/// names only the behavior it drives to.
+fn sign_in_session() -> MusicKitSession {
+    MusicKitSession {
+        developer_token: "dev-token".to_string(),
+        user_token: "user-token".to_string(),
+    }
+}
+
 /// A fresh service plus its shared state with `song-1` already playing.
 /// The tests whose subject is a *later* operation — replacing the track,
 /// pausing, rejecting a blank or control-character id mid-playback, and
@@ -532,10 +544,7 @@ fn init_service_leaves_the_shared_state_untouched() {
 fn startup_sign_in_stores_the_session_on_the_shared_service() {
     let service = test_service();
     let sign_in_service = service.clone();
-    let expected = MusicKitSession {
-        developer_token: "dev-token".to_string(),
-        user_token: "user-token".to_string(),
-    };
+    let expected = sign_in_session();
 
     sign_in_service.sign_in("dev-token", &|token| {
         assert_eq!(token, "dev-token");
@@ -560,10 +569,7 @@ fn a_new_service_has_no_session() {
 #[test]
 fn authenticate_with_stores_the_session_its_flow_returns() {
     let service = test_service();
-    let expected = MusicKitSession {
-        developer_token: "dev-token".to_string(),
-        user_token: "user-token".to_string(),
-    };
+    let expected = sign_in_session();
 
     service
         .authenticate_with("dev-token", &|token| {
@@ -581,10 +587,7 @@ fn authenticate_with_stores_the_session_its_flow_returns() {
 #[test]
 fn a_failed_authentication_leaves_a_stored_session_unchanged() {
     let service = test_service();
-    let stored = MusicKitSession {
-        developer_token: "dev-token".to_string(),
-        user_token: "user-token".to_string(),
-    };
+    let stored = sign_in_session();
     service
         .authenticate_with("dev-token", &|_| Ok(stored.clone()))
         .unwrap();
