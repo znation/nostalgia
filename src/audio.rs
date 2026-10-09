@@ -231,9 +231,16 @@ fn preview_agent() -> &'static ureq::Agent {
 /// Builds an agent with `timeout` as its global bound. Split out from
 /// [`preview_agent`] so a test can bound a download against a stalled loopback
 /// server without waiting out the production 30 seconds.
+///
+/// The agent disables `ureq`'s status-as-error shortcut
+/// (`http_status_as_error(false)`), so a 4xx/5xx response reaches
+/// [`download_and_decode`] as an `Ok` response and its own status check
+/// reports "the preview download returned HTTP …" instead of `ureq`'s bare
+/// status error.
 fn agent_with_timeout(timeout: Duration) -> ureq::Agent {
     ureq::Agent::config_builder()
         .timeout_global(Some(timeout))
+        .http_status_as_error(false)
         .build()
         .into()
 }
@@ -413,6 +420,72 @@ mod tests {
         assert_eq!(
             output.stop().unwrap_err().to_string(),
             "the audio thread is gone"
+        );
+    }
+
+    /// Serves exactly one HTTP response on a fresh loopback listener and
+    /// returns the address to fetch it from, so a preview download's response
+    /// handling can be driven without a network. The response is written
+    /// verbatim and the connection closed.
+    fn serve_one_preview_response(response: &str) -> std::net::SocketAddr {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let response = response.to_string();
+        std::thread::spawn(move || {
+            use std::io::{Read, Write};
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut request = [0u8; 4096];
+            let _ = stream.read(&mut request);
+            let _ = stream.write_all(response.as_bytes());
+            let _ = stream.flush();
+        });
+        address
+    }
+
+    // A preview URL that answers with a non-2xx status must be reported as a
+    // status failure, before its body reaches the decoder. The agent disables
+    // `ureq`'s status-as-error shortcut (`http_status_as_error(false)`), so
+    // this 404 arrives as an `Ok` response and `download_and_decode`'s own
+    // status check runs. The body is deliberately non-empty: were that check
+    // removed, these bytes would go to `new_mp4` and the function would report
+    // a decode failure, so pinning the exact status message keeps the check
+    // ahead of the decoder.
+    #[test]
+    fn a_preview_download_with_an_error_status_is_reported() {
+        let body = "<html>captive portal, not a preview</html>";
+        let address = serve_one_preview_response(&format!(
+            "HTTP/1.1 404 Not Found\r\nContent-Type: audio/mp4\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        ));
+        let agent = agent_with_timeout(Duration::from_secs(5));
+        let url = format!("http://{address}/missing.m4a");
+
+        let error = download_and_decode(&agent, &url)
+            .err()
+            .expect("a 404 preview must not decode");
+        assert_eq!(
+            error.to_string(),
+            "the preview download returned HTTP 404 Not Found"
+        );
+    }
+
+    // A 2xx response whose body is not an MP4/AAC preview (a captive portal's
+    // HTML, a truncated download) must be reported as a decode failure, not
+    // panic the worker or play noise.
+    #[test]
+    fn a_preview_download_that_does_not_decode_is_reported() {
+        let address = serve_one_preview_response(
+            "HTTP/1.1 200 OK\r\nContent-Type: audio/mp4\r\nContent-Length: 4\r\nConnection: close\r\n\r\nJUNK",
+        );
+        let agent = agent_with_timeout(Duration::from_secs(5));
+        let url = format!("http://{address}/not-a-preview.m4a");
+
+        let error = download_and_decode(&agent, &url)
+            .err()
+            .expect("garbage bytes must not decode as an MP4 preview");
+        assert!(
+            error.to_string().contains("decoding the preview failed"),
+            "unexpected error: {error}"
         );
     }
 }
