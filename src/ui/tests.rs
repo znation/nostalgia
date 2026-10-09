@@ -885,11 +885,11 @@ fn assert_no_task(task: Task<Message>) {
 /// epoch/index guard rejects, Next/Previous with an empty `songs` buffer, a
 /// title-bar window action before the window id resolves, and a shade
 /// measurement that arrives after the shade it belongs to — while others
-/// (`Play`, `Pause`, the volume nudges, and a shade toggle whose resize the
-/// missing window id skips) still mutate the shared state and only skip the
-/// follow-up task. Both kinds repeat the update-then-[`assert_no_task`]
-/// sequence, so it lives here once and each call site names only the message
-/// it drives.
+/// (`Play`, `Pause`, the volume nudges, and the shade and always-on-top
+/// toggles whose resize/level call the missing window id skips) still mutate
+/// the shared state and only skip the follow-up task. Both kinds repeat the
+/// update-then-[`assert_no_task`] sequence, so it lives here once and each
+/// call site names only the message it drives.
 fn assert_message_schedules_no_work(player: &mut WinampPlayer, message: Message) {
     assert_no_task(update(player, message));
 }
