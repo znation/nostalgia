@@ -117,6 +117,51 @@ rules already say a Refused entry is skipped and a fully-blocked backlog is a
 legitimate nothing-to-do; the scheduler should apply the same rule before it
 defers other roles or queues bugfix.
 
+### The scheduler dispatches two roles onto the same open plan, and the duplicate's review rejection is recorded as authoring failure (found by telemetry 2026-10-09)
+
+Symptom: the 2026-10-09 digest's largest improve loss is `0.3 h · $0.06 —
+1 tick: review-rejected authoring on improve`, whose rejection cluster reads
+"**The diff does not do what the summary/WHY/RISK claim.** The body claims it
+adds the worker's `Command::SetVolume` …". The commit under review did add
+exactly that path against its own base — the rejection's stated reason does
+not match the diff. It is a duplicate: feature and improve both implemented
+the same open plan, "Drive the volume slider through the audio backend".
+feature's `9d1d879` (authored 2026-10-09 01:44:51) landed as `cd1ab58`
+("Wire the volume slider and arrow keys through the audio backend"); improve's
+tick #63 (90 turns, 168.8k ctx) then committed `b4dc9fd` at 01:57:11 from a
+base that still listed the plan in `## Planned`. `git diff cd1ab58 b4dc9fd`
+shows only cosmetic differences (log wording, comment placement, one
+`drop(state)`, test-assertion style) — no behavioral difference. `b4dc9fd` is
+not an ancestor of main; it was review-rejected and its whole 0.3 h tick
+discarded, recorded as an authoring rejection rather than as duplicate work,
+so the race hid itself from the operator.
+
+How to reproduce:
+- `git show cd1ab58:PLANS.md` and `git show b4dc9fd:PLANS.md` both move the
+  same heading "Drive the volume slider through the audio backend" from
+  `## Planned` to `## Done` with the identical hunk (`index e4a8c8e..4efddfa`).
+- `git diff cd1ab58 b4dc9fd -- src/audio.rs src/apple_music.rs src/ui/mod.rs`
+  is comments, log strings, and one `drop(state)` only; the `Command::SetVolume`
+  variant and its `run_worker` arm — the change the body is rejected for not
+  making — are present in both.
+- `git merge-base --is-ancestor b4dc9fd HEAD` fails while `cd1ab58` is in main;
+  `git reflog refs/heads/tumwater/improve` shows `b4dc9fd` (01:57:11)
+  immediately followed by `reset: moving to main` with no rework, so the tick
+  was abandoned rather than fixed.
+- The digest prices it as improve's only error-class row: `0.3 h · $0.06`.
+
+Suspected cause: PLANS.md is the work queue, and a plan leaves `## Planned`
+only when the completing commit merges into main. feature's `cd1ab58` sat in
+an accepted-but-unmerged landing ref while improve's tick started from an older
+main (`437c80c`, 01:29) that still showed the plan as open. No plan state marks
+it claimed or in-flight, so the scheduler dispatched a second role onto it.
+When the duplicate was reviewed against a main that already contained
+`cd1ab58`, its net diff no longer added the `Command::SetVolume` path its body
+claimed, so the gate rejected it as a claim mismatch. The fix is in the
+scheduler/review seam (claim an open plan before dispatch, or reject a
+candidate that is behaviorally equivalent to a pending landing ref as a
+duplicate rather than as authoring failure), not in this repo.
+
 ## Fixed
 
 ### The preview-URL guard never resolves the host, so a hostname that resolves to an internal address bypasses the SSRF check (found by security 2026-10-09, fixed 2026-10-09)
