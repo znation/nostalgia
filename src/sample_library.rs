@@ -247,6 +247,17 @@ mod tests {
         );
     }
 
+    /// Every song in `library`, in library order: all of `album-1`'s songs,
+    /// then `album-2`'s, then `album-3`'s. The two content tests below walk the
+    /// whole library in this order to pin one song field at a time, and both
+    /// used to repeat the same album-id list and `flat_map` chain; it lives here
+    /// once so adding or reordering an album touches one place.
+    fn songs_in_library_order(library: &SampleLibrary) -> impl Iterator<Item = &Song> {
+        ["album-1", "album-2", "album-3"]
+            .iter()
+            .flat_map(|album_id| &library.songs_by_album[*album_id])
+    }
+
     // The Now Playing bar formats a song's length from `Song::duration_ms`
     // (see `ui::views::format_track_time`), and `sample_library` is what the
     // app browses when no Apple Music session is stored, so these values are
@@ -257,9 +268,7 @@ mod tests {
     #[test]
     fn songs_carry_the_documented_durations() {
         let library = sample_library();
-        let durations: Vec<(&str, u64)> = ["album-1", "album-2", "album-3"]
-            .iter()
-            .flat_map(|album_id| &library.songs_by_album[*album_id])
+        let durations: Vec<(&str, u64)> = songs_in_library_order(library)
             .map(|song| (song.id.as_str(), song.duration_ms))
             .collect();
 
@@ -286,9 +295,7 @@ mod tests {
     #[test]
     fn songs_carry_the_documented_artists() {
         let library = sample_library();
-        let artists: Vec<(&str, &str)> = ["album-1", "album-2", "album-3"]
-            .iter()
-            .flat_map(|album_id| &library.songs_by_album[*album_id])
+        let artists: Vec<(&str, &str)> = songs_in_library_order(library)
             .map(|song| (song.id.as_str(), song.artist.as_str()))
             .collect();
 
