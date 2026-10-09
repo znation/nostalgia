@@ -318,4 +318,53 @@ mod tests {
         // device is reported through the `Result` rather than a panic.
         let _ = RodioOutput::new();
     }
+
+    #[test]
+    fn rodio_output_maps_each_seam_method_to_its_worker_command() {
+        // Hold the receiver open so the sends succeed, then read back the
+        // command each public seam method put on the worker channel.
+        let (commands, receiver) = std::sync::mpsc::channel();
+        let output = RodioOutput {
+            commands: Mutex::new(commands),
+        };
+
+        output.play("https://example.test/preview.m4a").unwrap();
+        output.pause().unwrap();
+        output.stop().unwrap();
+
+        match receiver.try_recv() {
+            Ok(Command::Play(url)) => assert_eq!(url, "https://example.test/preview.m4a"),
+            _ => panic!("play did not send Command::Play"),
+        }
+        assert!(matches!(receiver.try_recv(), Ok(Command::Pause)));
+        assert!(matches!(receiver.try_recv(), Ok(Command::Stop)));
+    }
+
+    #[test]
+    fn rodio_output_reports_a_closed_worker_for_every_command() {
+        // Dropping the receiver stands in for a worker thread that has ended,
+        // so every seam method must surface the closed channel as an error
+        // rather than panicking.
+        let (commands, receiver) = std::sync::mpsc::channel();
+        drop(receiver);
+        let output = RodioOutput {
+            commands: Mutex::new(commands),
+        };
+
+        assert_eq!(
+            output
+                .play("https://example.test/preview.m4a")
+                .unwrap_err()
+                .to_string(),
+            "the audio thread is gone"
+        );
+        assert_eq!(
+            output.pause().unwrap_err().to_string(),
+            "the audio thread is gone"
+        );
+        assert_eq!(
+            output.stop().unwrap_err().to_string(),
+            "the audio thread is gone"
+        );
+    }
 }
