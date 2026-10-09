@@ -1749,6 +1749,36 @@ fn now_playing_time_shows_the_played_tracks_duration_after_browsing_to_another_a
     assert_eq!(player.now_playing_time(Some("no-such-song")), "--:--");
 }
 
+// The Now Playing bar renders the played track's artist before its title
+// (`<artist> - <title>`). The artist comes from the same `known_tracks`
+// entry as the title and time: `TrackSelected` must record the played song's
+// artist, and `WinampPlayer::now_playing_artist` must resolve it — and keep
+// resolving it after a later browse to a different album replaces `songs`.
+// The view-level `now_playing_artist` tests build their maps by hand, so a
+// regression that dropped `artist` from the recorded `KnownTrack` (or
+// resolved the bar against the currently-browsed `songs` list) would clear
+// every existing test and only fail here.
+#[test]
+fn now_playing_artist_shows_the_played_tracks_artist_after_browsing_to_another_album() {
+    let (mut player, state) = test_player();
+
+    assert_eq!(player.now_playing_artist(None), "");
+
+    // Play song-1 (artist "The Sample Band") from album-1, then browse to
+    // album-2's songs, which replaces `songs`.
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+    state.blocking_lock().current_track = Some("song-1".to_string());
+    let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
+
+    let current_track = state.blocking_lock().current_track.clone();
+    assert_eq!(
+        player.now_playing_artist(current_track.as_deref()),
+        "The Sample Band"
+    );
+    assert_eq!(player.now_playing_artist(Some("no-such-song")), "");
+}
+
 // `fetch_into` schedules the fetch as an iced `Task`; the arm itself only
 // builds it, so the real behavior lives in the returned task. Drive that
 // task to completion and assert the mapped `*Loaded` message, as the
