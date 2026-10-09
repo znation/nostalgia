@@ -214,6 +214,42 @@ stands in under test. Depends on "Carry the Apple Music preview URL on
 - `pause` records a `Pause`.
 - The UI passes the selected `Song::preview_url` to `play_track`.
 
+### Reject a `make test-one TEST=<name>` that matches no test name (found 2026-10-08, done 2026-10-08)
+
+`make test-one` forwarded its filter to libtest, which exits `0` when the
+filter matches zero tests — so a typo (`TEST=clamp_with_nan_fallback`, a
+function name rather than a behavior name) printed "running 0 tests" and a
+green result, reading as a pass.
+
+**Goal.** A `TEST` that matches no test name fails the target with a message,
+while a real name still runs only the matching tests.
+
+**Approach.**
+
+- `Makefile`: `test-one` lists the tests the filter would select
+  (`cargo test --locked -- --list "$(TEST)"`) and requires at least one line
+  naming a test before the filtered run. The match is anchored to libtest's
+  test-name lines (`: test$`) so the trailing summary (`N tests, 0
+  benchmarks`) cannot satisfy the guard. The list command's stderr is left
+  attached, so compiler diagnostics for a broken build appear next to the
+  guard's message. The match pattern lives in the `TEST_LIST_HAS_TEST`
+  variable.
+- `Makefile`: `test-one-guard-test` feeds that pattern a synthetic list with
+  a test line and a summary-only list, asserting the first matches and the
+  second does not; it is added to `check`, so a guard that reintroduces the
+  summary-line false pass fails the gate.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- `make test-one TEST=<name>` with a real test name runs only the matching
+  tests and exits zero.
+- `make test-one` with no `TEST` exits non-zero with a usage line.
+- `make test-one TEST=benchmarks` (a value that appears only in libtest's
+  summary line) and `make test-one TEST=no_such_test` each exit non-zero with
+  a "no test name contains" message and run no tests.
+- `make test-one-guard-test` passes.
+
 ### Carry the Apple Music preview URL on `Song` (found 2026-10-08, done 2026-10-08)
 
 The audio-output decision (QUESTIONS.md `## Answered`, 2026-10-08) scopes

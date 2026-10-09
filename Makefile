@@ -12,10 +12,10 @@
 # mid-check and passing on a dependency set nobody committed. (`cargo fmt`
 # is the exception — it resolves no dependencies and takes no `--locked`.)
 
-.PHONY: check test test-one fmt lint fix docs run clean
+.PHONY: check test test-one test-one-guard-test fmt lint fix docs run clean
 
 ## The full landing gate: formatting, lints, docs, then tests.
-check: fmt lint docs test
+check: fmt lint docs test test-one-guard-test
 
 ## Runs the test suite against the committed lockfile.
 test:
@@ -24,15 +24,39 @@ test:
 ## Runs only the tests whose names contain TEST, e.g.
 ## `make test-one TEST=shuffled_pick`.
 ##
+## Matches only the lines of libtest's `--list` output that name a test. The
+## trailing summary line (`N tests, 0 benchmarks`) is not a test name, so a
+## TEST value that appears only there (for example `benchmarks`) does not
+## satisfy the guard. Shared with `test-one-guard-test`, which exercises it.
+TEST_LIST_HAS_TEST = grep -q ': test$$'
+
 ## A focused alternative to the full `test` target while iterating on one
 ## behavior. Cargo's test harness treats its first positional argument as a
 ## substring filter, so the target forwards TEST after `--` (which separates
-## cargo's own options from the test binary's). The guard rejects an empty
-## TEST with a usage line rather than silently running the whole suite, which
-## is what `cargo test` would do with no filter.
+## cargo's own options from the test binary's). Two guards keep a mistyped
+## invocation from reading as success: an empty TEST is rejected with a usage
+## line rather than silently running the whole suite (which is what
+## `cargo test` does with no filter), and a TEST that matches no test name is
+## rejected rather than running nothing — libtest exits `0` on zero matches,
+## so without the second guard a typo would report a pass. The match is
+## checked against the harness's `--list` output filtered to the lines that
+## name a test, so the trailing summary (`N tests, 0 benchmarks`) cannot
+## satisfy the guard; only a real test name can. The list command's stderr is
+## left attached, so compiler diagnostics for a broken build are visible next
+## to the guard's message.
 test-one:
 	@test -n "$(TEST)" || { echo "usage: make test-one TEST=<name>"; exit 2; }
+	@cargo test --locked -- --list "$(TEST)" | $(TEST_LIST_HAS_TEST) || { echo "no test name contains '$(TEST)' (or the test build failed)"; exit 1; }
 	cargo test --locked -- $(TEST)
+
+## Exercises the `test-one` no-match guard against synthetic `--list` output:
+## a line naming a test matches, and the trailing summary alone does not. It
+## uses the same pattern variable as the target, so a change that reintroduces
+## the summary-line false pass fails this test. Pure shell, no cargo run, so
+## it is cheap enough to run inside `make check`.
+test-one-guard-test:
+	@printf 'a::b: test\n\n1 test, 0 benchmarks\n' | $(TEST_LIST_HAS_TEST) || { echo "test-one guard rejected a real test name"; exit 1; }
+	@printf '0 tests, 0 benchmarks\n' | $(TEST_LIST_HAS_TEST) && { echo "test-one guard accepted a summary-only list"; exit 1; } || true
 
 ## Checks formatting without editing files (fails on any diff).
 fmt:
