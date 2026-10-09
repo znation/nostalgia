@@ -646,3 +646,53 @@ fn a_request_carries_the_developer_and_user_tokens() {
         "{request:?}"
     );
 }
+
+// The collection response's `next` link means Apple has more pages, but the
+// client reads only the first. A large library would otherwise be truncated
+// with no sign of it, so the parse path logs a notice naming the unread page.
+// Pure, like the other report formatters, so the wording and escaping are
+// testable without capturing stderr.
+#[test]
+fn truncation_notice_names_the_unread_page() {
+    assert_eq!(
+        truncation_notice("/v1/me/library/artists?offset=100"),
+        "Apple Music returned a next page \"/v1/me/library/artists?offset=100\"; only the first page is read"
+    );
+}
+
+// `next` is server-controlled and reaches the terminal, so a control character
+// or a Unicode format character must be escaped rather than emitted raw, as
+// `api_error_cause` escapes an API error detail. Pin both: `\u{1b}` (a control
+// character) and `\u{202e}` (the right-to-left override, which
+// `char::is_control` does not classify as a control).
+#[test]
+fn truncation_notice_escapes_control_and_format_characters() {
+    let notice = truncation_notice("/v1/evil\u{1b}\u{202e}");
+    assert!(!notice.contains('\u{1b}'), "{notice:?}");
+    assert!(!notice.contains('\u{202e}'), "{notice:?}");
+    assert!(notice.contains("\\u{1b}"), "{notice:?}");
+    assert!(notice.contains("\\u{202e}"), "{notice:?}");
+}
+
+// A response carrying `next` still returns the first page's data: the notice
+// reports the truncation, it does not change what is browsed. The stub answers
+// every call with the same body, so exactly one recorded call proves the next
+// page is not fetched.
+#[test]
+fn a_response_with_a_next_page_still_returns_only_the_first_page() {
+    let stub = StubTransport::returning(
+        r#"{"data":[{"id":"artist-1","attributes":{"name":"The Sample Band"}}],"next":"/v1/me/library/artists?offset=1"}"#,
+    );
+    let library = library_over(&stub);
+
+    let artists = library.get_favorite_artists(&session()).unwrap();
+
+    assert_eq!(
+        artists,
+        vec![Artist {
+            id: "artist-1".to_string(),
+            name: "The Sample Band".to_string(),
+        }]
+    );
+    assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/artists");
+}

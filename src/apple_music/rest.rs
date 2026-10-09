@@ -271,6 +271,9 @@ impl RestLibrary {
         let body = self.transport.get(url, session)?;
         let envelope: Envelope<Resource> = serde_json::from_str(&body)
             .map_err(|error| AppleMusicError::new(describe_parse_failure(&error)))?;
+        if let Some(next) = envelope.next.as_deref() {
+            eprintln!("{}", truncation_notice(next));
+        }
         Ok(envelope.data)
     }
 }
@@ -295,6 +298,19 @@ fn describe_parse_failure(error: &serde_json::Error) -> String {
     }
 }
 
+/// The notice logged when a collection response carries a `next` page the
+/// client does not read: pagination is not implemented, so the first page is
+/// all the user sees. Naming the unread page turns a silently truncated
+/// library into a diagnosable one. `next` is server-controlled text headed for
+/// the terminal, so it is formatted with `Debug` — as
+/// [`crate::apple_music::play_log_line`] formats an id — to escape a control
+/// character (`\u{1b}`) or a Unicode format character such as the
+/// right-to-left override `\u{202e}` instead of letting it reach the terminal
+/// raw.
+fn truncation_notice(next: &str) -> String {
+    format!("Apple Music returned a next page {next:?}; only the first page is read")
+}
+
 /// Percent-encodes `segment` for use as a single URL path segment.
 ///
 /// Every byte outside the RFC 3986 unreserved set (`A`-`Z`, `a`-`z`, `0`-`9`,
@@ -315,11 +331,17 @@ fn encode_path_segment(segment: &str) -> String {
 }
 
 /// The `{ "data": [ ... ] }` envelope every Apple Music collection response
-/// carries. Only the first page is read: the API's `next` link is ignored, and
-/// Apple caps a page at 100 items.
+/// carries. Apple caps a page at 100 items and links the next page in `next`;
+/// only the first page is read (pagination is not implemented), and
+/// [`RestLibrary::fetch`] logs [`truncation_notice`] when `next` is present so
+/// a larger library is not truncated silently.
 #[derive(Deserialize)]
 struct Envelope<T> {
     data: Vec<T>,
+    /// The API's link to the next page of a paginated collection, present only
+    /// when there is one. The client does not follow it; `fetch` only reports
+    /// that it is there.
+    next: Option<String>,
 }
 
 /// The `{ "errors": [ ... ] }` envelope an Apple Music error response carries,

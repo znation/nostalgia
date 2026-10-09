@@ -99,6 +99,37 @@ transport, browse navigation, volume, balance, or the equalizer.
 
 ## Done
 
+### Log a notice when a browse response has an unread next page (found 2026-10-08, done 2026-10-08)
+
+Apple caps a collection page at 100 items and links the next page in the
+response's `next` field, but `rest::Envelope` dropped that field, so a library
+larger than one page was truncated silently: the user saw the first 100
+artists (or songs) with nothing to say the rest existed. Following the link is
+a pagination feature this change does not attempt; it makes the truncation
+visible instead.
+
+**Goal.** When a collection response carries `next`, log a line naming the
+unread page, without changing what the browse queries return.
+
+**Approach.**
+
+- `src/apple_music/rest.rs`: add `next: Option<String>` to `Envelope`; in
+  `RestLibrary::fetch`, when `next` is `Some`, log `truncation_notice(next)` to
+  stderr and still return the first page's `data`. `truncation_notice` is a
+  pure function that formats `next` with `Debug`, so a server-controlled
+  control character or Unicode format character is escaped before it reaches
+  the terminal, matching `api_error_cause` and `play_log_line`.
+- `src/apple_music/rest/tests.rs`: pin the notice's wording, its escaping of
+  `\u{1b}` and `\u{202e}`, and that a response with `next` still returns only
+  the first page and issues one request.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- A response with a `next` field returns the same first page it did before and
+  logs the notice; a response without `next` logs nothing (the `if let`
+  guard).
+
 ### Add a `make test-one` target for running one focused test (found 2026-10-08, done 2026-10-08)
 
 The Makefile's declared entry point for tests was only `make test`, the full
