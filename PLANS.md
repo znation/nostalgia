@@ -450,6 +450,14 @@ a `MusicKitSession` (developer token + user token).
 
 ### Add classic Winamp main-window keyboard shortcuts for transport and volume (found 2026-10-08, done 2026-10-08)
 
+**Update (2026-10-08, organize).** The key→message mapping this entry added
+(`message_for`, `shortcut`) and its unit tests moved from `src/ui/mod.rs` and
+`src/ui/tests.rs` to a new `src/ui/shortcuts.rs`. The extraction gives the
+classic Winamp keymap its own module, mirroring the other pure UI seams
+(`views`, `transport`, `loading`); `ui/mod.rs` now imports
+`shortcuts::message_for` for the subscription and holds only the event-loop
+wiring.
+
 Winamp is driven from the keyboard as much as the mouse: Z previous, X play,
 C pause, V stop, B next, ArrowUp/ArrowDown volume. Nostalgia's transport and
 volume are mouse-only today — `src/ui/mod.rs`'s `init_ui` installs no

@@ -2,16 +2,12 @@
 //! type, and the `update`/`view` loop `init_ui` hands to iced. Widget
 //! construction lives in the `views` submodule (browse lists, Now Playing bar,
 //! transport controls, equalizer panel), the Previous/Next stepping arithmetic
-//! in `transport`, the library-fetch/error-reporting adapter in `loading`, and
-//! the per-level browse state machine in `browse`; this module wires those to
-//! the shared `AppState` and the `AppleMusicService` seam. Its unit tests live
-//! in the `tests` submodule.
+//! in `transport`, the library-fetch/error-reporting adapter in `loading`, the
+//! per-level browse state machine in `browse`, and the classic key bindings in
+//! `shortcuts`; this module wires those to the shared `AppState` and the
+//! `AppleMusicService` seam. Its unit tests live in the `tests` submodule.
 
-use iced::{
-    Element, Task,
-    keyboard::{self, Event, Key, Modifiers, key},
-    widget::Column,
-};
+use iced::{Element, Task, keyboard, widget::Column};
 use std::{
     borrow::Cow,
     collections::HashMap,
@@ -25,12 +21,14 @@ use tokio::sync::Mutex;
 mod bevel;
 mod browse;
 mod loading;
+mod shortcuts;
 mod style;
 mod theme;
 mod transport;
 mod views;
 
 use browse::BrowseList;
+use shortcuts::message_for;
 
 use crate::{
     apple_music::AppleMusicService,
@@ -322,44 +320,6 @@ fn resize_to_shade(player: &WinampPlayer, width: f32) -> Task<Message> {
     with_window_id(player, |id| {
         iced::window::resize(id, iced::Size::new(width, views::TITLE_BAR_HEIGHT))
     })
-}
-
-/// Maps a keyboard event to the classic Winamp transport shortcut, or `None`
-/// for every event that binds nothing: a key release, a modifier-only change,
-/// an unbound key, or a key pressed with a chord modifier. `init_ui` installs
-/// this as the window subscription's mapper, so the key-to-message table
-/// lives here once and the subscription stays a plain `filter_map`.
-fn message_for(event: Event) -> Option<Message> {
-    match event {
-        Event::KeyPressed { key, modifiers, .. } => shortcut(&key, modifiers),
-        Event::KeyReleased { .. } | Event::ModifiersChanged(_) => None,
-    }
-}
-
-/// The classic Winamp main-window bindings: Z previous, X play, C pause, V
-/// stop, B next, and the arrow keys nudge the volume. A Control, Alt, or Logo
-/// chord is left to the OS and window manager, so those modifiers yield
-/// `None`; Shift is allowed, and the letter match ignores ASCII case, so
-/// Shift+Z steps back exactly like Z.
-fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
-    if modifiers.control() || modifiers.alt() || modifiers.logo() {
-        return None;
-    }
-
-    match key {
-        Key::Character(character) if character.eq_ignore_ascii_case("z") => {
-            Some(Message::PreviousTrack)
-        }
-        Key::Character(character) if character.eq_ignore_ascii_case("x") => Some(Message::Play),
-        Key::Character(character) if character.eq_ignore_ascii_case("c") => Some(Message::Pause),
-        Key::Character(character) if character.eq_ignore_ascii_case("v") => Some(Message::Stop),
-        Key::Character(character) if character.eq_ignore_ascii_case("b") => {
-            Some(Message::NextTrack)
-        }
-        Key::Named(key::Named::ArrowUp) => Some(Message::VolumeUp),
-        Key::Named(key::Named::ArrowDown) => Some(Message::VolumeDown),
-        _ => None,
-    }
 }
 
 fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
