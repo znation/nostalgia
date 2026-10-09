@@ -779,3 +779,18 @@ async fn a_signed_out_service_ignores_the_transport_and_returns_sample_data() {
     );
     assert!(stub.calls().is_empty());
 }
+
+// `off_thread` reports the thread's result through a `oneshot` channel, so a
+// panic in the blocking work drops the sender without a value. That must
+// surface as an error rather than leaving the browse query's `await` pending
+// forever; this test drives exactly that branch. The panic prints to stderr on
+// the spawned thread, which is expected here.
+#[tokio::test]
+async fn off_thread_reports_an_error_when_its_work_thread_panics() {
+    let result: Result<(), AppleMusicError> = off_thread(|| panic!("work thread panicked")).await;
+
+    assert_eq!(
+        result.unwrap_err().to_string(),
+        "the library request thread ended without a result"
+    );
+}
