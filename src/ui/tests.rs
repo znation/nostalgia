@@ -1526,6 +1526,7 @@ fn a_failed_play_completion_clears_the_index_when_nothing_committed() {
         title: "Blank".to_string(),
         album_id: "album-1".to_string(),
         duration_ms: 0,
+        preview_url: None,
     }];
 
     let task = update(&mut player, Message::TrackSelected { epoch: 0, index: 0 });

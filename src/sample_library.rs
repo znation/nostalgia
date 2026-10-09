@@ -81,30 +81,35 @@ impl SampleLibrary {
                 title: "Opening".to_string(),
                 album_id: "album-1".to_string(),
                 duration_ms: 210_000,
+                preview_url: None,
             },
             Song {
                 id: "song-2".to_string(),
                 title: "Middle".to_string(),
                 album_id: "album-1".to_string(),
                 duration_ms: 240_000,
+                preview_url: None,
             },
             Song {
                 id: "song-3".to_string(),
                 title: "Ending".to_string(),
                 album_id: "album-1".to_string(),
                 duration_ms: 180_000,
+                preview_url: None,
             },
             Song {
                 id: "song-4".to_string(),
                 title: "B-side".to_string(),
                 album_id: "album-2".to_string(),
                 duration_ms: 95_000,
+                preview_url: None,
             },
             Song {
                 id: "song-5".to_string(),
                 title: "Headliner".to_string(),
                 album_id: "album-3".to_string(),
                 duration_ms: 200_000,
+                preview_url: None,
             },
         ];
         SampleLibrary {

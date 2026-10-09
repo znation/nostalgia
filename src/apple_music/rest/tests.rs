@@ -96,6 +96,7 @@ fn songs_from_album_map_library_json_and_set_the_album_id() {
             title: "Opening".to_string(),
             album_id: "album-9".to_string(),
             duration_ms: 210_000,
+            preview_url: None,
         }]
     );
     assert_single_call(
@@ -123,7 +124,69 @@ fn songs_from_album_maps_a_missing_duration_to_zero() {
             title: "Opening".to_string(),
             album_id: "album-9".to_string(),
             duration_ms: 0,
+            preview_url: None,
         }]
+    );
+}
+
+// The audio-output decision (QUESTIONS.md `## Answered`, 2026-10-08) scopes
+// playback to the Apple Music preview asset, so the browse client must carry
+// the preview's URL onto `Song`. The cases below differ only in the resource's
+// `attributes`, so they share a helper that returns the mapped `preview_url`.
+fn preview_url_from(attributes: &str) -> Option<String> {
+    let stub = StubTransport::returning(&format!(
+        r#"{{"data":[{{"id":"song-1","attributes":{attributes}}}]}}"#
+    ));
+    let library = library_over(&stub);
+    library
+        .get_songs_from_album(&session(), "album-9")
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap()
+        .preview_url
+}
+
+#[test]
+fn songs_from_album_maps_the_first_preview_url() {
+    assert_eq!(
+        preview_url_from(
+            r#"{"name":"Opening","previews":[{"url":"https://example.test/preview.m4a"}]}"#
+        ),
+        Some("https://example.test/preview.m4a".to_string())
+    );
+}
+
+#[test]
+fn songs_from_album_maps_no_preview_when_previews_is_absent() {
+    assert_eq!(preview_url_from(r#"{"name":"Opening"}"#), None);
+}
+
+#[test]
+fn songs_from_album_maps_no_preview_when_previews_is_empty() {
+    assert_eq!(
+        preview_url_from(r#"{"name":"Opening","previews":[]}"#),
+        None
+    );
+}
+
+#[test]
+fn songs_from_album_maps_no_preview_when_every_url_is_blank() {
+    // A preview with no `url` key and one with a whitespace-only url are both
+    // "blank": neither can play, so the resource maps to `None`.
+    assert_eq!(
+        preview_url_from(r#"{"name":"Opening","previews":[{"url":""},{}]}"#),
+        None
+    );
+}
+
+#[test]
+fn songs_from_album_skips_a_blank_preview_url_for_the_next() {
+    assert_eq!(
+        preview_url_from(
+            r#"{"name":"Opening","previews":[{"url":"   "},{"url":"https://example.test/second.m4a"}]}"#
+        ),
+        Some("https://example.test/second.m4a".to_string())
     );
 }
 

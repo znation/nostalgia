@@ -42,6 +42,11 @@ pub struct Song {
     /// The track's length in milliseconds; `0` means the source supplied no
     /// duration.
     pub duration_ms: u64,
+    /// The preview asset URL the audio output plays; `None` when the source
+    /// supplied none. `#[serde(default)]` keeps a payload without the field
+    /// deserializable, as an older or partial response may omit it.
+    #[serde(default)]
+    pub preview_url: Option<String>,
 }
 
 #[cfg(test)]
@@ -71,8 +76,26 @@ mod tests {
     }
 
     /// The [`Song`] twin of [`artist_payload`]: the full, valid wire payload
-    /// the song round-trip and missing-field tests share.
+    /// the song field-name and round-trip test pins. It carries the optional
+    /// `preview_url` so the serialized field name is pinned too; the payload
+    /// the missing-field probe walks is [`song_required_fields_payload`],
+    /// because an optional field is legitimately omittable.
     fn song_payload() -> serde_json::Value {
+        json!({
+            "id": "song-1",
+            "title": "Opening",
+            "album_id": "album-1",
+            "duration_ms": 210_000,
+            "preview_url": null
+        })
+    }
+
+    /// The [`Song`] payload carrying every required field and omitting the
+    /// optional `preview_url`, so [`assert_every_field_required`] can remove
+    /// each key and see the parse fail. Passing [`song_payload`] instead would
+    /// clear the probe for `preview_url`: a `#[serde(default)]` field is
+    /// allowed to be missing.
+    fn song_required_fields_payload() -> serde_json::Value {
         json!({ "id": "song-1", "title": "Opening", "album_id": "album-1", "duration_ms": 210_000 })
     }
 
@@ -169,6 +192,32 @@ mod tests {
 
     #[test]
     fn song_deserialization_rejects_missing_required_fields() {
-        assert_every_field_required::<Song>(song_payload());
+        assert_every_field_required::<Song>(song_required_fields_payload());
+    }
+
+    #[test]
+    fn song_deserialization_defaults_a_missing_preview_url_to_none() {
+        // The browse response may omit `previews`, and an older or partial
+        // payload may omit `preview_url`; the model must still deserialize to
+        // the `None` "no preview" state rather than reject the whole song.
+        let parsed: Song = serde_json::from_value(song_required_fields_payload())
+            .expect("a Song without preview_url must deserialize");
+        assert_eq!(parsed.preview_url, None);
+    }
+
+    #[test]
+    fn song_deserializes_a_preview_url() {
+        let parsed: Song = serde_json::from_value(json!({
+            "id": "song-1",
+            "title": "Opening",
+            "album_id": "album-1",
+            "duration_ms": 210_000,
+            "preview_url": "https://example.test/preview.m4a"
+        }))
+        .unwrap();
+        assert_eq!(
+            parsed.preview_url,
+            Some("https://example.test/preview.m4a".to_string())
+        );
     }
 }

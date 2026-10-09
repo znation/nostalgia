@@ -267,6 +267,7 @@ impl RestLibrary {
                     title,
                     album_id: album_id.to_string(),
                     duration_ms: resource.duration_ms(),
+                    preview_url: resource.preview_url(),
                 })
             })
             .collect()
@@ -498,6 +499,17 @@ struct Attributes {
     /// The track's length in milliseconds; absent when the API omits it.
     #[serde(rename = "durationInMillis")]
     duration_in_millis: Option<u64>,
+    /// The preview assets the API offers for the resource; absent when the
+    /// API omits them.
+    previews: Option<Vec<Preview>>,
+}
+
+/// One entry in a resource's `attributes.previews` array: the short preview
+/// asset the audio output plays.
+#[derive(Deserialize)]
+struct Preview {
+    /// The preview asset's URL; absent when the API omits it.
+    url: Option<String>,
 }
 
 impl Resource {
@@ -526,6 +538,27 @@ impl Resource {
             .as_ref()
             .and_then(|attributes| attributes.duration_in_millis)
             .unwrap_or(0)
+    }
+
+    /// The first non-blank URL in `attributes.previews`, or `None` when
+    /// `previews` is absent, empty, or carries only blank URLs.
+    ///
+    /// A blank URL (empty or only whitespace) can play nothing, so it is
+    /// skipped in favour of a later preview; the URL is compared trimmed but
+    /// returned exactly as the resource carried it.
+    fn preview_url(&self) -> Option<String> {
+        self.attributes
+            .as_ref()
+            .and_then(|attributes| attributes.previews.as_ref())
+            .and_then(|previews| {
+                previews.iter().find_map(|preview| {
+                    preview
+                        .url
+                        .as_deref()
+                        .filter(|url| !url.trim().is_empty())
+                        .map(str::to_string)
+                })
+            })
     }
 
     /// The resource's non-blank name, or an [`AppleMusicError`] naming `kind`

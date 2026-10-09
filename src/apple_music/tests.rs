@@ -697,6 +697,7 @@ async fn get_songs_from_album_uses_the_rest_library_when_signed_in() {
             title: "Opening".to_string(),
             album_id: "album-9".to_string(),
             duration_ms: 210_000,
+            preview_url: None,
         }]
     );
     assert_single_rest_call(

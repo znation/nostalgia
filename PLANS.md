@@ -29,61 +29,6 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Carry the Apple Music preview URL on `Song` (found 2026-10-08)
-
-The audio-output decision (QUESTIONS.md `## Answered`, 2026-10-08) scopes
-playback to the Apple Music **preview** asset, so the model must carry its URL
-before any backend can play it. Apple Music's resource attributes include a
-`previews` array whose first entry's `url` is a short M4A; the browse client
-currently reads only `name` and `durationInMillis` (the `Attributes` struct in
-`src/apple_music/rest.rs`), and `Song` (`src/library.rs`) has no URL field.
-This adds the field and parses it; it is the data half of "Add the audio-output
-seam and a rodio backend", which depends on it. No audio dependency lands
-here.
-
-**Goal.** `Song` carries `preview_url: Option<String>` — the first non-blank
-`attributes.previews[].url` from the browse response, `None` when the source
-supplied none. The REST client fills it; the sample library and test fixtures
-set `None`.
-
-**Approach.**
-
-- `src/library.rs`: add `pub preview_url: Option<String>` to `Song`, documented
-  as the preview asset URL (`None` when the source supplied none), with
-  `#[serde(default)]` so a payload without the field still deserializes. Update
-  the `Song` wire-fixture tests: the full JSON payload gains `"preview_url"`,
-  the round-trip and field-name assertions cover it, and the missing-field
-  probe still omits a required key.
-- `src/apple_music/rest.rs`: add `previews: Option<Vec<Preview>>` to
-  `Attributes` and a private `struct Preview { url: Option<String> }`; add
-  `Resource::preview_url(&self) -> Option<String>` returning the first
-  preview's non-blank `url` (compared trimmed, returned untouched) and `None`
-  when `previews` is absent, empty, or all blank. Set
-  `preview_url: resource.preview_url()` in `get_songs_from_album`.
-- `src/sample_library.rs`: every `Song { … }` literal gains
-  `preview_url: None`.
-- `src/test_support.rs`: `sample_song`, `stepping_songs`, `single_song_album`,
-  and `second_album_songs` gain `preview_url: None`.
-- Every other `Song { … }` literal (`src/apple_music/tests.rs`,
-  `src/apple_music/rest/tests.rs`, `src/ui/tests.rs`, `src/library.rs`) gains
-  the field.
-
-**Files touched.** `src/library.rs`, `src/apple_music/rest.rs`,
-`src/apple_music/rest/tests.rs`, `src/sample_library.rs`,
-`src/test_support.rs`, plus the `Song` literals in `src/apple_music/tests.rs`
-and `src/ui/tests.rs`.
-
-**Acceptance criteria.**
-
-- `make check` passes.
-- A `get_songs_from_album` stub response carrying
-  `"previews": [{"url": "https://example.test/preview.m4a"}]` maps that URL to
-  the song's `preview_url`.
-- A response with no `previews`, an empty `previews` array, or a blank first
-  `url` maps to `preview_url == None`.
-- Every `sample_library()` song has `preview_url == None`.
-- A `Song` JSON payload without `preview_url` still deserializes.
-
 ### Add the audio-output seam and a rodio backend (found 2026-10-08)
 
 **Goal.** `AppleMusicService` plays real audio through an injectable
@@ -163,6 +108,61 @@ symbols),
 - The UI passes the selected `Song::preview_url` to `play_track`.
 
 ## Done
+
+### Carry the Apple Music preview URL on `Song` (found 2026-10-08, done 2026-10-08)
+
+The audio-output decision (QUESTIONS.md `## Answered`, 2026-10-08) scopes
+playback to the Apple Music **preview** asset, so the model must carry its URL
+before any backend can play it. Apple Music's resource attributes include a
+`previews` array whose first entry's `url` is a short M4A; the browse client
+currently reads only `name` and `durationInMillis` (the `Attributes` struct in
+`src/apple_music/rest.rs`), and `Song` (`src/library.rs`) has no URL field.
+This adds the field and parses it; it is the data half of "Add the audio-output
+seam and a rodio backend", which depends on it. No audio dependency lands
+here.
+
+**Goal.** `Song` carries `preview_url: Option<String>` — the first non-blank
+`attributes.previews[].url` from the browse response, `None` when the source
+supplied none. The REST client fills it; the sample library and test fixtures
+set `None`.
+
+**Approach.**
+
+- `src/library.rs`: add `pub preview_url: Option<String>` to `Song`, documented
+  as the preview asset URL (`None` when the source supplied none), with
+  `#[serde(default)]` so a payload without the field still deserializes. Update
+  the `Song` wire-fixture tests: the full JSON payload gains `"preview_url"`,
+  the round-trip and field-name assertions cover it, and the missing-field
+  probe still omits a required key.
+- `src/apple_music/rest.rs`: add `previews: Option<Vec<Preview>>` to
+  `Attributes` and a private `struct Preview { url: Option<String> }`; add
+  `Resource::preview_url(&self) -> Option<String>` returning the first
+  preview's non-blank `url` (compared trimmed, returned untouched) and `None`
+  when `previews` is absent, empty, or all blank. Set
+  `preview_url: resource.preview_url()` in `get_songs_from_album`.
+- `src/sample_library.rs`: every `Song { … }` literal gains
+  `preview_url: None`.
+- `src/test_support.rs`: `sample_song`, `stepping_songs`, `single_song_album`,
+  and `second_album_songs` gain `preview_url: None`.
+- Every other `Song { … }` literal (`src/apple_music/tests.rs`,
+  `src/apple_music/rest/tests.rs`, `src/ui/tests.rs`, `src/library.rs`) gains
+  the field.
+
+**Files touched.** `src/library.rs`, `src/apple_music/rest.rs`,
+`src/apple_music/rest/tests.rs`, `src/sample_library.rs`,
+`src/test_support.rs`, plus the `Song` literals in `src/apple_music/tests.rs`
+and `src/ui/tests.rs`.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- A `get_songs_from_album` stub response carrying
+  `"previews": [{"url": "https://example.test/preview.m4a"}]` maps that URL to
+  the song's `preview_url`.
+- A response with no `previews`, an empty `previews` array, or a blank first
+  `url` maps to `preview_url == None`.
+- Every `sample_library()` song has `preview_url == None`.
+- A `Song` JSON payload without `preview_url` still deserializes.
 
 ### Name the page when a paginated Apple Music browse fails (found 2026-10-08, done 2026-10-08)
 
