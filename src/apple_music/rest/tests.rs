@@ -575,3 +575,23 @@ fn a_truncated_response_body_reports_a_read_error() {
         "{error}"
     );
 }
+
+// The transport's success arm. Every other `UreqTransport::get` test pins a
+// failure — a non-2xx status, a body that cannot be read whole, a stalled
+// server, or a redirect — and the truncated-body test returns 200 but fails
+// while reading the body, so it never reaches the status check. This pins that
+// a 2xx whose body reads whole is returned verbatim rather than being treated
+// as an error: the one path the browse methods depend on.
+#[test]
+fn a_successful_response_returns_its_body() {
+    let body = r#"{"data":[]}"#;
+    let addr = serve_one_response(&format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    ));
+
+    let url = format!("http://{addr}/me/library/artists");
+    let got = UreqTransport::new().get(&url, &session()).unwrap();
+
+    assert_eq!(got, body);
+}
