@@ -877,6 +877,34 @@ mod tests {
         );
     }
 
+    // The resolver's allow branch: a preview URL that names a public address
+    // literal must pass through to the connector. `preview_url_problem`
+    // accepts such a URL, so a resolver that refused every address — an
+    // inverted internal-address check, say — would fail every legitimate
+    // preview literal, and the refusal test above (which only pins the
+    // internal case) would stay green. An IP literal is resolved without a
+    // DNS lookup, so this stays offline.
+    #[test]
+    fn the_preview_resolver_allows_a_public_address_literal() {
+        let uri: ureq::http::Uri = "https://93.184.216.34/preview.m4a".parse().unwrap();
+        let config = config_with_timeout(Duration::from_secs(1));
+        let timeout = NextTimeout {
+            after: ureq::unversioned::transport::time::Duration::from_secs(1),
+            reason: ureq::Timeout::Resolve,
+        };
+
+        let addresses = PublicAddressResolver::default()
+            .resolve(&uri, &config, timeout)
+            .expect("a public address literal must not be refused");
+
+        assert!(
+            addresses
+                .iter()
+                .any(|address| address.ip().to_string() == "93.184.216.34"),
+            "the resolver must return the public address it resolved: {addresses:?}"
+        );
+    }
+
     /// A recording [`WorkerPlayer`] for the command-loop tests: it records the
     /// previews appended and whether it was stopped, and remembers its gain,
     /// without needing an output device.
