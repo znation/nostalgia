@@ -1166,4 +1166,54 @@ mod tests {
             "only the newer preview may be appended"
         );
     }
+
+    // The supersession check above names `Command::Stop` as well as
+    // `Command::Play`: a Stop that arrives while a Play is downloading means
+    // the user has already silenced playback, so installing the
+    // just-downloaded preview would start audio they asked to stop. The queued
+    // Stop must drop the in-flight preview instead of installing it (it is then
+    // a no-op, since no player exists). A regression that checked only
+    // `Command::Play` would install a player and append its preview here, so
+    // this is the case that pins the Stop half of the check.
+    #[test]
+    fn a_preview_superseded_by_stop_during_its_download_is_not_installed() {
+        let (sender, receiver) = mpsc::channel();
+        let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
+        let fetched: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+
+        let recorded = Arc::clone(&players);
+        let create_player = move || {
+            let player = RecordingPlayer::default();
+            recorded.lock().unwrap().push(player.clone());
+            player
+        };
+        // "first" is still downloading when the user presses Stop, so the Stop
+        // is sent from inside the fetch. The clone is taken (and so dropped)
+        // with the send, letting the channel close and the worker loop end.
+        let fetch_sender = Arc::new(Mutex::new(Some(sender.clone())));
+        let seen = Arc::clone(&fetched);
+        let fetch = move |url: &str| -> Result<(), AppleMusicError> {
+            seen.lock().unwrap().push(url.to_string());
+            if url == "first"
+                && let Some(sender) = fetch_sender.lock().unwrap().take()
+            {
+                sender.send(Command::Stop).unwrap();
+            }
+            Ok(())
+        };
+
+        sender.send(Command::Play("first".to_string())).unwrap();
+        drop(sender);
+        serve_commands(receiver, create_player, fetch);
+
+        assert_eq!(
+            *fetched.lock().unwrap(),
+            vec!["first".to_string()],
+            "the superseded download still ran; only its preview is dropped"
+        );
+        assert!(
+            players.lock().unwrap().is_empty(),
+            "a preview superseded by Stop must not install a player"
+        );
+    }
 }
