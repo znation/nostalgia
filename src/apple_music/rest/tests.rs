@@ -453,3 +453,35 @@ fn a_non_success_status_surfaces_the_api_error_detail() {
     assert!(message.contains("401 Unauthorized"), "{message}");
     assert!(message.contains("Invalid developer token"), "{message}");
 }
+
+// `UreqTransport::get` has a second failure path the stalled-server test does
+// not reach: a response whose headers arrive but whose body cannot be read
+// whole. A server that declares a `Content-Length` and then closes the
+// connection before sending that many bytes makes `read_to_string` fail; this
+// pins that the read error is reported with the URL rather than surfacing as a
+// truncated body or a panic.
+#[test]
+fn a_truncated_response_body_reports_a_read_error() {
+    use std::io::{Read, Write};
+
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let transport = UreqTransport::with_timeout(std::time::Duration::from_secs(5));
+    let url = format!("http://{addr}/truncated");
+    std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        // Read the request so the client finishes writing before the reply.
+        let mut request = [0_u8; 1024];
+        let _ = stream.read(&mut request);
+        // Declare 100 bytes but send only five, then close the connection.
+        stream
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\nConnection: close\r\n\r\nshort")
+            .unwrap();
+        let _ = stream.flush();
+    });
+
+    let error = transport.get(&url, &session()).unwrap_err().to_string();
+
+    assert!(error.contains("reading response from"), "{error}");
+    assert!(error.contains(&url), "{error}");
+}
