@@ -636,6 +636,44 @@ fn read_http_request_refuses_a_body_that_closes_before_its_declared_length() {
     );
 }
 
+// A declared body larger than one 1024-byte read chunk arrives over several
+// socket reads, so the body loop's `limit = room.min(chunk.len())` and its
+// extend run more than once. The small callback body usually arrives in the
+// same read as the headers, so it never enters this loop at all; a real
+// MusicKit user token is a multi-kilobyte JWT, so the server must reassemble
+// the body byte-for-byte instead of truncating or misaligning it at a chunk
+// boundary.
+#[test]
+fn read_http_request_reads_a_body_across_multiple_reads() {
+    let (mut server, mut client) = connected_pair();
+    // 4000 bytes is more than one read can deliver even after the header read
+    // already buffered part of the body, so the loop runs at least twice.
+    let body: String = (0..4000)
+        .map(|i| char::from(b'a' + (i % 26) as u8))
+        .collect();
+    let raw = format!(
+        "POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    client.write_all(raw.as_bytes()).expect("write the request");
+    client
+        .shutdown(std::net::Shutdown::Write)
+        .expect("close the write half so the body loop sees a complete body");
+
+    let request = read_http_request(&mut server, Instant::now() + Duration::from_secs(5))
+        .expect("a multi-chunk body is not an I/O error")
+        .expect("a complete multi-chunk body is accepted");
+
+    assert_eq!(request.method, "POST");
+    assert_eq!(request.path, "/token");
+    assert_eq!(
+        request.body,
+        body.as_bytes(),
+        "the body must be reassembled byte-for-byte across reads"
+    );
+}
+
 #[test]
 fn authorize_times_out_without_a_callback_and_names_the_bound() {
     let opener = |_url: &str| Ok(());
