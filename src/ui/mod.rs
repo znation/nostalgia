@@ -37,8 +37,7 @@ use crate::{
     state::AppState,
 };
 use loading::{
-    FETCH_TIMEOUT, PLAY_TIMEOUT, RequestGeneration, fetch_into, play_failure_report, play_into,
-    transport_into,
+    PLAY_TIMEOUT, RequestGeneration, fetch_level, play_failure_report, play_into, transport_into,
 };
 
 /// Runs the UI, blocking until the window is closed.
@@ -387,7 +386,7 @@ fn step_track(player: &WinampPlayer, forward: bool) -> Task<Message> {
 /// `blocking_lock`, one mutation, then `Task::none()` — so the lock-and-noop
 /// shape lives here once and each arm only names its mutation. The transport
 /// arms and asynchronous work (fetches, plays) go through the service instead
-/// (see [`transport_into`] and [`fetch_into`]), and the volume arms use
+/// (see [`transport_into`] and [`fetch_level`]), and the volume arms use
 /// [`mutate_volume`] because they also forward the value to the backend.
 fn mutate_state(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> Task<Message> {
     let mut state = player.state.blocking_lock();
@@ -561,13 +560,10 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             // Drop the previous artist's albums before the new fetch lands:
             // otherwise the Albums view renders them, and a press during the
             // fetch resolves against the wrong artist's list.
-            player.albums.clear();
-            let generation = player.albums.begin_fetch();
-            fetch_into(
+            fetch_level(
+                &mut player.albums,
                 &player.apple_music_service,
                 format!("loading albums for artist {artist_id:?}"),
-                generation,
-                FETCH_TIMEOUT,
                 move |service| async move { service.get_albums_by_artist(&artist_id).await },
                 Message::AlbumsLoaded,
                 Message::AlbumsLoadFailed,
@@ -588,13 +584,10 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             // The songs twin of the artist arm above: clear the previous
             // album's songs so they cannot be shown or pressed while the new
             // album's fetch is in flight.
-            player.songs.clear();
-            let generation = player.songs.begin_fetch();
-            fetch_into(
+            fetch_level(
+                &mut player.songs,
                 &player.apple_music_service,
                 format!("loading songs from album {album_id:?}"),
-                generation,
-                FETCH_TIMEOUT,
                 move |service| async move { service.get_songs_from_album(&album_id).await },
                 Message::SongsLoaded,
                 Message::SongsLoadFailed,
@@ -640,13 +633,10 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             // The search results reuse the songs buffer, so the album's rows
             // are dropped and a press during the fetch cannot resolve against
             // them (the same clear-before-fetch the navigation arms do).
-            player.songs.clear();
-            let generation = player.songs.begin_fetch();
-            fetch_into(
+            fetch_level(
+                &mut player.songs,
                 &player.apple_music_service,
                 format!("searching the library for {query:?}"),
-                generation,
-                FETCH_TIMEOUT,
                 move |service| async move { service.search_songs(&query).await },
                 Message::SongsLoaded,
                 Message::SongsLoadFailed,
@@ -658,13 +648,10 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             // arm: clearing first drops any earlier failure report and shows
             // "Loading…" while the re-fetch is in flight, exactly as the
             // navigation arms clear their level before re-fetching.
-            player.artists.clear();
-            let generation = player.artists.begin_fetch();
-            fetch_into(
+            fetch_level(
+                &mut player.artists,
                 &player.apple_music_service,
                 "loading favorite artists".to_string(),
-                generation,
-                FETCH_TIMEOUT,
                 |service| async move { service.get_favorite_artists().await },
                 Message::ArtistsLoaded,
                 Message::ArtistsLoadFailed,

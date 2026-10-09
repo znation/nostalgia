@@ -21,6 +21,7 @@ use iced::Task;
 use crate::apple_music::AppleMusicService;
 
 use super::Message;
+use super::browse::BrowseList;
 
 /// Runs a playback future through iced's runtime, bounding it with
 /// [`with_timeout`] and mapping it to the `TrackPlayed` completion message.
@@ -266,9 +267,9 @@ fn play_timeout_report(track_id: &str, timeout: Duration) -> String {
 /// the store happens — a navigation in between must still drop the reply.
 /// `timeout` bounds the wait via [`with_timeout`],
 /// so a backend that never answers is reported as a failed fetch instead of
-/// leaving the panel on "Loading…". Shared by the artists, albums, and songs
-/// load arms so none of them repeats the clone-the-service-then-`Task::perform`
-/// boilerplate.
+/// leaving the panel on "Loading…". [`fetch_level`] drives every browse-level
+/// fetch through here, so no arm repeats the clone-the-service-then-
+/// `Task::perform` boilerplate.
 pub(super) fn fetch_into<T, E, Fut>(
     service: &AppleMusicService,
     context: String,
@@ -308,6 +309,44 @@ where
                 reply: Box::new(reply),
             }
         },
+    )
+}
+
+/// Starts one browse-level fetch: clears `list` and marks it loading (the
+/// [`BrowseList::clear`] step before every browse request), issues the
+/// request's generation, and hands both to [`fetch_into`].
+///
+/// The four browse fetches — the three navigation arms' artists, albums, and
+/// songs loads, plus the library search's songs load — all repeat the same
+/// clear-then-issue-then-fetch sequence. Issuing the request without clearing
+/// first would let the previous level's rows render, and be pressed, while the
+/// reply is in flight, so the ordering lives here once instead of at each
+/// arm. `list` and `service` are separate borrows of the player's fields, so a
+/// caller can pass `&mut player.songs` and `&player.apple_music_service`
+/// together.
+pub(super) fn fetch_level<T, E, Fut>(
+    list: &mut BrowseList<T>,
+    service: &AppleMusicService,
+    context: String,
+    fetch: impl FnOnce(AppleMusicService) -> Fut + Send + 'static,
+    loaded: impl Fn(Vec<T>) -> Message + Send + 'static,
+    failed: impl Fn(String) -> Message + Send + 'static,
+) -> Task<Message>
+where
+    T: Send + 'static,
+    E: std::fmt::Display + Send + 'static,
+    Fut: Future<Output = Result<Vec<T>, E>> + Send + 'static,
+{
+    list.clear();
+    let generation = list.begin_fetch();
+    fetch_into(
+        service,
+        context,
+        generation,
+        FETCH_TIMEOUT,
+        fetch,
+        loaded,
+        failed,
     )
 }
 

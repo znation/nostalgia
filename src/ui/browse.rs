@@ -9,9 +9,10 @@
 //! `clear`, `fail`, `begin_fetch`) instead of spelling out the parallel-field
 //! bookkeeping at each site.
 //!
-//! Nine `update` arms go through `store`/`clear`/`fail`: the three
+//! Ten `update` arms go through `store`/`clear`/`fail`: the three
 //! `*Loaded` arms call `store`, the three `*LoadFailed` arms call `fail`, and
-//! the two navigation arms plus `LoadArtists` call `clear` before
+//! the two navigation arms, `LoadArtists`, and `SearchSubmitted` start their
+//! fetch through the event loop's `fetch_level`, which calls `clear` before
 //! `begin_fetch`. `select` resolves the three selection arms' presses.
 
 use std::sync::{

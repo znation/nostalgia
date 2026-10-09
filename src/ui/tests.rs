@@ -1,3 +1,4 @@
+use super::loading::fetch_into;
 use super::views::BROWSE_VIEWS;
 use super::*;
 use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB};
