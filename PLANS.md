@@ -440,10 +440,12 @@ a `MusicKitSession` (developer token + user token).
 - With a fake opener that GETs `/` and then POSTs the matching `state` and a
   sample JWT `userToken`, `authorize` returns a session carrying both tokens,
   and the served page contains the developer token and the nonce.
-- `authorize` rejects a blank or malformed developer token; rejects a callback
-  whose `state` differs from the nonce and one whose `userToken` is empty; and a
-  fake opener that never calls back makes `authorize_with_timeout` return a
-  timeout error within a short test deadline instead of hanging.
+- `authorize` rejects a blank or malformed developer token; answers a callback
+  whose `state` differs from the nonce with `400` and ignores it (so a local
+  client that reaches the loopback port cannot abort the sign-in); rejects one
+  whose `userToken` is empty; and a fake opener that never calls back makes
+  `authorize_with_timeout` return a timeout error within a short test deadline
+  instead of hanging.
 - Manual check (`cargo run` once the sibling wiring plan lands): with a real
   `APPLE_MUSIC_DEVELOPER_TOKEN`, the system browser opens the sign-in page, and
   completing sign-in logs that a session was stored.

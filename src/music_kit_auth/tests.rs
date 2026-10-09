@@ -337,12 +337,26 @@ fn authorize_refuses_the_page_without_the_state_nonce() {
 }
 
 #[test]
-fn authorize_rejects_a_callback_with_the_wrong_state() {
-    let error = authorize_with_flow(|port, _state| {
-        let _ = request(port, &token_request("wrong-state", SAMPLE_USER_TOKEN));
+fn authorize_ignores_a_callback_with_the_wrong_state() {
+    // Any local client can reach `POST /token` without knowing the nonce, so a
+    // wrong-state request must not abort the sign-in: it is answered 400 and
+    // the real callback still completes on a later connection.
+    let observed = Arc::new(Mutex::new(String::new()));
+    let observed_for_flow = Arc::clone(&observed);
+    authorize_with_flow(move |port, state| {
+        let wrong = request(port, &token_request("wrong-state", SAMPLE_USER_TOKEN));
+        let _ = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
+        *observed_for_flow.lock().expect("observed lock") = wrong;
     })
-    .expect_err("a wrong state is rejected");
-    assert!(error.to_string().contains("state"));
+    .expect("a wrong state does not abort the flow");
+
+    assert!(
+        observed
+            .lock()
+            .expect("observed lock")
+            .starts_with("HTTP/1.1 400"),
+        "a wrong state should be rejected with 400"
+    );
 }
 
 #[test]

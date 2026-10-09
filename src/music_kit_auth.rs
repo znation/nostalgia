@@ -27,8 +27,10 @@
 //! client cannot make the server allocate without bound or panic it with an
 //! overflowing `Content-Length`. Per-connection failures — a client that closes
 //! early, stalls, or declares an oversized body — are ignored and the server
-//! keeps waiting for the real callback; only a well-formed callback with the
-//! wrong `state` or an invalid user token ends the flow with an error. Each
+//! keeps waiting for the real callback; only a well-formed callback carrying an
+//! invalid user token ends the flow with an error, while a callback with the
+//! wrong `state` is answered and ignored so a local client cannot abort the
+//! sign-in by forging one. Each
 //! connection's reads are capped by the time left before [`AUTH_TIMEOUT`], so a
 //! client that dribbles bytes cannot hold the flow past its deadline, and each
 //! response write carries a bounded timeout, so a client that stops reading
@@ -117,8 +119,11 @@ pub fn validate_developer_token(token: &str) -> Result<(), AppleMusicError> {
 /// # Errors
 ///
 /// Returns an [`AppleMusicError`] when `developer_token` is malformed, when the
-/// browser cannot be opened, when a callback carries the wrong `state` or an
-/// invalid user token, or when no callback arrives before [`AUTH_TIMEOUT`].
+/// browser cannot be opened, when a callback carries an invalid user token, or
+/// when no callback arrives before [`AUTH_TIMEOUT`]. A callback with the wrong
+/// `state` is answered with a `400` and ignored rather than aborting the flow,
+/// so a local client that can reach the loopback port but does not know the
+/// nonce cannot end a sign-in the user is completing.
 // `AppleMusicService::authenticate` is this function's caller; it is public so
 // the wiring in `apple_music` can obtain a session at startup.
 pub fn authorize(
@@ -342,7 +347,8 @@ fn page_query_carries_nonce(query: Option<&str>, nonce: &str) -> bool {
 }
 
 /// Handles the `POST /token` callback: validates `state` and `userToken` and
-/// either returns the session or a rejection.
+/// either returns the session, ignores a wrong-state request, or rejects an
+/// invalid user token.
 fn handle_token(
     stream: &mut TcpStream,
     developer_token: &str,
@@ -370,9 +376,11 @@ fn handle_token(
             "text/plain; charset=utf-8",
             "The sign-in state did not match.",
         );
-        return Connection::Rejected(AppleMusicError::new(
-            "the sign-in callback carried an unexpected state",
-        ));
+        // A wrong state is ignored, not fatal: any local client can reach
+        // this route without knowing the nonce, so aborting on one would let
+        // it end a sign-in the user is completing. The real callback (with the
+        // right state) still arrives on a later connection.
+        return Connection::Continue;
     }
 
     match user_token {
