@@ -519,6 +519,68 @@ async fn play_track_rejects_a_blank_preview_url_without_touching_state() {
     assert_playback_state(&state, Some("song-1"), true).await;
 }
 
+// A preview URL comes from the Apple Music API response and is handed to a
+// network fetch by the audio backend, so the seam must reject anything that is
+// not an https URL with an acceptable host: a cleartext URL, a
+// loopback/private/link-local address literal (an SSRF target), a non-http
+// scheme, a numeric host form that resolves to an address, and a value
+// carrying a control character. Each must fail before shared state is
+// committed and before the backend records a play, so a hostile or compromised
+// API reply cannot reach the fetch through a cleartext, address-literal, or
+// numeric-host URL.
+#[tokio::test]
+async fn play_track_rejects_a_preview_url_that_is_not_a_public_https_url() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+
+    for url in [
+        "http://127.0.0.1:8080/preview.m4a",
+        "http://169.254.169.254/latest/meta-data/",
+        "https://localhost/preview.m4a",
+        "https://[::1]/preview.m4a",
+        "https://10.0.0.5/preview.m4a",
+        "https://192.168.1.1/preview.m4a",
+        "https://2130706433/preview.m4a",
+        "https://127.1/preview.m4a",
+        "https://0x7f000001/preview.m4a",
+        "https://0x7f.0.0.1/preview.m4a",
+        "https://0177.0.0.1/preview.m4a",
+        "file:///etc/passwd",
+        "https://example.test/\u{1b}[2Jpreview.m4a",
+    ] {
+        let error = service
+            .play_track("song-1", Some(url), || true)
+            .await
+            .unwrap_err();
+        assert!(
+            error.to_string().starts_with("preview URL "),
+            "unexpected error for {url:?}: {error}"
+        );
+    }
+
+    assert!(recording.calls().is_empty());
+    assert_playback_state(&state, None, false).await;
+}
+
+// The guard must not reject a legitimate preview URL, so Apple's CDN host, a
+// plain public host, and a public address literal all still reach the backend.
+#[tokio::test]
+async fn play_track_accepts_a_public_https_preview_url() {
+    for url in [
+        "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview/x.m4a",
+        "https://example.test/preview.m4a",
+        "https://93.184.216.34/preview.m4a",
+    ] {
+        let recording = Arc::new(RecordingAudio::default());
+        let (service, _state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+        service
+            .play_track("song-1", Some(url), || true)
+            .await
+            .unwrap();
+        assert_eq!(recording.calls(), vec![AudioCall::Play(url.to_string())]);
+    }
+}
+
 // A backend that cannot start the preview reports it through the seam, so the
 // UI's play path can log the failure instead of silently claiming success.
 // The preview never started, so shared state must not keep claiming it is

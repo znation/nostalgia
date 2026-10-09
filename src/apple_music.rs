@@ -421,7 +421,13 @@ impl AppleMusicService {
     /// `preview_url` is a track with no playable asset: the state transition
     /// is committed but no audio starts. A `preview_url` that is `Some` but
     /// blank is a caller bug — no asset has a blank URL — and is rejected the
-    /// same way a blank id is, before shared state is touched.
+    /// same way a blank id is, before shared state is touched. A non-blank
+    /// `preview_url` must be an `https` URL whose host is not an internal
+    /// address literal or a legacy numeric address form (see
+    /// [`preview_url_problem`]); the audio backend hands it to a network
+    /// fetch, so a cleartext URL, an internal address literal, a numeric
+    /// host, or a value carrying a control character is rejected before
+    /// shared state is touched.
     ///
     /// When the audio backend rejects the preview, shared state must not keep
     /// claiming playback: `is_playing` is cleared before the error is
@@ -445,7 +451,8 @@ impl AppleMusicService {
     ///
     /// Returns an [`AppleMusicError`] when `track_id` is blank (empty or only
     /// whitespace), carries a control character, when `preview_url` is present
-    /// but blank, or the audio backend cannot start the preview.
+    /// but blank or is not an `https` URL with an acceptable host, or the audio
+    /// backend cannot start the preview.
     pub async fn play_track(
         &self,
         track_id: &str,
@@ -644,8 +651,9 @@ fn ensure_id_is_valid(id: &str, kind: IdKind) -> Result<(), AppleMusicError> {
     Ok(())
 }
 
-/// Validates a preview URL at the seam: `Ok` for `None` or a non-blank URL,
-/// `Err` naming the offending value when it is present but blank.
+/// Validates a preview URL at the seam: `Ok` for `None` or an `https` URL
+/// that [`preview_url_problem`] accepts, `Err` naming the offending value
+/// otherwise.
 ///
 /// `None` is [`AppleMusicService::play_track`]'s documented "the track has no
 /// playable asset" case, so it passes and the state transition is still
@@ -653,15 +661,139 @@ fn ensure_id_is_valid(id: &str, kind: IdKind) -> Result<(), AppleMusicError> {
 /// caller bug: [`crate::apple_music::rest`]'s `Resource::preview_url` already
 /// maps a blank preview to `None`, and handing a blank string on to the audio
 /// backend would surface as a transport error that does not name the actual
-/// defect. Rejecting it here leaves shared state untouched, exactly as a blank
-/// track id does. The message quotes the value with `{url:?}`, so a
-/// whitespace-only URL reads as escaped text rather than as invisible bytes.
+/// defect. A non-blank URL is then held to the host rule of
+/// [`preview_url_problem`], because the audio backend hands it to a network
+/// fetch. The message quotes the value with `{url:?}`, so a whitespace-only or
+/// control-character URL reads as escaped text rather than as invisible bytes.
 fn ensure_preview_url_is_valid(preview_url: Option<&str>) -> Result<(), AppleMusicError> {
-    match preview_url {
-        Some(url) if url.trim().is_empty() => Err(AppleMusicError::new(format!(
+    let Some(url) = preview_url else {
+        return Ok(());
+    };
+    if url.trim().is_empty() {
+        return Err(AppleMusicError::new(format!(
             "preview URL must not be blank (got {url:?})"
-        ))),
-        _ => Ok(()),
+        )));
+    }
+    if let Some(problem) = preview_url_problem(url) {
+        return Err(AppleMusicError::new(format!(
+            "preview URL {problem} (got {url:?})"
+        )));
+    }
+    Ok(())
+}
+
+/// Describes why `url` is not a preview URL the audio backend may fetch, or
+/// `None` when it is.
+///
+/// A preview URL arrives in the Apple Music API response
+/// (`attributes.previews[].url`) and is handed to a network fetch, so it is
+/// untrusted input at a network sink. The guard requires the absolute
+/// `https` scheme and rejects a host that is the local machine or a private,
+/// loopback, link-local, or unspecified address literal, as well as the
+/// legacy numeric address forms (`2130706433`, `0x7f000001`, `0177.0.0.1`,
+/// `127.1`) that `getaddrinfo` resolves as an address instead of a name. This
+/// closes the address-literal SSRF shapes a hostile or compromised API reply
+/// can carry; a public DNS name that later resolves to an internal address is
+/// not defended, which would need resolve-then-connect pinning. A value
+/// carrying a control character is rejected too, matching
+/// [`ensure_id_is_valid`]: a control character is never valid in a URL. The
+/// host may be any public name — Apple's preview CDN can move without a code
+/// change — so the check names what it refuses rather than pinning a host
+/// allowlist.
+fn preview_url_problem(url: &str) -> Option<&'static str> {
+    if url.chars().any(char::is_control) {
+        return Some("must not contain control characters");
+    }
+    let Some((scheme, rest)) = url.split_once("://") else {
+        return Some("must be an absolute https URL");
+    };
+    if !scheme.eq_ignore_ascii_case("https") {
+        return Some("must use the https scheme");
+    }
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host_port = authority.rsplit('@').next().unwrap_or(authority);
+    let host = if let Some(inner) = host_port.strip_prefix('[') {
+        inner.split(']').next().unwrap_or("")
+    } else {
+        host_port.split(':').next().unwrap_or("")
+    };
+    if host.is_empty() {
+        return Some("must name a host");
+    }
+    let host = host.trim_end_matches('.').to_ascii_lowercase();
+    if host == "localhost" || host.ends_with(".localhost") {
+        return Some("must not target the local host");
+    }
+    match host.parse::<std::net::IpAddr>() {
+        Ok(ip) if ip_is_internal(ip) => Some("must not target an internal address"),
+        Ok(_) => None,
+        // `IpAddr::parse` accepts only the canonical forms, but `getaddrinfo`
+        // (which ureq's resolver uses) also accepts the legacy numeric forms
+        // `2130706433`, `0x7f000001`, `0177.0.0.1`, and `127.1`, resolving each
+        // to an address without a DNS lookup. Reject those here so they cannot
+        // bypass the address-literal check above.
+        Err(_) if is_numeric_host_form(&host) => Some("must not be a numeric address"),
+        // A host with no ASCII letter is neither an `IpAddr` nor a numeric
+        // form, so it is not a name `getaddrinfo` can look up; reject it too.
+        Err(_) if !host.chars().any(|c| c.is_ascii_alphabetic()) => Some("must name a host"),
+        _ => None,
+    }
+}
+
+/// Whether `host` is an IPv4 address written in one of the legacy numeric
+/// forms `getaddrinfo` accepts — a single 32-bit value (`2130706433`,
+/// `0x7f000001`, `017700000001`), a two-part `a.b`, or a three- or four-part
+/// dotted value with hex or octal components (`127.1`, `0x7f.0.0.1`). Such a
+/// host is resolved as an address, never looked up as a DNS name, and
+/// `IpAddr::parse` does not accept most of these spellings.
+fn is_numeric_host_form(host: &str) -> bool {
+    let mut components = 0;
+    for part in host.split('.') {
+        components += 1;
+        if components > 4 || !is_numeric_component(part) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Whether `part` is a decimal, `0x`/`0X` hex, or leading-`0` octal integer
+/// component of a legacy numeric IPv4 form. An empty part is not a component.
+fn is_numeric_component(part: &str) -> bool {
+    if let Some(hex) = part.strip_prefix("0x").or_else(|| part.strip_prefix("0X")) {
+        return !hex.is_empty() && hex.chars().all(|c| c.is_ascii_hexdigit());
+    }
+    if part.len() > 1 && part.starts_with('0') {
+        return part.chars().all(|c| ('0'..='7').contains(&c));
+    }
+    !part.is_empty() && part.chars().all(|c| c.is_ascii_digit())
+}
+
+/// Whether `ip` is an address the preview fetch must not reach: one that names
+/// the local machine or a private, loopback, link-local, or unspecified
+/// network. Public addresses are allowed.
+fn ip_is_internal(ip: std::net::IpAddr) -> bool {
+    match ip {
+        std::net::IpAddr::V4(v4) => {
+            v4.is_private()
+                || v4.is_loopback()
+                || v4.is_link_local()
+                || v4.is_unspecified()
+                || v4.is_broadcast()
+                || v4.is_documentation()
+                || v4.octets()[0] == 0
+                || (v4.octets()[0] == 100 && (v4.octets()[1] & 0xc0) == 64)
+        }
+        std::net::IpAddr::V6(v6) => {
+            v6.is_loopback()
+                || v6.is_unspecified()
+                || v6.is_multicast()
+                || (v6.segments()[0] & 0xfe00) == 0xfc00
+                || (v6.segments()[0] & 0xffc0) == 0xfe80
+                || v6
+                    .to_ipv4()
+                    .is_some_and(|v4| ip_is_internal(std::net::IpAddr::V4(v4)))
+        }
     }
 }
 
