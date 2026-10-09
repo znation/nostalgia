@@ -79,6 +79,42 @@ an unrelated code edit. (Telemetry's BUGS.md-only edits do land, e.g. 3738f29,
 so the "md-only" block is role-scoped.) The role re-authors the same change
 until the "3 consecutive tick failures" breaker trips.
 
+### The scheduler reads a fully-Refused bugfix backlog as "open", so it defers maintenance roles and spins bugfix on work no role may take (found by telemetry 2026-10-08)
+
+Symptom: BUGS.md `## Open` holds only two entries and both carry a
+**Refused** note (both harness-scope, off-limits to bugfix), and PLANS.md
+`## Planned` is `_None yet._`. The 2026-10-08 digest's fleet state changes log
+`17:33 readme — deferred — feature/bugfix backlog open` and `17:48 perf —
+deferred — feature/bugfix backlog open`. At both times no feature plan was
+open: the title-bar plan moved to Done at 17:19 (`7bcb23f`, which reset
+`## Planned` to `_None yet._`), and the next plan was created at 18:07
+(`1d77e9f`). The "backlog open" the scheduler acted on was therefore the two
+**Refused** bugfix entries. The digest prices the result: `0.7 h · $0.13 — 75
+ticks: no_change on bugfix`, the most `no_change` ticks of any role; bugfix's
+digest row is `queued 1 · no_change 74 · refused 1`, and its one landed change
+(`4e9e428`) came only after security filed a real, actionable bug at 18:35
+(`15711c8`).
+
+How to reproduce:
+- `git show b1d8c4c` and `git show 674e7ba` — the two bugfix commits that
+  added the **Refused** notes; with them, BUGS.md `## Open` is entirely
+  non-actionable.
+- `git show 7bcb23f -- PLANS.md` — the feature commit that moved the
+  title-bar plan to Done and set `## Planned` to `_None yet._` at 17:19,
+  before the 17:33 and 17:48 deferrals; `git show 1d77e9f` is the next plan,
+  created 18:07, after them.
+- The digest logs the state cluster `deferred — feature/bugfix backlog open`
+  for readme (17:33) and perf (17:48), and the loss cause `0.7 h · $0.13 — 75
+  ticks: no_change on bugfix`.
+
+Suspected cause: the scheduler's "feature/bugfix backlog open" check counts
+every BUGS.md `## Open` entry regardless of its **Refused** marker, so a fully
+blocked backlog latches as open. bugfix is then dispatched repeatedly against
+work no role may take, while readme/perf/robustness wait behind it. The loop
+rules already say a Refused entry is skipped and a fully-blocked backlog is a
+legitimate nothing-to-do; the scheduler should apply the same rule before it
+defers other roles or queues bugfix.
+
 ## Fixed
 
 ### The sign-in nonce travels in the browser opener's command line, so another local user can read it and fetch the page's developer token (found by security 2026-10-08, fixed 2026-10-08)
