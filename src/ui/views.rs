@@ -1095,19 +1095,24 @@ mod tests {
 
     // The slider specs are literals iced exposes no way to read back, so they
     // are named constants the builders consume and these tests pin. The
-    // important one is the tie to the shared-state clamp: the volume slider's
-    // range must equal the range `set_volume`/`clamp_volume` store. A slider
-    // bound the clamp moves means the thumb cannot reach the stored extreme;
-    // a bound the clamp accepts but the slider cannot reach leaves part of
-    // the volume scale unusable. Asserting that both endpoints survive the
-    // clamp unchanged, and that a step beyond each is clamped back, pins the
-    // two ranges equal without reading the iced widget.
+    // important one is the tie to the shared-state clamp: each slider's range
+    // must equal the range its state clamp stores. A slider bound the clamp
+    // moves means the thumb cannot reach the stored extreme; a bound the clamp
+    // accepts but the slider cannot reach leaves part of the scale unusable.
+
+    /// Asserts that `clamp` stores exactly `min..=max`: both endpoints survive
+    /// unchanged and a step beyond each is clamped back. This pins a slider's
+    /// range equal to its shared-state range without reading the iced widget.
+    fn assert_slider_range_matches_clamp(clamp: fn(f32) -> f32, min: f32, max: f32, step: f32) {
+        assert_eq!(clamp(min), min);
+        assert_eq!(clamp(max), max);
+        assert_eq!(clamp(min - step), min);
+        assert_eq!(clamp(max + step), max);
+    }
+
     #[test]
     fn volume_slider_spec_matches_the_state_clamp_and_pins_its_granularity() {
-        assert_eq!(clamp_volume(VOLUME_MIN), VOLUME_MIN);
-        assert_eq!(clamp_volume(VOLUME_MAX), VOLUME_MAX);
-        assert_eq!(clamp_volume(VOLUME_MIN - VOLUME_STEP), VOLUME_MIN);
-        assert_eq!(clamp_volume(VOLUME_MAX + VOLUME_STEP), VOLUME_MAX);
+        assert_slider_range_matches_clamp(clamp_volume, VOLUME_MIN, VOLUME_MAX, VOLUME_STEP);
 
         // One-percent drag granularity, pinned so the step cannot silently
         // coarsen while the endpoints stay put.
@@ -1120,10 +1125,7 @@ mod tests {
     // cannot silently coarsen.
     #[test]
     fn balance_slider_spec_matches_the_state_clamp_and_pins_its_granularity() {
-        assert_eq!(clamp_balance(BALANCE_MIN), BALANCE_MIN);
-        assert_eq!(clamp_balance(BALANCE_MAX), BALANCE_MAX);
-        assert_eq!(clamp_balance(BALANCE_MIN - BALANCE_STEP), BALANCE_MIN);
-        assert_eq!(clamp_balance(BALANCE_MAX + BALANCE_STEP), BALANCE_MAX);
+        assert_slider_range_matches_clamp(clamp_balance, BALANCE_MIN, BALANCE_MAX, BALANCE_STEP);
 
         assert_eq!(BALANCE_STEP, 0.01);
     }
@@ -1133,10 +1135,7 @@ mod tests {
     // stores, so a drag to either end lands exactly on the stored extreme.
     #[test]
     fn equalizer_slider_spec_matches_the_gain_clamp_and_steps_whole_decibels() {
-        assert_eq!(clamp_gain(GAIN_MIN_DB), GAIN_MIN_DB);
-        assert_eq!(clamp_gain(GAIN_MAX_DB), GAIN_MAX_DB);
-        assert_eq!(clamp_gain(GAIN_MIN_DB - EQ_STEP), GAIN_MIN_DB);
-        assert_eq!(clamp_gain(GAIN_MAX_DB + EQ_STEP), GAIN_MAX_DB);
+        assert_slider_range_matches_clamp(clamp_gain, GAIN_MIN_DB, GAIN_MAX_DB, EQ_STEP);
 
         assert_eq!(EQ_STEP, 1.0);
     }
