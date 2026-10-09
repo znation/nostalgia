@@ -29,7 +29,73 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Show the current track's duration in the Now Playing bar (found 2026-10-08)
+
+Classic Winamp's main LCD pairs the current track with a time, and its
+playlist editor lists each track's length. Nostalgia's `Song` drops the
+duration the Apple Music API already returns — `rest::Attributes` reads only
+`name` — so no surface can show a time. This adds the duration to the model
+and shows the current track's total as `m:ss` in the Now Playing bar, where
+the title already survives a browse to another album. Elapsed counting and a
+seek bar stay out of scope: they need the real playback clock the open backend
+question gates (QUESTIONS.md, "What audio-output backend should Nostalgia use
+for real playback?").
+
+**Goal.** `Song` carries `duration_ms`, the REST browse client parses
+`attributes.durationInMillis` into it, and the Now Playing bar shows the
+current track's length as `m:ss` (`--:--` while unknown), surviving a browse
+to another album exactly as the title does. No new dependency and no change to
+transport, browse navigation, volume, balance, or the equalizer.
+
+**Approach.**
+
+- `src/library.rs`: add `pub duration_ms: u64` to `Song`, documented as the
+  track's length in milliseconds with `0` meaning the source supplied none.
+  Add it to `song_payload()`, and change
+  `song_deserialization_ignores_unknown_fields`'s extra key from the now-known
+  `"duration_ms"` to a still-unknown one (`"genre"`), so that test keeps
+  pinning unknown-field tolerance.
+- `src/test_support.rs`: give `sample_song`, `stepping_songs`,
+  `single_song_album`, and `second_album_songs` durations.
+- `src/sample_library.rs`: add `duration_ms` to every `Song { … }` literal.
+- `src/apple_music/rest.rs`: add
+  `#[serde(rename = "durationInMillis")] duration_in_millis: Option<u64>` to
+  `Attributes`; add `Resource::duration_ms(&self) -> u64` returning it or `0`;
+  map it in `get_songs_from_album`.
+- `src/apple_music/rest/tests.rs` and `src/apple_music/tests.rs`: extend the
+  `songs_from_album` stub bodies and expected `Song`s with
+  `"durationInMillis"` / `duration_ms`; add a
+  `songs_from_album_maps_a_missing_duration_to_zero` case.
+- `src/ui/views.rs`: add `pub struct KnownTrack { pub title: String, pub
+  duration_ms: u64 }`; change `now_playing_label` to take
+  `&HashMap<String, KnownTrack>` and read `.title`; add
+  `pub fn format_track_time(duration_ms: u64) -> String` (`"--:--"` for `0`,
+  else zero-padded `m:ss`); `view_now_playing` gains a `time: String` laid at
+  the right edge of the LCD well (a `Length::Fill` spacer before it).
+- `src/ui/mod.rs`: replace `known_titles: HashMap<String, String>` with
+  `known_tracks: HashMap<String, KnownTrack>`; the `TrackSelected` arm records
+  both fields; the `TrackPlayed` prune is unchanged; add
+  `WinampPlayer::now_playing_time` reading the map's `duration_ms`; `view`
+  passes the formatted time to `view_now_playing`.
+- `src/ui/tests.rs`: rename the `known_titles` references to `known_tracks`
+  (reading `.title`); add a test that a played track's duration reaches
+  `now_playing_time` and survives browsing to another album.
+
+**Files touched.** `src/library.rs`, `src/test_support.rs`,
+`src/sample_library.rs`, `src/apple_music/rest.rs`,
+`src/apple_music/rest/tests.rs`, `src/apple_music/tests.rs`,
+`src/ui/views.rs`, `src/ui/mod.rs`, `src/ui/tests.rs`.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- A REST song resource carrying `attributes.durationInMillis` maps to
+  `Song::duration_ms`; one without maps to `0`.
+- `format_track_time(0)` is `--:--` and `format_track_time(210_000)` is
+  `3:30`.
+- The Now Playing bar shows `--:--` with no current track and the played
+  track's `m:ss` after a play, and that time survives browsing to another
+  album.
 
 ## Done
 
