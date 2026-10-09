@@ -29,7 +29,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Add a Winamp Shuffle toggle that randomizes Next (found 2026-10-08)
+_None yet._
+
+## Done
+
+### Add a Winamp Shuffle toggle that randomizes Next (found 2026-10-08, done 2026-10-08)
 
 The transport row carries a Repeat toggle but not the Shuffle button that sits
 beside it in classic Winamp. This adds it: a Shuffle button flips shared
@@ -147,8 +151,6 @@ browse, volume, balance, or the equalizer.
 - Manual check (`cargo run`): the Shuffle button toggles its label and, with
   Shuffle on, Next jumps to a different song in the album. The build and tests
   are the primary gate.
-
-## Done
 
 ### De-duplicate the query label in a failed browse report (found 2026-10-08, done 2026-10-08)
 

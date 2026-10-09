@@ -472,6 +472,17 @@ fn repeat_label(repeat: bool) -> &'static str {
     if repeat { "Repeat: On" } else { "Repeat: Off" }
 }
 
+/// The Shuffle button's label: "Shuffle: On" while Shuffle is on, "Shuffle:
+/// Off" when it is off. Pure so the label logic is testable without an iced
+/// `Element`, like [`repeat_label`].
+fn shuffle_label(shuffle: bool) -> &'static str {
+    if shuffle {
+        "Shuffle: On"
+    } else {
+        "Shuffle: Off"
+    }
+}
+
 /// The equalizer on/off button's label: "EQ: On" while the equalizer is
 /// engaged, "EQ: Off" when it is off. Pure so the label logic is testable
 /// without an iced `Element`, like [`repeat_label`].
@@ -535,24 +546,32 @@ fn chrome_slider(
         .into()
 }
 
-/// The transport row's five chrome buttons, in row order: Play/Pause, Stop,
-/// Previous, Next, and Repeat. `is_playing` and `repeat` resolve the two
-/// labels that change with state; the other three are static literals.
+/// The transport row's six chrome buttons, in row order: Play/Pause, Stop,
+/// Previous, Next, Repeat, and Shuffle. `is_playing`, `repeat`, and `shuffle`
+/// resolve the three labels that change with state; the other three are static
+/// literals.
 ///
 /// Each button is pinned to the fixed face width of its widest label, so a
-/// label swap — Play for Pause, or Repeat: Off for Repeat: On — cannot resize
-/// the button and reflow every widget after it in the row. Returned as
-/// `Element`s so the width each button requests is observable in a test.
-fn transport_buttons(is_playing: bool, repeat: bool) -> [Element<'static, Message>; 5] {
+/// label swap — Play for Pause, Repeat: Off for Repeat: On, or Shuffle: Off
+/// for Shuffle: On — cannot resize the button and reflow every widget after it
+/// in the row. Returned as `Element`s so the width each button requests is
+/// observable in a test.
+fn transport_buttons(
+    is_playing: bool,
+    repeat: bool,
+    shuffle: bool,
+) -> [Element<'static, Message>; 6] {
     // The widths, in pixels, of each button's widest label: Play/Pause must
-    // fit "Pause" and Repeat must fit "Repeat: Off". They are the face widths
-    // measured from the running window (see the qa reproduction), so at rest
-    // each button keeps the width its label already had.
+    // fit "Pause", Repeat must fit "Repeat: Off", and Shuffle must fit
+    // "Shuffle: Off". They are the face widths measured from the running
+    // window (see the qa reproduction), so at rest each button keeps the
+    // width its label already had.
     const PLAY_PAUSE_WIDTH: f32 = 65.0;
     const STOP_WIDTH: f32 = 54.0;
     const PREVIOUS_WIDTH: f32 = 84.0;
     const NEXT_WIDTH: f32 = 54.0;
     const REPEAT_WIDTH: f32 = 104.0;
+    const SHUFFLE_WIDTH: f32 = 112.0;
 
     [
         fixed_width_button(
@@ -565,25 +584,32 @@ fn transport_buttons(is_playing: bool, repeat: bool) -> [Element<'static, Messag
         fixed_width_button("Previous", PREVIOUS_WIDTH, Message::PreviousTrack).into(),
         fixed_width_button("Next", NEXT_WIDTH, Message::NextTrack).into(),
         fixed_width_button(repeat_label(repeat), REPEAT_WIDTH, Message::ToggleRepeat).into(),
+        fixed_width_button(
+            shuffle_label(shuffle),
+            SHUFFLE_WIDTH,
+            Message::ToggleShuffle,
+        )
+        .into(),
     ]
 }
 
-/// The transport row: the Play/Pause, Stop, Previous, Next, and Repeat
-/// buttons, the volume slider, and the balance slider. `volume` and `balance`
-/// are the sliders' current values; dragging them emits
+/// The transport row: the Play/Pause, Stop, Previous, Next, Repeat, and
+/// Shuffle buttons, the volume slider, and the balance slider. `volume` and
+/// `balance` are the sliders' current values; dragging them emits
 /// `Message::VolumeChange` and `Message::BalanceChange` respectively.
-/// `repeat` is the shared Repeat flag, shown on the Repeat button and toggled
-/// by pressing it. The Stop label is static — Stop is always pressable, even
-/// when already stopped, as in Winamp — so no `play_pause_label`-style helper
-/// is needed.
+/// `repeat` is the shared Repeat flag and `shuffle` the shared Shuffle flag,
+/// each shown on its button and toggled by pressing it. The Stop label is
+/// static — Stop is always pressable, even when already stopped, as in Winamp
+/// — so no `play_pause_label`-style helper is needed.
 pub fn view_transport_controls(
     is_playing: bool,
     volume: f32,
     balance: f32,
     repeat: bool,
+    shuffle: bool,
 ) -> Element<'static, Message> {
     let mut row = Row::new();
-    for button in transport_buttons(is_playing, repeat) {
+    for button in transport_buttons(is_playing, repeat, shuffle) {
         row = row.push(button).push(spacer(20.0));
     }
     row.push(chrome_slider(
@@ -691,7 +717,7 @@ mod tests {
         BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, BROWSE_VIEWS, CurrentView, EQ_STEP, Message,
         VOLUME_MAX, VOLUME_MIN, VOLUME_STEP, album_row, artist_row, browse_placeholder,
         can_go_back, can_retry_artists, current_row_style, empty_list_label, eq_enabled_label,
-        now_playing_label, play_pause_label, repeat_label, song_row, style, theme,
+        now_playing_label, play_pause_label, repeat_label, shuffle_label, song_row, style, theme,
         transport_buttons, view_albums, view_artists, view_back_button, view_equalizer,
         view_now_playing, view_retry_button, view_songs, view_transport_controls,
     };
@@ -879,6 +905,12 @@ mod tests {
     }
 
     #[test]
+    fn shuffle_label_mirrors_shuffle_state() {
+        assert_eq!(shuffle_label(true), "Shuffle: On");
+        assert_eq!(shuffle_label(false), "Shuffle: Off");
+    }
+
+    #[test]
     fn eq_enabled_label_mirrors_enabled_state() {
         assert_eq!(eq_enabled_label(true), "EQ: On");
         assert_eq!(eq_enabled_label(false), "EQ: Off");
@@ -1030,18 +1062,19 @@ mod tests {
         let _retry = view_retry_button();
     }
 
-    // The transport row is rebuilt every frame, and the Play/Pause and Repeat
-    // labels change with state. A button that sizes to its text resizes when
-    // its label changes, reflowing every widget after it in the row (the qa
-    // reproduction measured a 14-15px shift when Play swapped to the wider
-    // Pause). Pin that every transport button requests a fixed width and that
-    // the widths do not depend on the play or repeat state, so a label swap
-    // cannot move the row.
+    // The transport row is rebuilt every frame, and the Play/Pause, Repeat,
+    // and Shuffle labels change with state. A button that sizes to its text
+    // resizes when its label changes, reflowing every widget after it in the
+    // row (the qa reproduction measured a 14-15px shift when Play swapped to
+    // the wider Pause). Pin that every transport button requests a fixed width
+    // and that the widths do not depend on the play, repeat, or shuffle state,
+    // so a label swap cannot move the row.
     #[test]
     fn transport_buttons_keep_a_fixed_width_across_label_changes() {
-        let stopped = transport_buttons(false, false);
-        let playing = transport_buttons(true, false);
-        let repeat_on = transport_buttons(false, true);
+        let stopped = transport_buttons(false, false, false);
+        let playing = transport_buttons(true, false, false);
+        let repeat_on = transport_buttons(false, true, false);
+        let shuffle_on = transport_buttons(false, false, true);
 
         for (index, button) in stopped.iter().enumerate() {
             assert!(
@@ -1055,20 +1088,26 @@ mod tests {
         for (a, b) in stopped.iter().zip(repeat_on.iter()) {
             assert_eq!(a.as_widget().size().width, b.as_widget().size().width);
         }
+        for (a, b) in stopped.iter().zip(shuffle_on.iter()) {
+            assert_eq!(a.as_widget().size().width, b.as_widget().size().width);
+        }
     }
 
     #[test]
     fn transport_controls_construct_for_both_play_states_volume_endpoints_and_repeat_states() {
         // `view()` passes the shared state's `is_playing`, clamped `volume`,
-        // `balance`, and `repeat` straight through, so build the transport row
-        // for every value the update arms can store, in both play and repeat
-        // states.
+        // `balance`, `repeat`, and `shuffle` straight through, so build the
+        // transport row for every value the update arms can store, in every
+        // play, repeat, and shuffle state.
         for volume in [0.0, 0.5, 1.0] {
             for balance in [-1.0, 0.0, 1.0] {
                 for is_playing in [false, true] {
                     for repeat in [false, true] {
-                        let _controls =
-                            view_transport_controls(is_playing, volume, balance, repeat);
+                        for shuffle in [false, true] {
+                            let _controls = view_transport_controls(
+                                is_playing, volume, balance, repeat, shuffle,
+                            );
+                        }
                     }
                 }
             }

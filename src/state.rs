@@ -23,6 +23,9 @@ pub struct AppState {
     /// Whether Previous/Next wrap around the current album's ends (Repeat on)
     /// or stop at the edge (Repeat off). Starts off, as in Winamp.
     pub repeat: bool,
+    /// Whether Next picks a random song from the loaded album (Shuffle on) or
+    /// the next in order (Shuffle off). Starts off, as in Winamp.
+    pub shuffle: bool,
     /// Playback volume in `[0.0, 1.0]`, never NaN. Kept private so the only
     /// way to change it is [`AppState::set_volume`], which clamps. Read it
     /// with [`AppState::volume`].
@@ -64,15 +67,16 @@ pub struct AppState {
 /// place, instead of in a struct literal repeated at each site. The starting
 /// volume is 0.5, not the derived 0.0, so a manual impl is required.
 ///
-/// Initial state: nothing loaded, stopped, Repeat off, at 50% volume with a
-/// centered balance, and the equalizer off with a flat (all-zero) curve and
-/// no preset selected.
+/// Initial state: nothing loaded, stopped, Repeat off, Shuffle off, at 50%
+/// volume with a centered balance, and the equalizer off with a flat
+/// (all-zero) curve and no preset selected.
 impl Default for AppState {
     fn default() -> Self {
         Self {
             current_track: None,
             is_playing: false,
             repeat: false,
+            shuffle: false,
             volume: 0.5,
             balance: 0.0,
             eq_enabled: false,
@@ -97,6 +101,14 @@ impl AppState {
     /// `toggle_playing`.
     pub fn toggle_repeat(&mut self) {
         self.repeat = !self.repeat;
+    }
+
+    /// Flip the Shuffle flag in place. The UI's Shuffle button is the only
+    /// toggle caller; keeping the flip here (rather than inlined at the call
+    /// site) puts the toggling semantics next to the field they mutate, like
+    /// `toggle_repeat`.
+    pub fn toggle_shuffle(&mut self) {
+        self.shuffle = !self.shuffle;
     }
 
     /// Clear the playback flag in place, leaving `current_track` in place so
@@ -286,8 +298,9 @@ mod tests {
     /// `volume` untouched. Every `AppState` mutation but `play`, `pause`, and
     /// the volume setters (`set_volume`, `nudge_volume`) uses this helper or
     /// its own isolation test — the playback setters (`toggle_playing`,
-    /// `stop`, `toggle_repeat`) and the equalizer setters (`toggle_equalizer`,
-    /// `set_eq_preamp`, `set_eq_band`, `apply_eq_preset`) use it directly,
+    /// `stop`, `toggle_repeat`, `toggle_shuffle`) and the equalizer setters
+    /// (`toggle_equalizer`, `set_eq_preamp`, `set_eq_band`,
+    /// `apply_eq_preset`) use it directly,
     /// while `set_balance` is pinned by `set_balance_changes_only_the_balance`
     /// — so the snapshot-then-compare sequence lives here once instead of at
     /// each call site. Each test pins its own field's new value separately;
@@ -318,6 +331,7 @@ mod tests {
         assert_eq!(state.current_track, None);
         assert!(!state.is_playing);
         assert!(!state.repeat);
+        assert!(!state.shuffle);
         assert_eq!(state.volume(), 0.5);
         assert_eq!(state.balance(), 0.0);
         assert!(!state.eq_enabled);
@@ -354,6 +368,19 @@ mod tests {
 
         assert_keeps_track_and_volume(&mut state, AppState::toggle_repeat);
         assert!(!state.repeat);
+    }
+
+    #[test]
+    fn toggle_shuffle_flips_only_the_shuffle_flag() {
+        let mut state = AppState::default();
+        assert!(!state.shuffle);
+
+        assert_keeps_track_and_volume(&mut state, AppState::toggle_shuffle);
+        assert!(state.shuffle);
+        assert!(!state.is_playing);
+
+        assert_keeps_track_and_volume(&mut state, AppState::toggle_shuffle);
+        assert!(!state.shuffle);
     }
 
     #[test]

@@ -6,6 +6,9 @@
 //! the update loop. `AppleMusicService` stays the library API seam and keeps
 //! its `next_track`/`previous_track` stubs untouched.
 
+use std::collections::hash_map::RandomState;
+use std::hash::{BuildHasher, Hasher};
+
 use crate::library::Song;
 
 /// The id of the song one step from `current` in `songs`, in the given
@@ -81,6 +84,41 @@ pub fn next_track_id(songs: &[Song], current: Option<&str>, repeat: bool) -> Opt
 #[must_use]
 pub fn previous_track_id(songs: &[Song], current: Option<&str>, repeat: bool) -> Option<String> {
     stepped_track_id(songs, current, false, repeat)
+}
+
+/// The id of the song to play when Next is pressed with Shuffle on: a pick
+/// from `songs` that is not `current`, so Next never re-lands on the song
+/// already playing. `roll` selects among the candidates (taken modulo their
+/// count), which keeps the function pure and testable — production passes a
+/// fresh [`shuffle_roll`]. `None` when `songs` is empty; when every song is
+/// the current one (a one-song album already current) there is no other song
+/// to pick, so the current song's id is returned.
+///
+/// `#[must_use]`: the returned id is the call's entire purpose, so a caller
+/// that drops it has silently done nothing — the Next button would not step.
+#[must_use]
+pub fn shuffled_track_id(songs: &[Song], current: Option<&str>, roll: u64) -> Option<String> {
+    let candidates: Vec<&Song> = songs
+        .iter()
+        .filter(|song| Some(song.id.as_str()) != current)
+        .collect();
+    match candidates.len() {
+        0 => songs.first().map(|song| song.id.clone()),
+        count => Some(candidates[(roll % count as u64) as usize].id.clone()),
+    }
+}
+
+/// A fresh random value for [`shuffled_track_id`]'s `roll`, drawn from
+/// `std::collections::hash_map::RandomState` — std's per-thread random hash
+/// seed, so no new dependency is needed. Called once per Shuffled Next press;
+/// the candidate modulo in `shuffled_track_id` spreads the value over the
+/// album.
+///
+/// `#[must_use]`: a dropped roll is a call that produced no randomness for
+/// its caller, which is always a mistake.
+#[must_use]
+pub fn shuffle_roll() -> u64 {
+    RandomState::new().build_hasher().finish()
 }
 
 #[cfg(test)]
@@ -223,5 +261,68 @@ mod tests {
             assert_next(current, true, "song-1");
             assert_previous(current, true, "song-3");
         }
+    }
+
+    // Shuffle's core promise: Next never re-lands on the song already playing.
+    // The sweep covers every residue the modulo can produce on the two
+    // candidates (`song-1` and `song-3`), so a regression that picked from the
+    // whole list rather than the non-current candidates — or off-by-one in the
+    // modulo — would surface here.
+    #[test]
+    fn shuffled_pick_never_returns_the_current_song() {
+        let songs = stepping_songs();
+        for roll in 0..4 {
+            let picked = shuffled_track_id(&songs, Some("song-2"), roll);
+            assert!(
+                matches!(picked.as_deref(), Some("song-1") | Some("song-3")),
+                "roll {roll} re-landed on the current song: {picked:?}"
+            );
+        }
+    }
+
+    // Both candidates are reachable, one per roll: roll 0 lands on the first
+    // non-current song and roll 1 on the second. This pins that the modulo
+    // spans the candidate set rather than collapsing onto one song.
+    #[test]
+    fn shuffled_pick_visits_every_candidate() {
+        let songs = stepping_songs();
+        let picks: Vec<Option<String>> = (0..2)
+            .map(|roll| shuffled_track_id(&songs, Some("song-2"), roll))
+            .collect();
+        assert_eq!(
+            picks,
+            vec![Some("song-1".to_string()), Some("song-3".to_string())]
+        );
+    }
+
+    #[test]
+    fn shuffled_pick_on_empty_list_is_none() {
+        assert_eq!(shuffled_track_id(&[], Some("song-1"), 0), None);
+    }
+
+    // A one-song album already playing has no other song to pick, so Shuffle
+    // returns that song rather than `None` — the same edge the sequential
+    // stepping functions document for a one-element list.
+    #[test]
+    fn shuffled_pick_on_a_one_song_album_returns_that_song() {
+        let songs = single_song_album();
+        assert_eq!(
+            shuffled_track_id(&songs, Some("song-1"), 7),
+            Some("song-1".to_string())
+        );
+    }
+
+    // With no current song every song is a candidate, so the sweep reaches all
+    // three. This pins that the `current` filter does not accidentally drop a
+    // song when there is nothing to exclude.
+    #[test]
+    fn shuffled_pick_without_current_can_reach_every_song() {
+        let songs = stepping_songs();
+        let mut reached: Vec<String> = (0..3)
+            .filter_map(|roll| shuffled_track_id(&songs, None, roll))
+            .collect();
+        reached.sort();
+        reached.dedup();
+        assert_eq!(reached, vec!["song-1", "song-2", "song-3"]);
     }
 }

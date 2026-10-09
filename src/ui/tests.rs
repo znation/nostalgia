@@ -89,7 +89,8 @@ fn assert_view(player: &WinampPlayer, expected: CurrentView) {
 }
 
 /// Asserts `message` flips the shared-state flag `read_flag` from false to
-/// true and back: the `PlayPause`, `ToggleRepeat`, and `ToggleEqualizer` update
+/// true and back: the `PlayPause`, `ToggleRepeat`, `ToggleShuffle`, and
+/// `ToggleEqualizer` update
 /// arms all do the same one-flag flip, differing only in which flag they
 /// read, so the lock-read-update sequence lives here once. The arms use
 /// `blocking_lock`, which panics inside an async runtime, so this stays a
@@ -259,6 +260,11 @@ fn play_pause_toggles_is_playing() {
 #[test]
 fn toggle_repeat_flips_shared_state() {
     assert_toggles_shared_state(Message::ToggleRepeat, |state| state.repeat);
+}
+
+#[test]
+fn shuffle_toggle_flips_the_shuffle_flag() {
+    assert_toggles_shared_state(Message::ToggleShuffle, |state| state.shuffle);
 }
 
 #[test]
@@ -1209,6 +1215,40 @@ fn previous_track_follows_the_shared_repeat_flag_at_the_albums_start() {
     assert_repeat_wraps_at_the_edge(Message::PreviousTrack, "song-1", 0, 2);
 }
 
+// With Shuffle on, the Next arm must land somewhere other than the current
+// song. `shuffled_track_id`'s arithmetic is pinned in `transport.rs`; this
+// pins the arm's wiring over the shared Shuffle flag and that the picked id
+// resolves back to an index. The roll is random, so the test asserts only the
+// invariant that matters — the index is not the current song's (index 1).
+#[test]
+fn next_with_shuffle_never_reselects_the_current_track() {
+    let (mut player, state) = player_stepping_from(Some("song-2"));
+    state.blocking_lock().shuffle = true;
+
+    let task = update(&mut player, Message::NextTrack);
+    futures::executor::block_on(drive_task(
+        task,
+        "shuffled stepping",
+        |message| match message {
+            Message::TrackSelected { index, .. } => {
+                assert_ne!(index, 1, "shuffle re-selected the current song");
+            }
+            other => panic!("unexpected shuffled stepping task output: {other:?}"),
+        },
+    ));
+}
+
+// Previous ignores Shuffle — the app keeps no play history to walk back — so
+// with the flag on it still steps one song backward, exactly as with it off.
+#[test]
+fn previous_with_shuffle_still_steps_backward() {
+    let (mut player, state) = player_stepping_from(Some("song-2"));
+    state.blocking_lock().shuffle = true;
+
+    let task = update(&mut player, Message::PreviousTrack);
+    assert_track_selected(task, 0, 0);
+}
+
 /// Feeds a `*Loaded` message built from `items` back through `update` and
 /// asserts the list lands in `buffer` unchanged and that the matching
 /// `loading` flag is cleared — a `*Loaded` reply reaches `BrowseList::store`,
@@ -1724,7 +1764,8 @@ fn construct_view_in_every_browse_view(player: &mut WinampPlayer) {
 // introspection, so the observable contract — as with the `views.rs`
 // builder tests — is that `view` builds its widget tree without panicking
 // over the space the app actually produces: every browse view (including
-// the pre-load empty buffers), both play states, both repeat states, the
+// the pre-load empty buffers), both play states, both repeat states, both
+// shuffle states, the
 // volume endpoints the update arm can store, and each now-playing
 // resolution. `view` uses `blocking_lock`, which panics inside an async
 // runtime, so this stays a plain test.
@@ -1744,6 +1785,7 @@ fn view_constructs_over_the_apps_full_input_space() {
     let now_playing_options = [None, Some("song-1"), Some("no-such-song")];
     let play_states = [false, true];
     let repeats = [false, true];
+    let shuffles = [false, true];
     let volumes = [0.0, 0.5, 1.0];
 
     for current_view in BROWSE_VIEWS {
@@ -1751,15 +1793,18 @@ fn view_constructs_over_the_apps_full_input_space() {
         for current_track in now_playing_options {
             for is_playing in play_states {
                 for repeat in repeats {
-                    for volume in volumes {
-                        {
-                            let mut state = state.blocking_lock();
-                            state.current_track = current_track.map(str::to_string);
-                            state.is_playing = is_playing;
-                            state.repeat = repeat;
-                            state.set_volume(volume);
+                    for shuffle in shuffles {
+                        for volume in volumes {
+                            {
+                                let mut state = state.blocking_lock();
+                                state.current_track = current_track.map(str::to_string);
+                                state.is_playing = is_playing;
+                                state.repeat = repeat;
+                                state.shuffle = shuffle;
+                                state.set_volume(volume);
+                            }
+                            let _screen = view(&player);
                         }
-                        let _screen = view(&player);
                     }
                 }
             }

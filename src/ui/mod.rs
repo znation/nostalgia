@@ -72,6 +72,9 @@ enum Message {
     Pause,
     Stop,
     ToggleRepeat,
+    // The Shuffle toggle: with it on, a forward step picks a random
+    // non-current song from the loaded album instead of the next in order.
+    ToggleShuffle,
     VolumeChange(f32),
     // The balance slider's change message, clamped by `AppState::set_balance`.
     BalanceChange(f32),
@@ -251,31 +254,48 @@ fn boot(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> (WinampPlaye
 }
 
 /// The task the Next/Previous buttons schedule: step the current track
-/// through the player's loaded songs in the given direction — via the
-/// `transport::next_track_id`/`previous_track_id` stepping function passed
-/// in — and schedule the landed song as `TrackSelected`, or no task when
-/// there is nothing to step through. Both transport update arms used to
-/// repeat this lock-then-dispatch block; the direction comes in as a function
-/// so the stepping arithmetic stays in `transport` and the wiring lives here
-/// once. The shared Repeat flag is read under the same lock and passed
-/// through to the stepping function, so the wrap-vs-stop-at-the-edge decision
-/// (see `transport::next_track_id`) stays in `transport` too.
-fn step_track(
-    player: &WinampPlayer,
-    step: fn(&[Song], Option<&str>, bool) -> Option<String>,
-) -> Task<Message> {
+/// through the player's loaded songs in the given direction — with Shuffle on
+/// a forward step picks a random non-current song via
+/// `transport::shuffled_track_id`, otherwise `forward` selects the
+/// `transport::next_track_id`/`previous_track_id` stepping function — and
+/// schedule the landed song as `TrackSelected`, or no task when there is
+/// nothing to step through. Both transport update arms used to repeat this
+/// lock-then-dispatch block; `forward` selects the direction so the stepping
+/// arithmetic stays in `transport` and the wiring lives here once. The shared
+/// Shuffle and Repeat flags are read under the same lock, so the
+/// random-vs-sequential and wrap-vs-stop-at-the-edge decisions (see
+/// `transport::shuffled_track_id` and `transport::next_track_id`) stay in
+/// `transport` too. Previous ignores Shuffle: the app keeps no play history,
+/// so there is no prior song to randomize back to.
+fn step_track(player: &WinampPlayer, forward: bool) -> Task<Message> {
     // The stepped song is computed under the state lock, borrowing the
     // current track directly. The earlier version cloned the `current_track`
     // `String` only to borrow it via `as_deref` — the same clone-to-borrow
     // the per-frame now-playing path used to do — so the lock now covers the
-    // pure stepping scan (fast, and `step` never locks anything itself).
+    // pure stepping scan (fast, and the transport functions never lock
+    // anything themselves).
     let state = player.state.blocking_lock();
     let epoch = player.songs.epoch;
-    match step(
-        &player.songs.items,
-        state.current_track.as_deref(),
-        state.repeat,
-    ) {
+    let stepped = if forward && state.shuffle {
+        transport::shuffled_track_id(
+            &player.songs.items,
+            state.current_track.as_deref(),
+            transport::shuffle_roll(),
+        )
+    } else if forward {
+        transport::next_track_id(
+            &player.songs.items,
+            state.current_track.as_deref(),
+            state.repeat,
+        )
+    } else {
+        transport::previous_track_id(
+            &player.songs.items,
+            state.current_track.as_deref(),
+            state.repeat,
+        )
+    };
+    match stepped {
         // `transport` answers with the stepped song's id, but the selection
         // message carries the song's index and the epoch of the list that
         // rendered the row (see `TrackSelected`), so resolve the id to its
@@ -297,9 +317,10 @@ fn step_track(
 
 /// Locks the shared playback state, applies `mutation` to it, and returns no
 /// task. The synchronous arms — `Play/Pause`, `Play`, `Pause`, `Stop`,
-/// `ToggleRepeat`, `VolumeChange`, `BalanceChange`, `VolumeUp`, `VolumeDown`,
-/// `ToggleEqualizer`, `EqPreampChange`, `EqBandChange`, and
-/// `EqPresetSelected` — all repeat the same shared-state update —
+/// `ToggleRepeat`, `ToggleShuffle`, `VolumeChange`, `BalanceChange`,
+/// `VolumeUp`, `VolumeDown`, `ToggleEqualizer`, `EqPreampChange`,
+/// `EqBandChange`, and `EqPresetSelected` — all repeat the same shared-state
+/// update —
 /// `blocking_lock`, one mutation, then `Task::none()` — so the lock-and-noop
 /// shape lives here once and each arm only names its mutation. Asynchronous
 /// work (fetches) goes through [`fetch_into`] instead.
@@ -352,6 +373,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         // position while Pause keeps it.
         Message::Stop => mutate_state(player, AppState::stop),
         Message::ToggleRepeat => mutate_state(player, AppState::toggle_repeat),
+        Message::ToggleShuffle => mutate_state(player, AppState::toggle_shuffle),
         Message::VolumeChange(volume) => mutate_state(player, |state| state.set_volume(volume)),
         Message::BalanceChange(balance) => mutate_state(player, |state| state.set_balance(balance)),
         // The arrow keys nudge the slider's value by its own step, so the
@@ -371,8 +393,8 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::EqPresetSelected(preset) => {
             mutate_state(player, |state| state.apply_eq_preset(preset))
         }
-        Message::NextTrack => step_track(player, transport::next_track_id),
-        Message::PreviousTrack => step_track(player, transport::previous_track_id),
+        Message::NextTrack => step_track(player, true),
+        Message::PreviousTrack => step_track(player, false),
         Message::TrackSelected { epoch, index } => {
             // The message carries the pressed row's index into `songs` plus the
             // epoch of the list that rendered it. A mismatched epoch means the
@@ -607,8 +629,8 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
 
 /// Assembles the app screen: the Now Playing bar, transport row, and
 /// equalizer panel — all built in `views.rs` from the resolved title and the
-/// shared playback, volume, Repeat, and EQ state — above the current browse
-/// list. When the window is shaded, only [`views::view_title_bar`] is built
+/// shared playback, volume, Repeat, Shuffle, and EQ state — above the current
+/// browse list. When the window is shaded, only [`views::view_title_bar`] is built
 /// and the rest of the screen is dropped.
 fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // Shade mode builds only the title bar — the Now Playing bar, transport
@@ -630,6 +652,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
         volume,
         balance,
         repeat,
+        shuffle,
         eq_enabled,
         eq_preamp,
         eq_bands,
@@ -642,6 +665,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
             state.volume(),
             state.balance(),
             state.repeat,
+            state.shuffle,
             state.eq_enabled,
             state.eq_preamp(),
             state.eq_bands(),
@@ -683,7 +707,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
         .push(views::view_title_bar(player.always_on_top))
         .push(views::view_now_playing(now_playing))
         .push(views::view_transport_controls(
-            is_playing, volume, balance, repeat,
+            is_playing, volume, balance, repeat, shuffle,
         ))
         .push(views::view_equalizer(
             eq_enabled, eq_preamp, &eq_bands, eq_preset,
