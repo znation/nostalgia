@@ -511,6 +511,38 @@ fn authorize_rejects_a_malformed_developer_token_without_opening() {
 }
 
 #[test]
+fn authorize_reports_a_failed_opener_with_its_cause() {
+    // A missing opener — `xdg-open` absent on a headless Linux box, say — is
+    // a real startup failure, so the flow must surface it at once rather than
+    // block until the callback deadline. The opener is called once with the
+    // bootstrap path, and its own `io::Error` is named in the returned message.
+    let calls = Arc::new(AtomicUsize::new(0));
+    let calls_for_opener = Arc::clone(&calls);
+    let opener = move |_page_path: &str| {
+        calls_for_opener.fetch_add(1, Ordering::SeqCst);
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "xdg-open: not found",
+        ))
+    };
+
+    let error = authorize_with_timeout(SAMPLE_DEVELOPER_TOKEN, &opener, Duration::from_secs(5))
+        .expect_err("a failed opener aborts the flow");
+
+    assert!(
+        error
+            .to_string()
+            .contains("could not open the sign-in page"),
+        "the message must name the opener step, got: {error}"
+    );
+    assert!(
+        error.to_string().contains("xdg-open: not found"),
+        "the message must carry the opener's own error, got: {error}"
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
 fn authorize_refuses_the_page_without_the_state_nonce() {
     let observed = Arc::new(Mutex::new(Vec::<String>::new()));
     let observed_for_flow = Arc::clone(&observed);
