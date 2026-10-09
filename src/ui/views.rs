@@ -515,8 +515,9 @@ const BALANCE_MIN: f32 = -1.0;
 /// `state::clamp_balance` clamps to (see [`BALANCE_MIN`]).
 const BALANCE_MAX: f32 = 1.0;
 
-/// The balance slider's drag granularity: one percent of the scale per step,
-/// matching the volume slider's step.
+/// The balance slider's drag granularity: the same step as the volume
+/// slider, so a drag spans the `[BALANCE_MIN, BALANCE_MAX]` scale in fine
+/// steps.
 const BALANCE_STEP: f32 = 0.01;
 
 /// The equalizer sliders' drag granularity: one decibel, so every preamp and
