@@ -84,3 +84,66 @@ pub(super) const SUCCESS_PAGE: &str = r#"<!DOCTYPE html>
 </body>
 </html>
 "#;
+
+#[cfg(test)]
+mod tests {
+    use super::{SUCCESS_PAGE, render_auth_page, render_bootstrap_page};
+
+    // The bootstrap page exists to redirect the browser to the loopback
+    // sign-in URL, which the flow cannot pass on the command line (the URL
+    // carries the per-flow nonce, and argv is world-readable).
+    // `bootstrap_page_is_private_and_carries_the_sign_in_url` pins the file
+    // mechanics and that the URL appears in the page, but not the redirect:
+    // leaving the URL as plain body text would keep that test green while the
+    // browser sat on the bootstrap page until the flow timed out. Pin the meta
+    // refresh that actually performs the redirect.
+    #[test]
+    fn bootstrap_page_meta_refreshes_to_the_sign_in_url() {
+        let url = "http://127.0.0.1:4321/?state=deadbeefdeadbeef";
+        let page = render_bootstrap_page(url);
+
+        assert!(
+            page.contains(&format!(
+                "<meta http-equiv=\"refresh\" content=\"0; url={url}\">"
+            )),
+            "the bootstrap page must meta-refresh to the sign-in URL, got: {page}"
+        );
+    }
+
+    // The sign-in page only works if the browser loads MusicKit JS and calls
+    // `authorize()`. `render_auth_page_substitutes_every_template_placeholder`
+    // pins the token, nonce, and version substitutions, but a page that
+    // dropped the script tag (or the `authorize()` call) would keep every
+    // placeholder assertion green while no user token was ever obtained. Pin
+    // the two things that make the page do its job.
+    #[test]
+    fn auth_page_loads_musickit_and_calls_authorize() {
+        let page = render_auth_page("dev-token", "deadbeefdeadbeef");
+
+        assert!(
+            page.contains("musickit.js"),
+            "the sign-in page must load MusicKit JS, got: {page}"
+        );
+        assert!(
+            page.contains(".authorize()"),
+            "the sign-in page must call MusicKit's authorize(), got: {page}"
+        );
+    }
+
+    // The callback serves `SUCCESS_PAGE` after storing the session. The flow
+    // test pins the 200 status but never the body, so a regression that served
+    // a blank or wrong page would clear the suite while the user's browser
+    // showed nothing. Pin that it announces the completed sign-in and does not
+    // re-load the sign-in script (which would restart the flow).
+    #[test]
+    fn success_page_announces_the_sign_in_without_restarting_it() {
+        assert!(
+            SUCCESS_PAGE.contains("Signed in to Apple Music"),
+            "the success page must tell the user the sign-in completed, got: {SUCCESS_PAGE}"
+        );
+        assert!(
+            !SUCCESS_PAGE.contains("musickit.js"),
+            "the success page must not re-load the sign-in flow, got: {SUCCESS_PAGE}"
+        );
+    }
+}
