@@ -16,9 +16,23 @@ use super::AppleMusicError;
 use crate::library::{Album, Artist, Song};
 use crate::music_kit_auth::MusicKitSession;
 
+/// The Apple Music REST API origin, without a version path. A collection's
+/// `next` link is resolved against this origin (see [`absolute_next_url`]), so
+/// a paginated follow stays on the same host as the first-page query.
+const API_ORIGIN: &str = "https://api.music.apple.com";
+
 /// The Apple Music REST API root. The library endpoints are storefront-free,
 /// so no storefront is fetched.
 const API_BASE: &str = "https://api.music.apple.com/v1";
+
+/// The most collection pages [`RestLibrary::fetch`] reads for one query.
+///
+/// Apple caps a collection page at 100 items and links the next in `next`, so
+/// the client follows that link to read a large library in full. The bound
+/// stops a server that returns an endless `next` chain — or a link back to a
+/// page already read — from looping forever; when it is reached, `fetch` logs
+/// [`page_bound_notice`] and returns the rows read so far.
+const MAX_PAGES: usize = 10;
 
 /// The end-to-end bound on one REST call, from DNS lookup through reading the
 /// response body. `ureq` defaults every network timeout to `None`, so without
@@ -258,7 +272,10 @@ impl RestLibrary {
             .collect()
     }
 
-    /// Fetches `url` and parses the collection envelope.
+    /// Fetches `url` and parses the collection envelope, following the
+    /// response's `next` link (up to [`MAX_PAGES`] pages) so a collection
+    /// larger than one 100-item page is read in full. A `next` link that does
+    /// not name a same-origin path is not followed (see [`absolute_next_url`]).
     ///
     /// A transport failure propagates as the transport's own cause and a parse
     /// failure names the parse. Neither names the query: the browse methods
@@ -269,13 +286,33 @@ impl RestLibrary {
         url: &str,
         session: &MusicKitSession,
     ) -> Result<Vec<Resource>, AppleMusicError> {
-        let body = self.transport.get(url, session)?;
-        let envelope: Envelope<Resource> = serde_json::from_str(&body)
-            .map_err(|error| AppleMusicError::new(describe_parse_failure(&error)))?;
-        if let Some(next) = envelope.next.as_deref() {
-            eprintln!("{}", truncation_notice(next));
+        let mut resources = Vec::new();
+        let mut next_url = url.to_string();
+        for page in 1..=MAX_PAGES {
+            let body = self.transport.get(&next_url, session)?;
+            let envelope: Envelope<Resource> = serde_json::from_str(&body)
+                .map_err(|error| AppleMusicError::new(describe_parse_failure(&error)))?;
+            resources.extend(envelope.data);
+            let Some(next) = envelope.next.as_deref() else {
+                break;
+            };
+            match absolute_next_url(next) {
+                // Another page exists and the bound allows reading it.
+                Some(resolved) if page < MAX_PAGES => next_url = resolved,
+                // The bound is reached: report the unread page and stop.
+                Some(_) => {
+                    eprintln!("{}", page_bound_notice(next));
+                    break;
+                }
+                // The link is not a same-origin path, so following it could
+                // send the session's tokens to another host.
+                None => {
+                    eprintln!("{}", unfollowable_next_notice(next));
+                    break;
+                }
+            }
         }
-        Ok(envelope.data)
+        Ok(resources)
     }
 }
 
@@ -299,17 +336,44 @@ fn describe_parse_failure(error: &serde_json::Error) -> String {
     }
 }
 
-/// The notice logged when a collection response carries a `next` page the
-/// client does not read: pagination is not implemented, so the first page is
-/// all the user sees. Naming the unread page turns a silently truncated
-/// library into a diagnosable one. `next` is server-controlled text headed for
+/// The absolute URL to follow for a collection's `next` link, or `None` when
+/// the link is not a same-origin path this client may follow.
+///
+/// Apple returns `next` as an absolute path (`/v1/me/library/artists?offset=100`),
+/// which is resolved against [`API_ORIGIN`]. Only a path beginning with a
+/// single `/` is accepted: an absolute URL, a scheme-relative `//host` target,
+/// and a bare relative target all yield `None`, so the session's credentials
+/// only ever go to [`API_ORIGIN`] — the same credential-isolation rule as
+/// `agent_with_timeout`'s `max_redirects(0)`.
+fn absolute_next_url(next: &str) -> Option<String> {
+    if next.starts_with('/') && !next.starts_with("//") {
+        Some(format!("{API_ORIGIN}{next}"))
+    } else {
+        None
+    }
+}
+
+/// The notice logged when a collection has more pages than [`MAX_PAGES`], so
+/// `fetch` stops with rows unread. `next` is server-controlled text headed for
 /// the terminal, so it is formatted with `Debug` — as
 /// [`crate::apple_music::play_log_line`] formats an id — to escape a control
 /// character (`\u{1b}`) or a Unicode format character such as the
 /// right-to-left override `\u{202e}` instead of letting it reach the terminal
 /// raw.
-fn truncation_notice(next: &str) -> String {
-    format!("Apple Music returned a next page {next:?}; only the first page is read")
+fn page_bound_notice(next: &str) -> String {
+    format!(
+        "Apple Music returned a next page {next:?} after {MAX_PAGES} pages; stopping at the page limit"
+    )
+}
+
+/// The notice logged when a collection's `next` link is not a same-origin path
+/// and is therefore not followed. Escaped with `Debug` for the same reason as
+/// [`page_bound_notice`]: the link is server-controlled and reaches the
+/// terminal.
+fn unfollowable_next_notice(next: &str) -> String {
+    format!(
+        "Apple Music returned a next page {next:?} that is not a same-origin path; not following it"
+    )
 }
 
 /// Percent-encodes `segment` for use as a single URL path segment.
@@ -333,15 +397,14 @@ fn encode_path_segment(segment: &str) -> String {
 
 /// The `{ "data": [ ... ] }` envelope every Apple Music collection response
 /// carries. Apple caps a page at 100 items and links the next page in `next`;
-/// only the first page is read (pagination is not implemented), and
-/// [`RestLibrary::fetch`] logs [`truncation_notice`] when `next` is present so
-/// a larger library is not truncated silently.
+/// [`RestLibrary::fetch`] follows that link (up to [`MAX_PAGES`] pages) so a
+/// larger library is read in full rather than truncated to its first page.
 #[derive(Deserialize)]
 struct Envelope<T> {
     data: Vec<T>,
     /// The API's link to the next page of a paginated collection, present only
-    /// when there is one. The client does not follow it; `fetch` only reports
-    /// that it is there.
+    /// when there is one. [`RestLibrary::fetch`] follows it, up to
+    /// [`MAX_PAGES`] pages, when it names a same-origin path.
     next: Option<String>,
 }
 

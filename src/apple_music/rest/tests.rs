@@ -672,39 +672,117 @@ fn a_request_carries_the_developer_and_user_tokens() {
     );
 }
 
-// The collection response's `next` link means Apple has more pages, but the
-// client reads only the first. A large library would otherwise be truncated
-// with no sign of it, so the parse path logs a notice naming the unread page.
-// Pure, like the other report formatters, so the wording and escaping are
-// testable without capturing stderr.
+// The page-bound and unfollowable-link notices are pure, like the other
+// report formatters, so the wording and the escaping of server-controlled
+// text are testable without capturing stderr. Pin each notice's exact wording,
+// including the production `MAX_PAGES` in the bound message.
 #[test]
-fn truncation_notice_names_the_unread_page() {
+fn page_bound_notice_names_the_unread_page_and_the_bound() {
     assert_eq!(
-        truncation_notice("/v1/me/library/artists?offset=100"),
-        "Apple Music returned a next page \"/v1/me/library/artists?offset=100\"; only the first page is read"
+        page_bound_notice("/v1/me/library/artists?offset=1000"),
+        "Apple Music returned a next page \"/v1/me/library/artists?offset=1000\" after 10 pages; stopping at the page limit"
+    );
+}
+
+#[test]
+fn unfollowable_next_notice_names_the_unfollowed_page() {
+    assert_eq!(
+        unfollowable_next_notice("https://evil.example/steal"),
+        "Apple Music returned a next page \"https://evil.example/steal\" that is not a same-origin path; not following it"
     );
 }
 
 // `next` is server-controlled and reaches the terminal, so a control character
 // or a Unicode format character must be escaped rather than emitted raw, as
-// `api_error_cause` escapes an API error detail. Pin both: `\u{1b}` (a control
-// character) and `\u{202e}` (the right-to-left override, which
+// `api_error_cause` escapes an API error detail. Pin both notices: `\u{1b}` (a
+// control character) and `\u{202e}` (the right-to-left override, which
 // `char::is_control` does not classify as a control).
 #[test]
-fn truncation_notice_escapes_control_and_format_characters() {
-    let notice = truncation_notice("/v1/evil\u{1b}\u{202e}");
-    assert!(!notice.contains('\u{1b}'), "{notice:?}");
-    assert!(!notice.contains('\u{202e}'), "{notice:?}");
-    assert!(notice.contains("\\u{1b}"), "{notice:?}");
-    assert!(notice.contains("\\u{202e}"), "{notice:?}");
+fn pagination_notices_escape_control_and_format_characters() {
+    for notice in [
+        page_bound_notice("/v1/evil\u{1b}\u{202e}"),
+        unfollowable_next_notice("/v1/evil\u{1b}\u{202e}"),
+    ] {
+        assert!(!notice.contains('\u{1b}'), "{notice:?}");
+        assert!(!notice.contains('\u{202e}'), "{notice:?}");
+        assert!(notice.contains("\\u{1b}"), "{notice:?}");
+        assert!(notice.contains("\\u{202e}"), "{notice:?}");
+    }
 }
 
-// A response carrying `next` still returns the first page's data: the notice
-// reports the truncation, it does not change what is browsed. The stub answers
-// every call with the same body, so exactly one recorded call proves the next
-// page is not fetched.
+// `absolute_next_url` is the credential-isolation rule: only a same-origin
+// path may be followed, so a hostile `next` cannot redirect the session's
+// tokens to another host. A relative path is resolved against the API origin;
+// an absolute URL, a scheme-relative `//host` target, and a bare relative
+// target all yield `None`.
 #[test]
-fn a_response_with_a_next_page_still_returns_only_the_first_page() {
+fn absolute_next_url_follows_only_a_same_origin_path() {
+    assert_eq!(
+        absolute_next_url("/v1/me/library/artists?offset=100"),
+        Some("https://api.music.apple.com/v1/me/library/artists?offset=100".to_string())
+    );
+    for next in [
+        "https://evil.example/steal",
+        "//evil.example/steal",
+        "me/library/artists?offset=100",
+        "",
+    ] {
+        assert_eq!(absolute_next_url(next), None, "{next:?}");
+    }
+}
+
+// `API_BASE` must stay the origin plus the version path, or a followed `next`
+// and a first-page query would disagree about where the API lives.
+#[test]
+fn api_base_is_the_origin_plus_the_version_path() {
+    assert_eq!(API_BASE, format!("{API_ORIGIN}/v1"));
+}
+
+// A collection over one page links the next; the client follows it and returns
+// both pages' rows in order, so a library larger than 100 items is read in
+// full. Two recorded calls, the second to the resolved next URL, prove the
+// link was followed exactly once.
+#[test]
+fn a_next_page_is_followed_and_both_pages_are_returned_in_order() {
+    let stub = StubTransport::returning_bodies(&[
+        r#"{"data":[{"id":"artist-1","attributes":{"name":"The Sample Band"}}],"next":"/v1/me/library/artists?offset=1"}"#,
+        r#"{"data":[{"id":"artist-2","attributes":{"name":"Echo Chamber"}}]}"#,
+    ]);
+    let library = library_over(&stub);
+
+    let artists = library.get_favorite_artists(&session()).unwrap();
+
+    assert_eq!(
+        artists,
+        vec![
+            Artist {
+                id: "artist-1".to_string(),
+                name: "The Sample Band".to_string(),
+            },
+            Artist {
+                id: "artist-2".to_string(),
+                name: "Echo Chamber".to_string(),
+            },
+        ]
+    );
+    let calls = stub.calls();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(
+        calls[0].0,
+        "https://api.music.apple.com/v1/me/library/artists"
+    );
+    assert_eq!(
+        calls[1].0,
+        "https://api.music.apple.com/v1/me/library/artists?offset=1"
+    );
+}
+
+// An endless `next` chain — a server that always links another page, or one
+// that links back to a page already read — must stop at `MAX_PAGES` rather
+// than loop forever. The stub repeats its one body, so the call count is the
+// page bound.
+#[test]
+fn an_endless_next_chain_stops_at_the_page_bound() {
     let stub = StubTransport::returning(
         r#"{"data":[{"id":"artist-1","attributes":{"name":"The Sample Band"}}],"next":"/v1/me/library/artists?offset=1"}"#,
     );
@@ -712,12 +790,23 @@ fn a_response_with_a_next_page_still_returns_only_the_first_page() {
 
     let artists = library.get_favorite_artists(&session()).unwrap();
 
-    assert_eq!(
-        artists,
-        vec![Artist {
-            id: "artist-1".to_string(),
-            name: "The Sample Band".to_string(),
-        }]
+    assert_eq!(artists.len(), MAX_PAGES);
+    assert_eq!(stub.calls().len(), MAX_PAGES);
+}
+
+// A `next` link that names another host must not be followed: the session's
+// developer and user tokens only ever go to the API origin (the same rule as
+// `max_redirects(0)`). One recorded call and the first page's row prove the
+// link was dropped.
+#[test]
+fn a_next_link_to_another_host_is_not_followed() {
+    let stub = StubTransport::returning(
+        r#"{"data":[{"id":"artist-1","attributes":{"name":"The Sample Band"}}],"next":"https://evil.example/steal"}"#,
     );
+    let library = library_over(&stub);
+
+    let artists = library.get_favorite_artists(&session()).unwrap();
+
+    assert_eq!(artists.len(), 1);
     assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/artists");
 }

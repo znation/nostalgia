@@ -92,6 +92,38 @@ seam, navigation, transport, or the other panels.
 
 ## Done
 
+### Follow a browse collection's next page so a large library is read in full (found 2026-10-08, done 2026-10-08)
+
+Apple caps a collection page at 100 items and links the next page in the
+response's `next` field. The prior change only logged the unread page; the
+client still returned the first page, so a library over one page was truncated.
+This follows the link (up to a bound) and returns every page's rows.
+
+**Goal.** `RestLibrary::fetch` follows `next` for every browse query, combining
+the pages in order, without letting a hostile link redirect the session's
+tokens or an endless chain loop forever.
+
+**Approach.**
+
+- `src/apple_music/rest.rs`: add `API_ORIGIN`, `MAX_PAGES` (10), and
+  `absolute_next_url`, which resolves only a single-slash same-origin path
+  against `API_ORIGIN`; rewrite `fetch` to loop up to `MAX_PAGES`, extending
+  the rows and following each `next`, logging `page_bound_notice` at the bound
+  and `unfollowable_next_notice` for a non-same-origin link.
+- `src/test_support.rs`: add `StubTransport::returning_bodies` so a test can
+  serve a sequence of responses (the existing stub repeated one body).
+- `src/apple_music/rest/tests.rs`: pin the two notices, `absolute_next_url`,
+  `API_BASE`/`API_ORIGIN` agreement, a two-page fetch, the page bound, and that
+  a cross-host `next` is not followed.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- A two-page response yields both pages' rows in order with two requests, the
+  second to the resolved next URL.
+- An endless `next` chain issues exactly `MAX_PAGES` requests.
+- A `next` naming another host is not followed.
+
 ### Show the current track's duration in the Now Playing bar (found 2026-10-08, done 2026-10-08)
 
 Classic Winamp's main LCD pairs the current track with a time, and its

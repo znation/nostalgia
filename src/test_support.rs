@@ -6,6 +6,7 @@
 //! `library` so the data model module stays only the model; every item here
 //! is compiled only for tests.
 
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use crate::apple_music::AppleMusicError;
@@ -207,31 +208,57 @@ pub(crate) fn assert_ids<T>(items: &[T], id: impl Fn(&T) -> &str, expected: &[&s
 
 /// A transport stub shared by the `apple_music` service tests and the
 /// `apple_music::rest` client tests: it records every `(url, session)` it is
-/// handed and returns the same canned result to each call. Cloning it shares
-/// the recording, so a test keeps a handle after the service or
+/// handed and answers with its canned result. Cloning it shares the recording
+/// and the queued responses, so a test keeps a handle after the service or
 /// [`RestLibrary`](crate::apple_music::rest::RestLibrary) boxes the clone.
 /// Both suites used to define this stub independently, so the recording
 /// contract lived in two places; it lives here once and is compiled only for
 /// tests.
 #[derive(Clone)]
 pub(crate) struct StubTransport {
+    /// The response repeated once [`Self::queue`] is exhausted.
     result: Result<String, AppleMusicError>,
+    /// The responses served in order, front first, before `result` takes over.
+    /// Empty for the single-response stubs, so they answer every call with
+    /// `result`; `returning_bodies` fills it for a paginated fetch.
+    queue: Arc<Mutex<VecDeque<Result<String, AppleMusicError>>>>,
     calls: Arc<Mutex<Vec<(String, MusicKitSession)>>>,
 }
 
 impl StubTransport {
     /// A stub that answers every request with `body`.
     pub(crate) fn returning(body: &str) -> Self {
-        Self {
-            result: Ok(body.to_string()),
-            calls: Arc::new(Mutex::new(Vec::new())),
-        }
+        Self::with_result(Ok(body.to_string()))
     }
 
     /// A stub that fails every request with `message`.
     pub(crate) fn failing(message: &str) -> Self {
+        Self::with_result(Err(AppleMusicError::new(message)))
+    }
+
+    /// A stub that answers the first calls with `bodies` in order and then
+    /// repeats the last body for every later call. `returning` is the
+    /// single-body case; this is the multi-response case a paginated fetch
+    /// needs.
+    pub(crate) fn returning_bodies(bodies: &[&str]) -> Self {
+        let responses: VecDeque<Result<String, AppleMusicError>> =
+            bodies.iter().map(|body| Ok((*body).to_string())).collect();
+        let last = responses
+            .back()
+            .cloned()
+            .unwrap_or_else(|| Ok(String::new()));
         Self {
-            result: Err(AppleMusicError::new(message)),
+            result: last,
+            queue: Arc::new(Mutex::new(responses)),
+            calls: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    /// A stub with an empty queue, so `result` answers every call.
+    fn with_result(result: Result<String, AppleMusicError>) -> Self {
+        Self {
+            result,
+            queue: Arc::new(Mutex::new(VecDeque::new())),
             calls: Arc::new(Mutex::new(Vec::new())),
         }
     }
@@ -248,6 +275,10 @@ impl HttpTransport for StubTransport {
             .lock()
             .unwrap()
             .push((url.to_string(), session.clone()));
-        self.result.clone()
+        self.queue
+            .lock()
+            .unwrap()
+            .pop_front()
+            .unwrap_or_else(|| self.result.clone())
     }
 }
