@@ -29,7 +29,82 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Add a Winamp balance slider beside the volume slider (found 2026-10-08)
+
+The transport row (`views::view_transport_controls`) carries the five chrome
+buttons and a volume slider, but not the balance slider that sits beside
+volume in classic Winamp's main window. This adds it as pure shared state,
+mirroring volume: `-1.0` hard left, `0.0` center, `+1.0` hard right.
+
+**Goal.** A Balance slider beside the volume slider writes a clamped
+`[-1.0, 1.0]` value to `AppState`, and the view reads it back, with no new
+dependency and no change to playback, browse, or the equalizer.
+
+**Approach.**
+
+- `src/state.rs`:
+  - Add `balance: f32` to `AppState`, private like `volume`, documented as
+    `[-1.0, 1.0]` and never NaN; default `0.0` (center) in the `Default` impl.
+  - Add `pub fn balance(&self) -> f32`, `pub fn set_balance(&mut self, balance:
+    f32)` (the field's only writer, storing `clamp_balance(balance)`), and
+    `pub fn clamp_balance(balance: f32) -> f32` =
+    `clamp::clamp_with_nan_fallback(balance, -1.0, 1.0, 0.0)` — the volume
+    wrapper's `[-1.0, 1.0]` twin, with NaN mapped to center and `#[must_use]`.
+  - Update the `Default` doc comment's initial-state sentence and the
+    `assert_keeps_track_and_volume` doc comment (which enumerates the volume
+    setters as the mutations it cannot guard) to name `set_balance` as another
+    such setter.
+  - Tests: `set_balance_stores_an_in_range_value`,
+    `set_balance_clamps_out_of_range_values` (both ends),
+    `set_balance_maps_nan_to_center`, and `set_balance_changes_only_the_balance`
+    (against a state whose other fields are set, like
+    `set_volume_changes_only_the_volume`).
+- `src/ui/mod.rs`:
+  - Add `Message::BalanceChange(f32)` beside `VolumeChange`.
+  - Add `Message::BalanceChange(balance) => mutate_state(player, |state|
+    state.set_balance(balance))` beside the `VolumeChange` arm, and add
+    `BalanceChange` to `mutate_state`'s doc-comment list of synchronous arms.
+  - In `view`, read `state.balance()` into the destructured state tuple and
+    pass it to `views::view_transport_controls`.
+- `src/ui/views.rs`:
+  - Add `const BALANCE_MIN: f32 = -1.0;`, `const BALANCE_MAX: f32 = 1.0;`, and
+    `const BALANCE_STEP: f32 = 0.01;` beside the volume constants.
+  - Change `view_transport_controls(is_playing, volume, repeat)` to
+    `view_transport_controls(is_playing, volume, balance, repeat)`, push a
+    second `Slider::new(BALANCE_MIN..=BALANCE_MAX, balance,
+    Message::BalanceChange)` after the volume slider with `.step(BALANCE_STEP)`,
+    `.width(Length::Fixed(100.0))`, and the same `style::chrome_slider_style`
+    as volume, and extend its doc comment.
+- `src/ui/tests.rs`:
+  - Update the `view_transport_controls` call in
+    `transport_controls_construct_for_both_play_states_volume_endpoints_and_repeat_states`
+    for the new argument (add a balance loop over `[-1.0, 0.0, 1.0]`).
+  - Add `balance_change_clamps_value_before_storing` using the existing
+    `assert_message_clamps` helper: `BalanceChange(1.5)` → `1.0`,
+    `BalanceChange(-2.0)` → `-1.0`, `BalanceChange(-0.4)` → `-0.4`; extend that
+    helper's doc comment to name the `BalanceChange` arm.
+- `src/ui/views.rs` tests:
+  - Add `balance_slider_spec_matches_the_state_clamp_and_pins_its_granularity`,
+    the volume spec test's twin: `clamp_balance(BALANCE_MIN) == BALANCE_MIN`,
+    `clamp_balance(BALANCE_MAX) == BALANCE_MAX`, a `BALANCE_STEP` past each end
+    clamps back, and `BALANCE_STEP == 0.01`. Import `clamp_balance` and the new
+    constants in the test module.
+
+**Files touched.** `src/state.rs`, `src/ui/mod.rs`, `src/ui/views.rs`,
+`src/ui/tests.rs`.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- `AppState::default().balance()` is `0.0`; `set_balance` stores an in-range
+  value, clamps both out-of-range ends, and maps NaN to `0.0`; a balance write
+  leaves every other `AppState` field untouched.
+- `Message::BalanceChange` routes through `update` to the clamped stored value,
+  and the transport row constructs for the balance endpoints.
+- The Balance slider's range equals `clamp_balance`'s range and its step is
+  `0.01`, pinned by the spec test.
+- Manual check (`cargo run`): the Balance slider sits beside Volume and its
+  thumb stays where dragged. The build and tests are the primary gate.
 
 ## Done
 
