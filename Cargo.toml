@@ -15,9 +15,10 @@ repository = "https://github.com/znation/nostalgia"
 
 [dependencies]
 # `iced_native` was dropped with the iced 0.14 port (no longer referenced).
-# `advanced` exposes `iced::advanced` — the `Widget`/layout API — so the UI
-# style tests can lay a panel out and assert its resolved size. The feature
-# only un-gates modules; it adds no crates.
+# `advanced` exposes `iced::advanced` — the `Widget`/layout API. Production
+# `bevel.rs` names `iced::advanced::Renderer` in its generic bevel builders,
+# and the style tests lay a panel out and assert its resolved size. The
+# feature only un-gates modules; it adds no crates.
 iced = { version = "0.14.0", features = ["advanced"] }
 # `derive` is requested explicitly: `library` uses
 # `#[derive(Serialize, Deserialize)]`, and without this the crate would compile
