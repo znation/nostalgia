@@ -395,14 +395,37 @@ fn write_private_file(file: &Path, contents: &str) -> io::Result<()> {
 }
 
 /// Waits on `child` on a detached thread so it is reaped without blocking the
-/// caller. A failed wait is reported: the child could not be reaped, which is
-/// worth a line on stderr rather than silence.
-fn reap_in_background(mut child: std::process::Child) {
-    thread::spawn(move || {
-        if let Err(error) = child.wait() {
-            eprintln!("could not reap the browser opener process: {error}");
-        }
+/// caller. A failed wait is reported, and so is a nonzero exit: an opener that
+/// cannot hand the page to a browser (a missing opener, or no browser
+/// installed) exits nonzero, and without this line that failure stays invisible
+/// until the flow reports its generic timeout minutes later. The status is only
+/// reported, not turned into a flow failure: the opener has already run, and a
+/// browser that did open still delivers the callback.
+fn reap_in_background(child: std::process::Child) {
+    reap_with(child, |report| eprintln!("{report}"));
+}
+
+/// [`reap_in_background`] with an injectable reporter, so a test can observe
+/// the report a nonzero opener exit produces without capturing stderr.
+///
+/// The wait runs on its own thread (see [`reap_in_background`]); `report` runs
+/// on that thread and receives the one line to log, or nothing for a
+/// successful exit.
+fn reap_with(mut child: std::process::Child, report: impl FnOnce(String) + Send + 'static) {
+    thread::spawn(move || match child.wait() {
+        Ok(status) if !status.success() => report(opener_exit_report(&status)),
+        Ok(_) => {}
+        Err(error) => report(format!(
+            "could not reap the browser opener process: {error}"
+        )),
     });
+}
+
+/// The line logged when the browser opener exits without success. Names the
+/// status so a missing or broken opener is diagnosable, and states the
+/// consequence without overclaiming it: the browser may still have opened.
+fn opener_exit_report(status: &std::process::ExitStatus) -> String {
+    format!("the browser opener exited with {status}; the sign-in page may not have opened")
 }
 
 /// What serving one connection decided for the overall flow.

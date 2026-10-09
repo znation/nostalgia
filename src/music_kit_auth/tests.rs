@@ -1227,6 +1227,57 @@ fn reap_in_background_reaps_the_child() {
     }
 }
 
+// The opener reaps on a detached thread, so its exit status is the only signal
+// the flow has about whether the browser actually opened. A nonzero exit (a
+// broken or missing browser) used to be discarded: the sign-in then sat for
+// the full `AUTH_TIMEOUT` and reported only a generic timeout, hiding the
+// cause. `reap_with`'s injectable reporter makes the status observable, and a
+// real nonzero-exiting process is the fault injected.
+#[cfg(unix)]
+#[test]
+fn a_nonzero_opener_exit_is_reported() {
+    let child = Command::new("sh")
+        .args(["-c", "exit 3"])
+        .spawn()
+        .expect("spawn a child that exits nonzero");
+    let (sender, receiver) = std::sync::mpsc::channel();
+    reap_with(child, move |report| {
+        let _ = sender.send(report);
+    });
+    let report = receiver
+        .recv_timeout(Duration::from_secs(10))
+        .expect("a nonzero opener exit must be reported");
+    assert!(
+        report.contains("opener"),
+        "the report must name the opener, got: {report}"
+    );
+    assert!(
+        report.contains('3'),
+        "the report must name the exit status, got: {report}"
+    );
+}
+
+// The twin of the test above: a successful opener exit must stay quiet, so the
+// new report cannot fire on every sign-in and turn a working browser into a
+// logged failure. The child exits zero and the reporter must never receive a
+// line.
+#[cfg(unix)]
+#[test]
+fn a_successful_opener_exit_is_not_reported() {
+    let child = Command::new("sh")
+        .args(["-c", "exit 0"])
+        .spawn()
+        .expect("spawn a child that exits zero");
+    let (sender, receiver) = std::sync::mpsc::channel();
+    reap_with(child, move |report| {
+        let _ = sender.send(report);
+    });
+    assert!(
+        receiver.recv_timeout(Duration::from_millis(500)).is_err(),
+        "a successful opener exit must not be reported"
+    );
+}
+
 // `AUTH_TIMEOUT` is production behavior — how long `authorize` waits for
 // the browser callback — but `authorize` is its only reader and the
 // timeout tests above inject their own deadline, so a changed constant
