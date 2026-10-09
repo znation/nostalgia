@@ -119,6 +119,27 @@ defers other roles or queues bugfix.
 
 ## Fixed
 
+### A failed preview start leaves shared state claiming playback (found by improve 2026-10-09, fixed 2026-10-09)
+
+Symptom: `AppleMusicService::play_track` commits the shared-state transition
+(`current_track` and `is_playing = true`) before it hands the preview URL to
+the injected `audio::AudioOutput`. When the backend rejects the request the
+error propagates, but `AppState::is_playing` stays `true`, so the Now Playing
+bar and the Play/Pause button report playback that never started. In
+production `RodioOutput::play` only sends a worker command, so the window is
+narrow, but the seam is public and a real backend can report a rejection.
+
+How to reproduce: play a track with a preview URL through a failing
+`AudioOutput` (`test_support::FailingAudio`); the returned error is "the audio
+device is gone" while `AppState::is_playing` is still `true`.
+
+Fix: on an audio failure, re-lock the shared state and clear `is_playing`
+(leaving `current_track` set, as `stop` does) before returning the error. The
+rollback re-checks the play's `is_current` guard under the lock, so a play a
+newer one has superseded leaves the newer play's flag alone. `play_track`'s
+`is_current` parameter is now `Fn` rather than `FnOnce` so it can be consulted
+at both points.
+
 ### A browse reply is stored after a newer request was issued, so a navigation shows the previous level's rows (found by robustness 2026-10-08, fixed 2026-10-08)
 
 Symptom: `loading::fetch_into` checks `RequestGeneration::is_current()` inside

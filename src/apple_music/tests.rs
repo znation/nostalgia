@@ -440,9 +440,12 @@ async fn play_track_rejects_a_blank_preview_url_without_touching_state() {
 
 // A backend that cannot start the preview reports it through the seam, so the
 // UI's play path can log the failure instead of silently claiming success.
+// The preview never started, so shared state must not keep claiming it is
+// playing: `current_track` records the selection but `is_playing` is rolled
+// back.
 #[tokio::test]
 async fn play_track_propagates_an_audio_backend_failure() {
-    let (service, _state) = service_with_audio(Arc::new(FailingAudio));
+    let (service, state) = service_with_audio(Arc::new(FailingAudio));
 
     let error = service
         .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
@@ -450,6 +453,42 @@ async fn play_track_propagates_an_audio_backend_failure() {
         .unwrap_err();
 
     assert_eq!(error.to_string(), "the audio device is gone");
+    assert_playback_state(&state, Some("song-1"), false).await;
+}
+
+// A play can fail after a newer one has already committed: the user clicks
+// song-1, then song-2, and song-1's backend call fails after song-2 is
+// playing. The failure rollback must not clear the newer play's flag, or the
+// UI would show song-2 stopped while it plays. The guard reports "current" at
+// commit and "superseded" at rollback — the window in which a newer play can
+// land — and the rollback then leaves the flag set.
+#[tokio::test]
+async fn play_track_rollback_leaves_a_newer_plays_flag_alone() {
+    let (service, state) = service_with_audio(Arc::new(FailingAudio));
+
+    // First call (the commit guard) reports current; the second (the rollback
+    // guard) reports superseded.
+    let calls = std::cell::Cell::new(0u32);
+    let is_current = || {
+        let call = calls.get();
+        calls.set(call + 1);
+        call == 0
+    };
+
+    let error = service
+        .play_track(
+            "song-1",
+            Some("https://example.test/preview.m4a"),
+            is_current,
+        )
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.to_string(), "the audio device is gone");
+    assert_playback_state(&state, Some("song-1"), true).await;
+    // Two calls: the commit guard and the rollback guard. A missing rollback
+    // would consult the guard once and leave the assertion above green.
+    assert_eq!(calls.get(), 2);
 }
 
 // `pause` pauses the injected backend as well as clearing the shared playing

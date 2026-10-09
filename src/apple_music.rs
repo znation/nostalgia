@@ -296,13 +296,23 @@ impl AppleMusicService {
     /// blank is a caller bug — no asset has a blank URL — and is rejected the
     /// same way a blank id is, before shared state is touched.
     ///
+    /// When the audio backend rejects the preview, shared state must not keep
+    /// claiming playback: `is_playing` is cleared before the error is
+    /// returned, leaving `current_track` set as [`crate::state::AppState::stop`]
+    /// leaves it, so the Now Playing bar still names the track the user
+    /// selected. The rollback is itself guarded by `is_current` (see below),
+    /// so a play a newer one has superseded never clears the newer play's
+    /// flag.
+    ///
     /// `is_current` guards the commit: it is evaluated while the state lock is
     /// held, and when it returns `false` the track is left uncommitted — and
     /// no audio starts — because a newer play has superseded this one. A slow
     /// backend can complete two plays out of order, and without the guard the
     /// older reply would overwrite the newer track in shared state; the UI
     /// passes the guard from its playback-request counter, exactly as the
-    /// browse path does.
+    /// browse path does. The same guard is consulted again under the lock
+    /// before an audio failure rolls the flag back, because a newer play may
+    /// have committed in the window between the commit and the backend call.
     ///
     /// # Errors
     ///
@@ -313,7 +323,7 @@ impl AppleMusicService {
         &self,
         track_id: &str,
         preview_url: Option<&str>,
-        is_current: impl FnOnce() -> bool,
+        is_current: impl Fn() -> bool,
     ) -> Result<(), AppleMusicError> {
         ensure_id_is_valid(track_id, IdKind::Track)?;
         ensure_preview_url_is_valid(preview_url)?;
@@ -328,8 +338,20 @@ impl AppleMusicService {
 
         println!("{}", play_log_line(track_id));
 
-        if let Some(url) = preview_url {
-            self.audio.play(url)?;
+        if let Some(url) = preview_url
+            && let Err(error) = self.audio.play(url)
+        {
+            // The backend refused the preview, so shared state must not keep
+            // claiming playback. Roll the flag back only when no newer play
+            // has replaced this one: a newer play owns the state now, and
+            // clearing it here would make that track look stopped.
+            // `current_track` is left in place, as `stop` leaves it, so the
+            // bar still names the track the user selected.
+            let mut state = self.state.lock().await;
+            if is_current() {
+                state.is_playing = false;
+            }
+            return Err(error);
         }
         Ok(())
     }
