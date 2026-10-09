@@ -2,10 +2,10 @@
 //!
 //! These are the sample `Artist`/`Album`/`Song` values and stepping fixtures,
 //! the `"Rock"` preset, the serde-contract assertions, the transport stub, and
-//! the audio fakes that the `library`, `apple_music`, `ui`, and `audio` test
-//! suites share. They live in one named module rather than inside `library` so
-//! the data model module stays only the model; every item here is compiled
-//! only for tests.
+//! the audio fakes that the `library`, `apple_music`, `ui`, `state`,
+//! `equalizer`, and `audio` test suites share. They live in one named module
+//! rather than inside `library` so the data model module stays only the model;
+//! every item here is compiled only for tests.
 
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
