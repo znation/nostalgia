@@ -35,7 +35,7 @@ use ureq::unversioned::resolver::{DefaultResolver, ResolvedSocketAddrs, Resolver
 use ureq::unversioned::transport::{DefaultConnector, NextTimeout};
 
 use crate::apple_music::ip_is_internal;
-use crate::http::config_with_timeout;
+use crate::http::config_builder_with_timeout;
 use crate::music_error::AppleMusicError;
 
 /// The end-to-end bound on one preview download, from DNS lookup through
@@ -462,7 +462,8 @@ fn serve_commands<P, D>(
 /// passed `preview_url_problem`'s one-time host check cannot be bounced to an
 /// address that check refused, and resolves through [`PublicAddressResolver`],
 /// so a hostname the URL names is refused when it resolves to an internal
-/// address rather than only when the URL spells one as a literal.
+/// address rather than only when the URL spells one as a literal. It is built
+/// with no proxy, so that resolver always sees the preview host.
 fn preview_agent() -> &'static ureq::Agent {
     static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
     AGENT.get_or_init(|| preview_agent_with_timeout(PREVIEW_TIMEOUT))
@@ -470,9 +471,15 @@ fn preview_agent() -> &'static ureq::Agent {
 
 /// [`preview_agent`]'s builder, with an injectable bound so a test can build
 /// the same guarded agent without waiting out [`PREVIEW_TIMEOUT`].
+///
+/// The proxy is disabled so `ureq` resolves the preview host itself. With an
+/// environment proxy configured (`HTTPS_PROXY`/`ALL_PROXY`), `ureq` sends the
+/// target hostname to the proxy and never consults [`PublicAddressResolver`],
+/// which would bypass the guard; a proxy that resolves the target differently
+/// (DNS rebinding) would also defeat a local pre-check.
 fn preview_agent_with_timeout(timeout: Duration) -> ureq::Agent {
     ureq::Agent::with_parts(
-        config_with_timeout(timeout),
+        config_builder_with_timeout(timeout).proxy(None).build(),
         DefaultConnector::default(),
         PublicAddressResolver::default(),
     )
@@ -488,10 +495,11 @@ fn preview_agent_with_timeout(timeout: Duration) -> ureq::Agent {
 /// `ip6-localhost`, or an attacker-controlled name) is resolved by `ureq`'s
 /// own resolver at connect time, after that check. Wrapping the default
 /// resolver here validates every address it returns and errors with
-/// [`ureq::Error::HostNotFound`] when any of them is internal, so on the
-/// direct path (no proxy configured, the app's default) the connection is made
-/// only to an address the guard approved — closing the resolve-after-check
-/// gap, not just the literal case.
+/// [`ureq::Error::HostNotFound`] when any of them is internal, so the
+/// connection is made only to an address the guard approved — closing the
+/// resolve-after-check gap, not just the literal case. The preview agent
+/// disables the proxy so this resolver always runs; a CONNECT proxy would
+/// resolve the target itself and never call it.
 #[derive(Debug, Default)]
 struct PublicAddressResolver {
     inner: DefaultResolver,
@@ -566,7 +574,7 @@ pub(crate) fn audio_with_fallback(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::http::agent_with_timeout;
+    use crate::http::{agent_with_timeout, config_with_timeout};
     use crate::test_support::{
         AudioCall, PREVIEW_URL, RecordingAudio, loopback_listener, read_some_request,
         record_first_request, serve_one_response,
@@ -923,6 +931,58 @@ mod tests {
                 .iter()
                 .any(|address| address.ip().to_string() == "93.184.216.34"),
             "the resolver must return the public address it resolved: {addresses:?}"
+        );
+    }
+
+    // An HTTP(S) CONNECT proxy resolves the target host itself, so with
+    // `HTTPS_PROXY` (or `ALL_PROXY`) set, `ureq` sends the preview hostname to
+    // the proxy and never consults `preview_agent`'s resolver — the SSRF guard
+    // is bypassed. `preview_agent` therefore disables the proxy. The assertion
+    // runs in a child process of this same test binary: the proxy variables
+    // are process-global, and setting them here would race every other test
+    // that builds an agent. The parent forwards them only to the child.
+    #[test]
+    fn the_preview_agent_ignores_a_configured_proxy() {
+        let child =
+            std::process::Command::new(std::env::current_exe().expect("the test executable path"))
+                .args([
+                    "--exact",
+                    "audio::tests::with_a_proxy_set_the_preview_agent_stays_direct",
+                ])
+                .env("HTTPS_PROXY", "http://127.0.0.1:9")
+                .env("ALL_PROXY", "http://127.0.0.1:9")
+                .output()
+                .expect("run the child test process");
+        let stdout = String::from_utf8_lossy(&child.stdout);
+        assert!(
+            child.status.success() && stdout.contains("1 passed"),
+            "the child test must run and pass; stdout:\n{stdout}\nstderr:\n{}",
+            String::from_utf8_lossy(&child.stderr)
+        );
+    }
+
+    // Runs only in the child process `the_preview_agent_ignores_a_configured_proxy`
+    // spawns with the proxy variables set: the ordinary suite leaves them unset,
+    // and this returns without asserting rather than racing to set them.
+    #[test]
+    fn with_a_proxy_set_the_preview_agent_stays_direct() {
+        if std::env::var_os("HTTPS_PROXY").is_none() && std::env::var_os("ALL_PROXY").is_none() {
+            return;
+        }
+        let timeout = Duration::from_secs(1);
+        // The REST agent inherits the environment proxy; this proves the
+        // variables are visible to `ureq` in this process, so the preview
+        // assertion below is not vacuously true.
+        assert!(
+            agent_with_timeout(timeout).config().proxy().is_some(),
+            "the environment proxy must reach the REST agent's config"
+        );
+        assert!(
+            preview_agent_with_timeout(timeout)
+                .config()
+                .proxy()
+                .is_none(),
+            "the preview fetch must be direct even when a proxy is configured"
         );
     }
 

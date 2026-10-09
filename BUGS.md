@@ -117,64 +117,6 @@ rules already say a Refused entry is skipped and a fully-blocked backlog is a
 legitimate nothing-to-do; the scheduler should apply the same rule before it
 defers other roles or queues bugfix.
 
-### The preview-URL resolver guard is bypassed when an HTTP(S) proxy is configured (found by security 2026-10-09)
-
-Symptom: the 2026-10-09 fix added `PublicAddressResolver` (`src/audio.rs`) so a
-preview URL whose hostname resolves to an internal address is refused. That
-guard only runs when `ureq` resolves the target locally. `http::config_with_timeout`
-builds on `ureq::Agent::config_builder()`, which starts from `Config::default()`
-and therefore takes `proxy: Proxy::try_from_env()` — `ALL_PROXY`, `HTTPS_PROXY`,
-`HTTP_PROXY`, or their lowercase spellings. For an HTTP/HTTPS CONNECT proxy
-(not SOCKS) `ureq` does not resolve the target: `run.rs` passes
-`agent.resolver.empty()` for the target and `connect.rs` sends the target
-hostname to the proxy. So with any of those variables set and the preview host
-not matching `NO_PROXY`, `PublicAddressResolver` is never asked about the
-preview host, and a hostile or compromised Apple Music reply whose
-`attributes.previews[].url` names an internal hostname (`metadata.google.internal`,
-`ip6-localhost`, or an attacker-controlled name resolving internally) is fetched
-by the proxy instead of being refused. The result is blind SSRF (GET only, no
-redirects) against hosts the proxy can reach.
-
-Source: the `attributes.previews[].url` string in the Apple Music REST response
-(`src/apple_music/rest.rs`, `Resource::preview_url`).
-
-Path: `Resource::preview_url` -> `Song.preview_url` -> `ui/mod.rs`
-`TrackSelected` -> `AppleMusicService::play_track` -> `ensure_preview_url_is_valid`
--> `preview_url_problem` (host-text only, so a non-literal name passes) ->
-`audio.play` -> worker `download_and_decode` -> `preview_agent()` ->
-`agent.get(url).call()` (`src/audio.rs`). `config_with_timeout` (`src/http.rs:33`)
--> `ureq::Agent::config_builder()` -> `ureq` `Config::default()` sets
-`proxy: Proxy::try_from_env()`.
-
-How to reproduce:
-- Code path: `src/http.rs:33` (`config_with_timeout`) -> `ureq::Agent::config_builder()`
-  -> `ureq` `Config::default()` (`proxy: Proxy::try_from_env()`). With a proxy
-  configured, `ureq` `run.rs` takes the `agent.resolver.empty()` branch for the
-  target, and `unversioned/transport/connect.rs` resolves only the proxy before
-  sending the target hostname to it.
-- Manual: run with `HTTPS_PROXY=http://127.0.0.1:<port>` and a proxy listening
-  there; have the REST stub (or a MITM) return
-  `attributes.previews[0].url = "https://internal.example/preview.m4a"`. The
-  proxy receives `CONNECT internal.example:443`, and `PublicAddressResolver` is
-  never consulted. Without the proxy variable the same URL is refused with
-  `HostNotFound` (the existing
-  `audio::tests::the_preview_agent_refuses_a_hostname_that_resolves_to_loopback`
-  covers the direct path).
-
-Suspected cause: the guard is attached to `ureq`'s resolver, which only sees the
-target on a direct connection (or a SOCKS proxy, where `resolve_target()` is
-true). An HTTP/HTTPS proxy resolves the target itself, so a resolver-level guard
-cannot hold under it. The code comment already scopes the guard to "the direct
-path (no proxy configured, the app's default)".
-
-Fix (needs a product call, so recorded rather than applied): build the preview
-agent on a config with `proxy(None)`, so the guarded fetch is always direct and
-`PublicAddressResolver` always sees the target — at the cost that a user who
-requires a proxy to reach the internet loses preview playback (browse still
-works through the REST agent, which keeps its proxy). The alternative, resolving
-the target host locally and refusing internal addresses before the request,
-keeps the proxy but does not close a proxy-side rebinding answer.
-
 ### The scheduler dispatches two roles onto the same open plan, and the duplicate's review rejection is recorded as authoring failure (found by telemetry 2026-10-09)
 
 Symptom: the 2026-10-09 digest's largest improve loss is `0.3 h · $0.06 —
@@ -221,6 +163,75 @@ candidate that is behaviorally equivalent to a pending landing ref as a
 duplicate rather than as authoring failure), not in this repo.
 
 ## Fixed
+
+### The preview-URL resolver guard is bypassed when an HTTP(S) proxy is configured (found by security 2026-10-09, fixed 2026-10-09)
+
+Symptom: the 2026-10-09 fix added `PublicAddressResolver` (`src/audio.rs`) so a
+preview URL whose hostname resolves to an internal address is refused. That
+guard only runs when `ureq` resolves the target locally. `http::config_with_timeout`
+builds on `ureq::Agent::config_builder()`, which starts from `Config::default()`
+and therefore takes `proxy: Proxy::try_from_env()` — `ALL_PROXY`, `HTTPS_PROXY`,
+`HTTP_PROXY`, or their lowercase spellings. For an HTTP/HTTPS CONNECT proxy
+(not SOCKS) `ureq` does not resolve the target: `run.rs` passes
+`agent.resolver.empty()` for the target and `connect.rs` sends the target
+hostname to the proxy. So with any of those variables set and the preview host
+not matching `NO_PROXY`, `PublicAddressResolver` is never asked about the
+preview host, and a hostile or compromised Apple Music reply whose
+`attributes.previews[].url` names an internal hostname (`metadata.google.internal`,
+`ip6-localhost`, or an attacker-controlled name resolving internally) is fetched
+by the proxy instead of being refused. The result is blind SSRF (GET only, no
+redirects) against hosts the proxy can reach.
+
+Source: the `attributes.previews[].url` string in the Apple Music REST response
+(`src/apple_music/rest.rs`, `Resource::preview_url`).
+
+Path: `Resource::preview_url` -> `Song.preview_url` -> `ui/mod.rs`
+`TrackSelected` -> `AppleMusicService::play_track` -> `ensure_preview_url_is_valid`
+-> `preview_url_problem` (host-text only, so a non-literal name passes) ->
+`audio.play` -> worker `download_and_decode` -> `preview_agent()` ->
+`agent.get(url).call()` (`src/audio.rs`). `config_with_timeout` (`src/http.rs`)
+-> `ureq::Agent::config_builder()` -> `ureq` `Config::default()` sets
+`proxy: Proxy::try_from_env()`.
+
+How to reproduce:
+- Code path: `src/http.rs` (`config_with_timeout`) -> `ureq::Agent::config_builder()`
+  -> `ureq` `Config::default()` (`proxy: Proxy::try_from_env()`). With a proxy
+  configured, `ureq` `run.rs` takes the `agent.resolver.empty()` branch for the
+  target, and `unversioned/transport/connect.rs` resolves only the proxy before
+  sending the target hostname to it.
+- Manual: run with `HTTPS_PROXY=http://127.0.0.1:<port>` and a proxy listening
+  there; have the REST stub (or a MITM) return
+  `attributes.previews[0].url = "https://internal.example/preview.m4a"`. The
+  proxy receives `CONNECT internal.example:443`, and `PublicAddressResolver` is
+  never consulted. Without the proxy variable the same URL is refused with
+  `HostNotFound` (the existing
+  `audio::tests::the_preview_agent_refuses_a_hostname_that_resolves_to_loopback`
+  covers the direct path).
+
+Suspected cause: the guard is attached to `ureq`'s resolver, which only sees the
+target on a direct connection (or a SOCKS proxy, where `resolve_target()` is
+true). An HTTP/HTTPS proxy resolves the target itself, so a resolver-level guard
+cannot hold under it.
+
+Fix: the production preview agent is built on a configuration with `proxy(None)`
+(`preview_agent_with_timeout`, `src/audio.rs`), so `ureq` always resolves the
+target locally and `PublicAddressResolver` always sees it; an environment proxy
+no longer routes the preview fetch. `src/http.rs` grew
+`config_builder_with_timeout`, so the guarded agent shares the REST agent's
+global timeout, zero-redirect, and status-as-error choices while overriding the
+proxy. The REST agent keeps `Proxy::try_from_env()`, so library browsing still
+honors a proxy; only preview playback goes direct. This closes the guard bypass
+completely rather than pre-resolving the target locally, which would leave the
+proxy free to resolve it differently (DNS rebinding).
+
+Verification: `make check` green, including the new
+`audio::tests::the_preview_agent_ignores_a_configured_proxy`, which spawns a
+child test process with `HTTPS_PROXY`/`ALL_PROXY` set; the child asserts the
+REST agent's config sees the proxy while the preview agent's config has none.
+The pre-fix code fails that child assertion (`preview_agent` inherited the
+environment proxy).
+
+**Validation gap:** no-fake — the suite had no proxy-configured environment, so confirming the bypass needed a child-process harness (a shim) that sets `HTTPS_PROXY`/`ALL_PROXY` and reads the built agent's config.
 
 ### The preview-URL guard never resolves the host, so a hostname that resolves to an internal address bypasses the SSRF check (found by security 2026-10-09, fixed 2026-10-09)
 
