@@ -190,15 +190,11 @@ impl RestLibrary {
         session: &MusicKitSession,
     ) -> Result<Vec<Artist>, AppleMusicError> {
         let url = format!("{API_BASE}/me/library/artists");
-        let resources = self.fetch(&url, session)?;
-        resources
-            .into_iter()
-            .map(|resource| {
-                let id = resource.required_id("artist")?;
-                let name = resource.required_name("artist")?;
-                Ok(Artist { id, name })
-            })
-            .collect()
+        self.fetch(&url, session, |resource| {
+            let id = resource.required_id("artist")?;
+            let name = resource.required_name("artist")?;
+            Ok(Artist { id, name })
+        })
     }
 
     /// Albums by `artist_id` in the signed-in user's library.
@@ -221,19 +217,15 @@ impl RestLibrary {
             "{API_BASE}/me/library/artists/{}/albums",
             encode_path_segment(artist_id)
         );
-        let resources = self.fetch(&url, session)?;
-        resources
-            .into_iter()
-            .map(|resource| {
-                let id = resource.required_id("album")?;
-                let title = resource.required_name("album")?;
-                Ok(Album {
-                    id,
-                    title,
-                    artist_id: artist_id.to_string(),
-                })
+        self.fetch(&url, session, |resource| {
+            let id = resource.required_id("album")?;
+            let title = resource.required_name("album")?;
+            Ok(Album {
+                id,
+                title,
+                artist_id: artist_id.to_string(),
             })
-            .collect()
+        })
     }
 
     /// Songs on `album_id` in the signed-in user's library.
@@ -256,52 +248,58 @@ impl RestLibrary {
             "{API_BASE}/me/library/albums/{}/tracks",
             encode_path_segment(album_id)
         );
-        let resources = self.fetch(&url, session)?;
-        resources
-            .into_iter()
-            .map(|resource| {
-                let id = resource.required_id("song")?;
-                let title = resource.required_name("song")?;
-                Ok(Song {
-                    id,
-                    title,
-                    album_id: album_id.to_string(),
-                    duration_ms: resource.duration_ms(),
-                    preview_url: resource.preview_url(),
-                })
+        self.fetch(&url, session, |resource| {
+            let id = resource.required_id("song")?;
+            let title = resource.required_name("song")?;
+            Ok(Song {
+                id,
+                title,
+                album_id: album_id.to_string(),
+                duration_ms: resource.duration_ms(),
+                preview_url: resource.preview_url(),
             })
-            .collect()
+        })
     }
 
     /// Fetches `url` and parses the collection envelope, following the
     /// response's `next` link (up to [`MAX_PAGES`] pages) so a collection
     /// larger than one 100-item page is read in full. A `next` link that does
     /// not name a same-origin path is not followed (see [`absolute_next_url`]).
+    /// Each page's resources are passed to `map` as that page is read, so the
+    /// caller's validation runs per page rather than after the whole
+    /// collection is accumulated.
     ///
-    /// A transport failure propagates as the transport's own cause and a parse
-    /// failure names the parse. Neither names the query: the browse methods
-    /// leave that to the UI, which already labels the fetch it issued, so the
-    /// user-facing report names the query once rather than in both layers. A
-    /// failure on a page after the first additionally names the page (see
-    /// [`page_context`]), because the UI cannot know which page the failure
-    /// happened on.
-    fn fetch(
+    /// A transport failure propagates as the transport's own cause, a parse
+    /// failure names the parse, and a resource `map` rejects (a blank id or a
+    /// missing name) reports `map`'s cause. None names the query: the browse
+    /// methods leave that to the UI, which already labels the fetch it issued,
+    /// so the user-facing report names the query once rather than in both
+    /// layers. A failure on a page after the first — transport, parse, or
+    /// `map` — additionally names the page (see [`page_context`]), because the
+    /// UI cannot know which page the failure happened on.
+    fn fetch<T>(
         &self,
         url: &str,
         session: &MusicKitSession,
-    ) -> Result<Vec<Resource>, AppleMusicError> {
-        let mut resources = Vec::new();
+        map: impl Fn(Resource) -> Result<T, AppleMusicError>,
+    ) -> Result<Vec<T>, AppleMusicError> {
+        let mut items = Vec::new();
         let mut next_url = url.to_string();
         for page in 1..=MAX_PAGES {
             let body = self
                 .transport
                 .get(&next_url, session)
                 .map_err(|error| AppleMusicError::new(page_context(&error.to_string(), page)))?;
-            let envelope: Envelope<Resource> = serde_json::from_str(&body).map_err(|error| {
-                AppleMusicError::new(page_context(&describe_parse_failure(&error), page))
-            })?;
-            resources.extend(envelope.data);
-            let Some(next) = envelope.next.as_deref() else {
+            let Envelope { data, next } = serde_json::from_str::<Envelope<Resource>>(&body)
+                .map_err(|error| {
+                    AppleMusicError::new(page_context(&describe_parse_failure(&error), page))
+                })?;
+            for resource in data {
+                items.push(map(resource).map_err(|error| {
+                    AppleMusicError::new(page_context(&error.to_string(), page))
+                })?);
+            }
+            let Some(next) = next.as_deref() else {
                 break;
             };
             match absolute_next_url(next) {
@@ -320,7 +318,7 @@ impl RestLibrary {
                 }
             }
         }
-        Ok(resources)
+        Ok(items)
     }
 }
 

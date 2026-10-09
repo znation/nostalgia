@@ -957,6 +957,30 @@ fn a_failure_following_a_next_page_names_the_page() {
     );
 }
 
+// A resource `map` rejects on a later page must name the page, just as a
+// transport or parse failure does: the UI labels the query but cannot know
+// which page carried the bad resource, so a multi-page browse would otherwise
+// report an ambiguous cause. Page 1 maps a valid artist and links page 2;
+// page 2's artist has no name.
+#[test]
+fn a_nameless_resource_on_a_later_page_names_the_page() {
+    let stub = StubTransport::returning_bodies(&[
+        r#"{"data":[{"id":"artist-1","attributes":{"name":"The Sample Band"}}],"next":"/v1/me/library/artists?offset=1"}"#,
+        r#"{"data":[{"id":"artist-2","attributes":{}}]}"#,
+    ]);
+    let library = library_over(&stub);
+
+    let error = library
+        .get_favorite_artists(&session())
+        .unwrap_err()
+        .to_string();
+
+    assert_eq!(
+        error,
+        "response carried artist \"artist-2\" without a name (page 2)"
+    );
+}
+
 // The page suffix is only appended when it adds information: the first page is
 // the query the UI already names, so its cause stays bare (the transport and
 // parse tests above pin that end to end). A unit test pins the boundary
