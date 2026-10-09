@@ -272,6 +272,30 @@ fn encode_path_segment_leaves_unreserved_bytes_and_encodes_the_rest() {
     assert_eq!(encode_path_segment("caf\u{e9}"), "caf%C3%A9");
 }
 
+// The example test above pins a handful of bytes; the RFC 3986 rule covers
+// all of them. Sweep the whole ASCII range so every byte's branch — the
+// unreserved passthrough, the reserved/control escape, and the uppercase hex
+// digits — is pinned, not just the samples a hand-written list happened to
+// include. A regression that, say, lowercased the hex or forgot `~` would
+// clear the example test's three inputs but fail here.
+#[test]
+fn encode_path_segment_applies_the_rfc_3986_rule_to_every_ascii_byte() {
+    for byte in 0x00u8..=0x7F {
+        let input = char::from(byte).to_string();
+        let expected = if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~')
+        {
+            input.clone()
+        } else {
+            format!("%{byte:02X}")
+        };
+        assert_eq!(
+            encode_path_segment(&input),
+            expected,
+            "ASCII byte {byte:#04X} must encode to {expected:?}"
+        );
+    }
+}
+
 #[test]
 fn transport_error_propagates_the_bare_cause() {
     let stub = StubTransport::failing("network down");

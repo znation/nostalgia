@@ -407,12 +407,18 @@ fn unfollowable_next_notice(next: &str) -> String {
 /// unreserved byte is never encoded, so a normal Apple Music id (letters,
 /// digits, and dots) passes through unchanged.
 fn encode_path_segment(segment: &str) -> String {
+    // The uppercase hex digits RFC 3986 percent-encoding uses.
+    const HEX: [u8; 16] = *b"0123456789ABCDEF";
     let mut encoded = String::with_capacity(segment.len());
     for byte in segment.bytes() {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
             encoded.push(char::from(byte));
         } else {
-            encoded.push_str(&format!("%{byte:02X}"));
+            // Push the `%` and its two hex digits directly; a `format!` here
+            // would allocate a throwaway `String` for every encoded byte.
+            encoded.push('%');
+            encoded.push(char::from(HEX[usize::from(byte >> 4)]));
+            encoded.push(char::from(HEX[usize::from(byte & 0x0F)]));
         }
     }
     encoded
