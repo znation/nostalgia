@@ -165,6 +165,53 @@ impl AudioOutput for GatedAudio {
     }
 }
 
+/// The one transport command a [`RejectingAudio`] backend refuses.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RejectedCommand {
+    Pause,
+    Resume,
+    Stop,
+}
+
+/// An audio backend that loads and starts a preview normally but refuses one
+/// chosen transport command, so a test can reach a live transport and then pin
+/// that the service reports the backend's failure *before* shared state
+/// changes. `play` and `set_volume` always succeed, so the service arrives at
+/// the state the rejected command must leave untouched.
+struct RejectingAudio(RejectedCommand);
+
+impl RejectingAudio {
+    fn check(&self, command: RejectedCommand) -> Result<(), AppleMusicError> {
+        if self.0 == command {
+            Err(AppleMusicError::new("the audio device is gone"))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl AudioOutput for RejectingAudio {
+    fn play(&self, _url: &str) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn pause(&self) -> Result<(), AppleMusicError> {
+        self.check(RejectedCommand::Pause)
+    }
+
+    fn resume(&self) -> Result<(), AppleMusicError> {
+        self.check(RejectedCommand::Resume)
+    }
+
+    fn stop(&self) -> Result<(), AppleMusicError> {
+        self.check(RejectedCommand::Stop)
+    }
+
+    fn set_volume(&self, _volume: f32) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+}
+
 /// Asserts that both blank forms of an id — empty and whitespace-only —
 /// are rejected by the query, each with the seam's blank-id error naming
 /// `kind`. `ensure_id_is_valid` rejects the two forms through the same
@@ -855,6 +902,52 @@ async fn stop_stops_the_audio_backend() {
             AudioCall::Stop
         ]
     );
+    assert_playback_state(&state, Some("song-1"), false).await;
+}
+
+// `pause` documents a backend-first order: a backend that cannot accept the
+// pause reports it before shared state claims playback stopped. A regression
+// that cleared the shared flag first would leave the Now Playing bar reading
+// "paused" while the preview kept sounding, and only a failing backend can
+// catch it.
+#[tokio::test]
+async fn pause_reports_a_backend_failure_without_clearing_playing() {
+    let (service, state) =
+        service_with_preview_playing(Arc::new(RejectingAudio(RejectedCommand::Pause))).await;
+
+    let error = service.pause().await.unwrap_err();
+
+    assert_eq!(error.to_string(), "the audio device is gone");
+    assert_playback_state(&state, Some("song-1"), true).await;
+}
+
+// `stop`'s backend-first order, the twin of the pause contract above: a
+// rejected stop must not clear the playing flag, or the UI would report a
+// stopped transport while the preview still sounds.
+#[tokio::test]
+async fn stop_reports_a_backend_failure_without_clearing_playing() {
+    let (service, state) =
+        service_with_preview_playing(Arc::new(RejectingAudio(RejectedCommand::Stop))).await;
+
+    let error = service.stop().await.unwrap_err();
+
+    assert_eq!(error.to_string(), "the audio device is gone");
+    assert_playback_state(&state, Some("song-1"), true).await;
+}
+
+// `resume_locked` calls the backend before it sets the playing flag, so a
+// backend that rejects the resume leaves the transport paused rather than
+// claiming a preview that never restarted. The starting point is a loaded but
+// paused preview: play it, then pause it successfully.
+#[tokio::test]
+async fn resume_reports_a_backend_failure_without_claiming_playback() {
+    let (service, state) =
+        service_with_preview_playing(Arc::new(RejectingAudio(RejectedCommand::Resume))).await;
+    service.pause().await.unwrap();
+
+    let error = service.resume().await.unwrap_err();
+
+    assert_eq!(error.to_string(), "the audio device is gone");
     assert_playback_state(&state, Some("song-1"), false).await;
 }
 
