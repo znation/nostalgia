@@ -30,11 +30,13 @@
 //! keeps waiting for the real callback; only a well-formed callback carrying an
 //! invalid user token ends the flow with an error, while a callback with the
 //! wrong `state` is answered and ignored so a local client cannot abort the
-//! sign-in by forging one. Each
-//! connection's reads are capped by the time left before [`AUTH_TIMEOUT`], so a
-//! client that dribbles bytes cannot hold the flow past its deadline, and each
-//! response write carries a bounded timeout, so a client that stops reading
-//! cannot hold it there either.
+//! sign-in by forging one. Connections are served one at a time, so each is
+//! bounded by [`CONNECTION_READ_TIMEOUT`] from the moment it is accepted — a
+//! local client that opens a connection and dribbles a partial request can
+//! hold the accept loop for that budget, not for the whole [`AUTH_TIMEOUT`],
+//! so it cannot starve the browser's callback until the flow gives up. Each
+//! response write carries its own bounded timeout, so a client that stops
+//! reading cannot hold the connection there either.
 
 use std::collections::hash_map::RandomState;
 use std::hash::{BuildHasher, Hasher};
@@ -49,7 +51,7 @@ use crate::apple_music::AppleMusicError;
 mod http;
 mod page;
 
-use http::{read_http_request, write_response};
+use http::{CONNECTION_READ_TIMEOUT, read_http_request, write_response};
 use page::{SUCCESS_PAGE, render_auth_page};
 
 /// How long [`authorize`] waits for the browser callback before giving up:
@@ -140,6 +142,18 @@ fn authorize_with_timeout(
     open_url: &dyn Fn(&str) -> io::Result<()>,
     timeout: Duration,
 ) -> Result<MusicKitSession, AppleMusicError> {
+    authorize_with_bounds(developer_token, open_url, timeout, CONNECTION_READ_TIMEOUT)
+}
+
+/// [`authorize_with_timeout`] with an injectable per-connection budget, so a
+/// test can prove one stalled connection cannot hold the accept loop for the
+/// whole flow without waiting out the production five-second budget.
+fn authorize_with_bounds(
+    developer_token: &str,
+    open_url: &dyn Fn(&str) -> io::Result<()>,
+    timeout: Duration,
+    connection_budget: Duration,
+) -> Result<MusicKitSession, AppleMusicError> {
     // Normalize at the boundary before validating or using the token: the
     // production caller reads it from `APPLE_MUSIC_DEVELOPER_TOKEN`, where a
     // trailing newline or a stray space is easy to introduce and impossible
@@ -178,7 +192,15 @@ fn authorize_with_timeout(
         }
         match listener.accept() {
             Ok((mut stream, _address)) => {
-                match serve_connection(&mut stream, developer_token, &nonce, deadline) {
+                // Connections are served sequentially, so cap the whole
+                // connection, not just each read: a client that opens one and
+                // dribbles a partial request would otherwise hold the accept
+                // loop until the flow deadline and starve the browser's
+                // callback. A legitimate request arrives in milliseconds, so
+                // this budget is generous. `min` keeps the flow deadline the
+                // outer bound.
+                let connection_deadline = deadline.min(Instant::now() + connection_budget);
+                match serve_connection(&mut stream, developer_token, &nonce, connection_deadline) {
                     Connection::Authorized(session) => return Ok(session),
                     Connection::Continue => {}
                     Connection::Rejected(error) => return Err(error),

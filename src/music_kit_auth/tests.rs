@@ -587,6 +587,44 @@ fn authorize_deadline_bounds_a_stalled_connection() {
     );
 }
 
+#[test]
+fn authorize_serves_the_callback_after_a_stalled_connection_is_dropped() {
+    // A local client can reach the loopback port without the nonce and open a
+    // connection that never completes its request. Connections are served one
+    // at a time, so that stalled connection must not hold the accept loop for
+    // the whole flow: the per-connection budget drops it, and the real browser
+    // callback on a later connection is then served. Before the budget, the
+    // stalled connection held the loop past the flow deadline and the callback
+    // was starved, so this test failed with a timeout.
+    let (opener, handles) = background(|port, state| {
+        let mut stalled = TcpStream::connect(("127.0.0.1", port)).expect("connect the stall");
+        // A header that never completes: no `\r\n\r\n`.
+        stalled
+            .write_all(b"POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\n")
+            .expect("write a partial request");
+        // Let the server accept and block on the stalled connection before the
+        // callback arrives, so the test exercises the sequential accept loop.
+        thread::sleep(Duration::from_millis(50));
+        let response = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
+        assert!(
+            response.starts_with("HTTP/1.1 200"),
+            "the callback should be served once the stalled connection is dropped, got: {response}"
+        );
+        drop(stalled);
+    });
+
+    let session = authorize_with_bounds(
+        SAMPLE_DEVELOPER_TOKEN,
+        &opener,
+        Duration::from_millis(500),
+        Duration::from_millis(100),
+    )
+    .expect("a stalled connection does not starve the callback");
+    join_all(&handles);
+
+    assert_eq!(session.user_token, SAMPLE_USER_TOKEN);
+}
+
 // The browser opener is a short-lived launcher. Dropping its `Child` without
 // waiting leaves a zombie for the rest of the app's life, one per sign-in;
 // `reap_in_background` waits on a detached thread so the child is reaped

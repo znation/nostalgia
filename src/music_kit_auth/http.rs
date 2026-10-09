@@ -21,7 +21,7 @@ pub(super) const MAX_REQUEST_BYTES: usize = 16 * 1024;
 
 /// How long a single connection may take to send its request before it is
 /// dropped as a stalled client. Each read is capped further by the time left
-/// before the flow's deadline.
+/// before the caller's deadline.
 pub(super) const CONNECTION_READ_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// How long a single response write may take before it is abandoned as a
