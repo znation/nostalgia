@@ -153,11 +153,11 @@ mod tests {
     }
 
     // The missing-field contract holds for every model type, not just Artist:
-    // `Album` and `Song` only have round-trip tests, which pass for *any*
-    // deserialization that yields some value, so a regression that made one of
-    // their fields optional (e.g. a stray `#[serde(default)]` added to tolerate
-    // a payload variant) would clear every existing test while silently
-    // rendering blank data. Each gets the same every-field probe as Artist.
+    // `Album` and `Song` have no test that omits a field, and their other
+    // tests all supply every field, so a regression that made one of their
+    // fields optional (e.g. a stray `#[serde(default)]` added to tolerate a
+    // payload variant) would clear them while silently rendering blank data.
+    // Each gets the same every-field probe as Artist.
     #[test]
     fn album_deserialization_rejects_missing_required_fields() {
         assert_every_field_required::<Album>(album_payload());
