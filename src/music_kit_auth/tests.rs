@@ -390,6 +390,30 @@ fn authorize_rejects_a_foreign_host_header() {
 }
 
 #[test]
+fn authorize_serves_the_page_for_a_loopback_host_carrying_the_port() {
+    // The browser opens `http://127.0.0.1:{port}/`, so its `Host` header is the
+    // port-bearing form `127.0.0.1:{port}` — not the bare address the other
+    // tests send. The host check must strip the port before comparing, or the
+    // legitimate page request is refused as a foreign host and sign-in never
+    // starts.
+    let observed = Arc::new(Mutex::new(String::new()));
+    let observed_for_flow = Arc::clone(&observed);
+    authorize_with_flow(move |port, state| {
+        let page = request(
+            port,
+            &format!("GET / HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\r\n"),
+        );
+        let _ = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
+        *observed_for_flow.lock().expect("observed lock") = page;
+    })
+    .expect("the real callback still succeeds");
+
+    let page = observed.lock().expect("observed lock");
+    assert!(page.starts_with("HTTP/1.1 200"), "got: {page}");
+    assert!(page.contains(SAMPLE_DEVELOPER_TOKEN));
+}
+
+#[test]
 fn authorize_survives_a_connection_that_closes_early() {
     authorize_with_flow(|port, state| {
         // A client that connects and closes without a complete request.
