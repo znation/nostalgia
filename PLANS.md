@@ -29,7 +29,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Add a Winamp balance slider beside the volume slider (found 2026-10-08)
+_None yet._
+
+## Done
+
+### Add a Winamp balance slider beside the volume slider (found 2026-10-08, done 2026-10-08)
 
 The transport row (`views::view_transport_controls`) carries the five chrome
 buttons and a volume slider, but not the balance slider that sits beside
@@ -106,7 +110,11 @@ dependency and no change to playback, browse, or the equalizer.
 - Manual check (`cargo run`): the Balance slider sits beside Volume and its
   thumb stays where dragged. The build and tests are the primary gate.
 
-## Done
+**Verified (2026-10-08).** `make check` is green, including the new state
+setter tests, the `BalanceChange` update-arm test, and the balance
+slider-spec test. The `cargo run` manual check — the Balance slider actually
+sits beside Volume and its thumb stays where dragged — was not run in this
+headless tick.
 
 ### Add the Winamp title-bar clutter bar and shade button (found 2026-10-08, done 2026-10-08)
 

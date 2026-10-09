@@ -106,13 +106,13 @@ fn assert_toggles_shared_state(message: Message, read_flag: impl Fn(&AppState) -
 }
 
 /// Drives a slider-change message through `update` and asserts the clamped
-/// value lands in shared state. The `VolumeChange`, `EqPreampChange`, and
-/// `EqBandChange` arms all do the same one-value write — the setter clamps the
-/// slider's value before storing it — so the lock-read-assert sequence lives
-/// here once and each call only names its message, the field read back, and
-/// the clamped value. The arms use `blocking_lock`, which panics inside an
-/// async runtime, so this stays a plain (non-async) helper, like
-/// [`assert_toggles_shared_state`].
+/// value lands in shared state. The `VolumeChange`, `BalanceChange`,
+/// `EqPreampChange`, and `EqBandChange` arms all do the same one-value write —
+/// the setter clamps the slider's value before storing it — so the
+/// lock-read-assert sequence lives here once and each call only names its
+/// message, the field read back, and the clamped value. The arms use
+/// `blocking_lock`, which panics inside an async runtime, so this stays a
+/// plain (non-async) helper, like [`assert_toggles_shared_state`].
 fn assert_message_clamps(message: Message, read: impl Fn(&AppState) -> f32, expected: f32) {
     let (mut player, state) = test_player();
     let _ = update(&mut player, message);
@@ -377,6 +377,16 @@ fn volume_change_clamps_value_before_storing() {
 
     // An in-range value is stored as-is.
     assert_message_clamps(Message::VolumeChange(0.3), |state| state.volume(), 0.3);
+}
+
+#[test]
+fn balance_change_clamps_value_before_storing() {
+    // Out-of-range slider values are clamped by the update arm.
+    assert_message_clamps(Message::BalanceChange(1.5), |state| state.balance(), 1.0);
+    assert_message_clamps(Message::BalanceChange(-2.0), |state| state.balance(), -1.0);
+
+    // An in-range value is stored as-is.
+    assert_message_clamps(Message::BalanceChange(-0.4), |state| state.balance(), -0.4);
 }
 
 #[test]

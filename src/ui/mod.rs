@@ -73,6 +73,8 @@ enum Message {
     Stop,
     ToggleRepeat,
     VolumeChange(f32),
+    // The balance slider's change message, clamped by `AppState::set_balance`.
+    BalanceChange(f32),
     // Arrow-key volume nudges: one `views::VOLUME_STEP` up or down, clamped
     // by `AppState::nudge_volume`.
     VolumeUp,
@@ -293,7 +295,7 @@ fn step_track(
 
 /// Locks the shared playback state, applies `mutation` to it, and returns no
 /// task. The synchronous arms — `Play/Pause`, `Play`, `Pause`, `Stop`,
-/// `ToggleRepeat`, `VolumeChange`, `VolumeUp`, `VolumeDown`,
+/// `ToggleRepeat`, `VolumeChange`, `BalanceChange`, `VolumeUp`, `VolumeDown`,
 /// `ToggleEqualizer`, `EqPreampChange`, `EqBandChange`, and
 /// `EqPresetSelected` — all repeat the same shared-state update —
 /// `blocking_lock`, one mutation, then `Task::none()` — so the lock-and-noop
@@ -348,6 +350,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::Stop => mutate_state(player, AppState::stop),
         Message::ToggleRepeat => mutate_state(player, AppState::toggle_repeat),
         Message::VolumeChange(volume) => mutate_state(player, |state| state.set_volume(volume)),
+        Message::BalanceChange(balance) => mutate_state(player, |state| state.set_balance(balance)),
         // The arrow keys nudge the slider's value by its own step, so the
         // keyboard and the drag share one granularity; `nudge_volume` clamps.
         Message::VolumeUp => mutate_state(player, |state| state.nudge_volume(views::VOLUME_STEP)),
@@ -617,12 +620,23 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // (see [`WinampPlayer::now_playing_label`]) — the label borrows the title
     // from `known_titles` (or the `"Nothing"` literal), so the per-frame path
     // allocates only in the unknown-id fallback, not the common cases.
-    let (now_playing, is_playing, volume, repeat, eq_enabled, eq_preamp, eq_bands, eq_preset) = {
+    let (
+        now_playing,
+        is_playing,
+        volume,
+        balance,
+        repeat,
+        eq_enabled,
+        eq_preamp,
+        eq_bands,
+        eq_preset,
+    ) = {
         let state = player.state.blocking_lock();
         (
             player.now_playing_label(state.current_track.as_deref()),
             state.is_playing,
             state.volume(),
+            state.balance(),
             state.repeat,
             state.eq_enabled,
             state.eq_preamp(),
@@ -664,7 +678,9 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     let mut column = Column::new()
         .push(views::view_title_bar(player.always_on_top))
         .push(views::view_now_playing(now_playing))
-        .push(views::view_transport_controls(is_playing, volume, repeat))
+        .push(views::view_transport_controls(
+            is_playing, volume, balance, repeat,
+        ))
         .push(views::view_equalizer(
             eq_enabled, eq_preamp, &eq_bands, eq_preset,
         ));

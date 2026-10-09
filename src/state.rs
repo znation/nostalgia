@@ -27,6 +27,11 @@ pub struct AppState {
     /// way to change it is [`AppState::set_volume`], which clamps. Read it
     /// with [`AppState::volume`].
     volume: f32,
+    /// Stereo balance in `[-1.0, 1.0]`, never NaN: `-1.0` is hard left, `0.0`
+    /// center, and `+1.0` hard right. Kept private so the only way to change
+    /// it is [`AppState::set_balance`], which clamps. Read it with
+    /// [`AppState::balance`].
+    balance: f32,
     /// Whether the equalizer is engaged. Starts off, as in Winamp; the band
     /// gains below are stored regardless so turning it back on restores them.
     pub eq_enabled: bool,
@@ -59,8 +64,9 @@ pub struct AppState {
 /// place, instead of in a struct literal repeated at each site. The starting
 /// volume is 0.5, not the derived 0.0, so a manual impl is required.
 ///
-/// Initial state: nothing loaded, stopped, Repeat off, at 50% volume, and the
-/// equalizer off with a flat (all-zero) curve and no preset selected.
+/// Initial state: nothing loaded, stopped, Repeat off, at 50% volume with a
+/// centered balance, and the equalizer off with a flat (all-zero) curve and
+/// no preset selected.
 impl Default for AppState {
     fn default() -> Self {
         Self {
@@ -68,6 +74,7 @@ impl Default for AppState {
             is_playing: false,
             repeat: false,
             volume: 0.5,
+            balance: 0.0,
             eq_enabled: false,
             eq_preamp: 0.0,
             eq_bands: [0.0; equalizer::BAND_COUNT],
@@ -178,6 +185,14 @@ impl AppState {
         self.volume
     }
 
+    /// The current stereo balance, always in `[-1.0, 1.0]` (see
+    /// [`AppState::set_balance`]). The UI's `view` reads it for the balance
+    /// slider.
+    #[must_use]
+    pub fn balance(&self) -> f32 {
+        self.balance
+    }
+
     /// The current preamp gain in decibels, always within
     /// `[equalizer::GAIN_MIN_DB, equalizer::GAIN_MAX_DB]` (see
     /// [`AppState::set_eq_preamp`]). The UI's `view` reads it for the preamp
@@ -211,6 +226,14 @@ impl AppState {
         self.volume = clamp_volume(volume);
     }
 
+    /// Stores `balance`, clamped to `[-1.0, 1.0]` with NaN mapped to center
+    /// by [`clamp_balance`]. The field is private and this is its only writer,
+    /// so the clamped invariant holds no matter which caller (today, the UI's
+    /// `BalanceChange` arm) sets it.
+    pub fn set_balance(&mut self, balance: f32) {
+        self.balance = clamp_balance(balance);
+    }
+
     /// Moves the volume by `delta`, clamped to the valid range by
     /// [`AppState::set_volume`]. The UI's arrow-key arms call this with
     /// `+views::VOLUME_STEP` and `-views::VOLUME_STEP`, so the keyboard and
@@ -236,6 +259,23 @@ pub fn clamp_volume(volume: f32) -> f32 {
     clamp::clamp_with_nan_fallback(volume, 0.0, 1.0, 0.0)
 }
 
+/// Clamps a balance value to the valid `[-1.0, 1.0]` range, mapping a NaN to
+/// `0.0` (center).
+///
+/// The volume wrapper's twin: iced's slider can emit a value outside the
+/// range (a drag beyond the ends, or a stale in-flight change), and the UI
+/// must never store an unclamped balance in `AppState`.
+/// [`AppState::set_balance`] is the field's only writer and calls this, so the
+/// rule lives here as a pure function beside the state it protects rather than
+/// at each call site. The NaN-and-bounds behaviour itself is
+/// [`crate::clamp::clamp_with_nan_fallback`], shared with
+/// `equalizer::clamp_gain`; this wrapper only names balance's range and its
+/// center fallback.
+#[must_use]
+pub fn clamp_balance(balance: f32) -> f32 {
+    clamp::clamp_with_nan_fallback(balance, -1.0, 1.0, 0.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{AppState, clamp_volume};
@@ -244,13 +284,14 @@ mod tests {
 
     /// Runs `mutation` on `state` and asserts it leaves `current_track` and
     /// `volume` untouched. Every `AppState` mutation but `play`, `pause`, and
-    /// the volume setters (`set_volume`, `nudge_volume`) uses this helper — the
-    /// playback setters (`toggle_playing`, `stop`, `toggle_repeat`) and the
-    /// equalizer setters (`toggle_equalizer`, `set_eq_preamp`, `set_eq_band`,
-    /// `apply_eq_preset`) — so the snapshot-then-compare sequence lives here
-    /// once instead of at each call site. Each test pins
-    /// its own field's new value separately; this helper only pins the two
-    /// fields the mutation must not disturb.
+    /// the volume setters (`set_volume`, `nudge_volume`) uses this helper or
+    /// its own isolation test — the playback setters (`toggle_playing`,
+    /// `stop`, `toggle_repeat`) and the equalizer setters (`toggle_equalizer`,
+    /// `set_eq_preamp`, `set_eq_band`, `apply_eq_preset`) use it directly,
+    /// while `set_balance` is pinned by `set_balance_changes_only_the_balance`
+    /// — so the snapshot-then-compare sequence lives here once instead of at
+    /// each call site. Each test pins its own field's new value separately;
+    /// this helper only pins the two fields the mutation must not disturb.
     fn assert_keeps_track_and_volume(state: &mut AppState, mutation: impl FnOnce(&mut AppState)) {
         let track = state.current_track.clone();
         let volume = state.volume();
@@ -278,6 +319,7 @@ mod tests {
         assert!(!state.is_playing);
         assert!(!state.repeat);
         assert_eq!(state.volume(), 0.5);
+        assert_eq!(state.balance(), 0.0);
         assert!(!state.eq_enabled);
         assert_eq!(state.eq_preamp(), 0.0);
         assert_eq!(state.eq_bands(), [0.0; BAND_COUNT]);
@@ -529,6 +571,58 @@ mod tests {
 
         state.set_volume(0.9);
 
+        assert_eq!(state.volume(), 0.9);
+        assert_eq!(state.current_track.as_deref(), Some("song-1"));
+        assert!(state.is_playing);
+        assert!(state.repeat);
+        assert!(state.eq_enabled);
+        assert_eq!(state.eq_preamp(), 3.0);
+        assert_eq!(state.eq_bands()[4], 5.0);
+    }
+
+    #[test]
+    fn set_balance_stores_an_in_range_value() {
+        let mut state = AppState::default();
+        state.set_balance(-0.4);
+        assert_eq!(state.balance(), -0.4);
+    }
+
+    #[test]
+    fn set_balance_clamps_out_of_range_values() {
+        let mut state = AppState::default();
+        state.set_balance(1.5);
+        assert_eq!(state.balance(), 1.0);
+        state.set_balance(-2.0);
+        assert_eq!(state.balance(), -1.0);
+    }
+
+    #[test]
+    fn set_balance_maps_nan_to_center() {
+        let mut state = AppState::default();
+        state.set_balance(f32::NAN);
+        assert_eq!(state.balance(), 0.0);
+    }
+
+    // `set_balance` is a mutation `assert_keeps_track_and_volume` cannot guard,
+    // because balance is not a field that helper holds constant. Its three
+    // tests above assert only the stored balance, so a regression that also
+    // cleared `current_track` or reset a playback or EQ flag would pass all of
+    // them. Pin that the balance setter writes balance alone, against a state
+    // whose every other field is set.
+    #[test]
+    fn set_balance_changes_only_the_balance() {
+        let mut state = AppState {
+            repeat: true,
+            eq_enabled: true,
+            ..playing_state()
+        };
+        state.set_eq_preamp(3.0);
+        state.set_eq_band(4, 5.0);
+        state.set_volume(0.9);
+
+        state.set_balance(-0.5);
+
+        assert_eq!(state.balance(), -0.5);
         assert_eq!(state.volume(), 0.9);
         assert_eq!(state.current_track.as_deref(), Some("song-1"));
         assert!(state.is_playing);

@@ -494,6 +494,20 @@ const VOLUME_MAX: f32 = 1.0;
 /// keyboard volume arms in `ui::mod` nudge by the slider's own step.
 pub(super) const VOLUME_STEP: f32 = 0.01;
 
+/// The balance slider's hard-left floor, the same lower bound
+/// `state::clamp_balance` clamps to. Named here so the slider spec is a
+/// testable seam; the test below ties it to the clamp so the two cannot
+/// drift apart.
+const BALANCE_MIN: f32 = -1.0;
+
+/// The balance slider's hard-right ceiling, the same upper bound
+/// `state::clamp_balance` clamps to (see [`BALANCE_MIN`]).
+const BALANCE_MAX: f32 = 1.0;
+
+/// The balance slider's drag granularity: one percent of the scale per step,
+/// matching the volume slider's step.
+const BALANCE_STEP: f32 = 0.01;
+
 /// The equalizer sliders' drag granularity: one decibel, so every preamp and
 /// band slider lands on a whole-dB gain within `GAIN_MIN_DB..=GAIN_MAX_DB`.
 const EQ_STEP: f32 = 1.0;
@@ -532,14 +546,17 @@ fn transport_buttons(is_playing: bool, repeat: bool) -> [Element<'static, Messag
 }
 
 /// The transport row: the Play/Pause, Stop, Previous, Next, and Repeat
-/// buttons and the volume slider. `volume` is the slider's current value;
-/// dragging it emits `Message::VolumeChange`. `repeat` is the shared Repeat
-/// flag, shown on the Repeat button and toggled by pressing it. The Stop
-/// label is static — Stop is always pressable, even when already stopped, as
-/// in Winamp — so no `play_pause_label`-style helper is needed.
+/// buttons, the volume slider, and the balance slider. `volume` and `balance`
+/// are the sliders' current values; dragging them emits
+/// `Message::VolumeChange` and `Message::BalanceChange` respectively.
+/// `repeat` is the shared Repeat flag, shown on the Repeat button and toggled
+/// by pressing it. The Stop label is static — Stop is always pressable, even
+/// when already stopped, as in Winamp — so no `play_pause_label`-style helper
+/// is needed.
 pub fn view_transport_controls(
     is_playing: bool,
     volume: f32,
+    balance: f32,
     repeat: bool,
 ) -> Element<'static, Message> {
     let mut row = Row::new();
@@ -549,6 +566,12 @@ pub fn view_transport_controls(
     row.push(
         Slider::new(VOLUME_MIN..=VOLUME_MAX, volume, Message::VolumeChange)
             .step(VOLUME_STEP)
+            .width(Length::Fixed(100.0))
+            .style(|_theme, status| style::chrome_slider_style(status)),
+    )
+    .push(
+        Slider::new(BALANCE_MIN..=BALANCE_MAX, balance, Message::BalanceChange)
+            .step(BALANCE_STEP)
             .width(Length::Fixed(100.0))
             .style(|_theme, status| style::chrome_slider_style(status)),
     )
@@ -638,17 +661,17 @@ pub(super) const BROWSE_VIEWS: [CurrentView; 3] = [
 #[cfg(test)]
 mod tests {
     use super::{
-        BROWSE_VIEWS, CurrentView, EQ_STEP, Message, VOLUME_MAX, VOLUME_MIN, VOLUME_STEP,
-        album_row, artist_row, browse_placeholder, can_go_back, can_retry_artists,
-        current_row_style, empty_list_label, eq_enabled_label, now_playing_label, play_pause_label,
-        repeat_label, song_row, style, theme, transport_buttons, view_albums, view_artists,
-        view_back_button, view_equalizer, view_now_playing, view_retry_button, view_songs,
-        view_transport_controls,
+        BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, BROWSE_VIEWS, CurrentView, EQ_STEP, Message,
+        VOLUME_MAX, VOLUME_MIN, VOLUME_STEP, album_row, artist_row, browse_placeholder,
+        can_go_back, can_retry_artists, current_row_style, empty_list_label, eq_enabled_label,
+        now_playing_label, play_pause_label, repeat_label, song_row, style, theme,
+        transport_buttons, view_albums, view_artists, view_back_button, view_equalizer,
+        view_now_playing, view_retry_button, view_songs, view_transport_controls,
     };
     use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, clamp_gain};
     use crate::library::{Album, Artist, Song};
     use crate::sample_library::sample_library;
-    use crate::state::clamp_volume;
+    use crate::state::{clamp_balance, clamp_volume};
     use crate::test_support::{sample_album, sample_artist, sample_song};
     use iced::Length;
     use std::borrow::Cow;
@@ -1010,12 +1033,16 @@ mod tests {
     #[test]
     fn transport_controls_construct_for_both_play_states_volume_endpoints_and_repeat_states() {
         // `view()` passes the shared state's `is_playing`, clamped `volume`,
-        // and `repeat` straight through, so build the transport row for every
-        // value the update arm can store, in both play and repeat states.
+        // `balance`, and `repeat` straight through, so build the transport row
+        // for every value the update arms can store, in both play and repeat
+        // states.
         for volume in [0.0, 0.5, 1.0] {
-            for is_playing in [false, true] {
-                for repeat in [false, true] {
-                    let _controls = view_transport_controls(is_playing, volume, repeat);
+            for balance in [-1.0, 0.0, 1.0] {
+                for is_playing in [false, true] {
+                    for repeat in [false, true] {
+                        let _controls =
+                            view_transport_controls(is_playing, volume, balance, repeat);
+                    }
                 }
             }
         }
@@ -1058,6 +1085,20 @@ mod tests {
         // One-percent drag granularity, pinned so the step cannot silently
         // coarsen while the endpoints stay put.
         assert_eq!(VOLUME_STEP, 0.01);
+    }
+
+    // The balance twin of the volume spec: the balance slider's range must
+    // equal the range `set_balance`/`clamp_balance` store, so a drag to either
+    // end lands exactly on the stored extreme, and its step is pinned so it
+    // cannot silently coarsen.
+    #[test]
+    fn balance_slider_spec_matches_the_state_clamp_and_pins_its_granularity() {
+        assert_eq!(clamp_balance(BALANCE_MIN), BALANCE_MIN);
+        assert_eq!(clamp_balance(BALANCE_MAX), BALANCE_MAX);
+        assert_eq!(clamp_balance(BALANCE_MIN - BALANCE_STEP), BALANCE_MIN);
+        assert_eq!(clamp_balance(BALANCE_MAX + BALANCE_STEP), BALANCE_MAX);
+
+        assert_eq!(BALANCE_STEP, 0.01);
     }
 
     // The equalizer twin: every preamp and band slider spans
