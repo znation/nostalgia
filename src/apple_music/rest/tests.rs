@@ -493,6 +493,19 @@ fn api_error_cause_skips_a_blank_detail_for_the_title() {
     assert_eq!(api_error_cause(body), Some("Unauthorized".to_string()));
 }
 
+// Apple may return several `errors` entries, and the first may name no cause
+// (an entry carrying only a `status`, say). The search must continue to a later
+// entry rather than returning `None` and dropping a cause the body carries, so
+// the status message names it instead of reporting the bare status.
+#[test]
+fn api_error_cause_falls_through_a_causeless_entry_to_a_later_cause() {
+    let body = r#"{"errors":[{"status":"401"},{"title":"Unauthorized","detail":"Invalid developer token"}]}"#;
+    assert_eq!(
+        api_error_cause(body),
+        Some("Invalid developer token".to_string())
+    );
+}
+
 // With every field present but blank there is no cause to add, so the
 // transport reports the status alone rather than "HTTP 401: ".
 #[test]

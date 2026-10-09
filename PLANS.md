@@ -94,6 +94,26 @@ seam, navigation, transport, or the other panels.
   library: the existing `browse_views_construct_over_the_loaded_library` and
   `view_constructs_over_the_apps_full_input_space` tests pass.
 
+### Read a later Apple Music error entry when the first names no cause (found 2026-10-08, done 2026-10-08)
+
+Apple's error body can carry several `errors` entries, and the client read only
+the first, so an entry carrying just a `status` hid a later entry's `detail` or
+`title` and the browse failure report showed a bare `HTTP 401`.
+
+**Goal.** `api_error_cause` returns the first non-blank cause across all
+entries, keeping each entry's `detail`-before-`title` preference.
+
+**Approach.** `src/apple_music/rest.rs`: replace the single `next()` entry with
+`find_map` over `envelope.errors`, so a causeless entry falls through to the
+next. `src/apple_music/rest/tests.rs`: pin the fall-through with a two-entry
+body whose first entry has only a `status`.
+
+**Files touched.** `src/apple_music/rest.rs`, `src/apple_music/rest/tests.rs`.
+
+**Acceptance criteria.** `make check` passes; a body whose first `errors` entry
+names no cause yields the later entry's cause, while every existing
+`api_error_cause` test still passes.
+
 ### Follow a browse collection's next page so a large library is read in full (found 2026-10-08, done 2026-10-08)
 
 Apple caps a collection page at 100 items and links the next page in the

@@ -423,12 +423,16 @@ struct ApiError {
     detail: Option<String>,
 }
 
-/// The human-readable cause in an Apple Music error body, preferring the first
-/// entry's non-blank `detail` and falling back to its non-blank `title`; `None`
-/// when `body` is not the documented envelope or carries neither. A field that
-/// is present but blank (empty or only whitespace) is treated as absent, so a
-/// cause is never empty and the status message does not end in a dangling
-/// `": "`.
+/// The human-readable cause in an Apple Music error body: the first entry's
+/// non-blank `detail`, falling back to that entry's non-blank `title`, then the
+/// same for each later entry in order; `None` when `body` is not the documented
+/// envelope or no entry carries a cause. The API may return several entries,
+/// and one whose `detail`/`title` is absent or blank (an entry carrying only a
+/// `status`, say) names no cause, so the search continues to the next entry
+/// rather than reporting the status alone and hiding a later entry's cause. A
+/// field that is present but blank (empty or only whitespace) is treated as
+/// absent, so a cause is never empty and the status message does not end in a
+/// dangling `": "`.
 ///
 /// The cause is an Apple Music reply — data outside this program's control —
 /// and it is carried into [`AppleMusicError`], whose `Display` reaches the
@@ -441,11 +445,15 @@ struct ApiError {
 /// unchanged.
 fn api_error_cause(body: &str) -> Option<String> {
     let envelope: ErrorEnvelope = serde_json::from_str(body).ok()?;
-    let error = envelope.errors.into_iter().next()?;
-    [error.detail, error.title]
+    envelope
+        .errors
         .into_iter()
-        .flatten()
-        .find(|cause| !cause.trim().is_empty())
+        .find_map(|error| {
+            [error.detail, error.title]
+                .into_iter()
+                .flatten()
+                .find(|cause| !cause.trim().is_empty())
+        })
         .map(|cause| cause.escape_debug().to_string())
 }
 
