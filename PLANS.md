@@ -29,7 +29,21 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Add the audio-output seam and a rodio backend (found 2026-10-08)
+_None yet._
+
+## Done
+
+### Add the audio-output seam and a rodio backend (found 2026-10-08, done 2026-10-08)
+
+The audio-output decision (QUESTIONS.md `## Answered`, 2026-10-08) scopes
+playback to the Apple Music **preview**; this lands the playback half behind an
+injectable seam, with `rodio` as the production backend. Rodio 0.22's API
+differs from the names first sketched here — the device is a `MixerDeviceSink`
+from `DeviceSinkBuilder::open_default_sink()`, playback goes through
+`rodio::Player`, and the preview decodes with `Decoder::new_mp4` — so the
+approach below names the API that landed. The transport's Pause and Stop
+buttons still update only UI state; wiring them to the service's `pause`/`stop`
+seam is left to a later plan.
 
 **Goal.** `AppleMusicService` plays real audio through an injectable
 `AudioOutput` seam; the production implementation uses `rodio`, `play_track`
@@ -39,10 +53,10 @@ stands in under test. Depends on "Carry the Apple Music preview URL on
 
 **Approach.**
 
-- `Cargo.toml`: add `rodio` with the features for `cpal` output and symphonia
-  AAC + MP4 decoding (Apple's preview is AAC in M4A); enable
-  `symphonia-aac`/`symphonia-isomp4` explicitly if the resolved default feature
-  set omits them.
+- `Cargo.toml`: `rodio = { version = "0.22.2", default-features = false,
+  features = ["playback", "mp4"] }`. The `mp4` feature already pulls
+  `symphonia-isomp4` and `symphonia-aac` (Apple's preview is AAC in M4A), and
+  dropping the default features leaves out recording and the unused decoders.
 - A new `audio` module (the `AudioOutput` trait, `SilentOutput`, `RodioOutput`, and `audio_with_fallback` symbols), registered by `pub mod audio;` in `src/main.rs`:
   - `pub trait AudioOutput: Send + Sync` with `fn play(&self, url: &str) ->
     Result<(), AppleMusicError>`, `fn pause(&self) -> Result<(),
@@ -50,18 +64,20 @@ stands in under test. Depends on "Carry the Apple Music preview URL on
   - `pub struct SilentOutput`, whose methods log and return `Ok(())`: the
     fallback when no device opens, and the production stand-in for the browse
     tests.
-  - `pub struct RodioOutput`, owning a `std::sync::mpsc::Sender<Command>` to a
-    worker `std::thread` that holds the `rodio::OutputStream` and current
-    `rodio::Sink`. Keeping rodio's stream on the worker makes the seam
-    `Send + Sync` regardless of the stream's own thread bounds. `Command` is
-    `Play(String)`, `Pause`, `Stop`. The worker downloads the URL with the
-    existing `ureq` client, decodes the bytes from a `Cursor<Vec<u8>>` with
-    `rodio::Decoder`, and appends to a fresh `Sink`; a download/decode failure
-    is logged with `eprintln!` (the trait call itself fails only when the
-    worker is gone). `RodioOutput::new() -> Result<Self, AppleMusicError>`
-    opens the default device on the worker and reports success/failure back
-    through a `std::sync::mpsc` channel, so a device-less machine gets `Err`
-    rather than a panic.
+  - `pub struct RodioOutput`, owning a `Mutex<std::sync::mpsc::Sender<Command>>`
+    to a worker `std::thread`. Rodio 0.22 opens the device through
+    `DeviceSinkBuilder::open_default_sink()` (a `MixerDeviceSink`) and plays
+    through `rodio::Player`; keeping both on the worker makes the seam
+    `Send + Sync` regardless of the platform handle's thread bounds. The
+    sender sits behind a `Mutex` because the standard sender is `Send` but not
+    `Sync`. `Command` is `Play(String)`, `Pause`, `Stop`. The worker downloads
+    the URL with `ureq`, buffers it, and decodes it with
+    `rodio::Decoder::new_mp4(Cursor<Vec<u8>>)`, appending to a fresh `Player`;
+    a download/decode failure is logged with `eprintln!` (the trait call
+    itself fails only when the worker is gone). `RodioOutput::new() ->
+    Result<Self, AppleMusicError>` opens the default device on the worker and
+    reports success/failure back through a `std::sync::mpsc` channel, so a
+    device-less machine gets `Err` rather than a panic.
   - `pub(crate) fn audio_with_fallback(open: impl FnOnce() ->
     Result<Arc<dyn AudioOutput>, AppleMusicError>) -> Arc<dyn AudioOutput>`:
     returns the opened output, or a `SilentOutput` when `open` fails. Pure and
@@ -79,17 +95,20 @@ stands in under test. Depends on "Carry the Apple Music preview URL on
   - Update the doc comments that call playback a shared-state-only stub.
 - `src/ui/mod.rs`: the `TrackSelected` arm passes `song.preview_url.as_deref()`
   to `play_track`.
-- `src/apple_music/tests.rs`: add a `RecordingAudio` fake holding
-  `Mutex<Vec<Call>>` (`Play(String)`/`Pause`/`Stop`) and a `FailingAudio`;
-  assert `play_track(…, Some(url), …)` records one `Play(url)` and commits
-  state, `play_track(…, None, …)` records none and still commits, and `pause`
-  records `Pause`. Update the `play_track` call sites and service constructors
-  in `src/apple_music/tests.rs` and `src/ui/tests.rs`.
+- Tests: `AudioCall`/`RecordingAudio`/`FailingAudio` live in
+  `src/test_support.rs`, shared by the `apple_music` and `ui` suites. The
+  `apple_music` suite asserts `play_track(…, Some(url), …)` records one
+  `Play(url)` and commits state, `play_track(…, None, …)` records none and
+  still commits, a failing backend's error propagates, and `pause` records
+  `Pause`. The `ui` suite drives `TrackSelected` end to end and asserts the
+  backend saw the selected `Song::preview_url`. The service constructors in
+  both suites use `with_transport` (silent audio), so no test opens an audio
+  device.
 
-**Files touched.** `Cargo.toml`, `src/main.rs`, the new `audio` module (the
-`AudioOutput`, `SilentOutput`, `RodioOutput`, and `audio_with_fallback`
-symbols),
-`src/apple_music.rs`, `src/apple_music/tests.rs`, `src/ui/mod.rs`,
+**Files touched.** `Cargo.toml`, `README.md`, `src/main.rs`, the new
+`src/audio.rs` (the `AudioOutput`, `SilentOutput`, `RodioOutput`, and
+`audio_with_fallback` symbols), `src/apple_music.rs`,
+`src/apple_music/tests.rs`, `src/test_support.rs`, `src/ui/mod.rs`,
 `src/ui/tests.rs`.
 
 **Acceptance criteria.**
@@ -106,8 +125,6 @@ symbols),
   transition.
 - `pause` records a `Pause`.
 - The UI passes the selected `Song::preview_url` to `play_track`.
-
-## Done
 
 ### Carry the Apple Music preview URL on `Song` (found 2026-10-08, done 2026-10-08)
 

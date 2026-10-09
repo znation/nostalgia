@@ -429,6 +429,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 return Task::none();
             };
             let track_id = song.id.clone();
+            let preview_url = song.preview_url.clone();
             // Record the played track's title and duration before handing the
             // id to the async play: the Now Playing bar resolves its label and
             // time from `known_tracks`, and the entry must survive a later
@@ -456,7 +457,9 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 generation,
                 PLAY_TIMEOUT,
                 move |service, id, generation| async move {
-                    service.play_track(&id, || generation.is_current()).await
+                    service
+                        .play_track(&id, preview_url.as_deref(), || generation.is_current())
+                        .await
                 },
                 move |err| eprintln!("{}", play_failure_report(&id_for_report, err)),
             )

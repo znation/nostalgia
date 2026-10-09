@@ -34,6 +34,11 @@ tokio = { version = "1.48.0", features = ["sync", "macros", "rt"] }
 # recorded in QUESTIONS.md `## Answered`, 2026-10-08). Default features carry
 # rustls TLS.
 ureq = "3.4"
+# Audio output behind the `audio::AudioOutput` seam (the backend choice
+# recorded in QUESTIONS.md `## Answered`, 2026-10-08). Default features pull
+# in recording and every decoder; only `playback` (cpal) and `mp4`
+# (symphonia isomp4 + aac, the format of an Apple Music preview) are needed.
+rodio = { version = "0.22.2", default-features = false, features = ["playback", "mp4"] }
 # The REST browse client parses Apple Music responses in production, so
 # `serde_json` is a runtime dependency, not test-only.
 serde_json = "1.0.146"

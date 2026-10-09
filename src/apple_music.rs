@@ -4,11 +4,12 @@
 //! replace. `AppleMusicService` answers a browse query from the signed-in
 //! user's Apple Music library through the REST client when a session is
 //! stored, and from the shared in-memory sample library
-//! ([`crate::sample_library::sample_library`]) otherwise; it stubs playback as
-//! shared-state transitions: `play_track` records the selected track and
-//! marks it playing, `pause` clears the flag. The still-unimplemented stubs
-//! (`next_track` and `previous_track`) stay so a real implementation has a
-//! surface to land on.
+//! ([`crate::sample_library::sample_library`]) otherwise; it plays the
+//! selected track's preview through an injected [`crate::audio::AudioOutput`],
+//! committing the shared-state transition (`play_track` records the selected
+//! track and marks it playing, `pause` pauses the audio and clears the flag).
+//! The still-unimplemented stubs (`next_track` and `previous_track`) stay so a
+//! real implementation has a surface to land on.
 //!
 //! The service also holds the authenticated `MusicKit` session
 //! ([`crate::music_kit_auth::MusicKitSession`]) obtained by [`init_service`]
@@ -26,6 +27,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+use crate::audio;
 use crate::library::{Album, Artist, Song};
 use crate::music_kit_auth::{MusicKitSession, authorize, open_in_browser};
 use crate::sample_library::sample_library;
@@ -37,7 +39,9 @@ pub use crate::music_error::AppleMusicError;
 /// user's Apple Music library through the REST client once
 /// [`AppleMusicService::authenticate`] has stored a session, and from the
 /// shared [`crate::sample_library::sample_library`] otherwise, so the UI and
-/// its tests agree on the same stub data before sign-in.
+/// its tests agree on the same stub data before sign-in. It plays audio
+/// through the injected [`crate::audio::AudioOutput`], so the production
+/// `rodio` backend can be swapped for a silent or recording fake.
 #[derive(Clone)]
 pub struct AppleMusicService {
     session: Arc<std::sync::Mutex<Option<MusicKitSession>>>,
@@ -47,6 +51,7 @@ pub struct AppleMusicService {
     session_ready: Arc<tokio::sync::Notify>,
     rest: Arc<rest::RestLibrary>,
     state: Arc<Mutex<AppState>>,
+    audio: Arc<dyn audio::AudioOutput>,
 }
 
 /// Transport stubs kept as the seam a real Apple Music implementation will
@@ -57,9 +62,11 @@ pub struct AppleMusicService {
 #[allow(dead_code)]
 impl AppleMusicService {
     async fn pause(&self) -> Result<(), AppleMusicError> {
-        // As with `play_track`, the stub only owns the shared-state
-        // transition — clear the playing flag. A real implementation
-        // would add the API call that pauses audio.
+        // Pause the audio first: a backend that cannot accept the request
+        // reports it before shared state claims playback stopped. Only the
+        // shared-state transition is owned here; a real implementation would
+        // also confirm the pause with the API.
+        self.audio.pause()?;
 
         let mut state = self.state.lock().await;
         state.is_playing = false;
@@ -145,25 +152,46 @@ fn browser_sign_in(developer_token: &str) -> Result<MusicKitSession, AppleMusicE
 
 impl AppleMusicService {
     /// Wraps the shared [`AppState`] in a new service over the production
-    /// [`rest::UreqTransport`]; the session starts unset until
-    /// [`AppleMusicService::authenticate`] stores one.
+    /// [`rest::UreqTransport`] and [`audio::RodioOutput`]; the session starts
+    /// unset until [`AppleMusicService::authenticate`] stores one. When no
+    /// audio device opens, the service falls back to a silent
+    /// [`audio::SilentOutput`] rather than failing to start.
     #[must_use]
     pub fn new(state: Arc<Mutex<AppState>>) -> Self {
-        Self::with_transport(state, Box::new(rest::UreqTransport::new()))
+        let output = audio::audio_with_fallback(|| {
+            audio::RodioOutput::new().map(|output| Arc::new(output) as Arc<dyn audio::AudioOutput>)
+        });
+        Self::with_audio(state, Box::new(rest::UreqTransport::new()), output)
     }
 
     /// [`new`](Self::new) with an injectable [`rest::HttpTransport`], so a
-    /// test drives the browse queries with a stub instead of the network.
+    /// test drives the browse queries with a stub instead of the network. The
+    /// audio backend is a silent [`audio::SilentOutput`], so a browse test
+    /// never touches an audio device; use [`with_audio`](Self::with_audio) to
+    /// inject a recording backend for playback tests.
     #[must_use]
     pub fn with_transport(
         state: Arc<Mutex<AppState>>,
         transport: Box<dyn rest::HttpTransport>,
+    ) -> Self {
+        Self::with_audio(state, transport, Arc::new(audio::SilentOutput))
+    }
+
+    /// [`with_transport`](Self::with_transport) with an injectable
+    /// [`audio::AudioOutput`], so a playback test records what the service
+    /// hands the backend.
+    #[must_use]
+    pub fn with_audio(
+        state: Arc<Mutex<AppState>>,
+        transport: Box<dyn rest::HttpTransport>,
+        audio: Arc<dyn audio::AudioOutput>,
     ) -> Self {
         Self {
             session: Arc::new(std::sync::Mutex::new(None)),
             session_ready: Arc::new(tokio::sync::Notify::new()),
             rest: Arc::new(rest::RestLibrary::new(transport)),
             state,
+            audio,
         }
     }
 
@@ -255,30 +283,34 @@ impl AppleMusicService {
     }
 
     /// Plays the given track by id, recording it as the current track and
-    /// marking it playing. A blank `track_id` — empty or only whitespace — or
-    /// one carrying a terminal control character is rejected with an
-    /// [`AppleMusicError`] and leaves shared state untouched: a blank id can
-    /// never name a track, and a control-character id must not reach shared
-    /// state. The playback log below escapes the id with `Debug` (see
+    /// marking it playing, then starts `preview_url` through the injected
+    /// [`crate::audio::AudioOutput`]. A blank `track_id` — empty or only
+    /// whitespace — or one carrying a terminal control character is rejected
+    /// with an [`AppleMusicError`] and leaves shared state untouched: a blank
+    /// id can never name a track, and a control-character id must not reach
+    /// shared state. The playback log below escapes the id with `Debug` (see
     /// [`play_log_line`]), so even a non-control Unicode format character the
-    /// guard does not reject cannot reach the terminal raw. The stub owns only
-    /// this shared-state transition — a real implementation would add the API
-    /// call that starts audio.
+    /// guard does not reject cannot reach the terminal raw. A `None`
+    /// `preview_url` is a track with no playable asset: the state transition
+    /// is committed but no audio starts.
     ///
     /// `is_current` guards the commit: it is evaluated while the state lock is
-    /// held, and when it returns `false` the track is left uncommitted because
-    /// a newer play has superseded this one. A slow backend can complete two
-    /// plays out of order, and without the guard the older reply would
-    /// overwrite the newer track in shared state; the UI passes the guard from
-    /// its playback-request counter, exactly as the browse path does.
+    /// held, and when it returns `false` the track is left uncommitted — and
+    /// no audio starts — because a newer play has superseded this one. A slow
+    /// backend can complete two plays out of order, and without the guard the
+    /// older reply would overwrite the newer track in shared state; the UI
+    /// passes the guard from its playback-request counter, exactly as the
+    /// browse path does.
     ///
     /// # Errors
     ///
     /// Returns an [`AppleMusicError`] when `track_id` is blank (empty or only
-    /// whitespace) or carries a control character.
+    /// whitespace), carries a control character, or the audio backend cannot
+    /// start the preview.
     pub async fn play_track(
         &self,
         track_id: &str,
+        preview_url: Option<&str>,
         is_current: impl FnOnce() -> bool,
     ) -> Result<(), AppleMusicError> {
         ensure_id_is_valid(track_id, IdKind::Track)?;
@@ -289,8 +321,13 @@ impl AppleMusicService {
         }
         state.current_track = Some(track_id.to_string());
         state.is_playing = true;
+        drop(state);
 
         println!("{}", play_log_line(track_id));
+
+        if let Some(url) = preview_url {
+            self.audio.play(url)?;
+        }
         Ok(())
     }
 

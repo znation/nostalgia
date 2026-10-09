@@ -4,15 +4,30 @@ use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB};
 use crate::music_kit_auth::MusicKitSession;
 use crate::sample_library::sample_library;
 use crate::test_support::{
-    assert_ids, rock_preset, sample_album, sample_artist, sample_song, second_album_songs,
-    stepping_songs,
+    AudioCall, RecordingAudio, StubTransport, assert_ids, rock_preset, sample_album, sample_artist,
+    sample_song, second_album_songs, stepping_songs,
 };
 
 /// A fresh player over its own shared state, so a test can inspect the
 /// same `AppState` the player mutates.
 fn test_player() -> (WinampPlayer, Arc<Mutex<AppState>>) {
     let state = Arc::new(Mutex::new(AppState::default()));
-    let service = AppleMusicService::new(state.clone());
+    // Over a stub transport and the silent audio backend, so a UI test never
+    // touches the network or an audio device; no session is stored, so the
+    // sample library answers the browse queries.
+    let service =
+        AppleMusicService::with_transport(state.clone(), Box::new(StubTransport::returning("")));
+    (WinampPlayer::new(state.clone(), service), state)
+}
+
+/// A fresh player over an injected playback backend and its own shared state,
+/// so a test can observe what the UI hands the service's audio seam.
+fn player_with_audio(
+    audio: Arc<dyn crate::audio::AudioOutput>,
+) -> (WinampPlayer, Arc<Mutex<AppState>>) {
+    let state = Arc::new(Mutex::new(AppState::default()));
+    let service =
+        AppleMusicService::with_audio(state.clone(), Box::new(StubTransport::returning("")), audio);
     (WinampPlayer::new(state.clone(), service), state)
 }
 
@@ -721,6 +736,36 @@ async fn a_slow_stale_play_does_not_overwrite_the_newer_track() {
     assert_eq!(state.lock().await.current_track.as_deref(), Some("song-2"));
 }
 
+// The UI must hand the selected song's preview URL to the service, so the
+// audio backend plays the right asset. This drives `TrackSelected` through
+// `update` and the returned play task to completion, then asserts the
+// recording backend saw exactly that URL — the end-to-end wiring the one-line
+// `preview_url.as_deref()` handoff exists for.
+#[tokio::test]
+async fn track_selected_plays_the_songs_preview_url() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, _state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+
+    player.songs.items = vec![Song {
+        id: "song-1".to_string(),
+        title: "One".to_string(),
+        album_id: "album-1".to_string(),
+        duration_ms: 210_000,
+        preview_url: Some("https://example.test/preview.m4a".to_string()),
+    }];
+
+    let task = update(&mut player, Message::TrackSelected { epoch: 0, index: 0 });
+    drive_task(task, "play", |_| {}).await;
+
+    assert_eq!(
+        recording.calls(),
+        vec![AudioCall::Play(
+            "https://example.test/preview.m4a".to_string()
+        )]
+    );
+}
+
 // Startup wiring: `boot` hands iced a fresh player plus a batched task that
 // loads the artist list and resolves the window id, and `update`'s
 // `LoadArtists` arm runs that fetch into the player's `artists` buffer. A
@@ -733,7 +778,8 @@ async fn boot_schedules_loading_the_artist_list() {
     use futures::StreamExt;
 
     let state = Arc::new(Mutex::new(AppState::default()));
-    let service = AppleMusicService::new(state.clone());
+    let service =
+        AppleMusicService::with_transport(state.clone(), Box::new(StubTransport::returning("")));
 
     let (player, task) = boot(state, service);
     assert_view(&player, CurrentView::Artists);

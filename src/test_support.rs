@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::apple_music::AppleMusicError;
 use crate::apple_music::rest::HttpTransport;
+use crate::audio::AudioOutput;
 use crate::equalizer::{PRESETS, Preset};
 use crate::library::{Album, Artist, Song};
 use crate::music_kit_auth::MusicKitSession;
@@ -297,5 +298,71 @@ impl HttpTransport for StubTransport {
             .unwrap()
             .pop_front()
             .unwrap_or_else(|| self.result.clone())
+    }
+}
+
+/// The commands a [`RecordingAudio`] recorded, in order, so a test can pin
+/// exactly what the service handed the audio backend.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum AudioCall {
+    /// `play` was called with this URL.
+    Play(String),
+    /// `pause` was called.
+    Pause,
+    /// `stop` was called.
+    Stop,
+}
+
+/// A recording [`AudioOutput`] so a test observes the commands the service
+/// issues without touching an audio device. The `apple_music` and `ui` suites
+/// both drive the service's playback seam, so the fake lives here once.
+#[derive(Debug, Default)]
+pub(crate) struct RecordingAudio {
+    calls: Mutex<Vec<AudioCall>>,
+}
+
+impl RecordingAudio {
+    /// A snapshot of the recorded calls, cloned out from under the mutex.
+    pub(crate) fn calls(&self) -> Vec<AudioCall> {
+        self.calls.lock().unwrap().clone()
+    }
+}
+
+impl AudioOutput for RecordingAudio {
+    fn play(&self, url: &str) -> Result<(), AppleMusicError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(AudioCall::Play(url.to_string()));
+        Ok(())
+    }
+
+    fn pause(&self) -> Result<(), AppleMusicError> {
+        self.calls.lock().unwrap().push(AudioCall::Pause);
+        Ok(())
+    }
+
+    fn stop(&self) -> Result<(), AppleMusicError> {
+        self.calls.lock().unwrap().push(AudioCall::Stop);
+        Ok(())
+    }
+}
+
+/// An [`AudioOutput`] whose `play` fails, so a test can pin that the service
+/// propagates the backend's error.
+#[derive(Debug, Default)]
+pub(crate) struct FailingAudio;
+
+impl AudioOutput for FailingAudio {
+    fn play(&self, _url: &str) -> Result<(), AppleMusicError> {
+        Err(AppleMusicError::new("the audio device is gone"))
+    }
+
+    fn pause(&self) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn stop(&self) -> Result<(), AppleMusicError> {
+        Ok(())
     }
 }

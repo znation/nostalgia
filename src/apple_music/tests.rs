@@ -1,8 +1,15 @@
 use super::*;
-use crate::test_support::{StubTransport, assert_ids};
+use crate::audio::AudioOutput;
+use crate::test_support::{AudioCall, FailingAudio, RecordingAudio, StubTransport, assert_ids};
 
 fn test_service() -> AppleMusicService {
-    AppleMusicService::new(Arc::new(Mutex::new(AppState::default())))
+    // Over a stub transport and the silent audio backend, so a test never
+    // touches the network or an audio device; the sample library answers
+    // because no session is stored.
+    AppleMusicService::with_transport(
+        Arc::new(Mutex::new(AppState::default())),
+        Box::new(StubTransport::returning("")),
+    )
 }
 
 /// A fresh service plus a handle to the shared state it mutates, so a
@@ -35,7 +42,7 @@ fn sign_in_session() -> MusicKitSession {
 /// each test names only the state it drives to.
 async fn service_with_song_1_playing() -> (AppleMusicService, Arc<Mutex<AppState>>) {
     let (service, state) = test_service_with_state();
-    service.play_track("song-1", || true).await.unwrap();
+    service.play_track("song-1", None, || true).await.unwrap();
     (service, state)
 }
 
@@ -52,6 +59,16 @@ async fn assert_playback_state(
     let state = state.lock().await;
     assert_eq!(state.current_track.as_deref(), expected_track);
     assert_eq!(state.is_playing, expected_playing);
+}
+
+/// A service over `audio` and a stub transport, plus its shared state, so a
+/// playback test drives the injected backend. The transport never answers
+/// because no session is stored, matching the sample-library path.
+fn service_with_audio(audio: Arc<dyn AudioOutput>) -> (AppleMusicService, Arc<Mutex<AppState>>) {
+    let state = Arc::new(Mutex::new(AppState::default()));
+    let service =
+        AppleMusicService::with_audio(state.clone(), Box::new(StubTransport::returning("")), audio);
+    (service, state)
 }
 
 /// Asserts that both blank forms of an id — empty and whitespace-only —
@@ -345,9 +362,73 @@ async fn get_songs_from_album_returns_single_song_albums_song() {
 async fn play_track_sets_current_track_and_starts_playing() {
     let (service, state) = test_service_with_state();
 
-    service.play_track("song-1", || true).await.unwrap();
+    service.play_track("song-1", None, || true).await.unwrap();
 
     assert_playback_state(&state, Some("song-1"), true).await;
+}
+
+// The service hands a track's preview URL to the injected audio backend and
+// commits the shared-state transition. The recording fake pins the exact URL,
+// so a regression that dropped it (or reordered the arguments) fails here.
+#[tokio::test]
+async fn play_track_starts_the_preview_through_the_audio_backend() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+
+    service
+        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        recording.calls(),
+        vec![AudioCall::Play(
+            "https://example.test/preview.m4a".to_string()
+        )]
+    );
+    assert_playback_state(&state, Some("song-1"), true).await;
+}
+
+// A song the library supplied without a preview URL still commits the state
+// transition — the Now Playing bar must name it — but starts no audio. The
+// recording fake pins that no `Play` reaches the backend.
+#[tokio::test]
+async fn play_track_without_a_preview_url_commits_state_without_audio() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+
+    service.play_track("song-1", None, || true).await.unwrap();
+
+    assert!(recording.calls().is_empty());
+    assert_playback_state(&state, Some("song-1"), true).await;
+}
+
+// A backend that cannot start the preview reports it through the seam, so the
+// UI's play path can log the failure instead of silently claiming success.
+#[tokio::test]
+async fn play_track_propagates_an_audio_backend_failure() {
+    let (service, _state) = service_with_audio(Arc::new(FailingAudio));
+
+    let error = service
+        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.to_string(), "the audio device is gone");
+}
+
+// `pause` pauses the backend as well as clearing the shared playing flag, so
+// the audio and the UI state stay in step.
+#[tokio::test]
+async fn pause_pauses_the_audio_backend() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+
+    service.play_track("song-1", None, || true).await.unwrap();
+    service.pause().await.unwrap();
+
+    assert_eq!(recording.calls(), vec![AudioCall::Pause]);
+    assert_playback_state(&state, Some("song-1"), false).await;
 }
 
 // The test above plays once from the default (no track), so it only
@@ -361,7 +442,7 @@ async fn play_track_sets_current_track_and_starts_playing() {
 async fn play_track_replaces_the_current_track_when_another_song_is_played() {
     let (service, state) = service_with_song_1_playing().await;
 
-    service.play_track("song-2", || true).await.unwrap();
+    service.play_track("song-2", None, || true).await.unwrap();
 
     assert_playback_state(&state, Some("song-2"), true).await;
 }
@@ -377,8 +458,8 @@ async fn a_superseded_play_leaves_the_newer_track_in_place() {
 
     // The newer play commits, then the older one completes late with a
     // guard reporting it has been superseded.
-    service.play_track("song-2", || true).await.unwrap();
-    service.play_track("song-1", || false).await.unwrap();
+    service.play_track("song-2", None, || true).await.unwrap();
+    service.play_track("song-1", None, || false).await.unwrap();
 
     assert_playback_state(&state, Some("song-2"), true).await;
 }
@@ -393,8 +474,8 @@ async fn play_track_rejects_a_blank_track_id_without_touching_state() {
     let (service, state) = test_service_with_state();
 
     assert_blank_id_rejected(
-        service.play_track("", || true),
-        service.play_track("   ", || true),
+        service.play_track("", None, || true),
+        service.play_track("   ", None, || true),
         IdKind::Track,
     )
     .await;
@@ -412,7 +493,7 @@ async fn play_track_rejects_a_blank_track_id_without_touching_state() {
 async fn play_track_rejects_a_blank_track_id_while_a_song_is_playing() {
     let (service, state) = service_with_song_1_playing().await;
 
-    let error = service.play_track("", || true).await.unwrap_err();
+    let error = service.play_track("", None, || true).await.unwrap_err();
 
     assert_eq!(error.to_string(), "track id must not be blank (got \"\")");
     assert_playback_state(&state, Some("song-1"), true).await;
@@ -429,7 +510,8 @@ async fn play_track_rejects_a_control_character_track_id() {
     let (service, state) = service_with_song_1_playing().await;
 
     let id = "evil\u{1b}]0;pwnd\u{7}";
-    assert_control_character_id_rejected(service.play_track(id, || true), IdKind::Track, id).await;
+    assert_control_character_id_rejected(service.play_track(id, None, || true), IdKind::Track, id)
+        .await;
 
     assert_playback_state(&state, Some("song-1"), true).await;
 }

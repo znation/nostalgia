@@ -60,6 +60,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub mod apple_music;
+pub mod audio;
 pub mod clamp;
 pub mod equalizer;
 pub mod library;

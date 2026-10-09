@@ -18,7 +18,9 @@ chrome transport controls with Repeat and Shuffle, volume and balance sliders, a
 with a preset pick list, and an artist → album → song browser. A MusicKit loopback sign-in runs at
 startup when `APPLE_MUSIC_DEVELOPER_TOKEN` is set: browse queries then read the signed-in Apple
 Music library through the REST API, and fall back to the in-memory sample library otherwise.
-Playback is still a state-only stub with no audio output. Open work lives in PLANS.md, BUGS.md,
+Playback plays the selected song's Apple Music preview through `rodio`, behind an injectable
+audio-output seam that falls back to silence when no output device opens; the transport's Pause
+and Stop buttons still only update UI state. Open work lives in PLANS.md, BUGS.md,
 and QUESTIONS.md.
 <!-- tumwater:status:end -->
 
@@ -55,8 +57,10 @@ and `✕` buttons minimize and close. With the window focused, the classic Winam
 playback: Z and B step back and forward, X plays, C pauses, V stops, and the up/down arrows nudge
 the volume. Setting `APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a browser-based MusicKit
 sign-in: browse queries then read your Apple Music library through the REST API, and fall back to
-the built-in sample library when it is unset. Playback is not wired to audio yet — it only updates
-the UI state. There are no CLI flags or config files yet.
+the built-in sample library when it is unset. Playback plays the selected song's Apple Music
+preview through `rodio` when the library supplies one, and updates the UI state either way; the
+Pause and Stop controls still only change that UI state, so they do not silence the preview yet.
+There are no CLI flags or config files yet.
 
 ## Development
 
