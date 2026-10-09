@@ -12,6 +12,17 @@ on:
   push:
   pull_request:
 
+# Least privilege: the gate only reads the repository (checkout), so the
+# workflow's default broad `GITHUB_TOKEN` is narrowed to read-only contents.
+permissions:
+  contents: read
+
+# One run per ref: a newer push to a branch supersedes the older run, so the
+# superseded gate is cancelled instead of continuing to hold a runner.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -19,6 +30,10 @@ jobs:
   check:
     name: make check
     runs-on: ubuntu-latest
+    # A hung build or test would otherwise occupy a runner until GitHub's
+    # six-hour default; the gate finishes in minutes, so bound it well below
+    # that to free the runner and report the hang as a failure.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - name: Install the Linux audio build dependency
