@@ -403,6 +403,38 @@ async fn play_track_without_a_preview_url_commits_state_without_audio() {
     assert_playback_state(&state, Some("song-1"), true).await;
 }
 
+// A `Some` preview URL that is blank can play nothing, so the seam rejects it
+// before committing state — the same guard a blank track id gets. The REST
+// layer never produces one (`Resource::preview_url` maps a blank preview to
+// `None`), so this pins the public seam's contract for a caller that hands it
+// one directly. Both an empty and a whitespace-only URL are blank, and the
+// error quotes the value with `{url:?}` so the whitespace case is visible.
+// State must survive untouched, so the already-playing song keeps playing.
+#[tokio::test]
+async fn play_track_rejects_a_blank_preview_url_without_touching_state() {
+    let (service, state) = service_with_song_1_playing().await;
+
+    let error = service
+        .play_track("song-2", Some(""), || true)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "preview URL must not be blank (got \"\")"
+    );
+
+    let error = service
+        .play_track("song-2", Some("   "), || true)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.to_string(),
+        "preview URL must not be blank (got \"   \")"
+    );
+
+    assert_playback_state(&state, Some("song-1"), true).await;
+}
+
 // A backend that cannot start the preview reports it through the seam, so the
 // UI's play path can log the failure instead of silently claiming success.
 #[tokio::test]

@@ -33,6 +33,37 @@ _None yet._
 
 ## Done
 
+### Reject a blank preview URL at the playback seam (found 2026-10-08, done 2026-10-08)
+
+`AppleMusicService::play_track` validates its track id — a blank or
+control-character id is rejected with a named error before shared state is
+touched — but passed `preview_url` straight to the audio backend. A caller
+handing `Some("")` (or only whitespace) made the backend attempt a request to
+an empty URL, so the user saw a transport error that did not name the actual
+defect. The REST layer already maps a blank preview to `None`, but the seam is
+public and documented for a real backend to fill, so the guard belongs at the
+seam too.
+
+**Goal.** `play_track` rejects a present-but-blank `preview_url` with a named
+`AppleMusicError` before committing state, while `None` keeps its documented
+"no playable asset" behavior (state committed, no audio).
+
+**Approach.**
+
+- `src/apple_music.rs`: add `ensure_preview_url_is_valid(Option<&str>)`, which
+  returns `Ok` for `None` or a non-blank URL and names the offending value
+  (quoted with `{url:?}`) for a blank one; call it in `play_track` after
+  `ensure_id_is_valid`, before the state lock. Update `play_track`'s doc comment
+  and its `# Errors` list.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- A test drives `play_track` with `Some("")` and `Some("   ")` mid-playback and
+  sees the named error with shared state untouched.
+
+**Files touched.** `src/apple_music.rs`, `src/apple_music/tests.rs`.
+
 ### Show the playing track's artist in the Now Playing bar (found 2026-10-08, done 2026-10-08)
 
 Classic Winamp's main-window marquee reads "Artist - Title", and the Apple

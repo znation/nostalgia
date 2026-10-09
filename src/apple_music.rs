@@ -292,7 +292,9 @@ impl AppleMusicService {
     /// [`play_log_line`]), so even a non-control Unicode format character the
     /// guard does not reject cannot reach the terminal raw. A `None`
     /// `preview_url` is a track with no playable asset: the state transition
-    /// is committed but no audio starts.
+    /// is committed but no audio starts. A `preview_url` that is `Some` but
+    /// blank is a caller bug — no asset has a blank URL — and is rejected the
+    /// same way a blank id is, before shared state is touched.
     ///
     /// `is_current` guards the commit: it is evaluated while the state lock is
     /// held, and when it returns `false` the track is left uncommitted — and
@@ -305,8 +307,8 @@ impl AppleMusicService {
     /// # Errors
     ///
     /// Returns an [`AppleMusicError`] when `track_id` is blank (empty or only
-    /// whitespace), carries a control character, or the audio backend cannot
-    /// start the preview.
+    /// whitespace), carries a control character, when `preview_url` is present
+    /// but blank, or the audio backend cannot start the preview.
     pub async fn play_track(
         &self,
         track_id: &str,
@@ -314,6 +316,7 @@ impl AppleMusicService {
         is_current: impl FnOnce() -> bool,
     ) -> Result<(), AppleMusicError> {
         ensure_id_is_valid(track_id, IdKind::Track)?;
+        ensure_preview_url_is_valid(preview_url)?;
 
         let mut state = self.state.lock().await;
         if !is_current() {
@@ -472,6 +475,27 @@ fn ensure_id_is_valid(id: &str, kind: IdKind) -> Result<(), AppleMusicError> {
         )));
     }
     Ok(())
+}
+
+/// Validates a preview URL at the seam: `Ok` for `None` or a non-blank URL,
+/// `Err` naming the offending value when it is present but blank.
+///
+/// `None` is [`AppleMusicService::play_track`]'s documented "the track has no
+/// playable asset" case, so it passes and the state transition is still
+/// committed without audio. A blank `Some` (empty or only whitespace) is a
+/// caller bug: [`crate::apple_music::rest`]'s `Resource::preview_url` already
+/// maps a blank preview to `None`, and handing a blank string on to the audio
+/// backend would surface as a transport error that does not name the actual
+/// defect. Rejecting it here leaves shared state untouched, exactly as a blank
+/// track id does. The message quotes the value with `{url:?}`, so a
+/// whitespace-only URL reads as escaped text rather than as invisible bytes.
+fn ensure_preview_url_is_valid(preview_url: Option<&str>) -> Result<(), AppleMusicError> {
+    match preview_url {
+        Some(url) if url.trim().is_empty() => Err(AppleMusicError::new(format!(
+            "preview URL must not be blank (got {url:?})"
+        ))),
+        _ => Ok(()),
+    }
 }
 
 /// The playback log line for `track_id`, escaped so a hostile library id
