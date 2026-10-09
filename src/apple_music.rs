@@ -23,7 +23,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::library::{Album, Artist, Song};
-use crate::music_kit_auth::MusicKitSession;
+use crate::music_kit_auth::{MusicKitSession, authorize, open_in_browser};
 use crate::sample_library::sample_library;
 use crate::state::AppState;
 
@@ -146,7 +146,7 @@ pub fn init_service(state: Arc<Mutex<AppState>>) -> AppleMusicService {
 /// loopback callback. Single-sourced so [`AppleMusicService::authenticate`]
 /// and [`init_service`] run the same flow.
 fn browser_sign_in(developer_token: &str) -> Result<MusicKitSession, AppleMusicError> {
-    crate::music_kit_auth::authorize(developer_token, &crate::music_kit_auth::open_in_browser)
+    authorize(developer_token, &open_in_browser)
 }
 
 impl AppleMusicService {
