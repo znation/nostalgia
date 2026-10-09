@@ -241,8 +241,19 @@ impl StubTransport {
     /// single-body case; this is the multi-response case a paginated fetch
     /// needs.
     pub(crate) fn returning_bodies(bodies: &[&str]) -> Self {
-        let responses: VecDeque<Result<String, AppleMusicError>> =
+        let responses: Vec<Result<String, AppleMusicError>> =
             bodies.iter().map(|body| Ok((*body).to_string())).collect();
+        Self::returning_results(&responses)
+    }
+
+    /// A stub that answers the first calls with `responses` in order and then
+    /// repeats the last for every later call. [`Self::returning_bodies`] is
+    /// the all-success shorthand; this is the mixed case a test needs when an
+    /// earlier page of a paginated fetch succeeds and a later one fails, so
+    /// the queue can carry an error rather than only bodies.
+    pub(crate) fn returning_results(responses: &[Result<String, AppleMusicError>]) -> Self {
+        let responses: VecDeque<Result<String, AppleMusicError>> =
+            responses.iter().cloned().collect();
         let last = responses
             .back()
             .cloned()

@@ -790,6 +790,37 @@ fn a_next_page_is_followed_and_both_pages_are_returned_in_order() {
     );
 }
 
+// Pagination exists so a large library is read in full, so a transport
+// failure on a *later* page must surface as an error rather than be swallowed
+// to return the earlier pages' rows: silently returning a prefix would
+// reintroduce the truncation the paging loop replaced. Page 1 succeeds and
+// links page 2; the second request fails. The bare cause and the two recorded
+// calls prove `fetch` followed the link once, stopped at the failure, and
+// returned no partial rows.
+#[test]
+fn a_transport_error_on_a_later_page_surfaces_instead_of_truncating() {
+    let stub = StubTransport::returning_results(&[
+        Ok(r#"{"data":[{"id":"artist-1","attributes":{"name":"The Sample Band"}}],"next":"/v1/me/library/artists?offset=1"}"#.to_string()),
+        Err(AppleMusicError::new("connection reset")),
+    ]);
+    let library = library_over(&stub);
+
+    let error = library
+        .get_favorite_artists(&session())
+        .unwrap_err()
+        .to_string();
+
+    // The cause is bare, like the first-page transport error: the UI names
+    // the query, so this layer does not repeat it.
+    assert_eq!(error, "connection reset");
+    let calls = stub.calls();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(
+        calls[1].0,
+        "https://api.music.apple.com/v1/me/library/artists?offset=1"
+    );
+}
+
 // An endless `next` chain — a server that always links another page, or one
 // that links back to a page already read — must stop at `MAX_PAGES` rather
 // than loop forever. The stub repeats its one body, so the call count is the
