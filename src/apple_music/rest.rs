@@ -51,7 +51,9 @@ pub trait HttpTransport: Send + Sync {
 /// time, while the shared agent reuses the pooled connection across the
 /// artist → album → song browse requests. The shared agent carries
 /// [`REQUEST_TIMEOUT`] as its global timeout, so a stalled server cannot block
-/// a request forever.
+/// a request forever, and follows no redirects, so the `Music-User-Token`
+/// credential is only ever sent to the URL this client built (see
+/// [`agent_with_timeout`]).
 pub struct UreqTransport {
     agent: ureq::Agent,
 }
@@ -70,11 +72,9 @@ impl UreqTransport {
     /// the production 30 seconds.
     #[cfg(test)]
     fn with_timeout(timeout: Duration) -> Self {
-        let agent = ureq::Agent::config_builder()
-            .timeout_global(Some(timeout))
-            .build()
-            .into();
-        Self { agent }
+        Self {
+            agent: agent_with_timeout(timeout),
+        }
     }
 }
 
@@ -90,12 +90,25 @@ impl Default for UreqTransport {
 /// [`REQUEST_TIMEOUT`], so every request through it is bounded end to end.
 fn shared_agent() -> &'static ureq::Agent {
     static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
-    AGENT.get_or_init(|| {
-        ureq::Agent::config_builder()
-            .timeout_global(Some(REQUEST_TIMEOUT))
-            .build()
-            .into()
-    })
+    AGENT.get_or_init(|| agent_with_timeout(REQUEST_TIMEOUT))
+}
+
+/// Builds an API agent with `timeout` as its global bound and no redirect
+/// following.
+///
+/// The API requests carry the user token in the custom `Music-User-Token`
+/// header. `ureq` follows up to ten redirects by default, and on a redirect it
+/// strips only `Authorization`, `Cookie`, and `Content-Length` — a custom
+/// header survives, so a `Location` naming another host would re-send the user
+/// token there. The library endpoints answer with a JSON body, so a redirect is
+/// the unexpected response it looks like, and refusing to follow one keeps the
+/// credential on the single URL [`RestLibrary`] constructed.
+fn agent_with_timeout(timeout: Duration) -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_global(Some(timeout))
+        .max_redirects(0)
+        .build()
+        .into()
 }
 
 impl HttpTransport for UreqTransport {

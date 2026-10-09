@@ -309,3 +309,92 @@ fn a_stalled_server_is_bounded_by_the_request_timeout() {
         started.elapsed()
     );
 }
+
+/// Binds a loopback listener, returning it with the address it bound.
+fn loopback_listener() -> (std::net::TcpListener, std::net::SocketAddr) {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    (listener, address)
+}
+
+/// Reads whatever one request has sent within a one-second bound and returns
+/// it lossily as text, so a test can look for a header without a full parse.
+fn read_some_request(stream: &mut std::net::TcpStream) -> String {
+    use std::io::Read;
+    stream
+        .set_read_timeout(Some(std::time::Duration::from_secs(1)))
+        .unwrap();
+    let mut buffer = [0u8; 4096];
+    let read = stream.read(&mut buffer).unwrap_or(0);
+    String::from_utf8_lossy(&buffer[..read]).into_owned()
+}
+
+// The API requests carry the user token in the custom `Music-User-Token`
+// header, and `ureq` follows redirects by default while stripping only
+// `Authorization`, `Cookie`, and `Content-Length` from the redirected request
+// — a custom header survives. A response whose `Location` names another host
+// would therefore re-send the user token there. Pin the guard at the
+// transport: a redirect is not followed, so the token never leaves the URL the
+// client built.
+#[test]
+fn a_redirect_is_not_followed_so_the_user_token_cannot_leak() {
+    let (foreign, foreign_addr) = loopback_listener();
+    let (redirector, redirector_addr) = loopback_listener();
+
+    // The redirecting server answers the one request with a 302 pointing at
+    // the "foreign" server, exactly what a hostile or compromised API reply
+    // could return.
+    let redirect_thread = std::thread::spawn(move || {
+        let (mut stream, _) = redirector.accept().unwrap();
+        let _ = read_some_request(&mut stream);
+        use std::io::Write;
+        let response = format!(
+            "HTTP/1.1 302 Found\r\nLocation: http://{foreign_addr}/leak\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        );
+        let _ = stream.write_all(response.as_bytes());
+        let _ = stream.flush();
+    });
+
+    // The foreign server records whether any redirected request arrived. A
+    // one-second poll makes "no request" a bounded, observable result rather
+    // than a hang.
+    let foreign_thread = std::thread::spawn(move || {
+        foreign.set_nonblocking(true).unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        loop {
+            match foreign.accept() {
+                Ok((mut stream, _)) => return Some(read_some_request(&mut stream)),
+                Err(ref error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    if std::time::Instant::now() >= deadline {
+                        return None;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                Err(error) => panic!("foreign listener failed: {error}"),
+            }
+        }
+    });
+
+    let transport = UreqTransport::with_timeout(std::time::Duration::from_secs(2));
+    let url = format!("http://{redirector_addr}/redirect");
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = sender.send(transport.get(&url, &session()));
+    });
+    let _ = receiver.recv_timeout(std::time::Duration::from_secs(5));
+
+    redirect_thread.join().unwrap();
+    let leaked = foreign_thread.join().unwrap();
+    assert!(
+        leaked.is_none(),
+        "the user token reached the redirect target: {leaked:?}"
+    );
+}
+
+// The production transport is the one that carries real credentials, and it
+// uses the process-wide `shared_agent` rather than the test-only
+// `with_timeout` path, so pin the shared agent's redirect policy directly.
+#[test]
+fn the_shared_agent_does_not_follow_redirects() {
+    assert_eq!(shared_agent().config().max_redirects(), 0);
+}
