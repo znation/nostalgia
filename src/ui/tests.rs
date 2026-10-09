@@ -1,6 +1,7 @@
 use super::views::BROWSE_VIEWS;
 use super::*;
 use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB};
+use crate::music_kit_auth::MusicKitSession;
 use crate::sample_library::sample_library;
 use crate::test_support::{
     assert_ids, rock_preset, sample_album, sample_artist, sample_song, second_album_songs,
@@ -750,6 +751,53 @@ async fn boot_schedules_loading_the_artist_list() {
             return;
         }
     }
+}
+
+// The startup sign-in runs on a background thread, so the first artists fetch
+// can land before the session exists and answer from the sample library. The
+// boot task must watch for the session and re-issue `LoadArtists` when it
+// arrives, or a signed-in user keeps seeing the sample artists for the rest of
+// the process. A regression that dropped that watch would exhaust the boot
+// stream after the initial fetch, failing the second `expect` below.
+#[tokio::test]
+async fn boot_reloads_artists_after_the_startup_sign_in_stores_a_session() {
+    use futures::StreamExt;
+
+    let state = Arc::new(Mutex::new(AppState::default()));
+    let service = AppleMusicService::new(state.clone());
+    let sign_in_service = service.clone();
+
+    let (player, task) = boot(state, service);
+    assert_view(&player, CurrentView::Artists);
+
+    // Store the session from a background thread, as `init_service` does, so
+    // the boot task observes a session that arrives after it started waiting.
+    let sign_in = std::thread::spawn(move || {
+        sign_in_service
+            .authenticate_with("dev-token", &|_| {
+                Ok(MusicKitSession {
+                    developer_token: "dev-token".to_string(),
+                    user_token: "user-token".to_string(),
+                })
+            })
+            .expect("the stub sign-in must store its session");
+    });
+
+    // The batched task carries the initial fetch, the session wait, and the
+    // window-id query; drive until the wait's second `LoadArtists` lands. The
+    // window query yields a runtime `Action::Window` this test does not
+    // service, and the initial fetch's output is the first `LoadArtists`.
+    let mut stream = iced_runtime::task::into_stream(task).expect("boot must schedule work");
+    let mut artist_loads = 0;
+    while artist_loads < 2 {
+        let action = await_or_timeout("boot", TASK_TIMEOUT, stream.next())
+            .await
+            .expect("boot task must yield a second artists fetch");
+        if matches!(action, iced_runtime::Action::Output(Message::LoadArtists)) {
+            artist_loads += 1;
+        }
+    }
+    sign_in.join().expect("the sign-in thread must not panic");
 }
 
 #[tokio::test]

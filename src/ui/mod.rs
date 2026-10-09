@@ -255,12 +255,22 @@ impl WinampPlayer {
 
 fn boot(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> (WinampPlayer, Task<Message>) {
     // `iced` runs the boot task only after the window opens, so `latest()`
-    // resolves to the app window. The two run together: the artists fetch does
-    // not wait on the window id.
+    // resolves to the app window. The three run together: the artists fetch
+    // does not wait on the window id, and the sign-in wait does not block the
+    // first fetch.
+    let sign_in_service = service.clone();
     (
         WinampPlayer::new(state, service),
         Task::batch([
             Task::done(Message::LoadArtists),
+            // The startup sign-in runs on a background thread, so the fetch
+            // above can land before the session exists and answer from the
+            // sample library. Re-issue it when a session arrives, replacing
+            // the sample artists with the signed-in library.
+            Task::perform(
+                async move { sign_in_service.wait_for_session().await },
+                |()| Message::LoadArtists,
+            ),
             iced::window::latest().map(Message::WindowIdResolved),
         ]),
     )
@@ -519,7 +529,8 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::LoadArtists => {
-            // `boot` schedules this once, so this is also the Retry button's
+            // `boot` schedules this for the initial load, and again once the
+            // startup sign-in stores a session; it is also the Retry button's
             // arm: clearing first drops any earlier failure report and shows
             // "Loading…" while the re-fetch is in flight, exactly as the
             // navigation arms clear their level before re-fetching.

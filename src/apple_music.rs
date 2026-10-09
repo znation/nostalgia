@@ -16,7 +16,11 @@
 //! stores it and [`AppleMusicService::session`] hands it to the browse
 //! queries, which route through the REST client while it is stored.
 //! [`init_service`] returns the one service the app shares, so the session
-//! stored at startup is the session the UI later reads.
+//! stored at startup is the session the UI later reads. Because the startup
+//! sign-in runs on a background thread, the first browse query can land before
+//! the session exists and answer from the sample library;
+//! [`AppleMusicService::wait_for_session`] resolves when a session is stored so
+//! the UI can re-issue that query against the real library.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -37,6 +41,10 @@ pub use crate::music_error::AppleMusicError;
 #[derive(Clone)]
 pub struct AppleMusicService {
     session: Arc<std::sync::Mutex<Option<MusicKitSession>>>,
+    /// Fires when [`AppleMusicService::authenticate_with`] stores a session.
+    /// [`AppleMusicService::wait_for_session`] awaits it, so a session that
+    /// lands after the UI's first browse fetch still triggers a re-fetch.
+    session_ready: Arc<tokio::sync::Notify>,
     rest: Arc<rest::RestLibrary>,
     state: Arc<Mutex<AppState>>,
 }
@@ -153,6 +161,7 @@ impl AppleMusicService {
     ) -> Self {
         Self {
             session: Arc::new(std::sync::Mutex::new(None)),
+            session_ready: Arc::new(tokio::sync::Notify::new()),
             rest: Arc::new(rest::RestLibrary::new(transport)),
             state,
         }
@@ -180,17 +189,23 @@ impl AppleMusicService {
     /// so tests can store a session without a browser. Stores the session the
     /// flow returns under the mutex; a flow that returns `Err` propagates it
     /// and leaves any previously stored session unchanged.
-    fn authenticate_with(
+    pub(crate) fn authenticate_with(
         &self,
         developer_token: &str,
         authorize: &dyn Fn(&str) -> Result<MusicKitSession, AppleMusicError>,
     ) -> Result<(), AppleMusicError> {
         let session = authorize(developer_token)?;
-        let mut stored = self
-            .session
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        *stored = Some(session);
+        {
+            let mut stored = self
+                .session
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            *stored = Some(session);
+        }
+        // Wake the UI's boot task, which awaits `wait_for_session` to re-issue
+        // its artists fetch once the startup sign-in completes. Notified only
+        // after the session is stored, so a woken waiter always observes it.
+        self.session_ready.notify_one();
         Ok(())
     }
 
@@ -220,6 +235,23 @@ impl AppleMusicService {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
+    }
+
+    /// Resolves once a `MusicKit` session has been stored.
+    ///
+    /// [`init_service`] runs the blocking sign-in on a background thread and
+    /// returns immediately, so the UI's first artists fetch can answer from
+    /// the sample library before the session exists. The UI's boot task awaits
+    /// this future and re-issues `Message::LoadArtists` when it resolves, so a
+    /// signed-in user's real library replaces the sample list. Returns
+    /// immediately when a session is already stored (the sign-in finished
+    /// first); when sign-in is skipped or fails, no session is ever stored and
+    /// this never resolves — there is no library to load from.
+    pub async fn wait_for_session(&self) {
+        if self.session().is_some() {
+            return;
+        }
+        self.session_ready.notified().await;
     }
 
     /// Plays the given track by id, recording it as the current track and

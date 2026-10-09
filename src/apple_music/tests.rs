@@ -584,6 +584,46 @@ fn authenticate_with_stores_the_session_its_flow_returns() {
     assert_eq!(service.session(), Some(expected));
 }
 
+// The session-ready signal: `wait_for_session` resolves once a session is
+// stored, whether it was already stored before the wait began or arrives
+// afterwards. The UI's boot task awaits it to re-issue the artists fetch after
+// the background sign-in completes, so both orderings must resolve.
+
+#[tokio::test]
+async fn wait_for_session_returns_immediately_when_a_session_is_already_stored() {
+    let service = test_service();
+    service
+        .authenticate_with("dev-token", &|_| Ok(sign_in_session()))
+        .unwrap();
+
+    service.wait_for_session().await;
+}
+
+#[test]
+fn wait_for_session_resolves_when_a_session_is_stored_after_the_wait_starts() {
+    use std::task::{Context, Poll};
+
+    let service = test_service();
+    let future = service.wait_for_session();
+    futures::pin_mut!(future);
+
+    // Poll once so the waiter registers on the notification before the session
+    // is stored; the already-stored fast path therefore cannot be what
+    // resolves it.
+    let waker = futures::task::noop_waker();
+    let mut context = Context::from_waker(&waker);
+    assert!(future.as_mut().poll(&mut context).is_pending());
+
+    service
+        .authenticate_with("dev-token", &|_| Ok(sign_in_session()))
+        .unwrap();
+
+    assert!(matches!(
+        future.as_mut().poll(&mut context),
+        Poll::Ready(())
+    ));
+}
+
 #[test]
 fn a_failed_authentication_leaves_a_stored_session_unchanged() {
     let service = test_service();
