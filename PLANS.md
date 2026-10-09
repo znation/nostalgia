@@ -29,7 +29,66 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Show each track's length in the playlist editor (found 2026-10-08)
+
+Classic Winamp's playlist editor lists every track with its length beside the
+title. Nostalgia's Songs browse list — the sunken playlist editor framed by
+"Frame the browse list as a sunken Winamp playlist editor" — renders each row
+as `[title] [secondary label]`, and `song_row` fills that label with the
+static "Play" hint. The last landing added `Song::duration_ms` and
+`views::format_track_time`, but they reach only the Now Playing bar, so the
+playlist still shows no lengths. This replaces the song row's "Play" hint
+with the track's formatted length, so the list reads as a Winamp playlist; the
+artist and album rows keep their "View Albums"/"View Songs" hints. A row
+index column, right-aligning the length at the row edge, and per-frame
+allocation avoidance stay out of scope: the shared row builder hugs its
+content (so right-alignment would reflow every row), and a formatted number is
+owned text.
+
+**Goal.** Each Songs browse row shows its track's length as `m:ss` (`--:--`
+when `duration_ms` is `0`) in the secondary-label slot, while the artist and
+album rows keep their existing hints. No change to the model, the service
+seam, navigation, transport, or the other panels.
+
+**Approach.**
+
+- `src/ui/views.rs`:
+  - Widen the browse row tuple's second field from `&'static str` to
+    `Cow<'a, str>` in `scrollable_list`, `browse_view`, `artist_row`,
+    `album_row`, and `song_row`. `scrollable_list` already builds
+    `Text::new(label)`; `iced_core`'s `IntoFragment` is implemented for
+    `Cow<'a, str>`, so the widget call is unchanged. Add the `'a` lifetime to
+    `artist_row` and `album_row`, which already borrow their title from the
+    `&Artist`/`&Album` argument.
+  - `artist_row` and `album_row` return `Cow::Borrowed("View Albums")` /
+    `Cow::Borrowed("View Songs")`.
+  - `song_row` returns `Cow::Owned(format_track_time(song.duration_ms))` in
+    place of the `"Play"` literal.
+  - Update the doc comments on `scrollable_list`, `song_row`, and the row
+    tuple: the secondary label is an owned-or-borrowed `Cow`, and a song row's
+    label is the track's length. Record the deliberate change that `song_row`
+    now allocates one small `String` per song row per frame — the same
+    per-frame allocation `now_playing_time` already makes — while the title
+    still borrows.
+  - In the `#[cfg(test)] mod tests`: change
+    `song_row_uses_title_and_selects_the_song_by_index` to assert the label is
+    the formatted duration of a `sample_song` (`3:30`), add
+    `song_row_shows_an_unknown_duration_as_blank_time` for a `duration_ms == 0`
+    song asserting `--:--`, and keep the artist/album row assertions (a `Cow`
+    compares equal to a `&str`).
+
+**Files touched.** `src/ui/views.rs` (including its `#[cfg(test)] mod tests`).
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- `song_row` for a song with `duration_ms = 210_000` yields the label `3:30`,
+  and for `duration_ms = 0` yields `--:--`.
+- `artist_row` still yields `View Albums` and `album_row` still yields
+  `View Songs`.
+- The Songs browse view still builds without panicking over the sample
+  library: the existing `browse_views_construct_over_the_loaded_library` and
+  `view_constructs_over_the_apps_full_input_space` tests pass.
 
 ## Done
 
