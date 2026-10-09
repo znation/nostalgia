@@ -15,12 +15,15 @@
 //! handle's own thread bounds, and a download or decode failure is logged on
 //! the worker (and stops the previous player, so a failed new selection does
 //! not leave the old track audible) rather than surfacing as a caller error.
-//! Each download is bounded by [`PREVIEW_TIMEOUT`], so a stalled server cannot
-//! block the worker — and with it every later play, pause, stop, and volume
-//! command — forever. Opening the device is bounded by [`DEVICE_OPEN_TIMEOUT`],
+//! A selection a newer `Play` or a `Stop` superseded while it was downloading
+//! is dropped rather than installed, so the worker cannot start the old
+//! preview after the UI has committed a newer track. Each download is bounded
+//! by [`PREVIEW_TIMEOUT`], so a stalled server cannot block the worker — and
+//! with it every later play, pause, stop, and volume command — forever. Opening the device is bounded by [`DEVICE_OPEN_TIMEOUT`],
 //! so a wedged platform audio daemon cannot stall the caller that builds the
 //! service at startup.
 
+use std::collections::VecDeque;
 use std::io::Cursor;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -357,6 +360,14 @@ fn run_worker(receiver: Receiver<Command>, ready: Sender<Result<(), AppleMusicEr
 /// cannot observe the asynchronous failure and roll the state back; silencing
 /// the old player is what keeps the audio consistent with the committed
 /// state.
+///
+/// A download runs on this thread, so any command the caller issues meanwhile
+/// waits in the channel. Once a download finishes, this loop drains those
+/// commands before installing the preview: if a later `Play` or a `Stop` is
+/// among them, the just-downloaded selection is already superseded, and
+/// installing it would play the old audio under the newer committed track's
+/// name. The stale preview is dropped and the queued commands are handled
+/// instead.
 fn serve_commands<P, D>(
     receiver: Receiver<Command>,
     create_player: impl Fn() -> P,
@@ -369,10 +380,35 @@ fn serve_commands<P, D>(
     // set while stopped still applies to the next `Play`, and a new player
     // starts at it rather than rodio's full-volume default.
     let mut volume = 1.0_f32;
-    while let Ok(command) = receiver.recv() {
+    // Commands that arrived while a download was in flight, handled in order
+    // once it finishes. A later `Play` or `Stop` among them supersedes the
+    // preview the download produced.
+    let mut queued: VecDeque<Command> = VecDeque::new();
+    loop {
+        let command = match queued.pop_front() {
+            Some(command) => command,
+            None => match receiver.recv() {
+                Ok(command) => command,
+                Err(_) => break,
+            },
+        };
         match command {
             Command::Play(url) => match fetch(&url) {
                 Ok(preview) => {
+                    // Collect every command that arrived while the download
+                    // ran. If one supersedes this selection, drop the preview
+                    // and let the queued command be handled below; the UI has
+                    // already committed the newer state, so playing this one
+                    // would be the wrong audio under the right title.
+                    while let Ok(command) = receiver.try_recv() {
+                        queued.push_back(command);
+                    }
+                    if queued
+                        .iter()
+                        .any(|command| matches!(command, Command::Play(_) | Command::Stop))
+                    {
+                        continue;
+                    }
                     // A fresh player per track replaces the previous one, so a
                     // new selection does not queue behind the old track. It
                     // starts at the remembered gain rather than rodio's
@@ -940,15 +976,28 @@ mod tests {
     /// order, so a test can assert which players the loop installed and what
     /// happened to them. Returns the shared recording list alongside the
     /// factory to pass to [`serve_commands`].
-    fn recording_players() -> (
+    ///
+    /// `queue_on_first` is sent through `sender` from the factory's first call,
+    /// once the first player is recorded. A test queues a later selection this
+    /// way so it is not already waiting when the loop drains the channel after
+    /// a download: an already-queued selection would supersede the preview the
+    /// test means to replace, coalescing the two commands into one.
+    fn recording_players(
+        sender: &Sender<Command>,
+        queue_on_first: Command,
+    ) -> (
         Arc<Mutex<Vec<RecordingPlayer>>>,
-        impl Fn() -> RecordingPlayer,
+        impl Fn() -> RecordingPlayer + use<>,
     ) {
         let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
         let recorded = Arc::clone(&players);
+        let queued = Arc::new(Mutex::new(Some((sender.clone(), queue_on_first))));
         let create_player = move || {
             let player = RecordingPlayer::default();
             recorded.lock().unwrap().push(player.clone());
+            if let Some((sender, command)) = queued.lock().unwrap().take() {
+                sender.send(command).unwrap();
+            }
             player
         };
         (players, create_player)
@@ -959,11 +1008,14 @@ mod tests {
     // to the caller. If that failure left the previous player running, the old
     // preview would stay audible under the new track's name. The first Play
     // installs a player and the second's download fails; the loop must stop
-    // the first player and install none.
+    // the first player and install none. The second selection is queued from
+    // inside `create_player`, once the first player is installed, so the two
+    // do not coalesce into one.
     #[test]
     fn a_failed_preview_stops_the_previous_player() {
         let (sender, receiver) = mpsc::channel();
-        let (players, create_player) = recording_players();
+        let (players, create_player) =
+            recording_players(&sender, Command::Play("second".to_string()));
         let fetches = Arc::new(AtomicUsize::new(0));
 
         let fetch = move |_url: &str| {
@@ -975,7 +1027,6 @@ mod tests {
         };
 
         sender.send(Command::Play("first".to_string())).unwrap();
-        sender.send(Command::Play("second".to_string())).unwrap();
         drop(sender);
         serve_commands(receiver, create_player, fetch);
 
@@ -995,15 +1046,18 @@ mod tests {
     // A successful Play installs a fresh player for the new track (rather than
     // queueing it behind the old one) and starts it at the remembered gain, so
     // a volume set while a previous track played carries to the next.
+    // The second selection is queued from inside `create_player`, once the
+    // first player has been installed, so the two downloads do not coalesce
+    // into one: this pins the replacement itself, not the supersession path.
     #[test]
     fn a_new_preview_replaces_the_previous_player_at_the_remembered_volume() {
         let (sender, receiver) = mpsc::channel();
-        let (players, create_player) = recording_players();
+        let (players, create_player) =
+            recording_players(&sender, Command::Play("second".to_string()));
         let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
 
         sender.send(Command::SetVolume(0.4)).unwrap();
         sender.send(Command::Play("first".to_string())).unwrap();
-        sender.send(Command::Play("second".to_string())).unwrap();
         drop(sender);
         serve_commands(receiver, create_player, fetch);
 
@@ -1011,5 +1065,60 @@ mod tests {
         assert_eq!(players.len(), 2, "each successful Play installs a player");
         assert_eq!(*players[0].volume.lock().unwrap(), 0.4);
         assert_eq!(*players[1].volume.lock().unwrap(), 0.4);
+    }
+
+    // A Play's download runs on the worker, so commands issued meanwhile wait
+    // in the channel. If a newer Play arrives during the download, the UI has
+    // already committed the newer selection, and installing the older preview
+    // would play the wrong audio under the committed track's name. The worker
+    // must drop the superseded preview and handle the queued selection.
+    #[test]
+    fn a_preview_superseded_during_its_download_is_not_installed() {
+        let (sender, receiver) = mpsc::channel();
+        let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
+        let fetched: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+
+        let recorded = Arc::clone(&players);
+        let create_player = move || {
+            let player = RecordingPlayer::default();
+            recorded.lock().unwrap().push(player.clone());
+            player
+        };
+        // "first" is still downloading when the user selects "second", so the
+        // second Play is sent from inside the first fetch. The clone is taken
+        // (and so dropped) with the send, letting the channel close and the
+        // worker loop end.
+        let fetch_sender = Arc::new(Mutex::new(Some(sender.clone())));
+        let seen = Arc::clone(&fetched);
+        let fetch = move |url: &str| -> Result<(), AppleMusicError> {
+            seen.lock().unwrap().push(url.to_string());
+            if url == "first"
+                && let Some(sender) = fetch_sender.lock().unwrap().take()
+            {
+                sender.send(Command::Play("second".to_string())).unwrap();
+            }
+            Ok(())
+        };
+
+        sender.send(Command::Play("first".to_string())).unwrap();
+        drop(sender);
+        serve_commands(receiver, create_player, fetch);
+
+        assert_eq!(
+            *fetched.lock().unwrap(),
+            vec!["first".to_string(), "second".to_string()],
+            "the superseded download still ran; only its preview is dropped"
+        );
+        let players = players.lock().unwrap();
+        assert_eq!(
+            players.len(),
+            1,
+            "only the newer selection may install a player"
+        );
+        assert_eq!(
+            players[0].appended.load(Ordering::SeqCst),
+            1,
+            "only the newer preview may be appended"
+        );
     }
 }
