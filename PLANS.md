@@ -99,6 +99,31 @@ transport, browse navigation, volume, balance, or the equalizer.
 
 ## Done
 
+### Add a `make test-one` target for running one focused test (found 2026-10-08, done 2026-10-08)
+
+The Makefile's declared entry point for tests was only `make test`, the full
+`cargo test --locked` suite. Iterating on one behavior meant either waiting
+for every test or remembering the raw `cargo test --locked -- <name>`
+incantation, so a single focused test had no first-class way to run through
+the project's own tooling.
+
+**Goal.** Run only the tests matching a name, through the Makefile, without
+weakening the full-suite `test` target the landing gate uses.
+
+**Approach.**
+
+- `Makefile`: add a `test-one` target that forwards `TEST` to cargo's test
+  harness (`cargo test --locked -- $(TEST)`), and a guard that fails with a
+  usage line when `TEST` is empty instead of silently running the whole suite.
+  `test-one` is added to `.PHONY`; the existing `test` target and the
+  `check: fmt lint docs test` chain are unchanged.
+
+**Acceptance criteria.**
+
+- `make check` passes (the full-suite `test` target is unchanged).
+- `make test-one TEST=<name>` runs only the matching tests, and
+  `make test-one` with no `TEST` exits non-zero with a usage line.
+
 ### Name the user-token shape defect when the sign-in callback is rejected (found 2026-10-08, done 2026-10-08)
 
 `handle_token` rejected a `POST /token` callback whose `userToken` was missing

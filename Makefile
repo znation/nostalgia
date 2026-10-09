@@ -12,7 +12,7 @@
 # mid-check and passing on a dependency set nobody committed. (`cargo fmt`
 # is the exception — it resolves no dependencies and takes no `--locked`.)
 
-.PHONY: check test fmt lint fix docs run clean
+.PHONY: check test test-one fmt lint fix docs run clean
 
 ## The full landing gate: formatting, lints, docs, then tests.
 check: fmt lint docs test
@@ -20,6 +20,19 @@ check: fmt lint docs test
 ## Runs the test suite against the committed lockfile.
 test:
 	cargo test --locked
+
+## Runs only the tests whose names contain TEST, e.g.
+## `make test-one TEST=shuffled_pick`.
+##
+## A focused alternative to the full `test` target while iterating on one
+## behavior. Cargo's test harness treats its first positional argument as a
+## substring filter, so the target forwards TEST after `--` (which separates
+## cargo's own options from the test binary's). The guard rejects an empty
+## TEST with a usage line rather than silently running the whole suite, which
+## is what `cargo test` would do with no filter.
+test-one:
+	@test -n "$(TEST)" || { echo "usage: make test-one TEST=<name>"; exit 2; }
+	cargo test --locked -- $(TEST)
 
 ## Checks formatting without editing files (fails on any diff).
 fmt:
