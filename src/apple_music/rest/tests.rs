@@ -493,6 +493,19 @@ fn serve_one_response(response: &str) -> std::net::SocketAddr {
     address
 }
 
+/// Formats a complete HTTP/1.1 response around `body`: the `status_line`
+/// (e.g. `"200 OK"`), the `Content-Type` header, and the exact
+/// `Content-Length`, closed with `Connection: close`. The loopback tests
+/// either hand the result to [`serve_one_response`] or write it from a
+/// request-capturing thread, so the framing lives here rather than being
+/// rebuilt at each site.
+fn http_response(status_line: &str, content_type: &str, body: &str) -> String {
+    format!(
+        "HTTP/1.1 {status_line}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    )
+}
+
 // The API requests carry the user token in the custom `Music-User-Token`
 // header, and `ureq` follows redirects by default while stripping only
 // `Authorization`, `Cookie`, and `Content-Length` from the redirected request
@@ -657,10 +670,7 @@ fn api_error_cause_escapes_terminal_control_characters() {
 #[test]
 fn a_non_success_status_surfaces_the_api_error_detail() {
     let body = r#"{"errors":[{"title":"Unauthorized","detail":"Invalid developer token"}]}"#;
-    let addr = serve_one_response(&format!(
-        "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-        body.len()
-    ));
+    let addr = serve_one_response(&http_response("401 Unauthorized", "application/json", body));
 
     let url = format!("http://{addr}/me/library/artists");
     let error = UreqTransport::new().get(&url, &session()).unwrap_err();
@@ -676,10 +686,7 @@ fn a_non_success_status_surfaces_the_api_error_detail() {
 #[test]
 fn a_non_success_status_with_a_blank_api_error_detail_reports_just_the_status() {
     let body = r#"{"errors":[{"title":"","detail":"  "}]}"#;
-    let addr = serve_one_response(&format!(
-        "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-        body.len()
-    ));
+    let addr = serve_one_response(&http_response("401 Unauthorized", "application/json", body));
 
     let url = format!("http://{addr}/me/library/artists");
     let error = UreqTransport::new().get(&url, &session()).unwrap_err();
@@ -693,10 +700,7 @@ fn a_non_success_status_with_a_blank_api_error_detail_reports_just_the_status() 
 #[test]
 fn a_non_success_status_without_an_api_error_body_reports_just_the_status() {
     let body = "Not found";
-    let addr = serve_one_response(&format!(
-        "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-        body.len()
-    ));
+    let addr = serve_one_response(&http_response("404 Not Found", "text/plain", body));
 
     let url = format!("http://{addr}/me/library/artists");
     let error = UreqTransport::new().get(&url, &session()).unwrap_err();
@@ -735,10 +739,7 @@ fn a_truncated_response_body_reports_a_read_error() {
 #[test]
 fn a_successful_response_returns_its_body() {
     let body = r#"{"data":[]}"#;
-    let addr = serve_one_response(&format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-        body.len()
-    ));
+    let addr = serve_one_response(&http_response("200 OK", "application/json", body));
 
     let url = format!("http://{addr}/me/library/artists");
     let got = UreqTransport::new().get(&url, &session()).unwrap();
@@ -762,10 +763,7 @@ fn a_request_carries_the_developer_and_user_tokens() {
         let (mut stream, _) = listener.accept().unwrap();
         let request = read_some_request(&mut stream);
         let body = r#"{"data":[]}"#;
-        let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-            body.len()
-        );
+        let response = http_response("200 OK", "application/json", body);
         let _ = stream.write_all(response.as_bytes());
         let _ = stream.flush();
         let _ = sender.send(request);
