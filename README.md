@@ -13,14 +13,15 @@ Nostalgia is a (very close if not pixel-perfect) clone of the classic Winamp UI,
 
 <!-- tumwater:status:start -->
 Early skeleton (0.1.0): an iced (0.14) desktop shell themed with a Winamp 2.x base-skin palette —
-a custom raised title bar (always-on-top toggle, shade, minimize, close), a Now Playing LCD bar,
-chrome transport controls with Repeat and Shuffle, volume and balance sliders, an equalizer panel
-with a preset pick list, and an artist → album → song browser. A MusicKit loopback sign-in runs at
-startup when `APPLE_MUSIC_DEVELOPER_TOKEN` is set: browse queries then read the signed-in Apple
-Music library through the REST API, and fall back to the in-memory sample library otherwise.
-Playback plays the selected song's Apple Music preview through `rodio`, behind an injectable
-audio-output seam that falls back to silence when no output device opens; the transport's Pause
-and Stop buttons still only update UI state. Open work lives in PLANS.md, BUGS.md,
+a raised title bar (always-on-top, shade, minimize, close), a Now Playing LCD bar
+showing the current track's artist, title, and length, chrome transport controls with Repeat and
+Shuffle, volume and balance sliders, an equalizer panel with a preset pick list, and an artist →
+album → song browser whose song rows show each track's length. A MusicKit loopback sign-in runs
+at startup when `APPLE_MUSIC_DEVELOPER_TOKEN` is set: browse queries read the signed-in Apple
+Music library through the REST API, following `next` pages for large libraries, and fall back
+to the in-memory sample library otherwise. Playback plays the selected song's Apple Music preview
+through `rodio`, behind an injectable audio-output seam that falls back to silence when no output
+device opens; Pause and Stop still only update UI state. Open work lives in PLANS.md, BUGS.md,
 and QUESTIONS.md.
 <!-- tumwater:status:end -->
 
@@ -48,12 +49,14 @@ The player on its own: [docs/screenshots/player.png](docs/screenshots/player.png
 
 ## Usage
 
-Build and run with `cargo run`; the player opens an iced window showing the Now Playing bar, the
+Build and run with `cargo run`; the player opens an iced window showing the Now Playing bar (the
+playing track's artist and title, with its length at the right), the
 Play/Pause/Stop/Previous/Next controls, Repeat and Shuffle toggles, volume and balance sliders,
 an equalizer panel (an EQ on/off button, a preset pick list, a preamp slider, and ten band
-sliders), and a browse list. The title bar's `A` button toggles always-on-top, its shade button
-(or a double-click on the bar) rolls the window up to just that title bar and back, and its `–`
-and `✕` buttons minimize and close. With the window focused, the classic Winamp keys drive
+sliders), and a browse list whose song rows show each track's length. The title bar's `A` button
+toggles always-on-top, its shade button (or a double-click on the bar) rolls the window up to
+just that title bar and back, and its `–` and `✕` buttons minimize and close. With the window
+focused, the classic Winamp keys drive
 playback: Z and B step back and forward, X plays, C pauses, V stops, and the up/down arrows nudge
 the volume. Setting `APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a browser-based MusicKit
 sign-in: browse queries then read your Apple Music library through the REST API, and fall back to
