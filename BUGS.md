@@ -117,6 +117,42 @@ rules already say a Refused entry is skipped and a fully-blocked backlog is a
 legitimate nothing-to-do; the scheduler should apply the same rule before it
 defers other roles or queues bugfix.
 
+### The boot-time artists fetch races the async sign-in, so a signed-in user sees the sample library (found by robustness 2026-10-08)
+
+Symptom: with `APPLE_MUSIC_DEVELOPER_TOKEN` set, `init_service` starts the
+MusicKit sign-in on a background thread and returns immediately, so the UI's
+boot task fetches favorite artists while `AppleMusicService::session()` is
+still `None`. The Artists view is populated from `sample_library()`. When the
+sign-in later stores the session, nothing re-issues the fetch, so the Artists
+view keeps showing the sample artists for the rest of the process. The sample
+fetch succeeded, so `can_retry_artists` is false and the Retry button never
+appears; the sample artist ids do not exist in the signed-in library, so
+drilling into them yields empty or failed album fetches. A completed sign-in,
+a failed sign-in, and the unset-token fallback are indistinguishable in the
+UI.
+
+How to reproduce:
+- Run the app with a valid `APPLE_MUSIC_DEVELOPER_TOKEN` and complete the
+  browser sign-in. The Artists list still shows `sample_library()`'s artists
+  and no Retry button appears.
+- Code path: `init_service` (`src/apple_music.rs:94`) spawns
+  `sign_in_service.sign_in(...)` on a `std::thread` and returns the service;
+  `boot` (`src/ui/mod.rs:256`) schedules `Message::LoadArtists` immediately
+  (`src/ui/mod.rs:263`); `browse` (`src/apple_music.rs:339`) answers from
+  `sample()` when `self.session()` is `None` (`src/apple_music.rs:346`);
+  `authenticate_with` (`src/apple_music.rs:183`) stores the session under the
+  mutex with no notification. `Message::LoadArtists` is scheduled only by
+  `boot` (`src/ui/mod.rs:521`) and the Retry button (`src/ui/views.rs:343`),
+  which is gated on a failed fetch.
+
+Suspected cause: the service stores the session asynchronously but exposes no
+completion signal, so the UI cannot learn that the external sign-in finished
+and re-fetch. A fix needs a session-ready notification (a `Notify`/`watch` on
+the service) plus a UI arm that re-issues `LoadArtists` on it — a change to
+the service API, `boot`, and the `Message` set, larger than one robustness
+tick. The same notification would let the UI distinguish the sample fallback
+from the signed-in library.
+
 ## Fixed
 
 ### The sign-in nonce travels in the browser opener's command line, so another local user can read it and fetch the page's developer token (found by security 2026-10-08, fixed 2026-10-08)
