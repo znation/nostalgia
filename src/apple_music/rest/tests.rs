@@ -191,6 +191,21 @@ fn songs_from_album_skips_a_blank_preview_url_for_the_next() {
 }
 
 #[test]
+fn songs_from_album_keeps_a_padded_preview_url_verbatim() {
+    // `Resource::preview_url` compares each candidate trimmed, so a padded
+    // URL counts as non-blank and is selected rather than skipped, but it is
+    // returned exactly as the resource carried it. This is the reachable twin
+    // of the whitespace-only skip above: whitespace-only is skipped, padded is
+    // taken as-is (the padding is not normalized away).
+    assert_eq!(
+        preview_url_from(
+            r#"{"name":"Opening","previews":[{"url":"  https://example.test/padded.m4a\t"}]}"#
+        ),
+        Some("  https://example.test/padded.m4a\t".to_string())
+    );
+}
+
+#[test]
 fn albums_by_artist_percent_encodes_the_id() {
     let stub = StubTransport::returning(r#"{"data":[]}"#);
     let library = library_over(&stub);
