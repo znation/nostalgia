@@ -13,11 +13,13 @@
 //! then owns the `rodio` stream and player. Commands cross to that thread over
 //! a channel, so the seam stays `Send + Sync` regardless of the platform
 //! handle's own thread bounds, and a download or decode failure is logged on
-//! the worker rather than surfacing as a caller error. Each download is bounded
-//! by [`PREVIEW_TIMEOUT`], so a stalled server cannot block the worker — and
-//! with it every later play, pause, stop, and volume command — forever. Opening
-//! the device is bounded by [`DEVICE_OPEN_TIMEOUT`], so a wedged platform audio
-//! daemon cannot stall the caller that builds the service at startup.
+//! the worker (and stops the previous player, so a failed new selection does
+//! not leave the old track audible) rather than surfacing as a caller error.
+//! Each download is bounded by [`PREVIEW_TIMEOUT`], so a stalled server cannot
+//! block the worker — and with it every later play, pause, stop, and volume
+//! command — forever. Opening the device is bounded by [`DEVICE_OPEN_TIMEOUT`],
+//! so a wedged platform audio daemon cannot stall the caller that builds the
+//! service at startup.
 
 use std::io::Cursor;
 use std::sync::Arc;
@@ -163,6 +165,54 @@ enum Command {
     SetVolume(f32),
 }
 
+/// The player handle [`serve_commands`] drives.
+///
+/// `rodio::Player` can only be built from an open output device, so the
+/// command loop names this small seam rather than the concrete type:
+/// production implements it for `rodio::Player` over the opened device, and a
+/// test stands in a recording fake to exercise the loop's state transitions
+/// (including the failed-preview path) without a device. The methods mirror
+/// the `rodio::Player` operations the loop uses.
+trait WorkerPlayer {
+    /// A decoded preview the player can hold.
+    type Preview;
+
+    /// Sets the player's output gain.
+    fn set_volume(&self, volume: f32);
+    /// Appends `preview` to the player's queue.
+    fn append(&self, preview: Self::Preview);
+    /// Pauses playback.
+    fn pause(&self);
+    /// Resumes playback.
+    fn play(&self);
+    /// Stops playback and clears the queue.
+    fn stop(&self);
+}
+
+impl WorkerPlayer for rodio::Player {
+    type Preview = rodio::Decoder<Cursor<Vec<u8>>>;
+
+    fn set_volume(&self, volume: f32) {
+        rodio::Player::set_volume(self, volume);
+    }
+
+    fn append(&self, preview: Self::Preview) {
+        rodio::Player::append(self, preview);
+    }
+
+    fn pause(&self) {
+        rodio::Player::pause(self);
+    }
+
+    fn play(&self) {
+        rodio::Player::play(self);
+    }
+
+    fn stop(&self) {
+        rodio::Player::stop(self);
+    }
+}
+
 /// The production [`AudioOutput`], backed by `rodio`.
 ///
 /// The default output device and the current `rodio` player live on a worker
@@ -283,25 +333,65 @@ fn run_worker(receiver: Receiver<Command>, ready: Sender<Result<(), AppleMusicEr
     };
     let _ = ready.send(Ok(()));
 
-    let mut player: Option<rodio::Player> = None;
+    serve_commands(
+        receiver,
+        || rodio::Player::connect_new(device.mixer()),
+        |url| download_and_decode(preview_agent(), url),
+    );
+}
+
+/// Serves [`Command`]s until the sender closes, driving players created by
+/// `create_player` and previews decoded by `fetch`.
+///
+/// `create_player` and `fetch` are injected — rather than the loop opening a
+/// device and calling [`download_and_decode`] directly — so its state
+/// transitions are testable without an output device (see [`WorkerPlayer`]);
+/// production passes `rodio::Player::connect_new` over the opened device and
+/// [`download_and_decode`] over [`preview_agent`].
+///
+/// A failed `Play` download stops and drops the previous player before
+/// logging. By the time the worker downloads a selection, `play_track` has
+/// already committed it as the current track, so leaving the previous player
+/// running would keep the old preview audible under the new track's name. The
+/// seam's `play` returned `Ok` when it queued this command, so the caller
+/// cannot observe the asynchronous failure and roll the state back; silencing
+/// the old player is what keeps the audio consistent with the committed
+/// state.
+fn serve_commands<P, D>(
+    receiver: Receiver<Command>,
+    create_player: impl Fn() -> P,
+    fetch: impl Fn(&str) -> Result<D, AppleMusicError>,
+) where
+    P: WorkerPlayer<Preview = D>,
+{
+    let mut player: Option<P> = None;
     // The gain the output should hold. Remembered across players so a volume
     // set while stopped still applies to the next `Play`, and a new player
     // starts at it rather than rodio's full-volume default.
     let mut volume = 1.0_f32;
     while let Ok(command) = receiver.recv() {
         match command {
-            Command::Play(url) => match download_and_decode(preview_agent(), &url) {
-                Ok(decoder) => {
+            Command::Play(url) => match fetch(&url) {
+                Ok(preview) => {
                     // A fresh player per track replaces the previous one, so a
                     // new selection does not queue behind the old track. It
                     // starts at the remembered gain rather than rodio's
                     // full-volume default.
-                    let next = rodio::Player::connect_new(device.mixer());
+                    let next = create_player();
                     next.set_volume(volume);
-                    next.append(decoder);
+                    next.append(preview);
                     player = Some(next);
                 }
-                Err(error) => eprintln!("audio playback failed for {url:?}: {error}"),
+                Err(error) => {
+                    // Stop and drop the previous player (as `Command::Stop`
+                    // does) so a failed new selection is not misreported by
+                    // the old preview still playing.
+                    if let Some(player) = &player {
+                        player.stop();
+                    }
+                    player = None;
+                    eprintln!("audio playback failed for {url:?}: {error}");
+                }
             },
             Command::Pause => {
                 if let Some(player) = &player {
@@ -445,6 +535,7 @@ mod tests {
         AudioCall, PREVIEW_URL, RecordingAudio, loopback_listener, read_some_request,
         serve_one_response,
     };
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::time::Instant;
 
     #[test]
@@ -784,5 +875,107 @@ mod tests {
             !matches!(error, ureq::Error::HostNotFound),
             "`localhost` must resolve for the guarded case to prove anything, got: {error:?}"
         );
+    }
+
+    /// A recording [`WorkerPlayer`] for the command-loop tests: it records the
+    /// previews appended and whether it was stopped, and remembers its gain,
+    /// without needing an output device.
+    #[derive(Clone, Default)]
+    struct RecordingPlayer {
+        appended: Arc<AtomicUsize>,
+        stopped: Arc<AtomicBool>,
+        volume: Arc<Mutex<f32>>,
+    }
+
+    impl WorkerPlayer for RecordingPlayer {
+        type Preview = ();
+
+        fn set_volume(&self, volume: f32) {
+            *self.volume.lock().unwrap() = volume;
+        }
+
+        fn append(&self, _preview: ()) {
+            self.appended.fetch_add(1, Ordering::SeqCst);
+        }
+
+        fn pause(&self) {}
+
+        fn play(&self) {}
+
+        fn stop(&self) {
+            self.stopped.store(true, Ordering::SeqCst);
+        }
+    }
+
+    // `play_track` commits the new track and returns `Ok` as soon as the
+    // command is queued, so the worker's later download failure is invisible
+    // to the caller. If that failure left the previous player running, the old
+    // preview would stay audible under the new track's name. The first Play
+    // installs a player and the second's download fails; the loop must stop
+    // the first player and install none.
+    #[test]
+    fn a_failed_preview_stops_the_previous_player() {
+        let (sender, receiver) = mpsc::channel();
+        let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
+        let fetches = Arc::new(AtomicUsize::new(0));
+
+        let recorded = Arc::clone(&players);
+        let create_player = move || {
+            let player = RecordingPlayer::default();
+            recorded.lock().unwrap().push(player.clone());
+            player
+        };
+        let fetch = move |_url: &str| {
+            if fetches.fetch_add(1, Ordering::SeqCst) == 0 {
+                Ok(())
+            } else {
+                Err(AppleMusicError::new("the preview download failed"))
+            }
+        };
+
+        sender.send(Command::Play("first".to_string())).unwrap();
+        sender.send(Command::Play("second".to_string())).unwrap();
+        drop(sender);
+        serve_commands(receiver, create_player, fetch);
+
+        let players = players.lock().unwrap();
+        assert_eq!(
+            players.len(),
+            1,
+            "a failed download must not install a player"
+        );
+        assert_eq!(players[0].appended.load(Ordering::SeqCst), 1);
+        assert!(
+            players[0].stopped.load(Ordering::SeqCst),
+            "the failed preview must stop the previous player"
+        );
+    }
+
+    // A successful Play installs a fresh player for the new track (rather than
+    // queueing it behind the old one) and starts it at the remembered gain, so
+    // a volume set while a previous track played carries to the next.
+    #[test]
+    fn a_new_preview_replaces_the_previous_player_at_the_remembered_volume() {
+        let (sender, receiver) = mpsc::channel();
+        let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
+
+        let recorded = Arc::clone(&players);
+        let create_player = move || {
+            let player = RecordingPlayer::default();
+            recorded.lock().unwrap().push(player.clone());
+            player
+        };
+        let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+
+        sender.send(Command::SetVolume(0.4)).unwrap();
+        sender.send(Command::Play("first".to_string())).unwrap();
+        sender.send(Command::Play("second".to_string())).unwrap();
+        drop(sender);
+        serve_commands(receiver, create_player, fetch);
+
+        let players = players.lock().unwrap();
+        assert_eq!(players.len(), 2, "each successful Play installs a player");
+        assert_eq!(*players[0].volume.lock().unwrap(), 0.4);
+        assert_eq!(*players[1].volume.lock().unwrap(), 0.4);
     }
 }
