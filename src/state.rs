@@ -327,6 +327,37 @@ mod tests {
         }
     }
 
+    /// A state whose loaded track, playback flag, Repeat, equalizer flag,
+    /// preamp, and band-4 gain are all set to non-default values, so a slider
+    /// setter can be shown to write its own field and nothing else. The volume
+    /// and balance isolation tests share it, so the fixture stays in lockstep;
+    /// each caller sets the slider it tests (`set_balance`'s caller also sets
+    /// volume, to prove that survives).
+    fn state_with_every_other_field_set() -> AppState {
+        let mut state = AppState {
+            repeat: true,
+            eq_enabled: true,
+            ..playing_state()
+        };
+        state.set_eq_preamp(3.0);
+        state.set_eq_band(4, 5.0);
+        state
+    }
+
+    /// Asserts the fields [`state_with_every_other_field_set`] sets — the
+    /// loaded track, the playback flag, Repeat, the equalizer flag, the preamp,
+    /// and band 4's gain — still hold their fixture values. The two slider
+    /// isolation tests share it, so neither can stop checking a field the other
+    /// still covers.
+    fn assert_track_flags_and_eq_untouched(state: &AppState) {
+        assert_eq!(state.current_track.as_deref(), Some("song-1"));
+        assert!(state.is_playing);
+        assert!(state.repeat);
+        assert!(state.eq_enabled);
+        assert_eq!(state.eq_preamp(), 3.0);
+        assert_eq!(state.eq_bands()[4], 5.0);
+    }
+
     #[test]
     fn default_state_is_stopped_at_half_volume() {
         let state = AppState::default();
@@ -590,23 +621,12 @@ mod tests {
     // writes volume alone, against a state whose every other field is set.
     #[test]
     fn set_volume_changes_only_the_volume() {
-        let mut state = AppState {
-            repeat: true,
-            eq_enabled: true,
-            ..playing_state()
-        };
-        state.set_eq_preamp(3.0);
-        state.set_eq_band(4, 5.0);
+        let mut state = state_with_every_other_field_set();
 
         state.set_volume(0.9);
 
         assert_eq!(state.volume(), 0.9);
-        assert_eq!(state.current_track.as_deref(), Some("song-1"));
-        assert!(state.is_playing);
-        assert!(state.repeat);
-        assert!(state.eq_enabled);
-        assert_eq!(state.eq_preamp(), 3.0);
-        assert_eq!(state.eq_bands()[4], 5.0);
+        assert_track_flags_and_eq_untouched(&state);
     }
 
     #[test]
@@ -640,25 +660,14 @@ mod tests {
     // whose every other field is set.
     #[test]
     fn set_balance_changes_only_the_balance() {
-        let mut state = AppState {
-            repeat: true,
-            eq_enabled: true,
-            ..playing_state()
-        };
-        state.set_eq_preamp(3.0);
-        state.set_eq_band(4, 5.0);
+        let mut state = state_with_every_other_field_set();
         state.set_volume(0.9);
 
         state.set_balance(-0.5);
 
         assert_eq!(state.balance(), -0.5);
         assert_eq!(state.volume(), 0.9);
-        assert_eq!(state.current_track.as_deref(), Some("song-1"));
-        assert!(state.is_playing);
-        assert!(state.repeat);
-        assert!(state.eq_enabled);
-        assert_eq!(state.eq_preamp(), 3.0);
-        assert_eq!(state.eq_bands()[4], 5.0);
+        assert_track_flags_and_eq_untouched(&state);
     }
 
     #[test]
