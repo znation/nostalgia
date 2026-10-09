@@ -24,6 +24,7 @@ use std::sync::OnceLock;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::Duration;
 
+use crate::http::agent_with_timeout;
 use crate::music_error::AppleMusicError;
 
 /// The end-to-end bound on one preview download, from DNS lookup through
@@ -287,36 +288,12 @@ fn run_worker(receiver: Receiver<Command>, ready: Sender<Result<(), AppleMusicEr
 /// The process-wide [`ureq::Agent`] the audio worker downloads previews
 /// through, so consecutive plays reuse its pooled connection. It carries
 /// [`PREVIEW_TIMEOUT`] as its global timeout, so a stalled server cannot block
-/// the worker forever.
+/// the worker forever, and refuses to follow a redirect, so a preview URL that
+/// passed `preview_url_problem`'s one-time host check cannot be bounced to an
+/// address that check refused.
 fn preview_agent() -> &'static ureq::Agent {
     static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
     AGENT.get_or_init(|| agent_with_timeout(PREVIEW_TIMEOUT))
-}
-
-/// Builds an agent with `timeout` as its global bound and no redirect
-/// following. Split out from [`preview_agent`] so a test can bound a download
-/// against a stalled loopback server without waiting out the production 30
-/// seconds.
-///
-/// The agent disables `ureq`'s status-as-error shortcut
-/// (`http_status_as_error(false)`), so a 4xx/5xx response reaches
-/// [`download_and_decode`] as an `Ok` response and its own status check
-/// reports "the preview download returned HTTP …" instead of `ureq`'s bare
-/// status error.
-///
-/// The agent follows no redirects (`max_redirects(0)`), matching the REST
-/// agent. `preview_url_problem` validates the preview URL's host once, before
-/// the fetch, and `ureq` follows redirects by default; a `Location` to an
-/// address that validation refused (an internal address literal, say) would
-/// otherwise be fetched, so refusing to follow one keeps the fetch on the
-/// single URL that passed validation.
-fn agent_with_timeout(timeout: Duration) -> ureq::Agent {
-    ureq::Agent::config_builder()
-        .timeout_global(Some(timeout))
-        .max_redirects(0)
-        .http_status_as_error(false)
-        .build()
-        .into()
 }
 
 /// Downloads `url` through `agent` and decodes it as an `MP4`/`AAC` preview.

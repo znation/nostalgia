@@ -13,6 +13,7 @@ use std::time::{Duration, Instant};
 use serde::Deserialize;
 
 use super::AppleMusicError;
+use crate::http::agent_with_timeout;
 use crate::library::{Album, Artist, Song};
 use crate::music_kit_auth::MusicKitSession;
 
@@ -96,7 +97,7 @@ pub trait HttpTransport: Send + Sync {
 /// [`REQUEST_TIMEOUT`] as its global timeout, so a stalled server cannot block
 /// a request forever, and follows no redirects, so the `Music-User-Token`
 /// credential is only ever sent to the URL this client built (see
-/// [`agent_with_timeout`]).
+/// [`crate::http::agent_with_timeout`]).
 ///
 /// The agent also disables `ureq`'s status-as-error shortcut
 /// (`http_status_as_error(false)`), so a 4xx/5xx response reaches
@@ -139,25 +140,6 @@ impl Default for UreqTransport {
 fn shared_agent() -> &'static ureq::Agent {
     static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
     AGENT.get_or_init(|| agent_with_timeout(REQUEST_TIMEOUT))
-}
-
-/// Builds an API agent with `timeout` as its global bound and no redirect
-/// following.
-///
-/// The API requests carry the user token in the custom `Music-User-Token`
-/// header. `ureq` follows up to ten redirects by default, and on a redirect it
-/// strips only `Authorization`, `Cookie`, and `Content-Length` — a custom
-/// header survives, so a `Location` naming another host would re-send the user
-/// token there. The library endpoints answer with a JSON body, so a redirect is
-/// the unexpected response it looks like, and refusing to follow one keeps the
-/// credential on the single URL [`RestLibrary`] constructed.
-fn agent_with_timeout(timeout: Duration) -> ureq::Agent {
-    ureq::Agent::config_builder()
-        .timeout_global(Some(timeout))
-        .max_redirects(0)
-        .http_status_as_error(false)
-        .build()
-        .into()
 }
 
 impl UreqTransport {

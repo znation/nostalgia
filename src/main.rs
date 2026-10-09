@@ -63,6 +63,7 @@ pub mod apple_music;
 pub mod audio;
 pub mod clamp;
 pub mod equalizer;
+pub mod http;
 pub mod library;
 pub mod music_error;
 pub mod music_kit_auth;
