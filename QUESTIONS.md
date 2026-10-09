@@ -6,39 +6,6 @@ with your decision (or tell the director). Loops never block on their own questi
 
 ## Open
 
-### What audio-output backend should Nostalgia use for real playback? (posted by plan 2026-10-08)
-
-**Context.** Browse is real: `AppleMusicService` answers `get_favorite_artists`,
-`get_albums_by_artist`, and `get_songs_from_album` from the Apple Music REST
-client (`src/apple_music/rest.rs`) when a MusicKit session is stored, and from
-`sample_library()` otherwise. Playback is still a stub: `play_track` records
-the selected track and sets `is_playing`, `pause` clears the flag, and
-`next_track`/`previous_track` only print (`src/apple_music.rs`). The crate has
-no audio dependency (`Cargo.toml`), so nothing produces sound today. The
-project's reason to exist is Apple Music as the library, which makes audio
-output the largest remaining gap — but the backend is a dependency and
-platform call, so no plan should guess it.
-
-**Options.**
-
-1. **A Rust audio-output crate behind the service seam (recommended).** Add a
-   backend such as `rodio` (or `cpal` plus a decoder) and have the service
-   hand it a playable asset URL, keeping `AppleMusicService` the narrow seam a
-   test stub can stand behind. Cross-platform, so Linux works; costs one
-   dependency, which PRINCIPLES' "prefer the standard library" cannot avoid
-   (std has no audio).
-2. **Native Apple-platform audio behind the same seam.** Use MusicKit /
-   `AVPlayer` on macOS and keep the Linux build on the stub. Closest to
-   full-track playback, but platform-specific and much larger.
-3. **Defer playback.** Keep the stub and keep building UI/other features.
-
-**Recommendation.** Option 1, scoped to whichever playable asset the API can
-actually supply (the implementer must confirm that before wiring it). It lands
-behind the existing seam, is testable with a stub, and needs no new UI.
-
-**Related.** This is independent of the planned "Add a Winamp Shuffle toggle
-that randomizes Next", which changes only which song Next selects.
-
 ## Answered
 
 ### How should Nostalgia authenticate to Apple Music? (posted by plan 2026-10-08)
@@ -84,3 +51,49 @@ later behind the same seam.
 principles prefer the standard library, which has none. Recommend the smallest
 blocking client (`ureq`) behind the service seam; `reqwest`/`tokio` is the
 alternative if the async runtime is wanted.
+
+### What audio-output backend should Nostalgia use for real playback? (posted by plan 2026-10-08)
+
+**Decision (2026-10-08): Option 1 — a Rust audio-output crate behind the
+service seam.** Nostalgia will play audio through a Rust audio-output crate
+(`rodio`) hidden behind the existing `AppleMusicService` seam, which hands it a
+playable asset URL. The playable asset is the Apple Music **preview**
+(`attributes.previews[0].url`, a short M4A) that the browse response already
+carries; full DRM-protected tracks stay out of scope because the REST
+developer/user tokens cannot decrypt them, and native `AVPlayer` (Option 2) is
+deferred until preview playback has landed. The backend is injected into the
+service, so a recording stub stands in under test and a silent stub stands in
+when no audio device opens. Routing: PLANS.md "Carry the Apple Music preview
+URL on `Song`" (the model/REST half) and "Add the audio-output seam and a
+rodio backend" (the playback half), in that order.
+
+**Context.** Browse is real: `AppleMusicService` answers `get_favorite_artists`,
+`get_albums_by_artist`, and `get_songs_from_album` from the Apple Music REST
+client (`src/apple_music/rest.rs`) when a MusicKit session is stored, and from
+`sample_library()` otherwise. Playback is still a stub: `play_track` records
+the selected track and sets `is_playing`, `pause` clears the flag, and
+`next_track`/`previous_track` only print (`src/apple_music.rs`). The crate has
+no audio dependency (`Cargo.toml`), so nothing produces sound today. The
+project's reason to exist is Apple Music as the library, which makes audio
+output the largest remaining gap — but the backend is a dependency and
+platform call, so no plan should guess it.
+
+**Options.**
+
+1. **A Rust audio-output crate behind the service seam (recommended).** Add a
+   backend such as `rodio` (or `cpal` plus a decoder) and have the service
+   hand it a playable asset URL, keeping `AppleMusicService` the narrow seam a
+   test stub can stand behind. Cross-platform, so Linux works; costs one
+   dependency, which PRINCIPLES' "prefer the standard library" cannot avoid
+   (std has no audio).
+2. **Native Apple-platform audio behind the same seam.** Use MusicKit /
+   `AVPlayer` on macOS and keep the Linux build on the stub. Closest to
+   full-track playback, but platform-specific and much larger.
+3. **Defer playback.** Keep the stub and keep building UI/other features.
+
+**Recommendation.** Option 1, scoped to whichever playable asset the API can
+actually supply (the implementer must confirm that before wiring it). It lands
+behind the existing seam, is testable with a stub, and needs no new UI.
+
+**Related.** This is independent of the planned "Add a Winamp Shuffle toggle
+that randomizes Next", which changes only which song Next selects.

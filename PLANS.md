@@ -29,7 +29,138 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Carry the Apple Music preview URL on `Song` (found 2026-10-08)
+
+The audio-output decision (QUESTIONS.md `## Answered`, 2026-10-08) scopes
+playback to the Apple Music **preview** asset, so the model must carry its URL
+before any backend can play it. Apple Music's resource attributes include a
+`previews` array whose first entry's `url` is a short M4A; the browse client
+currently reads only `name` and `durationInMillis` (the `Attributes` struct in
+`src/apple_music/rest.rs`), and `Song` (`src/library.rs`) has no URL field.
+This adds the field and parses it; it is the data half of "Add the audio-output
+seam and a rodio backend", which depends on it. No audio dependency lands
+here.
+
+**Goal.** `Song` carries `preview_url: Option<String>` — the first non-blank
+`attributes.previews[].url` from the browse response, `None` when the source
+supplied none. The REST client fills it; the sample library and test fixtures
+set `None`.
+
+**Approach.**
+
+- `src/library.rs`: add `pub preview_url: Option<String>` to `Song`, documented
+  as the preview asset URL (`None` when the source supplied none), with
+  `#[serde(default)]` so a payload without the field still deserializes. Update
+  the `Song` wire-fixture tests: the full JSON payload gains `"preview_url"`,
+  the round-trip and field-name assertions cover it, and the missing-field
+  probe still omits a required key.
+- `src/apple_music/rest.rs`: add `previews: Option<Vec<Preview>>` to
+  `Attributes` and a private `struct Preview { url: Option<String> }`; add
+  `Resource::preview_url(&self) -> Option<String>` returning the first
+  preview's non-blank `url` (compared trimmed, returned untouched) and `None`
+  when `previews` is absent, empty, or all blank. Set
+  `preview_url: resource.preview_url()` in `get_songs_from_album`.
+- `src/sample_library.rs`: every `Song { … }` literal gains
+  `preview_url: None`.
+- `src/test_support.rs`: `sample_song`, `stepping_songs`, `single_song_album`,
+  and `second_album_songs` gain `preview_url: None`.
+- Every other `Song { … }` literal (`src/apple_music/tests.rs`,
+  `src/apple_music/rest/tests.rs`, `src/ui/tests.rs`, `src/library.rs`) gains
+  the field.
+
+**Files touched.** `src/library.rs`, `src/apple_music/rest.rs`,
+`src/apple_music/rest/tests.rs`, `src/sample_library.rs`,
+`src/test_support.rs`, plus the `Song` literals in `src/apple_music/tests.rs`
+and `src/ui/tests.rs`.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- A `get_songs_from_album` stub response carrying
+  `"previews": [{"url": "https://example.test/preview.m4a"}]` maps that URL to
+  the song's `preview_url`.
+- A response with no `previews`, an empty `previews` array, or a blank first
+  `url` maps to `preview_url == None`.
+- Every `sample_library()` song has `preview_url == None`.
+- A `Song` JSON payload without `preview_url` still deserializes.
+
+### Add the audio-output seam and a rodio backend (found 2026-10-08)
+
+**Goal.** `AppleMusicService` plays real audio through an injectable
+`AudioOutput` seam; the production implementation uses `rodio`, `play_track`
+starts the selected song's preview, `pause` pauses it, and a recording stub
+stands in under test. Depends on "Carry the Apple Music preview URL on
+`Song`" (the URL must be on `Song` first).
+
+**Approach.**
+
+- `Cargo.toml`: add `rodio` with the features for `cpal` output and symphonia
+  AAC + MP4 decoding (Apple's preview is AAC in M4A); enable
+  `symphonia-aac`/`symphonia-isomp4` explicitly if the resolved default feature
+  set omits them.
+- A new `audio` module (the `AudioOutput` trait, `SilentOutput`, `RodioOutput`, and `audio_with_fallback` symbols), registered by `pub mod audio;` in `src/main.rs`:
+  - `pub trait AudioOutput: Send + Sync` with `fn play(&self, url: &str) ->
+    Result<(), AppleMusicError>`, `fn pause(&self) -> Result<(),
+    AppleMusicError>`, and `fn stop(&self) -> Result<(), AppleMusicError>`.
+  - `pub struct SilentOutput`, whose methods log and return `Ok(())`: the
+    fallback when no device opens, and the production stand-in for the browse
+    tests.
+  - `pub struct RodioOutput`, owning a `std::sync::mpsc::Sender<Command>` to a
+    worker `std::thread` that holds the `rodio::OutputStream` and current
+    `rodio::Sink`. Keeping rodio's stream on the worker makes the seam
+    `Send + Sync` regardless of the stream's own thread bounds. `Command` is
+    `Play(String)`, `Pause`, `Stop`. The worker downloads the URL with the
+    existing `ureq` client, decodes the bytes from a `Cursor<Vec<u8>>` with
+    `rodio::Decoder`, and appends to a fresh `Sink`; a download/decode failure
+    is logged with `eprintln!` (the trait call itself fails only when the
+    worker is gone). `RodioOutput::new() -> Result<Self, AppleMusicError>`
+    opens the default device on the worker and reports success/failure back
+    through a `std::sync::mpsc` channel, so a device-less machine gets `Err`
+    rather than a panic.
+  - `pub(crate) fn audio_with_fallback(open: impl FnOnce() ->
+    Result<Arc<dyn AudioOutput>, AppleMusicError>) -> Arc<dyn AudioOutput>`:
+    returns the opened output, or a `SilentOutput` when `open` fails. Pure and
+    injectable so the fallback is testable without a device.
+- `src/apple_music.rs`:
+  - Add `audio: Arc<dyn audio::AudioOutput>` to `AppleMusicService`.
+  - `with_transport` builds `SilentOutput`; add
+    `with_audio(state, transport, audio)` for the playback tests; `new(state)`
+    builds `RodioOutput` through `audio_with_fallback`, then calls
+    `with_audio`.
+  - `play_track(&self, track_id: &str, preview_url: Option<&str>, is_current:
+    …)`: keep the id guard and the `is_current`-guarded state commit, then call
+    `self.audio.play(url)` when `preview_url` is `Some` and propagate an audio
+    error. `pause` calls `self.audio.pause()` before clearing `is_playing`.
+  - Update the doc comments that call playback a shared-state-only stub.
+- `src/ui/mod.rs`: the `TrackSelected` arm passes `song.preview_url.as_deref()`
+  to `play_track`.
+- `src/apple_music/tests.rs`: add a `RecordingAudio` fake holding
+  `Mutex<Vec<Call>>` (`Play(String)`/`Pause`/`Stop`) and a `FailingAudio`;
+  assert `play_track(…, Some(url), …)` records one `Play(url)` and commits
+  state, `play_track(…, None, …)` records none and still commits, and `pause`
+  records `Pause`. Update the `play_track` call sites and service constructors
+  in `src/apple_music/tests.rs` and `src/ui/tests.rs`.
+
+**Files touched.** `Cargo.toml`, `src/main.rs`, the new `audio` module (the
+`AudioOutput`, `SilentOutput`, `RodioOutput`, and `audio_with_fallback`
+symbols),
+`src/apple_music.rs`, `src/apple_music/tests.rs`, `src/ui/mod.rs`,
+`src/ui/tests.rs`.
+
+**Acceptance criteria.**
+
+- `make check` passes, including on a machine with no audio device (the
+  `RodioOutput` tests cover `new` returning `Err` without panicking; they do
+  not assert a device is present).
+- `audio_with_fallback` with a failing opener returns a `SilentOutput` whose
+  `play`/`pause`/`stop` return `Ok`.
+- With a recording `AudioOutput`, `play_track("song-1",
+  Some("https://example.test/preview.m4a"), || true)` records one `Play` with
+  that URL and sets `AppState::current_track`/`is_playing`.
+- `play_track(…, None, …)` records no `Play` but still commits the state
+  transition.
+- `pause` records a `Pause`.
+- The UI passes the selected `Song::preview_url` to `play_track`.
 
 ## Done
 
