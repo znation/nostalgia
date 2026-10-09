@@ -329,8 +329,9 @@ render a browsable sample library", done 2026-10-04). The four root causes:
    `iced::application(boot, update, view)` builder with a synchronous
    `update` returning `Task`; `iced_native` was dropped from Cargo.toml.
 3. `#[tokio::main]` was removed: `main` is a plain synchronous
-   `fn main() -> iced::Result`, so no tokio `macros`/`rt` features are needed
-   at runtime (they are enabled only for the `#[tokio::test]` suite).
+   `fn main() -> iced::Result`, so tokio's `rt` feature is not needed at
+   runtime (it is enabled only for the `#[tokio::test]` suite); the `macros`
+   feature is still a runtime need, for `ui::loading`'s `tokio::select!`.
 4. `apple_music::init_service` is a module-level free function again, so the
    call in `main.rs` resolves.
 

@@ -24,7 +24,10 @@ iced = { version = "0.14.0", features = ["advanced"] }
 # only because a transitive iced dependency (zbus) happens to enable the
 # feature. Naming it here keeps the derive macros ours, not a side effect.
 serde = { version = "1.0.228", features = ["derive"] }
-# `macros` + `rt` power the `#[tokio::test]` runtime in apple_music.
+# `sync` supplies the `Mutex` and `oneshot` channels the service and UI use;
+# `macros` supplies the `#[tokio::test]` attributes (in `apple_music` and
+# `ui`) and `ui::loading`'s `tokio::select!`; `rt` is the runtime those tests
+# need.
 tokio = { version = "1.48.0", features = ["sync", "macros", "rt"] }
 # The blocking HTTP client for the Apple Music REST integration (the choice
 # recorded in QUESTIONS.md `## Answered`, 2026-10-08). Default features carry
