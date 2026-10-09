@@ -15,7 +15,7 @@
 //! handle's own thread bounds, and a download or decode failure is logged on
 //! the worker rather than surfacing as a caller error. Each download is bounded
 //! by [`PREVIEW_TIMEOUT`], so a stalled server cannot block the worker — and
-//! with it every later play, pause, and stop command — forever.
+//! with it every later play, pause, stop, and volume command — forever.
 
 use std::io::Cursor;
 use std::sync::Arc;
@@ -30,12 +30,13 @@ use crate::music_error::AppleMusicError;
 /// reading the response body. `ureq` defaults every network timeout to `None`,
 /// so without this a server that accepts the connection and then stalls would
 /// block the audio worker forever; because the worker serves commands one at a
-/// time, every later play, pause, and stop would queue behind it. Matches the
-/// REST client's `REQUEST_TIMEOUT` so both of the app's network calls share one
-/// bound.
+/// time, every later play, pause, stop, and volume command would queue behind
+/// it. Matches the REST client's `REQUEST_TIMEOUT` so both of the app's network
+/// calls share one bound.
 const PREVIEW_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// The audio-output seam: a backend that can play, pause, and stop a track.
+/// The audio-output seam: a backend that can play, pause, and stop a track
+/// and set its output gain.
 ///
 /// Implementations are shared behind an `Arc`, so every method takes `&self`
 /// and the backend owns whatever interior state it needs. The trait is
@@ -247,7 +248,9 @@ fn run_worker(receiver: Receiver<Command>, ready: Sender<Result<(), AppleMusicEr
             Command::Play(url) => match download_and_decode(preview_agent(), &url) {
                 Ok(decoder) => {
                     // A fresh player per track replaces the previous one, so a
-                    // new selection does not queue behind the old track.
+                    // new selection does not queue behind the old track. It
+                    // starts at the remembered gain rather than rodio's
+                    // full-volume default.
                     let next = rodio::Player::connect_new(device.mixer());
                     next.set_volume(volume);
                     next.append(decoder);

@@ -410,8 +410,10 @@ impl AppleMusicService {
     }
 
     /// Plays the given track by id, recording it as the current track and
-    /// marking it playing, then starts `preview_url` through the injected
-    /// [`crate::audio::AudioOutput`]. A blank `track_id` — empty or only
+    /// marking it playing, then applies the state's current volume to the
+    /// injected [`crate::audio::AudioOutput`] and starts `preview_url` through
+    /// it, so the first play uses the slider's value rather than rodio's
+    /// full-volume default. A blank `track_id` — empty or only
     /// whitespace — or one carrying a terminal control character is rejected
     /// with an [`AppleMusicError`] and leaves shared state untouched: a blank
     /// id can never name a track, and a control-character id must not reach
