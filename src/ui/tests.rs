@@ -198,12 +198,13 @@ async fn drive_task(task: Task<Message>, what: &str, mut check: impl FnMut(Messa
 /// Drives `task` to completion and returns its single output message — the
 /// message the iced runtime would deliver. [`drive_task`] hands a task's
 /// output to a callback for inspection; the tests that must feed that output
-/// back through `update` (the two stale-reply tests, the two play-completion
-/// tests, and [`drive_fetch_and_assert_loaded`]) instead need the message
-/// itself, so the capture-and-return plumbing lives here once. `what` names
-/// the task in `drive_task`'s timeout panic. Callers on a plain thread reach
-/// this through `futures::executor::block_on`, the same way the stepping
-/// tests drive `drive_task`.
+/// back through `update` (the two slow-stale browse tests, the superseded
+/// mapper-to-update test, the two play-completion tests, and
+/// [`drive_fetch_and_assert_loaded`]) instead need the message itself, so
+/// the capture-and-return plumbing lives here once. `what` names the task
+/// in `drive_task`'s timeout panic. Callers on a plain thread reach this
+/// through `futures::executor::block_on`, the same way the stepping tests
+/// drive `drive_task`.
 async fn task_output(task: Task<Message>, what: &str) -> Message {
     let mut output: Option<Message> = None;
     drive_task(task, what, |message| output = Some(message)).await;
