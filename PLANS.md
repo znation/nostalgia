@@ -63,6 +63,42 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Done
 
+### Document `make test-one` and report a build failure distinctly from a mistyped name (found 2026-10-08, done 2026-10-08)
+
+`make test-one TEST=<name>` (added 2026-10-08) runs only the tests whose
+names contain `<name>`, but the README's Development section never mentioned
+it, and the target's no-match guard reported a build failure and a mistyped
+name through one hedged message: `no test name contains 'X' (or the test build
+failed)`.
+
+**Goal.** The README documents the target, and `make test-one` reports a build
+failure and a mistyped name distinctly.
+
+**Approach.**
+
+- `Makefile`: capture the `cargo test --list` output and check its exit status
+  separately, so a failed build reprints the compiler diagnostics under a
+  `make test-one: the test build failed` line, while a successful build with
+  no match reports `no test name contains '<name>'`. Update the target's
+  comment block to match. The cargo command is the `CARGO` variable so
+  `test-one-guard-test` can substitute a stub.
+- `README.md`: add `make test-one TEST=<name>` to the individual stages in the
+  Development section.
+- `Makefile`: `test-one-guard-test` invokes the recipe through `$(MAKE)` with
+  `CARGO=false` (a failed build) and `CARGO=true` (a successful build that
+  names no test), asserting each cause is reported distinctly, so removing
+  either branch fails `make check`.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- `make test-one TEST=zzz_no_such_test` reports the no-match cause rather
+  than the build-failure one.
+- `make test-one-guard-test` exercises both the build-failure and no-match
+  branches of the recipe and fails if either message regresses.
+
+**Files touched.** `Makefile`, `README.md`.
+
 ### Reject a blank preview URL at the playback seam (found 2026-10-08, done 2026-10-08)
 
 `AppleMusicService::play_track` validates its track id — a blank or
@@ -327,10 +363,10 @@ while a real name still runs only the matching tests.
   (`cargo test --locked -- --list "$(TEST)"`) and requires at least one line
   naming a test before the filtered run. The match is anchored to libtest's
   test-name lines (`: test$`) so the trailing summary (`N tests, 0
-  benchmarks`) cannot satisfy the guard. The list command's stderr is left
-  attached, so compiler diagnostics for a broken build appear next to the
-  guard's message. The match pattern lives in the `TEST_LIST_HAS_TEST`
-  variable.
+  benchmarks`) cannot satisfy the guard. The list command's output is
+  captured together with its stderr and its exit status checked separately,
+  so a build failure is reported as such rather than as a mistyped name. The
+  match pattern lives in the `TEST_LIST_HAS_TEST` variable.
 - `Makefile`: `test-one-guard-test` feeds that pattern a synthetic list with
   a test line and a summary-only list, asserting the first matches and the
   second does not; it is added to `check`, so a guard that reintroduces the

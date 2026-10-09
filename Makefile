@@ -30,6 +30,11 @@ test:
 ## satisfy the guard. Shared with `test-one-guard-test`, which exercises it.
 TEST_LIST_HAS_TEST = grep -q ': test$$'
 
+## The cargo command `test-one` invokes. It is a variable so
+## `test-one-guard-test` can substitute a stub and exercise the target's
+## branches without running a real build.
+CARGO ?= cargo
+
 ## A focused alternative to the full `test` target while iterating on one
 ## behavior. Cargo's test harness treats its first positional argument as a
 ## substring filter, so the target forwards TEST after `--` (which separates
@@ -41,22 +46,33 @@ TEST_LIST_HAS_TEST = grep -q ': test$$'
 ## so without the second guard a typo would report a pass. The match is
 ## checked against the harness's `--list` output filtered to the lines that
 ## name a test, so the trailing summary (`N tests, 0 benchmarks`) cannot
-## satisfy the guard; only a real test name can. The list command's stderr is
-## left attached, so compiler diagnostics for a broken build are visible next
-## to the guard's message.
+## satisfy the guard; only a real test name can. The list command's output is
+## captured and its exit status checked separately, so a build failure reprints
+## the compiler diagnostics and then a `make test-one: the test build failed`
+## line rather than being reported as a mistyped name.
 test-one:
 	@test -n "$(TEST)" || { echo "usage: make test-one TEST=<name>"; exit 2; }
-	@cargo test --locked -- --list "$(TEST)" | $(TEST_LIST_HAS_TEST) || { echo "no test name contains '$(TEST)' (or the test build failed)"; exit 1; }
-	cargo test --locked -- $(TEST)
+	@listed=$$($(CARGO) test --locked -- --list "$(TEST)" 2>&1); status=$$?; \
+		if [ $$status -ne 0 ]; then printf '%s\n' "$$listed"; echo "make test-one: the test build failed"; exit 1; fi; \
+		printf '%s\n' "$$listed" | $(TEST_LIST_HAS_TEST) || { echo "no test name contains '$(TEST)'"; exit 1; }
+	$(CARGO) test --locked -- $(TEST)
 
-## Exercises the `test-one` no-match guard against synthetic `--list` output:
-## a line naming a test matches, and the trailing summary alone does not. It
-## uses the same pattern variable as the target, so a change that reintroduces
-## the summary-line false pass fails this test. Pure shell, no cargo run, so
-## it is cheap enough to run inside `make check`.
+## Exercises the `test-one` guards. The first two lines test the match pattern
+## against synthetic `--list` output: a line naming a test matches, and the
+## trailing summary alone does not, using the same `TEST_LIST_HAS_TEST` variable
+## as the target. The last two invoke the recipe itself through `$(MAKE)` with
+## `CARGO` stubbed to a command that fails (`false`) and one that prints no test
+## names (`true`), asserting each cause is reported distinctly. No real build
+## runs, so it is cheap enough to run inside `make check`.
 test-one-guard-test:
 	@printf 'a::b: test\n\n1 test, 0 benchmarks\n' | $(TEST_LIST_HAS_TEST) || { echo "test-one guard rejected a real test name"; exit 1; }
 	@printf '0 tests, 0 benchmarks\n' | $(TEST_LIST_HAS_TEST) && { echo "test-one guard accepted a summary-only list"; exit 1; } || true
+	@out=$$($(MAKE) --no-print-directory test-one TEST=anything CARGO=false 2>&1); st=$$?; \
+		if [ $$st -eq 0 ] || ! printf '%s\n' "$$out" | grep -q 'make test-one: the test build failed' || printf '%s\n' "$$out" | grep -q 'no test name contains'; then \
+			echo "test-one did not report a failed build distinctly"; exit 1; fi
+	@out=$$($(MAKE) --no-print-directory test-one TEST=anything CARGO=true 2>&1); st=$$?; \
+		if [ $$st -eq 0 ] || ! printf '%s\n' "$$out" | grep -q "no test name contains 'anything'" || printf '%s\n' "$$out" | grep -q 'test build failed'; then \
+			echo "test-one did not report a mistyped name distinctly"; exit 1; fi
 
 ## Checks formatting without editing files (fails on any diff).
 fmt:
