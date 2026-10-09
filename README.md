@@ -13,11 +13,13 @@ Nostalgia is a (very close if not pixel-perfect) clone of the classic Winamp UI,
 
 <!-- tumwater:status:start -->
 Early skeleton (0.1.0): an iced (0.14) desktop shell themed with a Winamp 2.x base-skin palette —
-a custom raised title bar with minimize, close, and window-shade roll-up, a Now Playing LCD bar,
-chrome transport controls with Repeat, a volume slider, an equalizer panel with a preset pick
-list, and an artist → album → song browser. A MusicKit loopback sign-in runs at startup when
-`APPLE_MUSIC_DEVELOPER_TOKEN` is set, but the browse queries and playback still answer from the
-in-memory sample library. Open work lives in PLANS.md, BUGS.md, and QUESTIONS.md.
+a custom raised title bar (always-on-top toggle, shade, minimize, close), a Now Playing LCD bar,
+chrome transport controls with Repeat and Shuffle, volume and balance sliders, an equalizer panel
+with a preset pick list, and an artist → album → song browser. A MusicKit loopback sign-in runs at
+startup when `APPLE_MUSIC_DEVELOPER_TOKEN` is set: browse queries then read the signed-in Apple
+Music library through the REST API, and fall back to the in-memory sample library otherwise.
+Playback is still a state-only stub with no audio output. Open work lives in PLANS.md, BUGS.md,
+and QUESTIONS.md.
 <!-- tumwater:status:end -->
 
 ## Screenshots
@@ -45,14 +47,16 @@ The player on its own: [docs/screenshots/player.png](docs/screenshots/player.png
 ## Usage
 
 Build and run with `cargo run`; the player opens an iced window showing the Now Playing bar, the
-Play/Pause/Stop/Previous/Next controls, a Repeat toggle, a volume slider, an equalizer panel
-(an EQ on/off button, a preset pick list, a preamp slider, and ten band sliders), and a browse
-list. Double-clicking the title bar rolls the window up to just that title bar, and double-clicking
-it again restores it. With the window focused, the classic Winamp keys drive playback: Z and B
-step back and forward, X plays, C pauses, V stops, and the up/down arrows nudge the volume. At
-launch, setting the `APPLE_MUSIC_DEVELOPER_TOKEN` environment variable starts a browser-based
-MusicKit sign-in; with it unset the built-in sample library is used. There are no CLI flags or
-config files yet.
+Play/Pause/Stop/Previous/Next controls, Repeat and Shuffle toggles, volume and balance sliders,
+an equalizer panel (an EQ on/off button, a preset pick list, a preamp slider, and ten band
+sliders), and a browse list. The title bar's `A` button toggles always-on-top, its shade button
+(or a double-click on the bar) rolls the window up to just that title bar and back, and its `–`
+and `✕` buttons minimize and close. With the window focused, the classic Winamp keys drive
+playback: Z and B step back and forward, X plays, C pauses, V stops, and the up/down arrows nudge
+the volume. Setting `APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a browser-based MusicKit
+sign-in: browse queries then read your Apple Music library through the REST API, and fall back to
+the built-in sample library when it is unset. Playback is not wired to audio yet — it only updates
+the UI state. There are no CLI flags or config files yet.
 
 ## Development
 
