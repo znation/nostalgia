@@ -920,11 +920,13 @@ fn window_id_resolved_stores_the_window_id() {
     assert_eq!(player.window_id, None);
 }
 
-/// The three custom-title-bar window actions, in the order the title bar
-/// renders them: the draggable band, minimize, and close. The two tests below
-/// drive this same set against the two window-id states — no-ops before
-/// `boot`'s query resolves, work after — so a fourth title-bar action is
-/// added here once rather than to both loops.
+/// The three custom-title-bar window actions that are complete no-ops without
+/// a window id, in the order the title bar renders them: the draggable band,
+/// minimize, and close. The clutter and shade toggles also touch the window,
+/// but each flips a player flag before its window call, so they keep their own
+/// tests. The two tests below drive this set against the two window-id states
+/// — no work before `boot`'s query resolves, work after — so a new no-op
+/// window action is added here once rather than to both loops.
 const TITLE_BAR_WINDOW_ACTIONS: [Message; 3] = [
     Message::WindowDragged,
     Message::MinimizeWindow,
