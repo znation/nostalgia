@@ -545,46 +545,39 @@ fn read_http_request_refuses_headers_past_the_cap() {
 // treats like a closed connection: the malformed request is ignored and the
 // flow keeps waiting. Each test names the branch that produced it, so a parse
 // change that silently accepts a hostile line is caught.
-#[test]
-fn read_http_request_rejects_non_utf8_headers() {
+
+/// Writes `raw` to a fresh connection and asserts `read_http_request` rejects
+/// it as a malformed request: an `io::ErrorKind::InvalidData` parse error whose
+/// message is `expected`. The three malformed-request tests below differ only
+/// in the bytes and the message, so the write-read-assert scaffold lives here
+/// once and each test names the branch it pins.
+fn assert_request_parse_error(raw: &[u8], expected: &str) {
     let (mut server, mut client) = connected_pair();
-    client
-        .write_all(b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Bad: \xff\xfe\r\n\r\n")
-        .expect("write a request with an invalid UTF-8 header");
+    client.write_all(raw).expect("write the malformed request");
 
     let error = read_http_request(&mut server, Instant::now() + Duration::from_secs(5))
         .err()
-        .expect("non-UTF-8 headers are a parse error");
+        .expect("the malformed request is a parse error");
     assert_eq!(error.kind(), io::ErrorKind::InvalidData);
-    assert_eq!(error.to_string(), "request headers are not UTF-8");
+    assert_eq!(error.to_string(), expected);
+}
+
+#[test]
+fn read_http_request_rejects_non_utf8_headers() {
+    assert_request_parse_error(
+        b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Bad: \xff\xfe\r\n\r\n",
+        "request headers are not UTF-8",
+    );
 }
 
 #[test]
 fn read_http_request_rejects_a_request_line_without_a_method() {
-    let (mut server, mut client) = connected_pair();
-    client
-        .write_all(b"\r\n\r\n")
-        .expect("write a request line with no method");
-
-    let error = read_http_request(&mut server, Instant::now() + Duration::from_secs(5))
-        .err()
-        .expect("a request line without a method is a parse error");
-    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
-    assert_eq!(error.to_string(), "missing method");
+    assert_request_parse_error(b"\r\n\r\n", "missing method");
 }
 
 #[test]
 fn read_http_request_rejects_a_request_line_without_a_target() {
-    let (mut server, mut client) = connected_pair();
-    client
-        .write_all(b"GET\r\n\r\n")
-        .expect("write a request line with no target");
-
-    let error = read_http_request(&mut server, Instant::now() + Duration::from_secs(5))
-        .err()
-        .expect("a request line without a target is a parse error");
-    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
-    assert_eq!(error.to_string(), "missing target");
+    assert_request_parse_error(b"GET\r\n\r\n", "missing target");
 }
 
 // A `Content-Length` that does not parse as a number is treated as no body
