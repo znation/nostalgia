@@ -437,6 +437,23 @@ fn api_error_cause_falls_back_to_the_title() {
     assert_eq!(api_error_cause(body), Some("Unauthorized".to_string()));
 }
 
+// A field the API supplies but leaves blank names no cause, so it must not
+// win over a present `title` — otherwise the status message would end in a
+// dangling ": " instead of naming the cause the title carries.
+#[test]
+fn api_error_cause_skips_a_blank_detail_for_the_title() {
+    let body = r#"{"errors":[{"title":"Unauthorized","detail":""}]}"#;
+    assert_eq!(api_error_cause(body), Some("Unauthorized".to_string()));
+}
+
+// With every field present but blank there is no cause to add, so the
+// transport reports the status alone rather than "HTTP 401: ".
+#[test]
+fn api_error_cause_is_none_when_every_field_is_blank() {
+    let body = r#"{"errors":[{"title":"  ","detail":"\t"}]}"#;
+    assert_eq!(api_error_cause(body), None);
+}
+
 #[test]
 fn api_error_cause_is_none_without_an_envelope_or_cause() {
     assert_eq!(api_error_cause("not json"), None);
@@ -479,6 +496,22 @@ fn a_non_success_status_surfaces_the_api_error_detail() {
         error.to_string(),
         "HTTP 401 Unauthorized: Invalid developer token"
     );
+}
+
+// A 401 whose error envelope carries only blank fields is the `None` arm at
+// the transport: there is nothing to append, so the message is the bare
+// status rather than a status with a dangling colon.
+#[test]
+fn a_non_success_status_with_a_blank_api_error_detail_reports_just_the_status() {
+    let body = r#"{"errors":[{"title":"","detail":"  "}]}"#;
+    let addr = serve_one_response(&format!(
+        "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    ));
+
+    let url = format!("http://{addr}/me/library/artists");
+    let error = UreqTransport::new().get(&url, &session()).unwrap_err();
+    assert_eq!(error.to_string(), "HTTP 401 Unauthorized");
 }
 
 // The `None` arm of the same status check: a non-2xx response whose body is

@@ -33,6 +33,35 @@ _None yet._
 
 ## Done
 
+### Report just the HTTP status when an Apple Music error body's cause is blank (found 2026-10-08, done 2026-10-08)
+
+`api_error_cause` preferred the error envelope's `detail` with `Option::or`
+and then escaped whatever it found, so a `detail` that was present but blank
+(`""` or only whitespace) was returned as an empty cause. `UreqTransport::get`
+then formatted it as `"HTTP 401: "` — a status followed by a dangling colon
+and nothing, where `"HTTP 401"` is the honest report.
+
+**Goal.** A blank `detail` (or `title`) is treated as absent: the cause falls
+back to the other field when it is non-blank, and to no cause at all when
+neither is.
+
+**Approach.**
+
+- `src/apple_music/rest.rs`: `api_error_cause` now picks the first non-blank of
+the entry's `detail` and `title`, so a blank field never becomes the cause. Its
+doc comment states the blank-is-absent rule.
+- `src/apple_music/rest/tests.rs`:
+  `api_error_cause_skips_a_blank_detail_for_the_title` and
+  `api_error_cause_is_none_when_every_field_is_blank` pin the unit behavior;
+  `a_non_success_status_with_a_blank_api_error_detail_reports_just_the_status`
+  pins the transport message (`"HTTP 401 Unauthorized"`).
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- A non-2xx response whose error body carries only blank `detail`/`title`
+  reports the status alone, with no trailing `": "`.
+
 ### Add a Winamp Shuffle toggle that randomizes Next (found 2026-10-08, done 2026-10-08)
 
 The transport row carries a Repeat toggle but not the Shuffle button that sits

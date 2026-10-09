@@ -319,8 +319,11 @@ struct ApiError {
 }
 
 /// The human-readable cause in an Apple Music error body, preferring the first
-/// entry's `detail` and falling back to its `title`; `None` when `body` is not
-/// the documented envelope or carries neither field.
+/// entry's non-blank `detail` and falling back to its non-blank `title`; `None`
+/// when `body` is not the documented envelope or carries neither. A field that
+/// is present but blank (empty or only whitespace) is treated as absent, so a
+/// cause is never empty and the status message does not end in a dangling
+/// `": "`.
 ///
 /// The cause is an Apple Music reply — data outside this program's control —
 /// and it is carried into [`AppleMusicError`], whose `Display` reaches the
@@ -334,9 +337,10 @@ struct ApiError {
 fn api_error_cause(body: &str) -> Option<String> {
     let envelope: ErrorEnvelope = serde_json::from_str(body).ok()?;
     let error = envelope.errors.into_iter().next()?;
-    error
-        .detail
-        .or(error.title)
+    [error.detail, error.title]
+        .into_iter()
+        .flatten()
+        .find(|cause| !cause.trim().is_empty())
         .map(|cause| cause.escape_debug().to_string())
 }
 
