@@ -1262,6 +1262,42 @@ fn startup_sign_in_stores_the_session_on_the_shared_service() {
     assert_eq!(service.session(), Some(expected));
 }
 
+// `std::thread::spawn` panics when the OS refuses a thread, which would abort
+// the player at startup. `start_sign_in` spawns through the fallible
+// `Builder::spawn` and reports the refusal as a seam error instead; this test
+// injects a failing spawner to drive that branch without exhausting the OS.
+#[test]
+fn start_sign_in_reports_a_thread_spawn_failure_as_a_seam_error() {
+    let result = start_sign_in_with(test_service(), "dev-token".to_string(), |_work| {
+        Err(AppleMusicError::new(
+            "spawning the sign-in thread failed: no more threads",
+        ))
+    });
+
+    assert_eq!(
+        result.unwrap_err().to_string(),
+        "spawning the sign-in thread failed: no more threads"
+    );
+}
+
+// The startup sign-in runs on a named thread, so a panic in the blocking
+// sign-in is attributed to `nostalgia-signin` rather than `<unnamed>`. Pin the
+// name on the production spawner, since the failure test above injects its own
+// spawner and would not notice a rename.
+#[test]
+fn spawn_sign_in_thread_names_its_work_thread() {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    spawn_sign_in_thread(Box::new(move || {
+        let _ = sender.send(std::thread::current().name().map(str::to_string));
+    }))
+    .unwrap();
+
+    assert_eq!(
+        receiver.recv().unwrap().as_deref(),
+        Some(SIGN_IN_THREAD_NAME)
+    );
+}
+
 // The session seam: `new` starts with no session, `authenticate_with`
 // stores the session its flow returns, and a failed flow propagates the
 // error without disturbing an already-stored session. The real

@@ -221,14 +221,16 @@ impl AppleMusicService {
 /// token is available.
 ///
 /// Builds the one [`AppleMusicService`] the app shares, reads
-/// `APPLE_MUSIC_DEVELOPER_TOKEN`, and — when it is set and non-blank — spawns a
-/// `std::thread` that runs the blocking sign-in on a clone, so the UI thread
-/// never blocks. Returns the service so the caller hands that same instance to
-/// the UI: a clone shares the session handle, so the session stored at startup
-/// is visible through [`AppleMusicService::session`] on the UI's service. When
-/// the variable is unset, blank, or not valid UTF-8, sign-in is skipped and
-/// the sample library stays in use; the skip line names which of those three
-/// cases applies (see [`startup_token`]).
+/// `APPLE_MUSIC_DEVELOPER_TOKEN`, and — when it is set and non-blank — starts a
+/// named background thread that runs the blocking sign-in on a clone, so the UI
+/// thread never blocks. Returns the service so the caller hands that same
+/// instance to the UI: a clone shares the session handle, so the session stored
+/// at startup is visible through [`AppleMusicService::session`] on the UI's
+/// service. When the variable is unset, blank, or not valid UTF-8, sign-in is
+/// skipped and the sample library stays in use; the skip line names which of
+/// those three cases applies (see [`startup_token`]). A thread the OS refuses to
+/// start is logged rather than aborting the player, which then keeps the sample
+/// library (see [`start_sign_in`]).
 pub fn init_service(state: Arc<Mutex<AppState>>) -> AppleMusicService {
     let service = AppleMusicService::new(state);
     let developer_token = match startup_token(std::env::var("APPLE_MUSIC_DEVELOPER_TOKEN")) {
@@ -238,9 +240,54 @@ pub fn init_service(state: Arc<Mutex<AppState>>) -> AppleMusicService {
             return service;
         }
     };
-    let sign_in_service = service.clone();
-    std::thread::spawn(move || sign_in_service.sign_in(&developer_token, &browser_sign_in));
+    start_sign_in(service.clone(), developer_token);
     service
+}
+
+/// The name the startup sign-in thread gets, so a panic in the blocking
+/// sign-in is attributed to `nostalgia-signin` rather than `<unnamed>`.
+const SIGN_IN_THREAD_NAME: &str = "nostalgia-signin";
+
+/// Starts the blocking sign-in for `developer_token` on `service` in the
+/// background, logging a thread-creation failure rather than aborting the
+/// player.
+///
+/// `std::thread::spawn` panics when the OS refuses a thread; a background
+/// sign-in is not worth crashing the player for, so [`spawn_sign_in_thread`]
+/// uses the fallible `Builder::spawn` and this reports the refusal and returns.
+/// The player then keeps the sample library, as it does when no token is set.
+fn start_sign_in(service: AppleMusicService, developer_token: String) {
+    if let Err(error) = start_sign_in_with(service, developer_token, spawn_sign_in_thread) {
+        eprintln!("Apple Music sign-in could not start: {error}; the sample library stays in use");
+    }
+}
+
+/// [`start_sign_in`] with an injectable spawner, so a test can drive the
+/// thread-creation-failure branch without making the OS refuse a thread. The
+/// work is boxed because the seam carries a `FnOnce` value rather than a
+/// generic type the caller and the test stub would have to share.
+fn start_sign_in_with(
+    service: AppleMusicService,
+    developer_token: String,
+    spawn: impl FnOnce(Box<dyn FnOnce() + Send>) -> Result<(), AppleMusicError>,
+) -> Result<(), AppleMusicError> {
+    spawn(Box::new(move || {
+        service.sign_in(&developer_token, &browser_sign_in);
+    }))
+}
+
+/// [`start_sign_in`]'s production spawner: the named [`SIGN_IN_THREAD_NAME`]
+/// thread. Maps a thread-creation failure to an [`AppleMusicError`] naming the
+/// cause; `std::thread::Builder::spawn` is the fallible form
+/// `std::thread::spawn` wraps with a panic.
+fn spawn_sign_in_thread(work: Box<dyn FnOnce() + Send>) -> Result<(), AppleMusicError> {
+    std::thread::Builder::new()
+        .name(SIGN_IN_THREAD_NAME.to_string())
+        .spawn(work)
+        .map(|_handle| ())
+        .map_err(|error| {
+            AppleMusicError::new(format!("spawning the sign-in thread failed: {error}"))
+        })
 }
 
 /// Classifies the `APPLE_MUSIC_DEVELOPER_TOKEN` read: the token to sign in
