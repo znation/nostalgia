@@ -325,4 +325,20 @@ mod tests {
         reached.dedup();
         assert_eq!(reached, vec!["song-1", "song-2", "song-3"]);
     }
+
+    // Shuffle's pick is only as varied as the roll production hands it: every
+    // test above injects its own `roll`, so `shuffle_roll` itself is never
+    // called and a regression that returned a constant (or the same value on
+    // every call) would leave them all green while Next re-picked the same
+    // non-current song forever. Draw a handful of rolls and require more than
+    // one distinct value; a constant fails here.
+    #[test]
+    fn shuffle_roll_varies_across_calls() {
+        let first = shuffle_roll();
+        let varied = (0..15).any(|_| shuffle_roll() != first);
+        assert!(
+            varied,
+            "shuffle_roll returned {first} for sixteen calls, so Shuffle could not vary its pick"
+        );
+    }
 }
