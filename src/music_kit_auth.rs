@@ -5,7 +5,7 @@
 //! starts a one-shot HTTP server on a loopback port, opens the system browser
 //! at a page that loads `MusicKit` JS and calls `authorize()`, and captures the
 //! token Apple's page posts back. The developer token stays owner-side and is
-//! read from the environment by the sibling wiring plan.
+//! read from the environment by [`crate::apple_music::init_service`].
 //!
 //! The flow is synchronous and blocking by design — the caller runs it off the
 //! UI thread — and uses only the standard library, matching the project's
