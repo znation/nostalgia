@@ -595,3 +595,54 @@ fn a_successful_response_returns_its_body() {
 
     assert_eq!(got, body);
 }
+
+// The transport authenticates every browse request with two headers: the
+// developer token as `Authorization: Bearer <token>` and the MusicKit user
+// token as `Music-User-Token: <token>`. Apple Music rejects a request without
+// them, but the response-driven tests above assert only the reply, so a
+// refactor that dropped either `.header(..)` call would leave every browse
+// query unauthenticated with the suite still green. Capture the request the
+// real transport sends and pin both credentials (and the URL path).
+#[test]
+fn a_request_carries_the_developer_and_user_tokens() {
+    let (listener, address) = loopback_listener();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        use std::io::Write;
+        let (mut stream, _) = listener.accept().unwrap();
+        let request = read_some_request(&mut stream);
+        let body = r#"{"data":[]}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        let _ = stream.write_all(response.as_bytes());
+        let _ = stream.flush();
+        let _ = sender.send(request);
+    });
+
+    let url = format!("http://{address}/me/library/artists");
+    UreqTransport::new()
+        .get(&url, &session())
+        .expect("a 200 with an empty collection succeeds");
+
+    let request = receiver
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("the server captured the request");
+    // Header names are case-insensitive, so match on a lowercased copy while
+    // reporting the captured request verbatim in any failure.
+    let lower = request.to_ascii_lowercase();
+
+    assert!(
+        lower.starts_with("get /me/library/artists http/1.1\r\n"),
+        "{request:?}"
+    );
+    assert!(
+        lower.contains("authorization: bearer developer-token\r\n"),
+        "{request:?}"
+    );
+    assert!(
+        lower.contains("music-user-token: user-token\r\n"),
+        "{request:?}"
+    );
+}
