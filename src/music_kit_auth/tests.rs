@@ -104,6 +104,26 @@ where
     result
 }
 
+/// Runs the flow with `probe` sent as the first request and returns the raw
+/// HTTP response it received; the real callback then completes the flow.
+///
+/// The tests that inspect the response to an unusual request — the browser's
+/// `/?state=` page query, an unknown path, and a foreign `Host` — share this
+/// scaffold, so each keeps only its own assertion on the returned response.
+fn response_to_probe<F>(probe: F) -> String
+where
+    F: Fn(&str) -> String + Send + 'static,
+{
+    let observed = Arc::new(Mutex::new(String::new()));
+    let observed_for_flow = Arc::clone(&observed);
+    authorize_with_flow(move |port, state| {
+        *observed_for_flow.lock().expect("observed lock") = request(port, &probe(&state));
+        let _ = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
+    })
+    .expect("the real callback still succeeds");
+    observed.lock().expect("observed lock").clone()
+}
+
 #[test]
 fn validate_developer_token_accepts_a_three_segment_jwt() {
     assert!(validate_developer_token(SAMPLE_DEVELOPER_TOKEN).is_ok());
@@ -213,19 +233,9 @@ fn authorize_serves_the_page_for_the_browsers_query_request() {
     // `/` (the reader strips the query from the path) and carry the nonce. A
     // regression in either would refuse the page and the sign-in would never
     // start.
-    let observed = Arc::new(Mutex::new(String::new()));
-    let observed_for_flow = Arc::clone(&observed);
-    authorize_with_flow(move |port, state| {
-        let page = request(
-            port,
-            &format!("GET /?state={state} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"),
-        );
-        let _ = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
-        *observed_for_flow.lock().expect("observed lock") = page;
-    })
-    .expect("the real callback still succeeds");
-
-    let page = observed.lock().expect("observed lock");
+    let page = response_to_probe(|state| {
+        format!("GET /?state={state} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+    });
     assert!(page.starts_with("HTTP/1.1 200"));
     assert!(page.contains(SAMPLE_DEVELOPER_TOKEN));
 }
@@ -346,39 +356,19 @@ fn authorize_rejects_a_callback_with_an_empty_user_token() {
 
 #[test]
 fn authorize_ignores_an_unknown_request_before_the_callback() {
-    let observed = Arc::new(Mutex::new(String::new()));
-    let observed_for_flow = Arc::clone(&observed);
-    authorize_with_flow(move |port, state| {
-        let missing = request(port, "GET /nope HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n");
-        let _ = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
-        *observed_for_flow.lock().expect("observed lock") = missing;
-    })
-    .expect("the real callback still succeeds");
-
-    assert!(
-        observed
-            .lock()
-            .expect("observed lock")
-            .starts_with("HTTP/1.1 404")
-    );
+    let missing =
+        response_to_probe(|_state| "GET /nope HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n".to_string());
+    assert!(missing.starts_with("HTTP/1.1 404"));
 }
 
 #[test]
 fn authorize_rejects_a_foreign_host_header() {
-    let observed = Arc::new(Mutex::new(String::new()));
-    let observed_for_flow = Arc::clone(&observed);
-    authorize_with_flow(move |port, state| {
-        // A DNS-rebinding page reaches the loopback socket under its own
-        // hostname, so its `Host` header names that hostname, not 127.0.0.1.
-        // The response must not carry the sign-in page (and its developer
-        // token), and the real callback must still complete the flow.
-        let rebound = request(port, "GET / HTTP/1.1\r\nHost: evil.example\r\n\r\n");
-        let _ = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
-        *observed_for_flow.lock().expect("observed lock") = rebound;
-    })
-    .expect("a foreign host does not abort the flow");
-
-    let rebound = observed.lock().expect("observed lock");
+    // A DNS-rebinding page reaches the loopback socket under its own
+    // hostname, so its `Host` header names that hostname, not 127.0.0.1.
+    // The response must not carry the sign-in page (and its developer
+    // token), and the real callback must still complete the flow.
+    let rebound =
+        response_to_probe(|_state| "GET / HTTP/1.1\r\nHost: evil.example\r\n\r\n".to_string());
     assert!(
         rebound.starts_with("HTTP/1.1 403"),
         "a foreign Host should be forbidden, got: {rebound}"
@@ -391,17 +381,18 @@ fn authorize_rejects_a_foreign_host_header() {
 
 #[test]
 fn authorize_serves_the_page_for_a_loopback_host_carrying_the_port() {
-    // The browser opens `http://127.0.0.1:{port}/`, so its `Host` header is the
-    // port-bearing form `127.0.0.1:{port}` — not the bare address the other
-    // tests send. The host check must strip the port before comparing, or the
-    // legitimate page request is refused as a foreign host and sign-in never
-    // starts.
+    // The browser opens `http://127.0.0.1:{port}/?state=<nonce>`, so its
+    // `Host` header is the port-bearing form `127.0.0.1:{port}` — not the bare
+    // address the other tests send — and the page request also carries the
+    // per-flow nonce. The host check must strip the port before comparing, or
+    // the legitimate page request is refused as a foreign host and sign-in
+    // never starts.
     let observed = Arc::new(Mutex::new(String::new()));
     let observed_for_flow = Arc::clone(&observed);
     authorize_with_flow(move |port, state| {
         let page = request(
             port,
-            &format!("GET / HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\r\n"),
+            &format!("GET /?state={state} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n\r\n"),
         );
         let _ = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
         *observed_for_flow.lock().expect("observed lock") = page;
