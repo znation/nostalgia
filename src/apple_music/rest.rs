@@ -280,7 +280,10 @@ impl RestLibrary {
     /// A transport failure propagates as the transport's own cause and a parse
     /// failure names the parse. Neither names the query: the browse methods
     /// leave that to the UI, which already labels the fetch it issued, so the
-    /// user-facing report names the query once rather than in both layers.
+    /// user-facing report names the query once rather than in both layers. A
+    /// failure on a page after the first additionally names the page (see
+    /// [`page_context`]), because the UI cannot know which page the failure
+    /// happened on.
     fn fetch(
         &self,
         url: &str,
@@ -289,9 +292,13 @@ impl RestLibrary {
         let mut resources = Vec::new();
         let mut next_url = url.to_string();
         for page in 1..=MAX_PAGES {
-            let body = self.transport.get(&next_url, session)?;
-            let envelope: Envelope<Resource> = serde_json::from_str(&body)
-                .map_err(|error| AppleMusicError::new(describe_parse_failure(&error)))?;
+            let body = self
+                .transport
+                .get(&next_url, session)
+                .map_err(|error| AppleMusicError::new(page_context(&error.to_string(), page)))?;
+            let envelope: Envelope<Resource> = serde_json::from_str(&body).map_err(|error| {
+                AppleMusicError::new(page_context(&describe_parse_failure(&error), page))
+            })?;
             resources.extend(envelope.data);
             let Some(next) = envelope.next.as_deref() else {
                 break;
@@ -313,6 +320,22 @@ impl RestLibrary {
             }
         }
         Ok(resources)
+    }
+}
+
+/// Names `page` in a pagination failure, so a request that fails while
+/// following a `next` link says which page it happened on.
+///
+/// The first page is the query the UI already labels, so its message is
+/// returned unchanged and the report stays the bare cause. A later page is
+/// otherwise indistinguishable from the first in the report — the UI names the
+/// query, not the page — so the page number is appended only when it adds
+/// information.
+fn page_context(message: &str, page: usize) -> String {
+    if page == 1 {
+        message.to_string()
+    } else {
+        format!("{message} (page {page})")
     }
 }
 

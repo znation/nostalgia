@@ -164,6 +164,31 @@ symbols),
 
 ## Done
 
+### Name the page when a paginated Apple Music browse fails (found 2026-10-08, done 2026-10-08)
+
+A browse fetch follows a collection's `next` link (up to `MAX_PAGES`), but a
+failure on a later page read the same as a first-page failure. The UI report
+names the query ("loading favorite artists") and the underlying cause, but not
+which page failed, so a user with a multi-page library could not tell where the
+request broke.
+
+**Goal.** A transport or parse failure while following a `next` link names the
+page it happened on, while a first-page failure keeps its bare cause (the query
+the UI already labels).
+
+**Approach.** `src/apple_music/rest.rs`: add a `page_context` helper and apply
+it to both the transport and parse error paths in `fetch`. The first page is
+returned unchanged; later pages get a ` (page N)` suffix.
+`src/apple_music/rest/tests.rs`: pin the suffix with a two-page stub whose
+second body is not JSON, and pin the first-page boundary with a direct
+`page_context` unit test.
+
+**Files touched.** `src/apple_music/rest.rs`, `src/apple_music/rest/tests.rs`.
+
+**Acceptance criteria.** `make check` passes; a page-2 parse failure reads
+`response was not valid JSON: ... (page 2)`, and a first-page failure still
+reads as the bare cause every existing transport/parse test asserts.
+
 ### Show each track's length in the playlist editor (found 2026-10-08, done 2026-10-08)
 
 Classic Winamp's playlist editor lists every track with its length beside the

@@ -823,3 +823,37 @@ fn a_next_link_to_another_host_is_not_followed() {
     assert_eq!(artists.len(), 1);
     assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/artists");
 }
+
+// A failure while following a `next` link must say which page it happened on.
+// The UI labels the query ("loading favorite artists"), but only the client
+// knows the failure was on page 2 rather than the first page, so without the
+// page number the report is ambiguous. The first page's row is returned by the
+// stub's first body; the second body is not JSON, so the parse fails on page 2.
+#[test]
+fn a_failure_following_a_next_page_names_the_page() {
+    let stub = StubTransport::returning_bodies(&[
+        r#"{"data":[{"id":"artist-1","attributes":{"name":"The Sample Band"}}],"next":"/v1/me/library/artists?offset=1"}"#,
+        "not json",
+    ]);
+    let library = library_over(&stub);
+
+    let error = library
+        .get_favorite_artists(&session())
+        .unwrap_err()
+        .to_string();
+
+    assert!(
+        error.starts_with("response was not valid JSON:") && error.ends_with("(page 2)"),
+        "{error}"
+    );
+}
+
+// The page suffix is only appended when it adds information: the first page is
+// the query the UI already names, so its cause stays bare (the transport and
+// parse tests above pin that end to end). A unit test pins the boundary
+// directly, so a refactor cannot start appending "(page 1)" to every failure.
+#[test]
+fn page_context_leaves_the_first_page_message_bare() {
+    assert_eq!(page_context("network down", 1), "network down");
+    assert_eq!(page_context("network down", 2), "network down (page 2)");
+}
