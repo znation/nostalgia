@@ -907,6 +907,25 @@ mod tests {
         }
     }
 
+    /// Builds the recording player factory the [`serve_commands`] tests drive:
+    /// every call records the fresh [`RecordingPlayer`] it returns in creation
+    /// order, so a test can assert which players the loop installed and what
+    /// happened to them. Returns the shared recording list alongside the
+    /// factory to pass to [`serve_commands`].
+    fn recording_players() -> (
+        Arc<Mutex<Vec<RecordingPlayer>>>,
+        impl Fn() -> RecordingPlayer,
+    ) {
+        let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
+        let recorded = Arc::clone(&players);
+        let create_player = move || {
+            let player = RecordingPlayer::default();
+            recorded.lock().unwrap().push(player.clone());
+            player
+        };
+        (players, create_player)
+    }
+
     // `play_track` commits the new track and returns `Ok` as soon as the
     // command is queued, so the worker's later download failure is invisible
     // to the caller. If that failure left the previous player running, the old
@@ -916,15 +935,9 @@ mod tests {
     #[test]
     fn a_failed_preview_stops_the_previous_player() {
         let (sender, receiver) = mpsc::channel();
-        let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
+        let (players, create_player) = recording_players();
         let fetches = Arc::new(AtomicUsize::new(0));
 
-        let recorded = Arc::clone(&players);
-        let create_player = move || {
-            let player = RecordingPlayer::default();
-            recorded.lock().unwrap().push(player.clone());
-            player
-        };
         let fetch = move |_url: &str| {
             if fetches.fetch_add(1, Ordering::SeqCst) == 0 {
                 Ok(())
@@ -957,14 +970,7 @@ mod tests {
     #[test]
     fn a_new_preview_replaces_the_previous_player_at_the_remembered_volume() {
         let (sender, receiver) = mpsc::channel();
-        let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
-
-        let recorded = Arc::clone(&players);
-        let create_player = move || {
-            let player = RecordingPlayer::default();
-            recorded.lock().unwrap().push(player.clone());
-            player
-        };
+        let (players, create_player) = recording_players();
         let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
 
         sender.send(Command::SetVolume(0.4)).unwrap();
