@@ -250,3 +250,34 @@ fn nameless_song_is_an_error() {
     assert!(error.contains("songs from album"), "{error}");
     assert!(error.contains("song-1"), "{error}");
 }
+
+// `ureq` defaults every network timeout to `None`, so a server that accepts
+// the connection and never sends a response used to block `UreqTransport::get`
+// forever — the UI's own fetch timeout only abandons the detached `off_thread`
+// thread, it does not stop it. The bound is asserted from a worker thread with
+// `recv_timeout`, so an unbounded transport fails this test at 5s instead of
+// hanging the suite.
+#[test]
+fn a_stalled_server_is_bounded_by_the_request_timeout() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let transport = UreqTransport::with_timeout(std::time::Duration::from_millis(200));
+    let url = format!("http://{addr}/stalled");
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let started = std::time::Instant::now();
+    std::thread::spawn(move || {
+        let _ = sender.send(transport.get(&url, &session()));
+    });
+    let result = receiver
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("the transport must return within its bound");
+    assert!(result.is_err(), "{result:?}");
+    // A connect failure would also return `Err`, instantly; require that the
+    // call actually waited for the bound, so this test only passes because the
+    // stalled response was timed out.
+    assert!(
+        started.elapsed() >= std::time::Duration::from_millis(100),
+        "returned before the 200ms bound: {:?}",
+        started.elapsed()
+    );
+}

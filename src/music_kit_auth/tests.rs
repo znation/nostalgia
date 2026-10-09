@@ -381,12 +381,12 @@ fn authorize_rejects_a_foreign_host_header() {
 
 #[test]
 fn authorize_serves_the_page_for_a_loopback_host_carrying_the_port() {
-    // The browser opens `http://127.0.0.1:{port}/?state=<nonce>`, so its
-    // `Host` header is the port-bearing form `127.0.0.1:{port}` — not the bare
-    // address the other tests send — and the page request also carries the
-    // per-flow nonce. The host check must strip the port before comparing, or
-    // the legitimate page request is refused as a foreign host and sign-in
-    // never starts.
+    // The browser opens `http://127.0.0.1:{port}/?state={state}`, so its `Host`
+    // header is the port-bearing form `127.0.0.1:{port}` — not the bare address
+    // the other tests send — and the page request also carries the per-flow
+    // nonce. The host check must strip the port before comparing, or the
+    // legitimate page request is refused as a foreign host and sign-in never
+    // starts.
     let observed = Arc::new(Mutex::new(String::new()));
     let observed_for_flow = Arc::clone(&observed);
     authorize_with_flow(move |port, state| {

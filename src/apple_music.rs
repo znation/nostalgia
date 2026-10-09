@@ -156,7 +156,7 @@ impl AppleMusicService {
     /// [`AppleMusicService::authenticate`] stores one.
     #[must_use]
     pub fn new(state: Arc<Mutex<AppState>>) -> Self {
-        Self::with_transport(state, Box::new(rest::UreqTransport))
+        Self::with_transport(state, Box::new(rest::UreqTransport::new()))
     }
 
     /// [`new`](Self::new) with an injectable [`rest::HttpTransport`], so a

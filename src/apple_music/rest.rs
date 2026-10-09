@@ -8,6 +8,7 @@
 //! sibling wiring change.
 
 use std::sync::OnceLock;
+use std::time::Duration;
 
 use serde::Deserialize;
 
@@ -18,6 +19,14 @@ use crate::music_kit_auth::MusicKitSession;
 /// The Apple Music REST API root. The library endpoints are storefront-free,
 /// so no storefront is fetched.
 const API_BASE: &str = "https://api.music.apple.com/v1";
+
+/// The end-to-end bound on one REST call, from DNS lookup through reading the
+/// response body. `ureq` defaults every network timeout to `None`, so without
+/// this a server that accepts the connection and then stalls leaves the
+/// calling thread — spawned by `off_thread` and detached from the UI's own
+/// 30-second fetch timeout — blocked forever. Matches that fetch bound so the
+/// thread exits about when the UI stops waiting on it.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// The narrow seam over the blocking HTTP client, so [`RestLibrary`]'s tests
 /// run without a network.
@@ -40,21 +49,60 @@ pub trait HttpTransport: Send + Sync {
 /// Every request runs on one process-wide [`ureq::Agent`]: a fresh agent per
 /// request (`ureq::get`) would open a new TCP connection and TLS session each
 /// time, while the shared agent reuses the pooled connection across the
-/// artist → album → song browse requests.
-pub struct UreqTransport;
+/// artist → album → song browse requests. The shared agent carries
+/// [`REQUEST_TIMEOUT`] as its global timeout, so a stalled server cannot block
+/// a request forever.
+pub struct UreqTransport {
+    agent: ureq::Agent,
+}
+
+impl UreqTransport {
+    /// Builds the transport over the process-wide pooled [`ureq::Agent`].
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            agent: shared_agent().clone(),
+        }
+    }
+
+    /// [`new`](Self::new) with an explicit global timeout, so a test can use a
+    /// short bound against a stalled loopback server instead of waiting out
+    /// the production 30 seconds.
+    #[cfg(test)]
+    fn with_timeout(timeout: Duration) -> Self {
+        let agent = ureq::Agent::config_builder()
+            .timeout_global(Some(timeout))
+            .build()
+            .into();
+        Self { agent }
+    }
+}
+
+impl Default for UreqTransport {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// The shared [`ureq::Agent`], built once on first use. `ureq` keeps idle
 /// connections per host for 15 seconds by default, so consecutive browse
-/// queries reuse the same TLS connection.
+/// queries reuse the same TLS connection. Its global timeout is
+/// [`REQUEST_TIMEOUT`], so every request through it is bounded end to end.
 fn shared_agent() -> &'static ureq::Agent {
     static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
-    AGENT.get_or_init(ureq::agent)
+    AGENT.get_or_init(|| {
+        ureq::Agent::config_builder()
+            .timeout_global(Some(REQUEST_TIMEOUT))
+            .build()
+            .into()
+    })
 }
 
 impl HttpTransport for UreqTransport {
     fn get(&self, url: &str, session: &MusicKitSession) -> Result<String, AppleMusicError> {
         let authorization = format!("Bearer {}", session.developer_token);
-        let mut response = shared_agent()
+        let mut response = self
+            .agent
             .get(url)
             .header("Authorization", authorization.as_str())
             .header("Music-User-Token", session.user_token.as_str())
