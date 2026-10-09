@@ -208,17 +208,64 @@ pub(super) const PLAY_TIMEOUT: Duration = Duration::from_secs(30);
 /// of sleeping the full `timeout`, and no runtime timer is required — the
 /// future runs under iced's executor, which has none. `tokio::select!` only
 /// polls the two futures, so it works outside a tokio runtime too.
+///
+/// The timer thread is started through [`spawn_timer`]'s fallible spawn, so a
+/// thread-creation failure is reported rather than aborting the app (see
+/// [`with_timeout_with`]).
 pub(super) async fn with_timeout<F: Future>(timeout: Duration, future: F) -> Option<F::Output> {
+    with_timeout_with(timeout, future, spawn_timer).await
+}
+
+/// The name [`spawn_timer`] gives the timeout thread. Naming it, like the
+/// audio worker's `nostalgia-audio` and the REST worker's `nostalgia-rest`,
+/// attributes a panic there to `nostalgia-timer` rather than `<unnamed>`.
+const TIMER_THREAD_NAME: &str = "nostalgia-timer";
+
+/// Starts the detached thread that fires `fired` only when `finished` has not
+/// reported within `timeout`, and returns whether the thread started.
+///
+/// `std::thread::Builder::spawn` is the fallible form `std::thread::spawn`
+/// wraps with a panic; a thread-creation failure (thread exhaustion, say) is
+/// returned to [`with_timeout_with`] instead of aborting the app. The thread
+/// waits on `finished` with `recv_timeout`, so it exits as soon as the future
+/// completes instead of sleeping the full `timeout`.
+fn spawn_timer(
+    timeout: Duration,
+    finished: std::sync::mpsc::Receiver<()>,
+    fired: tokio::sync::oneshot::Sender<()>,
+) -> bool {
+    std::thread::Builder::new()
+        .name(TIMER_THREAD_NAME.to_string())
+        .spawn(move || {
+            if finished.recv_timeout(timeout).is_err() {
+                let _ = fired.send(());
+            }
+        })
+        .is_ok()
+}
+
+/// [`with_timeout`] with an injectable timer spawner, so a test can drive the
+/// thread-creation-failure branch without making the OS refuse a thread.
+///
+/// When the timer cannot start there is no bound to race the future against;
+/// the wait is reported as the timeout the bound promises rather than hanging
+/// on a future that may never complete, and the cause is logged so the report
+/// is not mistaken for a slow backend.
+async fn with_timeout_with<F: Future>(
+    timeout: Duration,
+    future: F,
+    spawn_timer: impl FnOnce(
+        Duration,
+        std::sync::mpsc::Receiver<()>,
+        tokio::sync::oneshot::Sender<()>,
+    ) -> bool,
+) -> Option<F::Output> {
     let (fired, timer) = tokio::sync::oneshot::channel::<()>();
     let (done, finished) = std::sync::mpsc::channel::<()>();
-    std::thread::spawn(move || {
-        // Wake early when the request finishes; fire the timer only if
-        // `timeout` elapses first. A completed request leaves no thread
-        // sleeping for the full bound.
-        if finished.recv_timeout(timeout).is_err() {
-            let _ = fired.send(());
-        }
-    });
+    if !spawn_timer(timeout, finished, fired) {
+        eprintln!("the timeout timer thread could not start; treating the wait as timed out");
+        return None;
+    }
     tokio::select! {
         biased;
         output = future => {
@@ -425,6 +472,20 @@ mod tests {
         let output = futures::executor::block_on(with_timeout(
             Duration::from_millis(10),
             std::future::pending::<()>(),
+        ));
+        assert_eq!(output, None);
+    }
+
+    // A timer thread that cannot start must not abort the executor the way
+    // `std::thread::spawn` would, nor leave the caller unbounded: with no
+    // timer to race, the wait is reported as the timeout the bound promises.
+    // The spawner is injected so the OS need not refuse a real thread.
+    #[test]
+    fn with_timeout_reports_a_timeout_when_the_timer_thread_cannot_start() {
+        let output = futures::executor::block_on(with_timeout_with(
+            Duration::from_secs(1),
+            async { 7 },
+            |_timeout, _finished, _fired| false,
         ));
         assert_eq!(output, None);
     }
