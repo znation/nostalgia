@@ -28,6 +28,21 @@ fn assert_single_call(stub: &StubTransport, expected_url: &str) {
     assert_eq!(calls[0].1, session());
 }
 
+/// The error message `query` reports when the transport answers with `body`.
+///
+/// The malformed-body and rejected-resource tests all build the same
+/// single-page stub over `body` and reduce their query's error to its `Display`
+/// string; this runs that scaffold once. `query` names the browse method under
+/// test, so each test states only the response body and the expected report.
+fn error_over<T>(
+    body: &str,
+    query: impl FnOnce(&RestLibrary) -> Result<T, AppleMusicError>,
+) -> String {
+    let stub = StubTransport::returning(body);
+    let library = library_over(&stub);
+    query(&library).map(|_| ()).unwrap_err().to_string()
+}
+
 #[test]
 fn favorite_artists_map_library_json() {
     // The extra `genres` attribute is real-payload noise: serde must tolerate
@@ -300,13 +315,9 @@ fn songs_from_album_transport_error_propagates_the_bare_cause() {
 
 #[test]
 fn malformed_json_surfaces_the_parse_error() {
-    let stub = StubTransport::returning("not json");
-    let library = library_over(&stub);
-
-    let error = library
-        .get_albums_by_artist(&session(), "artist-9")
-        .unwrap_err()
-        .to_string();
+    let error = error_over("not json", |library| {
+        library.get_albums_by_artist(&session(), "artist-9")
+    });
 
     assert!(error.starts_with("response was not valid JSON:"), "{error}");
 }
@@ -319,13 +330,9 @@ fn malformed_json_surfaces_the_parse_error() {
 // distinct wording, and that it still carries `serde_json`'s own detail.
 #[test]
 fn valid_json_that_is_not_the_collection_envelope_names_the_envelope() {
-    let stub = StubTransport::returning(r#"{"artists":[]}"#);
-    let library = library_over(&stub);
-
-    let error = library
-        .get_albums_by_artist(&session(), "artist-9")
-        .unwrap_err()
-        .to_string();
+    let error = error_over(r#"{"artists":[]}"#, |library| {
+        library.get_albums_by_artist(&session(), "artist-9")
+    });
 
     assert!(
         error.starts_with("response did not match the Apple Music collection envelope:"),
@@ -335,40 +342,29 @@ fn valid_json_that_is_not_the_collection_envelope_names_the_envelope() {
 
 #[test]
 fn nameless_artist_is_an_error_naming_its_id() {
-    let stub = StubTransport::returning(r#"{"data":[{"id":"artist-1","attributes":{}}]}"#);
-    let library = library_over(&stub);
-
-    let error = library
-        .get_favorite_artists(&session())
-        .unwrap_err()
-        .to_string();
+    let error = error_over(
+        r#"{"data":[{"id":"artist-1","attributes":{}}]}"#,
+        |library| library.get_favorite_artists(&session()),
+    );
 
     assert_eq!(error, "response carried artist \"artist-1\" without a name");
 }
 
 #[test]
 fn blank_album_name_is_an_error() {
-    let stub =
-        StubTransport::returning(r#"{"data":[{"id":"album-1","attributes":{"name":"   "}}]}"#);
-    let library = library_over(&stub);
-
-    let error = library
-        .get_albums_by_artist(&session(), "artist-9")
-        .unwrap_err()
-        .to_string();
+    let error = error_over(
+        r#"{"data":[{"id":"album-1","attributes":{"name":"   "}}]}"#,
+        |library| library.get_albums_by_artist(&session(), "artist-9"),
+    );
 
     assert_eq!(error, "response carried album \"album-1\" without a name");
 }
 
 #[test]
 fn nameless_song_is_an_error() {
-    let stub = StubTransport::returning(r#"{"data":[{"id":"song-1"}]}"#);
-    let library = library_over(&stub);
-
-    let error = library
-        .get_songs_from_album(&session(), "album-9")
-        .unwrap_err()
-        .to_string();
+    let error = error_over(r#"{"data":[{"id":"song-1"}]}"#, |library| {
+        library.get_songs_from_album(&session(), "album-9")
+    });
 
     assert_eq!(error, "response carried song \"song-1\" without a name");
 }
@@ -380,13 +376,10 @@ fn nameless_song_is_an_error() {
 // three maps calls `required_id`, so each query gets its own probe.
 #[test]
 fn blank_artist_id_is_an_error() {
-    let stub = StubTransport::returning(r#"{"data":[{"id":"   ","attributes":{"name":"Ghost"}}]}"#);
-    let library = library_over(&stub);
-
-    let error = library
-        .get_favorite_artists(&session())
-        .unwrap_err()
-        .to_string();
+    let error = error_over(
+        r#"{"data":[{"id":"   ","attributes":{"name":"Ghost"}}]}"#,
+        |library| library.get_favorite_artists(&session()),
+    );
 
     assert_eq!(
         error,
@@ -396,26 +389,20 @@ fn blank_artist_id_is_an_error() {
 
 #[test]
 fn blank_album_id_is_an_error() {
-    let stub = StubTransport::returning(r#"{"data":[{"id":"","attributes":{"name":"Ghost"}}]}"#);
-    let library = library_over(&stub);
-
-    let error = library
-        .get_albums_by_artist(&session(), "artist-9")
-        .unwrap_err()
-        .to_string();
+    let error = error_over(
+        r#"{"data":[{"id":"","attributes":{"name":"Ghost"}}]}"#,
+        |library| library.get_albums_by_artist(&session(), "artist-9"),
+    );
 
     assert_eq!(error, "response carried album with a blank id (got \"\")");
 }
 
 #[test]
 fn blank_song_id_is_an_error() {
-    let stub = StubTransport::returning(r#"{"data":[{"id":"","attributes":{"name":"Ghost"}}]}"#);
-    let library = library_over(&stub);
-
-    let error = library
-        .get_songs_from_album(&session(), "album-9")
-        .unwrap_err()
-        .to_string();
+    let error = error_over(
+        r#"{"data":[{"id":"","attributes":{"name":"Ghost"}}]}"#,
+        |library| library.get_songs_from_album(&session(), "album-9"),
+    );
 
     assert_eq!(error, "response carried song with a blank id (got \"\")");
 }
