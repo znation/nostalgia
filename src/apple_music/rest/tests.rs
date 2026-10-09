@@ -195,6 +195,34 @@ fn transport_error_names_the_query() {
 }
 
 #[test]
+fn albums_by_artist_transport_error_names_the_query() {
+    let stub = StubTransport::failing("network down");
+    let library = library_over(&stub);
+
+    let error = library
+        .get_albums_by_artist(&session(), "artist-9")
+        .unwrap_err()
+        .to_string();
+
+    assert!(error.contains("albums by artist"), "{error}");
+    assert!(error.contains("network down"), "{error}");
+}
+
+#[test]
+fn songs_from_album_transport_error_names_the_query() {
+    let stub = StubTransport::failing("network down");
+    let library = library_over(&stub);
+
+    let error = library
+        .get_songs_from_album(&session(), "album-9")
+        .unwrap_err()
+        .to_string();
+
+    assert!(error.contains("songs from album"), "{error}");
+    assert!(error.contains("network down"), "{error}");
+}
+
+#[test]
 fn malformed_json_names_the_query() {
     let stub = StubTransport::returning("not json");
     let library = library_over(&stub);
