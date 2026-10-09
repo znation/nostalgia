@@ -1702,6 +1702,23 @@ fn songs_loaded_replaces_the_previous_albums_songs() {
     assert_ids(&player.songs.items, |song| song.id.as_str(), &["song-4"]);
 }
 
+/// Plays song-1 (title "One", artist "The Sample Band") from the shared
+/// [`stepping_songs`] album — recording it in `known_tracks` — then browses to
+/// album-2's songs ([`second_album_songs`]), which replaces `songs`. Returns
+/// the player and the shared state's current track, so a Now Playing bar test
+/// can assert the bar still names the played track after the browse-away that
+/// used to leave it showing the raw id. The three bar tests below share this
+/// exact play-then-browse flow, so it lives here once.
+fn play_song_1_then_browse_to_album_2() -> (WinampPlayer, Option<String>) {
+    let (mut player, state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+    state.blocking_lock().current_track = Some("song-1".to_string());
+    let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
+    let current_track = state.blocking_lock().current_track.clone();
+    (player, current_track)
+}
+
 // The Now Playing bar must keep naming the playing track, not its raw id,
 // after the user browses to a different album. `view` renders the bar's
 // label through `WinampPlayer::now_playing_label`, so asserting that same
@@ -1712,17 +1729,8 @@ fn songs_loaded_replaces_the_previous_albums_songs() {
 // and the label would fall back to the raw id "song-1", failing this test.
 #[test]
 fn now_playing_label_keeps_the_track_name_after_browsing_to_another_album() {
-    let (mut player, state) = test_player();
+    let (player, current_track) = play_song_1_then_browse_to_album_2();
 
-    // Play song-1 (title "One") from album-1 — recording its title in
-    // `known_tracks` — then browse to album-2's songs, the flow that used
-    // to leave the bar showing "song-1".
-    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
-    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
-    state.blocking_lock().current_track = Some("song-1".to_string());
-    let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
-
-    let current_track = state.blocking_lock().current_track.clone();
     assert_eq!(player.now_playing_label(current_track.as_deref()), "One");
 }
 
@@ -1733,18 +1741,9 @@ fn now_playing_label_keeps_the_track_name_after_browsing_to_another_album() {
 // current track) reads the `--:--` placeholder.
 #[test]
 fn now_playing_time_shows_the_played_tracks_duration_after_browsing_to_another_album() {
-    let (mut player, state) = test_player();
+    let (player, current_track) = play_song_1_then_browse_to_album_2();
 
     assert_eq!(player.now_playing_time(None), "--:--");
-
-    // Play song-1 (210_000 ms -> 3:30) from album-1, then browse to
-    // album-2's songs, which replaces `songs`.
-    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
-    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
-    state.blocking_lock().current_track = Some("song-1".to_string());
-    let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
-
-    let current_track = state.blocking_lock().current_track.clone();
     assert_eq!(player.now_playing_time(current_track.as_deref()), "3:30");
     assert_eq!(player.now_playing_time(Some("no-such-song")), "--:--");
 }
@@ -1760,18 +1759,9 @@ fn now_playing_time_shows_the_played_tracks_duration_after_browsing_to_another_a
 // every existing test and only fail here.
 #[test]
 fn now_playing_artist_shows_the_played_tracks_artist_after_browsing_to_another_album() {
-    let (mut player, state) = test_player();
+    let (player, current_track) = play_song_1_then_browse_to_album_2();
 
     assert_eq!(player.now_playing_artist(None), "");
-
-    // Play song-1 (artist "The Sample Band") from album-1, then browse to
-    // album-2's songs, which replaces `songs`.
-    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
-    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
-    state.blocking_lock().current_track = Some("song-1".to_string());
-    let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
-
-    let current_track = state.blocking_lock().current_track.clone();
     assert_eq!(
         player.now_playing_artist(current_track.as_deref()),
         "The Sample Band"
