@@ -906,8 +906,8 @@ fn assert_message_schedules_no_work(player: &mut WinampPlayer, message: Message)
 
 /// Drives `message` through `update` and asserts the arm schedules follow-up
 /// work. The arms that must run a task once their guard passes — a title-bar
-/// window action with a resolved window id, a shade or unshade transition,
-/// and a recorded shade measurement — each used to repeat the same
+/// window action with a resolved window id, the shade and always-on-top
+/// toggles, and a recorded shade measurement — each used to repeat the same
 /// `into_stream(update(..)).is_some()` probe, so it lives here once and each
 /// call site names only the message it drives.
 fn assert_message_schedules_work(player: &mut WinampPlayer, message: Message) {
