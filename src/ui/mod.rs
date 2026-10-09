@@ -99,6 +99,9 @@ enum Message {
     ArtistSelected { epoch: u64, index: usize },
     AlbumSelected { epoch: u64, index: usize },
     Back,
+    // The Artists view's All Songs button: fetch the whole library flat and
+    // show it under the All Songs view.
+    ShowAllSongs,
     // The library search box: `SearchChanged` carries each keystroke into
     // `search_query`; `SearchSubmitted` carries the box's text when Enter is
     // pressed and replaces the songs list with the search results.
@@ -108,6 +111,7 @@ enum Message {
     ArtistsLoaded(Vec<Artist>),
     AlbumsLoaded(Vec<Album>),
     SongsLoaded(Vec<Song>),
+    AllSongsLoaded(Vec<Song>),
     // A browse fetch that returned an error. The payload is the formatted
     // report (see `loading::fetch_failure_report`): it names the failed fetch
     // and carries the backend's cause, so the browse panel can show why the
@@ -115,6 +119,7 @@ enum Message {
     ArtistsLoadFailed(String),
     AlbumsLoadFailed(String),
     SongsLoadFailed(String),
+    AllSongsLoadFailed(String),
     // A browse reply stamped with the generation that produced it. The
     // mapper's `RequestGeneration::is_current` check runs on iced's executor
     // thread; `update` stores the reply later on the UI thread, and a
@@ -188,6 +193,8 @@ struct WinampPlayer {
     artists: BrowseList<Artist>,
     albums: BrowseList<Album>,
     songs: BrowseList<Song>,
+    /// The flat whole-library list behind the Artists view's All Songs button.
+    all_songs: BrowseList<Song>,
     /// The library search box's text, as typed. `Message::SearchChanged`
     /// stores each keystroke here and the search box renders it back; a submit
     /// trims it into the fetch's query.
@@ -234,6 +241,7 @@ enum CurrentView {
     Artists,
     Albums,
     Songs,
+    AllSongs,
 }
 
 impl WinampPlayer {
@@ -255,6 +263,7 @@ impl WinampPlayer {
             artists: BrowseList::new(true),
             albums: BrowseList::new(false),
             songs: BrowseList::new(false),
+            all_songs: BrowseList::new(false),
             search_query: String::new(),
             search_active: false,
             known_tracks: HashMap::new(),
@@ -318,7 +327,8 @@ fn boot(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> (WinampPlaye
 }
 
 /// The task the Next/Previous buttons schedule: step the current track
-/// through the player's loaded songs in the given direction — with Shuffle on
+/// through the list the current view shows — `all_songs` for the flat All
+/// Songs view, the browsed `songs` otherwise — in the given direction — with Shuffle on
 /// a forward step picks a random non-current song via
 /// `transport::shuffled_track_id`, otherwise `forward` selects the
 /// `transport::next_track_id`/`previous_track_id` stepping function — and
@@ -339,25 +349,24 @@ fn step_track(player: &WinampPlayer, forward: bool) -> Task<Message> {
     // pure stepping scan (fast, and the transport functions never lock
     // anything themselves).
     let state = player.state.blocking_lock();
-    let epoch = player.songs.epoch;
+    // Step the list the current view draws from, so the scheduled
+    // `TrackSelected` index and epoch match the list the arm resolves
+    // against: the flat All Songs view's `all_songs`, otherwise `songs`.
+    let (items, epoch) = if player.current_view == CurrentView::AllSongs {
+        (&player.all_songs.items, player.all_songs.epoch)
+    } else {
+        (&player.songs.items, player.songs.epoch)
+    };
     let stepped = if forward && state.shuffle {
         transport::shuffled_track_id(
-            &player.songs.items,
+            items,
             state.current_track.as_deref(),
             transport::shuffle_roll(),
         )
     } else if forward {
-        transport::next_track_id(
-            &player.songs.items,
-            state.current_track.as_deref(),
-            state.repeat,
-        )
+        transport::next_track_id(items, state.current_track.as_deref(), state.repeat)
     } else {
-        transport::previous_track_id(
-            &player.songs.items,
-            state.current_track.as_deref(),
-            state.repeat,
-        )
+        transport::previous_track_id(items, state.current_track.as_deref(), state.repeat)
     };
     match stepped {
         // `transport` answers with the stepped song's id, but the selection
@@ -366,12 +375,7 @@ fn step_track(player: &WinampPlayer, forward: bool) -> Task<Message> {
         // position in this same buffer. This scan runs once per button press,
         // not per view refresh, and the stepped id always names a song in
         // this buffer.
-        Some(track_id) => match player
-            .songs
-            .items
-            .iter()
-            .position(|song| song.id == track_id)
-        {
+        Some(track_id) => match items.iter().position(|song| song.id == track_id) {
             Some(index) => Task::done(Message::TrackSelected { epoch, index }),
             None => Task::none(),
         },
@@ -493,13 +497,22 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::NextTrack => step_track(player, true),
         Message::PreviousTrack => step_track(player, false),
         Message::TrackSelected { epoch, index } => {
-            // The message carries the pressed row's index into `songs` plus the
-            // epoch of the list that rendered it. A mismatched epoch means the
-            // list was replaced after the row was rendered, so the index names
-            // a different song now — ignore the stale press. An out-of-range
-            // index likewise names no track and is a no-op rather than a bogus
-            // play. `songs.select` applies both checks.
-            let Some(song) = player.songs.select(epoch, index) else {
+            // The message carries the pressed row's index plus the epoch of
+            // the list that rendered it. The Songs view draws from `songs`
+            // and the flat All Songs view draws from `all_songs`, so resolve
+            // the press against the list the current view shows; resolving
+            // it against the other list would no-op or play the wrong song.
+            // A mismatched epoch means the list was replaced after the row
+            // was rendered, so the index names a different song now — ignore
+            // the stale press. An out-of-range index likewise names no track
+            // and is a no-op rather than a bogus play. `select` applies both
+            // checks.
+            let selected = if player.current_view == CurrentView::AllSongs {
+                player.all_songs.select(epoch, index)
+            } else {
+                player.songs.select(epoch, index)
+            };
+            let Some(song) = selected else {
                 return Task::none();
             };
             let track_id = song.id.clone();
@@ -610,10 +623,28 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 player.current_view = match &player.current_view {
                     CurrentView::Songs => CurrentView::Albums,
                     CurrentView::Albums => CurrentView::Artists,
+                    CurrentView::AllSongs => CurrentView::Artists,
                     CurrentView::Artists => CurrentView::Artists,
                 };
             }
             Task::none()
+        }
+        Message::ShowAllSongs => {
+            // The flat list hangs off the artists list, so an active search's
+            // results are left behind and Back returns to Artists.
+            player.search_active = false;
+            player.current_view = CurrentView::AllSongs;
+            // Clear the previous flat list before the new fetch lands, so a
+            // press during the fetch cannot resolve against stale rows (the
+            // same clear-before-fetch the navigation arms do).
+            fetch_level(
+                &mut player.all_songs,
+                &player.apple_music_service,
+                "loading all library songs".to_string(),
+                |service| async move { service.get_all_songs().await },
+                Message::AllSongsLoaded,
+                Message::AllSongsLoadFailed,
+            )
         }
         Message::SearchChanged(text) => {
             player.search_query = text;
@@ -669,6 +700,10 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             player.songs.store(songs);
             Task::none()
         }
+        Message::AllSongsLoaded(songs) => {
+            player.all_songs.store(songs);
+            Task::none()
+        }
         Message::ArtistsLoadFailed(report) => {
             player.artists.fail(report);
             Task::none()
@@ -679,6 +714,10 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         }
         Message::SongsLoadFailed(report) => {
             player.songs.fail(report);
+            Task::none()
+        }
+        Message::AllSongsLoadFailed(report) => {
+            player.all_songs.fail(report);
             Task::none()
         }
         // The executor-thread check in `fetch_into` already dropped replies a
@@ -697,6 +736,9 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 }
                 Message::SongsLoaded(_) | Message::SongsLoadFailed(_) => {
                     player.songs.is_current(issued)
+                }
+                Message::AllSongsLoaded(_) | Message::AllSongsLoadFailed(_) => {
+                    player.all_songs.is_current(issued)
                 }
                 _ => true,
             };
@@ -873,6 +915,18 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
                 player.search_active,
             )
         }
+        // The flat whole-library view marks its playing row from the same
+        // second lock the Songs arm takes.
+        CurrentView::AllSongs => {
+            let state = player.state.blocking_lock();
+            views::view_all_songs(
+                &player.all_songs.items,
+                player.all_songs.epoch,
+                player.all_songs.loading,
+                player.all_songs.error.as_deref(),
+                state.current_track.as_deref(),
+            )
+        }
     };
 
     let mut column = Column::new()
@@ -899,6 +953,12 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // failures need no button.
     if views::can_retry_artists(&player.current_view, player.artists.error.as_deref()) {
         column = column.push(views::view_retry_button());
+    }
+    // The All Songs button opens the flat whole-library list; it lives on the
+    // Artists view, beside Back/Retry, so the flat list is one press from the
+    // top of the hierarchy.
+    if matches!(player.current_view, CurrentView::Artists) {
+        column = column.push(views::view_all_songs_button());
     }
     // The search box sits on every browse screen, so a query can be typed
     // from any level of the hierarchy.

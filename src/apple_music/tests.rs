@@ -545,6 +545,21 @@ async fn search_songs_matches_the_sample_library_by_title_or_artist() {
     assert!(none.is_empty());
 }
 
+// The All Songs backend returns the whole sample library, flat and in
+// library order: a regression that dropped a song or shuffled the albums
+// would leave the flat view incomplete even though every other browse query
+// still passed.
+#[tokio::test]
+async fn get_all_songs_returns_every_sample_song_in_library_order() {
+    let songs = test_service().get_all_songs().await.unwrap();
+
+    assert_ids(
+        &songs,
+        |song| song.id.as_str(),
+        &["song-1", "song-2", "song-3", "song-4", "song-5"],
+    );
+}
+
 // A blank search has nothing to match; returning the whole library (or an
 // empty list) would report the caller's empty input as an ordinary result.
 // The error names the offending query, whitespace included.
@@ -1475,6 +1490,33 @@ async fn search_songs_uses_the_rest_library_when_signed_in() {
         &stub,
         "https://api.music.apple.com/v1/me/library/search?term=remote&types=library-songs&limit=25",
     );
+}
+
+// The All Songs view routes through the REST client when a session is stored,
+// so a signed-in user sees the real library rather than the sample one. The
+// stub returns a song whose id is not a sample id, so the result can only
+// have come from the REST collection; the URL pins the endpoint.
+#[tokio::test]
+async fn get_all_songs_uses_the_rest_library_when_signed_in() {
+    let stub = StubTransport::returning(
+        r#"{"data":[{"id":"rest-song","attributes":{"name":"Remote Result","artistName":"Remote Band"}}]}"#,
+    );
+    let service = signed_in_service(&stub);
+
+    let songs = service.get_all_songs().await.unwrap();
+
+    assert_eq!(
+        songs,
+        vec![Song {
+            id: "rest-song".to_string(),
+            title: "Remote Result".to_string(),
+            artist: "Remote Band".to_string(),
+            album_id: String::new(),
+            duration_ms: 0,
+            preview_url: None,
+        }]
+    );
+    assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/songs");
 }
 
 #[tokio::test]

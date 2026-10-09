@@ -70,6 +70,7 @@ fn empty_list_label(view: &CurrentView) -> &'static str {
         CurrentView::Artists => "No artists",
         CurrentView::Albums => "No albums",
         CurrentView::Songs => "No songs",
+        CurrentView::AllSongs => "No songs",
     }
 }
 
@@ -340,6 +341,31 @@ pub fn view_songs<'a>(
     )
 }
 
+/// The All Songs browse view: one row per song in the whole library, in the
+/// order given, each emitting [`Message::TrackSelected`] with the song's
+/// index in the list and the list's `epoch`; the row whose id is
+/// `current_track` is marked as playing. It mirrors [`view_songs`] but never
+/// shows the search wording, because the flat list is not a search's result.
+/// Built by [`browse_view`] from the [`song_row`] mapping.
+pub fn view_all_songs<'a>(
+    songs: &'a [Song],
+    epoch: u64,
+    loading: bool,
+    error: Option<&'a str>,
+    current_track: Option<&str>,
+) -> Element<'a, Message> {
+    browse_view(
+        CurrentView::AllSongs,
+        songs
+            .iter()
+            .enumerate()
+            .map(|(index, song)| song_row(epoch, index, song, current_track)),
+        loading,
+        error,
+        false,
+    )
+}
+
 /// Whether the browse view has a level above it to return to. The Albums and
 /// Songs views do — the Back button is shown above their lists — while the
 /// top-level Artists list has nothing to go back to.
@@ -369,6 +395,13 @@ pub fn can_retry_artists(view: &CurrentView, error: Option<&str>) -> bool {
 /// update loop turns the pressed message into the view change.
 pub fn view_back_button() -> Element<'static, Message> {
     labeled_button("Back", Message::Back).into()
+}
+
+/// The Artists view's All Songs button, opening the flat whole-library list.
+/// Rendered only on the Artists view; the update loop's `ShowAllSongs` arm
+/// switches to `CurrentView::AllSongs` and issues the fetch.
+pub fn view_all_songs_button() -> Element<'static, Message> {
+    labeled_button("All Songs", Message::ShowAllSongs).into()
 }
 
 /// The Artists view's Retry button, re-running the top-level artists fetch
@@ -817,10 +850,11 @@ pub fn view_equalizer(
 /// naming the list once means a new view is added here rather than to each
 /// loop's literal.
 #[cfg(test)]
-pub(super) const BROWSE_VIEWS: [CurrentView; 3] = [
+pub(super) const BROWSE_VIEWS: [CurrentView; 4] = [
     CurrentView::Artists,
     CurrentView::Albums,
     CurrentView::Songs,
+    CurrentView::AllSongs,
 ];
 
 #[cfg(test)]
@@ -830,9 +864,9 @@ mod tests {
         Message, VOLUME_MAX, VOLUME_MIN, VOLUME_STEP, album_row, artist_row, browse_placeholder,
         can_go_back, can_retry_artists, current_row_style, empty_list_label, eq_enabled_label,
         format_track_time, now_playing_artist, now_playing_label, play_pause_label, repeat_label,
-        shuffle_label, song_row, style, theme, transport_buttons, view_albums, view_artists,
-        view_back_button, view_equalizer, view_now_playing, view_retry_button, view_search_box,
-        view_songs, view_transport_controls,
+        shuffle_label, song_row, style, theme, transport_buttons, view_albums, view_all_songs,
+        view_all_songs_button, view_artists, view_back_button, view_equalizer, view_now_playing,
+        view_retry_button, view_search_box, view_songs, view_transport_controls,
     };
     use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, clamp_gain};
     use crate::library::{Album, Artist, Song};
@@ -1166,6 +1200,8 @@ mod tests {
         let _songs = view_songs(songs, epoch, loading, None, None, false);
         let _songs_marked = view_songs(songs, epoch, loading, None, Some("song-1"), false);
         let _songs_searched = view_songs(songs, epoch, loading, None, None, true);
+        let _all_songs = view_all_songs(songs, epoch, loading, None, None);
+        let _all_songs_marked = view_all_songs(songs, epoch, loading, None, Some("song-1"));
     }
 
     // The currently playing row is marked by a selection bar. iced's `Element`
@@ -1213,6 +1249,7 @@ mod tests {
         assert_eq!(empty_list_label(&CurrentView::Artists), "No artists");
         assert_eq!(empty_list_label(&CurrentView::Albums), "No albums");
         assert_eq!(empty_list_label(&CurrentView::Songs), "No songs");
+        assert_eq!(empty_list_label(&CurrentView::AllSongs), "No songs");
     }
 
     // The placeholder distinguishes a list whose first reply has not landed
@@ -1286,6 +1323,7 @@ mod tests {
         let _bar = view_now_playing("Opening".into(), "".into(), "3:30".to_string());
         let _back = view_back_button();
         let _retry = view_retry_button();
+        let _all_songs = view_all_songs_button();
     }
 
     // The search box is an iced `TextInput`, whose placeholder and callbacks

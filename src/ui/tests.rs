@@ -103,6 +103,7 @@ fn seed_browse_lists(player: &mut WinampPlayer) {
     player.artists.items = vec![sample_artist()];
     player.albums.items = vec![sample_album()];
     player.songs.items = vec![sample_song()];
+    player.all_songs.items = vec![sample_song()];
 }
 
 /// Asserts the player has no rows in any of its three browse buffers. The
@@ -113,6 +114,7 @@ fn assert_browse_lists_empty(player: &WinampPlayer) {
     assert!(player.artists.items.is_empty());
     assert!(player.albums.items.is_empty());
     assert!(player.songs.items.is_empty());
+    assert!(player.all_songs.items.is_empty());
 }
 
 /// Asserts the player is showing `expected`. The tests pin the current
@@ -675,6 +677,56 @@ fn back_from_artists_is_a_noop() {
     assert_view(&player, CurrentView::Artists);
 
     let _ = update(&mut player, Message::Back);
+    assert_view(&player, CurrentView::Artists);
+}
+
+// The All Songs button fetches the whole library flat and shows it under its
+// own view: the sample path returns every song in library order, and the
+// buffer is the dedicated `all_songs` list rather than the browsed `songs`.
+#[tokio::test]
+async fn show_all_songs_fetches_the_flat_list_and_switches_view() {
+    let (mut player, _state) = test_player();
+    // Seed a browsed album so the flat fetch visibly leaves the `songs`
+    // buffer alone: All Songs owns its own list.
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+
+    let task = update(&mut player, Message::ShowAllSongs);
+    drive_fetch_and_assert_loaded(
+        &mut player,
+        task,
+        "load all library songs",
+        |player| &mut player.all_songs.items,
+        |song| song.id.as_str(),
+        &["song-1", "song-2", "song-3", "song-4", "song-5"],
+    )
+    .await;
+
+    assert_view(&player, CurrentView::AllSongs);
+    assert!(!player.search_active);
+    assert_eq!(player.songs.items.len(), 3);
+}
+
+// The flat list hangs off the artists list, not off a search's results, so
+// opening it clears an active search.
+#[test]
+fn show_all_songs_clears_an_active_search() {
+    let (mut player, _state) = test_player();
+    player.search_active = true;
+    player.current_view = CurrentView::Songs;
+
+    let _ = update(&mut player, Message::ShowAllSongs);
+
+    assert!(!player.search_active);
+    assert_view(&player, CurrentView::AllSongs);
+}
+
+#[test]
+fn back_from_all_songs_returns_to_the_artists_list() {
+    let (mut player, _state) = test_player();
+    player.current_view = CurrentView::AllSongs;
+
+    let _ = update(&mut player, Message::Back);
+
     assert_view(&player, CurrentView::Artists);
 }
 
@@ -1774,6 +1826,70 @@ fn songs_loaded_populates_list() {
     );
 }
 
+#[test]
+fn all_songs_loaded_stores_the_flat_list() {
+    let (mut player, _state) = test_player();
+    let songs = vec![sample_song()];
+
+    assert_loaded_populates_list(
+        &mut player,
+        songs,
+        Message::AllSongsLoaded,
+        |player| &mut player.all_songs.items,
+        |player| player.all_songs.loading,
+    );
+}
+
+// Selecting a row in the flat All Songs view must play the song the flat
+// list rendered, not the same index in the browsed `songs` buffer. Both
+// lists use `Message::TrackSelected` and, after one store each, carry the
+// same epoch — so only routing the press to `all_songs` while the All Songs
+// view is current makes the flat list's song play. Without that route the
+// press resolves against `songs` and plays the wrong song.
+#[tokio::test]
+async fn track_selected_in_all_songs_plays_the_flat_lists_song() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    // Both buffers have a song at index 0 and both epochs land on 1:
+    // `songs` gets album-1's "song-1", the flat list gets album-2's
+    // "song-4".
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    let mut flat = second_album_songs();
+    flat[0].preview_url = Some(PREVIEW_URL.to_string());
+    let _ = update(&mut player, Message::AllSongsLoaded(flat));
+    player.current_view = CurrentView::AllSongs;
+
+    let task = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+    drive_task(task, "flat-list play", |_| {}).await;
+
+    assert_eq!(state.lock().await.current_track.as_deref(), Some("song-4"));
+    assert_eq!(
+        recording.calls(),
+        vec![
+            AudioCall::SetVolume(0.5),
+            AudioCall::Play(PREVIEW_URL.to_string())
+        ]
+    );
+}
+
+// Next/Previous must step the list the current view shows: the flat All
+// Songs view draws from `all_songs`, so Next there moves through the flat
+// rows, not the browsed `songs` buffer. `songs` holds a single song while the
+// flat list holds the three-song stepping album, so a Next that stepped
+// `songs` could not yield the flat list's second row (epoch 1, index 1).
+#[test]
+fn next_track_in_all_songs_steps_the_flat_list() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
+    let _ = update(&mut player, Message::AllSongsLoaded(stepping_songs()));
+    player.current_view = CurrentView::AllSongs;
+    player.state.blocking_lock().current_track = Some("song-1".to_string());
+
+    let task = update(&mut player, Message::NextTrack);
+    assert_track_selected(task, 1, 1);
+}
+
 // A failed browse fetch must not read as an empty library: the failure's
 // report is stored for the list (so the view can show it), the list is marked
 // not-loading, and the buffer stays empty. A later successful reply clears the
@@ -1810,12 +1926,14 @@ fn each_browse_failure_stores_its_report_in_its_own_list() {
     player.artists.loading = true;
     player.albums.loading = true;
     player.songs.loading = true;
+    player.all_songs.loading = true;
 
     let artists_report = "music-library fetch failed (loading favorite artists): artists boom";
     let albums_report =
         "music-library fetch failed (loading albums for artist \"artist-1\"): albums boom";
     let songs_report =
         "music-library fetch failed (loading songs from album \"album-1\"): songs boom";
+    let all_songs_report = "music-library fetch failed (loading all library songs): all songs boom";
 
     let _ = update(
         &mut player,
@@ -1829,14 +1947,20 @@ fn each_browse_failure_stores_its_report_in_its_own_list() {
         &mut player,
         Message::SongsLoadFailed(songs_report.to_string()),
     );
+    let _ = update(
+        &mut player,
+        Message::AllSongsLoadFailed(all_songs_report.to_string()),
+    );
 
     assert_browse_lists_empty(&player);
     assert!(!player.artists.loading);
     assert!(!player.albums.loading);
     assert!(!player.songs.loading);
+    assert!(!player.all_songs.loading);
     assert_eq!(player.artists.error.as_deref(), Some(artists_report));
     assert_eq!(player.albums.error.as_deref(), Some(albums_report));
     assert_eq!(player.songs.error.as_deref(), Some(songs_report));
+    assert_eq!(player.all_songs.error.as_deref(), Some(all_songs_report));
 }
 
 // `BrowseList::clear` runs on every navigation step and must reset all three
@@ -2330,9 +2454,11 @@ fn view_constructs_over_the_apps_full_input_space() {
     player.artists.items.clear();
     player.albums.items.clear();
     player.songs.items.clear();
+    player.all_songs.items.clear();
     player.artists.error = Some("music-library fetch failed: boom".to_string());
     player.albums.error = Some("music-library fetch failed: boom".to_string());
     player.songs.error = Some("music-library fetch failed: boom".to_string());
+    player.all_songs.error = Some("music-library fetch failed: boom".to_string());
     construct_view_in_every_browse_view(&mut player);
 }
 

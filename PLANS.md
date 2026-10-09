@@ -29,7 +29,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Add an All Songs view listing the whole library flat (found 2026-10-09)
+_None yet._
+
+## Done
+
+### Add an All Songs view listing the whole library flat (found 2026-10-09, done 2026-10-09)
 
 **Goal.** A new top-level `All Songs` browse view lists every song in the user's Apple Music library in one flat list, in library order, and each row plays exactly like a browsed song. It is reached by an `All Songs` button on the Artists view, and Back returns there. Today the only way to reach a song is to drill Artists → Albums → Songs, and the search box returns only query matches, so there is no way to see the library's songs as a whole. The REST half reads the library-songs collection (`/v1/me/library/songs`, which follows `next` pages like the sibling collections) and the sample half lists the whole sample library, through the same signed-in/sample split `browse` already applies. It is independent of the existing search box and can land on its own.
 
@@ -41,6 +45,7 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
   - Add `pub async fn get_all_songs(&self) -> Result<Vec<Song>, AppleMusicError>` answering through the existing `browse` helper: `self.browse(move |rest, session| rest.get_all_songs(session), sample_all_songs)`.
   - Extract the ordered library walk `sample_songs_matching` already spells out into a private `fn sample_songs_in_library_order() -> impl Iterator<Item = &'static Song>` (artists → `albums_by_artist` → `songs_by_album`, in library order), so the new `fn sample_all_songs() -> Vec<Song>` (`sample_songs_in_library_order().cloned().collect()`) and `sample_songs_matching` (the same walk, filtered) cannot drift apart.
 - `src/ui/mod.rs`:
+  - `Message::TrackSelected` resolves against `all_songs` when `current_view` is `AllSongs` and against `songs` otherwise, and `step_track` steps the same view's list, so a flat row plays — and Next/Previous move through — the flat list rather than the stale browsed songs.
   - Add `CurrentView::AllSongs`, `Message::ShowAllSongs`, `Message::AllSongsLoaded(Vec<Song>)`, and `Message::AllSongsLoadFailed(String)`.
   - Add `all_songs: BrowseList<Song>` to `WinampPlayer`, initialised `BrowseList::new(false)` in `WinampPlayer::new`.
   - `Message::ShowAllSongs` arm: clear `search_active`, set `current_view = CurrentView::AllSongs`, and issue `fetch_level(&mut player.all_songs, …, "loading all library songs".to_string(), |service| async move { service.get_all_songs().await }, Message::AllSongsLoaded, Message::AllSongsLoadFailed)`.
@@ -69,8 +74,7 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 - With no session, `AppleMusicService::get_all_songs` returns every sample-library song in library order (song-1, song-2, song-3, song-4, song-5); with a session, it returns the REST collection.
 - Pressing `All Songs` on the Artists view clears the buffer, switches to `CurrentView::AllSongs`, and fetches; the loaded reply stores the rows and a failed reply records the report.
 - Back from `CurrentView::AllSongs` returns to `CurrentView::Artists`.
-
-## Done
+- Selecting a row in `CurrentView::AllSongs` plays the flat list's song, and Next/Previous step the flat list rather than the browsed `songs` buffer.
 
 ### Back the library search with the Apple Music REST endpoint (found 2026-10-09, done 2026-10-09)
 

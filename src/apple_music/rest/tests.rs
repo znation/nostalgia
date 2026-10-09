@@ -350,6 +350,77 @@ fn search_library_rejects_a_nameless_song() {
     assert!(error.contains("song-7"), "{error}");
 }
 
+// The flat whole-library list reads the library-songs collection directly:
+// the requested URL pins the endpoint, and the mapped song pins the fields
+// the model reads, with the empty `album_id` a library song carries.
+#[test]
+fn get_all_songs_maps_the_library_songs_collection() {
+    let stub = StubTransport::returning(
+        r#"{"data":[{"id":"song-1","attributes":{"name":"Opening","artistName":"The Sample Band","durationInMillis":210000,"previews":[{"url":"https://example.test/preview.m4a"}]}}]}"#,
+    );
+    let library = library_over(&stub);
+
+    let songs = library.get_all_songs(&rest_session()).unwrap();
+
+    assert_eq!(
+        songs,
+        vec![Song {
+            id: "song-1".to_string(),
+            title: "Opening".to_string(),
+            artist: "The Sample Band".to_string(),
+            album_id: String::new(),
+            duration_ms: 210_000,
+            preview_url: Some(PREVIEW_URL.to_string()),
+        }]
+    );
+    assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/songs");
+}
+
+// A library larger than one page is read in full: the flat list follows the
+// same-origin `next` link with the same pagination rules as a browse
+// collection.
+#[test]
+fn get_all_songs_follows_a_next_page() {
+    let stub = StubTransport::returning_bodies(&[
+        r#"{"data":[{"id":"song-1","attributes":{"name":"Opening"}}],"next":"/v1/me/library/songs?offset=100"}"#,
+        r#"{"data":[{"id":"song-2","attributes":{"name":"Second"}}]}"#,
+    ]);
+    let library = library_over(&stub);
+
+    let songs = library.get_all_songs(&rest_session()).unwrap();
+
+    assert_ids(&songs, |song| song.id.as_str(), &["song-1", "song-2"]);
+    let calls = stub.calls();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(
+        calls[1].0,
+        "https://api.music.apple.com/v1/me/library/songs?offset=100"
+    );
+}
+
+#[test]
+fn get_all_songs_reports_a_transport_error_bare() {
+    let stub = StubTransport::failing("network down");
+    let library = library_over(&stub);
+
+    let error = library
+        .get_all_songs(&rest_session())
+        .unwrap_err()
+        .to_string();
+
+    assert_eq!(error, "network down");
+}
+
+#[test]
+fn get_all_songs_rejects_a_nameless_song() {
+    let error = error_over(r#"{"data":[{"id":"song-7","attributes":{}}]}"#, |library| {
+        library.get_all_songs(&rest_session())
+    });
+
+    assert!(error.contains("without a name"), "{error}");
+    assert!(error.contains("song-7"), "{error}");
+}
+
 #[test]
 fn encode_path_segment_leaves_unreserved_bytes_and_encodes_the_rest() {
     assert_eq!(encode_path_segment("i.abc-123_~"), "i.abc-123_~");

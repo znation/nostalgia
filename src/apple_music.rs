@@ -577,6 +577,22 @@ impl AppleMusicService {
         .await
     }
 
+    /// Every song in the library: the signed-in user's whole Apple Music
+    /// library when a session is stored, and every sample-library song
+    /// otherwise.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the signed-in request fails; with
+    /// no session the sample-library lookup never fails.
+    pub async fn get_all_songs(&self) -> Result<Vec<Song>, AppleMusicError> {
+        self.browse(
+            |rest, session| rest.get_all_songs(session),
+            sample_all_songs,
+        )
+        .await
+    }
+
     /// Songs in the library matching `query`: every song whose title or artist
     /// contains `query` case-insensitively, in library order.
     ///
@@ -861,38 +877,46 @@ fn lookup<T: Clone>(index: &HashMap<String, Vec<T>>, id: &str) -> Vec<T> {
     index.get(id).cloned().unwrap_or_default()
 }
 
+/// Every sample-library song in library order: the ordered
+/// `artists` → `albums_by_artist` → `songs_by_album` walk, so
+/// [`sample_all_songs`] and [`sample_songs_matching`] share one order and
+/// cannot drift apart. The library indexes songs by album in a `HashMap`,
+/// whose iteration order is unspecified, so walking it directly would shuffle
+/// the results; this chain keeps them stable and in the same order the Songs
+/// view shows a browsed album. Pure, so the order is testable without a
+/// service.
+fn sample_songs_in_library_order() -> impl Iterator<Item = &'static Song> {
+    let library = sample_library();
+    library.artists.iter().flat_map(|artist| {
+        library
+            .albums_by_artist
+            .get(&artist.id)
+            .into_iter()
+            .flatten()
+            .flat_map(|album| library.songs_by_album.get(&album.id).into_iter().flatten())
+    })
+}
+
+/// Every sample-library song, in library order.
+fn sample_all_songs() -> Vec<Song> {
+    sample_songs_in_library_order().cloned().collect()
+}
+
 /// Every sample-library song whose title or artist contains `query`
 /// case-insensitively, in library order.
 ///
-/// The library indexes songs by album in a `HashMap`, whose iteration order is
-/// unspecified, so walking it directly would shuffle a query's matches between
-/// calls; walking the ordered `artists` → `albums_by_artist` → `songs_by_album`
-/// chain keeps the results stable and in the same order the Songs view shows a
-/// browsed album. Pure, so the filter is testable without a service.
+/// Walks [`sample_songs_in_library_order`], so the matches keep the same
+/// stable order the Songs view shows a browsed album. Pure, so the filter is
+/// testable without a service.
 fn sample_songs_matching(query: &str) -> Vec<Song> {
     let needle = query.to_lowercase();
-    let library = sample_library();
-    let mut matches = Vec::new();
-    for artist in &library.artists {
-        let Some(albums) = library.albums_by_artist.get(&artist.id) else {
-            continue;
-        };
-        for album in albums {
-            let Some(songs) = library.songs_by_album.get(&album.id) else {
-                continue;
-            };
-            matches.extend(
-                songs
-                    .iter()
-                    .filter(|song| {
-                        song.title.to_lowercase().contains(&needle)
-                            || song.artist.to_lowercase().contains(&needle)
-                    })
-                    .cloned(),
-            );
-        }
-    }
-    matches
+    sample_songs_in_library_order()
+        .filter(|song| {
+            song.title.to_lowercase().contains(&needle)
+                || song.artist.to_lowercase().contains(&needle)
+        })
+        .cloned()
+        .collect()
 }
 
 /// The name [`off_thread`] gives the thread it runs blocking library work on.
