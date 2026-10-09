@@ -1,12 +1,18 @@
 //! Test-only fixtures and assertions shared across the crate's unit tests.
 //!
-//! These are the sample `Artist`/`Album`/`Song` values and the serde-contract
-//! helpers that the `library`, `apple_music`, and `ui` test suites share. They
-//! live in one named module rather than inside `library` so the data model
-//! module stays only the model; every item here is compiled only for tests.
+//! These are the sample `Artist`/`Album`/`Song` values, the serde-contract
+//! helpers, and the transport stub that the `library`, `apple_music`, and
+//! `ui` test suites share. They live in one named module rather than inside
+//! `library` so the data model module stays only the model; every item here
+//! is compiled only for tests.
 
+use std::sync::{Arc, Mutex};
+
+use crate::apple_music::AppleMusicError;
+use crate::apple_music::rest::HttpTransport;
 use crate::equalizer::{PRESETS, Preset};
 use crate::library::{Album, Artist, Song};
+use crate::music_kit_auth::MusicKitSession;
 
 /// The three songs on `album-1` that the Previous/Next stepping tests step
 /// through, shared by the `ui::transport` and `ui` test suites. Both suites
@@ -191,4 +197,51 @@ where
 pub(crate) fn assert_ids<T>(items: &[T], id: impl Fn(&T) -> &str, expected: &[&str]) {
     let ids: Vec<&str> = items.iter().map(id).collect();
     assert_eq!(ids, expected);
+}
+
+/// A transport stub shared by the `apple_music` service tests and the
+/// `apple_music::rest` client tests: it records every `(url, session)` it is
+/// handed and returns the same canned result to each call. Cloning it shares
+/// the recording, so a test keeps a handle after the service or
+/// [`RestLibrary`](crate::apple_music::rest::RestLibrary) boxes the clone.
+/// Both suites used to define this stub independently, so the recording
+/// contract lived in two places; it lives here once and is compiled only for
+/// tests.
+#[derive(Clone)]
+pub(crate) struct StubTransport {
+    result: Result<String, AppleMusicError>,
+    calls: Arc<Mutex<Vec<(String, MusicKitSession)>>>,
+}
+
+impl StubTransport {
+    /// A stub that answers every request with `body`.
+    pub(crate) fn returning(body: &str) -> Self {
+        Self {
+            result: Ok(body.to_string()),
+            calls: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    /// A stub that fails every request with `message`.
+    pub(crate) fn failing(message: &str) -> Self {
+        Self {
+            result: Err(AppleMusicError::new(message)),
+            calls: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    /// The requests recorded so far, oldest first.
+    pub(crate) fn calls(&self) -> Vec<(String, MusicKitSession)> {
+        self.calls.lock().unwrap().clone()
+    }
+}
+
+impl HttpTransport for StubTransport {
+    fn get(&self, url: &str, session: &MusicKitSession) -> Result<String, AppleMusicError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push((url.to_string(), session.clone()));
+        self.result.clone()
+    }
 }

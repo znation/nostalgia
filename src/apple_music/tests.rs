@@ -1,5 +1,5 @@
 use super::*;
-use crate::test_support::assert_ids;
+use crate::test_support::{StubTransport, assert_ids};
 
 fn test_service() -> AppleMusicService {
     AppleMusicService::new(Arc::new(Mutex::new(AppState::default())))
@@ -607,51 +607,6 @@ fn a_failed_authentication_leaves_a_stored_session_unchanged() {
 // without a session, the same service still answers from the sample library
 // and never calls the transport. The stub records each request, so the URL
 // and both tokens are pinned alongside the mapped rows.
-
-use std::sync::Mutex as StdMutex;
-
-/// A transport stub for the service tests: records every `(url, session)` it
-/// is handed and returns the same canned result to each call. Cloning it
-/// shares the recording, so a test keeps a handle after `with_transport`
-/// boxes the clone.
-#[derive(Clone)]
-struct StubTransport {
-    result: Result<String, AppleMusicError>,
-    calls: Arc<StdMutex<Vec<(String, MusicKitSession)>>>,
-}
-
-impl StubTransport {
-    /// A stub that answers every request with `body`.
-    fn returning(body: &str) -> Self {
-        Self {
-            result: Ok(body.to_string()),
-            calls: Arc::new(StdMutex::new(Vec::new())),
-        }
-    }
-
-    /// A stub that fails every request with `message`.
-    fn failing(message: &str) -> Self {
-        Self {
-            result: Err(AppleMusicError::new(message)),
-            calls: Arc::new(StdMutex::new(Vec::new())),
-        }
-    }
-
-    /// The requests recorded so far, oldest first.
-    fn calls(&self) -> Vec<(String, MusicKitSession)> {
-        self.calls.lock().unwrap().clone()
-    }
-}
-
-impl rest::HttpTransport for StubTransport {
-    fn get(&self, url: &str, session: &MusicKitSession) -> Result<String, AppleMusicError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push((url.to_string(), session.clone()));
-        self.result.clone()
-    }
-}
 
 /// The session a signed-in service stores, with recognizable tokens so a test
 /// can assert the transport saw exactly these credentials.

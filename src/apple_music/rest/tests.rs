@@ -1,5 +1,6 @@
 use super::*;
-use std::sync::{Arc, Mutex};
+
+use crate::test_support::StubTransport;
 
 /// A session whose tokens are recognizable, so a test can assert the transport
 /// saw exactly these credentials.
@@ -7,48 +8,6 @@ fn session() -> MusicKitSession {
     MusicKitSession {
         developer_token: "developer-token".to_string(),
         user_token: "user-token".to_string(),
-    }
-}
-
-/// A transport stub: it records every `(url, session)` it is handed and returns
-/// the same canned result to each call. Cloning it shares the recording, so a
-/// test keeps a handle after [`RestLibrary::new`] boxes the clone.
-#[derive(Clone)]
-struct StubTransport {
-    result: Result<String, AppleMusicError>,
-    calls: Arc<Mutex<Vec<(String, MusicKitSession)>>>,
-}
-
-impl StubTransport {
-    /// A stub that answers every request with `body`.
-    fn returning(body: &str) -> Self {
-        Self {
-            result: Ok(body.to_string()),
-            calls: Arc::new(Mutex::new(Vec::new())),
-        }
-    }
-
-    /// A stub that fails every request with `message`.
-    fn failing(message: &str) -> Self {
-        Self {
-            result: Err(AppleMusicError::new(message)),
-            calls: Arc::new(Mutex::new(Vec::new())),
-        }
-    }
-
-    /// The requests recorded so far, oldest first.
-    fn calls(&self) -> Vec<(String, MusicKitSession)> {
-        self.calls.lock().unwrap().clone()
-    }
-}
-
-impl HttpTransport for StubTransport {
-    fn get(&self, url: &str, session: &MusicKitSession) -> Result<String, AppleMusicError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push((url.to_string(), session.clone()));
-        self.result.clone()
     }
 }
 
