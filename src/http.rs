@@ -23,10 +23,17 @@ use std::time::Duration;
 /// caller can read its body and report the server's own error detail instead
 /// of `ureq`'s bare status error.
 pub(crate) fn agent_with_timeout(timeout: Duration) -> ureq::Agent {
+    ureq::Agent::new_with_config(config_with_timeout(timeout))
+}
+
+/// The [`ureq::Agent`] configuration [`agent_with_timeout`] applies, separated
+/// out so a caller that needs a custom resolver — the audio preview fetch,
+/// which must validate the addresses a hostname resolves to — can build its
+/// agent on the same transport choices instead of duplicating them.
+pub(crate) fn config_with_timeout(timeout: Duration) -> ureq::config::Config {
     ureq::Agent::config_builder()
         .timeout_global(Some(timeout))
         .max_redirects(0)
         .http_status_as_error(false)
         .build()
-        .into()
 }

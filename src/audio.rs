@@ -26,7 +26,11 @@ use std::sync::OnceLock;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::time::Duration;
 
-use crate::http::agent_with_timeout;
+use ureq::unversioned::resolver::{DefaultResolver, ResolvedSocketAddrs, Resolver};
+use ureq::unversioned::transport::{DefaultConnector, NextTimeout};
+
+use crate::apple_music::ip_is_internal;
+use crate::http::config_with_timeout;
 use crate::music_error::AppleMusicError;
 
 /// The end-to-end bound on one preview download, from DNS lookup through
@@ -328,12 +332,58 @@ fn run_worker(receiver: Receiver<Command>, ready: Sender<Result<(), AppleMusicEr
 /// The process-wide [`ureq::Agent`] the audio worker downloads previews
 /// through, so consecutive plays reuse its pooled connection. It carries
 /// [`PREVIEW_TIMEOUT`] as its global timeout, so a stalled server cannot block
-/// the worker forever, and refuses to follow a redirect, so a preview URL that
+/// the worker forever, refuses to follow a redirect, so a preview URL that
 /// passed `preview_url_problem`'s one-time host check cannot be bounced to an
-/// address that check refused.
+/// address that check refused, and resolves through [`PublicAddressResolver`],
+/// so a hostname the URL names is refused when it resolves to an internal
+/// address rather than only when the URL spells one as a literal.
 fn preview_agent() -> &'static ureq::Agent {
     static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
-    AGENT.get_or_init(|| agent_with_timeout(PREVIEW_TIMEOUT))
+    AGENT.get_or_init(|| preview_agent_with_timeout(PREVIEW_TIMEOUT))
+}
+
+/// [`preview_agent`]'s builder, with an injectable bound so a test can build
+/// the same guarded agent without waiting out [`PREVIEW_TIMEOUT`].
+fn preview_agent_with_timeout(timeout: Duration) -> ureq::Agent {
+    ureq::Agent::with_parts(
+        config_with_timeout(timeout),
+        DefaultConnector::default(),
+        PublicAddressResolver::default(),
+    )
+}
+
+/// A [`Resolver`] that refuses to resolve a host to any internal address, so
+/// the preview fetch cannot reach the local machine or a private network even
+/// when the preview URL names a public-looking hostname.
+///
+/// `preview_url_problem` in [`crate::apple_music`] rejects internal *address
+/// literals* before the fetch, but a hostname it accepts (a cloud metadata
+/// name such as `metadata.google.internal`, an `/etc/hosts` alias such as
+/// `ip6-localhost`, or an attacker-controlled name) is resolved by `ureq`'s
+/// own resolver at connect time, after that check. Wrapping the default
+/// resolver here validates every address it returns and errors with
+/// [`ureq::Error::HostNotFound`] when any of them is internal, so on the
+/// direct path (no proxy configured, the app's default) the connection is made
+/// only to an address the guard approved — closing the resolve-after-check
+/// gap, not just the literal case.
+#[derive(Debug, Default)]
+struct PublicAddressResolver {
+    inner: DefaultResolver,
+}
+
+impl Resolver for PublicAddressResolver {
+    fn resolve(
+        &self,
+        uri: &ureq::http::Uri,
+        config: &ureq::config::Config,
+        timeout: NextTimeout,
+    ) -> Result<ResolvedSocketAddrs, ureq::Error> {
+        let addresses = self.inner.resolve(uri, config, timeout)?;
+        if addresses.iter().any(|address| ip_is_internal(address.ip())) {
+            return Err(ureq::Error::HostNotFound);
+        }
+        Ok(addresses)
+    }
 }
 
 /// Downloads `url` through `agent` and decodes it as an `MP4`/`AAC` preview.
@@ -390,6 +440,7 @@ pub(crate) fn audio_with_fallback(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::http::agent_with_timeout;
     use crate::test_support::{
         AudioCall, PREVIEW_URL, RecordingAudio, loopback_listener, read_some_request,
         serve_one_response,
@@ -689,6 +740,49 @@ mod tests {
         assert!(
             error.to_string().contains("decoding the preview failed"),
             "unexpected error: {error}"
+        );
+    }
+
+    // `preview_url_problem` rejects internal address *literals*, but a preview
+    // URL may name a hostname that resolves to an internal address, and the
+    // fetch resolves that name only at connect time. `preview_agent`'s resolver
+    // must refuse such a name before any connection: `localhost` resolves to
+    // `127.0.0.1`/`::1`, so the guarded agent reports a resolution failure
+    // (`HostNotFound`) instead of connecting. The unguarded agent is checked in
+    // the same test so the result cannot come from `localhost` merely failing
+    // to resolve: it reaches the connect stage and fails there instead.
+    #[test]
+    fn the_preview_agent_refuses_a_hostname_that_resolves_to_loopback() {
+        let (listener, address) = loopback_listener();
+        // Accept the unguarded fetch's connection and close it without a
+        // response, so that fetch fails at the protocol level rather than on
+        // resolution. The guarded fetch never connects, so this thread may
+        // wait on `accept` until the test process ends.
+        std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let _ = read_some_request(&mut stream);
+            }
+        });
+        let url = format!("http://localhost:{}/preview.m4a", address.port());
+
+        let guarded = preview_agent_with_timeout(Duration::from_secs(2));
+        let error = guarded
+            .get(&url)
+            .call()
+            .expect_err("a loopback-resolving hostname must not connect");
+        assert!(
+            matches!(error, ureq::Error::HostNotFound),
+            "the guarded resolver must refuse the name, got: {error:?}"
+        );
+
+        let unguarded = agent_with_timeout(Duration::from_secs(2));
+        let error = unguarded
+            .get(&url)
+            .call()
+            .expect_err("the unguarded fetch must fail on the closed connection");
+        assert!(
+            !matches!(error, ureq::Error::HostNotFound),
+            "`localhost` must resolve for the guarded case to prove anything, got: {error:?}"
         );
     }
 }

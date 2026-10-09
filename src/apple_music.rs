@@ -807,7 +807,11 @@ fn is_numeric_component(part: &str) -> bool {
 /// Whether `ip` is an address the preview fetch must not reach: one that names
 /// the local machine or a private, loopback, link-local, or unspecified
 /// network. Public addresses are allowed.
-fn ip_is_internal(ip: std::net::IpAddr) -> bool {
+///
+/// Shared with [`crate::audio`], whose preview agent resolves a preview URL's
+/// hostname and rejects any internal address it resolves to — the check that
+/// closes the gap [`preview_url_problem`] leaves for a name it never resolves.
+pub(crate) fn ip_is_internal(ip: std::net::IpAddr) -> bool {
     match ip {
         std::net::IpAddr::V4(v4) => {
             v4.is_private()
