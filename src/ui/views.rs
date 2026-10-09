@@ -38,8 +38,8 @@ fn spacer(width: f32) -> Space {
 ///
 /// The browse Back and Retry buttons and the equalizer panel's on/off button
 /// call this directly; the transport row's five buttons (Play/Pause, Stop,
-/// Previous, Next, Repeat) and the title bar's minimize and close buttons
-/// reach it through [`fixed_width_button`]. They all build the same
+/// Previous, Next, Repeat) and the title bar's shade, minimize, and close
+/// buttons reach it through [`fixed_width_button`]. They all build the same
 /// `Button::new(Text::new(..)).on_press(..)` widget, so that expression lives
 /// here once instead of being repeated at every call site. The label is
 /// `'static` — a literal, or a `&'static str` such as [`play_pause_label`]
