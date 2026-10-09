@@ -255,8 +255,9 @@ fn play_timeout_report(track_id: &str, timeout: Duration) -> String {
 /// error or a timeout (after the cause is reported to stderr via
 /// [`fetch_failure_report`] or [`fetch_timeout_report`], whose report is the
 /// string handed to `failed`). `context` names the fetch —
-/// "loading favorite artists", "loading albums for artist \"artist-1\"", or
-/// "loading songs from album \"album-1\"" — so a failed browse reports *which*
+/// "loading favorite artists", "loading albums for artist \"artist-1\"",
+/// "loading songs from album \"album-1\"", or "searching the library for
+/// \"zzz\"" — so a failed browse reports *which*
 /// query failed and what it was fetching, not just that a fetch failed.
 /// `generation` names the request's place in its list's stream: when a newer
 /// request for the same list has been issued by the time this fetch completes,
