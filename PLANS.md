@@ -90,6 +90,86 @@ and the blocking HTTP call runs off iced's executor so it cannot freeze the UI.
   completed sign-in): the artist → album → song browser shows the signed-in
   user's library; without the variable it still shows the sample library.
 
+### Add the Winamp title-bar clutter bar and shade button (found 2026-10-08)
+
+The custom title bar (`views::view_title_bar`) landed 2026-10-07 with only the
+app name, minimize, and close. Classic Winamp's title bar also carries the
+clutter bar's always-on-top toggle (the "A" slot) and a dedicated shade
+(roll-up) button; today always-on-top has no control at all, and roll-up is
+reachable only by double-clicking the bar. This entry adds both. Only the A
+slot is rendered: Winamp's other four clutter slots (O/I/D/V) open menus, file
+info, double-size, and a visualizer this app does not have, so drawing them
+would be inert chrome.
+
+**Goal.** The title bar carries an always-on-top toggle that drives
+`iced::window::set_level`, and a shade button that emits the existing
+`Message::ToggleWindowShade` — both through the existing title-bar chrome and
+the resolved-window-id guard, with no new dependencies and no change to the
+browse or playback paths.
+
+**Approach.**
+
+- `src/ui/views.rs`:
+  - Change `pub fn view_title_bar()` to
+    `pub fn view_title_bar(always_on_top: bool) -> Element<'static, Message>`,
+    and extend its doc comment to name the clutter toggle and the shade
+    button.
+  - Add `const CLUTTER_BUTTON_WIDTH: f32 = 18.0;` beside
+    `TITLE_BAR_BUTTON_WIDTH`.
+  - Build the A toggle as a `Button::new(Text::new("A"))` with
+    `.on_press(Message::ToggleAlwaysOnTop)`,
+    `.width(Length::Fixed(CLUTTER_BUTTON_WIDTH))`, and
+    `.style(move |_theme, status| if always_on_top {
+    style::chrome_button_style(button::Status::Pressed) } else {
+    style::chrome_button_style(status) })` — sunken while the toggle is on and
+    the normal raised chrome otherwise. Push it as the first child of the
+    title-bar `Row`, before the drag region.
+  - Push `fixed_width_button("▭", TITLE_BAR_BUTTON_WIDTH,
+    Message::ToggleWindowShade)` between the drag region and the minimize
+    button: the same chrome as the existing two, emitting the already-tested
+    shade message.
+- `src/ui/mod.rs`:
+  - Add `always_on_top: bool` to `WinampPlayer` (a window property beside
+    `shaded`), initialized `false` in `WinampPlayer::new`, and a
+    `Message::ToggleAlwaysOnTop` variant with a doc comment.
+  - `update` arm: flip `player.always_on_top`, then compute
+    `let level = if player.always_on_top {
+    iced::window::Level::AlwaysOnTop } else { iced::window::Level::Normal };`
+    and return `with_window_id(player, move |id|
+    iced::window::set_level(id, level))` — the flag still flips before the
+    window id resolves, exactly like `ToggleWindowShade`, and the level change
+    is a no-op until it does.
+  - `view`: pass `player.always_on_top` to `views::view_title_bar(..)` in both
+    the shaded early return and the main `column`. The flag lives on the app
+    struct, not `AppState`, so the shaded path reads it without taking the
+    state lock.
+- `src/ui/tests.rs`:
+  - `toggle_always_on_top_flips_the_flag_and_sets_the_window_level`: with a
+    resolved window id (see `player_with_window_id`), drive
+    `Message::ToggleAlwaysOnTop` and assert `player.always_on_top` flips and
+    the arm schedules work; drive it again and assert it flips back.
+  - `toggle_always_on_top_without_a_window_id_still_flips_the_flag`: without
+    an id, assert the flag flips and `assert_message_schedules_no_work` holds,
+    the same split `ToggleWindowShade` is tested with.
+  - `title_bar_constructs_for_both_always_on_top_states`: call
+    `views::view_title_bar(false)` and `views::view_title_bar(true)`.
+
+**Files touched.** `src/ui/views.rs`, `src/ui/mod.rs`, `src/ui/tests.rs`.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- `always_on_top` defaults to `false`; `Message::ToggleAlwaysOnTop` flips it
+  and schedules the window-level task only once the window id is resolved.
+- The A button renders sunken while `always_on_top` is true and raised
+  otherwise, and `view_title_bar` constructs for both values.
+- The shade button emits `Message::ToggleWindowShade`, the roll-up path the
+  existing shade tests already cover.
+- Manual check (`cargo run`): pressing A keeps the window above other windows
+  and pressing it again restores normal stacking; the new title-bar button
+  rolls the window up and restores it, matching the double-click behaviour.
+  The build and tests are the primary gate.
+
 ## Done
 
 ### Add the Apple Music REST browse client (found 2026-10-08, done 2026-10-08)
