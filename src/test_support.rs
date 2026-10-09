@@ -135,8 +135,8 @@ pub(crate) fn rock_preset() -> Preset {
 /// Asserts that `T` requires every field `payload` declares: for each key,
 /// removing that one key must fail deserialization, because a payload missing
 /// a required field must error rather than silently yield a half-populated
-/// value the UI would render as blank data. The model-type tests and
-/// `apple_music`'s auth-token test each hand in a full, valid payload, so the
+/// value the UI would render as blank data. The three model-type tests
+/// (`Artist`, `Album`, and `Song`) each hand in a full, valid payload, so the
 /// walk-every-key loop lives here once. Probing every key matters: a single
 /// named field per type leaves the others unpinned, and a `#[serde(default)]`
 /// added to a field no probe omitted would clear the suite while blanking
@@ -163,8 +163,8 @@ where
 }
 
 /// Asserts that `value` serializes to exactly `expected` and then survives an
-/// out-and-back trip through `serde_json` unchanged. The library model types
-/// and `apple_music`'s auth-token test each pin the same two halves — the
+/// out-and-back trip through `serde_json` unchanged. The three model-type
+/// tests (`Artist`, `Album`, and `Song`) each pin the same two halves — the
 /// exact serialized field names (a `#[serde(rename)]` would pass a round-trip
 /// alone but fails this pin), then the round trip via [`assert_round_trips`] —
 /// so the serialize-then-compare-then-round-trip sequence lives here once and
@@ -194,7 +194,7 @@ where
 /// serde's default tolerance of fields beyond `T`'s declared set: a real
 /// Apple Music payload carries more than the model's fields, so an unknown
 /// field must be ignored rather than failing the whole parse. The three
-/// model-type tests and `apple_music`'s auth-token test each probe this
+/// model-type tests (`Artist`, `Album`, and `Song`) each probe this
 /// contract, so the `from_value`-then-`assert_eq` chain lives here once.
 pub(crate) fn assert_unknown_fields_tolerated<T>(payload: serde_json::Value, expected: T)
 where
