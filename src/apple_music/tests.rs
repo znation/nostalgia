@@ -417,8 +417,10 @@ async fn play_track_propagates_an_audio_backend_failure() {
     assert_eq!(error.to_string(), "the audio device is gone");
 }
 
-// `pause` pauses the backend as well as clearing the shared playing flag, so
-// the audio and the UI state stay in step.
+// `pause` pauses the injected backend as well as clearing the shared playing
+// flag; the test pins both halves of that contract. (The UI's Pause button
+// does not call this method yet — it only flips `AppState` — so the test
+// drives the service directly.)
 #[tokio::test]
 async fn pause_pauses_the_audio_backend() {
     let recording = Arc::new(RecordingAudio::default());
