@@ -444,7 +444,7 @@ async fn pause_stops_playing_but_keeps_current_track() {
 }
 
 // `pause`'s test above pins its state change; its two sibling stubs,
-// `next_track` and `previous_track`, have no test reaching them at all.
+// `next_track` and `previous_track`, have no production caller at all.
 // They are deliberately unimplemented no-ops — the transport buttons step
 // through `transport::next_track_id`/`previous_track_id` instead — so pin
 // the one contract they do carry: they report success and, unlike
