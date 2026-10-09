@@ -1,6 +1,9 @@
 use super::*;
 use crate::audio::AudioOutput;
-use crate::test_support::{AudioCall, FailingAudio, RecordingAudio, StubTransport, assert_ids};
+use crate::test_support::{
+    AudioCall, FailingAudio, RecordingAudio, StubTransport, assert_ids, sample_album,
+    sample_artist, sample_song,
+};
 
 fn test_service() -> AppleMusicService {
     // Over a stub transport and the silent audio backend, so a test never
@@ -804,13 +807,7 @@ async fn get_favorite_artists_uses_the_rest_library_when_signed_in() {
 
     let artists = service.get_favorite_artists().await.unwrap();
 
-    assert_eq!(
-        artists,
-        vec![Artist {
-            id: "artist-1".to_string(),
-            name: "The Sample Band".to_string(),
-        }]
-    );
+    assert_eq!(artists, vec![sample_artist()]);
     assert_single_rest_call(&stub, "https://api.music.apple.com/v1/me/library/artists");
 }
 
@@ -826,9 +823,8 @@ async fn get_albums_by_artist_uses_the_rest_library_when_signed_in() {
     assert_eq!(
         albums,
         vec![Album {
-            id: "album-1".to_string(),
-            title: "First Record".to_string(),
             artist_id: "artist-9".to_string(),
+            ..sample_album()
         }]
     );
     assert_single_rest_call(
@@ -849,12 +845,8 @@ async fn get_songs_from_album_uses_the_rest_library_when_signed_in() {
     assert_eq!(
         songs,
         vec![Song {
-            id: "song-1".to_string(),
-            title: "Opening".to_string(),
-            artist: "The Sample Band".to_string(),
             album_id: "album-9".to_string(),
-            duration_ms: 210_000,
-            preview_url: None,
+            ..sample_song()
         }]
     );
     assert_single_rest_call(

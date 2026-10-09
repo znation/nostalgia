@@ -89,10 +89,13 @@ pub(crate) fn second_album_songs() -> Vec<Song> {
 }
 
 /// A single representative artist, album, and song, shared by the `library`,
-/// `ui::views`, and `ui` test suites. Each suite used to build these same
-/// objects independently — a retitle or id change in one fixture would
-/// silently diverge from the others — so they live here once, next to
-/// [`stepping_songs`], and each test only names which one it wants.
+/// `apple_music` (including its `rest` client), `ui::views`, and `ui` test
+/// suites. Each suite used to build these same objects independently — a
+/// retitle or id change in one fixture would silently diverge from the
+/// others — so they live here once, next to [`stepping_songs`], and each test
+/// only names which one it wants. The browse-mapping tests reuse these,
+/// setting the artist or album id from the query where the browse supplies
+/// one.
 pub(crate) fn sample_artist() -> Artist {
     Artist {
         id: "artist-1".to_string(),

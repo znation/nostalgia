@@ -1,6 +1,6 @@
 use super::*;
 
-use crate::test_support::StubTransport;
+use crate::test_support::{StubTransport, sample_album, sample_artist, sample_song};
 
 /// A session whose tokens are recognizable, so a test can assert the transport
 /// saw exactly these credentials.
@@ -42,10 +42,7 @@ fn favorite_artists_map_library_json() {
     assert_eq!(
         artists,
         vec![
-            Artist {
-                id: "artist-1".to_string(),
-                name: "The Sample Band".to_string(),
-            },
+            sample_artist(),
             Artist {
                 id: "artist-2".to_string(),
                 name: "Second Act".to_string(),
@@ -69,9 +66,8 @@ fn albums_by_artist_map_library_json_and_set_the_artist_id() {
     assert_eq!(
         albums,
         vec![Album {
-            id: "album-1".to_string(),
-            title: "First Record".to_string(),
             artist_id: "artist-9".to_string(),
+            ..sample_album()
         }]
     );
     assert_single_call(
@@ -92,12 +88,8 @@ fn songs_from_album_map_library_json_and_set_the_album_id() {
     assert_eq!(
         songs,
         vec![Song {
-            id: "song-1".to_string(),
-            title: "Opening".to_string(),
-            artist: "The Sample Band".to_string(),
             album_id: "album-9".to_string(),
-            duration_ms: 210_000,
-            preview_url: None,
+            ..sample_song()
         }]
     );
     assert_single_call(
@@ -878,10 +870,7 @@ fn a_next_page_is_followed_and_both_pages_are_returned_in_order() {
     assert_eq!(
         artists,
         vec![
-            Artist {
-                id: "artist-1".to_string(),
-                name: "The Sample Band".to_string(),
-            },
+            sample_artist(),
             Artist {
                 id: "artist-2".to_string(),
                 name: "Echo Chamber".to_string(),
