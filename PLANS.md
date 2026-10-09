@@ -33,6 +33,39 @@ _None yet._
 
 ## Done
 
+### Name the user-token shape defect when the sign-in callback is rejected (found 2026-10-08, done 2026-10-08)
+
+`handle_token` rejected a `POST /token` callback whose `userToken` was missing
+or malformed with one generic message, "the sign-in callback did not carry a
+valid user token". A callback missing the field was indistinguishable from one
+carrying a broken token, and neither told the user what was wrong. The
+developer-token validator already names the shape defect
+(`validate_developer_token`), and `jwt_shape_problem` already computes a fixed,
+non-secret phrase for it.
+
+**Goal.** Report which failure it was and, for a malformed token, the shape
+defect — without echoing the token.
+
+**Approach.**
+
+- `src/music_kit_auth.rs`: `handle_token` now matches on `jwt_shape_problem`; a
+missing `userToken` is rejected as "did not carry a user token", and a
+malformed one as "the sign-in callback's user token must be a three-segment
+base64url JWT, but {problem}". The new `reject_token` writes the `400` and
+returns the `AppleMusicError` for both cases, and the now-redundant
+`is_jwt_shaped` wrapper is removed.
+- `src/music_kit_auth/tests.rs`:
+`authorize_rejects_a_malformed_user_token_naming_the_defect` pins the defect
+wording and that the token is not echoed;
+`authorize_rejects_a_callback_without_a_user_token_field` pins the
+missing-field wording.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- A malformed `userToken` reports the shape defect and a missing one reports the
+missing field; neither message echoes the token.
+
 ### Name the envelope, not "invalid JSON", when a valid-JSON body does not match (found 2026-10-08, done 2026-10-08)
 
 `RestLibrary::fetch` reported every parse failure as `"response was not

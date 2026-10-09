@@ -638,6 +638,46 @@ fn authorize_rejects_a_callback_with_an_empty_user_token() {
 }
 
 #[test]
+fn authorize_rejects_a_malformed_user_token_naming_the_defect() {
+    // A present-but-malformed token gets the same shape-defect wording the
+    // developer-token validator uses, so a broken callback is diagnosable
+    // rather than reported as a generic "invalid user token". The message
+    // must name the defect without echoing the token, which is a secret.
+    let error = authorize_with_flow(|port, state| {
+        let _ = request(port, &token_request(&state, "aaa.bbb.cc!"));
+    })
+    .expect_err("a malformed user token is rejected");
+    let message = error.to_string();
+    assert!(
+        message.contains("character outside the base64url alphabet"),
+        "the message must name the defect, got: {message}"
+    );
+    assert!(
+        !message.contains("aaa.bbb.cc!"),
+        "the message must not echo the user token, got: {message}"
+    );
+}
+
+#[test]
+fn authorize_rejects_a_callback_without_a_user_token_field() {
+    // A callback missing `userToken` altogether is rejected with a message
+    // distinct from a malformed one, so the two causes are not conflated.
+    let error = authorize_with_flow(|port, state| {
+        let body = format!("state={state}");
+        let raw = format!(
+            "POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\n\r\n{body}",
+            body.len()
+        );
+        let _ = request(port, &raw);
+    })
+    .expect_err("a callback without a user token is rejected");
+    assert!(
+        error.to_string().contains("did not carry a user token"),
+        "got: {error}"
+    );
+}
+
+#[test]
 fn authorize_ignores_an_unknown_request_before_the_callback() {
     let missing =
         response_to_probe(|_state| "GET /nope HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n".to_string());

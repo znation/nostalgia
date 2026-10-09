@@ -486,8 +486,9 @@ fn page_query_carries_nonce(query: Option<&str>, nonce: &str) -> bool {
 }
 
 /// Handles the `POST /token` callback: validates `state` and `userToken` and
-/// either returns the session, ignores a wrong-state request, or rejects an
-/// invalid user token.
+/// either returns the session, ignores a wrong-state request, or rejects a
+/// missing or malformed user token, naming which it was and — for a malformed
+/// one — the shape defect.
 fn handle_token(
     stream: &mut TcpStream,
     developer_token: &str,
@@ -523,26 +524,43 @@ fn handle_token(
     }
 
     match user_token {
-        Some(token) if is_jwt_shaped(&token) => {
-            let _ = write_response(stream, 200, "OK", "text/html; charset=utf-8", SUCCESS_PAGE);
-            Connection::Authorized(MusicKitSession {
-                developer_token: developer_token.to_string(),
-                user_token: token,
-            })
-        }
-        _ => {
-            let _ = write_response(
+        Some(token) => match jwt_shape_problem(&token) {
+            None => {
+                let _ = write_response(stream, 200, "OK", "text/html; charset=utf-8", SUCCESS_PAGE);
+                Connection::Authorized(MusicKitSession {
+                    developer_token: developer_token.to_string(),
+                    user_token: token,
+                })
+            }
+            // Name the defect rather than a generic "invalid user token",
+            // mirroring `validate_developer_token`: a broken callback is then
+            // diagnosable from the logged error. The phrase is fixed (see
+            // `jwt_shape_problem`), so the token itself stays out of the log.
+            Some(problem) => reject_token(
                 stream,
-                400,
-                "Bad Request",
-                "text/plain; charset=utf-8",
-                "The sign-in callback did not carry a valid user token.",
-            );
-            Connection::Rejected(AppleMusicError::new(
-                "the sign-in callback did not carry a valid user token",
-            ))
-        }
+                &format!(
+                    "the sign-in callback's user token must be a three-segment base64url JWT, but {problem}"
+                ),
+            ),
+        },
+        None => reject_token(stream, "the sign-in callback did not carry a user token"),
     }
+}
+
+/// Answers an invalid `POST /token` callback with a `400` and ends the flow
+/// with `message`. Shared by the two rejection cases — a missing user token
+/// and a malformed one — so the response and return shape live here once.
+/// `message` never echoes the token: the malformed case is named by the fixed
+/// phrase [`jwt_shape_problem`] returns.
+fn reject_token(stream: &mut TcpStream, message: &str) -> Connection {
+    let _ = write_response(
+        stream,
+        400,
+        "Bad Request",
+        "text/plain; charset=utf-8",
+        message,
+    );
+    Connection::Rejected(AppleMusicError::new(message))
 }
 
 /// Builds the `state` nonce: a hex-formatted hash drawn from a fresh
@@ -563,18 +581,13 @@ fn is_loopback_host(host: Option<&str>) -> bool {
     name == "127.0.0.1"
 }
 
-/// Whether `token` is exactly three non-empty dot-separated segments of
-/// `[A-Za-z0-9_-]`.
-fn is_jwt_shaped(token: &str) -> bool {
-    jwt_shape_problem(token).is_none()
-}
-
 /// Why `token` is not a three-segment base64url JWT, or `None` when it is.
 ///
 /// The reason is a fixed phrase — never the token itself, which is a secret
-/// and must not reach a log — so [`validate_developer_token`] can name the
-/// defect without echoing the value. The checks run from the most structural
-/// to the most specific: the segment count, then emptiness, then the alphabet.
+/// and must not reach a log — so [`validate_developer_token`] and
+/// [`handle_token`] can name the defect without echoing the value. The checks
+/// run from the most structural to the most specific: the segment count, then
+/// emptiness, then the alphabet.
 fn jwt_shape_problem(token: &str) -> Option<&'static str> {
     let mut parts = token.split('.');
     let (Some(first), Some(second), Some(third), None) =
