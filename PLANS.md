@@ -152,6 +152,33 @@ browse, volume, balance, or the equalizer.
   Shuffle on, Next jumps to a different song in the album. The build and tests
   are the primary gate.
 
+### Reject a blank resource id from an Apple Music browse response (found 2026-10-08, done 2026-10-08)
+
+`RestLibrary` validated a resource's name (`Resource::required_name`) but not
+its id, so a response carrying a resource with a blank id (`""` or only
+whitespace) mapped to a row the UI rendered but that errored when pressed: the
+seam's `ensure_id_is_valid` then rejected the blank id as a caller bug, long
+after the malformed response that produced it.
+
+**Goal.** A browse response's resource ids are as trustworthy as its names: a
+blank id fails the fetch with a message naming the resource kind.
+
+**Approach.**
+
+- `src/apple_music/rest.rs`: added `Resource::required_id(kind)`, which rejects
+  an id that is empty or only whitespace with
+  `"response carried {kind} with a blank id (got {id:?})"`, and called it
+  before `required_name` in all three browse maps. The three `# Errors`
+  sections now say "a resource carries a blank id or no name".
+- `src/apple_music/rest/tests.rs`: three tests pin the message for the artist,
+  album, and song queries, so each map is proven to call the guard.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- A browse response with a blank-id resource fails the fetch rather than
+  yielding a row whose id the seam later rejects.
+
 ### De-duplicate the query label in a failed browse report (found 2026-10-08, done 2026-10-08)
 
 `RestLibrary::fetch` prefixed every failure with the query it issued

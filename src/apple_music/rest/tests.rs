@@ -233,6 +233,53 @@ fn nameless_song_is_an_error() {
     assert_eq!(error, "response carried song \"song-1\" without a name");
 }
 
+// A resource with a blank id and a valid name is the id twin of the
+// `nameless_*` cases: an id is how the model links rows together and how the
+// seam later resolves a browse, so a blank one can name nothing and must fail
+// the response rather than become a row that errors when pressed. Each of the
+// three maps calls `required_id`, so each query gets its own probe.
+#[test]
+fn blank_artist_id_is_an_error() {
+    let stub = StubTransport::returning(r#"{"data":[{"id":"   ","attributes":{"name":"Ghost"}}]}"#);
+    let library = library_over(&stub);
+
+    let error = library
+        .get_favorite_artists(&session())
+        .unwrap_err()
+        .to_string();
+
+    assert_eq!(
+        error,
+        "response carried artist with a blank id (got \"   \")"
+    );
+}
+
+#[test]
+fn blank_album_id_is_an_error() {
+    let stub = StubTransport::returning(r#"{"data":[{"id":"","attributes":{"name":"Ghost"}}]}"#);
+    let library = library_over(&stub);
+
+    let error = library
+        .get_albums_by_artist(&session(), "artist-9")
+        .unwrap_err()
+        .to_string();
+
+    assert_eq!(error, "response carried album with a blank id (got \"\")");
+}
+
+#[test]
+fn blank_song_id_is_an_error() {
+    let stub = StubTransport::returning(r#"{"data":[{"id":"","attributes":{"name":"Ghost"}}]}"#);
+    let library = library_over(&stub);
+
+    let error = library
+        .get_songs_from_album(&session(), "album-9")
+        .unwrap_err()
+        .to_string();
+
+    assert_eq!(error, "response carried song with a blank id (got \"\")");
+}
+
 // `ureq` defaults every network timeout to `None`, so a server that accepts
 // the connection and never sends a response used to block `UreqTransport::get`
 // forever — the UI's own fetch timeout only abandons the detached `off_thread`

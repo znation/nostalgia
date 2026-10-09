@@ -170,7 +170,7 @@ impl RestLibrary {
     /// # Errors
     ///
     /// Returns an [`AppleMusicError`] when the request fails, the response is
-    /// not valid JSON, or a resource carries no name.
+    /// not valid JSON, or a resource carries a blank id or no name.
     pub fn get_favorite_artists(
         &self,
         session: &MusicKitSession,
@@ -180,11 +180,9 @@ impl RestLibrary {
         resources
             .into_iter()
             .map(|resource| {
+                let id = resource.required_id("artist")?;
                 let name = resource.required_name("artist")?;
-                Ok(Artist {
-                    id: resource.id,
-                    name,
-                })
+                Ok(Artist { id, name })
             })
             .collect()
     }
@@ -199,7 +197,7 @@ impl RestLibrary {
     /// # Errors
     ///
     /// Returns an [`AppleMusicError`] when the request fails, the response is
-    /// not valid JSON, or a resource carries no name.
+    /// not valid JSON, or a resource carries a blank id or no name.
     pub fn get_albums_by_artist(
         &self,
         session: &MusicKitSession,
@@ -213,9 +211,10 @@ impl RestLibrary {
         resources
             .into_iter()
             .map(|resource| {
+                let id = resource.required_id("album")?;
                 let title = resource.required_name("album")?;
                 Ok(Album {
-                    id: resource.id,
+                    id,
                     title,
                     artist_id: artist_id.to_string(),
                 })
@@ -233,7 +232,7 @@ impl RestLibrary {
     /// # Errors
     ///
     /// Returns an [`AppleMusicError`] when the request fails, the response is
-    /// not valid JSON, or a resource carries no name.
+    /// not valid JSON, or a resource carries a blank id or no name.
     pub fn get_songs_from_album(
         &self,
         session: &MusicKitSession,
@@ -247,9 +246,10 @@ impl RestLibrary {
         resources
             .into_iter()
             .map(|resource| {
+                let id = resource.required_id("song")?;
                 let title = resource.required_name("song")?;
                 Ok(Song {
-                    id: resource.id,
+                    id,
                     title,
                     album_id: album_id.to_string(),
                 })
@@ -358,6 +358,23 @@ struct Attributes {
 }
 
 impl Resource {
+    /// The resource's non-blank id, or an [`AppleMusicError`] naming `kind`.
+    ///
+    /// The id names the resource: the model links rows together by it, and the
+    /// seam later uses it to browse or play. A blank id (empty or only
+    /// whitespace) can name nothing, so the response is rejected rather than
+    /// mapped to a row the UI would render but that errors when pressed — the
+    /// same reason [`Self::required_name`] rejects a blank name.
+    fn required_id(&self, kind: &str) -> Result<String, AppleMusicError> {
+        if self.id.trim().is_empty() {
+            return Err(AppleMusicError::new(format!(
+                "response carried {kind} with a blank id (got {:?})",
+                self.id
+            )));
+        }
+        Ok(self.id.clone())
+    }
+
     /// The resource's non-blank name, or an [`AppleMusicError`] naming `kind`
     /// and this resource's id.
     ///
