@@ -219,6 +219,36 @@ fn bootstrap_page_is_private_and_carries_the_sign_in_url() {
     );
 }
 
+// `render_auth_page` fills every template placeholder. The flow tests assert
+// that the served page carries the developer token and the per-flow nonce, but
+// nothing pins the build version the page hands MusicKit's `configure` as
+// `app.build`: dropping the `{{VERSION}}` substitution, or adding a fourth
+// placeholder without a matching `replace`, would serve a literal `{{...}}`
+// into the browser's MusicKit config with the whole suite still green. Render
+// the template directly and pin all three substitutions plus the absence of
+// any surviving placeholder.
+#[test]
+fn render_auth_page_substitutes_every_template_placeholder() {
+    let page = super::page::render_auth_page(SAMPLE_DEVELOPER_TOKEN, "deadbeefdeadbeef");
+
+    assert!(
+        page.contains(SAMPLE_DEVELOPER_TOKEN),
+        "the page must embed the developer token"
+    );
+    assert!(
+        page.contains("deadbeefdeadbeef"),
+        "the page must embed the per-flow state nonce"
+    );
+    assert!(
+        page.contains(&format!("build: \"{}\"", env!("CARGO_PKG_VERSION"))),
+        "the page must hand MusicKit the crate's build version"
+    );
+    assert!(
+        !page.contains("{{"),
+        "no template placeholder may survive rendering, got: {page}"
+    );
+}
+
 // The bootstrap guard's security claim is that it creates its directory and
 // file with `create`/`create_new`, so an entry already at the path — a file an
 // attacker pre-planted, or a symlink to a victim — is refused rather than
