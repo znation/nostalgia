@@ -410,14 +410,33 @@ pub(crate) fn read_some_request(stream: &mut TcpStream) -> String {
 /// `response` verbatim, and closes. Returns the bound address so a test can
 /// point an HTTP client at it without rebuilding the accept/read/write
 /// scaffolding. Shared by the `apple_music::rest` and `audio` suites.
+///
+/// The recording-free variant of [`serve_one_response_capturing_request`]:
+/// the request it read is dropped, so a test that needs those bytes calls
+/// that helper instead.
 pub(crate) fn serve_one_response(response: &str) -> SocketAddr {
+    let (address, _request) = serve_one_response_capturing_request(response);
+    address
+}
+
+/// Serves exactly one HTTP response on a fresh loopback listener and returns
+/// the bound address together with a receiver for the request text it read, so
+/// a test can assert on the bytes the client sent as well as the response. The
+/// accept/read/write scaffolding lives here once; [`serve_one_response`] is
+/// the recording-free variant that drops the receiver. The `apple_music::rest`
+/// request-capture test calls it.
+pub(crate) fn serve_one_response_capturing_request(
+    response: &str,
+) -> (SocketAddr, std::sync::mpsc::Receiver<String>) {
     let (listener, address) = loopback_listener();
     let response = response.to_string();
+    let (sender, receiver) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let (mut stream, _) = listener.accept().unwrap();
-        let _ = read_some_request(&mut stream);
+        let request = read_some_request(&mut stream);
         let _ = stream.write_all(response.as_bytes());
         let _ = stream.flush();
+        let _ = sender.send(request);
     });
-    address
+    (address, receiver)
 }

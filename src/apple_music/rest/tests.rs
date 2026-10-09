@@ -2,7 +2,7 @@ use super::*;
 
 use crate::test_support::{
     StubTransport, loopback_listener, read_some_request, sample_album, sample_artist, sample_song,
-    serve_one_response,
+    serve_one_response, serve_one_response_capturing_request,
 };
 
 /// A session whose tokens are recognizable, so a test can assert the transport
@@ -474,21 +474,15 @@ fn http_response(status_line: &str, content_type: &str, body: &str) -> String {
 #[test]
 fn a_redirect_is_not_followed_so_the_user_token_cannot_leak() {
     let (foreign, foreign_addr) = loopback_listener();
-    let (redirector, redirector_addr) = loopback_listener();
 
     // The redirecting server answers the one request with a 302 pointing at
     // the "foreign" server, exactly what a hostile or compromised API reply
-    // could return.
-    let redirect_thread = std::thread::spawn(move || {
-        let (mut stream, _) = redirector.accept().unwrap();
-        let _ = read_some_request(&mut stream);
-        use std::io::Write;
-        let response = format!(
-            "HTTP/1.1 302 Found\r\nLocation: http://{foreign_addr}/leak\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-        );
-        let _ = stream.write_all(response.as_bytes());
-        let _ = stream.flush();
-    });
+    // could return. `serve_one_response` binds, accepts, reads, and writes the
+    // reply, so the redirecting server is the same one-shot loopback server
+    // the response tests use.
+    let redirector_addr = serve_one_response(&format!(
+        "HTTP/1.1 302 Found\r\nLocation: http://{foreign_addr}/leak\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+    ));
 
     // The foreign server records whether any redirected request arrived. A
     // one-second poll makes "no request" a bounded, observable result rather
@@ -518,7 +512,6 @@ fn a_redirect_is_not_followed_so_the_user_token_cannot_leak() {
     });
     let _ = receiver.recv_timeout(std::time::Duration::from_secs(5));
 
-    redirect_thread.join().unwrap();
     let leaked = foreign_thread.join().unwrap();
     assert!(
         leaked.is_none(),
@@ -714,18 +707,9 @@ fn a_successful_response_returns_its_body() {
 // real transport sends and pin both credentials (and the URL path).
 #[test]
 fn a_request_carries_the_developer_and_user_tokens() {
-    let (listener, address) = loopback_listener();
-    let (sender, receiver) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        use std::io::Write;
-        let (mut stream, _) = listener.accept().unwrap();
-        let request = read_some_request(&mut stream);
-        let body = r#"{"data":[]}"#;
-        let response = http_response("200 OK", "application/json", body);
-        let _ = stream.write_all(response.as_bytes());
-        let _ = stream.flush();
-        let _ = sender.send(request);
-    });
+    let body = r#"{"data":[]}"#;
+    let (address, receiver) =
+        serve_one_response_capturing_request(&http_response("200 OK", "application/json", body));
 
     let url = format!("http://{address}/me/library/artists");
     UreqTransport::new()
