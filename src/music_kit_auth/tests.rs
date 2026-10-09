@@ -587,6 +587,32 @@ fn read_http_request_rejects_a_request_line_without_a_target() {
     assert_eq!(error.to_string(), "missing target");
 }
 
+// A `Content-Length` that does not parse as a number is treated as no body
+// (the `parse().unwrap_or(0)` branch), so the request is still returned with
+// an empty body rather than aborting the flow or reading an unbounded body.
+// Pin that: propagating the parse error instead would reject the request, and
+// reading to the deadline would hang it, so either regression fails here.
+#[test]
+fn read_http_request_treats_a_malformed_content_length_as_no_body() {
+    let (mut server, mut client) = connected_pair();
+    client
+        .write_all(
+            b"POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: not-a-number\r\n\r\nbody",
+        )
+        .expect("write a request with a malformed Content-Length");
+
+    let request = read_http_request(&mut server, Instant::now() + Duration::from_secs(5))
+        .expect("a malformed Content-Length is not an I/O error")
+        .expect("a malformed Content-Length is treated as no body, not refused");
+    assert_eq!(request.method, "POST");
+    assert_eq!(request.path, "/token");
+    assert!(
+        request.body.is_empty(),
+        "the malformed length must not read a body, got {:?}",
+        request.body
+    );
+}
+
 #[test]
 fn authorize_times_out_without_a_callback_and_names_the_bound() {
     let opener = |_url: &str| Ok(());
