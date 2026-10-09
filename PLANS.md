@@ -29,7 +29,37 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Drive the transport's Play/Pause/Stop through the audio backend (found 2026-10-08)
+
+**Goal.** Pressing the transport's Play/Pause, Play, Pause, and Stop controls — and their X, C, and V keys — drives the injected `audio::AudioOutput` as well as `AppState`, so pausing or stopping silences the playing preview and Play resumes it. Today only `AppleMusicService::play_track` reaches the backend: the service's `pause` is dead code and there is no `resume` or `stop`, so the preview keeps sounding after Stop and Pause. This is the wiring the audio-seam plan (PLANS.md `## Done`, 2026-10-08) explicitly deferred.
+
+**Approach.**
+
+- `src/audio.rs`: add `resume(&self) -> Result<(), AppleMusicError>` to `AudioOutput` (doc: resumes a paused player; no effect when nothing is loaded — rodio's `Player::play` resumes, it does not restart). Implement it for `SilentOutput` (log and `Ok`); add `Command::Resume`; `RodioOutput::resume` sends it; the `run_worker` loop maps `Command::Resume` to `player.play()` on the current `rodio::Player`. Extend `silent_output_reports_success_for_every_command`, `audio_with_fallback_falls_back_to_silence_when_open_fails`, `rodio_output_maps_each_seam_method_to_its_worker_command`, and `rodio_output_reports_a_closed_worker_for_every_command` to cover `resume`.
+- `src/test_support.rs`: add `AudioCall::Resume`; `RecordingAudio::resume` records it; `FailingAudio::resume` returns `Ok(())` like its `pause`/`stop`.
+- `src/apple_music.rs`: make the service the single owner of each transport transition, reusing the existing `AppState` mutators so none go dead:
+  - Move `pause` out of the `#[allow(dead_code)]` block, narrow that attribute to `next_track`/`previous_track`, and make the four transport methods `pub(crate)` so `ui` can call them.
+  - `pause` keeps pausing audio first, then calls `self.state.lock().await.pause()` instead of writing `is_playing` directly.
+  - Add `resume`: `self.audio.resume()?`, then `state.play()`.
+  - Add `stop`: `self.audio.stop()?`, then `state.stop()`.
+  - Add `toggle_play_pause`: read `is_playing` under the lock, call `audio.pause()` or `audio.resume()` to match it, then `state.toggle_playing()`.
+  - Update the impl-block and struct doc comments that call the transport unwired, and log a matching line as `pause` does.
+- `src/ui/loading.rs`: add `transport_into(service, context, action) -> Task<Message>`: clone the service, await `action(service)`, report a backend error through a new pure `transport_failure_report(context, err)`, and map completion to `Message::TransportSettled`. Unlike `play_into` it carries no track or generation — a pause/stop cannot be superseded by a newer play — and it must not prune the title index.
+- `src/ui/mod.rs`: add the `Message::TransportSettled` variant with a no-op arm (its purpose is to make iced re-render after the async transition). Replace the four synchronous arms `PlayPause`, `Play`, `Pause`, and `Stop` with `transport_into(...)` calls to `toggle_play_pause`/`resume`/`pause`/`stop`; drop those four from `mutate_state`'s doc list and import `transport_into`.
+- Tests:
+  - `src/apple_music/tests.rs`: keep the two existing `pause` tests; add `resume_resumes_the_audio_backend`, `stop_stops_the_audio_backend`, `toggle_play_pause_pauses_while_playing`, and `toggle_play_pause_resumes_while_stopped`, each asserting the recorded `AudioCall` and the resulting `is_playing`/`current_track`.
+  - `src/ui/tests.rs`: convert `play_pause_toggles_is_playing`, `stop_clears_is_playing`, and `play_and_pause_set_the_playback_flag_explicitly` into `#[tokio::test]`s that drive the returned task with `drive_task` before reading state, and update their stale `blocking_lock` comments. Add `transport_messages_drive_the_audio_backend`, which drives each of the four messages through `update` and `drive_task` over a `player_with_audio(RecordingAudio)` and asserts the recorded calls (`Stop`, `Resume`, `Pause`, and a `Pause` from the toggle).
+  - `src/ui/loading.rs`'s suite: add a pure-function test for `transport_failure_report`, like the existing `play_failure_report` test.
+
+**Files touched.** `src/audio.rs`, `src/test_support.rs`, `src/apple_music.rs`, `src/apple_music/tests.rs`, `src/ui/loading.rs`, `src/ui/mod.rs`, `src/ui/tests.rs`.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- With a `RecordingAudio`, `AppleMusicService::stop` records one `AudioCall::Stop` and clears `AppState::is_playing` while keeping `current_track`; `resume` records one `AudioCall::Resume` and sets `is_playing`; `toggle_play_pause` records `Pause` from playing and `Resume` from stopped.
+- `RodioOutput::resume` sends `Command::Resume`, and `SilentOutput::resume` returns `Ok`.
+- Driving `Message::Stop`, `Message::Pause`, `Message::Play`, and `Message::PlayPause` through `update` and the returned task leaves `AppState::is_playing` matching the control (false after Stop/Pause, true after Play, toggled after PlayPause) and records the matching `AudioCall`.
+- `transport_failure_report` names the context and includes the backend error.
 
 ## Done
 
