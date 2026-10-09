@@ -699,6 +699,56 @@ async fn play_track_rejects_a_preview_url_that_is_not_a_public_https_url() {
     assert_playback_state(&state, None, false).await;
 }
 
+// `preview_url_problem` extracts and normalizes the host before it checks it:
+// it drops a `user:pass@` prefix, a `:port` suffix, an IPv6 `[`/`]` pair, a
+// trailing root dot, and case. Each of those spellings can hide an internal
+// host that only the normalized form exposes, so a regression that dropped one
+// normalization would leave the host looking like an ordinary name and pass it
+// through. Pin each disguised spelling and the reason it is refused.
+#[test]
+fn preview_url_problem_unwraps_a_disguised_internal_host() {
+    for (url, reason) in [
+        (
+            "https://user@127.0.0.1/preview.m4a",
+            "must not target an internal address",
+        ),
+        (
+            "https://user:pass@10.0.0.5/preview.m4a",
+            "must not target an internal address",
+        ),
+        (
+            "https://127.0.0.1:443/preview.m4a",
+            "must not target an internal address",
+        ),
+        (
+            "https://[::1]:443/preview.m4a",
+            "must not target an internal address",
+        ),
+        (
+            "https://127.0.0.1./preview.m4a",
+            "must not target an internal address",
+        ),
+        (
+            "https://localhost:8080/preview.m4a",
+            "must not target the local host",
+        ),
+        (
+            "https://localhost./preview.m4a",
+            "must not target the local host",
+        ),
+        (
+            "https://LOCALHOST/preview.m4a",
+            "must not target the local host",
+        ),
+    ] {
+        assert_eq!(
+            preview_url_problem(url),
+            Some(reason),
+            "unexpected reason for {url:?}"
+        );
+    }
+}
+
 // The guard must not reject a legitimate preview URL, so Apple's CDN host, a
 // plain public host, and a public address literal all still reach the backend.
 // `play_track` first forwards the state's volume (the default 0.5) so the
