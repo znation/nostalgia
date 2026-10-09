@@ -27,9 +27,9 @@ fn test_service_with_state() -> (AppleMusicService, Arc<Mutex<AppState>>) {
 
 /// The session the browser sign-in flow returns in the tests below, with
 /// recognizable tokens so a test can assert the service stored exactly what
-/// the flow produced. The startup, `authenticate_with`, and failed-auth
-/// tests all build this same session, so it lives here once and each test
-/// names only the behavior it drives to.
+/// the flow produced. The startup, `authenticate_with`, failed-auth, and
+/// `wait_for_session` tests all build this same session, so it lives here
+/// once and each test names only the behavior it drives to.
 fn sign_in_session() -> MusicKitSession {
     MusicKitSession {
         developer_token: "dev-token".to_string(),
