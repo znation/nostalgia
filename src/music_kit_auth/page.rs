@@ -1,6 +1,7 @@
-//! The two pages the loopback server serves to the browser: the sign-in page
-//! that loads `MusicKit` JS and runs the authorization flow, and the success
-//! page it lands on once the callback is captured.
+//! The pages the sign-in flow puts in front of the browser: the sign-in page
+//! that loads `MusicKit` JS and runs the authorization flow, the success page
+//! it lands on once the callback is captured, and the local bootstrap page that
+//! redirects the browser to the loopback sign-in URL.
 //!
 //! The page is a static template; [`render_auth_page`] substitutes the
 //! developer token and the per-flow `state` nonce into it. Keeping the HTML
@@ -14,6 +15,20 @@ pub(super) fn render_auth_page(developer_token: &str, nonce: &str) -> String {
         .replace("{{DEVELOPER_TOKEN}}", developer_token)
         .replace("{{STATE}}", nonce)
         .replace("{{VERSION}}", env!("CARGO_PKG_VERSION"))
+}
+
+/// Builds the local bootstrap page that redirects the browser to the sign-in
+/// URL.
+///
+/// The flow writes this page into an owner-only temp file and opens that file,
+/// rather than passing the URL to the browser: the URL carries the per-flow
+/// `state` nonce, and a process's command line is world-readable on Unix. `url`
+/// is assembled from a numeric port and a hex nonce, so it contains no HTML
+/// metacharacters and needs no escaping.
+pub(super) fn render_bootstrap_page(url: &str) -> String {
+    format!(
+        "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta http-equiv=\"refresh\" content=\"0; url={url}\">\n<title>Nostalgia - Apple Music sign-in</title>\n</head>\n<body>\n<p>Opening the Apple Music sign-in page...</p>\n</body>\n</html>\n"
+    )
 }
 
 /// The page opened in the browser: it loads `MusicKit` JS, configures it, calls

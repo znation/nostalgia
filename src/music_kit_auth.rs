@@ -18,9 +18,11 @@
 //! `127.0.0.1` is refused, so a DNS-rebinding page — which reaches the socket
 //! under its own hostname — cannot read the sign-in page's developer token or
 //! `state` nonce. The page route itself is served only to a request that
-//! presents this flow's `state` nonce (the browser was opened at
-//! `/?state=<nonce>`), so another local client — which can reach the loopback
-//! port but does not know the nonce — cannot read the developer token the page
+//! presents this flow's `state` nonce, and the browser reaches that URL through
+//! an owner-only bootstrap file rather than a command-line argument — process
+//! arguments are world-readable on Unix, so a URL carrying the nonce would leak
+//! it to every local user. A local client that can reach the loopback port but
+//! does not know the nonce therefore cannot read the developer token the page
 //! embeds. Every request is read into a buffer capped at
 //! `MAX_REQUEST_BYTES` (defined in the `http` submodule): the cap is checked
 //! while reading headers *and* before the declared body is read, so a hostile
@@ -39,9 +41,13 @@
 //! reading cannot hold the connection there either.
 
 use std::collections::hash_map::RandomState;
+use std::env;
+use std::fs;
 use std::hash::{BuildHasher, Hasher};
 use std::io;
+use std::io::Write;
 use std::net::{TcpListener, TcpStream};
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -52,7 +58,7 @@ mod http;
 mod page;
 
 use http::{CONNECTION_READ_TIMEOUT, read_http_request, write_response};
-use page::{SUCCESS_PAGE, render_auth_page};
+use page::{SUCCESS_PAGE, render_auth_page, render_bootstrap_page};
 
 /// How long [`authorize`] waits for the browser callback before giving up:
 /// five minutes, enough for a sign-in the user completes by hand.
@@ -109,8 +115,10 @@ pub fn validate_developer_token(token: &str) -> Result<(), AppleMusicError> {
 
 /// Runs the `MusicKit` loopback sign-in flow and returns the resulting session.
 ///
-/// `open_url` is called with the loopback page URL; production passes
-/// [`open_in_browser`], and tests pass a fake opener that drives the callback.
+/// `open_page` is called with the path of an owner-only bootstrap page that
+/// redirects the browser to the loopback URL; production passes
+/// [`open_in_browser`], and tests pass a fake opener that reads the page and
+/// drives the callback.
 ///
 /// Surrounding whitespace on `developer_token` — a trailing newline read from
 /// a token file, say — is trimmed before validation and before the token is
@@ -130,19 +138,19 @@ pub fn validate_developer_token(token: &str) -> Result<(), AppleMusicError> {
 // the wiring in `apple_music` can obtain a session at startup.
 pub fn authorize(
     developer_token: &str,
-    open_url: &dyn Fn(&str) -> io::Result<()>,
+    open_page: &dyn Fn(&str) -> io::Result<()>,
 ) -> Result<MusicKitSession, AppleMusicError> {
-    authorize_with_timeout(developer_token, open_url, AUTH_TIMEOUT)
+    authorize_with_timeout(developer_token, open_page, AUTH_TIMEOUT)
 }
 
 /// [`authorize`] with an injectable deadline, so tests need not wait
 /// [`AUTH_TIMEOUT`].
 fn authorize_with_timeout(
     developer_token: &str,
-    open_url: &dyn Fn(&str) -> io::Result<()>,
+    open_page: &dyn Fn(&str) -> io::Result<()>,
     timeout: Duration,
 ) -> Result<MusicKitSession, AppleMusicError> {
-    authorize_with_bounds(developer_token, open_url, timeout, CONNECTION_READ_TIMEOUT)
+    authorize_with_bounds(developer_token, open_page, timeout, CONNECTION_READ_TIMEOUT)
 }
 
 /// [`authorize_with_timeout`] with an injectable per-connection budget, so a
@@ -150,7 +158,7 @@ fn authorize_with_timeout(
 /// whole flow without waiting out the production five-second budget.
 fn authorize_with_bounds(
     developer_token: &str,
-    open_url: &dyn Fn(&str) -> io::Result<()>,
+    open_page: &dyn Fn(&str) -> io::Result<()>,
     timeout: Duration,
     connection_budget: Duration,
 ) -> Result<MusicKitSession, AppleMusicError> {
@@ -173,7 +181,16 @@ fn authorize_with_bounds(
         .port();
     let nonce = random_nonce();
     let url = format!("http://127.0.0.1:{port}/?state={nonce}");
-    open_url(&url).map_err(|error| {
+    // Keep the URL — and with it the `state` nonce — out of the opener's
+    // command line, which is world-readable on Unix. The browser opens this
+    // owner-only file, which redirects it to the loopback page. `bootstrap`
+    // stays alive until the flow returns so the browser can read it.
+    let bootstrap = BootstrapPage::write(&url).map_err(|error| {
+        AppleMusicError::new(format!(
+            "could not write the sign-in bootstrap page: {error}"
+        ))
+    })?;
+    open_page(&bootstrap.path_string()).map_err(|error| {
         AppleMusicError::new(format!("could not open the sign-in page: {error}"))
     })?;
     listener.set_nonblocking(true).map_err(|error| {
@@ -218,7 +235,11 @@ fn authorize_with_bounds(
     }
 }
 
-/// Opens `url` in the system's default browser.
+/// Opens `path` in the system's default browser.
+///
+/// `path` is the owner-only bootstrap page [`BootstrapPage`] wrote, not the
+/// sign-in URL: the URL carries the `state` nonce, and a command-line argument
+/// is world-readable on Unix, so only the local file path may reach the opener.
 ///
 /// The opener is a short-lived launcher, so it is reaped on a detached thread
 /// (see [`spawn_opener`]) rather than left as a zombie for the rest of the
@@ -231,13 +252,13 @@ fn authorize_with_bounds(
 /// diagnosable rather than a bare "No such file or directory".
 // `AppleMusicService::authenticate` passes this to [`authorize`]; it is public
 // so the wiring in `apple_music` can supply the real opener.
-pub fn open_in_browser(url: &str) -> io::Result<()> {
+pub fn open_in_browser(path: &str) -> io::Result<()> {
     if cfg!(target_os = "macos") {
-        spawn_opener("open", &[url])
+        spawn_opener("open", &[path])
     } else if cfg!(target_os = "windows") {
-        spawn_opener("cmd", &["/C", "start", "", url])
+        spawn_opener("cmd", &["/C", "start", "", path])
     } else {
-        spawn_opener("xdg-open", &[url])
+        spawn_opener("xdg-open", &[path])
     }
 }
 
@@ -257,6 +278,102 @@ fn spawn_opener(program: &str, args: &[&str]) -> io::Result<()> {
         .map_err(|error| io::Error::new(error.kind(), format!("{program}: {error}")))?;
     reap_in_background(child);
     Ok(())
+}
+
+/// A private, single-use bootstrap page that redirects the browser to the
+/// sign-in URL.
+///
+/// The sign-in URL carries the per-flow `state` nonce. Handing it to the
+/// browser as a command-line argument would expose it to every local user
+/// through `/proc/<pid>/cmdline` on Linux (and `ps` on macOS). Writing the URL
+/// into an owner-only file and opening *that* file keeps the nonce out of the
+/// only world-readable channel to the browser: the spawned opener and browser
+/// see this file's path, never the URL. The file and its directory are removed
+/// when the guard is dropped, after the flow has finished with them.
+struct BootstrapPage {
+    directory: PathBuf,
+    file: PathBuf,
+}
+
+impl BootstrapPage {
+    /// Writes a redirect page carrying `url` into a fresh owner-only temp
+    /// directory and returns the guard that owns it.
+    fn write(url: &str) -> io::Result<Self> {
+        // Retry on the vanishingly unlikely name collision so a stale entry
+        // cannot wedge the flow; `create_dir` refuses an existing path, so a
+        // pre-planted file or symlink is never followed.
+        for _ in 0..8 {
+            let directory = env::temp_dir().join(format!("nostalgia-auth-{}", random_nonce()));
+            match create_private_dir(&directory) {
+                Ok(()) => {
+                    let file = directory.join("sign-in.html");
+                    write_private_file(&file, &render_bootstrap_page(url))?;
+                    return Ok(Self { directory, file });
+                }
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+                Err(error) => return Err(error),
+            }
+        }
+        Err(io::Error::new(
+            io::ErrorKind::AlreadyExists,
+            "could not create a private temp directory for the sign-in page",
+        ))
+    }
+
+    /// The local file path handed to the browser opener.
+    fn path_string(&self) -> String {
+        self.file.to_string_lossy().into_owned()
+    }
+}
+
+impl Drop for BootstrapPage {
+    /// Removes the page and its directory. A failure is ignored: the flow has
+    /// already finished, so there is nothing left to retry or report.
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.file);
+        let _ = fs::remove_dir(&self.directory);
+    }
+}
+
+/// Creates `directory` with owner-only permissions. The mode is set at
+/// creation (via `mkdir`), so there is no window where another user can enter
+/// the directory.
+#[cfg(unix)]
+fn create_private_dir(directory: &Path) -> io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+    fs::DirBuilder::new().mode(0o700).create(directory)
+}
+
+/// Creates `directory`. The world-readable `/proc` argument channel this guard
+/// defends against is Unix-specific, so the non-Unix fallback needs no mode.
+#[cfg(not(unix))]
+fn create_private_dir(directory: &Path) -> io::Result<()> {
+    fs::DirBuilder::new().create(directory)
+}
+
+/// Writes `contents` to `file`, creating it with owner-only permissions and
+/// refusing to overwrite an existing path.
+#[cfg(unix)]
+fn write_private_file(file: &Path, contents: &str) -> io::Result<()> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut handle = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(file)?;
+    handle.write_all(contents.as_bytes())
+}
+
+/// Writes `contents` to `file`, refusing to overwrite an existing path. The
+/// world-readable `/proc` argument channel this guard defends against is
+/// Unix-specific, so the non-Unix fallback needs no mode.
+#[cfg(not(unix))]
+fn write_private_file(file: &Path, contents: &str) -> io::Result<()> {
+    let mut handle = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(file)?;
+    handle.write_all(contents.as_bytes())
 }
 
 /// Waits on `child` on a detached thread so it is reaped without blocking the

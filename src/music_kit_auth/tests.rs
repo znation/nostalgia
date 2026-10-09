@@ -10,6 +10,9 @@ const SAMPLE_USER_TOKEN: &str = "eyJhbGciOiJFUzI1NiJ9.eyJzdWIiOiJ1c2VyIn0.c2ln";
 /// The background opener threads a test started, so it can join them.
 type OpenerHandles = Arc<Mutex<Vec<thread::JoinHandle<()>>>>;
 
+/// Each `(bootstrap path, sign-in URL)` pair a capturing opener received.
+type OpenerCalls = Arc<Mutex<Vec<(String, String)>>>;
+
 /// The port embedded in the opener URL.
 fn port_of(url: &str) -> u16 {
     let authority = url
@@ -32,6 +35,14 @@ fn state_of(url: &str) -> String {
         .to_string()
 }
 
+/// The sign-in URL embedded in a bootstrap page.
+fn url_of_bootstrap(html: &str) -> String {
+    let start = html.find("url=").expect("the bootstrap page carries a url") + 4;
+    let rest = &html[start..];
+    let end = rest.find('"').expect("the bootstrap url is quoted");
+    rest[..end].to_string()
+}
+
 /// Sends one raw HTTP request to `port` and returns the whole response.
 fn request(port: u16, raw: &str) -> String {
     let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect to the server");
@@ -47,6 +58,10 @@ fn request(port: u16, raw: &str) -> String {
 /// blocking `authorize` call can accept the connection. The returned
 /// handles let a test join the thread (and surface any panic in it) once
 /// `authorize` has returned.
+///
+/// The opener receives the path of the private bootstrap page, not the
+/// sign-in URL, so it reads the page to recover the port and nonce the way a
+/// browser would follow the redirect.
 fn background<F>(flow: F) -> (impl Fn(&str) -> io::Result<()>, OpenerHandles)
 where
     F: FnOnce(u16, String) + Send + 'static,
@@ -54,9 +69,11 @@ where
     let slot = Arc::new(Mutex::new(Some(flow)));
     let handles = Arc::new(Mutex::new(Vec::new()));
     let handles_for_opener = Arc::clone(&handles);
-    let opener = move |url: &str| {
-        let port = port_of(url);
-        let state = state_of(url);
+    let opener = move |page_path: &str| {
+        let html = std::fs::read_to_string(page_path).expect("the bootstrap page is readable");
+        let url = url_of_bootstrap(&html);
+        let port = port_of(&url);
+        let state = state_of(&url);
         let flow = slot.lock().expect("opener slot lock").take();
         if let Some(flow) = flow {
             let handle = thread::spawn(move || flow(port, state));
@@ -68,6 +85,39 @@ where
         Ok(())
     };
     (opener, handles)
+}
+
+/// Like [`background`], but also records each `(bootstrap path, sign-in URL)`
+/// pair the opener received, so a test can inspect what reached the opener.
+fn background_capturing<F>(flow: F) -> (impl Fn(&str) -> io::Result<()>, OpenerHandles, OpenerCalls)
+where
+    F: FnOnce(u16, String) + Send + 'static,
+{
+    let slot = Arc::new(Mutex::new(Some(flow)));
+    let handles = Arc::new(Mutex::new(Vec::new()));
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let handles_for_opener = Arc::clone(&handles);
+    let calls_for_opener = Arc::clone(&calls);
+    let opener = move |page_path: &str| {
+        let html = std::fs::read_to_string(page_path).expect("the bootstrap page is readable");
+        let url = url_of_bootstrap(&html);
+        calls_for_opener
+            .lock()
+            .expect("calls lock")
+            .push((page_path.to_string(), url.clone()));
+        let port = port_of(&url);
+        let state = state_of(&url);
+        let flow = slot.lock().expect("opener slot lock").take();
+        if let Some(flow) = flow {
+            let handle = thread::spawn(move || flow(port, state));
+            handles_for_opener
+                .lock()
+                .expect("handles lock")
+                .push(handle);
+        }
+        Ok(())
+    };
+    (opener, handles, calls)
 }
 
 /// Joins every opener thread, propagating a panic from one to the test.
@@ -123,6 +173,77 @@ where
     })
     .expect("the real callback still succeeds");
     observed.lock().expect("observed lock").clone()
+}
+
+#[test]
+fn bootstrap_page_is_private_and_carries_the_sign_in_url() {
+    let url = "http://127.0.0.1:4321/?state=deadbeefdeadbeef";
+    let page = BootstrapPage::write(url).expect("write the bootstrap page");
+    let path = page.path_string();
+    let html = std::fs::read_to_string(&path).expect("read the bootstrap page");
+    assert!(
+        html.contains(url),
+        "the bootstrap page must redirect to the sign-in URL, got: {html}"
+    );
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let file_mode = std::fs::metadata(&path)
+            .expect("bootstrap metadata")
+            .permissions()
+            .mode();
+        assert_eq!(
+            file_mode & 0o077,
+            0,
+            "the bootstrap page must be owner-only, mode {file_mode:o}"
+        );
+        let directory = std::path::Path::new(&path)
+            .parent()
+            .expect("the bootstrap page has a directory");
+        let dir_mode = std::fs::metadata(directory)
+            .expect("bootstrap directory metadata")
+            .permissions()
+            .mode();
+        assert_eq!(
+            dir_mode & 0o077,
+            0,
+            "the bootstrap directory must be owner-only, mode {dir_mode:o}"
+        );
+    }
+
+    drop(page);
+    assert!(
+        !std::path::Path::new(&path).exists(),
+        "dropping the bootstrap page removes it"
+    );
+}
+
+#[test]
+fn authorize_keeps_the_state_nonce_out_of_the_opener_argument() {
+    // `/proc/<pid>/cmdline` (and `ps`) is world-readable on Unix, so the
+    // sign-in URL — which carries the `state` nonce — must never be a
+    // command-line argument. The flow writes the URL into an owner-only
+    // bootstrap file and hands the opener only that file's path.
+    let (opener, handles, calls) = background_capturing(|port, state| {
+        let _ = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
+    });
+    let session = authorize_with_timeout(SAMPLE_DEVELOPER_TOKEN, &opener, Duration::from_secs(5))
+        .expect("the callback completes the flow");
+    join_all(&handles);
+    assert_eq!(session.user_token, SAMPLE_USER_TOKEN);
+
+    let calls = calls.lock().expect("calls lock");
+    let (path, url) = calls.first().expect("the opener was called");
+    let nonce = state_of(url);
+    assert!(
+        !path.contains(&nonce),
+        "the state nonce must not travel in the opener argument: {path}"
+    );
+    assert!(
+        !path.contains("state=") && !path.starts_with("http"),
+        "the opener must receive a local path, not the sign-in URL: {path}"
+    );
 }
 
 #[test]

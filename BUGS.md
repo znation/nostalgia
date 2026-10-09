@@ -5,50 +5,6 @@ reproduce, suspected cause. Move fixed bugs to Fixed.
 
 ## Open
 
-### The sign-in nonce travels in the browser opener's command line, so another local user can read it and fetch the page's developer token (found by security 2026-10-08)
-
-Symptom: the sign-in server's only authenticator is the per-flow `state`
-nonce, and that nonce is delivered to the browser inside the URL passed to the
-opener. `authorize_with_bounds` builds `let url =
-format!("http://127.0.0.1:{port}/?state={nonce}")` (`src/music_kit_auth.rs:175`)
-and hands it to `open_in_browser` (`:234`), which spawns `xdg-open` (or `open`,
-or `cmd /C start`) with the URL as a command-line argument (`:240`). Process
-arguments are world-readable on Linux: `/proc/<pid>/cmdline` is mode
-`-r--r--r--` (verified here by reading root's `/proc/1/cmdline`) and this host
-mounts `/proc` without `hidepid` (no `hidepid` option in `/proc/mounts`). While
-the opener (or a freshly launched browser) is alive, any other local account can
-read the nonce out of its command line. The page route in `serve_connection`
-(`:309`-`:338`) checks only the `Host` header and the nonce, then serves
-`render_auth_page`, which embeds the owner-side developer token; the same nonce
-also lets the attacker POST a forged callback to `/token`. The module's stated
-guarantee that "another local client ... does not know the nonce" therefore
-holds only against a client that cannot read `/proc`, not against another user
-on the same multi-user host. (The prior security note called the reader
-"same-user"; `/proc/<pid>/cmdline` is world-readable, so the reader need not
-share the UID.)
-
-How to reproduce:
-- On a host without `hidepid`, with `APPLE_MUSIC_DEVELOPER_TOKEN` set, start the
-  app and let it open the sign-in page.
-- From another local account, read the opener's or browser's command line, e.g.
-  `tr '\0' ' ' < /proc/<pid>/cmdline`; it carries
-  `http://127.0.0.1:<port>/?state=<nonce>`.
-- Fetch the page with that state: `curl 'http://127.0.0.1:<port>/?state=<nonce>'`.
-  The returned HTML contains `var developerToken = "..."` with the owner's
-  developer token.
-- Or POST `state=<nonce>&userToken=<any JWT-shaped value>` to `/token`; the flow
-  stores the attacker's user token as the session.
-
-Suspected cause: the nonce is the sole authenticator for both the page and the
-callback route, yet it reaches the browser through a world-readable channel
-(the opener's argv). The `Host` check does not constrain which local user
-connects, and the server has no peer-credential check. A TCP loopback listener
-cannot cheaply distinguish the browser's connection from another user's in std
-Rust, so the robust fix is to serve the flow over a Unix-domain socket inside a
-mode-0700 directory and verify the connecting process's UID (`SO_PEERCRED` on
-Linux, `getpeereid` on the BSDs), or otherwise keep the nonce out of every
-world-readable channel. Both are larger than one security tick.
-
 ### The stage self-check rejects a plan that names the new file it creates, so the plan/director roles must reword it to a symbol anchor (found by telemetry 2026-10-08)
 
 **Refused 2026-10-08 by bugfix: the pre-queue/landing self-check that flags added lines naming paths absent from the tree is tumwater harness code, off-limits to this role, so no change in this nostalgia repo can fix the false positive.**
@@ -124,6 +80,64 @@ so the "md-only" block is role-scoped.) The role re-authors the same change
 until the "3 consecutive tick failures" breaker trips.
 
 ## Fixed
+
+### The sign-in nonce travels in the browser opener's command line, so another local user can read it and fetch the page's developer token (found by security 2026-10-08, fixed 2026-10-08)
+
+Symptom: the sign-in server's only authenticator is the per-flow `state`
+nonce, and that nonce is delivered to the browser inside the URL passed to the
+opener. `authorize_with_bounds` builds `let url =
+format!("http://127.0.0.1:{port}/?state={nonce}")` (`src/music_kit_auth.rs:175`)
+and hands it to `open_in_browser` (`:234`), which spawns `xdg-open` (or `open`,
+or `cmd /C start`) with the URL as a command-line argument (`:240`). Process
+arguments are world-readable on Linux: `/proc/<pid>/cmdline` is mode
+`-r--r--r--` (verified here by reading root's `/proc/1/cmdline`) and this host
+mounts `/proc` without `hidepid` (no `hidepid` option in `/proc/mounts`). While
+the opener (or a freshly launched browser) is alive, any other local account can
+read the nonce out of its command line. The page route in `serve_connection`
+(`:309`-`:338`) checks only the `Host` header and the nonce, then serves
+`render_auth_page`, which embeds the owner-side developer token; the same nonce
+also lets the attacker POST a forged callback to `/token`. The module's stated
+guarantee that "another local client ... does not know the nonce" therefore
+holds only against a client that cannot read `/proc`, not against another user
+on the same multi-user host. (The prior security note called the reader
+"same-user"; `/proc/<pid>/cmdline` is world-readable, so the reader need not
+share the UID.)
+
+How to reproduce:
+- On a host without `hidepid`, with `APPLE_MUSIC_DEVELOPER_TOKEN` set, start the
+  app and let it open the sign-in page.
+- From another local account, read the opener's or browser's command line, e.g.
+  `tr '\0' ' ' < /proc/<pid>/cmdline`; it carries
+  `http://127.0.0.1:<port>/?state=<nonce>`.
+- Fetch the page with that state: `curl 'http://127.0.0.1:<port>/?state=<nonce>'`.
+  The returned HTML contains `var developerToken = "..."` with the owner's
+  developer token.
+- Or POST `state=<nonce>&userToken=<any JWT-shaped value>` to `/token`; the flow
+  stores the attacker's user token as the session.
+
+Suspected cause: the nonce is the sole authenticator for both the page and the
+callback route, yet it reaches the browser through a world-readable channel
+(the opener's argv). The `Host` check does not constrain which local user
+connects, and the server has no peer-credential check. A TCP loopback listener
+cannot cheaply distinguish the browser's connection from another user's in std
+Rust, so the robust fix is to serve the flow over a Unix-domain socket inside a
+mode-0700 directory and verify the connecting process's UID (`SO_PEERCRED` on
+Linux, `getpeereid` on the BSDs), or otherwise keep the nonce out of every
+world-readable channel. Both are larger than one security tick.
+
+**Fix:** `authorize_with_bounds` now writes the sign-in URL into a fresh
+owner-only temp directory (`BootstrapPage`: mode-0700 directory, mode-0600
+page) and hands the opener only that file's path, so the URL — and with it the
+`state` nonce — is not passed as a command-line argument to the opener or the
+browser it launches. The page's `<meta refresh>` sends the browser to the
+loopback URL, and the file and directory are removed when the flow returns.
+This keeps the nonce out of the world-readable channel the report named; it
+does not add a peer-credential check, so the loopback server still cannot tell
+the browser from another local client that has somehow learned the nonce.
+
+**Validation gap:** real-run-needed — the leak lived in a spawned process's
+command line, which the in-process fake-opener test seam did not observe, so the
+security role read `/proc/<pid>/cmdline` on a real host to confirm it.
 
 ### Transport buttons resize to their label text, so pressing Play/Pause reflows the whole control row (found by qa 2026-10-07, fixed 2026-10-07)
 
