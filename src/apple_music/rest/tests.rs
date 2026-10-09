@@ -444,6 +444,21 @@ fn api_error_cause_is_none_without_an_envelope_or_cause() {
     assert_eq!(api_error_cause(r#"{"data":[]}"#), None);
 }
 
+// The cause is a third-party reply, not this program's text: it reaches the
+// terminal through the browse failure report, so a raw escape sequence in the
+// detail must be rendered as a visible escape rather than driving the
+// terminal. Covers both a control character (`\u{1b}`) and a Unicode format
+// character (`\u{202e}`), which `char::is_control` does not classify as one.
+#[test]
+fn api_error_cause_escapes_terminal_control_characters() {
+    let body = r#"{"errors":[{"detail":"bad \u001b[31mtoken\u202e"}]}"#;
+    let cause = api_error_cause(body).unwrap();
+    assert!(!cause.contains('\u{1b}'), "{cause:?}");
+    assert!(!cause.contains('\u{202e}'), "{cause:?}");
+    assert!(cause.contains("\\u{1b}"), "{cause:?}");
+    assert!(cause.contains("\\u{202e}"), "{cause:?}");
+}
+
 // `ureq` turns a 4xx/5xx into a bare `Error::StatusCode` unless
 // `http_status_as_error(false)` is set, which discards Apple's error body —
 // the part that names the cause. `UreqTransport` now checks the status where

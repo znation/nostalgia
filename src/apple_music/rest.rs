@@ -318,10 +318,23 @@ struct ApiError {
 /// The human-readable cause in an Apple Music error body, preferring the first
 /// entry's `detail` and falling back to its `title`; `None` when `body` is not
 /// the documented envelope or carries neither field.
+///
+/// The cause is an Apple Music reply — data outside this program's control —
+/// and it is carried into [`AppleMusicError`], whose `Display` reaches the
+/// browse panel and, through `ui::loading`'s failure reports, the terminal.
+/// Escaping it with [`str::escape_debug`] renders a control character
+/// (`\u{1b}`) or a Unicode format character such as the right-to-left override
+/// `\u{202e}` as a visible `\u{..}` sequence instead of letting it reach the
+/// terminal raw, matching how [`crate::apple_music::play_log_line`] escapes a
+/// library id. An ordinary message (letters, digits, spaces) passes through
+/// unchanged.
 fn api_error_cause(body: &str) -> Option<String> {
     let envelope: ErrorEnvelope = serde_json::from_str(body).ok()?;
     let error = envelope.errors.into_iter().next()?;
-    error.detail.or(error.title)
+    error
+        .detail
+        .or(error.title)
+        .map(|cause| cause.escape_debug().to_string())
 }
 
 /// One entry in a collection response: its stable id plus the attributes the
