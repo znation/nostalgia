@@ -90,6 +90,31 @@ async fn service_with_preview_playing(
     (service, state)
 }
 
+/// A service over a recording backend, the shared state it mutates, and the
+/// recording that captured its `AudioCall`s.
+type RecordingService = (AppleMusicService, Arc<Mutex<AppState>>, Arc<RecordingAudio>);
+
+/// A fresh service over a recording backend, plus its shared state and the
+/// recording itself, so a transport test can drive the service and then assert
+/// the exact `AudioCall` sequence it sent. The four tests that start from a
+/// stopped transport build this same `Arc::new`/`Arc::clone` pair, so it lives
+/// here once.
+fn recording_service() -> RecordingService {
+    let recording = Arc::new(RecordingAudio::default());
+    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+    (service, state, recording)
+}
+
+/// [`recording_service`] with `song-1`'s preview already playing, so the
+/// backend holds a loaded player for the five tests whose subject is a later
+/// transition. They build the same pair, so it lives here once.
+async fn recording_service_with_preview() -> RecordingService {
+    let recording = Arc::new(RecordingAudio::default());
+    let (service, state) =
+        service_with_preview_playing(Arc::clone(&recording) as Arc<dyn AudioOutput>).await;
+    (service, state, recording)
+}
+
 /// A recording backend whose `pause` blocks until released, so a test can hold
 /// one transport transition inside the backend and prove a second one waits on
 /// the service's transport lock rather than entering the backend alongside it.
@@ -441,8 +466,7 @@ async fn play_track_sets_current_track_and_starts_playing() {
 // so a regression that dropped it (or reordered the arguments) fails here.
 #[tokio::test]
 async fn play_track_starts_the_preview_through_the_audio_backend() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+    let (service, state, recording) = recording_service();
 
     service
         .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
@@ -478,8 +502,7 @@ async fn set_output_volume_forwards_to_the_audio_backend() {
 // recording fake pins that no `Play` reaches the backend.
 #[tokio::test]
 async fn play_track_without_a_preview_url_commits_state_without_audio() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+    let (service, state, recording) = recording_service();
 
     service.play_track("song-1", None, || true).await.unwrap();
 
@@ -638,8 +661,7 @@ async fn play_track_rollback_leaves_a_newer_plays_flag_alone() {
 // flag; the test pins both halves of that contract.
 #[tokio::test]
 async fn pause_pauses_the_audio_backend() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+    let (service, state, recording) = recording_service();
 
     service.play_track("song-1", None, || true).await.unwrap();
     service.pause().await.unwrap();
@@ -748,9 +770,7 @@ async fn pause_stops_playing_but_keeps_current_track() {
 // restarts a stopped one).
 #[tokio::test]
 async fn resume_resumes_the_audio_backend() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (service, state) =
-        service_with_preview_playing(Arc::clone(&recording) as Arc<dyn AudioOutput>).await;
+    let (service, state, recording) = recording_service_with_preview().await;
 
     service.pause().await.unwrap();
     service.resume().await.unwrap();
@@ -771,9 +791,7 @@ async fn resume_resumes_the_audio_backend() {
 // keeping `current_track`, exactly as `AppState::stop` does.
 #[tokio::test]
 async fn stop_stops_the_audio_backend() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (service, state) =
-        service_with_preview_playing(Arc::clone(&recording) as Arc<dyn AudioOutput>).await;
+    let (service, state, recording) = recording_service_with_preview().await;
 
     service.stop().await.unwrap();
 
@@ -791,9 +809,7 @@ async fn stop_stops_the_audio_backend() {
 // The Play/Pause toggle pauses while playing.
 #[tokio::test]
 async fn toggle_play_pause_pauses_while_playing() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (service, state) =
-        service_with_preview_playing(Arc::clone(&recording) as Arc<dyn AudioOutput>).await;
+    let (service, state, recording) = recording_service_with_preview().await;
 
     service.toggle_play_pause().await.unwrap();
 
@@ -811,9 +827,7 @@ async fn toggle_play_pause_pauses_while_playing() {
 // The Play/Pause toggle resumes while paused.
 #[tokio::test]
 async fn toggle_play_pause_resumes_while_paused() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (service, state) =
-        service_with_preview_playing(Arc::clone(&recording) as Arc<dyn AudioOutput>).await;
+    let (service, state, recording) = recording_service_with_preview().await;
 
     service.pause().await.unwrap();
     service.toggle_play_pause().await.unwrap();
@@ -837,9 +851,7 @@ async fn toggle_play_pause_resumes_while_paused() {
 // the desync this wiring exists to prevent.
 #[tokio::test]
 async fn resume_after_stop_restarts_the_preview() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (service, state) =
-        service_with_preview_playing(Arc::clone(&recording) as Arc<dyn AudioOutput>).await;
+    let (service, state, recording) = recording_service_with_preview().await;
 
     service.stop().await.unwrap();
     service.resume().await.unwrap();
@@ -861,8 +873,7 @@ async fn resume_after_stop_restarts_the_preview() {
 // cannot produce.
 #[tokio::test]
 async fn resume_without_a_preview_leaves_the_transport_stopped() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+    let (service, state, recording) = recording_service();
 
     service.resume().await.unwrap();
 
