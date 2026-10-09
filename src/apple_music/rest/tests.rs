@@ -1,31 +1,14 @@
 use super::*;
 
 use crate::test_support::{
-    PREVIEW_URL, StubTransport, assert_ids, loopback_listener, read_some_request, sample_album,
-    sample_artist, sample_song, serve_one_response, serve_one_response_capturing_request,
+    PREVIEW_URL, StubTransport, assert_ids, assert_single_call, loopback_listener,
+    read_some_request, rest_session, sample_album, sample_artist, sample_song, serve_one_response,
+    serve_one_response_capturing_request,
 };
-
-/// A session whose tokens are recognizable, so a test can assert the transport
-/// saw exactly these credentials.
-fn session() -> MusicKitSession {
-    MusicKitSession {
-        developer_token: "developer-token".to_string(),
-        user_token: "user-token".to_string(),
-    }
-}
 
 /// A [`RestLibrary`] over `stub`, plus the handle to inspect its calls.
 fn library_over(stub: &StubTransport) -> RestLibrary {
     RestLibrary::new(Box::new(stub.clone()))
-}
-
-/// Asserts the stub saw exactly one request, to `expected_url` with the
-/// expected session.
-fn assert_single_call(stub: &StubTransport, expected_url: &str) {
-    let calls = stub.calls();
-    assert_eq!(calls.len(), 1);
-    assert_eq!(calls[0].0, expected_url);
-    assert_eq!(calls[0].1, session());
 }
 
 /// The error message `query` reports when the transport answers with `body`.
@@ -55,7 +38,7 @@ fn favorite_artists_map_library_json() {
     );
     let library = library_over(&stub);
 
-    let artists = library.get_favorite_artists(&session()).unwrap();
+    let artists = library.get_favorite_artists(&rest_session()).unwrap();
 
     assert_eq!(
         artists,
@@ -78,7 +61,7 @@ fn albums_by_artist_map_library_json_and_set_the_artist_id() {
     let library = library_over(&stub);
 
     let albums = library
-        .get_albums_by_artist(&session(), "artist-9")
+        .get_albums_by_artist(&rest_session(), "artist-9")
         .unwrap();
 
     assert_eq!(
@@ -101,7 +84,9 @@ fn songs_from_album_map_library_json_and_set_the_album_id() {
     );
     let library = library_over(&stub);
 
-    let songs = library.get_songs_from_album(&session(), "album-9").unwrap();
+    let songs = library
+        .get_songs_from_album(&rest_session(), "album-9")
+        .unwrap();
 
     assert_eq!(
         songs,
@@ -161,7 +146,7 @@ fn song_from_attributes(attributes: &str) -> Song {
     ));
     let library = library_over(&stub);
     library
-        .get_songs_from_album(&session(), "album-9")
+        .get_songs_from_album(&rest_session(), "album-9")
         .unwrap()
         .into_iter()
         .next()
@@ -241,7 +226,7 @@ fn albums_by_artist_percent_encodes_the_id() {
     let library = library_over(&stub);
 
     library
-        .get_albums_by_artist(&session(), "a/b c?d#e")
+        .get_albums_by_artist(&rest_session(), "a/b c?d#e")
         .unwrap();
 
     assert_single_call(
@@ -256,7 +241,7 @@ fn songs_from_album_percent_encodes_the_id() {
     let library = library_over(&stub);
 
     library
-        .get_songs_from_album(&session(), "caf\u{e9}")
+        .get_songs_from_album(&rest_session(), "caf\u{e9}")
         .unwrap();
 
     assert_single_call(
@@ -277,7 +262,9 @@ fn search_library_maps_the_search_envelope_and_percent_encodes_the_term() {
     );
     let library = library_over(&stub);
 
-    let songs = library.search_library(&session(), "open ing&x").unwrap();
+    let songs = library
+        .search_library(&rest_session(), "open ing&x")
+        .unwrap();
 
     assert_eq!(
         songs,
@@ -310,7 +297,7 @@ fn search_library_returns_no_songs_when_the_results_carry_no_library_songs() {
         let library = library_over(&stub);
 
         let songs = library
-            .search_library(&session(), "nothing matches")
+            .search_library(&rest_session(), "nothing matches")
             .unwrap();
 
         assert!(songs.is_empty(), "{body}");
@@ -328,7 +315,7 @@ fn search_library_follows_a_next_page() {
     ]);
     let library = library_over(&stub);
 
-    let songs = library.search_library(&session(), "x").unwrap();
+    let songs = library.search_library(&rest_session(), "x").unwrap();
 
     assert_ids(&songs, |song| song.id.as_str(), &["song-1", "song-2"]);
     let calls = stub.calls();
@@ -345,7 +332,7 @@ fn search_library_reports_a_transport_error_bare() {
     let library = library_over(&stub);
 
     let error = library
-        .search_library(&session(), "x")
+        .search_library(&rest_session(), "x")
         .unwrap_err()
         .to_string();
 
@@ -356,7 +343,7 @@ fn search_library_reports_a_transport_error_bare() {
 fn search_library_rejects_a_nameless_song() {
     let error = error_over(
         r#"{"results":{"library-songs":{"data":[{"id":"song-7","attributes":{}}]}}}"#,
-        |library| library.search_library(&session(), "x"),
+        |library| library.search_library(&rest_session(), "x"),
     );
 
     assert!(error.contains("without a name"), "{error}");
@@ -400,7 +387,7 @@ fn transport_error_propagates_the_bare_cause() {
     let library = library_over(&stub);
 
     let error = library
-        .get_favorite_artists(&session())
+        .get_favorite_artists(&rest_session())
         .unwrap_err()
         .to_string();
 
@@ -415,7 +402,7 @@ fn albums_by_artist_transport_error_propagates_the_bare_cause() {
     let library = library_over(&stub);
 
     let error = library
-        .get_albums_by_artist(&session(), "artist-9")
+        .get_albums_by_artist(&rest_session(), "artist-9")
         .unwrap_err()
         .to_string();
 
@@ -428,7 +415,7 @@ fn songs_from_album_transport_error_propagates_the_bare_cause() {
     let library = library_over(&stub);
 
     let error = library
-        .get_songs_from_album(&session(), "album-9")
+        .get_songs_from_album(&rest_session(), "album-9")
         .unwrap_err()
         .to_string();
 
@@ -438,7 +425,7 @@ fn songs_from_album_transport_error_propagates_the_bare_cause() {
 #[test]
 fn malformed_json_surfaces_the_parse_error() {
     let error = error_over("not json", |library| {
-        library.get_albums_by_artist(&session(), "artist-9")
+        library.get_albums_by_artist(&rest_session(), "artist-9")
     });
 
     assert!(error.starts_with("response was not valid JSON:"), "{error}");
@@ -453,7 +440,7 @@ fn malformed_json_surfaces_the_parse_error() {
 #[test]
 fn valid_json_that_is_not_the_collection_envelope_names_the_envelope() {
     let error = error_over(r#"{"artists":[]}"#, |library| {
-        library.get_albums_by_artist(&session(), "artist-9")
+        library.get_albums_by_artist(&rest_session(), "artist-9")
     });
 
     assert!(
@@ -466,7 +453,7 @@ fn valid_json_that_is_not_the_collection_envelope_names_the_envelope() {
 fn nameless_artist_is_an_error_naming_its_id() {
     let error = error_over(
         r#"{"data":[{"id":"artist-1","attributes":{}}]}"#,
-        |library| library.get_favorite_artists(&session()),
+        |library| library.get_favorite_artists(&rest_session()),
     );
 
     assert_eq!(error, "response carried artist \"artist-1\" without a name");
@@ -476,7 +463,7 @@ fn nameless_artist_is_an_error_naming_its_id() {
 fn blank_album_name_is_an_error() {
     let error = error_over(
         r#"{"data":[{"id":"album-1","attributes":{"name":"   "}}]}"#,
-        |library| library.get_albums_by_artist(&session(), "artist-9"),
+        |library| library.get_albums_by_artist(&rest_session(), "artist-9"),
     );
 
     assert_eq!(error, "response carried album \"album-1\" without a name");
@@ -485,7 +472,7 @@ fn blank_album_name_is_an_error() {
 #[test]
 fn nameless_song_is_an_error() {
     let error = error_over(r#"{"data":[{"id":"song-1"}]}"#, |library| {
-        library.get_songs_from_album(&session(), "album-9")
+        library.get_songs_from_album(&rest_session(), "album-9")
     });
 
     assert_eq!(error, "response carried song \"song-1\" without a name");
@@ -500,7 +487,7 @@ fn nameless_song_is_an_error() {
 fn blank_artist_id_is_an_error() {
     let error = error_over(
         r#"{"data":[{"id":"   ","attributes":{"name":"Ghost"}}]}"#,
-        |library| library.get_favorite_artists(&session()),
+        |library| library.get_favorite_artists(&rest_session()),
     );
 
     assert_eq!(
@@ -513,7 +500,7 @@ fn blank_artist_id_is_an_error() {
 fn blank_album_id_is_an_error() {
     let error = error_over(
         r#"{"data":[{"id":"","attributes":{"name":"Ghost"}}]}"#,
-        |library| library.get_albums_by_artist(&session(), "artist-9"),
+        |library| library.get_albums_by_artist(&rest_session(), "artist-9"),
     );
 
     assert_eq!(error, "response carried album with a blank id (got \"\")");
@@ -523,7 +510,7 @@ fn blank_album_id_is_an_error() {
 fn blank_song_id_is_an_error() {
     let error = error_over(
         r#"{"data":[{"id":"","attributes":{"name":"Ghost"}}]}"#,
-        |library| library.get_songs_from_album(&session(), "album-9"),
+        |library| library.get_songs_from_album(&rest_session(), "album-9"),
     );
 
     assert_eq!(error, "response carried song with a blank id (got \"\")");
@@ -544,7 +531,7 @@ fn a_stalled_server_is_bounded_by_the_request_timeout() {
     let (sender, receiver) = std::sync::mpsc::channel();
     let started = std::time::Instant::now();
     std::thread::spawn(move || {
-        let _ = sender.send(transport.get(&url, &session()));
+        let _ = sender.send(transport.get(&url, &rest_session()));
     });
     let result = receiver
         .recv_timeout(std::time::Duration::from_secs(5))
@@ -575,7 +562,7 @@ fn a_request_is_bounded_by_its_deadline_not_only_the_agent_timeout() {
     let (sender, receiver) = std::sync::mpsc::channel();
     let started = Instant::now();
     std::thread::spawn(move || {
-        let _ = sender.send(transport.get_within(&url, &session(), deadline));
+        let _ = sender.send(transport.get_within(&url, &rest_session(), deadline));
     });
     let result = receiver
         .recv_timeout(std::time::Duration::from_secs(5))
@@ -605,7 +592,7 @@ fn an_expired_deadline_fails_without_opening_a_connection() {
     let url = format!("http://{addr}/never");
 
     let error = transport
-        .get_within(&url, &session(), Instant::now())
+        .get_within(&url, &rest_session(), Instant::now())
         .unwrap_err()
         .to_string();
 
@@ -676,7 +663,7 @@ fn a_redirect_is_not_followed_so_the_user_token_cannot_leak() {
     let url = format!("http://{redirector_addr}/redirect");
     let (sender, receiver) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        let _ = sender.send(transport.get(&url, &session()));
+        let _ = sender.send(transport.get(&url, &rest_session()));
     });
     let _ = receiver.recv_timeout(std::time::Duration::from_secs(5));
 
@@ -792,7 +779,7 @@ fn a_non_success_status_surfaces_the_api_error_detail() {
     let addr = serve_one_response(&http_response("401 Unauthorized", "application/json", body));
 
     let url = format!("http://{addr}/me/library/artists");
-    let error = UreqTransport::new().get(&url, &session()).unwrap_err();
+    let error = UreqTransport::new().get(&url, &rest_session()).unwrap_err();
     assert_eq!(
         error.to_string(),
         "HTTP 401 Unauthorized: Invalid developer token"
@@ -808,7 +795,7 @@ fn a_non_success_status_with_a_blank_api_error_detail_reports_just_the_status() 
     let addr = serve_one_response(&http_response("401 Unauthorized", "application/json", body));
 
     let url = format!("http://{addr}/me/library/artists");
-    let error = UreqTransport::new().get(&url, &session()).unwrap_err();
+    let error = UreqTransport::new().get(&url, &rest_session()).unwrap_err();
     assert_eq!(error.to_string(), "HTTP 401 Unauthorized");
 }
 
@@ -822,7 +809,7 @@ fn a_non_success_status_without_an_api_error_body_reports_just_the_status() {
     let addr = serve_one_response(&http_response("404 Not Found", "text/plain", body));
 
     let url = format!("http://{addr}/me/library/artists");
-    let error = UreqTransport::new().get(&url, &session()).unwrap_err();
+    let error = UreqTransport::new().get(&url, &rest_session()).unwrap_err();
     assert_eq!(error.to_string(), "HTTP 404 Not Found");
 }
 
@@ -841,7 +828,10 @@ fn a_truncated_response_body_reports_a_read_error() {
     let transport = UreqTransport::with_timeout(std::time::Duration::from_secs(5));
     let url = format!("http://{addr}/truncated");
 
-    let error = transport.get(&url, &session()).unwrap_err().to_string();
+    let error = transport
+        .get(&url, &rest_session())
+        .unwrap_err()
+        .to_string();
 
     assert!(
         error.starts_with("reading the response body failed:"),
@@ -861,7 +851,7 @@ fn a_successful_response_returns_its_body() {
     let addr = serve_one_response(&http_response("200 OK", "application/json", body));
 
     let url = format!("http://{addr}/me/library/artists");
-    let got = UreqTransport::new().get(&url, &session()).unwrap();
+    let got = UreqTransport::new().get(&url, &rest_session()).unwrap();
 
     assert_eq!(got, body);
 }
@@ -881,7 +871,7 @@ fn a_request_carries_the_developer_and_user_tokens() {
 
     let url = format!("http://{address}/me/library/artists");
     UreqTransport::new()
-        .get(&url, &session())
+        .get(&url, &rest_session())
         .expect("a 200 with an empty collection succeeds");
 
     let request = receiver
@@ -983,7 +973,7 @@ fn a_next_page_is_followed_and_both_pages_are_returned_in_order() {
     ]);
     let library = library_over(&stub);
 
-    let artists = library.get_favorite_artists(&session()).unwrap();
+    let artists = library.get_favorite_artists(&rest_session()).unwrap();
 
     assert_eq!(
         artists,
@@ -1023,7 +1013,7 @@ fn a_transport_error_on_a_later_page_surfaces_instead_of_truncating() {
     let library = library_over(&stub);
 
     let error = library
-        .get_favorite_artists(&session())
+        .get_favorite_artists(&rest_session())
         .unwrap_err()
         .to_string();
 
@@ -1050,7 +1040,7 @@ fn an_endless_next_chain_stops_at_the_page_bound() {
     );
     let library = library_over(&stub);
 
-    let artists = library.get_favorite_artists(&session()).unwrap();
+    let artists = library.get_favorite_artists(&rest_session()).unwrap();
 
     assert_eq!(artists.len(), MAX_PAGES);
     assert_eq!(stub.calls().len(), MAX_PAGES);
@@ -1099,7 +1089,7 @@ fn fetch_shares_one_deadline_across_all_pages() {
     let library = RestLibrary::new(Box::new(transport));
     let before = Instant::now();
 
-    let artists = library.get_favorite_artists(&session()).unwrap();
+    let artists = library.get_favorite_artists(&rest_session()).unwrap();
     let after = Instant::now();
 
     assert_eq!(artists.len(), 2);
@@ -1121,7 +1111,7 @@ fn a_next_link_to_another_host_is_not_followed() {
     );
     let library = library_over(&stub);
 
-    let artists = library.get_favorite_artists(&session()).unwrap();
+    let artists = library.get_favorite_artists(&rest_session()).unwrap();
 
     assert_eq!(artists.len(), 1);
     assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/artists");
@@ -1141,7 +1131,7 @@ fn a_failure_following_a_next_page_names_the_page() {
     let library = library_over(&stub);
 
     let error = library
-        .get_favorite_artists(&session())
+        .get_favorite_artists(&rest_session())
         .unwrap_err()
         .to_string();
 
@@ -1165,7 +1155,7 @@ fn a_nameless_resource_on_a_later_page_names_the_page() {
     let library = library_over(&stub);
 
     let error = library
-        .get_favorite_artists(&session())
+        .get_favorite_artists(&rest_session())
         .unwrap_err()
         .to_string();
 
@@ -1192,7 +1182,7 @@ fn a_nameless_resource_on_the_first_page_stops_before_the_next_page() {
     let library = library_over(&stub);
 
     let error = library
-        .get_favorite_artists(&session())
+        .get_favorite_artists(&rest_session())
         .unwrap_err()
         .to_string();
 

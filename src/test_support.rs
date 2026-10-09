@@ -1,8 +1,9 @@
 //! Test-only fixtures and assertions shared across the crate's unit tests.
 //!
 //! These are the sample `Artist`/`Album`/`Song` values and stepping fixtures,
-//! the shared preview URL, the `"Rock"` preset, the serde-contract assertions,
-//! the transport stub, the audio fakes, and the loopback HTTP server fixtures
+//! the shared preview URL, the sign-in session fixtures, the `"Rock"` preset,
+//! the serde-contract assertions, the transport stub, the audio fakes, and the
+//! loopback HTTP server fixtures
 //! that the `library`, `apple_music`, `ui`, `state`, `equalizer`, and `audio`
 //! test suites share.
 //! They live in one named module
@@ -133,6 +134,28 @@ pub(crate) fn sample_song() -> Song {
         album_id: "album-1".to_string(),
         duration_ms: 210_000,
         preview_url: None,
+    }
+}
+
+/// The session the browser sign-in flow returns in the tests, with
+/// recognizable tokens so a test can assert the service stored exactly what
+/// the flow produced. The `apple_music` sign-in tests and the `ui` startup
+/// test all build this same session, so the token pair lives here once.
+pub(crate) fn sign_in_session() -> MusicKitSession {
+    MusicKitSession {
+        developer_token: "dev-token".to_string(),
+        user_token: "user-token".to_string(),
+    }
+}
+
+/// The session a signed-in service stores, with recognizable tokens so a test
+/// can assert the transport saw exactly these credentials. The `apple_music`
+/// service tests and the `apple_music::rest` client tests both build it, so
+/// the token pair lives here once.
+pub(crate) fn rest_session() -> MusicKitSession {
+    MusicKitSession {
+        developer_token: "developer-token".to_string(),
+        user_token: "user-token".to_string(),
     }
 }
 
@@ -323,6 +346,17 @@ impl HttpTransport for StubTransport {
             .pop_front()
             .unwrap_or_else(|| self.result.clone())
     }
+}
+
+/// Asserts the stub saw exactly one request, to `expected_url` with the
+/// [`rest_session`] the browse tests store. The `apple_music` service tests
+/// and the `apple_music::rest` client tests each used to carry this same
+/// len-and-two-fields check, so it lives here once.
+pub(crate) fn assert_single_call(stub: &StubTransport, expected_url: &str) {
+    let calls = stub.calls();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].0, expected_url);
+    assert_eq!(calls[0].1, rest_session());
 }
 
 /// The commands a [`RecordingAudio`] recorded, in order, so a test can pin

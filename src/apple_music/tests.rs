@@ -1,8 +1,8 @@
 use super::*;
 use crate::audio::AudioOutput;
 use crate::test_support::{
-    AudioCall, FailingAudio, PREVIEW_URL, RecordingAudio, StubTransport, assert_ids, sample_album,
-    sample_artist, sample_song,
+    AudioCall, FailingAudio, PREVIEW_URL, RecordingAudio, StubTransport, assert_ids,
+    assert_single_call, rest_session, sample_album, sample_artist, sample_song, sign_in_session,
 };
 
 fn test_service() -> AppleMusicService {
@@ -23,18 +23,6 @@ fn test_service_with_state() -> (AppleMusicService, Arc<Mutex<AppState>>) {
     let service = test_service();
     let state = service.state.clone();
     (service, state)
-}
-
-/// The session the browser sign-in flow returns in the tests below, with
-/// recognizable tokens so a test can assert the service stored exactly what
-/// the flow produced. The startup, `authenticate_with`, failed-auth, and
-/// `wait_for_session` tests all build this same session, so it lives here
-/// once and each test names only the behavior it drives to.
-fn sign_in_session() -> MusicKitSession {
-    MusicKitSession {
-        developer_token: "dev-token".to_string(),
-        user_token: "user-token".to_string(),
-    }
 }
 
 /// A fresh service plus its shared state with `song-1` already playing.
@@ -1289,15 +1277,6 @@ fn a_failed_authentication_leaves_a_stored_session_unchanged() {
 // and never calls the transport. The stub records each request, so the URL
 // and both tokens are pinned alongside the mapped rows.
 
-/// The session a signed-in service stores, with recognizable tokens so a test
-/// can assert the transport saw exactly these credentials.
-fn rest_session() -> MusicKitSession {
-    MusicKitSession {
-        developer_token: "developer-token".to_string(),
-        user_token: "user-token".to_string(),
-    }
-}
-
 /// A service over `transport` with a session stored, so its browse queries
 /// route through the REST client.
 fn signed_in_service(transport: &StubTransport) -> AppleMusicService {
@@ -1311,15 +1290,6 @@ fn signed_in_service(transport: &StubTransport) -> AppleMusicService {
     service
 }
 
-/// Asserts the stub saw exactly one request, to `expected_url` with the
-/// stored session.
-fn assert_single_rest_call(stub: &StubTransport, expected_url: &str) {
-    let calls = stub.calls();
-    assert_eq!(calls.len(), 1);
-    assert_eq!(calls[0].0, expected_url);
-    assert_eq!(calls[0].1, rest_session());
-}
-
 #[tokio::test]
 async fn get_favorite_artists_uses_the_rest_library_when_signed_in() {
     let stub = StubTransport::returning(
@@ -1330,7 +1300,7 @@ async fn get_favorite_artists_uses_the_rest_library_when_signed_in() {
     let artists = service.get_favorite_artists().await.unwrap();
 
     assert_eq!(artists, vec![sample_artist()]);
-    assert_single_rest_call(&stub, "https://api.music.apple.com/v1/me/library/artists");
+    assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/artists");
 }
 
 #[tokio::test]
@@ -1349,7 +1319,7 @@ async fn get_albums_by_artist_uses_the_rest_library_when_signed_in() {
             ..sample_album()
         }]
     );
-    assert_single_rest_call(
+    assert_single_call(
         &stub,
         "https://api.music.apple.com/v1/me/library/artists/artist-9/albums",
     );
@@ -1371,7 +1341,7 @@ async fn get_songs_from_album_uses_the_rest_library_when_signed_in() {
             ..sample_song()
         }]
     );
-    assert_single_rest_call(
+    assert_single_call(
         &stub,
         "https://api.music.apple.com/v1/me/library/albums/album-9/tracks",
     );
@@ -1402,7 +1372,7 @@ async fn search_songs_uses_the_rest_library_when_signed_in() {
             preview_url: None,
         }]
     );
-    assert_single_rest_call(
+    assert_single_call(
         &stub,
         "https://api.music.apple.com/v1/me/library/search?term=remote&types=library-songs&limit=25",
     );

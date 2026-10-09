@@ -2,11 +2,10 @@ use super::loading::fetch_into;
 use super::views::BROWSE_VIEWS;
 use super::*;
 use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB};
-use crate::music_kit_auth::MusicKitSession;
 use crate::sample_library::sample_library;
 use crate::test_support::{
     AudioCall, PREVIEW_URL, RecordingAudio, StubTransport, assert_ids, rock_preset, sample_album,
-    sample_artist, sample_song, second_album_songs, stepping_songs,
+    sample_artist, sample_song, second_album_songs, sign_in_session, stepping_songs,
 };
 
 /// A fresh player over its own shared state, so a test can inspect the
@@ -1191,12 +1190,7 @@ async fn boot_reloads_artists_after_the_startup_sign_in_stores_a_session() {
     // the boot task observes a session that arrives after it started waiting.
     let sign_in = std::thread::spawn(move || {
         sign_in_service
-            .authenticate_with("dev-token", &|_| {
-                Ok(MusicKitSession {
-                    developer_token: "dev-token".to_string(),
-                    user_token: "user-token".to_string(),
-                })
-            })
+            .authenticate_with("dev-token", &|_| Ok(sign_in_session()))
             .expect("the stub sign-in must store its session");
     });
 
