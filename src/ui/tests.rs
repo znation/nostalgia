@@ -803,6 +803,50 @@ async fn a_stale_songs_reply_superseded_before_update_is_not_stored() {
     assert!(player.songs.loading);
 }
 
+// The albums twin of `a_stale_songs_reply_superseded_before_update_is_not_stored`.
+// `BrowseReply`'s UI-thread re-check names the albums list in its own match
+// arm: without that arm a reply from the artist the user browsed away from
+// would repopulate the cleared albums buffer with the previous artist's
+// albums. Issue the first albums fetch and drive it to completion while it is
+// still current, issue a newer albums request before `update` processes the
+// reply, and assert the stamped reply is dropped.
+#[tokio::test]
+async fn a_stale_albums_reply_superseded_before_update_is_not_stored() {
+    let (mut player, _state) = test_player();
+    // Clear the albums buffer and mark it loading, as `ArtistSelected` does
+    // before issuing a fetch, so the dropped reply's effect on `loading` is
+    // observable below.
+    player.albums.clear();
+
+    // Issue the first albums fetch and drive it to completion while it is
+    // still current, so the mapper stamps its reply as current rather than
+    // dropping it as `Ignored` before it reaches the `BrowseReply` arm.
+    let generation = player.albums.begin_fetch();
+    let task = fetch_into(
+        &player.apple_music_service,
+        "loading albums for artist \"artist-1\"".to_string(),
+        generation,
+        std::time::Duration::from_secs(1),
+        |service| async move { service.get_albums_by_artist("artist-1").await },
+        Message::AlbumsLoaded,
+        Message::AlbumsLoadFailed,
+    );
+    let reply = task_output(task, "first albums fetch").await;
+    assert!(
+        matches!(&reply, Message::BrowseReply { reply, .. } if matches!(reply.as_ref(), Message::AlbumsLoaded(albums) if !albums.is_empty())),
+        "the driven fetch must produce a stamped non-empty albums reply, got {reply:?}"
+    );
+
+    // A newer albums request is issued before `update` processes the reply.
+    let _ = player.albums.begin_fetch();
+
+    // The reply the newer request superseded must not be stored: the albums
+    // buffer stays empty and loading for the newer fetch.
+    let _ = update(&mut player, reply);
+    assert!(player.albums.items.is_empty());
+    assert!(player.albums.loading);
+}
+
 // A play reply can complete out of order just like a browse reply: the user
 // clicks song-1, then song-2, and song-1's slower play lands last. The
 // playback counter's guard, evaluated inside `play_track` under the state
