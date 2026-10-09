@@ -112,22 +112,16 @@ fn songs_from_album_map_library_json_and_set_the_album_id() {
 // shows `--:--` for it instead of dropping the song.
 #[test]
 fn songs_from_album_maps_a_missing_duration_to_zero() {
-    let stub =
-        StubTransport::returning(r#"{"data":[{"id":"song-1","attributes":{"name":"Opening"}}]}"#);
-    let library = library_over(&stub);
-
-    let songs = library.get_songs_from_album(&session(), "album-9").unwrap();
-
     assert_eq!(
-        songs,
-        vec![Song {
+        song_from_attributes(r#"{"name":"Opening"}"#),
+        Song {
             id: "song-1".to_string(),
             title: "Opening".to_string(),
             artist: String::new(),
             album_id: "album-9".to_string(),
             duration_ms: 0,
             preview_url: None,
-        }]
+        }
     );
 }
 
@@ -142,22 +136,16 @@ fn songs_from_album_maps_a_missing_or_blank_artist_to_empty() {
         r#"{"name":"Opening","artistName":""}"#,
         r#"{"name":"Opening","artistName":"   "}"#,
     ] {
-        let stub = StubTransport::returning(&format!(
-            r#"{{"data":[{{"id":"song-1","attributes":{attributes}}}]}}"#
-        ));
-        let library = library_over(&stub);
-
-        let songs = library.get_songs_from_album(&session(), "album-9").unwrap();
-
-        assert_eq!(songs[0].artist, "");
+        assert_eq!(song_from_attributes(attributes).artist, "");
     }
 }
 
-// The audio-output decision (QUESTIONS.md `## Answered`, 2026-10-08) scopes
-// playback to the Apple Music preview asset, so the browse client must carry
-// the preview's URL onto `Song`. The cases below differ only in the resource's
-// `attributes`, so they share a helper that returns the mapped `preview_url`.
-fn preview_url_from(attributes: &str) -> Option<String> {
+/// The [`Song`] `get_songs_from_album` maps from one resource carrying
+/// `attributes` — the id (`song-1`) and album (`album-9`) are fixed, so a
+/// caller varies only the attribute subset it probes. The duration, artist,
+/// and preview tests each assert one mapped field of the same resource, so
+/// this builder holds the JSON envelope and the fetch in one place.
+fn song_from_attributes(attributes: &str) -> Song {
     let stub = StubTransport::returning(&format!(
         r#"{{"data":[{{"id":"song-1","attributes":{attributes}}}]}}"#
     ));
@@ -168,7 +156,15 @@ fn preview_url_from(attributes: &str) -> Option<String> {
         .into_iter()
         .next()
         .unwrap()
-        .preview_url
+}
+
+// The audio-output decision (QUESTIONS.md `## Answered`, 2026-10-08) scopes
+// playback to the Apple Music preview asset, so the browse client must carry
+// the preview's URL onto `Song`. The cases below differ only in the resource's
+// `attributes`, so they build it through `song_from_attributes` and read the
+// mapped `preview_url` here.
+fn preview_url_from(attributes: &str) -> Option<String> {
+    song_from_attributes(attributes).preview_url
 }
 
 #[test]
