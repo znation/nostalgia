@@ -606,6 +606,36 @@ fn read_http_request_treats_a_malformed_content_length_as_no_body() {
     );
 }
 
+// A request whose headers declare a `Content-Length` but whose body closes
+// before that many bytes arrive must be ignored, not returned with the bytes
+// that did arrive. `authorize_survives_a_connection_that_closes_early` pins
+// the same EOF on the header loop; this is the body loop's own read, which
+// only a client that sends headers, sends part of the declared body, and then
+// hangs up reaches. Returning the partial request would hand the callback
+// parser a truncated body it would read as the fields the attacker did send.
+#[test]
+fn read_http_request_refuses_a_body_that_closes_before_its_declared_length() {
+    let (mut server, mut client) = connected_pair();
+    // Declare 100 body bytes, send five, then close the write half so the
+    // server's body-loop read sees EOF while it still wants 95 more. Without
+    // the shutdown the server would instead wait out the deadline, making the
+    // test slow and the branch it pins less clear.
+    client
+        .write_all(b"POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 100\r\n\r\nshort")
+        .expect("write a truncated body");
+    client
+        .shutdown(std::net::Shutdown::Write)
+        .expect("close the write half");
+
+    let request = read_http_request(&mut server, Instant::now() + Duration::from_secs(5))
+        .expect("a truncated body is not an I/O error");
+
+    assert!(
+        request.is_none(),
+        "a body that closes before its declared length must be refused, not returned partially"
+    );
+}
+
 #[test]
 fn authorize_times_out_without_a_callback_and_names_the_bound() {
     let opener = |_url: &str| Ok(());
