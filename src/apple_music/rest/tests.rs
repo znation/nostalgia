@@ -1,6 +1,9 @@
 use super::*;
 
-use crate::test_support::{StubTransport, sample_album, sample_artist, sample_song};
+use crate::test_support::{
+    StubTransport, loopback_listener, read_some_request, sample_album, sample_artist, sample_song,
+    serve_one_response,
+};
 
 /// A session whose tokens are recognizable, so a test can assert the transport
 /// saw exactly these credentials.
@@ -446,43 +449,6 @@ fn a_stalled_server_is_bounded_by_the_request_timeout() {
         "returned before the 200ms bound: {:?}",
         started.elapsed()
     );
-}
-
-/// Binds a loopback listener, returning it with the address it bound.
-fn loopback_listener() -> (std::net::TcpListener, std::net::SocketAddr) {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let address = listener.local_addr().unwrap();
-    (listener, address)
-}
-
-/// Reads whatever one request has sent within a one-second bound and returns
-/// it lossily as text, so a test can look for a header without a full parse.
-fn read_some_request(stream: &mut std::net::TcpStream) -> String {
-    use std::io::Read;
-    stream
-        .set_read_timeout(Some(std::time::Duration::from_secs(1)))
-        .unwrap();
-    let mut buffer = [0u8; 4096];
-    let read = stream.read(&mut buffer).unwrap_or(0);
-    String::from_utf8_lossy(&buffer[..read]).into_owned()
-}
-
-/// Serves exactly one HTTP response on a fresh loopback listener: binds,
-/// accepts a single connection, reads whatever request arrived, writes
-/// `response` verbatim, and closes. Returns the bound address for
-/// [`UreqTransport`], so a test can pin a response-dependent failure mode
-/// without rebuilding the accept/read/write scaffolding.
-fn serve_one_response(response: &str) -> std::net::SocketAddr {
-    let (listener, address) = loopback_listener();
-    let response = response.to_string();
-    std::thread::spawn(move || {
-        use std::io::Write;
-        let (mut stream, _) = listener.accept().unwrap();
-        let _ = read_some_request(&mut stream);
-        let _ = stream.write_all(response.as_bytes());
-        let _ = stream.flush();
-    });
-    address
 }
 
 /// Formats a complete HTTP/1.1 response around `body`: the `status_line`

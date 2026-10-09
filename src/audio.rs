@@ -299,7 +299,7 @@ pub(crate) fn audio_with_fallback(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{AudioCall, RecordingAudio};
+    use crate::test_support::{AudioCall, RecordingAudio, serve_one_response};
     use std::time::Instant;
 
     #[test]
@@ -423,25 +423,6 @@ mod tests {
         );
     }
 
-    /// Serves exactly one HTTP response on a fresh loopback listener and
-    /// returns the address to fetch it from, so a preview download's response
-    /// handling can be driven without a network. The response is written
-    /// verbatim and the connection closed.
-    fn serve_one_preview_response(response: &str) -> std::net::SocketAddr {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let address = listener.local_addr().unwrap();
-        let response = response.to_string();
-        std::thread::spawn(move || {
-            use std::io::{Read, Write};
-            let (mut stream, _) = listener.accept().unwrap();
-            let mut request = [0u8; 4096];
-            let _ = stream.read(&mut request);
-            let _ = stream.write_all(response.as_bytes());
-            let _ = stream.flush();
-        });
-        address
-    }
-
     // A preview URL that answers with a non-2xx status must be reported as a
     // status failure, before its body reaches the decoder. The agent disables
     // `ureq`'s status-as-error shortcut (`http_status_as_error(false)`), so
@@ -453,7 +434,7 @@ mod tests {
     #[test]
     fn a_preview_download_with_an_error_status_is_reported() {
         let body = "<html>captive portal, not a preview</html>";
-        let address = serve_one_preview_response(&format!(
+        let address = serve_one_response(&format!(
             "HTTP/1.1 404 Not Found\r\nContent-Type: audio/mp4\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
             body.len()
         ));
@@ -474,7 +455,7 @@ mod tests {
     // panic the worker or play noise.
     #[test]
     fn a_preview_download_that_does_not_decode_is_reported() {
-        let address = serve_one_preview_response(
+        let address = serve_one_response(
             "HTTP/1.1 200 OK\r\nContent-Type: audio/mp4\r\nContent-Length: 4\r\nConnection: close\r\n\r\nJUNK",
         );
         let agent = agent_with_timeout(Duration::from_secs(5));

@@ -1,14 +1,18 @@
 //! Test-only fixtures and assertions shared across the crate's unit tests.
 //!
 //! These are the sample `Artist`/`Album`/`Song` values and stepping fixtures,
-//! the `"Rock"` preset, the serde-contract assertions, the transport stub, and
-//! the audio fakes that the `library`, `apple_music`, `ui`, `state`,
-//! `equalizer`, and `audio` test suites share. They live in one named module
+//! the `"Rock"` preset, the serde-contract assertions, the transport stub, the
+//! audio fakes, and the loopback HTTP server fixtures that the `library`,
+//! `apple_music`, `ui`, `state`, `equalizer`, and `audio` test suites share.
+//! They live in one named module
 //! rather than inside `library` so the data model module stays only the model;
 //! every item here is compiled only for tests.
 
 use std::collections::VecDeque;
+use std::io::{Read, Write};
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use crate::apple_music::AppleMusicError;
 use crate::apple_music::rest::HttpTransport;
@@ -378,4 +382,42 @@ impl AudioOutput for FailingAudio {
     fn stop(&self) -> Result<(), AppleMusicError> {
         Ok(())
     }
+}
+
+/// Binds a loopback listener, returning it with the address it bound, so a
+/// test can stand up a loopback server on an ephemeral port without repeating
+/// the bind. [`serve_one_response`] and the `apple_music::rest` suite's
+/// redirect and request-capture tests call it.
+pub(crate) fn loopback_listener() -> (TcpListener, SocketAddr) {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+    (listener, address)
+}
+
+/// Reads whatever one request has sent within a one-second bound and returns
+/// it lossily as text, so a test can look for a header without a full parse.
+pub(crate) fn read_some_request(stream: &mut TcpStream) -> String {
+    stream
+        .set_read_timeout(Some(Duration::from_secs(1)))
+        .unwrap();
+    let mut buffer = [0u8; 4096];
+    let read = stream.read(&mut buffer).unwrap_or(0);
+    String::from_utf8_lossy(&buffer[..read]).into_owned()
+}
+
+/// Serves exactly one HTTP response on a fresh loopback listener: binds,
+/// accepts a single connection, reads whatever request arrived, writes
+/// `response` verbatim, and closes. Returns the bound address so a test can
+/// point an HTTP client at it without rebuilding the accept/read/write
+/// scaffolding. Shared by the `apple_music::rest` and `audio` suites.
+pub(crate) fn serve_one_response(response: &str) -> SocketAddr {
+    let (listener, address) = loopback_listener();
+    let response = response.to_string();
+    std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let _ = read_some_request(&mut stream);
+        let _ = stream.write_all(response.as_bytes());
+        let _ = stream.flush();
+    });
+    address
 }
