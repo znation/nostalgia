@@ -2,7 +2,7 @@
 //!
 //! The transport buttons are a player concern — they step through the
 //! currently loaded album's songs — so the index logic lives here as pure
-//! functions, mirroring `views.rs`, and knows nothing about `WinampPlayer` or
+//! functions, mirroring `views`, and knows nothing about `WinampPlayer` or
 //! the update loop. `AppleMusicService` stays the library API seam and keeps
 //! its `next_track`/`previous_track` stubs untouched.
 

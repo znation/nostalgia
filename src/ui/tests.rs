@@ -1764,7 +1764,7 @@ fn previous_with_shuffle_still_steps_backward() {
 /// Feeds a `*Loaded` message built from `items` back through `update` and
 /// asserts the list lands in `buffer` unchanged and that the matching
 /// `loading` flag is cleared — a `*Loaded` reply reaches `BrowseList::store`,
-/// which clears the flag (see `views::browse_placeholder`), so the reply must
+/// which clears the flag (see `views::browse::browse_placeholder`), so the reply must
 /// leave that list not-loading. The three
 /// `*_loaded_populates_list` tests — artists, albums, songs — each used
 /// to repeat the same update-then-compare flow, differing only in the
@@ -2367,7 +2367,7 @@ fn new_player_starts_at_artists_with_nothing_selected() {
     assert_browse_lists_empty(&player);
     // The artists fetch `boot` schedules is in flight, so the panel shows
     // "Loading…" rather than claiming an empty library (see
-    // `views::browse_placeholder`); the two lower lists are not loading.
+    // `views::browse::browse_placeholder`); the two lower lists are not loading.
     assert!(player.artists.loading);
     assert!(!player.albums.loading);
     assert!(!player.songs.loading);
@@ -2391,12 +2391,12 @@ fn construct_view_in_every_browse_view(player: &mut WinampPlayer) {
 // buffer, and stacks the Now Playing bar, the transport row, the optional
 // Back button (only below the artist list), and the browse list. No other
 // test reaches this assembly — the shade test stops at `view`'s title-bar
-// early return, the `views.rs` tests stop at the individual builders, and
+// early return, the `views` tests stop at the individual builders, and
 // the `update` tests stop before the view layer — so a regression
 // that made this assembly panic (a bad slider range, a `view_*` builder
 // failing over the input the app produces) would take the window down on
 // every refresh with no test catching it. iced `Element`s expose no tree
-// introspection, so the observable contract — as with the `views.rs`
+// introspection, so the observable contract — as with the `views`
 // builder tests — is that `view` builds its widget tree without panicking
 // over the space the app actually produces: every browse view (including
 // the pre-load empty buffers), both play states, both repeat states, both

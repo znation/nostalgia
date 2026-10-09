@@ -834,7 +834,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
 }
 
 /// Assembles the app screen: the Now Playing bar, transport row, and
-/// equalizer panel — all built in `views.rs` from the resolved title and the
+/// equalizer panel — all built in `views` from the resolved title and the
 /// shared playback, volume, Repeat, Shuffle, and EQ state — above the current
 /// browse list. When the window is shaded, only [`views::view_title_bar`] is built
 /// and the rest of the screen is dropped.
