@@ -6,7 +6,38 @@ with your decision (or tell the director). Loops never block on their own questi
 
 ## Open
 
-_None currently open._
+### What audio-output backend should Nostalgia use for real playback? (posted by plan 2026-10-08)
+
+**Context.** Browse is real: `AppleMusicService` answers `get_favorite_artists`,
+`get_albums_by_artist`, and `get_songs_from_album` from the Apple Music REST
+client (`src/apple_music/rest.rs`) when a MusicKit session is stored, and from
+`sample_library()` otherwise. Playback is still a stub: `play_track` records
+the selected track and sets `is_playing`, `pause` clears the flag, and
+`next_track`/`previous_track` only print (`src/apple_music.rs`). The crate has
+no audio dependency (`Cargo.toml`), so nothing produces sound today. The
+project's reason to exist is Apple Music as the library, which makes audio
+output the largest remaining gap — but the backend is a dependency and
+platform call, so no plan should guess it.
+
+**Options.**
+
+1. **A Rust audio-output crate behind the service seam (recommended).** Add a
+   backend such as `rodio` (or `cpal` plus a decoder) and have the service
+   hand it a playable asset URL, keeping `AppleMusicService` the narrow seam a
+   test stub can stand behind. Cross-platform, so Linux works; costs one
+   dependency, which PRINCIPLES' "prefer the standard library" cannot avoid
+   (std has no audio).
+2. **Native Apple-platform audio behind the same seam.** Use MusicKit /
+   `AVPlayer` on macOS and keep the Linux build on the stub. Closest to
+   full-track playback, but platform-specific and much larger.
+3. **Defer playback.** Keep the stub and keep building UI/other features.
+
+**Recommendation.** Option 1, scoped to whichever playable asset the API can
+actually supply (the implementer must confirm that before wiring it). It lands
+behind the existing seam, is testable with a stub, and needs no new UI.
+
+**Related.** This is independent of the planned "Add a Winamp Shuffle toggle
+that randomizes Next", which changes only which song Next selects.
 
 ## Answered
 

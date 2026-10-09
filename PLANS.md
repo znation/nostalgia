@@ -29,7 +29,124 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Add a Winamp Shuffle toggle that randomizes Next (found 2026-10-08)
+
+The transport row carries a Repeat toggle but not the Shuffle button that sits
+beside it in classic Winamp. This adds it: a Shuffle button flips shared
+`AppState.shuffle`, and with Shuffle on the Next button lands on a random song
+from the loaded album instead of the next in order. Previous stays sequential
+and Repeat is unchanged.
+
+**Goal.** A Shuffle button in the transport row toggles `AppState.shuffle`;
+with Shuffle on, `Message::NextTrack` selects a random song from the currently
+loaded album that is not the current one; with Shuffle off every existing step
+is unchanged. No new dependency (the entropy source is std) and no change to
+browse, volume, balance, or the equalizer.
+
+**Approach.**
+
+- `src/state.rs`:
+  - Add `pub shuffle: bool` beside `repeat`, documented as "Whether Next
+    picks a random song from the loaded album (Shuffle on) or the next in
+    order (Shuffle off). Starts off, as in Winamp."
+  - Default `shuffle: false`; name Shuffle off in the `Default` doc comment's
+    initial-state sentence.
+  - Add `pub fn toggle_shuffle(&mut self)` flipping the field, its doc comment
+    mirroring `toggle_repeat`'s.
+  - Tests: `toggle_shuffle_flips_only_the_shuffle_flag` (the
+    `toggle_repeat_flips_only_the_repeat_flag` twin, using
+    `assert_keeps_track_and_volume`), and assert `!state.shuffle` in
+    `default_state_is_stopped_at_half_volume`.
+  - Update `assert_keeps_track_and_volume`'s doc comment to name
+    `toggle_shuffle` among the mutations it guards.
+
+- `src/ui/transport.rs`:
+  - Add `#[must_use] pub fn shuffled_track_id(songs: &[Song], current:
+    Option<&str>, roll: u64) -> Option<String>`: `None` when `songs` is empty;
+    otherwise the `roll`-th song among the songs whose id is not `current`
+    (taken modulo that candidate count), so Next never re-lands on the current
+    song. When every song is the current one (a one-song album already
+    current) it returns that song's id — there is no other song to pick.
+  - Add `#[must_use] pub fn shuffle_roll() -> u64` returning a fresh value
+    from `std::collections::hash_map::RandomState` (std's per-thread random
+    hash seed), the entropy source `step_track` feeds to `shuffled_track_id`.
+  - Tests in the existing `tests` module:
+    `shuffled_pick_never_returns_the_current_song` (sweep `roll` over
+    `0..candidates*2` on the shared three-song fixture with current `song-2`,
+    assert every result is `song-1` or `song-3`);
+    `shuffled_pick_visits_every_candidate` (rolls `0..2` land on the two
+    candidates, one each); `shuffled_pick_on_empty_list_is_none`;
+    `shuffled_pick_on_a_one_song_album_returns_that_song` (current is the only
+    song); `shuffled_pick_without_current_can_reach_every_song` (the sweep
+    covers all three ids).
+
+- `src/ui/mod.rs`:
+  - Add `Message::ToggleShuffle` beside `ToggleRepeat`, and the arm
+    `Message::ToggleShuffle => mutate_state(player, AppState::toggle_shuffle)`;
+    add `ToggleShuffle` to `mutate_state`'s doc list.
+  - Replace `step_track`'s `step: fn(&[Song], Option<&str>, bool) ->
+    Option<String>` parameter with `forward: bool`, and choose inside the one
+    lock: with `forward && state.shuffle`,
+    `transport::shuffled_track_id(.., transport::shuffle_roll())`; otherwise
+    the `transport::next_track_id` / `transport::previous_track_id` call as
+    today (Repeat still passed through). Update the arms to
+    `Message::NextTrack => step_track(player, true)` and
+    `Message::PreviousTrack => step_track(player, false)`, and rewrite
+    `step_track`'s doc comment to name the shuffle branch and why Previous
+    ignores Shuffle (the app keeps no play history to walk back).
+  - In `view`, read `state.shuffle` into the destructured tuple and pass it to
+    `views::view_transport_controls`.
+
+- `src/ui/views.rs`:
+  - Add `fn shuffle_label(shuffle: bool) -> &'static str` returning
+    `"Shuffle: On"` / `"Shuffle: Off"`, mirroring `repeat_label`.
+  - Extend `transport_buttons` to return `[Element<'static, Message>; 6]`:
+    add a sixth fixed-width button after Repeat with `shuffle_label(shuffle)`
+    and `Message::ToggleShuffle`, and a `SHUFFLE_WIDTH` sized to fit
+    `"Shuffle: Off"` (a little wider than `REPEAT_WIDTH`). Change its
+    signature to `transport_buttons(is_playing, repeat, shuffle)` and extend
+    its doc comment from "five" to six buttons.
+  - Change `view_transport_controls` to take `shuffle: bool` and pass it to
+    `transport_buttons`; extend its doc comment to name the Shuffle button.
+  - Tests: add `shuffle_label_mirrors_shuffle_state` (the `repeat_label` twin)
+    and extend `transport_buttons_keep_a_fixed_width_across_label_changes`
+    with a `shuffle_on` case asserting every button's width is unchanged; pass
+    the extra `shuffle` argument through
+    `transport_controls_construct_for_both_play_states_volume_endpoints_and_repeat_states`.
+
+- `src/ui/tests.rs`:
+  - Add `shuffle_toggle_flips_the_shuffle_flag` via
+    `assert_toggles_shared_state(Message::ToggleShuffle, |state| state.shuffle)`
+    and name `ToggleShuffle` in that helper's doc comment.
+  - Add `next_with_shuffle_never_reselects_the_current_track`: set
+    `state.shuffle = true` on `player_stepping_from(Some("song-2"))`, drive
+    the `Message::NextTrack` task with the existing `drive_task` helper, and
+    assert the `TrackSelected` index is not `1` (the index of `song-2` in
+    `stepping_songs`).
+  - Add `previous_with_shuffle_still_steps_backward`: with `shuffle = true`,
+    `Message::PreviousTrack` from `song-2` still lands on index 0.
+
+**Files touched.** `src/state.rs`, `src/ui/transport.rs`, `src/ui/mod.rs`,
+`src/ui/views.rs`, `src/ui/tests.rs`.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- `AppState::default().shuffle` is `false`; `toggle_shuffle` flips only
+  `shuffle`, leaving every other field (including `current_track` and
+  `volume`) untouched.
+- `shuffled_track_id` returns `None` on an empty list, never the current song
+  when another song exists, and can reach every candidate as `roll` varies;
+  on a one-song album it returns that song.
+- `Message::ToggleShuffle` routes through `update` to flip the stored flag.
+- With Shuffle on, `Message::NextTrack` selects a song other than the current
+  one; with Shuffle off, and for `Message::PreviousTrack` in either state, the
+  existing sequential/repeat behavior is unchanged.
+- The Shuffle button is fixed-width and its label reflects the flag; the
+  transport row constructs for both shuffle states.
+- Manual check (`cargo run`): the Shuffle button toggles its label and, with
+  Shuffle on, Next jumps to a different song in the album. The build and tests
+  are the primary gate.
 
 ## Done
 
