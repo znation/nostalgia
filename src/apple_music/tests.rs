@@ -1473,3 +1473,63 @@ async fn off_thread_reports_an_error_when_its_work_thread_panics() {
         "the library request thread ended without a result"
     );
 }
+
+// `ip_is_internal` is the shared SSRF guard: `preview_url_problem` applies it
+// to an address literal a preview URL spells, and `audio::PublicAddressResolver`
+// applies it to every address a preview hostname resolves to. The URL-level
+// tests above only reach the branches their sample literals happen to hit, so
+// a dropped range check (broadcast, documentation, CGNAT, a v6 form) would be
+// invisible. This table pins each branch on both sides: every internal form
+// must report `true`, and public v4/v6 addresses — including the addresses
+// bordering `100.64.0.0/10` and a public v4-mapped v6 address — must report
+// `false`, so the guard cannot pass by rejecting everything.
+#[test]
+fn ip_is_internal_refuses_every_internal_range_and_allows_public_addresses() {
+    for (text, expected) in [
+        // IPv4 internal: private, loopback, link-local, unspecified,
+        // broadcast, documentation, 0.0.0.0/8, and 100.64.0.0/10.
+        ("10.0.0.1", true),
+        ("172.16.0.1", true),
+        ("192.168.0.1", true),
+        ("127.0.0.1", true),
+        ("169.254.169.254", true),
+        ("0.0.0.0", true),
+        ("255.255.255.255", true),
+        ("192.0.2.1", true),
+        ("198.51.100.1", true),
+        ("203.0.113.1", true),
+        ("0.1.2.3", true),
+        ("100.64.0.1", true),
+        ("100.127.255.255", true),
+        // IPv4 public: the addresses bordering the CGNAT range and ordinary
+        // public hosts.
+        ("100.63.255.255", false),
+        ("100.128.0.0", false),
+        ("8.8.8.8", false),
+        ("93.184.216.34", false),
+        // IPv6 internal: loopback, unspecified, multicast, unique-local
+        // (fc00::/7), link-local (fe80::/10), and v4-mapped internal
+        // addresses.
+        ("::1", true),
+        ("::", true),
+        ("ff02::1", true),
+        ("fc00::1", true),
+        ("fd12:3456::1", true),
+        ("fe80::1", true),
+        ("::ffff:127.0.0.1", true),
+        ("::ffff:10.0.0.1", true),
+        // IPv6 public: a public v4-mapped address and ordinary public v6.
+        ("::ffff:8.8.8.8", false),
+        ("2001:4860:4860::8888", false),
+        ("2606:4700:4700::1111", false),
+    ] {
+        let ip: std::net::IpAddr = text
+            .parse()
+            .unwrap_or_else(|_| panic!("bad test address {text}"));
+        assert_eq!(
+            ip_is_internal(ip),
+            expected,
+            "ip_is_internal({text}) should be {expected}"
+        );
+    }
+}
