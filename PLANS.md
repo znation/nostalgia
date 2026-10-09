@@ -29,7 +29,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Show each track's length in the playlist editor (found 2026-10-08)
+_None yet._
+
+## Done
+
+### Show each track's length in the playlist editor (found 2026-10-08, done 2026-10-08)
 
 Classic Winamp's playlist editor lists every track with its length beside the
 title. Nostalgia's Songs browse list — the sunken playlist editor framed by
@@ -89,8 +93,6 @@ seam, navigation, transport, or the other panels.
 - The Songs browse view still builds without panicking over the sample
   library: the existing `browse_views_construct_over_the_loaded_library` and
   `view_constructs_over_the_apps_full_input_space` tests pass.
-
-## Done
 
 ### Follow a browse collection's next page so a large library is read in full (found 2026-10-08, done 2026-10-08)
 

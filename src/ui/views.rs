@@ -123,11 +123,13 @@ fn current_row_style(status: button::Status) -> button::Style {
 /// The rows borrow their titles from the list the caller passes in rather
 /// than owning clones: this builder runs on every view refresh, so the
 /// borrowed title avoids a `String` allocation per row per frame. The
-/// playing row's `▶` marker is pushed as its own static label beside the
-/// borrowed title rather than formatted into an owned one, so the marker
-/// adds no `String` allocation per frame either.
+/// secondary label is a [`Cow`] because a song row's label is the track's
+/// formatted length, which is owned, while the artist and album rows keep
+/// their static hints borrowed. The playing row's `▶` marker is pushed as
+/// its own static label beside the borrowed title rather than formatted into
+/// an owned one, so the marker adds no `String` allocation per frame either.
 fn scrollable_list<'a>(
-    items: impl IntoIterator<Item = (&'a str, &'static str, Message, bool)>,
+    items: impl IntoIterator<Item = (&'a str, Cow<'a, str>, Message, bool)>,
     empty_label: &'a str,
 ) -> Element<'a, Message> {
     let mut column = Column::new().padding(20);
@@ -176,10 +178,14 @@ fn scrollable_list<'a>(
 /// been replaced. Kept out of `view_artists` so the title/label/selection
 /// contract is testable without an iced renderer. Artists are never the
 /// currently playing row, so the flag is always false.
-fn artist_row(epoch: u64, index: usize, artist: &Artist) -> (&str, &'static str, Message, bool) {
+fn artist_row<'a>(
+    epoch: u64,
+    index: usize,
+    artist: &'a Artist,
+) -> (&'a str, Cow<'a, str>, Message, bool) {
     (
         artist.name.as_str(),
-        "View Albums",
+        Cow::Borrowed("View Albums"),
         Message::ArtistSelected { epoch, index },
         false,
     )
@@ -191,31 +197,38 @@ fn artist_row(epoch: u64, index: usize, artist: &Artist) -> (&str, &'static str,
 /// list, carried so building a row never clones the album's id (see
 /// [`artist_row`]). Albums are never the currently playing row, so the flag
 /// is always false.
-fn album_row(epoch: u64, index: usize, album: &Album) -> (&str, &'static str, Message, bool) {
+fn album_row<'a>(
+    epoch: u64,
+    index: usize,
+    album: &'a Album,
+) -> (&'a str, Cow<'a, str>, Message, bool) {
     (
         album.title.as_str(),
-        "View Songs",
+        Cow::Borrowed("View Songs"),
         Message::AlbumSelected { epoch, index },
         false,
     )
 }
 
-/// The browse row a song becomes: its title, the "Play" hint, the message
-/// emitted when it is pressed, and whether it is the currently playing track
-/// (true only when `current_track` names this song). `epoch` and `index` are
-/// the loaded-list epoch and the song's position in that list, carried so
+/// The browse row a song becomes: its title, the track's formatted length
+/// ([`format_track_time`]) as the secondary label, the message emitted when
+/// it is pressed, and whether it is the currently playing track (true only
+/// when `current_track` names this song). `epoch` and `index` are the
+/// loaded-list epoch and the song's position in that list, carried so
 /// building a row never clones the song's id (see [`artist_row`]). The flag
 /// feeds `scrollable_list`'s `▶` + highlight marker, so the song list reads
-/// as a playlist.
+/// as a playlist. The length is a small owned `String` formatted per row per
+/// frame — the same per-frame allocation `now_playing_time` makes — while
+/// the title still borrows.
 fn song_row<'a>(
     epoch: u64,
     index: usize,
     song: &'a Song,
     current_track: Option<&str>,
-) -> (&'a str, &'static str, Message, bool) {
+) -> (&'a str, Cow<'a, str>, Message, bool) {
     (
         song.title.as_str(),
-        "Play",
+        Cow::Owned(format_track_time(song.duration_ms)),
         Message::TrackSelected { epoch, index },
         Some(song.id.as_str()) == current_track,
     )
@@ -228,7 +241,7 @@ fn song_row<'a>(
 /// fetch failure wins.
 fn browse_view<'a>(
     view: CurrentView,
-    rows: impl IntoIterator<Item = (&'a str, &'static str, Message, bool)>,
+    rows: impl IntoIterator<Item = (&'a str, Cow<'a, str>, Message, bool)>,
     loading: bool,
     error: Option<&'a str>,
 ) -> Element<'a, Message> {
@@ -812,12 +825,24 @@ mod tests {
         let song = sample_song();
         let (title, label, message, is_current) = song_row(0, 0, &song, None);
         assert_eq!(title, "Opening");
-        assert_eq!(label, "Play");
+        // `sample_song` is 210_000 ms long, so the secondary label is its
+        // `m:ss` length rather than the old static "Play" hint.
+        assert_eq!(label, "3:30");
         assert!(matches!(
             message,
             Message::TrackSelected { epoch: 0, index: 0 }
         ));
         assert!(!is_current);
+    }
+
+    #[test]
+    fn song_row_shows_an_unknown_duration_as_blank_time() {
+        // A song whose source supplied no duration (`0`) renders the same
+        // `--:--` placeholder as the Now Playing bar, not `0:00`.
+        let mut song = sample_song();
+        song.duration_ms = 0;
+        let (_, label, _, _) = song_row(0, 0, &song, None);
+        assert_eq!(label, "--:--");
     }
 
     #[test]
