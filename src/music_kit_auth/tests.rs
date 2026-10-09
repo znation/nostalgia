@@ -1254,6 +1254,40 @@ fn a_successful_opener_exit_is_not_reported() {
     );
 }
 
+// An opener that never exits is the fault a bare `Child::wait` cannot bound:
+// the reaper thread blocks forever and the child process outlives the sign-in.
+// The injected fault is a real long-running child plus a short deadline; the
+// report must name the timeout and the pid must be reaped (a killed child still
+// needs a `wait`, and `/proc` only disappears once it has one).
+#[cfg(target_os = "linux")]
+#[test]
+fn a_hung_opener_is_killed_and_reported() {
+    let child = Command::new("sleep")
+        .arg("30")
+        .spawn()
+        .expect("spawn a long-running child");
+    let pid = child.id();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    reap_with_timeout(child, Duration::from_millis(200), move |report| {
+        let _ = sender.send(report);
+    });
+    let report = receiver
+        .recv_timeout(Duration::from_secs(5))
+        .expect("a hung opener must be reported");
+    assert!(
+        report.contains("did not exit"),
+        "the report must name the hang, got: {report}"
+    );
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while std::path::Path::new(&format!("/proc/{pid}")).exists() {
+        assert!(
+            Instant::now() < deadline,
+            "child {pid} was still present five seconds after the reap timeout"
+        );
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
 // `AUTH_TIMEOUT` is production behavior — how long `authorize` waits for
 // the browser callback — but `authorize` is its only reader and the
 // timeout tests above inject their own deadline, so a changed constant

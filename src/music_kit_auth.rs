@@ -394,13 +394,30 @@ fn write_private_file(file: &Path, contents: &str) -> io::Result<()> {
     handle.write_all(contents.as_bytes())
 }
 
+/// How long the browser opener is given to exit before it is killed and reaped.
+///
+/// The opener is a short-lived launcher: it hands the page to the browser and
+/// exits within milliseconds. A launcher still running after this bound is hung
+/// (a wedged desktop session, say), and waiting on it forever would leak its
+/// reaper thread — and the child process — for the life of the app.
+const OPENER_REAP_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// How often [`reap_with_timeout`] checks whether the opener has exited.
+///
+/// `std::process::Child::wait` blocks with no bound, so the wait is a poll:
+/// this is the sleep between checks, short enough that a normal opener is
+/// reaped promptly and long enough not to spin.
+const OPENER_REAP_POLL_INTERVAL: Duration = Duration::from_millis(50);
+
 /// Waits on `child` on a detached thread so it is reaped without blocking the
 /// caller. A failed wait is reported, and so is a nonzero exit: an opener that
 /// cannot hand the page to a browser (a missing opener, or no browser
 /// installed) exits nonzero, and without this line that failure stays invisible
-/// until the flow reports its generic timeout minutes later. The status is only
-/// reported, not turned into a flow failure: the opener has already run, and a
-/// browser that did open still delivers the callback.
+/// until the flow reports its generic timeout minutes later. An opener that
+/// never exits at all is killed and reaped once [`OPENER_REAP_TIMEOUT`]
+/// elapses, and that is reported too. The status is only reported, not turned
+/// into a flow failure: the opener has already run, and a browser that did open
+/// still delivers the callback.
 fn reap_in_background(child: std::process::Child) {
     reap_with(child, |report| eprintln!("{report}"));
 }
@@ -411,13 +428,52 @@ fn reap_in_background(child: std::process::Child) {
 /// The wait runs on its own thread (see [`reap_in_background`]); `report` runs
 /// on that thread and receives the one line to log, or nothing for a
 /// successful exit.
-fn reap_with(mut child: std::process::Child, report: impl FnOnce(String) + Send + 'static) {
-    thread::spawn(move || match child.wait() {
-        Ok(status) if !status.success() => report(opener_exit_report(&status)),
-        Ok(_) => {}
-        Err(error) => report(format!(
-            "could not reap the browser opener process: {error}"
-        )),
+fn reap_with(child: std::process::Child, report: impl FnOnce(String) + Send + 'static) {
+    reap_with_timeout(child, OPENER_REAP_TIMEOUT, report);
+}
+
+/// [`reap_with`] with an injectable deadline, so a test can prove a hung opener
+/// is killed and reaped without waiting out [`OPENER_REAP_TIMEOUT`].
+///
+/// The child is polled with `try_wait` because `Child::wait` has no timeout: a
+/// launcher that never exits would otherwise block this thread forever. On the
+/// deadline the child is killed and then waited on, so it is reaped rather than
+/// left as a zombie (a killed child still needs a `wait` to be reaped) and no
+/// process is left running after the flow.
+fn reap_with_timeout(
+    mut child: std::process::Child,
+    timeout: Duration,
+    report: impl FnOnce(String) + Send + 'static,
+) {
+    thread::spawn(move || {
+        let deadline = Instant::now() + timeout;
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) => {
+                    if !status.success() {
+                        report(opener_exit_report(&status));
+                    }
+                    return;
+                }
+                Ok(None) if Instant::now() < deadline => {
+                    thread::sleep(OPENER_REAP_POLL_INTERVAL);
+                }
+                Ok(None) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    report(format!(
+                        "the browser opener did not exit within {timeout:?}; killed it"
+                    ));
+                    return;
+                }
+                Err(error) => {
+                    report(format!(
+                        "could not reap the browser opener process: {error}"
+                    ));
+                    return;
+                }
+            }
+        }
     });
 }
 
