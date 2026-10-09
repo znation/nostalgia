@@ -29,7 +29,46 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Add an All Songs view listing the whole library flat (found 2026-10-09)
+
+**Goal.** A new top-level `All Songs` browse view lists every song in the user's Apple Music library in one flat list, in library order, and each row plays exactly like a browsed song. It is reached by an `All Songs` button on the Artists view, and Back returns there. Today the only way to reach a song is to drill Artists → Albums → Songs, and the search box returns only query matches, so there is no way to see the library's songs as a whole. The REST half reads the library-songs collection (`/v1/me/library/songs`, which follows `next` pages like the sibling collections) and the sample half lists the whole sample library, through the same signed-in/sample split `browse` already applies. It is independent of the existing search box and can land on its own.
+
+**Approach.**
+
+- `src/apple_music/rest.rs`:
+  - Add `pub fn get_all_songs(&self, session: &MusicKitSession) -> Result<Vec<Song>, AppleMusicError>`. Build `{API_BASE}/me/library/songs` and call `self.fetch` — the same paginated collection helper `get_favorite_artists` and `get_albums_by_artist` use, so a library larger than one page is read in full under one `REQUEST_TIMEOUT`. Map each `Resource` exactly as `search_library` does (`required_id("song")`, `required_name("song")`, `artist_name()`, `duration_ms()`, `preview_url()`) with `album_id: String::new()`, because a library-songs resource carries no album id and nothing that plays a song reads it.
+- `src/apple_music.rs`:
+  - Add `pub async fn get_all_songs(&self) -> Result<Vec<Song>, AppleMusicError>` answering through the existing `browse` helper: `self.browse(move |rest, session| rest.get_all_songs(session), sample_all_songs)`.
+  - Extract the ordered library walk `sample_songs_matching` already spells out into a private `fn sample_songs_in_library_order() -> impl Iterator<Item = &'static Song>` (artists → `albums_by_artist` → `songs_by_album`, in library order), so the new `fn sample_all_songs() -> Vec<Song>` (`sample_songs_in_library_order().cloned().collect()`) and `sample_songs_matching` (the same walk, filtered) cannot drift apart.
+- `src/ui/mod.rs`:
+  - Add `CurrentView::AllSongs`, `Message::ShowAllSongs`, `Message::AllSongsLoaded(Vec<Song>)`, and `Message::AllSongsLoadFailed(String)`.
+  - Add `all_songs: BrowseList<Song>` to `WinampPlayer`, initialised `BrowseList::new(false)` in `WinampPlayer::new`.
+  - `Message::ShowAllSongs` arm: clear `search_active`, set `current_view = CurrentView::AllSongs`, and issue `fetch_level(&mut player.all_songs, …, "loading all library songs".to_string(), |service| async move { service.get_all_songs().await }, Message::AllSongsLoaded, Message::AllSongsLoadFailed)`.
+  - `AllSongsLoaded` stores via `player.all_songs.store`; `AllSongsLoadFailed` records via `player.all_songs.fail`; the `BrowseReply` arm re-checks `player.all_songs.is_current(issued)` for both, beside the existing three lists.
+  - `Back` arm: `CurrentView::AllSongs => CurrentView::Artists`.
+  - `view`'s browse match: `CurrentView::AllSongs` builds `views::view_all_songs` from `player.all_songs`, mirroring the `Songs` arm (including the second lock that hands the current track id to the view).
+  - Push `views::view_all_songs_button()` in `view` when `current_view` is `CurrentView::Artists`, beside the Back/Retry buttons.
+- `src/ui/views.rs`:
+  - Add `pub fn view_all_songs(songs, epoch, loading, error, current_track)` that calls `browse_view(CurrentView::AllSongs, …, false)` from `song_row`, like `view_songs`.
+  - Add `pub fn view_all_songs_button()` returning `labeled_button("All Songs", Message::ShowAllSongs)`.
+  - `empty_list_label`: add `CurrentView::AllSongs => "No songs"`.
+  - Add `CurrentView::AllSongs` to `BROWSE_VIEWS` so the existing per-view construction and placeholder loops exercise it.
+- Tests:
+  - `src/apple_music/rest/tests.rs`: `get_all_songs_maps_the_library_songs_collection` (pin the requested URL, the mapped songs, and the empty `album_id`); `get_all_songs_follows_a_next_page`; `get_all_songs_reports_a_transport_error_bare`; `get_all_songs_rejects_a_nameless_song`.
+  - `src/apple_music/tests.rs`: `get_all_songs_returns_every_sample_song_in_library_order` (song-1 through song-5); `get_all_songs_reads_the_rest_library_when_signed_in` (store a session over a stub transport and assert the REST songs, not the sample list).
+  - `src/ui/tests.rs`: `show_all_songs_fetches_the_flat_list_and_switches_view`; `all_songs_loaded_stores_the_flat_list`; `back_from_all_songs_returns_to_the_artists_list`; `show_all_songs_clears_an_active_search`. Extend `seed_browse_lists` to populate `all_songs` and `assert_browse_lists_empty` to check it, so the shared full-input and failure-shape tests cover the new buffer.
+  - `src/ui/views.rs`'s suite: a `view_all_songs_button` construction check and the `empty_list_label` arm, plus the extended `BROWSE_VIEWS` loops.
+
+**Files touched.** `src/apple_music/rest.rs`, `src/apple_music/rest/tests.rs`, `src/apple_music.rs`, `src/apple_music/tests.rs`, `src/ui/mod.rs`, `src/ui/views.rs`, `src/ui/tests.rs`.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- `RestLibrary::get_all_songs` requests `/v1/me/library/songs`, maps every resource's id, title, artist, duration, and first non-blank preview URL, leaves `album_id` empty, and follows a same-origin `next` page.
+- A transport failure propagates as the transport's own cause; a resource without a name is an error naming its id.
+- With no session, `AppleMusicService::get_all_songs` returns every sample-library song in library order (song-1, song-2, song-3, song-4, song-5); with a session, it returns the REST collection.
+- Pressing `All Songs` on the Artists view clears the buffer, switches to `CurrentView::AllSongs`, and fetches; the loaded reply stores the rows and a failed reply records the report.
+- Back from `CurrentView::AllSongs` returns to `CurrentView::Artists`.
 
 ## Done
 
