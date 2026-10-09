@@ -559,3 +559,184 @@ fn a_failed_authentication_leaves_a_stored_session_unchanged() {
     assert_eq!(error.to_string(), "sign-in failed");
     assert_eq!(service.session(), Some(stored));
 }
+
+// The REST browse wiring: with a session stored, each browse query runs
+// through the injected `rest::HttpTransport` and returns its mapped rows;
+// without a session, the same service still answers from the sample library
+// and never calls the transport. The stub records each request, so the URL
+// and both tokens are pinned alongside the mapped rows.
+
+use std::sync::Mutex as StdMutex;
+
+/// A transport stub for the service tests: records every `(url, session)` it
+/// is handed and returns the same canned result to each call. Cloning it
+/// shares the recording, so a test keeps a handle after `with_transport`
+/// boxes the clone.
+#[derive(Clone)]
+struct StubTransport {
+    result: Result<String, AppleMusicError>,
+    calls: Arc<StdMutex<Vec<(String, MusicKitSession)>>>,
+}
+
+impl StubTransport {
+    /// A stub that answers every request with `body`.
+    fn returning(body: &str) -> Self {
+        Self {
+            result: Ok(body.to_string()),
+            calls: Arc::new(StdMutex::new(Vec::new())),
+        }
+    }
+
+    /// A stub that fails every request with `message`.
+    fn failing(message: &str) -> Self {
+        Self {
+            result: Err(AppleMusicError::new(message)),
+            calls: Arc::new(StdMutex::new(Vec::new())),
+        }
+    }
+
+    /// The requests recorded so far, oldest first.
+    fn calls(&self) -> Vec<(String, MusicKitSession)> {
+        self.calls.lock().unwrap().clone()
+    }
+}
+
+impl rest::HttpTransport for StubTransport {
+    fn get(&self, url: &str, session: &MusicKitSession) -> Result<String, AppleMusicError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push((url.to_string(), session.clone()));
+        self.result.clone()
+    }
+}
+
+/// The session a signed-in service stores, with recognizable tokens so a test
+/// can assert the transport saw exactly these credentials.
+fn rest_session() -> MusicKitSession {
+    MusicKitSession {
+        developer_token: "developer-token".to_string(),
+        user_token: "user-token".to_string(),
+    }
+}
+
+/// A service over `transport` with a session stored, so its browse queries
+/// route through the REST client.
+fn signed_in_service(transport: &StubTransport) -> AppleMusicService {
+    let service = AppleMusicService::with_transport(
+        Arc::new(Mutex::new(AppState::default())),
+        Box::new(transport.clone()),
+    );
+    service
+        .authenticate_with("developer-token", &|_| Ok(rest_session()))
+        .unwrap();
+    service
+}
+
+/// Asserts the stub saw exactly one request, to `expected_url` with the
+/// stored session.
+fn assert_single_rest_call(stub: &StubTransport, expected_url: &str) {
+    let calls = stub.calls();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].0, expected_url);
+    assert_eq!(calls[0].1, rest_session());
+}
+
+#[tokio::test]
+async fn get_favorite_artists_uses_the_rest_library_when_signed_in() {
+    let stub = StubTransport::returning(
+        r#"{"data":[{"id":"artist-1","attributes":{"name":"The Sample Band"}}]}"#,
+    );
+    let service = signed_in_service(&stub);
+
+    let artists = service.get_favorite_artists().await.unwrap();
+
+    assert_eq!(
+        artists,
+        vec![Artist {
+            id: "artist-1".to_string(),
+            name: "The Sample Band".to_string(),
+        }]
+    );
+    assert_single_rest_call(&stub, "https://api.music.apple.com/v1/me/library/artists");
+}
+
+#[tokio::test]
+async fn get_albums_by_artist_uses_the_rest_library_when_signed_in() {
+    let stub = StubTransport::returning(
+        r#"{"data":[{"id":"album-1","attributes":{"name":"First Record"}}]}"#,
+    );
+    let service = signed_in_service(&stub);
+
+    let albums = service.get_albums_by_artist("artist-9").await.unwrap();
+
+    assert_eq!(
+        albums,
+        vec![Album {
+            id: "album-1".to_string(),
+            title: "First Record".to_string(),
+            artist_id: "artist-9".to_string(),
+        }]
+    );
+    assert_single_rest_call(
+        &stub,
+        "https://api.music.apple.com/v1/me/library/artists/artist-9/albums",
+    );
+}
+
+#[tokio::test]
+async fn get_songs_from_album_uses_the_rest_library_when_signed_in() {
+    let stub =
+        StubTransport::returning(r#"{"data":[{"id":"song-1","attributes":{"name":"Opening"}}]}"#);
+    let service = signed_in_service(&stub);
+
+    let songs = service.get_songs_from_album("album-9").await.unwrap();
+
+    assert_eq!(
+        songs,
+        vec![Song {
+            id: "song-1".to_string(),
+            title: "Opening".to_string(),
+            album_id: "album-9".to_string(),
+        }]
+    );
+    assert_single_rest_call(
+        &stub,
+        "https://api.music.apple.com/v1/me/library/albums/album-9/tracks",
+    );
+}
+
+#[tokio::test]
+async fn a_transport_error_propagates_from_a_signed_in_browse_query() {
+    let service = signed_in_service(&StubTransport::failing("network down"));
+
+    let error = service.get_favorite_artists().await.unwrap_err();
+
+    assert_eq!(
+        error.to_string(),
+        "favorite artists request failed: network down"
+    );
+}
+
+#[tokio::test]
+async fn a_signed_out_service_ignores_the_transport_and_returns_sample_data() {
+    let stub = StubTransport::failing("must not be called");
+    let service = AppleMusicService::with_transport(
+        Arc::new(Mutex::new(AppState::default())),
+        Box::new(stub.clone()),
+    );
+
+    assert_eq!(
+        service.get_favorite_artists().await.unwrap(),
+        sample_library().artists.clone()
+    );
+    assert_eq!(
+        service.get_albums_by_artist("artist-1").await.unwrap(),
+        sample_library().albums_by_artist["artist-1"].clone()
+    );
+    assert_eq!(
+        service.get_songs_from_album("album-1").await.unwrap(),
+        sample_library().songs_by_album["album-1"].clone()
+    );
+    assert!(stub.calls().is_empty());
+}

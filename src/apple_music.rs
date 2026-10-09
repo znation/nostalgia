@@ -1,9 +1,10 @@
 //! The seam to the Apple Music API.
 //!
 //! This is the narrow integration point a real Apple Music backend will
-//! replace. Until it lands, `AppleMusicService` answers every browse query
-//! from the shared in-memory sample library
-//! ([`crate::sample_library::sample_library`]) and stubs playback as
+//! replace. `AppleMusicService` answers a browse query from the signed-in
+//! user's Apple Music library through the REST client when a session is
+//! stored, and from the shared in-memory sample library
+//! ([`crate::sample_library::sample_library`]) otherwise; it stubs playback as
 //! shared-state transitions: `play_track` records the selected track and
 //! marks it playing, `pause` clears the flag. The still-unimplemented stubs
 //! (`next_track` and `previous_track`) stay so a real implementation has a
@@ -12,11 +13,10 @@
 //! The service also holds the authenticated `MusicKit` session
 //! ([`crate::music_kit_auth::MusicKitSession`]) obtained by [`init_service`]
 //! from `APPLE_MUSIC_DEVELOPER_TOKEN`; [`AppleMusicService::authenticate`]
-//! stores it and [`AppleMusicService::session`] hands it to the future REST
-//! integration. [`init_service`] returns the one service the app shares, so the
-//! session stored at startup is the session the UI later reads. Until that
-//! integration lands, the browse queries keep answering from the sample
-//! library.
+//! stores it and [`AppleMusicService::session`] hands it to the browse
+//! queries, which route through the REST client while it is stored.
+//! [`init_service`] returns the one service the app shares, so the session
+//! stored at startup is the session the UI later reads.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -70,14 +70,15 @@ impl AppleMusicError {
     }
 }
 
-/// The music-library service. Until the real Apple Music API lands, every
-/// browse query is answered from the shared [`crate::sample_library::sample_library`],
-/// so the UI and its tests agree on the same stub data. It also carries the
-/// authenticated `MusicKit` session once [`AppleMusicService::authenticate`]
-/// has stored one.
+/// The music-library service. It answers a browse query from the signed-in
+/// user's Apple Music library through the REST client once
+/// [`AppleMusicService::authenticate`] has stored a session, and from the
+/// shared [`crate::sample_library::sample_library`] otherwise, so the UI and
+/// its tests agree on the same stub data before sign-in.
 #[derive(Clone)]
 pub struct AppleMusicService {
     session: Arc<std::sync::Mutex<Option<MusicKitSession>>>,
+    rest: Arc<rest::RestLibrary>,
     state: Arc<Mutex<AppState>>,
 }
 
@@ -150,11 +151,24 @@ fn browser_sign_in(developer_token: &str) -> Result<MusicKitSession, AppleMusicE
 }
 
 impl AppleMusicService {
-    /// Wraps the shared [`AppState`] in a new service; the session starts
-    /// unset until [`AppleMusicService::authenticate`] stores one.
+    /// Wraps the shared [`AppState`] in a new service over the production
+    /// [`rest::UreqTransport`]; the session starts unset until
+    /// [`AppleMusicService::authenticate`] stores one.
+    #[must_use]
     pub fn new(state: Arc<Mutex<AppState>>) -> Self {
+        Self::with_transport(state, Box::new(rest::UreqTransport))
+    }
+
+    /// [`new`](Self::new) with an injectable [`rest::HttpTransport`], so a
+    /// test drives the browse queries with a stub instead of the network.
+    #[must_use]
+    pub fn with_transport(
+        state: Arc<Mutex<AppState>>,
+        transport: Box<dyn rest::HttpTransport>,
+    ) -> Self {
         Self {
             session: Arc::new(std::sync::Mutex::new(None)),
+            rest: Arc::new(rest::RestLibrary::new(transport)),
             state,
         }
     }
@@ -215,8 +229,7 @@ impl AppleMusicService {
     /// The stored `MusicKit` session, or `None` before a successful sign-in.
     ///
     /// Clones the session out from under the mutex so the caller owns it; the
-    /// future REST integration is the caller this seam is kept for.
-    #[allow(dead_code)]
+    /// browse queries are the caller this seam is kept for.
     pub fn session(&self) -> Option<MusicKitSession> {
         self.session
             .lock()
@@ -264,17 +277,26 @@ impl AppleMusicService {
         Ok(())
     }
 
-    /// All favorite artists (every artist in the sample library).
+    /// All favorite artists: the signed-in user's library artists when a
+    /// session is stored, and every sample-library artist otherwise.
     ///
     /// # Errors
     ///
-    /// The stub never fails; the `Result` is the seam a real Apple Music
-    /// backend reports a failed request through.
+    /// Returns an [`AppleMusicError`] when the signed-in request fails; with
+    /// no session the sample-library lookup never fails.
     pub async fn get_favorite_artists(&self) -> Result<Vec<Artist>, AppleMusicError> {
-        Ok(sample_library().artists.clone())
+        match self.session() {
+            Some(session) => {
+                let rest = Arc::clone(&self.rest);
+                off_thread(move || rest.get_favorite_artists(&session)).await
+            }
+            None => Ok(sample_library().artists.clone()),
+        }
     }
 
-    /// Albums by the given artist; unknown artists yield an empty list.
+    /// Albums by the given artist: the signed-in user's library albums when a
+    /// session is stored, and the sample library's matching albums otherwise
+    /// (unknown artists yield an empty list).
     ///
     /// A blank `artist_id` — empty or only whitespace — or one carrying a
     /// terminal control character is rejected with an [`AppleMusicError`]
@@ -286,16 +308,26 @@ impl AppleMusicService {
     /// # Errors
     ///
     /// Returns an [`AppleMusicError`] when `artist_id` is blank (empty or only
-    /// whitespace) or carries a control character.
+    /// whitespace), carries a control character, or the signed-in request
+    /// fails.
     pub async fn get_albums_by_artist(
         &self,
         artist_id: &str,
     ) -> Result<Vec<Album>, AppleMusicError> {
         ensure_id_is_valid(artist_id, IdKind::Artist)?;
-        Ok(lookup(&sample_library().albums_by_artist, artist_id))
+        match self.session() {
+            Some(session) => {
+                let rest = Arc::clone(&self.rest);
+                let artist_id = artist_id.to_string();
+                off_thread(move || rest.get_albums_by_artist(&session, &artist_id)).await
+            }
+            None => Ok(lookup(&sample_library().albums_by_artist, artist_id)),
+        }
     }
 
-    /// Songs on the given album; unknown albums yield an empty list.
+    /// Songs on the given album: the signed-in user's library songs when a
+    /// session is stored, and the sample library's matching songs otherwise
+    /// (unknown albums yield an empty list).
     ///
     /// A blank `album_id` — empty or only whitespace — or one carrying a
     /// terminal control character is rejected with an [`AppleMusicError`], the
@@ -304,10 +336,18 @@ impl AppleMusicService {
     /// # Errors
     ///
     /// Returns an [`AppleMusicError`] when `album_id` is blank (empty or only
-    /// whitespace) or carries a control character.
+    /// whitespace), carries a control character, or the signed-in request
+    /// fails.
     pub async fn get_songs_from_album(&self, album_id: &str) -> Result<Vec<Song>, AppleMusicError> {
         ensure_id_is_valid(album_id, IdKind::Album)?;
-        Ok(lookup(&sample_library().songs_by_album, album_id))
+        match self.session() {
+            Some(session) => {
+                let rest = Arc::clone(&self.rest);
+                let album_id = album_id.to_string();
+                off_thread(move || rest.get_songs_from_album(&session, &album_id)).await
+            }
+            None => Ok(lookup(&sample_library().songs_by_album, album_id)),
+        }
     }
 }
 
@@ -384,6 +424,27 @@ fn play_log_line(track_id: &str) -> String {
 /// default chain lives here once instead of in each query method.
 fn lookup<T: Clone>(index: &HashMap<String, Vec<T>>, id: &str) -> Vec<T> {
     index.get(id).cloned().unwrap_or_default()
+}
+
+/// Runs `work` on a `std::thread` and awaits its result, so a blocking HTTP
+/// call never stalls iced's executor.
+///
+/// The browse queries call this when a session is stored: the REST client is
+/// synchronous, and iced's executor has no tokio runtime for
+/// `tokio::task::spawn_blocking`, so the work moves to an ordinary thread and
+/// reports back through a `tokio::sync::oneshot`. A sender dropped without a
+/// value — the thread panicked — becomes an [`AppleMusicError`] rather than
+/// hanging the await.
+async fn off_thread<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T, AppleMusicError> + Send + 'static,
+) -> Result<T, AppleMusicError> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    std::thread::spawn(move || {
+        let _ = sender.send(work());
+    });
+    receiver
+        .await
+        .map_err(|_| AppleMusicError::new("the library request thread ended without a result"))?
 }
 
 pub mod rest;
