@@ -870,6 +870,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
                 player.songs.loading,
                 player.songs.error.as_deref(),
                 state.current_track.as_deref(),
+                player.search_active,
             )
         }
     };

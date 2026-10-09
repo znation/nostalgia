@@ -82,14 +82,28 @@ fn empty_list_label(view: &CurrentView) -> &'static str {
 /// Otherwise `loading` is the list's load state: true means the reply the
 /// navigation just scheduled is still in flight, so the panel reads as
 /// loading rather than as an empty library; false means a reply landed —
-/// possibly an empty one — so [`empty_list_label`] names the list. Pure, like
+/// possibly an empty one — so [`empty_list_label`] names the list.
+///
+/// `search_active` marks the Songs list as holding a library search's results
+/// rather than a browsed album's songs. A search that matched nothing then
+/// reads as "no matches" instead of the album-level [`empty_list_label`]
+/// wording, which would blame the album the search was issued from. The update
+/// loop's `SearchSubmitted` arm is the only setter and it always shows the
+/// Songs view, so the flag is only ever true with `view == Songs`. Pure, like
 /// [`empty_list_label`], so every wording is testable without an iced
 /// renderer.
-fn browse_placeholder<'a>(view: &CurrentView, loading: bool, error: Option<&'a str>) -> &'a str {
+fn browse_placeholder<'a>(
+    view: &CurrentView,
+    loading: bool,
+    error: Option<&'a str>,
+    search_active: bool,
+) -> &'a str {
     if let Some(error) = error {
         error
     } else if loading {
         "Loading…"
+    } else if search_active {
+        "No songs match your search"
     } else {
         empty_list_label(view)
     }
@@ -237,15 +251,19 @@ fn song_row<'a>(
 /// Builds a browse list from its rows: the shared body of [`view_artists`],
 /// [`view_albums`], and [`view_songs`]. `rows` yields each item's
 /// `(title, label, message, current-track)` tuple (see [`scrollable_list`]),
-/// and `view` selects the empty-list wording via [`browse_placeholder`]; a
-/// fetch failure wins.
+/// and `view` (with `search_active`) selects the empty-list wording via
+/// [`browse_placeholder`]; a fetch failure wins.
 fn browse_view<'a>(
     view: CurrentView,
     rows: impl IntoIterator<Item = (&'a str, Cow<'a, str>, Message, bool)>,
     loading: bool,
     error: Option<&'a str>,
+    search_active: bool,
 ) -> Element<'a, Message> {
-    scrollable_list(rows, browse_placeholder(&view, loading, error))
+    scrollable_list(
+        rows,
+        browse_placeholder(&view, loading, error, search_active),
+    )
 }
 
 /// The Artists browse view: one row per artist, in the order given, each
@@ -267,6 +285,7 @@ pub fn view_artists<'a>(
             .map(|(index, artist)| artist_row(epoch, index, artist)),
         loading,
         error,
+        false,
     )
 }
 
@@ -289,21 +308,24 @@ pub fn view_albums<'a>(
             .map(|(index, album)| album_row(epoch, index, album)),
         loading,
         error,
+        false,
     )
 }
 
 /// The Songs browse view: one row per song, in the order given, each emitting
 /// [`Message::TrackSelected`] with the song's index in the list and the
 /// list's `epoch`; the row whose id is `current_track` is marked as playing.
-/// `loading` and `error` select the placeholder wording (see
-/// [`browse_placeholder`]); a fetch failure wins. Built by [`browse_view`]
-/// from the [`song_row`] mapping.
+/// `loading`, `error`, and `search_active` select the placeholder wording (see
+/// [`browse_placeholder`]); a fetch failure wins, and a loaded-empty search
+/// reads as "no matches" rather than as an empty album. Built by
+/// [`browse_view`] from the [`song_row`] mapping.
 pub fn view_songs<'a>(
     songs: &'a [Song],
     epoch: u64,
     loading: bool,
     error: Option<&'a str>,
     current_track: Option<&str>,
+    search_active: bool,
 ) -> Element<'a, Message> {
     browse_view(
         CurrentView::Songs,
@@ -313,6 +335,7 @@ pub fn view_songs<'a>(
             .map(|(index, song)| song_row(epoch, index, song, current_track)),
         loading,
         error,
+        search_active,
     )
 }
 
@@ -1139,8 +1162,9 @@ mod tests {
     ) {
         let _artists = view_artists(artists, epoch, loading, None);
         let _albums = view_albums(albums, epoch, loading, None);
-        let _songs = view_songs(songs, epoch, loading, None, None);
-        let _songs_marked = view_songs(songs, epoch, loading, None, Some("song-1"));
+        let _songs = view_songs(songs, epoch, loading, None, None, false);
+        let _songs_marked = view_songs(songs, epoch, loading, None, Some("song-1"), false);
+        let _songs_searched = view_songs(songs, epoch, loading, None, None, true);
     }
 
     // The currently playing row is marked by a selection bar. iced's `Element`
@@ -1200,12 +1224,34 @@ mod tests {
     #[test]
     fn browse_placeholder_distinguishes_loading_from_an_empty_list() {
         for view in BROWSE_VIEWS {
-            assert_eq!(browse_placeholder(&view, true, None), "Loading…");
+            assert_eq!(browse_placeholder(&view, true, None, false), "Loading…");
             assert_eq!(
-                browse_placeholder(&view, false, None),
+                browse_placeholder(&view, false, None, false),
                 empty_list_label(&view)
             );
         }
+    }
+
+    // A loaded-empty Songs list that is showing a library search must not use
+    // the album-level "No songs" wording: that reads as "this album has no
+    // songs", blaming the album rather than reporting that the query matched
+    // nothing. The search wording applies only once the reply has landed, so a
+    // still-loading or failed search keeps its own message.
+    #[test]
+    fn browse_placeholder_names_an_empty_search() {
+        assert_eq!(
+            browse_placeholder(&CurrentView::Songs, false, None, true),
+            "No songs match your search"
+        );
+        assert_eq!(
+            browse_placeholder(&CurrentView::Songs, true, None, true),
+            "Loading…"
+        );
+        let report = "music-library fetch failed (searching the library for \"zzz\"): boom";
+        assert_eq!(
+            browse_placeholder(&CurrentView::Songs, false, Some(report), true),
+            report
+        );
     }
 
     // A failed fetch must read as a failure, not as an empty library: when an
@@ -1221,7 +1267,10 @@ mod tests {
         // that already replied), so drive each view through both states.
         for view in BROWSE_VIEWS {
             for loading in [true, false] {
-                assert_eq!(browse_placeholder(&view, loading, Some(report)), report);
+                assert_eq!(
+                    browse_placeholder(&view, loading, Some(report), false),
+                    report
+                );
             }
         }
     }
