@@ -69,28 +69,23 @@ mod tests {
         }
     }
 
+    /// Asserts each classic letter binding maps to its transport message, by
+    /// driving `map` with every letter. The tests below pass different mappers:
+    /// one wraps the letter in a `KeyPressed` event for `message_for`, the other
+    /// feeds `shortcut` an uppercase letter with Shift held.
+    fn assert_letter_bindings(map: impl Fn(&str) -> Option<Message>) {
+        assert!(matches!(map("z"), Some(Message::PreviousTrack)));
+        assert!(matches!(map("x"), Some(Message::Play)));
+        assert!(matches!(map("c"), Some(Message::Pause)));
+        assert!(matches!(map("v"), Some(Message::Stop)));
+        assert!(matches!(map("b"), Some(Message::NextTrack)));
+    }
+
     #[test]
     fn message_for_maps_each_bound_letter() {
-        assert!(matches!(
-            message_for(key_pressed(Key::Character("z".into()), Modifiers::NONE)),
-            Some(Message::PreviousTrack)
-        ));
-        assert!(matches!(
-            message_for(key_pressed(Key::Character("x".into()), Modifiers::NONE)),
-            Some(Message::Play)
-        ));
-        assert!(matches!(
-            message_for(key_pressed(Key::Character("c".into()), Modifiers::NONE)),
-            Some(Message::Pause)
-        ));
-        assert!(matches!(
-            message_for(key_pressed(Key::Character("v".into()), Modifiers::NONE)),
-            Some(Message::Stop)
-        ));
-        assert!(matches!(
-            message_for(key_pressed(Key::Character("b".into()), Modifiers::NONE)),
-            Some(Message::NextTrack)
-        ));
+        assert_letter_bindings(|letter| {
+            message_for(key_pressed(Key::Character(letter.into()), Modifiers::NONE))
+        });
     }
 
     #[test]
@@ -116,26 +111,12 @@ mod tests {
         // Uppercase characters map the same as lowercase, whether the case comes
         // from the character itself or the Shift modifier held over a lowercase
         // one; Shift is allowed, unlike the chord modifiers below.
-        assert!(matches!(
-            shortcut(&Key::Character("Z".into()), Modifiers::SHIFT),
-            Some(Message::PreviousTrack)
-        ));
-        assert!(matches!(
-            shortcut(&Key::Character("X".into()), Modifiers::SHIFT),
-            Some(Message::Play)
-        ));
-        assert!(matches!(
-            shortcut(&Key::Character("C".into()), Modifiers::SHIFT),
-            Some(Message::Pause)
-        ));
-        assert!(matches!(
-            shortcut(&Key::Character("V".into()), Modifiers::SHIFT),
-            Some(Message::Stop)
-        ));
-        assert!(matches!(
-            shortcut(&Key::Character("B".into()), Modifiers::SHIFT),
-            Some(Message::NextTrack)
-        ));
+        assert_letter_bindings(|letter| {
+            shortcut(
+                &Key::Character(letter.to_uppercase().into()),
+                Modifiers::SHIFT,
+            )
+        });
     }
 
     #[test]
