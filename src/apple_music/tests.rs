@@ -1377,6 +1377,37 @@ async fn get_songs_from_album_uses_the_rest_library_when_signed_in() {
     );
 }
 
+// The search box's backend routes through the REST client when a session is
+// stored, so a signed-in user searches the real library rather than the
+// sample one. The stub returns a song whose id is not a sample id, so the
+// result can only have come from the REST search envelope; the URL pins the
+// search endpoint, the term, and the documented page-size maximum.
+#[tokio::test]
+async fn search_songs_uses_the_rest_library_when_signed_in() {
+    let stub = StubTransport::returning(
+        r#"{"results":{"library-songs":{"data":[{"id":"rest-song","attributes":{"name":"Remote Result","artistName":"Remote Band"}}]}}}"#,
+    );
+    let service = signed_in_service(&stub);
+
+    let songs = service.search_songs("remote").await.unwrap();
+
+    assert_eq!(
+        songs,
+        vec![Song {
+            id: "rest-song".to_string(),
+            title: "Remote Result".to_string(),
+            artist: "Remote Band".to_string(),
+            album_id: String::new(),
+            duration_ms: 0,
+            preview_url: None,
+        }]
+    );
+    assert_single_rest_call(
+        &stub,
+        "https://api.music.apple.com/v1/me/library/search?term=remote&types=library-songs&limit=25",
+    );
+}
+
 #[tokio::test]
 async fn a_transport_error_propagates_from_a_signed_in_browse_query() {
     let service = signed_in_service(&StubTransport::failing("network down"));

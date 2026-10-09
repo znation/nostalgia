@@ -17,7 +17,7 @@ a raised title bar (always-on-top, shade, minimize, close), a Now Playing LCD ba
 showing the current track's artist, title, and length, chrome transport controls with Repeat and
 Shuffle, volume and balance sliders, an equalizer panel with a preset pick list, and an artist →
 album → song browser whose song rows show each track's length. A MusicKit loopback sign-in runs
-at startup when `APPLE_MUSIC_DEVELOPER_TOKEN` is set: browse queries read the signed-in Apple
+at startup when `APPLE_MUSIC_DEVELOPER_TOKEN` is set: browse and search queries read the signed-in Apple
 Music library through the REST API, following `next` pages for large libraries, and fall back
 to the in-memory sample library otherwise. Playback plays the selected song's Apple Music preview
 through `rodio`, behind an injectable audio-output seam that falls back to silence when no output
@@ -61,7 +61,7 @@ focused, the classic Winamp keys drive
 playback: Z and B step back and forward, X plays, C pauses, V stops, and the up/down arrows nudge
 the volume. The volume slider and the arrow keys set the audio backend's playback level, which is
 remembered for the next track. Setting `APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a
-browser-based MusicKit sign-in: browse queries then read your Apple Music library through the REST
+browser-based MusicKit sign-in: browse and search queries then read your Apple Music library through the REST
 API, and fall back to the built-in sample library when it is unset. Playback plays the selected
 song's Apple Music preview through `rodio` when the library supplies one, and updates the UI state
 either way. Pause and Stop silence the preview through the audio backend, and Play resumes a paused

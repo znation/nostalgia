@@ -1,8 +1,8 @@
 use super::*;
 
 use crate::test_support::{
-    PREVIEW_URL, StubTransport, loopback_listener, read_some_request, sample_album, sample_artist,
-    sample_song, serve_one_response, serve_one_response_capturing_request,
+    PREVIEW_URL, StubTransport, assert_ids, loopback_listener, read_some_request, sample_album,
+    sample_artist, sample_song, serve_one_response, serve_one_response_capturing_request,
 };
 
 /// A session whose tokens are recognizable, so a test can assert the transport
@@ -263,6 +263,104 @@ fn songs_from_album_percent_encodes_the_id() {
         &stub,
         "https://api.music.apple.com/v1/me/library/albums/caf%C3%A9/tracks",
     );
+}
+
+// The library search wraps its songs in `results.library-songs`, so the
+// client must reach one level deeper than a browse collection. The requested
+// URL pins the endpoint, the percent-encoded term, the `library-songs` type,
+// and the documented page-size maximum; the mapped song pins the fields the
+// model reads, with the empty `album_id` a search result carries.
+#[test]
+fn search_library_maps_the_search_envelope_and_percent_encodes_the_term() {
+    let stub = StubTransport::returning(
+        r#"{"results":{"library-songs":{"data":[{"id":"song-1","attributes":{"name":"Opening","artistName":"The Sample Band","durationInMillis":210000,"previews":[{"url":"https://example.test/preview.m4a"}]}}]}}}"#,
+    );
+    let library = library_over(&stub);
+
+    let songs = library.search_library(&session(), "open ing&x").unwrap();
+
+    assert_eq!(
+        songs,
+        vec![Song {
+            id: "song-1".to_string(),
+            title: "Opening".to_string(),
+            artist: "The Sample Band".to_string(),
+            album_id: String::new(),
+            duration_ms: 210_000,
+            preview_url: Some(PREVIEW_URL.to_string()),
+        }]
+    );
+    assert_single_call(
+        &stub,
+        "https://api.music.apple.com/v1/me/library/search?term=open%20ing%26x&types=library-songs&limit=25",
+    );
+}
+
+// Apple omits `results.library-songs` entirely for a search that matched
+// nothing, so an absent key is a valid empty result rather than a parse
+// failure; an explicit empty `data` array is the other no-match shape. Both
+// must return an empty list, not an error.
+#[test]
+fn search_library_returns_no_songs_when_the_results_carry_no_library_songs() {
+    for body in [
+        r#"{"results":{}}"#,
+        r#"{"results":{"library-songs":{"data":[]}}}"#,
+    ] {
+        let stub = StubTransport::returning(body);
+        let library = library_over(&stub);
+
+        let songs = library
+            .search_library(&session(), "nothing matches")
+            .unwrap();
+
+        assert!(songs.is_empty(), "{body}");
+    }
+}
+
+// A search matching more than one page is read in full: the client follows
+// the same-origin `next` link with the same pagination rules as a browse
+// collection.
+#[test]
+fn search_library_follows_a_next_page() {
+    let stub = StubTransport::returning_bodies(&[
+        r#"{"results":{"library-songs":{"data":[{"id":"song-1","attributes":{"name":"Opening"}}],"next":"/v1/me/library/search?term=x&types=library-songs&limit=25&offset=25"}}}"#,
+        r#"{"results":{"library-songs":{"data":[{"id":"song-2","attributes":{"name":"Second"}}]}}}"#,
+    ]);
+    let library = library_over(&stub);
+
+    let songs = library.search_library(&session(), "x").unwrap();
+
+    assert_ids(&songs, |song| song.id.as_str(), &["song-1", "song-2"]);
+    let calls = stub.calls();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(
+        calls[1].0,
+        "https://api.music.apple.com/v1/me/library/search?term=x&types=library-songs&limit=25&offset=25"
+    );
+}
+
+#[test]
+fn search_library_reports_a_transport_error_bare() {
+    let stub = StubTransport::failing("network down");
+    let library = library_over(&stub);
+
+    let error = library
+        .search_library(&session(), "x")
+        .unwrap_err()
+        .to_string();
+
+    assert_eq!(error, "network down");
+}
+
+#[test]
+fn search_library_rejects_a_nameless_song() {
+    let error = error_over(
+        r#"{"results":{"library-songs":{"data":[{"id":"song-7","attributes":{}}]}}}"#,
+        |library| library.search_library(&session(), "x"),
+    );
+
+    assert!(error.contains("without a name"), "{error}");
+    assert!(error.contains("song-7"), "{error}");
 }
 
 #[test]

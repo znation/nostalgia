@@ -35,6 +35,12 @@ const API_BASE: &str = "https://api.music.apple.com/v1";
 /// [`page_bound_notice`] and returns the rows read so far.
 const MAX_PAGES: usize = 10;
 
+/// The page size [`RestLibrary::search_library`] asks for. Apple documents the
+/// library-search `limit` maximum as 25 (default 5), so the request asks for
+/// the documented maximum: a larger value is out of contract and can fail the
+/// whole search.
+const SEARCH_PAGE_LIMIT: usize = 25;
+
 /// The end-to-end bound on one REST call, from DNS lookup through reading the
 /// response body. `ureq` defaults every network timeout to `None`, so without
 /// this a server that accepts the connection and then stalls leaves the
@@ -305,6 +311,42 @@ impl RestLibrary {
         })
     }
 
+    /// Songs in the signed-in user's library matching `query`.
+    ///
+    /// Apple's library search returns its songs nested under
+    /// `results.library-songs`; a query that matches nothing omits that key and
+    /// maps to an empty list. The term is percent-encoded as one query value,
+    /// so a space, `&`, or `#` in the query cannot split the parameter or start
+    /// a fragment. A search result carries no album id, so every mapped
+    /// [`Song`] leaves `album_id` empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the request fails, the response is
+    /// not valid JSON, or a resource carries a blank id or no name.
+    pub fn search_library(
+        &self,
+        session: &MusicKitSession,
+        query: &str,
+    ) -> Result<Vec<Song>, AppleMusicError> {
+        let url = format!(
+            "{API_BASE}/me/library/search?term={}&types=library-songs&limit={SEARCH_PAGE_LIMIT}",
+            encode_path_segment(query)
+        );
+        self.fetch_parsed(&url, session, parse_search_envelope, |resource| {
+            let id = resource.required_id("song")?;
+            let title = resource.required_name("song")?;
+            Ok(Song {
+                id,
+                title,
+                artist: resource.artist_name(),
+                album_id: String::new(),
+                duration_ms: resource.duration_ms(),
+                preview_url: resource.preview_url(),
+            })
+        })
+    }
+
     /// Fetches `url` and parses the collection envelope, following the
     /// response's `next` link (up to [`MAX_PAGES`] pages) so a collection
     /// larger than one 100-item page is read in full. A `next` link that does
@@ -330,6 +372,25 @@ impl RestLibrary {
         session: &MusicKitSession,
         map: impl Fn(Resource) -> Result<T, AppleMusicError>,
     ) -> Result<Vec<T>, AppleMusicError> {
+        self.fetch_parsed(url, session, parse_collection, map)
+    }
+
+    /// Fetches `url` and follows its collection's `next` link (up to
+    /// [`MAX_PAGES`] pages), parsing each page with `parse` and mapping each
+    /// resource with `map`.
+    ///
+    /// `parse` turns one page's body into its resources and `next` link, so a
+    /// caller whose collection is nested inside a larger response (the search
+    /// envelope) reuses the same pagination, deadline, and page-notice rules
+    /// as a top-level collection. See [`RestLibrary::fetch`] for the
+    /// pagination and error-reporting contract.
+    fn fetch_parsed<T>(
+        &self,
+        url: &str,
+        session: &MusicKitSession,
+        parse: impl Fn(&str) -> Result<(Vec<Resource>, Option<String>), AppleMusicError>,
+        map: impl Fn(Resource) -> Result<T, AppleMusicError>,
+    ) -> Result<Vec<T>, AppleMusicError> {
         let mut items = Vec::new();
         let mut next_url = url.to_string();
         // One deadline for the whole follow, not one per page: a server that
@@ -341,10 +402,8 @@ impl RestLibrary {
                 .transport
                 .get_within(&next_url, session, deadline)
                 .map_err(|error| AppleMusicError::new(page_context(&error.to_string(), page)))?;
-            let Envelope { data, next } = serde_json::from_str::<Envelope<Resource>>(&body)
-                .map_err(|error| {
-                    AppleMusicError::new(page_context(&describe_parse_failure(&error), page))
-                })?;
+            let (data, next) = parse(&body)
+                .map_err(|error| AppleMusicError::new(page_context(&error.to_string(), page)))?;
             for resource in data {
                 items.push(map(resource).map_err(|error| {
                     AppleMusicError::new(page_context(&error.to_string(), page))
@@ -393,20 +452,46 @@ fn page_context(message: &str, page: usize) -> String {
 ///
 /// `serde_json` reports two distinct failures through the same error type: a
 /// body that is not JSON at all, and a body that parses as JSON but does not
-/// match the `{ "data": [ ... ] }` envelope (a missing `data` array, say).
-/// Calling both "not valid JSON" misdescribes the second — the bytes are valid
-/// JSON; the envelope is what does not match — so the message names the defect
-/// `serde_json` classified: a `Data` error is a shape mismatch and every other
-/// category keeps the invalid-JSON wording. `Category::Io` cannot arise from a
-/// `from_str` parse of an in-memory body, so it shares that wording rather
-/// than going unreported.
-fn describe_parse_failure(error: &serde_json::Error) -> String {
+/// match the envelope (a missing `data` array, say). Calling both "not valid
+/// JSON" misdescribes the second — the bytes are valid JSON; the envelope is
+/// what does not match — so the message names the defect `serde_json`
+/// classified: a `Data` error is a shape mismatch and every other category
+/// keeps the invalid-JSON wording. `Category::Io` cannot arise from a `from_str`
+/// parse of an in-memory body, so it shares that wording rather than going
+/// unreported. `envelope` names the shape being parsed (`"collection"` or
+/// `"search"`), so the report says which envelope did not match.
+fn describe_parse_failure(error: &serde_json::Error, envelope: &str) -> String {
     match error.classify() {
         serde_json::error::Category::Data => {
-            format!("response did not match the Apple Music collection envelope: {error}")
+            format!("response did not match the Apple Music {envelope} envelope: {error}")
         }
         _ => format!("response was not valid JSON: {error}"),
     }
+}
+
+/// Parses one page of a top-level `{ "data": [...], "next": ... }` collection
+/// response.
+fn parse_collection(body: &str) -> Result<(Vec<Resource>, Option<String>), AppleMusicError> {
+    let Envelope { data, next } = serde_json::from_str(body)
+        .map_err(|error| AppleMusicError::new(describe_parse_failure(&error, "collection")))?;
+    Ok((data, next))
+}
+
+/// Parses one page of an Apple Music search response: the songs collection
+/// nested under `results.library-songs`, or no songs when the query matched
+/// none.
+///
+/// Apple omits `results.library-songs` entirely for a search that matched
+/// nothing, so an absent key is a valid empty page rather than a parse failure.
+/// Any other shape that does not match the search envelope is reported by
+/// [`describe_parse_failure`].
+fn parse_search_envelope(body: &str) -> Result<(Vec<Resource>, Option<String>), AppleMusicError> {
+    let SearchEnvelope { results } = serde_json::from_str(body)
+        .map_err(|error| AppleMusicError::new(describe_parse_failure(&error, "search")))?;
+    Ok(match results.library_songs {
+        Some(collection) => (collection.data, collection.next),
+        None => (Vec::new(), None),
+    })
 }
 
 /// The absolute URL to follow for a collection's `next` link, or `None` when
@@ -484,6 +569,34 @@ struct Envelope<T> {
     /// The API's link to the next page of a paginated collection, present only
     /// when there is one. [`RestLibrary::fetch`] follows it, up to
     /// [`MAX_PAGES`] pages, when it names a same-origin path.
+    next: Option<String>,
+}
+
+/// The `{ "results": { ... } }` envelope an Apple Music search response
+/// carries. [`RestLibrary::search_library`] parses the songs collection nested
+/// inside it through [`parse_search_envelope`].
+#[derive(Deserialize)]
+struct SearchEnvelope {
+    results: SearchResults,
+}
+
+/// The `results` object of a search response. Apple carries a `library-songs`
+/// collection only when the query matched something; a no-match search omits
+/// the key, so it is optional and maps to no songs.
+#[derive(Deserialize)]
+struct SearchResults {
+    /// The matching library songs, or `None` when the search matched none.
+    #[serde(rename = "library-songs")]
+    library_songs: Option<SearchCollection>,
+}
+
+/// The `library-songs` collection of a search response: the same
+/// `{ "data": [...], "next": ... }` shape as a top-level browse collection.
+#[derive(Deserialize)]
+struct SearchCollection {
+    data: Vec<Resource>,
+    /// The API's link to the next page of matching songs, present only when
+    /// there is one.
     next: Option<String>,
 }
 

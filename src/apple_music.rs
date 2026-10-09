@@ -580,17 +580,19 @@ impl AppleMusicService {
     /// Songs in the library matching `query`: every song whose title or artist
     /// contains `query` case-insensitively, in library order.
     ///
-    /// A blank `query` — empty or only whitespace — is rejected with an
-    /// [`AppleMusicError`] instead of answered with the whole library: a blank
-    /// search has nothing to match, and returning every song would report the
-    /// caller's empty input as an ordinary "everything matches" result. The
-    /// query guard is the browse queries' id guard's twin (see
-    /// [`ensure_id_is_valid`]).
+    /// A signed-in service answers from the signed-in user's Apple Music
+    /// library through [`rest::RestLibrary::search_library`]; a signed-out one
+    /// filters the in-memory sample library. A blank `query` — empty or only
+    /// whitespace — is rejected with an [`AppleMusicError`] instead of answered
+    /// with the whole library: a blank search has nothing to match, and
+    /// returning every song would report the caller's empty input as an
+    /// ordinary "everything matches" result. The query guard is the browse
+    /// queries' id guard's twin (see [`ensure_id_is_valid`]).
     ///
     /// # Errors
     ///
     /// Returns an [`AppleMusicError`] when `query` is blank (empty or only
-    /// whitespace).
+    /// whitespace), or when the signed-in search request fails.
     pub async fn search_songs(&self, query: &str) -> Result<Vec<Song>, AppleMusicError> {
         let trimmed = query.trim();
         if trimmed.is_empty() {
@@ -598,7 +600,12 @@ impl AppleMusicService {
                 "search query must not be blank (got {query:?})"
             )));
         }
-        Ok(sample_songs_matching(trimmed))
+        let term = trimmed.to_string();
+        self.browse(
+            move |rest, session| rest.search_library(session, &term),
+            || sample_songs_matching(trimmed),
+        )
+        .await
     }
 
     /// Answers a browse query from the signed-in REST library when a session
