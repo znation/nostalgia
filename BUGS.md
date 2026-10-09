@@ -119,6 +119,8 @@ defers other roles or queues bugfix.
 
 ### The scheduler dispatches two roles onto the same open plan, and the duplicate's review rejection is recorded as authoring failure (found by telemetry 2026-10-09)
 
+**Refused 2026-10-09 by bugfix: the claim-before-dispatch and duplicate-detection seam the entry prescribes is the tumwater scheduler/review gate, harness code off-limits to this role, so no change in this nostalgia repo can fix it.**
+
 Symptom: the 2026-10-09 digest's largest improve loss is `0.3 h · $0.06 —
 1 tick: review-rejected authoring on improve`, whose rejection cluster reads
 "**The diff does not do what the summary/WHY/RISK claim.** The body claims it
