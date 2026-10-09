@@ -187,6 +187,23 @@ fn percent_decode_decodes_form_escapes_and_leaves_bad_ones_literal() {
     assert_eq!(percent_decode("%2"), "%2");
 }
 
+// The `Host` header is the DNS-rebinding guard: the server is bound to
+// `127.0.0.1`, so only that address — with or without the port the browser
+// appends — may read the sign-in page, which embeds the developer token.
+// A missing `Host` (a hand-written or HTTP/1.0 request) must be refused
+// exactly like a foreign one, and the port must be stripped before the
+// comparison so a foreign host carrying a port is not mistaken for the
+// loopback address. The flow tests below only ever send a `Host`, so this
+// pins the `None` and port-bearing-foreign branches they never reach.
+#[test]
+fn is_loopback_host_accepts_only_the_bound_loopback_address() {
+    assert!(is_loopback_host(Some("127.0.0.1")));
+    assert!(is_loopback_host(Some("127.0.0.1:51234")));
+    assert!(!is_loopback_host(Some("evil.example")));
+    assert!(!is_loopback_host(Some("evil.example:51234")));
+    assert!(!is_loopback_host(None));
+}
+
 #[test]
 fn debug_redacts_both_tokens() {
     let session = MusicKitSession {
@@ -390,6 +407,32 @@ fn authorize_rejects_a_foreign_host_header() {
     assert!(
         !rebound.contains(SAMPLE_DEVELOPER_TOKEN),
         "the sign-in page must not leak the developer token to a foreign Host"
+    );
+}
+
+#[test]
+fn authorize_refuses_a_page_request_without_a_host_header() {
+    // A hand-written or HTTP/1.0 request can omit `Host` entirely. The probe
+    // carries the correct nonce, so only the loopback guard stands between it
+    // and the page that embeds the developer token: a guard that treated a
+    // missing host as loopback would serve the page here.
+    let observed = Arc::new(Mutex::new(String::new()));
+    let observed_for_flow = Arc::clone(&observed);
+    authorize_with_flow(move |port, state| {
+        let page = request(port, &format!("GET /?state={state} HTTP/1.1\r\n\r\n"));
+        let _ = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
+        *observed_for_flow.lock().expect("observed lock") = page;
+    })
+    .expect("the real callback still succeeds");
+
+    let page = observed.lock().expect("observed lock");
+    assert!(
+        page.starts_with("HTTP/1.1 403"),
+        "a page request without a Host should be forbidden, got: {page}"
+    );
+    assert!(
+        !page.contains(SAMPLE_DEVELOPER_TOKEN),
+        "the sign-in page must not leak the developer token without a Host"
     );
 }
 
