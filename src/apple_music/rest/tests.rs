@@ -794,9 +794,9 @@ fn a_next_page_is_followed_and_both_pages_are_returned_in_order() {
 // failure on a *later* page must surface as an error rather than be swallowed
 // to return the earlier pages' rows: silently returning a prefix would
 // reintroduce the truncation the paging loop replaced. Page 1 succeeds and
-// links page 2; the second request fails. The bare cause and the two recorded
-// calls prove `fetch` followed the link once, stopped at the failure, and
-// returned no partial rows.
+// links page 2; the second request fails. The page-named cause and the two
+// recorded calls prove `fetch` followed the link once, stopped at the failure,
+// and returned no partial rows.
 #[test]
 fn a_transport_error_on_a_later_page_surfaces_instead_of_truncating() {
     let stub = StubTransport::returning_results(&[
@@ -810,9 +810,10 @@ fn a_transport_error_on_a_later_page_surfaces_instead_of_truncating() {
         .unwrap_err()
         .to_string();
 
-    // The cause is bare, like the first-page transport error: the UI names
-    // the query, so this layer does not repeat it.
-    assert_eq!(error, "connection reset");
+    // The UI labels the query ("loading favorite artists") but cannot know the
+    // failure was on page 2, so the transport cause carries the page suffix —
+    // the transport-path twin of `a_failure_following_a_next_page_names_the_page`.
+    assert_eq!(error, "connection reset (page 2)");
     let calls = stub.calls();
     assert_eq!(calls.len(), 2);
     assert_eq!(
