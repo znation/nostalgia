@@ -7,6 +7,8 @@
 //! app behavior on its own: the service that decides when to call it is the
 //! sibling wiring change.
 
+use std::sync::OnceLock;
+
 use serde::Deserialize;
 
 use super::AppleMusicError;
@@ -34,12 +36,26 @@ pub trait HttpTransport: Send + Sync {
 }
 
 /// The production [`HttpTransport`], backed by the blocking `ureq` client.
+///
+/// Every request runs on one process-wide [`ureq::Agent`]: a fresh agent per
+/// request (`ureq::get`) would open a new TCP connection and TLS session each
+/// time, while the shared agent reuses the pooled connection across the
+/// artist → album → song browse requests.
 pub struct UreqTransport;
+
+/// The shared [`ureq::Agent`], built once on first use. `ureq` keeps idle
+/// connections per host for 15 seconds by default, so consecutive browse
+/// queries reuse the same TLS connection.
+fn shared_agent() -> &'static ureq::Agent {
+    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+    AGENT.get_or_init(ureq::agent)
+}
 
 impl HttpTransport for UreqTransport {
     fn get(&self, url: &str, session: &MusicKitSession) -> Result<String, AppleMusicError> {
         let authorization = format!("Bearer {}", session.developer_token);
-        let mut response = ureq::get(url)
+        let mut response = shared_agent()
+            .get(url)
             .header("Authorization", authorization.as_str())
             .header("Music-User-Token", session.user_token.as_str())
             .call()

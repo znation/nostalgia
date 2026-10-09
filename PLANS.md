@@ -206,7 +206,9 @@ an in-memory stub transport with no network.
   - `pub trait HttpTransport: Send + Sync` with
     `fn get(&self, url: &str, session: &MusicKitSession) -> Result<String, AppleMusicError>`
     — the narrow seam the tests stub.
-  - `pub struct UreqTransport;` implementing it: `ureq::get(url)` with an
+  - `pub struct UreqTransport;` implementing it over one process-wide
+    `ureq::Agent` (`agent.get(url)`; a fresh `ureq::get` per call would reopen
+    the TCP/TLS connection) with an
     `Authorization: Bearer <developer_token>` header and a
     `Music-User-Token: <user_token>` header, `.call()`, map any `ureq::Error`
     to `AppleMusicError::new(...)`, then `response.body_mut().read_to_string()`.
