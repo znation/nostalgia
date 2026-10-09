@@ -29,7 +29,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Drive the volume slider through the audio backend (found 2026-10-09)
+_None yet._
+
+## Done
+
+### Drive the volume slider through the audio backend (found 2026-10-09, done 2026-10-09)
 
 **Goal.** Moving the volume slider, or pressing the up/down arrow keys, changes the loudness of the playing preview, and a preview starts at the slider's volume. Today `Message::VolumeChange`, `VolumeUp`, and `VolumeDown` only write `AppState::volume`; `AudioOutput` has no volume method, so every preview plays at rodio's full-volume default no matter where the slider sits. This is the volume twin of the just-planned transport wiring and the same seam gap: only `play_track` reaches the backend.
 
@@ -61,8 +65,6 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 - `AppleMusicService::set_output_volume(0.3)` records one `AudioCall::SetVolume(0.3)` and leaves `AppState::volume` unchanged.
 - `play_track` with a preview records `SetVolume` carrying the state's current volume immediately before `Play`.
 - Driving `Message::VolumeChange(0.2)` leaves `AppState::volume` at `0.2` and records `SetVolume(0.2)`; `Message::VolumeUp`/`VolumeDown` record the nudged, clamped value; an out-of-range or `NaN` `VolumeChange` stores and forwards the clamped value.
-
-## Done
 
 ### Drive the transport's Play/Pause/Stop through the audio backend (found 2026-10-08, done 2026-10-09)
 

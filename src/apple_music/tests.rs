@@ -130,6 +130,14 @@ impl AudioOutput for GatedAudio {
         self.calls.lock().unwrap().push(AudioCall::Stop);
         Ok(())
     }
+
+    fn set_volume(&self, volume: f32) -> Result<(), AppleMusicError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(AudioCall::SetVolume(volume));
+        Ok(())
+    }
 }
 
 /// Asserts that both blank forms of an id — empty and whitespace-only —
@@ -443,11 +451,26 @@ async fn play_track_starts_the_preview_through_the_audio_backend() {
 
     assert_eq!(
         recording.calls(),
-        vec![AudioCall::Play(
-            "https://example.test/preview.m4a".to_string()
-        )]
+        vec![
+            AudioCall::SetVolume(0.5),
+            AudioCall::Play("https://example.test/preview.m4a".to_string())
+        ]
     );
     assert_playback_state(&state, Some("song-1"), true).await;
+}
+
+// `set_output_volume` forwards to the injected backend without touching the
+// shared state: the UI stores the clamped value itself, so this method is only
+// the seam to the output gain.
+#[tokio::test]
+async fn set_output_volume_forwards_to_the_audio_backend() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+
+    service.set_output_volume(0.3).unwrap();
+
+    assert_eq!(recording.calls(), vec![AudioCall::SetVolume(0.3)]);
+    assert_eq!(state.lock().await.volume(), 0.5);
 }
 
 // A song the library supplied without a preview URL still commits the state
@@ -673,6 +696,7 @@ async fn resume_resumes_the_audio_backend() {
     assert_eq!(
         recording.calls(),
         vec![
+            AudioCall::SetVolume(0.5),
             AudioCall::Play("https://example.test/preview.m4a".to_string()),
             AudioCall::Pause,
             AudioCall::Resume
@@ -694,6 +718,7 @@ async fn stop_stops_the_audio_backend() {
     assert_eq!(
         recording.calls(),
         vec![
+            AudioCall::SetVolume(0.5),
             AudioCall::Play("https://example.test/preview.m4a".to_string()),
             AudioCall::Stop
         ]
@@ -713,6 +738,7 @@ async fn toggle_play_pause_pauses_while_playing() {
     assert_eq!(
         recording.calls(),
         vec![
+            AudioCall::SetVolume(0.5),
             AudioCall::Play("https://example.test/preview.m4a".to_string()),
             AudioCall::Pause
         ]
@@ -733,6 +759,7 @@ async fn toggle_play_pause_resumes_while_paused() {
     assert_eq!(
         recording.calls(),
         vec![
+            AudioCall::SetVolume(0.5),
             AudioCall::Play("https://example.test/preview.m4a".to_string()),
             AudioCall::Pause,
             AudioCall::Resume
@@ -758,6 +785,7 @@ async fn resume_after_stop_restarts_the_preview() {
     assert_eq!(
         recording.calls(),
         vec![
+            AudioCall::SetVolume(0.5),
             AudioCall::Play("https://example.test/preview.m4a".to_string()),
             AudioCall::Stop,
             AudioCall::Play("https://example.test/preview.m4a".to_string())
@@ -834,6 +862,7 @@ fn concurrent_toggles_serialize_on_the_transport_lock() {
     assert_eq!(
         audio.calls(),
         vec![
+            AudioCall::SetVolume(0.5),
             AudioCall::Play("https://example.test/preview.m4a".to_string()),
             AudioCall::Pause,
             AudioCall::Resume

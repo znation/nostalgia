@@ -425,6 +425,7 @@ async fn transport_messages_drive_the_audio_backend() {
     assert_eq!(
         recording.calls(),
         vec![
+            AudioCall::SetVolume(0.5),
             AudioCall::Play(PREVIEW_URL.to_string()),
             AudioCall::Pause,
             AudioCall::Resume
@@ -438,7 +439,11 @@ async fn transport_messages_drive_the_audio_backend() {
     assert_transport_settled(update(&mut player, Message::Pause), "pause").await;
     assert_eq!(
         recording.calls(),
-        vec![AudioCall::Play(PREVIEW_URL.to_string()), AudioCall::Pause]
+        vec![
+            AudioCall::SetVolume(0.5),
+            AudioCall::Play(PREVIEW_URL.to_string()),
+            AudioCall::Pause
+        ]
     );
     assert!(!state.lock().await.is_playing);
 
@@ -448,7 +453,11 @@ async fn transport_messages_drive_the_audio_backend() {
     assert_transport_settled(update(&mut player, Message::Stop), "stop").await;
     assert_eq!(
         recording.calls(),
-        vec![AudioCall::Play(PREVIEW_URL.to_string()), AudioCall::Stop]
+        vec![
+            AudioCall::SetVolume(0.5),
+            AudioCall::Play(PREVIEW_URL.to_string()),
+            AudioCall::Stop
+        ]
     );
     assert!(!state.lock().await.is_playing);
 
@@ -458,7 +467,11 @@ async fn transport_messages_drive_the_audio_backend() {
     assert_transport_settled(update(&mut player, Message::PlayPause), "toggle").await;
     assert_eq!(
         recording.calls(),
-        vec![AudioCall::Play(PREVIEW_URL.to_string()), AudioCall::Pause]
+        vec![
+            AudioCall::SetVolume(0.5),
+            AudioCall::Play(PREVIEW_URL.to_string()),
+            AudioCall::Pause
+        ]
     );
     assert!(!state.lock().await.is_playing);
 }
@@ -988,9 +1001,44 @@ async fn track_selected_plays_the_songs_preview_url() {
 
     assert_eq!(
         recording.calls(),
-        vec![AudioCall::Play(
-            "https://example.test/preview.m4a".to_string()
-        )]
+        vec![
+            AudioCall::SetVolume(0.5),
+            AudioCall::Play("https://example.test/preview.m4a".to_string())
+        ]
+    );
+}
+
+// The volume arms must reach the injected backend, not just write shared
+// state: a slider drag or arrow key that only moved the `AppState` value would
+// leave the playing preview at its old gain. This drives each arm through
+// `update` over a recording backend and pins the clamped value it forwarded,
+// including a `NaN` `VolumeChange` that stores and forwards the `0.0` clamp.
+#[test]
+fn volume_messages_forward_to_the_audio_backend() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+
+    assert_message_schedules_no_work(&mut player, Message::VolumeChange(0.2));
+    assert_eq!(state.blocking_lock().volume(), 0.2);
+
+    assert_message_schedules_no_work(&mut player, Message::VolumeUp);
+    assert_eq!(state.blocking_lock().volume(), 0.2 + views::VOLUME_STEP);
+
+    assert_message_schedules_no_work(&mut player, Message::VolumeDown);
+    assert_eq!(state.blocking_lock().volume(), 0.2);
+
+    assert_message_schedules_no_work(&mut player, Message::VolumeChange(f32::NAN));
+    assert_eq!(state.blocking_lock().volume(), 0.0);
+
+    assert_eq!(
+        recording.calls(),
+        vec![
+            AudioCall::SetVolume(0.2),
+            AudioCall::SetVolume(0.2 + views::VOLUME_STEP),
+            AudioCall::SetVolume(0.2),
+            AudioCall::SetVolume(0.0),
+        ]
     );
 }
 

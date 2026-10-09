@@ -319,8 +319,11 @@ impl HttpTransport for StubTransport {
 }
 
 /// The commands a [`RecordingAudio`] recorded, in order, so a test can pin
-/// exactly what the service handed the audio backend.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// exactly what the service handed the audio backend. The derive drops `Eq`
+/// because [`AudioCall::SetVolume`] carries an `f32`, which is only
+/// `PartialEq`; the only uses compare whole `Vec<AudioCall>`s with
+/// `assert_eq!`.
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum AudioCall {
     /// `play` was called with this URL.
     Play(String),
@@ -330,6 +333,8 @@ pub(crate) enum AudioCall {
     Resume,
     /// `stop` was called.
     Stop,
+    /// `set_volume` was called with this gain.
+    SetVolume(f32),
 }
 
 /// A recording [`AudioOutput`] so a test observes the commands issued to the
@@ -370,6 +375,14 @@ impl AudioOutput for RecordingAudio {
         self.calls.lock().unwrap().push(AudioCall::Stop);
         Ok(())
     }
+
+    fn set_volume(&self, volume: f32) -> Result<(), AppleMusicError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(AudioCall::SetVolume(volume));
+        Ok(())
+    }
 }
 
 /// An [`AudioOutput`] whose `play` fails, so a test can pin that the service
@@ -391,6 +404,10 @@ impl AudioOutput for FailingAudio {
     }
 
     fn stop(&self) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn set_volume(&self, _volume: f32) -> Result<(), AppleMusicError> {
         Ok(())
     }
 }

@@ -78,6 +78,19 @@ pub trait AudioOutput: Send + Sync {
     /// Returns an [`AppleMusicError`] when the backend cannot accept the
     /// request (see [`AudioOutput::play`]).
     fn stop(&self) -> Result<(), AppleMusicError>;
+
+    /// Sets the output gain, where `1.0` is full volume.
+    ///
+    /// Applies to the current player, if one is loaded, and is remembered so
+    /// the next [`play`](Self::play) starts at the same gain. This is how the
+    /// volume slider reaches a preview, and how a preview starts at the
+    /// slider's value rather than the backend's default.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the backend cannot accept the
+    /// request (see [`AudioOutput::play`]).
+    fn set_volume(&self, volume: f32) -> Result<(), AppleMusicError>;
 }
 
 /// An [`AudioOutput`] that produces no sound: it logs each command and reports
@@ -109,6 +122,11 @@ impl AudioOutput for SilentOutput {
         println!("Audio output is silent; nothing to stop");
         Ok(())
     }
+
+    fn set_volume(&self, volume: f32) -> Result<(), AppleMusicError> {
+        println!("Audio output is silent; volume set to {volume}");
+        Ok(())
+    }
 }
 
 /// A command sent from [`RodioOutput`] to its worker thread.
@@ -121,6 +139,8 @@ enum Command {
     Resume,
     /// Stop and discard the current player.
     Stop,
+    /// Set the output gain (`1.0` is full volume).
+    SetVolume(f32),
 }
 
 /// The production [`AudioOutput`], backed by `rodio`.
@@ -193,6 +213,10 @@ impl AudioOutput for RodioOutput {
     fn stop(&self) -> Result<(), AppleMusicError> {
         self.send(Command::Stop)
     }
+
+    fn set_volume(&self, volume: f32) -> Result<(), AppleMusicError> {
+        self.send(Command::SetVolume(volume))
+    }
 }
 
 /// Opens the default device and serves [`Command`]s until the sender closes.
@@ -214,6 +238,10 @@ fn run_worker(receiver: Receiver<Command>, ready: Sender<Result<(), AppleMusicEr
     let _ = ready.send(Ok(()));
 
     let mut player: Option<rodio::Player> = None;
+    // The gain the output should hold. Remembered across players so a volume
+    // set while stopped still applies to the next `Play`, and a new player
+    // starts at it rather than rodio's full-volume default.
+    let mut volume = 1.0_f32;
     while let Ok(command) = receiver.recv() {
         match command {
             Command::Play(url) => match download_and_decode(preview_agent(), &url) {
@@ -221,6 +249,7 @@ fn run_worker(receiver: Receiver<Command>, ready: Sender<Result<(), AppleMusicEr
                     // A fresh player per track replaces the previous one, so a
                     // new selection does not queue behind the old track.
                     let next = rodio::Player::connect_new(device.mixer());
+                    next.set_volume(volume);
                     next.append(decoder);
                     player = Some(next);
                 }
@@ -241,6 +270,12 @@ fn run_worker(receiver: Receiver<Command>, ready: Sender<Result<(), AppleMusicEr
                     player.stop();
                 }
                 player = None;
+            }
+            Command::SetVolume(new_volume) => {
+                volume = new_volume;
+                if let Some(player) = &player {
+                    player.set_volume(volume);
+                }
             }
         }
     }
@@ -336,6 +371,7 @@ mod tests {
         assert!(output.pause().is_ok());
         assert!(output.resume().is_ok());
         assert!(output.stop().is_ok());
+        assert!(output.set_volume(0.4).is_ok());
     }
 
     #[test]
@@ -362,6 +398,7 @@ mod tests {
         assert!(output.pause().is_ok());
         assert!(output.resume().is_ok());
         assert!(output.stop().is_ok());
+        assert!(output.set_volume(0.4).is_ok());
     }
 
     // `ureq` defaults every network timeout to `None`, so a preview server
@@ -416,6 +453,7 @@ mod tests {
         output.pause().unwrap();
         output.resume().unwrap();
         output.stop().unwrap();
+        output.set_volume(0.4).unwrap();
 
         match receiver.try_recv() {
             Ok(Command::Play(url)) => assert_eq!(url, "https://example.test/preview.m4a"),
@@ -424,6 +462,7 @@ mod tests {
         assert!(matches!(receiver.try_recv(), Ok(Command::Pause)));
         assert!(matches!(receiver.try_recv(), Ok(Command::Resume)));
         assert!(matches!(receiver.try_recv(), Ok(Command::Stop)));
+        assert!(matches!(receiver.try_recv(), Ok(Command::SetVolume(v)) if v == 0.4));
     }
 
     #[test]
@@ -454,6 +493,10 @@ mod tests {
         );
         assert_eq!(
             output.stop().unwrap_err().to_string(),
+            "the audio thread is gone"
+        );
+        assert_eq!(
+            output.set_volume(0.4).unwrap_err().to_string(),
             "the audio thread is gone"
         );
     }

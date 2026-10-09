@@ -173,6 +173,21 @@ impl AppleMusicService {
         println!("Resumed playback");
         Ok(())
     }
+
+    /// Forwards `volume` to the audio backend, so the volume slider reaches
+    /// the output gain. Synchronous, and touches no shared state: the UI
+    /// already stored the clamped value under its own lock, and
+    /// [`crate::audio::AudioOutput::set_volume`] is a non-blocking channel
+    /// send, so an async transition here would let a slider drag's messages
+    /// race the state lock.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the audio backend cannot accept
+    /// the request.
+    pub(crate) fn set_output_volume(&self, volume: f32) -> Result<(), AppleMusicError> {
+        self.audio.set_volume(volume)
+    }
 }
 
 /// Transport stubs kept as the seam a real Apple Music implementation will
@@ -450,6 +465,10 @@ impl AppleMusicService {
         }
         state.current_track = Some(track_id.to_string());
         state.is_playing = true;
+        // The gain to start this preview at, read before the lock drops. A
+        // preview starts at the slider's value rather than rodio's
+        // full-volume default.
+        let volume = state.volume();
         drop(state);
 
         println!("{}", play_log_line(track_id));
@@ -459,7 +478,11 @@ impl AppleMusicService {
         transport.last_url = preview_url.map(str::to_string);
         transport.loaded = false;
         if let Some(url) = preview_url {
-            if let Err(error) = self.audio.play(url) {
+            if let Err(error) = self
+                .audio
+                .set_volume(volume)
+                .and_then(|()| self.audio.play(url))
+            {
                 // The backend refused the preview, so shared state must not keep
                 // claiming playback. Roll the flag back only when no newer play
                 // has replaced this one: a newer play owns the state now, and
