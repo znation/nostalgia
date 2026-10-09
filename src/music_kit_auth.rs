@@ -465,14 +465,7 @@ fn serve_connection(
     // page's developer token and `state` nonce. A hostile request is ignored,
     // not fatal, so it cannot abort a sign-in the user is completing.
     if !is_loopback_host(request.host.as_deref()) {
-        let _ = write_response(
-            stream,
-            403,
-            "Forbidden",
-            "text/plain; charset=utf-8",
-            "Forbidden",
-        );
-        return Connection::Continue;
+        return forbid(stream);
     }
 
     if request.method == "GET" && request.path == "/" {
@@ -483,14 +476,7 @@ fn serve_connection(
         // nonce would otherwise read the developer token and the nonce, then
         // forge a callback.
         if !page_query_carries_nonce(request.query.as_deref(), nonce) {
-            let _ = write_response(
-                stream,
-                403,
-                "Forbidden",
-                "text/plain; charset=utf-8",
-                "Forbidden",
-            );
-            return Connection::Continue;
+            return forbid(stream);
         }
         let page = render_auth_page(developer_token, nonce);
         let _ = write_response(stream, 200, "OK", "text/html; charset=utf-8", &page);
@@ -507,6 +493,21 @@ fn serve_connection(
         "Not Found",
         "text/plain; charset=utf-8",
         "Not found",
+    );
+    Connection::Continue
+}
+
+/// Answers a request that fails a security guard with a `403 Forbidden`
+/// plain-text body and keeps the sign-in flow alive. Both the non-loopback
+/// `Host` and the page request without the state nonce are refused this way,
+/// so the response and the `Continue` return live here once.
+fn forbid(stream: &mut TcpStream) -> Connection {
+    let _ = write_response(
+        stream,
+        403,
+        "Forbidden",
+        "text/plain; charset=utf-8",
+        "Forbidden",
     );
     Connection::Continue
 }
