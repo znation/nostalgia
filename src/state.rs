@@ -95,9 +95,10 @@ impl AppState {
     /// Clear the playback flag in place, leaving `current_track` in place so
     /// the Now Playing bar keeps showing the interrupted track's title
     /// (matching Winamp, where Stop halts the music and the title stays in
-    /// the display). The UI's Stop button is the only caller; keeping the
-    /// semantics here (rather than inlined at the call site) puts them next
-    /// to the field they mutate, like `toggle_playing`.
+    /// the display). The UI's Stop button and the keyboard's V key call this
+    /// (through `Message::Stop`); keeping the semantics here (rather than
+    /// inlined at the call site) puts them next to the field they mutate,
+    /// like `toggle_playing`.
     pub fn stop(&mut self) {
         self.is_playing = false;
     }
