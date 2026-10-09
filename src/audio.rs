@@ -15,13 +15,15 @@
 //! handle's own thread bounds, and a download or decode failure is logged on
 //! the worker rather than surfacing as a caller error. Each download is bounded
 //! by [`PREVIEW_TIMEOUT`], so a stalled server cannot block the worker — and
-//! with it every later play, pause, stop, and volume command — forever.
+//! with it every later play, pause, stop, and volume command — forever. Opening
+//! the device is bounded by [`DEVICE_OPEN_TIMEOUT`], so a wedged platform audio
+//! daemon cannot stall the caller that builds the service at startup.
 
 use std::io::Cursor;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::OnceLock;
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::time::Duration;
 
 use crate::http::agent_with_timeout;
@@ -35,6 +37,18 @@ use crate::music_error::AppleMusicError;
 /// it. Matches the REST client's `REQUEST_TIMEOUT` so both of the app's network
 /// calls share one bound.
 const PREVIEW_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// The longest [`RodioOutput::new`] waits for the worker to report whether the
+/// default audio device opened.
+///
+/// `rodio::DeviceSinkBuilder::open_default_sink` talks to the platform audio
+/// daemon, which can block indefinitely when that daemon is wedged or
+/// unreachable. `new` runs on the caller's thread — the binary builds the
+/// service before it starts the UI — so an unbounded wait there would stall the
+/// whole app at startup and the silent fallback would never get a chance to
+/// stand in. Five seconds is far longer than a healthy open takes and short
+/// enough that a wedged one is reported instead of hanging.
+const DEVICE_OPEN_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The audio-output seam: a backend that can play, pause, and stop a track
 /// and set its output gain.
@@ -160,14 +174,16 @@ impl RodioOutput {
     /// Opens the default output device on a dedicated worker thread.
     ///
     /// The worker reports whether the device opened back through a channel, so
-    /// a machine with no output device gets `Err` rather than a panic. The
-    /// worker then runs until this value is dropped, when its command sender
-    /// closes.
+    /// a machine with no output device gets `Err` rather than a panic. The wait
+    /// for that report is bounded by [`DEVICE_OPEN_TIMEOUT`], so a platform
+    /// audio daemon that blocks the open cannot stall the caller. The worker
+    /// then runs until this value is dropped, when its command sender closes.
     ///
     /// # Errors
     ///
-    /// Returns an [`AppleMusicError`] when the worker thread cannot be spawned
-    /// or the default output device cannot be opened.
+    /// Returns an [`AppleMusicError`] when the worker thread cannot be spawned,
+    /// the default output device cannot be opened, or the open does not report
+    /// within [`DEVICE_OPEN_TIMEOUT`].
     pub fn new() -> Result<Self, AppleMusicError> {
         let (commands, receiver) = mpsc::channel();
         let (ready_sender, ready_receiver) = mpsc::channel();
@@ -178,15 +194,13 @@ impl RodioOutput {
                 AppleMusicError::new(format!("spawning the audio thread failed: {error}"))
             })?;
 
-        match ready_receiver.recv() {
-            Ok(Ok(())) => Ok(Self {
-                commands: Mutex::new(commands),
-            }),
-            Ok(Err(error)) => Err(error),
-            Err(_) => Err(AppleMusicError::new(
-                "the audio thread ended before opening a device",
-            )),
-        }
+        // Dropping `commands` on the error path closes the worker's channel, so
+        // a worker still blocked in `open_default_sink` exits as soon as that
+        // call returns instead of lingering with a live command queue.
+        await_device_ready(ready_receiver, DEVICE_OPEN_TIMEOUT)?;
+        Ok(Self {
+            commands: Mutex::new(commands),
+        })
     }
 
     /// Sends `command` to the worker, mapping a closed channel to a seam error.
@@ -218,6 +232,32 @@ impl AudioOutput for RodioOutput {
 
     fn set_volume(&self, volume: f32) -> Result<(), AppleMusicError> {
         self.send(Command::SetVolume(volume))
+    }
+}
+
+/// Waits up to `timeout` for the worker to report whether the default device
+/// opened, classifying the three outcomes the caller must tell apart.
+///
+/// A worker that reports success or a device-open failure yields that result
+/// unchanged. A worker that has not reported within `timeout` is reported as a
+/// timed-out open, so [`audio_with_fallback`] can stand in with
+/// [`SilentOutput`] instead of the caller hanging. A worker whose thread ended
+/// without reporting (it panicked before sending) is reported distinctly, as
+/// before. Kept separate from [`RodioOutput::new`] so the bound is testable
+/// without a real, hanging audio device.
+fn await_device_ready(
+    ready: Receiver<Result<(), AppleMusicError>>,
+    timeout: Duration,
+) -> Result<(), AppleMusicError> {
+    match ready.recv_timeout(timeout) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(error)) => Err(error),
+        Err(RecvTimeoutError::Timeout) => Err(AppleMusicError::new(format!(
+            "opening the default audio device timed out after {timeout:?}"
+        ))),
+        Err(RecvTimeoutError::Disconnected) => Err(AppleMusicError::new(
+            "the audio thread ended before opening a device",
+        )),
     }
 }
 
@@ -428,6 +468,63 @@ mod tests {
         // Either outcome is acceptable here — this pins only that opening the
         // device is reported through the `Result` rather than a panic.
         let _ = RodioOutput::new();
+    }
+
+    // `open_default_sink` talks to the platform audio daemon and can block
+    // indefinitely when that daemon is wedged. `RodioOutput::new` runs on the
+    // caller's thread (the binary builds the service before it starts the UI),
+    // so the wait for the worker's report must be bounded or the whole app
+    // stalls at startup. A sender that stays alive but never sends stands in
+    // for the hung open: the wait must return within the bound, not hang the
+    // test.
+    #[test]
+    fn a_device_open_that_never_reports_is_bounded_by_the_timeout() {
+        let (_sender, receiver) = mpsc::channel();
+        let started = Instant::now();
+        let error = await_device_ready(receiver, Duration::from_millis(50))
+            .expect_err("a device open that never reports must not wait forever");
+        assert!(
+            started.elapsed() >= Duration::from_millis(50),
+            "returned before the 50ms bound: {:?}",
+            started.elapsed()
+        );
+        assert_eq!(
+            error.to_string(),
+            "opening the default audio device timed out after 50ms"
+        );
+    }
+
+    // The reporting half: a worker that reports the device opened must yield
+    // `Ok`, and one that reports an open failure must carry that failure
+    // through unchanged rather than turning it into a timeout.
+    #[test]
+    fn await_device_ready_carries_the_workers_report() {
+        let (sender, receiver) = mpsc::channel();
+        sender.send(Ok(())).unwrap();
+        assert!(await_device_ready(receiver, Duration::from_secs(1)).is_ok());
+
+        let (sender, receiver) = mpsc::channel();
+        sender.send(Err(AppleMusicError::new("no device"))).unwrap();
+        assert_eq!(
+            await_device_ready(receiver, Duration::from_secs(1))
+                .unwrap_err()
+                .to_string(),
+            "no device"
+        );
+    }
+
+    // A worker whose thread ended before reporting (it panicked) must keep its
+    // distinct error, not be misreported as a hung device open.
+    #[test]
+    fn await_device_ready_reports_a_worker_that_ended_early() {
+        let (sender, receiver) = mpsc::channel::<Result<(), AppleMusicError>>();
+        drop(sender);
+        assert_eq!(
+            await_device_ready(receiver, Duration::from_secs(1))
+                .unwrap_err()
+                .to_string(),
+            "the audio thread ended before opening a device"
+        );
     }
 
     #[test]
