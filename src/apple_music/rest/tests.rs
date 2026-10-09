@@ -329,6 +329,24 @@ fn read_some_request(stream: &mut std::net::TcpStream) -> String {
     String::from_utf8_lossy(&buffer[..read]).into_owned()
 }
 
+/// Serves exactly one HTTP response on a fresh loopback listener: binds,
+/// accepts a single connection, reads whatever request arrived, writes
+/// `response` verbatim, and closes. Returns the bound address for
+/// [`UreqTransport`], so a test can pin a response-dependent failure mode
+/// without rebuilding the accept/read/write scaffolding.
+fn serve_one_response(response: &str) -> std::net::SocketAddr {
+    let (listener, address) = loopback_listener();
+    let response = response.to_string();
+    std::thread::spawn(move || {
+        use std::io::Write;
+        let (mut stream, _) = listener.accept().unwrap();
+        let _ = read_some_request(&mut stream);
+        let _ = stream.write_all(response.as_bytes());
+        let _ = stream.flush();
+    });
+    address
+}
+
 // The API requests carry the user token in the custom `Music-User-Token`
 // header, and `ureq` follows redirects by default while stripping only
 // `Authorization`, `Cookie`, and `Content-Length` from the redirected request
@@ -433,19 +451,11 @@ fn api_error_cause_is_none_without_an_envelope_or_cause() {
 // token reads as "Invalid developer token" rather than just "401".
 #[test]
 fn a_non_success_status_surfaces_the_api_error_detail() {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let addr = listener.local_addr().unwrap();
     let body = r#"{"errors":[{"title":"Unauthorized","detail":"Invalid developer token"}]}"#;
-    std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
-        let mut request = [0u8; 1024];
-        let _ = std::io::Read::read(&mut stream, &mut request);
-        let response = format!(
-            "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-            body.len()
-        );
-        let _ = std::io::Write::write_all(&mut stream, response.as_bytes());
-    });
+    let addr = serve_one_response(&format!(
+        "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    ));
 
     let url = format!("http://{addr}/me/library/artists");
     let error = UreqTransport::new().get(&url, &session()).unwrap_err();
@@ -462,23 +472,12 @@ fn a_non_success_status_surfaces_the_api_error_detail() {
 // truncated body or a panic.
 #[test]
 fn a_truncated_response_body_reports_a_read_error() {
-    use std::io::{Read, Write};
-
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let addr = listener.local_addr().unwrap();
+    // Declare 100 bytes but send only five, then close the connection.
+    let addr = serve_one_response(
+        "HTTP/1.1 200 OK\r\nContent-Length: 100\r\nConnection: close\r\n\r\nshort",
+    );
     let transport = UreqTransport::with_timeout(std::time::Duration::from_secs(5));
     let url = format!("http://{addr}/truncated");
-    std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
-        // Read the request so the client finishes writing before the reply.
-        let mut request = [0_u8; 1024];
-        let _ = stream.read(&mut request);
-        // Declare 100 bytes but send only five, then close the connection.
-        stream
-            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\nConnection: close\r\n\r\nshort")
-            .unwrap();
-        let _ = stream.flush();
-    });
 
     let error = transport.get(&url, &session()).unwrap_err().to_string();
 
