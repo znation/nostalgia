@@ -71,14 +71,8 @@ pub(super) fn read_http_request(
         if buffer.len() >= MAX_REQUEST_BYTES {
             return Ok(None);
         }
-        if !arm_read_timeout(stream, deadline) {
+        let Some(read) = read_or_none(stream, &mut chunk, deadline)? else {
             return Ok(None);
-        }
-        let read = match stream.read(&mut chunk) {
-            Ok(0) => return Ok(None),
-            Ok(read) => read,
-            Err(error) if is_timeout(&error) => return Ok(None),
-            Err(error) => return Err(error),
         };
         let room = MAX_REQUEST_BYTES - buffer.len();
         buffer.extend_from_slice(&chunk[..read.min(room)]);
@@ -127,16 +121,10 @@ pub(super) fn read_http_request(
     };
 
     while buffer.len() < body_end {
-        if !arm_read_timeout(stream, deadline) {
-            return Ok(None);
-        }
         let room = body_end - buffer.len();
         let limit = room.min(chunk.len());
-        let read = match stream.read(&mut chunk[..limit]) {
-            Ok(0) => return Ok(None),
-            Ok(read) => read,
-            Err(error) if is_timeout(&error) => return Ok(None),
-            Err(error) => return Err(error),
+        let Some(read) = read_or_none(stream, &mut chunk[..limit], deadline)? else {
+            return Ok(None);
         };
         buffer.extend_from_slice(&chunk[..read]);
     }
@@ -148,6 +136,28 @@ pub(super) fn read_http_request(
         host,
         body: buffer[body_start..body_end].to_vec(),
     }))
+}
+
+/// Arms the deadline-bounded read timeout and reads up to `buffer.len()` bytes
+/// into `buffer`, classifying the result the way both of [`read_http_request`]'s
+/// read loops need: a clean EOF, a timeout, or an arrived deadline all mean the
+/// request is unusable (`None`), any other I/O error propagates, and a
+/// successful read returns its byte count. The header loop and the body loop
+/// would otherwise arm the timeout and classify the result verbatim.
+fn read_or_none(
+    stream: &mut TcpStream,
+    buffer: &mut [u8],
+    deadline: Instant,
+) -> io::Result<Option<usize>> {
+    if !arm_read_timeout(stream, deadline) {
+        return Ok(None);
+    }
+    match stream.read(buffer) {
+        Ok(0) => Ok(None),
+        Ok(read) => Ok(Some(read)),
+        Err(error) if is_timeout(&error) => Ok(None),
+        Err(error) => Err(error),
+    }
 }
 
 /// Writes a minimal HTTP/1.1 response and closes the connection.
