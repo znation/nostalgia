@@ -541,6 +541,52 @@ fn read_http_request_refuses_headers_past_the_cap() {
     let _ = writer.join();
 }
 
+// A parse failure is `io::ErrorKind::InvalidData`, which `serve_connection`
+// treats like a closed connection: the malformed request is ignored and the
+// flow keeps waiting. Each test names the branch that produced it, so a parse
+// change that silently accepts a hostile line is caught.
+#[test]
+fn read_http_request_rejects_non_utf8_headers() {
+    let (mut server, mut client) = connected_pair();
+    client
+        .write_all(b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Bad: \xff\xfe\r\n\r\n")
+        .expect("write a request with an invalid UTF-8 header");
+
+    let error = read_http_request(&mut server, Instant::now() + Duration::from_secs(5))
+        .err()
+        .expect("non-UTF-8 headers are a parse error");
+    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    assert_eq!(error.to_string(), "request headers are not UTF-8");
+}
+
+#[test]
+fn read_http_request_rejects_a_request_line_without_a_method() {
+    let (mut server, mut client) = connected_pair();
+    client
+        .write_all(b"\r\n\r\n")
+        .expect("write a request line with no method");
+
+    let error = read_http_request(&mut server, Instant::now() + Duration::from_secs(5))
+        .err()
+        .expect("a request line without a method is a parse error");
+    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    assert_eq!(error.to_string(), "missing method");
+}
+
+#[test]
+fn read_http_request_rejects_a_request_line_without_a_target() {
+    let (mut server, mut client) = connected_pair();
+    client
+        .write_all(b"GET\r\n\r\n")
+        .expect("write a request line with no target");
+
+    let error = read_http_request(&mut server, Instant::now() + Duration::from_secs(5))
+        .err()
+        .expect("a request line without a target is a parse error");
+    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    assert_eq!(error.to_string(), "missing target");
+}
+
 #[test]
 fn authorize_times_out_without_a_callback_and_names_the_bound() {
     let opener = |_url: &str| Ok(());
