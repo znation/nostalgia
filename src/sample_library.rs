@@ -237,6 +237,34 @@ mod tests {
         );
     }
 
+    // The Now Playing bar formats a song's length from `Song::duration_ms`
+    // (see `ui::views::format_track_time`), and `sample_library` is what the
+    // app browses when no Apple Music session is stored, so these values are
+    // user-visible. The index tests above pin each song's id and title but
+    // never its duration, so a wrong or zero duration here would show a wrong
+    // (or `--:--`) time in the Now Playing bar while every existing test
+    // stayed green. Pin every song's duration, in library order.
+    #[test]
+    fn songs_carry_the_documented_durations() {
+        let library = sample_library();
+        let durations: Vec<(&str, u64)> = ["album-1", "album-2", "album-3"]
+            .iter()
+            .flat_map(|album_id| &library.songs_by_album[*album_id])
+            .map(|song| (song.id.as_str(), song.duration_ms))
+            .collect();
+
+        assert_eq!(
+            durations,
+            vec![
+                ("song-1", 210_000u64),
+                ("song-2", 240_000),
+                ("song-3", 180_000),
+                ("song-4", 95_000),
+                ("song-5", 200_000),
+            ]
+        );
+    }
+
     // `sample_library` is cached in a `OnceLock` so every browse query reads
     // the same prebuilt instance instead of rebuilding the library (and its
     // `String` allocations) per call. Pointer identity across calls is the
