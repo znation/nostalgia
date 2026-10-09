@@ -726,11 +726,13 @@ fn ensure_preview_url_is_valid(preview_url: Option<&str>) -> Result<(), AppleMus
 /// legacy numeric address forms (`2130706433`, `0x7f000001`, `0177.0.0.1`,
 /// `127.1`) that `getaddrinfo` resolves as an address instead of a name. This
 /// closes the address-literal SSRF shapes a hostile or compromised API reply
-/// can carry; a public DNS name that later resolves to an internal address is
-/// not defended, which would need resolve-then-connect pinning. A redirect to
-/// an internal address is refused at the audio agent, which follows no
-/// redirects (see [`crate::audio`]). A value carrying a control character is
-/// rejected too, matching
+/// can carry. A public DNS name that resolves to an internal address is
+/// refused at the fetch instead: the audio agent resolves the host and refuses
+/// an internal address (see [`crate::audio`]), so the name this pure guard
+/// cannot see is checked before the connection. A redirect to an internal
+/// address is refused at the audio agent, which follows no redirects (see
+/// [`crate::audio`]). A value carrying a control character is rejected too,
+/// matching
 /// [`ensure_id_is_valid`]: a control character is never valid in a URL. The
 /// host may be any public name — Apple's preview CDN can move without a code
 /// change — so the check names what it refuses rather than pinning a host
