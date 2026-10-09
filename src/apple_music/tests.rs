@@ -683,8 +683,9 @@ async fn get_albums_by_artist_uses_the_rest_library_when_signed_in() {
 
 #[tokio::test]
 async fn get_songs_from_album_uses_the_rest_library_when_signed_in() {
-    let stub =
-        StubTransport::returning(r#"{"data":[{"id":"song-1","attributes":{"name":"Opening"}}]}"#);
+    let stub = StubTransport::returning(
+        r#"{"data":[{"id":"song-1","attributes":{"name":"Opening","durationInMillis":210000}}]}"#,
+    );
     let service = signed_in_service(&stub);
 
     let songs = service.get_songs_from_album("album-9").await.unwrap();
@@ -695,6 +696,7 @@ async fn get_songs_from_album_uses_the_rest_library_when_signed_in() {
             id: "song-1".to_string(),
             title: "Opening".to_string(),
             album_id: "album-9".to_string(),
+            duration_ms: 210_000,
         }]
     );
     assert_single_rest_call(

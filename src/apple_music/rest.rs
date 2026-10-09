@@ -252,6 +252,7 @@ impl RestLibrary {
                     id,
                     title,
                     album_id: album_id.to_string(),
+                    duration_ms: resource.duration_ms(),
                 })
             })
             .collect()
@@ -400,6 +401,9 @@ struct Resource {
 struct Attributes {
     /// The display name; absent when the API omits it.
     name: Option<String>,
+    /// The track's length in milliseconds; absent when the API omits it.
+    #[serde(rename = "durationInMillis")]
+    duration_in_millis: Option<u64>,
 }
 
 impl Resource {
@@ -418,6 +422,16 @@ impl Resource {
             )));
         }
         Ok(self.id.clone())
+    }
+
+    /// The resource's length in milliseconds, or `0` when the API omitted
+    /// `attributes.durationInMillis`. `0` is [`Song::duration_ms`]'s "source
+    /// supplied no duration" sentinel.
+    fn duration_ms(&self) -> u64 {
+        self.attributes
+            .as_ref()
+            .and_then(|attributes| attributes.duration_in_millis)
+            .unwrap_or(0)
     }
 
     /// The resource's non-blank name, or an [`AppleMusicError`] naming `kind`

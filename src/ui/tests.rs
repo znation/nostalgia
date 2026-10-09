@@ -1398,33 +1398,32 @@ fn browse_list_clear_clears_the_buffer_loading_and_error() {
     assert!(list.error.is_none());
 }
 
-// The `known_titles` index backs the Now Playing bar's title lookup, and it
-// is populated only when a track is played — not when an album is loaded.
-// Folding a browsed album's songs into the index would make it grow with
-// every album the user visits while the bar only ever reads the playing
+// The `known_tracks` index backs the Now Playing bar's title and time
+// lookup, and it is populated only when a track is played — not when an album
+// is loaded. Folding a browsed album's songs into the index would make it grow
+// with every album the user visits while the bar only ever reads the playing
 // track's entry, so the browse path must leave the index untouched and
-// `TrackSelected` must record the played song's title.
+// `TrackSelected` must record the played song's title and duration.
 #[test]
-fn songs_loaded_does_not_populate_the_known_titles_index() {
+fn songs_loaded_does_not_populate_the_known_tracks_index() {
     let (mut player, _state) = test_player();
 
     let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
     let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
 
-    assert!(player.known_titles.is_empty());
+    assert!(player.known_tracks.is_empty());
 }
 
 #[test]
-fn track_selected_records_the_played_tracks_title() {
+fn track_selected_records_the_played_tracks_title_and_duration() {
     let (mut player, _state) = test_player();
     let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
 
     let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 1 });
 
-    assert_eq!(
-        player.known_titles.get("song-2").map(String::as_str),
-        Some("Two")
-    );
+    let track = player.known_tracks.get("song-2").expect("song-2 recorded");
+    assert_eq!(track.title, "Two");
+    assert_eq!(track.duration_ms, 125_000);
 }
 
 // The recording above only covers a `TrackSelected` whose index still names
@@ -1433,13 +1432,13 @@ fn track_selected_records_the_played_tracks_title() {
 // the user just browsed away from, so its message carries that list's epoch
 // and an index into it, and by the time the click is processed `SongsLoaded`
 // has replaced `songs` and bumped the epoch. The guards must leave
-// `known_titles` exactly as it was — an already-recorded title survives the
+// `known_tracks` exactly as it was — an already-recorded title survives the
 // stale click, and a press whose index names no song adds no entry (the
 // index stays proportional to songs actually played). A regression that
 // recorded a title before the guards would either clobber a known title or
 // grow the index with stale entries.
 #[test]
-fn track_selected_stale_press_leaves_known_titles_untouched() {
+fn track_selected_stale_press_leaves_known_tracks_untouched() {
     let (mut player, _state) = test_player();
 
     // Play song-1 (title "One", index 0) while album-1 is loaded, recording
@@ -1457,10 +1456,13 @@ fn track_selected_stale_press_leaves_known_titles_untouched() {
     // The stale clicks changed nothing: the known title survived and no entry
     // was added.
     assert_eq!(
-        player.known_titles.get("song-1").map(String::as_str),
+        player
+            .known_tracks
+            .get("song-1")
+            .map(|track| track.title.as_str()),
         Some("One")
     );
-    assert_eq!(player.known_titles.len(), 1);
+    assert_eq!(player.known_tracks.len(), 1);
 
     // The Now Playing bar still names the playing track rather than its id.
     assert_eq!(player.now_playing_label(Some("song-1")), "One");
@@ -1491,7 +1493,10 @@ fn a_stale_play_completion_does_not_prune_a_pending_selection() {
     // The stale completion must not prune song-3's still-pending title.
     let _ = update(&mut player, first_done);
     assert_eq!(
-        player.known_titles.get("song-3").map(String::as_str),
+        player
+            .known_tracks
+            .get("song-3")
+            .map(|track| track.title.as_str()),
         Some("Three")
     );
 
@@ -1503,7 +1508,7 @@ fn a_stale_play_completion_does_not_prune_a_pending_selection() {
     );
     let _ = update(&mut player, second_done);
 
-    assert_eq!(player.known_titles.len(), 1);
+    assert_eq!(player.known_tracks.len(), 1);
     assert_eq!(player.now_playing_label(Some("song-3")), "Three");
 }
 
@@ -1520,17 +1525,18 @@ fn a_failed_play_completion_clears_the_index_when_nothing_committed() {
         id: String::new(),
         title: "Blank".to_string(),
         album_id: "album-1".to_string(),
+        duration_ms: 0,
     }];
 
     let task = update(&mut player, Message::TrackSelected { epoch: 0, index: 0 });
-    assert_eq!(player.known_titles.len(), 1);
+    assert_eq!(player.known_tracks.len(), 1);
 
     let done = futures::executor::block_on(task_output(task, "failed play"));
 
     let _ = update(&mut player, done);
 
     assert_eq!(state.blocking_lock().current_track, None);
-    assert!(player.known_titles.is_empty());
+    assert!(player.known_tracks.is_empty());
 }
 
 // Browsing to a new album must *replace* the Songs view's buffer, not
@@ -1558,7 +1564,7 @@ fn songs_loaded_replaces_the_previous_albums_songs() {
 // label through `WinampPlayer::now_playing_label`, so asserting that same
 // resolution after a browse-away pins the actual bar path: if the label
 // were resolved against `songs` (the currently-browsed album's list, which
-// album-2's `SongsLoaded` just replaced) instead of the `known_titles`
+// album-2's `SongsLoaded` just replaced) instead of the `known_tracks`
 // entry recorded when song-1 was played, song-1 would no longer be "known"
 // and the label would fall back to the raw id "song-1", failing this test.
 #[test]
@@ -1566,7 +1572,7 @@ fn now_playing_label_keeps_the_track_name_after_browsing_to_another_album() {
     let (mut player, state) = test_player();
 
     // Play song-1 (title "One") from album-1 — recording its title in
-    // `known_titles` — then browse to album-2's songs, the flow that used
+    // `known_tracks` — then browse to album-2's songs, the flow that used
     // to leave the bar showing "song-1".
     let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
     let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
@@ -1575,6 +1581,29 @@ fn now_playing_label_keeps_the_track_name_after_browsing_to_another_album() {
 
     let current_track = state.blocking_lock().current_track.clone();
     assert_eq!(player.now_playing_label(current_track.as_deref()), "One");
+}
+
+// The Now Playing bar's time readout comes from the same `known_tracks` entry
+// as its label: a played track's duration must reach
+// `WinampPlayer::now_playing_time`, and — like the title — survive a later
+// browse to a different album that replaces `songs`. An unknown track (or no
+// current track) reads the `--:--` placeholder.
+#[test]
+fn now_playing_time_shows_the_played_tracks_duration_after_browsing_to_another_album() {
+    let (mut player, state) = test_player();
+
+    assert_eq!(player.now_playing_time(None), "--:--");
+
+    // Play song-1 (210_000 ms -> 3:30) from album-1, then browse to
+    // album-2's songs, which replaces `songs`.
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+    state.blocking_lock().current_track = Some("song-1".to_string());
+    let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
+
+    let current_track = state.blocking_lock().current_track.clone();
+    assert_eq!(player.now_playing_time(current_track.as_deref()), "3:30");
+    assert_eq!(player.now_playing_time(Some("no-such-song")), "--:--");
 }
 
 // `fetch_into` schedules the fetch as an iced `Task`; the arm itself only

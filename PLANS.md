@@ -29,7 +29,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Show the current track's duration in the Now Playing bar (found 2026-10-08)
+_None yet._
+
+## Done
+
+### Show the current track's duration in the Now Playing bar (found 2026-10-08, done 2026-10-08)
 
 Classic Winamp's main LCD pairs the current track with a time, and its
 playlist editor lists each track's length. Nostalgia's `Song` drops the
@@ -81,10 +85,14 @@ transport, browse navigation, volume, balance, or the equalizer.
   (reading `.title`); add a test that a played track's duration reaches
   `now_playing_time` and survives browsing to another album.
 
+- `BUGS.md`: update the two Fixed records that describe the live Now
+  Playing lookup as `known_titles` (the id→title index renamed to
+  `known_tracks`, now carrying title and duration).
+
 **Files touched.** `src/library.rs`, `src/test_support.rs`,
 `src/sample_library.rs`, `src/apple_music/rest.rs`,
 `src/apple_music/rest/tests.rs`, `src/apple_music/tests.rs`,
-`src/ui/views.rs`, `src/ui/mod.rs`, `src/ui/tests.rs`.
+`src/ui/views.rs`, `src/ui/mod.rs`, `src/ui/tests.rs`, `BUGS.md`.
 
 **Acceptance criteria.**
 
@@ -96,8 +104,6 @@ transport, browse navigation, volume, balance, or the equalizer.
 - The Now Playing bar shows `--:--` with no current track and the played
   track's `m:ss` after a play, and that time survives browsing to another
   album.
-
-## Done
 
 ### Log a notice when a browse response has an unread next page (found 2026-10-08, done 2026-10-08)
 

@@ -82,6 +82,34 @@ fn albums_by_artist_map_library_json_and_set_the_artist_id() {
 
 #[test]
 fn songs_from_album_map_library_json_and_set_the_album_id() {
+    let stub = StubTransport::returning(
+        r#"{"data":[{"id":"song-1","attributes":{"name":"Opening","durationInMillis":210000}}]}"#,
+    );
+    let library = library_over(&stub);
+
+    let songs = library.get_songs_from_album(&session(), "album-9").unwrap();
+
+    assert_eq!(
+        songs,
+        vec![Song {
+            id: "song-1".to_string(),
+            title: "Opening".to_string(),
+            album_id: "album-9".to_string(),
+            duration_ms: 210_000,
+        }]
+    );
+    assert_single_call(
+        &stub,
+        "https://api.music.apple.com/v1/me/library/albums/album-9/tracks",
+    );
+}
+
+// A track the API returns without `attributes.durationInMillis` (an older or
+// partial resource) must map to the model's `0` "no duration supplied"
+// sentinel rather than failing the whole response, so the Now Playing bar
+// shows `--:--` for it instead of dropping the song.
+#[test]
+fn songs_from_album_maps_a_missing_duration_to_zero() {
     let stub =
         StubTransport::returning(r#"{"data":[{"id":"song-1","attributes":{"name":"Opening"}}]}"#);
     let library = library_over(&stub);
@@ -94,11 +122,8 @@ fn songs_from_album_map_library_json_and_set_the_album_id() {
             id: "song-1".to_string(),
             title: "Opening".to_string(),
             album_id: "album-9".to_string(),
+            duration_ms: 0,
         }]
-    );
-    assert_single_call(
-        &stub,
-        "https://api.music.apple.com/v1/me/library/albums/album-9/tracks",
     );
 }
 

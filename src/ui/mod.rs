@@ -168,22 +168,23 @@ struct WinampPlayer {
     artists: BrowseList<Artist>,
     albums: BrowseList<Album>,
     songs: BrowseList<Song>,
-    /// Each played song's id mapped to its title, so the Now Playing bar can
-    /// still name the playing track after the user browses to a different
-    /// album (whose list replaces `songs.items`). The `TrackSelected` arm records a
-    /// track's title once, when it is played, and `now_playing_label`
-    /// resolves the per-frame bar label with a single get instead of scanning
-    /// a growing list on every frame. Recording on play — rather than folding
-    /// every song of every browsed album into the map — keeps the map
-    /// proportional to songs actually played and takes the per-album fold off
-    /// the browse path. Only the current track's entry is ever read, so the
-    /// latest play's completion prunes the map back to that entry (or clears
-    /// it when nothing committed): without the prune the map would grow by one
-    /// entry for every distinct track ever played. A completion whose play a
-    /// newer selection superseded leaves the map alone — the newer selection's
-    /// title is still pending, and pruning to the older committed track would
-    /// drop it.
-    known_titles: HashMap<String, String>,
+    /// Each played song's id mapped to its [`views::KnownTrack`] (title and
+    /// duration), so the Now Playing bar can still name and time the playing
+    /// track after the user browses to a different album (whose list replaces
+    /// `songs.items`). The `TrackSelected` arm records a track's title and
+    /// duration once, when it is played, and `now_playing_label` /
+    /// `now_playing_time` resolve the per-frame bar with a single get instead
+    /// of scanning a growing list on every frame. Recording on play — rather
+    /// than folding every song of every browsed album into the map — keeps the
+    /// map proportional to songs actually played and takes the per-album fold
+    /// off the browse path. Only the current track's entry is ever read, so
+    /// the latest play's completion prunes the map back to that entry (or
+    /// clears it when nothing committed): without the prune the map would grow
+    /// by one entry for every distinct track ever played. A completion whose
+    /// play a newer selection superseded leaves the map alone — the newer
+    /// selection's entry is still pending, and pruning to the older committed
+    /// track would drop it.
+    known_tracks: HashMap<String, views::KnownTrack>,
     /// The playback-request counter. Each `TrackSelected` bumps it and
     /// carries its value into the async play as a guard: `play_track`
     /// evaluates the guard while holding the state lock and commits the
@@ -224,19 +225,31 @@ impl WinampPlayer {
             artists: BrowseList::new(true),
             albums: BrowseList::new(false),
             songs: BrowseList::new(false),
-            known_titles: HashMap::new(),
+            known_tracks: HashMap::new(),
             plays_generation: Arc::new(AtomicU64::new(0)),
         }
     }
 
     /// The Now Playing bar's label for `current_track`, resolved against the
-    /// accumulated [`Self::known_titles`] index rather than the
+    /// accumulated [`Self::known_tracks`] index rather than the
     /// currently-browsed album's `songs`: `view` renders the bar from this, so
     /// the bar keeps naming a playing track even after a browse to another
     /// album replaced `songs`. The browse-away regression test asserts this
     /// same path.
     fn now_playing_label<'a>(&'a self, current_track: Option<&str>) -> Cow<'a, str> {
-        views::now_playing_label(&self.known_titles, current_track)
+        views::now_playing_label(&self.known_tracks, current_track)
+    }
+
+    /// The Now Playing bar's length readout for `current_track`, formatted
+    /// from the duration recorded in [`Self::known_tracks`]; a track the index
+    /// does not know, or one the source gave no duration for, formats as
+    /// `--:--`. Unlike the borrowed label, this formats a fresh `String` every
+    /// frame, so `view` passes it straight to [`views::view_now_playing`].
+    fn now_playing_time(&self, current_track: Option<&str>) -> String {
+        let duration_ms = current_track
+            .and_then(|id| self.known_tracks.get(id))
+            .map_or(0, |track| track.duration_ms);
+        views::format_track_time(duration_ms)
     }
 }
 
@@ -406,17 +419,20 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 return Task::none();
             };
             let track_id = song.id.clone();
-            // Record the played track's title before handing the id to the
-            // async play: the Now Playing bar resolves its label from
-            // `known_titles`, and the entry must survive a later browse to a
-            // different album (which replaces `songs.items`). Recording once per
-            // play — rather than folding every song of every browsed album
-            // into the map — keeps the index proportional to songs actually
-            // played and takes the fold off the browse path.
+            // Record the played track's title and duration before handing the
+            // id to the async play: the Now Playing bar resolves its label and
+            // time from `known_tracks`, and the entry must survive a later
+            // browse to a different album (which replaces `songs.items`).
+            // Recording once per play — rather than folding every song of
+            // every browsed album into the map — keeps the index proportional
+            // to songs actually played and takes the fold off the browse path.
             player
-                .known_titles
+                .known_tracks
                 .entry(track_id.clone())
-                .or_insert_with(|| song.title.clone());
+                .or_insert_with(|| views::KnownTrack {
+                    title: song.title.clone(),
+                    duration_ms: song.duration_ms,
+                });
             // A newer selection must win even when an older play's backend
             // call finishes later: issue a generation and hand its guard to
             // `play_track`, which evaluates it under the state lock so the
@@ -544,12 +560,12 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::TrackPlayed { generation } => {
-            // Only the current track's title is ever read (see
-            // [`WinampPlayer::known_titles`]), so the latest play's completion drops
+            // Only the current track's entry is ever read (see
+            // [`WinampPlayer::known_tracks`]), so the latest play's completion drops
             // every other entry the selections above accumulated. A completion
             // whose play a newer selection superseded is skipped: its
             // `current_track` names the older committed track, but the newer
-            // selection's title is still pending, and pruning to the older
+            // selection's entry is still pending, and pruning to the older
             // track would delete it. When this completion is the latest, no
             // newer selection is pending, so reducing to `current_track` is
             // safe — and when nothing committed, clearing the map keeps it
@@ -557,8 +573,8 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             if generation == player.plays_generation.load(Ordering::SeqCst) {
                 let state = player.state.blocking_lock();
                 match state.current_track.as_deref() {
-                    Some(current) => player.known_titles.retain(|id, _| id == current),
-                    None => player.known_titles.clear(),
+                    Some(current) => player.known_tracks.retain(|id, _| id == current),
+                    None => player.known_tracks.clear(),
                 }
             }
             Task::none()
@@ -641,13 +657,16 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
         return views::view_title_bar(player.always_on_top);
     }
 
-    // The now-playing title is resolved while the state lock is held, from a
-    // borrowed `current_track` against the accumulated `known_titles` index
-    // (see [`WinampPlayer::now_playing_label`]) — the label borrows the title
-    // from `known_titles` (or the `"Nothing"` literal), so the per-frame path
-    // allocates only in the unknown-id fallback, not the common cases.
+    // The now-playing title and time are resolved while the state lock is
+    // held, from a borrowed `current_track` against the accumulated
+    // `known_tracks` index (see [`WinampPlayer::now_playing_label`] and
+    // [`WinampPlayer::now_playing_time`]). The label borrows the title from
+    // `known_tracks` (or the `"Nothing"` literal), so the label path allocates
+    // only in the unknown-id fallback; the time readout formats a fresh
+    // `String` every frame, so it always allocates.
     let (
         now_playing,
+        now_playing_time,
         is_playing,
         volume,
         balance,
@@ -661,6 +680,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
         let state = player.state.blocking_lock();
         (
             player.now_playing_label(state.current_track.as_deref()),
+            player.now_playing_time(state.current_track.as_deref()),
             state.is_playing,
             state.volume(),
             state.balance(),
@@ -705,7 +725,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
 
     let mut column = Column::new()
         .push(views::view_title_bar(player.always_on_top))
-        .push(views::view_now_playing(now_playing))
+        .push(views::view_now_playing(now_playing, now_playing_time))
         .push(views::view_transport_controls(
             is_playing, volume, balance, repeat, shuffle,
         ))

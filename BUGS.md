@@ -285,18 +285,18 @@ then browse away to "Second Record" (album-2): `player.songs` is now album-2's
 list, song-1 is no longer "known", and the bar — which is meant to name the
 song for the user — falls back to the raw internal id "song-1".
 
-Fixed by resolving the bar's label through a `known_titles` id→title index
+Fixed by resolving the bar's label through a `known_tracks` id→track index
 instead of the replaceable `songs` buffer: `view` calls
 `WinampPlayer::now_playing_label`, which looks the current track up in
-`known_titles`, and the `TrackSelected` arm records the played song's
-id→title pair there before scheduling the play (the `SongsLoaded` arm only
+`known_tracks`, and the `TrackSelected` arm records the played song's
+id→track pair there before scheduling the play (the `SongsLoaded` arm only
 stores into `player.songs`). Because the index is written when a track is
 played, its entry survives a later browse to a different album (which
 replaces `songs`), and the browse-away case names the playing track. The
 regression test (`now_playing_label_keeps_the_track_name_after_browsing_to_another_album`)
 asserts the bar's label through the same `WinampPlayer::now_playing_label`
 path that `view` renders, after playing a song and browsing to another album —
-it fails with the raw id both when `known_titles` is not populated and when
+it fails with the raw id both when `known_tracks` is not populated and when
 the resolution is reverted to `songs`. `cargo build`, `cargo test`, and
 `cargo fmt --check` all pass. A later same-day perf change moved the index
 population from every loaded album to each played track, so the index stays
@@ -343,7 +343,7 @@ song for the user.
 
 Fixed by resolving `current_track` in a pure `now_playing_label` helper that
 `view` calls — originally against the loaded `player.songs`, since 2026-10-06
-against the player's accumulated id→title `known_titles` index: a known id
+against the player's accumulated id→track `known_tracks` index: a known id
 maps to the song's title, an id not in the index falls back to the id itself,
 and no current track yields "Nothing". The helper and its four cases (no
 current track, known track, unknown id, no songs loaded) are unit-tested in

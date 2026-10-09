@@ -422,40 +422,70 @@ pub fn view_title_bar(always_on_top: bool) -> Element<'static, Message> {
     )
 }
 
-/// The Now Playing bar label: the title of `current_track` when `titles`
+/// A track the Now Playing bar knows about: the title it renders and the
+/// length it shows beside the title. Recorded once when a track is played, so
+/// the bar keeps naming and timing the playing track after the user browses to
+/// a different album.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KnownTrack {
+    /// The track's display title.
+    pub title: String,
+    /// The track's length in milliseconds; `0` means the source supplied no
+    /// duration.
+    pub duration_ms: u64,
+}
+
+/// The Now Playing bar label: the title of `current_track` when `tracks`
 /// knows it; the raw id when it doesn't; "Nothing" when no track is current
-/// (Stop keeps the interrupted track's title). `titles` is
-/// the player's known id→title index, so this per-frame resolution is a single
+/// (Stop keeps the interrupted track's title). `tracks` is
+/// the player's known id→track index, so this per-frame resolution is a single
 /// map get rather than a scan of every song the player has ever loaded. The
-/// result borrows the title from `titles` (or the `"Nothing"` literal) in the
+/// result borrows the title from `tracks` (or the `"Nothing"` literal) in the
 /// common cases, so a per-frame refresh allocates only for the rare unknown-id
 /// fallback instead of cloning the title on every view. Pure data → `Cow` so
 /// the title resolution is testable without an iced renderer.
 pub fn now_playing_label<'a>(
-    titles: &'a HashMap<String, String>,
+    tracks: &'a HashMap<String, KnownTrack>,
     current_track: Option<&str>,
 ) -> Cow<'a, str> {
     match current_track {
-        Some(id) => titles
+        Some(id) => tracks
             .get(id)
-            .map(|title| Cow::Borrowed(title.as_str()))
+            .map(|track| Cow::Borrowed(track.title.as_str()))
             .unwrap_or_else(|| Cow::Owned(id.to_string())),
         None => Cow::Borrowed("Nothing"),
     }
 }
 
+/// The Now Playing bar's length readout for `duration_ms`: `"--:--"` when the
+/// source supplied no duration (`0`), else zero-padded `m:ss` (so a track
+/// under a minute reads `0:45` and one over an hour keeps counting minutes
+/// rather than rolling into hours). Pure so the formatting is testable without
+/// an iced renderer.
+pub fn format_track_time(duration_ms: u64) -> String {
+    if duration_ms == 0 {
+        return "--:--".to_string();
+    }
+    let total_seconds = duration_ms / 1000;
+    format!("{}:{:02}", total_seconds / 60, total_seconds % 60)
+}
+
 /// The Now Playing bar: the "Now Playing:" caption followed by the current
-/// track's resolved title (or "Nothing" when nothing is current). Takes the
-/// already resolved label (from [`now_playing_label`]) so this per-frame
-/// widget build does no song lookup itself. The label is a [`Cow`]: the
-/// borrowed case keeps the title owned by the caller's index (no allocation),
-/// while the owned fallback is moved into the widget, so the built element
-/// never borrows a temporary.
-pub fn view_now_playing(label: Cow<'_, str>) -> Element<'_, Message> {
+/// track's resolved title (or "Nothing" when nothing is current), with the
+/// track's length ([`format_track_time`]) laid at the right edge of the LCD
+/// well. Takes the already resolved label (from [`now_playing_label`]) and
+/// time string so this per-frame widget build does no song lookup or
+/// formatting itself. The label is a [`Cow`]: the borrowed case keeps the
+/// title owned by the caller's index (no allocation), while the owned fallback
+/// is moved into the widget, so the built element never borrows a temporary.
+/// The time is an owned `String` the caller formatted this frame.
+pub fn view_now_playing(label: Cow<'_, str>, time: String) -> Element<'_, Message> {
     bevel::lcd_well(
         Row::new()
             .push(Text::new("Now Playing: ").size(20))
-            .push(Text::new(label).size(20).color(theme::LCD_GREEN)),
+            .push(Text::new(label).size(20).color(theme::LCD_GREEN))
+            .push(Space::new().width(Length::Fill))
+            .push(Text::new(time).size(20).color(theme::LCD_GREEN)),
     )
 }
 
@@ -715,12 +745,12 @@ pub(super) const BROWSE_VIEWS: [CurrentView; 3] = [
 #[cfg(test)]
 mod tests {
     use super::{
-        BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, BROWSE_VIEWS, CurrentView, EQ_STEP, Message,
-        VOLUME_MAX, VOLUME_MIN, VOLUME_STEP, album_row, artist_row, browse_placeholder,
+        BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, BROWSE_VIEWS, CurrentView, EQ_STEP, KnownTrack,
+        Message, VOLUME_MAX, VOLUME_MIN, VOLUME_STEP, album_row, artist_row, browse_placeholder,
         can_go_back, can_retry_artists, current_row_style, empty_list_label, eq_enabled_label,
-        now_playing_label, play_pause_label, repeat_label, shuffle_label, song_row, style, theme,
-        transport_buttons, view_albums, view_artists, view_back_button, view_equalizer,
-        view_now_playing, view_retry_button, view_songs, view_transport_controls,
+        format_track_time, now_playing_label, play_pause_label, repeat_label, shuffle_label,
+        song_row, style, theme, transport_buttons, view_albums, view_artists, view_back_button,
+        view_equalizer, view_now_playing, view_retry_button, view_songs, view_transport_controls,
     };
     use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, clamp_gain};
     use crate::library::{Album, Artist, Song};
@@ -830,42 +860,62 @@ mod tests {
     // (grouped with the other widget builders), so their pure label logic is
     // pinned here alongside the browse-row mappings.
 
-    /// Builds the id→title index the player maintains for the Now Playing
+    /// Builds the id→track index the player maintains for the Now Playing
     /// bar, from `(id, title)` pairs — the shape `now_playing_label`
-    /// resolves against.
-    fn known_titles(entries: &[(&str, &str)]) -> HashMap<String, String> {
+    /// resolves against. Durations are `0` here; the length formatting is
+    /// pinned separately through `format_track_time`.
+    fn known_tracks(entries: &[(&str, &str)]) -> HashMap<String, KnownTrack> {
         entries
             .iter()
-            .map(|(id, title)| (id.to_string(), title.to_string()))
+            .map(|(id, title)| {
+                (
+                    id.to_string(),
+                    KnownTrack {
+                        title: title.to_string(),
+                        duration_ms: 0,
+                    },
+                )
+            })
             .collect()
     }
 
     #[test]
     fn now_playing_label_shows_nothing_with_no_current_track() {
-        assert_eq!(now_playing_label(&known_titles(&[]), None), "Nothing");
+        assert_eq!(now_playing_label(&known_tracks(&[]), None), "Nothing");
     }
 
     #[test]
     fn now_playing_label_resolves_known_track_to_title() {
-        let titles = known_titles(&[("song-1", "Opening")]);
-        assert_eq!(now_playing_label(&titles, Some("song-1")), "Opening");
+        let tracks = known_tracks(&[("song-1", "Opening")]);
+        assert_eq!(now_playing_label(&tracks, Some("song-1")), "Opening");
     }
 
     #[test]
-    fn now_playing_label_falls_back_to_id_when_track_not_in_titles() {
-        let titles = known_titles(&[("song-1", "Opening")]);
+    fn now_playing_label_falls_back_to_id_when_track_not_in_tracks() {
+        let tracks = known_tracks(&[("song-1", "Opening")]);
         assert_eq!(
-            now_playing_label(&titles, Some("no-such-song")),
+            now_playing_label(&tracks, Some("no-such-song")),
             "no-such-song"
         );
     }
 
     #[test]
-    fn now_playing_label_falls_back_to_id_when_titles_is_empty() {
+    fn now_playing_label_falls_back_to_id_when_tracks_is_empty() {
         assert_eq!(
-            now_playing_label(&known_titles(&[]), Some("song-1")),
+            now_playing_label(&known_tracks(&[]), Some("song-1")),
             "song-1"
         );
+    }
+
+    #[test]
+    fn format_track_time_shows_placeholders_when_the_source_supplied_no_duration() {
+        assert_eq!(format_track_time(0), "--:--");
+    }
+
+    #[test]
+    fn format_track_time_formats_minutes_and_zero_padded_seconds() {
+        assert_eq!(format_track_time(210_000), "3:30");
+        assert_eq!(format_track_time(45_000), "0:45");
     }
 
     // The bar is rebuilt on every frame, and `now_playing_label` documents
@@ -878,18 +928,18 @@ mod tests {
     // frame.
     #[test]
     fn now_playing_label_borrows_the_title_and_nothing_literal() {
-        let titles = known_titles(&[("song-1", "Opening")]);
+        let tracks = known_tracks(&[("song-1", "Opening")]);
 
-        let label = now_playing_label(&titles, Some("song-1"));
+        let label = now_playing_label(&tracks, Some("song-1"));
         assert!(matches!(&label, Cow::Borrowed(_)));
-        assert_eq!(label.as_ptr(), titles["song-1"].as_ptr());
+        assert_eq!(label.as_ptr(), tracks["song-1"].title.as_ptr());
 
-        let label = now_playing_label(&titles, None);
+        let label = now_playing_label(&tracks, None);
         assert!(matches!(&label, Cow::Borrowed(_)));
 
         // The one allocating case stays owned: the unknown id is copied into
         // the fallback label.
-        let label = now_playing_label(&titles, Some("no-such-song"));
+        let label = now_playing_label(&tracks, Some("no-such-song"));
         assert!(matches!(&label, Cow::Owned(_)));
     }
 
@@ -1058,7 +1108,7 @@ mod tests {
 
     #[test]
     fn now_playing_bar_and_browse_action_buttons_construct() {
-        let _bar = view_now_playing("Opening".into());
+        let _bar = view_now_playing("Opening".into(), "3:30".to_string());
         let _back = view_back_button();
         let _retry = view_retry_button();
     }

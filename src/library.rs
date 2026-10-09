@@ -39,6 +39,9 @@ pub struct Song {
     pub title: String,
     /// The [`Album::id`] of the album this song belongs to.
     pub album_id: String,
+    /// The track's length in milliseconds; `0` means the source supplied no
+    /// duration.
+    pub duration_ms: u64,
 }
 
 #[cfg(test)]
@@ -70,7 +73,7 @@ mod tests {
     /// The [`Song`] twin of [`artist_payload`]: the full, valid wire payload
     /// the song round-trip and missing-field tests share.
     fn song_payload() -> serde_json::Value {
-        json!({ "id": "song-1", "title": "Opening", "album_id": "album-1" })
+        json!({ "id": "song-1", "title": "Opening", "album_id": "album-1", "duration_ms": 210_000 })
     }
 
     /// The real Apple Music API will hand these types to the app as JSON, so
@@ -139,7 +142,8 @@ mod tests {
                 "id": "song-1",
                 "title": "Opening",
                 "album_id": "album-1",
-                "duration_ms": 210_000
+                "duration_ms": 210_000,
+                "genre": "rock"
             }),
             sample_song(),
         );
