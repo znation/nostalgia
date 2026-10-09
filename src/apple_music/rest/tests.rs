@@ -462,6 +462,65 @@ fn a_stalled_server_is_bounded_by_the_request_timeout() {
     );
 }
 
+// The agent's global bound is not the only one that matters: a paginated fetch
+// shares one deadline across its pages, so a single request must also honor a
+// deadline shorter than the agent's. The shared agent carries 30 seconds, so
+// without the per-request override this call would block for the full agent
+// bound; the 200ms deadline is what makes it return.
+#[test]
+fn a_request_is_bounded_by_its_deadline_not_only_the_agent_timeout() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let transport = UreqTransport::new();
+    let url = format!("http://{addr}/stalled");
+    let deadline = Instant::now() + std::time::Duration::from_millis(200);
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let started = Instant::now();
+    std::thread::spawn(move || {
+        let _ = sender.send(transport.get_within(&url, &session(), deadline));
+    });
+    let result = receiver
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("the transport must return within its deadline");
+    assert!(result.is_err(), "{result:?}");
+    assert!(
+        started.elapsed() >= std::time::Duration::from_millis(100),
+        "returned before the 200ms deadline: {:?}",
+        started.elapsed()
+    );
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(2),
+        "the 30s agent bound leaked through instead of the 200ms deadline: {:?}",
+        started.elapsed()
+    );
+}
+
+// A fetch whose shared deadline has already passed must fail immediately
+// without opening a connection, so a later page cannot start a fresh request
+// after the UI has stopped waiting.
+#[test]
+fn an_expired_deadline_fails_without_opening_a_connection() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let transport = UreqTransport::new();
+    let url = format!("http://{addr}/never");
+
+    let error = transport
+        .get_within(&url, &session(), Instant::now())
+        .unwrap_err()
+        .to_string();
+
+    assert!(error.contains("deadline"), "{error}");
+    assert!(
+        matches!(
+            listener.accept(),
+            Err(ref error) if error.kind() == std::io::ErrorKind::WouldBlock
+        ),
+        "the transport opened a connection after its deadline had passed"
+    );
+}
+
 /// Formats a complete HTTP/1.1 response around `body`: the `status_line`
 /// (e.g. `"200 OK"`), the `Content-Type` header, and the exact
 /// `Content-Length`, closed with `Connection: close`. The loopback tests
@@ -897,6 +956,60 @@ fn an_endless_next_chain_stops_at_the_page_bound() {
 
     assert_eq!(artists.len(), MAX_PAGES);
     assert_eq!(stub.calls().len(), MAX_PAGES);
+}
+
+/// A transport that records the deadline each request receives, so a test can
+/// prove [`RestLibrary::fetch`] shares one overall budget across pages.
+struct DeadlineRecordingTransport {
+    deadlines: std::sync::Arc<std::sync::Mutex<Vec<Instant>>>,
+    bodies: std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<String>>>,
+}
+
+impl HttpTransport for DeadlineRecordingTransport {
+    fn get(&self, _url: &str, _session: &MusicKitSession) -> Result<String, AppleMusicError> {
+        unreachable!("`fetch` must call `get_within`, not `get`")
+    }
+
+    fn get_within(
+        &self,
+        _url: &str,
+        _session: &MusicKitSession,
+        deadline: Instant,
+    ) -> Result<String, AppleMusicError> {
+        self.deadlines.lock().unwrap().push(deadline);
+        Ok(self.bodies.lock().unwrap().pop_front().unwrap_or_default())
+    }
+}
+
+// Pagination follows the `next` link, but the UI gives a fetch one
+// `FETCH_TIMEOUT`; a fresh request bound per page would let a ten-page
+// collection run ten times that. `fetch` must hand every page the same
+// deadline, computed once from `REQUEST_TIMEOUT`.
+#[test]
+fn fetch_shares_one_deadline_across_all_pages() {
+    let deadlines = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let bodies = std::sync::Arc::new(std::sync::Mutex::new(std::collections::VecDeque::from(
+        vec![
+            r#"{"data":[{"id":"artist-1","attributes":{"name":"The Sample Band"}}],"next":"/v1/me/library/artists?offset=1"}"#.to_string(),
+            r#"{"data":[{"id":"artist-2","attributes":{"name":"Echo Chamber"}}]}"#.to_string(),
+        ],
+    )));
+    let transport = DeadlineRecordingTransport {
+        deadlines: std::sync::Arc::clone(&deadlines),
+        bodies,
+    };
+    let library = RestLibrary::new(Box::new(transport));
+    let before = Instant::now();
+
+    let artists = library.get_favorite_artists(&session()).unwrap();
+    let after = Instant::now();
+
+    assert_eq!(artists.len(), 2);
+    let deadlines = deadlines.lock().unwrap();
+    assert_eq!(deadlines.len(), 2);
+    assert_eq!(deadlines[0], deadlines[1]);
+    assert!(*deadlines.last().unwrap() > before);
+    assert!(*deadlines.last().unwrap() <= after + REQUEST_TIMEOUT);
 }
 
 // A `next` link that names another host must not be followed: the session's

@@ -8,7 +8,7 @@
 //! sibling wiring change.
 
 use std::sync::OnceLock;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::Deserialize;
 
@@ -38,8 +38,11 @@ const MAX_PAGES: usize = 10;
 /// response body. `ureq` defaults every network timeout to `None`, so without
 /// this a server that accepts the connection and then stalls leaves the
 /// calling thread — spawned by `off_thread` and detached from the UI's own
-/// 30-second fetch timeout — blocked forever. Matches that fetch bound so the
-/// thread exits about when the UI stops waiting on it.
+/// 30-second fetch timeout — blocked forever. [`RestLibrary::fetch`] gives its
+/// whole paginated fetch this one budget, handing each page's request only the
+/// time left, so a slow multi-page collection cannot keep that detached thread
+/// alive for up to [`MAX_PAGES`] times this bound while the UI has already
+/// stopped waiting.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// The narrow seam over the blocking HTTP client, so [`RestLibrary`]'s tests
@@ -59,6 +62,29 @@ pub trait HttpTransport: Send + Sync {
     /// error); [`RestLibrary`] passes it through unchanged and leaves the query
     /// context to the UI, so the user-facing report names the query once.
     fn get(&self, url: &str, session: &MusicKitSession) -> Result<String, AppleMusicError>;
+
+    /// Fetches `url` like [`get`](Self::get), but must not run past `deadline`.
+    ///
+    /// `RestLibrary::fetch` calls this with one deadline for the whole
+    /// paginated fetch, so a slow multi-page collection shares a single budget
+    /// instead of letting each page start a fresh one. The default ignores
+    /// `deadline` and delegates to [`get`](Self::get), which is safe for a test
+    /// stub that answers instantly; the production [`UreqTransport`] overrides
+    /// it to bound the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the request fails or when `deadline`
+    /// has already passed.
+    fn get_within(
+        &self,
+        url: &str,
+        session: &MusicKitSession,
+        deadline: Instant,
+    ) -> Result<String, AppleMusicError> {
+        let _ = deadline;
+        self.get(url, session)
+    }
 }
 
 /// The production [`HttpTransport`], backed by the blocking `ureq` client.
@@ -134,12 +160,26 @@ fn agent_with_timeout(timeout: Duration) -> ureq::Agent {
         .into()
 }
 
-impl HttpTransport for UreqTransport {
-    fn get(&self, url: &str, session: &MusicKitSession) -> Result<String, AppleMusicError> {
+impl UreqTransport {
+    /// Runs one request with `timeout` as its bound, or the agent's own global
+    /// bound when `timeout` is `None`. Both [`get`](Self::get) and the trait's
+    /// [`get_within`](HttpTransport::get_within) share this body so the
+    /// response handling lives here once.
+    fn request(
+        &self,
+        url: &str,
+        session: &MusicKitSession,
+        timeout: Option<Duration>,
+    ) -> Result<String, AppleMusicError> {
         let authorization = format!("Bearer {}", session.developer_token);
-        let mut response = self
-            .agent
-            .get(url)
+        let request = self.agent.get(url);
+        // A per-request bound wins over the agent's global one, so a later page
+        // of a paginated fetch cannot outlive the fetch's shared deadline.
+        let request = match timeout {
+            Some(timeout) => request.config().timeout_global(Some(timeout)).build(),
+            None => request,
+        };
+        let mut response = request
             .header("Authorization", authorization.as_str())
             .header("Music-User-Token", session.user_token.as_str())
             .call()
@@ -163,6 +203,27 @@ impl HttpTransport for UreqTransport {
                 None => format!("HTTP {status}"),
             }))
         }
+    }
+}
+
+impl HttpTransport for UreqTransport {
+    fn get(&self, url: &str, session: &MusicKitSession) -> Result<String, AppleMusicError> {
+        self.request(url, session, None)
+    }
+
+    fn get_within(
+        &self,
+        url: &str,
+        session: &MusicKitSession,
+        deadline: Instant,
+    ) -> Result<String, AppleMusicError> {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return Err(AppleMusicError::new(
+                "the request deadline had already passed",
+            ));
+        }
+        self.request(url, session, Some(remaining))
     }
 }
 
@@ -268,7 +329,10 @@ impl RestLibrary {
     /// not name a same-origin path is not followed (see [`absolute_next_url`]).
     /// Each page's resources are passed to `map` as that page is read, so the
     /// caller's validation runs per page rather than after the whole
-    /// collection is accumulated.
+    /// collection is accumulated. The whole follow shares one
+    /// [`REQUEST_TIMEOUT`] budget — each page is requested with only the time
+    /// left — so a slow collection cannot outrun the UI's fetch timeout by a
+    /// multiple of the page bound.
     ///
     /// A transport failure propagates as the transport's own cause, a parse
     /// failure names the parse, and a resource `map` rejects (a blank id or a
@@ -286,10 +350,14 @@ impl RestLibrary {
     ) -> Result<Vec<T>, AppleMusicError> {
         let mut items = Vec::new();
         let mut next_url = url.to_string();
+        // One deadline for the whole follow, not one per page: a server that
+        // answers each page just inside the request bound cannot stretch a
+        // ten-page fetch into ten times the UI's wait.
+        let deadline = Instant::now() + REQUEST_TIMEOUT;
         for page in 1..=MAX_PAGES {
             let body = self
                 .transport
-                .get(&next_url, session)
+                .get_within(&next_url, session, deadline)
                 .map_err(|error| AppleMusicError::new(page_context(&error.to_string(), page)))?;
             let Envelope { data, next } = serde_json::from_str::<Envelope<Resource>>(&body)
                 .map_err(|error| {
