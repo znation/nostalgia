@@ -219,6 +219,51 @@ fn bootstrap_page_is_private_and_carries_the_sign_in_url() {
     );
 }
 
+// The bootstrap guard's security claim is that it creates its directory and
+// file with `create`/`create_new`, so an entry already at the path — a file an
+// attacker pre-planted, or a symlink to a victim — is refused rather than
+// adopted, followed, or overwritten. `BootstrapPage::write` names its
+// directory with a fresh 64-bit nonce, so a collision cannot be forced through
+// it; exercise the two guards directly, since they are what the claim rests on.
+#[test]
+fn bootstrap_guard_refuses_a_pre_planted_path() {
+    let base = std::env::temp_dir().join(format!("nostalgia-guard-{}", random_nonce()));
+    std::fs::create_dir(&base).expect("create the scratch directory");
+
+    // `create_private_dir` must refuse a path that already exists — the
+    // `AlreadyExists` signal `BootstrapPage::write` retries on — and must
+    // leave the existing entry alone rather than adopt or replace it.
+    let planted_dir = base.join("private");
+    std::fs::write(&planted_dir, b"pre-planted").expect("plant a file at the directory path");
+    let error = create_private_dir(&planted_dir).expect_err("an existing path is refused");
+    assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+    assert_eq!(
+        std::fs::read(&planted_dir).expect("read the planted file"),
+        b"pre-planted",
+        "the guard must not replace the entry already at the path"
+    );
+
+    // `write_private_file` opens with `create_new`, so a pre-planted symlink
+    // is refused rather than followed: the link's target must stay untouched.
+    #[cfg(unix)]
+    {
+        let victim = base.join("victim");
+        std::fs::write(&victim, b"original").expect("write the symlink target");
+        let planted_file = base.join("sign-in.html");
+        std::os::unix::fs::symlink(&victim, &planted_file).expect("plant a symlink");
+        let error = write_private_file(&planted_file, "attacker-controlled")
+            .expect_err("an existing symlink is refused");
+        assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+        assert_eq!(
+            std::fs::read(&victim).expect("read the symlink target"),
+            b"original",
+            "the guard must not follow a pre-planted symlink"
+        );
+    }
+
+    std::fs::remove_dir_all(&base).expect("remove the scratch directory");
+}
+
 #[test]
 fn authorize_keeps_the_state_nonce_out_of_the_opener_argument() {
     // `/proc/<pid>/cmdline` (and `ps`) is world-readable on Unix, so the
