@@ -881,11 +881,12 @@ async fn assert_track_played(task: Task<Message>, expected_generation: u64) {
 
 /// Asserts that an update arm scheduled no follow-up work: `update`
 /// returns `Task::none()` for an arm with nothing to run, and iced's `Task`
-/// represents that as no stream to run. The arms this pins — `TrackPlayed`
-/// (which still prunes the player-local title index), and Next/Previous with
-/// an empty `songs` buffer — each used to repeat the same
-/// `into_stream(task).is_none()` probe, so it lives here once and "this arm
-/// schedules nothing" reads as the named contract it is.
+/// represents that as no stream to run. The suite repeats this same
+/// `into_stream(task).is_none()` probe — directly for the `TrackPlayed`
+/// handoff (which still prunes the player-local title index) and a rejected
+/// selection press, and through [`assert_message_schedules_no_work`] for the
+/// arms it names — so it lives here once and "this arm schedules nothing"
+/// reads as the named contract it is.
 fn assert_no_task(task: Task<Message>) {
     assert!(iced_runtime::task::into_stream(task).is_none());
 }
