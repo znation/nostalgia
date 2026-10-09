@@ -55,10 +55,12 @@ pub struct AppleMusicService {
 }
 
 /// Transport stubs kept as the seam a real Apple Music implementation will
-/// fill: pause, next, and previous are not yet wired to the UI (the
-/// transport.rs stepping helpers drive those buttons), so `dead_code` is
-/// allowed on exactly this block — a *newly* dead private field or method
-/// elsewhere still triggers the compiler's `dead_code` warning.
+/// fill: none of `pause`, `next_track`, or `previous_track` has a production
+/// caller yet — the Pause button clears the playing flag through
+/// `AppState::pause`, and the Previous/Next buttons pick their song through
+/// `transport::next_track_id`/`previous_track_id` — so `dead_code` is allowed
+/// on exactly this block: a *newly* dead private field or method elsewhere
+/// still triggers the compiler's `dead_code` warning.
 #[allow(dead_code)]
 impl AppleMusicService {
     async fn pause(&self) -> Result<(), AppleMusicError> {
