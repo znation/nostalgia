@@ -1,7 +1,7 @@
 use super::*;
 use crate::audio::AudioOutput;
 use crate::test_support::{
-    AudioCall, FailingAudio, RecordingAudio, StubTransport, assert_ids, sample_album,
+    AudioCall, FailingAudio, PREVIEW_URL, RecordingAudio, StubTransport, assert_ids, sample_album,
     sample_artist, sample_song,
 };
 
@@ -84,7 +84,7 @@ async fn service_with_preview_playing(
 ) -> (AppleMusicService, Arc<Mutex<AppState>>) {
     let (service, state) = service_with_audio(audio);
     service
-        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
+        .play_track("song-1", Some(PREVIEW_URL), || true)
         .await
         .unwrap();
     (service, state)
@@ -469,7 +469,7 @@ async fn play_track_starts_the_preview_through_the_audio_backend() {
     let (service, state, recording) = recording_service();
 
     service
-        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
+        .play_track("song-1", Some(PREVIEW_URL), || true)
         .await
         .unwrap();
 
@@ -477,7 +477,7 @@ async fn play_track_starts_the_preview_through_the_audio_backend() {
         recording.calls(),
         vec![
             AudioCall::SetVolume(0.5),
-            AudioCall::Play("https://example.test/preview.m4a".to_string())
+            AudioCall::Play(PREVIEW_URL.to_string())
         ]
     );
     assert_playback_state(&state, Some("song-1"), true).await;
@@ -591,7 +591,7 @@ async fn play_track_rejects_a_preview_url_that_is_not_a_public_https_url() {
 async fn play_track_accepts_a_public_https_preview_url() {
     for url in [
         "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview/x.m4a",
-        "https://example.test/preview.m4a",
+        PREVIEW_URL,
         "https://93.184.216.34/preview.m4a",
     ] {
         let recording = Arc::new(RecordingAudio::default());
@@ -600,7 +600,10 @@ async fn play_track_accepts_a_public_https_preview_url() {
             .play_track("song-1", Some(url), || true)
             .await
             .unwrap();
-        assert_eq!(recording.calls(), vec![AudioCall::Play(url.to_string())]);
+        assert_eq!(
+            recording.calls(),
+            vec![AudioCall::SetVolume(0.5), AudioCall::Play(url.to_string())]
+        );
     }
 }
 
@@ -614,7 +617,7 @@ async fn play_track_propagates_an_audio_backend_failure() {
     let (service, state) = service_with_audio(Arc::new(FailingAudio));
 
     let error = service
-        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
+        .play_track("song-1", Some(PREVIEW_URL), || true)
         .await
         .unwrap_err();
 
@@ -642,11 +645,7 @@ async fn play_track_rollback_leaves_a_newer_plays_flag_alone() {
     };
 
     let error = service
-        .play_track(
-            "song-1",
-            Some("https://example.test/preview.m4a"),
-            is_current,
-        )
+        .play_track("song-1", Some(PREVIEW_URL), is_current)
         .await
         .unwrap_err();
 
@@ -779,7 +778,7 @@ async fn resume_resumes_the_audio_backend() {
         recording.calls(),
         vec![
             AudioCall::SetVolume(0.5),
-            AudioCall::Play("https://example.test/preview.m4a".to_string()),
+            AudioCall::Play(PREVIEW_URL.to_string()),
             AudioCall::Pause,
             AudioCall::Resume
         ]
@@ -799,7 +798,7 @@ async fn stop_stops_the_audio_backend() {
         recording.calls(),
         vec![
             AudioCall::SetVolume(0.5),
-            AudioCall::Play("https://example.test/preview.m4a".to_string()),
+            AudioCall::Play(PREVIEW_URL.to_string()),
             AudioCall::Stop
         ]
     );
@@ -817,7 +816,7 @@ async fn toggle_play_pause_pauses_while_playing() {
         recording.calls(),
         vec![
             AudioCall::SetVolume(0.5),
-            AudioCall::Play("https://example.test/preview.m4a".to_string()),
+            AudioCall::Play(PREVIEW_URL.to_string()),
             AudioCall::Pause
         ]
     );
@@ -836,7 +835,7 @@ async fn toggle_play_pause_resumes_while_paused() {
         recording.calls(),
         vec![
             AudioCall::SetVolume(0.5),
-            AudioCall::Play("https://example.test/preview.m4a".to_string()),
+            AudioCall::Play(PREVIEW_URL.to_string()),
             AudioCall::Pause,
             AudioCall::Resume
         ]
@@ -860,9 +859,9 @@ async fn resume_after_stop_restarts_the_preview() {
         recording.calls(),
         vec![
             AudioCall::SetVolume(0.5),
-            AudioCall::Play("https://example.test/preview.m4a".to_string()),
+            AudioCall::Play(PREVIEW_URL.to_string()),
             AudioCall::Stop,
-            AudioCall::Play("https://example.test/preview.m4a".to_string())
+            AudioCall::Play(PREVIEW_URL.to_string())
         ]
     );
     assert_playback_state(&state, Some("song-1"), true).await;
@@ -899,12 +898,7 @@ fn concurrent_toggles_serialize_on_the_transport_lock() {
         release: std::sync::Mutex::new(release_rx),
     });
     let (service, state) = service_with_audio(Arc::clone(&audio) as Arc<dyn AudioOutput>);
-    futures::executor::block_on(service.play_track(
-        "song-1",
-        Some("https://example.test/preview.m4a"),
-        || true,
-    ))
-    .unwrap();
+    futures::executor::block_on(service.play_track("song-1", Some(PREVIEW_URL), || true)).unwrap();
 
     let first = service.clone();
     let first = std::thread::spawn(move || {
@@ -936,7 +930,7 @@ fn concurrent_toggles_serialize_on_the_transport_lock() {
         audio.calls(),
         vec![
             AudioCall::SetVolume(0.5),
-            AudioCall::Play("https://example.test/preview.m4a".to_string()),
+            AudioCall::Play(PREVIEW_URL.to_string()),
             AudioCall::Pause,
             AudioCall::Resume
         ]

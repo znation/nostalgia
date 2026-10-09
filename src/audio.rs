@@ -361,13 +361,13 @@ pub(crate) fn audio_with_fallback(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{AudioCall, RecordingAudio, serve_one_response};
+    use crate::test_support::{AudioCall, PREVIEW_URL, RecordingAudio, serve_one_response};
     use std::time::Instant;
 
     #[test]
     fn silent_output_reports_success_for_every_command() {
         let output = SilentOutput;
-        assert!(output.play("https://example.test/preview.m4a").is_ok());
+        assert!(output.play(PREVIEW_URL).is_ok());
         assert!(output.pause().is_ok());
         assert!(output.resume().is_ok());
         assert!(output.stop().is_ok());
@@ -380,13 +380,11 @@ mod tests {
         let opened = Arc::clone(&recording) as Arc<dyn AudioOutput>;
 
         let output = audio_with_fallback(|| Ok(opened));
-        output.play("https://example.test/preview.m4a").unwrap();
+        output.play(PREVIEW_URL).unwrap();
 
         assert_eq!(
             recording.calls(),
-            vec![AudioCall::Play(
-                "https://example.test/preview.m4a".to_string()
-            )]
+            vec![AudioCall::Play(PREVIEW_URL.to_string())]
         );
     }
 
@@ -394,7 +392,7 @@ mod tests {
     fn audio_with_fallback_falls_back_to_silence_when_open_fails() {
         let output = audio_with_fallback(|| Err(AppleMusicError::new("no device")));
 
-        assert!(output.play("https://example.test/preview.m4a").is_ok());
+        assert!(output.play(PREVIEW_URL).is_ok());
         assert!(output.pause().is_ok());
         assert!(output.resume().is_ok());
         assert!(output.stop().is_ok());
@@ -449,14 +447,14 @@ mod tests {
             commands: Mutex::new(commands),
         };
 
-        output.play("https://example.test/preview.m4a").unwrap();
+        output.play(PREVIEW_URL).unwrap();
         output.pause().unwrap();
         output.resume().unwrap();
         output.stop().unwrap();
         output.set_volume(0.4).unwrap();
 
         match receiver.try_recv() {
-            Ok(Command::Play(url)) => assert_eq!(url, "https://example.test/preview.m4a"),
+            Ok(Command::Play(url)) => assert_eq!(url, PREVIEW_URL),
             _ => panic!("play did not send Command::Play"),
         }
         assert!(matches!(receiver.try_recv(), Ok(Command::Pause)));
@@ -477,10 +475,7 @@ mod tests {
         };
 
         assert_eq!(
-            output
-                .play("https://example.test/preview.m4a")
-                .unwrap_err()
-                .to_string(),
+            output.play(PREVIEW_URL).unwrap_err().to_string(),
             "the audio thread is gone"
         );
         assert_eq!(

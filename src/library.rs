@@ -57,8 +57,8 @@ pub struct Song {
 mod tests {
     use super::{Album, Artist, Song};
     use crate::test_support::{
-        assert_every_field_required, assert_serializes_as, assert_unknown_fields_tolerated,
-        sample_album, sample_artist, sample_song,
+        PREVIEW_URL, assert_every_field_required, assert_serializes_as,
+        assert_unknown_fields_tolerated, sample_album, sample_artist, sample_song,
     };
     use serde_json::json;
 
@@ -219,12 +219,9 @@ mod tests {
             "artist": "The Sample Band",
             "album_id": "album-1",
             "duration_ms": 210_000,
-            "preview_url": "https://example.test/preview.m4a"
+            "preview_url": PREVIEW_URL
         }))
         .unwrap();
-        assert_eq!(
-            parsed.preview_url,
-            Some("https://example.test/preview.m4a".to_string())
-        );
+        assert_eq!(parsed.preview_url, Some(PREVIEW_URL.to_string()));
     }
 }

@@ -1,8 +1,8 @@
 use super::*;
 
 use crate::test_support::{
-    StubTransport, loopback_listener, read_some_request, sample_album, sample_artist, sample_song,
-    serve_one_response, serve_one_response_capturing_request,
+    PREVIEW_URL, StubTransport, loopback_listener, read_some_request, sample_album, sample_artist,
+    sample_song, serve_one_response, serve_one_response_capturing_request,
 };
 
 /// A session whose tokens are recognizable, so a test can assert the transport
@@ -180,10 +180,10 @@ fn preview_url_from(attributes: &str) -> Option<String> {
 #[test]
 fn songs_from_album_maps_the_first_preview_url() {
     assert_eq!(
-        preview_url_from(
-            r#"{"name":"Opening","previews":[{"url":"https://example.test/preview.m4a"}]}"#
-        ),
-        Some("https://example.test/preview.m4a".to_string())
+        preview_url_from(&format!(
+            r#"{{"name":"Opening","previews":[{{"url":"{PREVIEW_URL}"}}]}}"#
+        )),
+        Some(PREVIEW_URL.to_string())
     );
 }
 

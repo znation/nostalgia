@@ -4,8 +4,8 @@ use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB};
 use crate::music_kit_auth::MusicKitSession;
 use crate::sample_library::sample_library;
 use crate::test_support::{
-    AudioCall, RecordingAudio, StubTransport, assert_ids, rock_preset, sample_album, sample_artist,
-    sample_song, second_album_songs, stepping_songs,
+    AudioCall, PREVIEW_URL, RecordingAudio, StubTransport, assert_ids, rock_preset, sample_album,
+    sample_artist, sample_song, second_album_songs, stepping_songs,
 };
 
 /// A fresh player over its own shared state, so a test can inspect the
@@ -30,10 +30,6 @@ fn player_with_audio(
         AppleMusicService::with_audio(state.clone(), Box::new(StubTransport::returning("")), audio);
     (WinampPlayer::new(state.clone(), service), state)
 }
-
-/// The preview URL the transport tests load and assert on. The UI test suite
-/// has no other preview asset, so the literal lives here once.
-const PREVIEW_URL: &str = "https://example.test/preview.m4a";
 
 /// A fresh player over `recording`, already playing `song-1`'s
 /// [`PREVIEW_URL`] — the precondition the transport-test setups build before
@@ -993,7 +989,7 @@ async fn track_selected_plays_the_songs_preview_url() {
         artist: "The Sample Band".to_string(),
         album_id: "album-1".to_string(),
         duration_ms: 210_000,
-        preview_url: Some("https://example.test/preview.m4a".to_string()),
+        preview_url: Some(PREVIEW_URL.to_string()),
     }];
 
     let task = update(&mut player, Message::TrackSelected { epoch: 0, index: 0 });
@@ -1003,7 +999,7 @@ async fn track_selected_plays_the_songs_preview_url() {
         recording.calls(),
         vec![
             AudioCall::SetVolume(0.5),
-            AudioCall::Play("https://example.test/preview.m4a".to_string())
+            AudioCall::Play(PREVIEW_URL.to_string())
         ]
     );
 }

@@ -1,9 +1,10 @@
 //! Test-only fixtures and assertions shared across the crate's unit tests.
 //!
 //! These are the sample `Artist`/`Album`/`Song` values and stepping fixtures,
-//! the `"Rock"` preset, the serde-contract assertions, the transport stub, the
-//! audio fakes, and the loopback HTTP server fixtures that the `library`,
-//! `apple_music`, `ui`, `state`, `equalizer`, and `audio` test suites share.
+//! the shared preview URL, the `"Rock"` preset, the serde-contract assertions,
+//! the transport stub, the audio fakes, and the loopback HTTP server fixtures
+//! that the `library`, `apple_music`, `ui`, `state`, `equalizer`, and `audio`
+//! test suites share.
 //! They live in one named module
 //! rather than inside `library` so the data model module stays only the model;
 //! every item here is compiled only for tests.
@@ -20,6 +21,12 @@ use crate::audio::AudioOutput;
 use crate::equalizer::{PRESETS, Preset};
 use crate::library::{Album, Artist, Song};
 use crate::music_kit_auth::MusicKitSession;
+
+/// The preview asset URL the transport and audio tests load and assert on, and
+/// the browse tests map a resource to. It lives here once so a change to the
+/// placeholder reaches every suite that names it instead of drifting between
+/// per-file copies.
+pub(crate) const PREVIEW_URL: &str = "https://example.test/preview.m4a";
 
 /// The three songs on `album-1` that the Previous/Next stepping tests step
 /// through, shared by the `ui::transport` and `ui` test suites. Both suites
