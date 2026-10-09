@@ -78,8 +78,8 @@ fn player_with_window_id() -> (WinampPlayer, Arc<Mutex<AppState>>) {
 
 /// Seeds `player`'s three browse buffers with one each of the shared
 /// [`sample_artist`], [`sample_album`], and [`sample_song`] fixtures — the
-/// "loaded" browse shape. The failure-arm test and the view-construction test
-/// both build this same three-buffer setup before exercising their own
+/// "loaded" browse shape. The failure-arm test and the two view-construction
+/// tests all build this same three-buffer setup before exercising their own
 /// contract, so it lives here once.
 fn seed_browse_lists(player: &mut WinampPlayer) {
     player.artists.items = vec![sample_artist()];
