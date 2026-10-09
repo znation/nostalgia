@@ -354,19 +354,26 @@ pub(super) const TITLE_BAR_HEIGHT: f32 = 24.0;
 /// reflow the drag region beside it.
 const TITLE_BAR_BUTTON_WIDTH: f32 = 22.0;
 
+/// The always-on-top clutter toggle's pinned width. It is narrower than the
+/// window buttons: the A slot is a small square in the classic skin, and it
+/// sits at the left edge of the bar rather than beside the window buttons.
+const CLUTTER_BUTTON_WIDTH: f32 = 18.0;
+
 /// The custom Winamp title bar: the app name on a raised
-/// [`theme::TITLE_BLUE`] band, draggable to move the window, with minimize
-/// and close buttons on the right. Double-clicking the band toggles the
-/// classic roll-up (shade) mode via [`Message::ToggleWindowShade`].
+/// [`theme::TITLE_BLUE`] band, draggable to move the window, with the clutter
+/// bar's always-on-top toggle at the left and shade, minimize, and close
+/// buttons on the right. Double-clicking the band toggles the classic roll-up
+/// (shade) mode via [`Message::ToggleWindowShade`].
 ///
 /// The whole band except the buttons is a [`MouseArea`], so a press anywhere
 /// on it emits [`Message::WindowDragged`] and the update loop begins the OS
 /// window drag, while a double-click emits [`Message::ToggleWindowShade`].
-/// The buttons are [`fixed_width_button`]s — the same raised
-/// chrome as the transport row — pinned so their glyphs cannot resize them.
-/// The bar paints [`style::title_bar_style`] and wraps it in
+/// The A toggle is sunken while `always_on_top` holds and raised otherwise;
+/// the shade, minimize, and close buttons are [`fixed_width_button`]s — the
+/// same raised chrome as the transport row — pinned so their glyphs cannot
+/// resize them. The bar paints [`style::title_bar_style`] and wraps it in
 /// [`bevel::raised_panel`], so it carries the base skin's raised bevel.
-pub fn view_title_bar() -> Element<'static, Message> {
+pub fn view_title_bar(always_on_top: bool) -> Element<'static, Message> {
     let drag_region = MouseArea::new(
         Container::new(Text::new(TITLE_BAR_TEXT).size(14).color(theme::TEXT))
             .width(Length::Fill)
@@ -377,10 +384,27 @@ pub fn view_title_bar() -> Element<'static, Message> {
     .on_press(Message::WindowDragged)
     .on_double_click(Message::ToggleWindowShade);
 
+    let clutter_toggle = Button::new(Text::new("A"))
+        .on_press(Message::ToggleAlwaysOnTop)
+        .width(Length::Fixed(CLUTTER_BUTTON_WIDTH))
+        .style(move |_theme, status| {
+            if always_on_top {
+                style::chrome_button_style(button::Status::Pressed)
+            } else {
+                style::chrome_button_style(status)
+            }
+        });
+
     bevel::raised_panel(
         Container::new(
             Row::new()
+                .push(clutter_toggle)
                 .push(drag_region)
+                .push(fixed_width_button(
+                    "▭",
+                    TITLE_BAR_BUTTON_WIDTH,
+                    Message::ToggleWindowShade,
+                ))
                 .push(fixed_width_button(
                     "–",
                     TITLE_BAR_BUTTON_WIDTH,

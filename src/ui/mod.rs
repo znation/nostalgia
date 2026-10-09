@@ -125,6 +125,10 @@ enum Message {
     // shade mode, or restores it. The first shade measures the window so the
     // pre-shade inner size can be restored; later shades reuse it.
     ToggleWindowShade,
+    // The clutter bar's always-on-top toggle. The arm flips the flag and
+    // schedules `iced::window::set_level` for the resolved window, which is a
+    // no-op until the window id resolves.
+    ToggleAlwaysOnTop,
     // The window's inner size, captured just before the first shade. The
     // arm stores it and resizes the window down to the title-bar strip,
     // unless a newer toggle already left shade mode or captured the size.
@@ -142,6 +146,12 @@ struct WinampPlayer {
     /// only the title bar and the window is resized to
     /// [`views::TITLE_BAR_HEIGHT`].
     shaded: bool,
+    /// Whether the window is pinned above other windows. The title bar's
+    /// clutter toggle flips it, and `update` schedules
+    /// `iced::window::set_level` to match; `view` renders the toggle sunken
+    /// while it holds. It lives here rather than in `AppState` so the shaded
+    /// frame can read it without the state lock.
+    always_on_top: bool,
     /// The window's inner size captured just before the first shade, so
     /// unshading can restore it. `None` until the measurement lands.
     unshaded_size: Option<iced::Size>,
@@ -201,6 +211,7 @@ impl WinampPlayer {
             apple_music_service: service,
             window_id: None,
             shaded: false,
+            always_on_top: false,
             unshaded_size: None,
             current_view: CurrentView::Artists,
             artists: BrowseList::new(true),
@@ -570,6 +581,19 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             player.unshaded_size = Some(size);
             resize_to_shade(player, size.width)
         }
+        // The clutter toggle flips the flag and schedules the window-level
+        // change. `with_window_id` makes the level call a no-op before the
+        // window id resolves, exactly like the other title-bar actions, while
+        // the flag still flips so the view redraws the toggle.
+        Message::ToggleAlwaysOnTop => {
+            player.always_on_top = !player.always_on_top;
+            let level = if player.always_on_top {
+                iced::window::Level::AlwaysOnTop
+            } else {
+                iced::window::Level::Normal
+            };
+            with_window_id(player, move |id| iced::window::set_level(id, level))
+        }
         Message::Ignored => Task::none(),
     }
 }
@@ -585,7 +609,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // is resized down to this strip. Returning before the state lock keeps
     // the rolled-up frame cheap and free of a lock the content needs.
     if player.shaded {
-        return views::view_title_bar();
+        return views::view_title_bar(player.always_on_top);
     }
 
     // The now-playing title is resolved while the state lock is held, from a
@@ -638,7 +662,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     };
 
     let mut column = Column::new()
-        .push(views::view_title_bar())
+        .push(views::view_title_bar(player.always_on_top))
         .push(views::view_now_playing(now_playing))
         .push(views::view_transport_controls(is_playing, volume, repeat))
         .push(views::view_equalizer(

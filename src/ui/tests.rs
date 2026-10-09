@@ -951,6 +951,27 @@ fn title_bar_window_actions_schedule_work_with_a_window_id() {
 }
 
 #[test]
+fn toggle_always_on_top_flips_the_flag_and_sets_the_window_level() {
+    let (mut player, _state) = player_with_window_id();
+    assert!(!player.always_on_top);
+
+    assert_message_schedules_work(&mut player, Message::ToggleAlwaysOnTop);
+    assert!(player.always_on_top);
+
+    assert_message_schedules_work(&mut player, Message::ToggleAlwaysOnTop);
+    assert!(!player.always_on_top);
+}
+
+#[test]
+fn toggle_always_on_top_without_a_window_id_still_flips_the_flag() {
+    let (mut player, _state) = test_player();
+    assert_eq!(player.window_id, None);
+
+    assert_message_schedules_no_work(&mut player, Message::ToggleAlwaysOnTop);
+    assert!(player.always_on_top);
+}
+
+#[test]
 fn toggle_window_shade_flips_the_flag_and_measures_the_window() {
     let (mut player, _state) = player_with_window_id();
     assert!(!player.shaded);
@@ -1757,4 +1778,13 @@ fn view_constructs_when_the_window_is_shaded() {
 
     seed_browse_lists(&mut player);
     construct_view_in_every_browse_view(&mut player);
+}
+
+#[test]
+fn title_bar_constructs_for_both_always_on_top_states() {
+    // iced `Element`s expose no tree introspection, so the observable
+    // contract is that the title bar builds for both toggle states — the
+    // sunken A slot and the raised one — without panicking.
+    let _ = views::view_title_bar(false);
+    let _ = views::view_title_bar(true);
 }

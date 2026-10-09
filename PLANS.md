@@ -29,7 +29,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Add the Winamp title-bar clutter bar and shade button (found 2026-10-08)
+_None yet._
+
+## Done
+
+### Add the Winamp title-bar clutter bar and shade button (found 2026-10-08, done 2026-10-08)
 
 The custom title bar (`views::view_title_bar`) landed 2026-10-07 with only the
 app name, minimize, and close. Classic Winamp's title bar also carries the
@@ -109,7 +113,12 @@ browse or playback paths.
   rolls the window up and restores it, matching the double-click behaviour.
   The build and tests are the primary gate.
 
-## Done
+**Verified (2026-10-08).** `make check` is green, including the new
+`toggle_always_on_top_flips_the_flag_and_sets_the_window_level`,
+`toggle_always_on_top_without_a_window_id_still_flips_the_flag`, and
+`title_bar_constructs_for_both_always_on_top_states` tests. The manual
+`cargo run` check that A pins the window above others and that the new
+button rolls it up was not run in this headless tick.
 
 ### Answer the browse queries from the Apple Music REST API when signed in (found 2026-10-08, done 2026-10-08)
 
