@@ -5,6 +5,61 @@ reproduce, suspected cause. Move fixed bugs to Fixed.
 
 ## Open
 
+### The preview-URL guard never resolves the host, so a hostname that resolves to an internal address bypasses the SSRF check (found by security 2026-10-09)
+
+Symptom: `preview_url_problem` (`src/apple_music.rs`) rejects internal
+*address literals* and the legacy numeric IPv4 spellings, but it only inspects
+the URL's host text — it never resolves the name. Any non-literal hostname
+passes, so a hostile or compromised Apple Music API reply whose
+`attributes.previews[].url` names a hostname that resolves to an internal
+address (a cloud metadata name such as `metadata.google.internal`, an
+`/etc/hosts` alias such as `ip6-localhost` -> `::1`, or an attacker-controlled
+name whose DNS answers `127.0.0.1`) is accepted and fetched by the audio
+worker.
+
+Source: the `attributes.previews[].url` string in the Apple Music REST response
+(`src/apple_music/rest.rs`, `Resource::preview_url`).
+
+Path: `Resource::preview_url` -> `Song.preview_url` -> `ui/mod.rs`
+`TrackSelected` -> `AppleMusicService::play_track` -> `ensure_preview_url_is_valid`
+-> `preview_url_problem` (one-time host-text check) -> `audio.play` -> worker
+`download_and_decode` -> `agent.get(url).call()` (`src/audio.rs`), which
+resolves the name and connects.
+
+Sink: the preview fetch, `agent.get(url).call()` in
+`src/audio.rs::download_and_decode` (the `preview_agent`).
+
+The missing check: no resolve-then-validate, and no pinning of the resolved
+address. `preview_url_problem` is pure and does no DNS, so the host it approves
+is never the address the fetch connects to.
+
+How to reproduce:
+- Unit-level (verified 2026-10-09): `preview_url_problem("https://ip6-localhost/preview.m4a")`
+  and `preview_url_problem("https://metadata.google.internal/latest/meta-data/")`
+  both return `None` (accepted), even though `ip6-localhost` resolves to `::1`
+  via `/etc/hosts` and `metadata.google.internal` is a cloud metadata name.
+- End-to-end (verified 2026-10-09): bind a `TcpListener` on `[::1]:0`, then call
+  `download_and_decode(&agent_with_timeout(...), &format!("http://ip6-localhost:{port}/preview.m4a"))`;
+  the listener accepts the request (`GET /preview.m4a HTTP/1.1` ...
+  `host: ip6-localhost:{port}`), proving the fetch reached the loopback address.
+  Production requires `https`, but the host check is otherwise scheme-independent,
+  so an `https` URL naming the same host passes the same check and reaches the
+  same resolver.
+
+Suspected cause / why the fix is larger than one run: closing this needs the
+name resolved, the resolved addresses validated, and the connection pinned to a
+validated address (a second DNS answer after validation is the rebinding variant
+already noted in `preview_url_problem`'s doc comment). ureq's
+`unversioned::resolver::Resolver` could filter internal addresses at connect
+time, but that is the crate's explicitly unstable "not for regular use" API,
+would need `ip_is_internal` shared out of `apple_music`, and must be kept off
+the test agents that deliberately fetch loopback URLs. Making the pure
+`preview_url_problem` resolve would make it impure and network-dependent (its
+tests would then hit DNS). Scope: resolve-and-pin the preview fetch at the
+`audio` agent boundary (or restrict preview hosts to Apple-controlled
+suffixes), with a test that a hostname resolving internally is refused before
+any connection.
+
 ### The stage self-check rejects a plan that names the new file it creates, so the plan/director roles must reword it to a symbol anchor (found by telemetry 2026-10-08)
 
 **Refused 2026-10-08 by bugfix: the pre-queue/landing self-check that flags added lines naming paths absent from the tree is tumwater harness code, off-limits to this role, so no change in this nostalgia repo can fix the false positive.**
