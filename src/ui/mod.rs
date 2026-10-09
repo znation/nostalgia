@@ -117,8 +117,9 @@ enum Message {
     // drop a still-pending selection's title.
     TrackPlayed { generation: u64 },
     // The app window's id, resolved once at boot by `iced::window::latest()`.
-    // The custom title bar's drag/minimize/close actions need it; until the
-    // query resolves (or if it fails) those actions are no-ops.
+    // The custom title bar's window actions — drag, minimize, close, shade,
+    // and always-on-top — need it; until the query resolves (or if it fails)
+    // their window calls are no-ops.
     WindowIdResolved(Option<iced::window::Id>),
     WindowDragged,
     MinimizeWindow,
@@ -141,8 +142,9 @@ struct WinampPlayer {
     state: Arc<Mutex<AppState>>,
     apple_music_service: AppleMusicService,
     /// The app window's id, resolved at boot by `iced::window::latest()`. The
-    /// custom title bar's drag/minimize/close messages act on this window; a
-    /// `None` (before the query resolves, or if it fails) makes them no-ops.
+    /// custom title bar's window messages — drag, minimize, close, shade, and
+    /// always-on-top — act on this window; a `None` (before the query
+    /// resolves, or if it fails) makes their window calls no-ops.
     window_id: Option<iced::window::Id>,
     /// Whether the window is rolled up into shade mode: `view` then renders
     /// only the title bar and the window is resized to
@@ -308,10 +310,11 @@ fn mutate_state(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> 
 }
 
 /// Runs `action` with the resolved window id, or returns no task when it has
-/// not resolved yet. The title bar's drag, minimize, and close arms all guard
-/// on `WinampPlayer::window_id` the same way — a `None` (before boot's
+/// not resolved yet. The title bar's window actions — drag, minimize, close,
+/// the shade size query and resize, and the always-on-top level — all guard on
+/// `WinampPlayer::window_id` the same way: a `None` (before boot's
 /// `iced::window::latest()` query resolves, or if it fails) makes the action a
-/// no-op — so the guard lives here once and each arm only names the
+/// no-op. The guard lives here once, so each arm names only the
 /// `iced::window` call it schedules.
 fn with_window_id(
     player: &WinampPlayer,
@@ -542,9 +545,10 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             player.window_id = id;
             Task::none()
         }
-        // The custom title bar's three window actions all act on the resolved
-        // window id and are no-ops until it exists; `with_window_id` holds that
-        // guard, so each arm names only the `iced::window` call it schedules.
+        // The custom title bar's window actions — drag, minimize, close, shade,
+        // and always-on-top — all act on the resolved window id and are no-ops
+        // until it exists; `with_window_id` holds that guard, so each arm names
+        // only the `iced::window` call it schedules.
         Message::WindowDragged => with_window_id(player, iced::window::drag),
         Message::MinimizeWindow => with_window_id(player, |id| iced::window::minimize(id, true)),
         Message::CloseWindow => with_window_id(player, iced::window::close),
