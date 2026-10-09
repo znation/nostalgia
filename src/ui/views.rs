@@ -918,6 +918,18 @@ mod tests {
         assert_eq!(format_track_time(45_000), "0:45");
     }
 
+    // The doc comment promises a track past an hour keeps counting minutes
+    // (`60:00`, `61:05`) rather than rolling into an `h:mm:ss` hours field,
+    // and the tests above stop at 3:30. Pin the boundary: an exact hour is
+    // `60:00` (not `0:00`, and not `1:00:00`) and an hour plus a remainder
+    // keeps the same `m:ss` shape, so a regression that special-cased hours or
+    // reset the minute counter at 60 fails here.
+    #[test]
+    fn format_track_time_keeps_counting_minutes_past_an_hour() {
+        assert_eq!(format_track_time(3_600_000), "60:00");
+        assert_eq!(format_track_time(3_665_000), "61:05");
+    }
+
     // The bar is rebuilt on every frame, and `now_playing_label` documents
     // that the common cases borrow — the title straight out of the id→title
     // index, or the static "Nothing" literal — so only the rare unknown-id
