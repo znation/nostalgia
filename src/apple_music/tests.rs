@@ -452,6 +452,57 @@ async fn get_songs_from_album_returns_single_song_albums_song() {
     assert_ids(&songs, |song| song.id.as_str(), &["song-4"]);
 }
 
+// The library search is the UI search box's backend: it answers with the
+// sample songs whose title or artist contains the query, case-insensitively,
+// so a user can find a track by either field without matching the exact case.
+#[tokio::test]
+async fn search_songs_matches_the_sample_library_by_title_or_artist() {
+    let service = test_service();
+
+    // A title-only match, case-insensitively, with surrounding whitespace
+    // trimmed off the query.
+    let by_title = service.search_songs("  OPENING  ").await.unwrap();
+    assert_ids(&by_title, |song| song.id.as_str(), &["song-1"]);
+
+    // An artist-only match: "song-5" is the only Echo Chamber track.
+    let by_artist = service.search_songs("echo").await.unwrap();
+    assert_ids(&by_artist, |song| song.id.as_str(), &["song-5"]);
+
+    // A match spanning two albums of one artist comes back in library order,
+    // not the `songs_by_album` map's unspecified iteration order.
+    let band = service.search_songs("sample band").await.unwrap();
+    assert_ids(
+        &band,
+        |song| song.id.as_str(),
+        &["song-1", "song-2", "song-3", "song-4"],
+    );
+
+    // A query matching nothing is an empty list, not an error.
+    let none = service.search_songs("no such track").await.unwrap();
+    assert!(none.is_empty());
+}
+
+// A blank search has nothing to match; returning the whole library (or an
+// empty list) would report the caller's empty input as an ordinary result.
+// The error names the offending query, whitespace included.
+#[tokio::test]
+async fn search_songs_rejects_a_blank_query() {
+    let service = test_service();
+
+    for query in ["", "   "] {
+        let error = service.search_songs(query).await.unwrap_err();
+        let message = error.to_string();
+        assert!(
+            message.contains("search query must not be blank"),
+            "unexpected message: {message}"
+        );
+        assert!(
+            message.contains(&format!("{query:?}")),
+            "the error must name the query: {message}"
+        );
+    }
+}
+
 #[tokio::test]
 async fn play_track_sets_current_track_and_starts_playing() {
     let (service, state) = test_service_with_state();

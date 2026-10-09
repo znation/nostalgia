@@ -678,6 +678,94 @@ fn back_from_artists_is_a_noop() {
     assert_view(&player, CurrentView::Artists);
 }
 
+// The library search box's text is stored on every keystroke; submitting is
+// what turns it into a fetch. This pins the storing half.
+#[test]
+fn search_changed_stores_the_box_text() {
+    let (mut player, _state) = test_player();
+
+    let _ = update(&mut player, Message::SearchChanged("echo".to_string()));
+
+    assert_eq!(player.search_query, "echo");
+    assert!(!player.search_active);
+}
+
+// Submitting a query replaces the songs buffer with the library matches and
+// shows them under the Songs view — the same buffer the browse hierarchy
+// uses, so the playing-row marker and the empty/failure wording keep working.
+#[tokio::test]
+async fn search_submitted_replaces_the_songs_list_with_the_matches() {
+    let (mut player, _state) = test_player();
+    // Seed a browsed album's songs so the search visibly replaces them.
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+
+    let task = update(&mut player, Message::SearchSubmitted("echo".to_string()));
+    drive_fetch_and_assert_loaded(
+        &mut player,
+        task,
+        "search the library",
+        |player| &mut player.songs.items,
+        |song| song.id.as_str(),
+        &["song-5"],
+    )
+    .await;
+
+    assert_view(&player, CurrentView::Songs);
+    assert!(player.search_active);
+    assert_eq!(player.search_query, "echo");
+}
+
+// A blank submit has nothing to search; it must not clear the current list,
+// flip the view, or mark a search active. The error report `search_songs`
+// would produce for the blank query is skipped too.
+#[test]
+fn search_submitted_with_a_blank_query_is_a_no_op() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    player.current_view = CurrentView::Songs;
+
+    assert_message_schedules_no_work(&mut player, Message::SearchSubmitted("   ".to_string()));
+
+    assert_view(&player, CurrentView::Songs);
+    assert!(!player.search_active);
+    assert_eq!(player.songs.items.len(), 3);
+}
+
+// A search's result list hangs off the artists list, not the album it was
+// issued from, so Back leaves the search straight for Artists rather than
+// opening the album list the search replaced.
+#[test]
+fn back_leaves_an_active_search_for_the_artists_list() {
+    let (mut player, _state) = test_player();
+    player.search_active = true;
+    player.current_view = CurrentView::Songs;
+
+    let _ = update(&mut player, Message::Back);
+
+    assert_view(&player, CurrentView::Artists);
+    assert!(!player.search_active);
+}
+
+// Entering a browse level leaves the search: ArtistSelected and AlbumSelected
+// both clear the active flag, so Back from the level they open behaves like an
+// ordinary browse again.
+#[test]
+fn entering_a_browse_level_clears_the_active_search() {
+    let (mut player, _state) = test_player();
+    player.artists.items = vec![sample_artist()];
+    player.search_active = true;
+
+    let _ = update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 });
+    assert!(!player.search_active);
+
+    let (mut player, _state) = test_player();
+    player.albums.items = vec![sample_album()];
+    player.search_active = true;
+
+    let _ = update(&mut player, Message::AlbumSelected { epoch: 0, index: 0 });
+    assert!(!player.search_active);
+}
+
 // The browse arms do two things — flip the view and fetch the next
 // level's list — and the view-flip tests above stop at the first half.
 // These pin the fetch half: `ArtistSelected` must load the selected

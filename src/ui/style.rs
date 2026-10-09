@@ -9,7 +9,7 @@
 
 use iced::{
     Background, Border, Color, Shadow, Vector,
-    widget::{button, container, overlay::menu, pick_list, scrollable, slider},
+    widget::{button, container, overlay::menu, pick_list, scrollable, slider, text_input},
 };
 
 use super::bevel::bevel_edges;
@@ -100,6 +100,32 @@ pub fn chrome_button_style(status: button::Status) -> button::Style {
         border: square_border(top_left),
         shadow: square_shadow(bottom_right),
         ..button::Style::default()
+    }
+}
+
+/// The chrome style for the library search box.
+///
+/// The raised face, light [`theme::TEXT`] value, and light top-left bevel edge
+/// mirror [`chrome_button_style`]: resting and hovered stay raised, while focus
+/// sinks the face to [`theme::BUTTON_FACE_PRESSED`] and reverses the edge to
+/// [`theme::PANEL_EDGE_DARK`], the same press the buttons use. iced's
+/// [`text_input::Style`] carries a single border colour and no shadow, so the
+/// bevel's bottom-right dark half is not drawn. The placeholder uses the
+/// lighter [`theme::PANEL_EDGE_LIGHT`] so an empty box reads as empty, and the
+/// selection uses the title-bar [`theme::TITLE_BLUE`]. Pure, so the colour rule
+/// is testable without building a widget.
+pub fn chrome_text_input_style(status: text_input::Status) -> text_input::Style {
+    let focused = matches!(status, text_input::Status::Focused { .. });
+    let (top_left, _) = bevel_edges(!focused);
+    let face = chrome_face(matches!(status, text_input::Status::Hovered), focused);
+
+    text_input::Style {
+        background: Background::Color(face),
+        border: square_border(top_left),
+        icon: theme::TEXT,
+        placeholder: theme::PANEL_EDGE_LIGHT,
+        value: theme::TEXT,
+        selection: theme::TITLE_BLUE,
     }
 }
 
@@ -300,6 +326,34 @@ mod tests {
         assert_eq!(style.shadow.color, theme::PANEL_EDGE_DARK);
         assert_eq!(style.shadow.offset, Vector::new(1.0, 1.0));
         assert_eq!(style.shadow.blur_radius, 0.0);
+    }
+
+    #[test]
+    fn chrome_text_input_style_active_is_raised_chrome() {
+        let style = chrome_text_input_style(text_input::Status::Active);
+        assert_eq!(style.background, Background::Color(theme::BUTTON_FACE));
+        assert_eq!(style.value, theme::TEXT);
+        assert_eq!(style.placeholder, theme::PANEL_EDGE_LIGHT);
+        assert_eq!(style.selection, theme::TITLE_BLUE);
+        assert_eq!(style.border.color, theme::PANEL_EDGE_LIGHT);
+        assert_eq!(style.border.width, 1.0);
+        assert_eq!(style.border.radius, 0.0.into());
+    }
+
+    #[test]
+    fn chrome_text_input_style_focus_sinks_the_face_and_reverses_the_edge() {
+        let active = chrome_text_input_style(text_input::Status::Active);
+        let focused = chrome_text_input_style(text_input::Status::Focused { is_hovered: false });
+        assert_eq!(
+            focused.background,
+            Background::Color(theme::BUTTON_FACE_PRESSED)
+        );
+        assert_eq!(focused.border.color, theme::PANEL_EDGE_DARK);
+        assert_eq!(focused.value, theme::TEXT);
+        // Focus changes the face and edge colours, not the 1px square
+        // geometry.
+        assert_eq!(focused.border.width, active.border.width);
+        assert_eq!(focused.border.radius, active.border.radius);
     }
 
     #[test]

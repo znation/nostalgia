@@ -100,6 +100,11 @@ enum Message {
     ArtistSelected { epoch: u64, index: usize },
     AlbumSelected { epoch: u64, index: usize },
     Back,
+    // The library search box: `SearchChanged` carries each keystroke into
+    // `search_query`; `SearchSubmitted` carries the box's text when Enter is
+    // pressed and replaces the songs list with the search results.
+    SearchChanged(String),
+    SearchSubmitted(String),
     LoadArtists,
     ArtistsLoaded(Vec<Artist>),
     AlbumsLoaded(Vec<Album>),
@@ -184,6 +189,15 @@ struct WinampPlayer {
     artists: BrowseList<Artist>,
     albums: BrowseList<Album>,
     songs: BrowseList<Song>,
+    /// The library search box's text, as typed. `Message::SearchChanged`
+    /// stores each keystroke here and the search box renders it back; a submit
+    /// trims it into the fetch's query.
+    search_query: String,
+    /// Whether the Songs view is showing the results of a library search
+    /// rather than a browsed album. `Message::SearchSubmitted` sets it, and a
+    /// browse step or `Back` clears it, so Back leaves the search for the
+    /// artists list instead of the album the search was issued from.
+    search_active: bool,
     /// Each played song's id mapped to its [`views::KnownTrack`] (title,
     /// artist, and duration), so the Now Playing bar can still name and time
     /// the playing track after the user browses to a different album (whose
@@ -242,6 +256,8 @@ impl WinampPlayer {
             artists: BrowseList::new(true),
             albums: BrowseList::new(false),
             songs: BrowseList::new(false),
+            search_query: String::new(),
+            search_active: false,
             known_tracks: HashMap::new(),
             plays_generation: Arc::new(AtomicU64::new(0)),
         }
@@ -538,6 +554,10 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 return Task::none();
             };
             player.current_view = CurrentView::Albums;
+            // Entering a browse level leaves any active search: the songs list
+            // the search filled is about to be replaced, so Back must not
+            // treat it as a searched list any more.
+            player.search_active = false;
             // Drop the previous artist's albums before the new fetch lands:
             // otherwise the Albums view renders them, and a press during the
             // fetch resolves against the wrong artist's list.
@@ -564,6 +584,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 return Task::none();
             };
             player.current_view = CurrentView::Songs;
+            player.search_active = false;
             // The songs twin of the artist arm above: clear the previous
             // album's songs so they cannot be shown or pressed while the new
             // album's fetch is in flight.
@@ -585,12 +606,51 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         // this arm mostly fires where a level exists to leave; the explicit
         // top-level arm keeps the no-op in the same place as the steps.
         Message::Back => {
-            player.current_view = match &player.current_view {
-                CurrentView::Songs => CurrentView::Albums,
-                CurrentView::Albums => CurrentView::Artists,
-                CurrentView::Artists => CurrentView::Artists,
-            };
+            // A search result list sits under the artists list, not under the
+            // album it was issued from: leaving it returns straight to
+            // Artists, and the album list it would otherwise open is empty or
+            // stale. A normal browse steps up one level.
+            if player.search_active {
+                player.search_active = false;
+                player.current_view = CurrentView::Artists;
+            } else {
+                player.current_view = match &player.current_view {
+                    CurrentView::Songs => CurrentView::Albums,
+                    CurrentView::Albums => CurrentView::Artists,
+                    CurrentView::Artists => CurrentView::Artists,
+                };
+            }
             Task::none()
+        }
+        Message::SearchChanged(text) => {
+            player.search_query = text;
+            Task::none()
+        }
+        Message::SearchSubmitted(query) => {
+            // A blank query has nothing to match: `search_songs` rejects it,
+            // and issuing the fetch would only turn the empty box into an
+            // error report. Leave the current list and view alone.
+            let query = query.trim().to_string();
+            if query.is_empty() {
+                return Task::none();
+            }
+            player.search_query = query.clone();
+            player.search_active = true;
+            player.current_view = CurrentView::Songs;
+            // The search results reuse the songs buffer, so the album's rows
+            // are dropped and a press during the fetch cannot resolve against
+            // them (the same clear-before-fetch the navigation arms do).
+            player.songs.clear();
+            let generation = player.songs.begin_fetch();
+            fetch_into(
+                &player.apple_music_service,
+                format!("searching the library for {query:?}"),
+                generation,
+                FETCH_TIMEOUT,
+                move |service| async move { service.search_songs(&query).await },
+                Message::SongsLoaded,
+                Message::SongsLoadFailed,
+            )
         }
         Message::LoadArtists => {
             // `boot` schedules this for the initial load, and again once the
@@ -852,6 +912,9 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     if views::can_retry_artists(&player.current_view, player.artists.error.as_deref()) {
         column = column.push(views::view_retry_button());
     }
+    // The search box sits on every browse screen, so a query can be typed
+    // from any level of the hierarchy.
+    column = column.push(views::view_search_box(&player.search_query));
     column.push(main_content).into()
 }
 

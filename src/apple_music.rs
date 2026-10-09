@@ -577,6 +577,30 @@ impl AppleMusicService {
         .await
     }
 
+    /// Songs in the library matching `query`: every song whose title or artist
+    /// contains `query` case-insensitively, in library order.
+    ///
+    /// A blank `query` — empty or only whitespace — is rejected with an
+    /// [`AppleMusicError`] instead of answered with the whole library: a blank
+    /// search has nothing to match, and returning every song would report the
+    /// caller's empty input as an ordinary "everything matches" result. The
+    /// query guard is the browse queries' id guard's twin (see
+    /// [`ensure_id_is_valid`]).
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when `query` is blank (empty or only
+    /// whitespace).
+    pub async fn search_songs(&self, query: &str) -> Result<Vec<Song>, AppleMusicError> {
+        let trimmed = query.trim();
+        if trimmed.is_empty() {
+            return Err(AppleMusicError::new(format!(
+                "search query must not be blank (got {query:?})"
+            )));
+        }
+        Ok(sample_songs_matching(trimmed))
+    }
+
     /// Answers a browse query from the signed-in REST library when a session
     /// is stored, and from `sample` otherwise.
     ///
@@ -822,6 +846,40 @@ fn play_log_line(track_id: &str) -> String {
 /// default chain lives here once instead of in each query method.
 fn lookup<T: Clone>(index: &HashMap<String, Vec<T>>, id: &str) -> Vec<T> {
     index.get(id).cloned().unwrap_or_default()
+}
+
+/// Every sample-library song whose title or artist contains `query`
+/// case-insensitively, in library order.
+///
+/// The library indexes songs by album in a `HashMap`, whose iteration order is
+/// unspecified, so walking it directly would shuffle a query's matches between
+/// calls; walking the ordered `artists` → `albums_by_artist` → `songs_by_album`
+/// chain keeps the results stable and in the same order the Songs view shows a
+/// browsed album. Pure, so the filter is testable without a service.
+fn sample_songs_matching(query: &str) -> Vec<Song> {
+    let needle = query.to_lowercase();
+    let library = sample_library();
+    let mut matches = Vec::new();
+    for artist in &library.artists {
+        let Some(albums) = library.albums_by_artist.get(&artist.id) else {
+            continue;
+        };
+        for album in albums {
+            let Some(songs) = library.songs_by_album.get(&album.id) else {
+                continue;
+            };
+            matches.extend(
+                songs
+                    .iter()
+                    .filter(|song| {
+                        song.title.to_lowercase().contains(&needle)
+                            || song.artist.to_lowercase().contains(&needle)
+                    })
+                    .cloned(),
+            );
+        }
+    }
+    matches
 }
 
 /// Runs `work` on a `std::thread` and awaits its result, so a blocking HTTP

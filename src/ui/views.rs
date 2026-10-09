@@ -14,7 +14,7 @@ use iced::{
     Background, Element, Length,
     widget::{
         Button, Column, Container, MouseArea, PickList, Row, Scrollable, Slider, Space, Text,
-        VerticalSlider, button,
+        TextInput, VerticalSlider, button,
     },
 };
 
@@ -354,6 +354,20 @@ pub fn view_back_button() -> Element<'static, Message> {
 /// fetch — no navigation re-issues it — into a retry.
 pub fn view_retry_button() -> Element<'static, Message> {
     labeled_button("Retry", Message::LoadArtists).into()
+}
+
+/// The library search box shown above the browse list: an iced text input with
+/// the `Search library` placeholder. Typing emits [`Message::SearchChanged`]
+/// so the player stores the box's text; pressing Enter emits
+/// [`Message::SearchSubmitted`] with that text, which the update loop turns
+/// into a library search. Rendered on every browse screen, so a search can be
+/// started from any level of the hierarchy.
+pub fn view_search_box(query: &str) -> Element<'_, Message> {
+    TextInput::new("Search library", query)
+        .on_input(Message::SearchChanged)
+        .on_submit(Message::SearchSubmitted(query.to_string()))
+        .style(|_theme, status| style::chrome_text_input_style(status))
+        .into()
 }
 
 /// The custom title bar's app name.
@@ -793,8 +807,8 @@ mod tests {
         can_go_back, can_retry_artists, current_row_style, empty_list_label, eq_enabled_label,
         format_track_time, now_playing_artist, now_playing_label, play_pause_label, repeat_label,
         shuffle_label, song_row, style, theme, transport_buttons, view_albums, view_artists,
-        view_back_button, view_equalizer, view_now_playing, view_retry_button, view_songs,
-        view_transport_controls,
+        view_back_button, view_equalizer, view_now_playing, view_retry_button, view_search_box,
+        view_songs, view_transport_controls,
     };
     use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, clamp_gain};
     use crate::library::{Album, Artist, Song};
@@ -1222,6 +1236,16 @@ mod tests {
         let _bar = view_now_playing("Opening".into(), "".into(), "3:30".to_string());
         let _back = view_back_button();
         let _retry = view_retry_button();
+    }
+
+    // The search box is an iced `TextInput`, whose placeholder and callbacks
+    // are opaque once built; like the other view-construction tests, this pins
+    // that the builder accepts a borrowed query — empty or filled — and
+    // returns an element without panicking.
+    #[test]
+    fn view_search_box_constructs() {
+        let _empty = view_search_box("");
+        let _filled = view_search_box("Opening");
     }
 
     // The transport row is rebuilt every frame, and the Play/Pause, Repeat,
