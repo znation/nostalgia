@@ -1474,6 +1474,43 @@ async fn off_thread_reports_an_error_when_its_work_thread_panics() {
     );
 }
 
+// The REST worker runs on a named thread (like the audio worker), so a panic
+// there is attributed to `nostalgia-rest` rather than `<unnamed>`. Pin the
+// name: a regression back to a bare `std::thread::spawn` would leave the panic
+// test above green (it checks only the error) while the log lost the
+// attribution.
+#[tokio::test]
+async fn off_thread_names_its_work_thread() {
+    let name =
+        off_thread(|| Ok::<_, AppleMusicError>(std::thread::current().name().map(str::to_string)))
+            .await
+            .unwrap();
+
+    assert_eq!(name.as_deref(), Some(REST_THREAD_NAME));
+}
+
+// `std::thread::spawn` panics when the OS refuses a thread, which would abort
+// the player on a browse query. `off_thread` spawns through the fallible
+// `Builder::spawn` and reports the refusal through the seam instead; this test
+// injects a failing spawner to drive that branch without exhausting the OS.
+#[tokio::test]
+async fn off_thread_reports_a_thread_spawn_failure_as_a_seam_error() {
+    let result = off_thread_with(
+        || Ok::<_, AppleMusicError>(()),
+        |_work| {
+            Err(AppleMusicError::new(
+                "spawning the library request thread failed: no more threads",
+            ))
+        },
+    )
+    .await;
+
+    assert_eq!(
+        result.unwrap_err().to_string(),
+        "spawning the library request thread failed: no more threads"
+    );
+}
+
 // `ip_is_internal` is the shared SSRF guard: `preview_url_problem` applies it
 // to an address literal a preview URL spells, and `audio::PublicAddressResolver`
 // applies it to every address a preview hostname resolves to. The URL-level

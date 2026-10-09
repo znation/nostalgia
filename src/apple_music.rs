@@ -895,6 +895,13 @@ fn sample_songs_matching(query: &str) -> Vec<Song> {
     matches
 }
 
+/// The name [`off_thread`] gives the thread it runs blocking library work on.
+///
+/// Naming the thread (like the audio worker's `nostalgia-audio`) means a panic
+/// there is attributed to `nostalgia-rest` in its message rather than to
+/// `<unnamed>`, so a crashed request is traceable to this seam.
+const REST_THREAD_NAME: &str = "nostalgia-rest";
+
 /// Runs `work` on a `std::thread` and awaits its result, so a blocking HTTP
 /// call never stalls iced's executor.
 ///
@@ -903,14 +910,43 @@ fn sample_songs_matching(query: &str) -> Vec<Song> {
 /// `tokio::task::spawn_blocking`, so the work moves to an ordinary thread and
 /// reports back through a `tokio::sync::oneshot`. A sender dropped without a
 /// value — the thread panicked — becomes an [`AppleMusicError`] rather than
-/// hanging the await.
+/// hanging the await. The thread is named [`REST_THREAD_NAME`], and a
+/// thread-creation failure is reported as an [`AppleMusicError`] naming the
+/// cause instead of letting `std::thread::spawn`'s panic abort the player.
 async fn off_thread<T: Send + 'static>(
     work: impl FnOnce() -> Result<T, AppleMusicError> + Send + 'static,
 ) -> Result<T, AppleMusicError> {
+    off_thread_with(work, spawn_rest_thread).await
+}
+
+/// Spawns `work` on the named REST thread, mapping a thread-creation failure
+/// to an [`AppleMusicError`] naming the cause. `std::thread::Builder::spawn` is
+/// the fallible form `std::thread::spawn` wraps with a panic; the audio
+/// worker's device thread uses the same form for the same reason.
+fn spawn_rest_thread(work: Box<dyn FnOnce() + Send>) -> Result<(), AppleMusicError> {
+    std::thread::Builder::new()
+        .name(REST_THREAD_NAME.to_string())
+        .spawn(work)
+        .map(|_handle| ())
+        .map_err(|error| {
+            AppleMusicError::new(format!(
+                "spawning the library request thread failed: {error}"
+            ))
+        })
+}
+
+/// [`off_thread`] with an injectable spawner, so a test can drive the
+/// thread-creation-failure branch without making the OS refuse a thread. The
+/// work is boxed because the seam carries a `FnOnce` value rather than a
+/// generic type the caller and the test stub would have to share.
+async fn off_thread_with<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T, AppleMusicError> + Send + 'static,
+    spawn: impl FnOnce(Box<dyn FnOnce() + Send>) -> Result<(), AppleMusicError>,
+) -> Result<T, AppleMusicError> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
-    std::thread::spawn(move || {
+    spawn(Box::new(move || {
         let _ = sender.send(work());
-    });
+    }))?;
     receiver
         .await
         .map_err(|_| AppleMusicError::new("the library request thread ended without a result"))?
