@@ -73,10 +73,13 @@ pub(crate) fn single_song_album() -> Vec<Song> {
 /// album-2's "song-4" / "B-side".
 /// `songs_loaded_replaces_the_previous_albums_songs` and
 /// `now_playing_label_keeps_the_track_name_after_browsing_to_another_album`
-/// both built this same list inline to stand in for the album browsed to — a
-/// retitle or id change in one copy would silently diverge from the other — so
-/// it lives here once, next to [`single_song_album`], and is compiled only for
-/// tests.
+/// first built this same list inline, and it now also backs
+/// `album_selected_clears_the_previous_albums_songs`,
+/// `selection_messages_with_a_stale_epoch_or_index_do_nothing`,
+/// `track_selected_stale_press_leaves_known_tracks_untouched`, and the three
+/// bar tests through `play_song_1_then_browse_to_album_2` — a retitle or id
+/// change in one copy would silently diverge from the others — so it lives
+/// here once, next to [`single_song_album`], and is compiled only for tests.
 pub(crate) fn second_album_songs() -> Vec<Song> {
     vec![Song {
         id: "song-4".to_string(),
