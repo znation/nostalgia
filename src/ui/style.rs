@@ -251,6 +251,18 @@ pub fn playlist_scrollable_style() -> scrollable::Style {
 mod tests {
     use super::*;
 
+    /// Asserts `status`'s chrome bevel keeps `active`'s 1px square geometry.
+    ///
+    /// Interaction statuses change the face and edge colours; they must not
+    /// change the bevel's shape. The three non-resting button-status tests
+    /// each pin that, so the geometry contract lives here once.
+    fn assert_same_edge_geometry(active: &button::Style, status: &button::Style) {
+        assert_eq!(status.border.width, active.border.width);
+        assert_eq!(status.border.radius, active.border.radius);
+        assert_eq!(status.shadow.offset, active.shadow.offset);
+        assert_eq!(status.shadow.blur_radius, active.shadow.blur_radius);
+    }
+
     #[test]
     fn chrome_face_is_the_rest_hover_press_ladder() {
         assert_eq!(chrome_face(false, false), theme::BUTTON_FACE);
@@ -298,10 +310,7 @@ mod tests {
         // geometry too, or a change that made (say) a hovered button's border
         // thicker or its shadow offset would clear every other test while the
         // chrome distorted under the cursor.
-        assert_eq!(hovered.border.width, active.border.width);
-        assert_eq!(hovered.border.radius, active.border.radius);
-        assert_eq!(hovered.shadow.offset, active.shadow.offset);
-        assert_eq!(hovered.shadow.blur_radius, active.shadow.blur_radius);
+        assert_same_edge_geometry(&active, &hovered);
     }
 
     #[test]
@@ -320,10 +329,7 @@ mod tests {
         // the two edge colours and the face, but the 1px geometry stays. Assert
         // it, or a status-dependent border width, radius, or shadow offset
         // could pass every test while the pressed bevel changed shape.
-        assert_eq!(pressed.border.width, active.border.width);
-        assert_eq!(pressed.border.radius, active.border.radius);
-        assert_eq!(pressed.shadow.offset, active.shadow.offset);
-        assert_eq!(pressed.shadow.blur_radius, active.shadow.blur_radius);
+        assert_same_edge_geometry(&active, &pressed);
     }
 
     #[test]
@@ -403,10 +409,7 @@ mod tests {
         // geometry all stay. Assert the geometry too, or a status-dependent
         // width, radius, or shadow offset could pass every other test while the
         // disabled bevel changed shape.
-        assert_eq!(disabled.border.width, active.border.width);
-        assert_eq!(disabled.border.radius, active.border.radius);
-        assert_eq!(disabled.shadow.offset, active.shadow.offset);
-        assert_eq!(disabled.shadow.blur_radius, active.shadow.blur_radius);
+        assert_same_edge_geometry(&active, &disabled);
     }
 
     #[test]
