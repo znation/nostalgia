@@ -435,10 +435,10 @@ pub fn view_title_bar(always_on_top: bool) -> Element<'static, Message> {
     )
 }
 
-/// A track the Now Playing bar knows about: the title it renders and the
-/// length it shows beside the title. Recorded once when a track is played, so
-/// the bar keeps naming and timing the playing track after the user browses to
-/// a different album.
+/// A track the Now Playing bar knows about: the title and artist it renders
+/// and the length it shows beside them. Recorded once when a track is played,
+/// so the bar keeps naming and timing the playing track after the user browses
+/// to a different album.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnownTrack {
     /// The track's display title.
