@@ -103,6 +103,19 @@ async fn recording_service_with_preview() -> RecordingService {
     (service, state, recording)
 }
 
+/// Asserts `calls` recorded the two `AudioCall`s that starting a preview
+/// always emits — the play-time volume set, then `PREVIEW_URL` — followed by
+/// `expected`, the transport transition under test. Both
+/// `service_with_preview_playing` and a direct `play_track` leave that prefix.
+fn assert_preview_calls(calls: &[AudioCall], expected: &[AudioCall]) {
+    let mut wanted = vec![
+        AudioCall::SetVolume(0.5),
+        AudioCall::Play(PREVIEW_URL.to_string()),
+    ];
+    wanted.extend_from_slice(expected);
+    assert_eq!(calls, wanted);
+}
+
 /// A recording backend whose `pause` blocks until released, so a test can hold
 /// one transport transition inside the backend and prove a second one waits on
 /// the service's transport lock rather than entering the backend alongside it.
@@ -602,13 +615,7 @@ async fn play_track_starts_the_preview_through_the_audio_backend() {
         .await
         .unwrap();
 
-    assert_eq!(
-        recording.calls(),
-        vec![
-            AudioCall::SetVolume(0.5),
-            AudioCall::Play(PREVIEW_URL.to_string())
-        ]
-    );
+    assert_preview_calls(&recording.calls(), &[]);
     assert_playback_state(&state, Some("song-1"), true).await;
 }
 
@@ -976,15 +983,7 @@ async fn resume_resumes_the_audio_backend() {
     service.pause().await.unwrap();
     service.resume().await.unwrap();
 
-    assert_eq!(
-        recording.calls(),
-        vec![
-            AudioCall::SetVolume(0.5),
-            AudioCall::Play(PREVIEW_URL.to_string()),
-            AudioCall::Pause,
-            AudioCall::Resume
-        ]
-    );
+    assert_preview_calls(&recording.calls(), &[AudioCall::Pause, AudioCall::Resume]);
     assert_playback_state(&state, Some("song-1"), true).await;
 }
 
@@ -996,14 +995,7 @@ async fn stop_stops_the_audio_backend() {
 
     service.stop().await.unwrap();
 
-    assert_eq!(
-        recording.calls(),
-        vec![
-            AudioCall::SetVolume(0.5),
-            AudioCall::Play(PREVIEW_URL.to_string()),
-            AudioCall::Stop
-        ]
-    );
+    assert_preview_calls(&recording.calls(), &[AudioCall::Stop]);
     assert_playback_state(&state, Some("song-1"), false).await;
 }
 
@@ -1060,14 +1052,7 @@ async fn toggle_play_pause_pauses_while_playing() {
 
     service.toggle_play_pause().await.unwrap();
 
-    assert_eq!(
-        recording.calls(),
-        vec![
-            AudioCall::SetVolume(0.5),
-            AudioCall::Play(PREVIEW_URL.to_string()),
-            AudioCall::Pause
-        ]
-    );
+    assert_preview_calls(&recording.calls(), &[AudioCall::Pause]);
     assert_playback_state(&state, Some("song-1"), false).await;
 }
 
@@ -1079,15 +1064,7 @@ async fn toggle_play_pause_resumes_while_paused() {
     service.pause().await.unwrap();
     service.toggle_play_pause().await.unwrap();
 
-    assert_eq!(
-        recording.calls(),
-        vec![
-            AudioCall::SetVolume(0.5),
-            AudioCall::Play(PREVIEW_URL.to_string()),
-            AudioCall::Pause,
-            AudioCall::Resume
-        ]
-    );
+    assert_preview_calls(&recording.calls(), &[AudioCall::Pause, AudioCall::Resume]);
     assert_playback_state(&state, Some("song-1"), true).await;
 }
 
@@ -1103,14 +1080,9 @@ async fn resume_after_stop_restarts_the_preview() {
     service.stop().await.unwrap();
     service.resume().await.unwrap();
 
-    assert_eq!(
-        recording.calls(),
-        vec![
-            AudioCall::SetVolume(0.5),
-            AudioCall::Play(PREVIEW_URL.to_string()),
-            AudioCall::Stop,
-            AudioCall::Play(PREVIEW_URL.to_string())
-        ]
+    assert_preview_calls(
+        &recording.calls(),
+        &[AudioCall::Stop, AudioCall::Play(PREVIEW_URL.to_string())],
     );
     assert_playback_state(&state, Some("song-1"), true).await;
 }
@@ -1174,15 +1146,7 @@ fn concurrent_toggles_serialize_on_the_transport_lock() {
     first.join().unwrap();
     second.join().unwrap();
 
-    assert_eq!(
-        audio.calls(),
-        vec![
-            AudioCall::SetVolume(0.5),
-            AudioCall::Play(PREVIEW_URL.to_string()),
-            AudioCall::Pause,
-            AudioCall::Resume
-        ]
-    );
+    assert_preview_calls(&audio.calls(), &[AudioCall::Pause, AudioCall::Resume]);
     assert!(futures::executor::block_on(state.lock()).is_playing);
 }
 
