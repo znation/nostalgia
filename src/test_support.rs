@@ -319,9 +319,9 @@ pub(crate) enum AudioCall {
     Stop,
 }
 
-/// A recording [`AudioOutput`] so a test observes the commands the service
-/// issues without touching an audio device. The `apple_music` and `ui` suites
-/// both drive the service's playback seam, so the fake lives here once.
+/// A recording [`AudioOutput`] so a test observes the commands issued to the
+/// backend without touching an audio device. The `apple_music`, `ui`, and
+/// `audio` suites all need one, so the fake lives here once.
 #[derive(Debug, Default)]
 pub(crate) struct RecordingAudio {
     calls: Mutex<Vec<AudioCall>>,

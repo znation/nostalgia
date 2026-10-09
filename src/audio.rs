@@ -256,30 +256,7 @@ pub(crate) fn audio_with_fallback(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// A recording [`AudioOutput`] so a test can observe which commands
-    /// reached the backend without an audio device.
-    #[derive(Debug, Default)]
-    struct RecordingOutput {
-        calls: Mutex<Vec<String>>,
-    }
-
-    impl AudioOutput for RecordingOutput {
-        fn play(&self, url: &str) -> Result<(), AppleMusicError> {
-            self.calls.lock().unwrap().push(format!("play:{url}"));
-            Ok(())
-        }
-
-        fn pause(&self) -> Result<(), AppleMusicError> {
-            self.calls.lock().unwrap().push("pause".to_string());
-            Ok(())
-        }
-
-        fn stop(&self) -> Result<(), AppleMusicError> {
-            self.calls.lock().unwrap().push("stop".to_string());
-            Ok(())
-        }
-    }
+    use crate::test_support::{AudioCall, RecordingAudio};
 
     #[test]
     fn silent_output_reports_success_for_every_command() {
@@ -291,15 +268,18 @@ mod tests {
 
     #[test]
     fn audio_with_fallback_returns_the_opened_output() {
-        let recording = Arc::new(RecordingOutput::default());
+        let recording = Arc::new(RecordingAudio::default());
         let opened = Arc::clone(&recording) as Arc<dyn AudioOutput>;
 
         let output = audio_with_fallback(|| Ok(opened));
         output.play("https://example.test/preview.m4a").unwrap();
 
-        let calls = recording.calls.lock().unwrap();
-        assert_eq!(calls.len(), 1);
-        assert_eq!(calls[0], "play:https://example.test/preview.m4a");
+        assert_eq!(
+            recording.calls(),
+            vec![AudioCall::Play(
+                "https://example.test/preview.m4a".to_string()
+            )]
+        );
     }
 
     #[test]
