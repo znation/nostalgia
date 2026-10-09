@@ -2,8 +2,8 @@ use super::*;
 
 use crate::test_support::{
     PREVIEW_URL, StubTransport, assert_ids, assert_single_call, loopback_listener,
-    read_some_request, rest_session, sample_album, sample_artist, sample_song, serve_one_response,
-    serve_one_response_capturing_request,
+    record_first_request, rest_session, sample_album, sample_artist, sample_song,
+    serve_one_response, serve_one_response_capturing_request,
 };
 
 /// A [`RestLibrary`] over `stub`, plus the handle to inspect its calls.
@@ -639,25 +639,10 @@ fn a_redirect_is_not_followed_so_the_user_token_cannot_leak() {
         "HTTP/1.1 302 Found\r\nLocation: http://{foreign_addr}/leak\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
     ));
 
-    // The foreign server records whether any redirected request arrived. A
-    // one-second poll makes "no request" a bounded, observable result rather
-    // than a hang.
-    let foreign_thread = std::thread::spawn(move || {
-        foreign.set_nonblocking(true).unwrap();
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
-        loop {
-            match foreign.accept() {
-                Ok((mut stream, _)) => return Some(read_some_request(&mut stream)),
-                Err(ref error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                    if std::time::Instant::now() >= deadline {
-                        return None;
-                    }
-                    std::thread::sleep(std::time::Duration::from_millis(10));
-                }
-                Err(error) => panic!("foreign listener failed: {error}"),
-            }
-        }
-    });
+    // The foreign server records whether any redirected request arrived; the
+    // shared recorder polls for one second, so "no request" is a bounded,
+    // observable result rather than a hang.
+    let foreign_thread = record_first_request(foreign);
 
     let transport = UreqTransport::with_timeout(std::time::Duration::from_secs(2));
     let url = format!("http://{redirector_addr}/redirect");

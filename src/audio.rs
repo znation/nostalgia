@@ -569,7 +569,7 @@ mod tests {
     use crate::http::agent_with_timeout;
     use crate::test_support::{
         AudioCall, PREVIEW_URL, RecordingAudio, loopback_listener, read_some_request,
-        serve_one_response,
+        record_first_request, serve_one_response,
     };
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::time::Instant;
@@ -808,25 +808,10 @@ mod tests {
             "HTTP/1.1 302 Found\r\nLocation: http://{foreign_addr}/preview.m4a\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
         ));
 
-        // The foreign server records whether any redirected request arrived. A
-        // one-second poll makes "no request" a bounded, observable result
-        // rather than a hang.
-        let foreign_thread = std::thread::spawn(move || {
-            foreign.set_nonblocking(true).unwrap();
-            let deadline = Instant::now() + Duration::from_secs(1);
-            loop {
-                match foreign.accept() {
-                    Ok((mut stream, _)) => return Some(read_some_request(&mut stream)),
-                    Err(ref error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                        if Instant::now() >= deadline {
-                            return None;
-                        }
-                        std::thread::sleep(Duration::from_millis(10));
-                    }
-                    Err(error) => panic!("foreign listener failed: {error}"),
-                }
-            }
-        });
+        // The foreign server records whether any redirected request arrived;
+        // the shared recorder polls for one second, so "no request" is a
+        // bounded, observable result rather than a hang.
+        let foreign_thread = record_first_request(foreign);
 
         let agent = agent_with_timeout(Duration::from_secs(2));
         let url = format!("http://{redirector_addr}/preview.m4a");

@@ -14,7 +14,7 @@ use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::apple_music::AppleMusicError;
 use crate::apple_music::rest::HttpTransport;
@@ -472,6 +472,36 @@ pub(crate) fn read_some_request(stream: &mut TcpStream) -> String {
     let mut buffer = [0u8; 4096];
     let read = stream.read(&mut buffer).unwrap_or(0);
     String::from_utf8_lossy(&buffer[..read]).into_owned()
+}
+
+/// Spawns a thread that accepts the first request to `listener` and returns
+/// its text, giving up after one second so "no request arrived" is a bounded
+/// result rather than a hang. The listener is switched to nonblocking and
+/// polled; a `WouldBlock` before the deadline sleeps, and the deadline returns
+/// `None`.
+///
+/// The `apple_music::rest` and `audio` suites' redirect tests both stand up a
+/// "foreign" listener this way to prove a redirect was not followed: joining
+/// the handle and finding `None` means no request reached the redirect target.
+pub(crate) fn record_first_request(
+    listener: TcpListener,
+) -> std::thread::JoinHandle<Option<String>> {
+    listener.set_nonblocking(true).unwrap();
+    std::thread::spawn(move || {
+        let deadline = Instant::now() + Duration::from_secs(1);
+        loop {
+            match listener.accept() {
+                Ok((mut stream, _)) => return Some(read_some_request(&mut stream)),
+                Err(ref error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    if Instant::now() >= deadline {
+                        return None;
+                    }
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) => panic!("foreign listener failed: {error}"),
+            }
+        }
+    })
 }
 
 /// Serves exactly one HTTP response on a fresh loopback listener: binds,
