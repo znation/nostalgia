@@ -326,6 +326,34 @@ fn is_loopback_host_accepts_only_the_bound_loopback_address() {
     assert!(!is_loopback_host(None));
 }
 
+// The nonce is the only thing a local process must guess to fetch the page
+// that embeds the developer token: the loopback `Host` check passes for any
+// local client, so the page route refuses a request whose `state` is not this
+// flow's nonce. `random_nonce` is therefore a security boundary, and no flow
+// test pins it — they all read the nonce back out of the opener URL and
+// compare it to itself, so a constant (or otherwise trivially guessable)
+// nonce would clear the whole suite while exposing the token to any local
+// process. Pin that each call is a fresh 16-hex-digit value.
+#[test]
+fn random_nonce_is_a_fresh_sixteen_hex_digit_value() {
+    let first = random_nonce();
+    let second = random_nonce();
+
+    assert_eq!(
+        first.len(),
+        16,
+        "the nonce should be 16 hex digits, got {first:?}"
+    );
+    assert!(
+        first.chars().all(|character| character.is_ascii_hexdigit()),
+        "the nonce should be hex, got {first:?}"
+    );
+    assert_ne!(
+        first, second,
+        "each flow's nonce must be fresh, not a constant"
+    );
+}
+
 #[test]
 fn debug_redacts_both_tokens() {
     let session = MusicKitSession {
