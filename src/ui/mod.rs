@@ -110,6 +110,15 @@ enum Message {
     ArtistsLoadFailed(String),
     AlbumsLoadFailed(String),
     SongsLoadFailed(String),
+    // A browse reply stamped with the generation that produced it. The
+    // mapper's `RequestGeneration::is_current` check runs on iced's executor
+    // thread; `update` stores the reply later on the UI thread, and a
+    // navigation in that window bumps the list's generation. The arm re-checks
+    // the stamp against the target list before dispatching, so a reply a newer
+    // request superseded is dropped instead of overwriting the newer list (or
+    // its error). Only `loading::fetch_into` constructs this, and only with
+    // the `*Loaded`/`*LoadFailed` message above.
+    BrowseReply { issued: u64, reply: Box<Message> },
     // A browse reply that a newer request for the same list has superseded.
     // `fetch_into` emits this instead of the `*Loaded` message so the stale
     // reply never reaches `BrowseList::store`; the arm below is a no-op.
@@ -584,6 +593,31 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::SongsLoadFailed(report) => {
             player.songs.fail(report);
             Task::none()
+        }
+        // The executor-thread check in `fetch_into` already dropped replies a
+        // newer request had superseded when they were mapped. This re-checks
+        // the stamp on the UI thread, where the store happens, closing the
+        // window between that check and this arm: a navigation there issues a
+        // newer request, and the stale reply must not repopulate the list (or
+        // record its error) over it.
+        Message::BrowseReply { issued, reply } => {
+            let current = match reply.as_ref() {
+                Message::ArtistsLoaded(_) | Message::ArtistsLoadFailed(_) => {
+                    player.artists.is_current(issued)
+                }
+                Message::AlbumsLoaded(_) | Message::AlbumsLoadFailed(_) => {
+                    player.albums.is_current(issued)
+                }
+                Message::SongsLoaded(_) | Message::SongsLoadFailed(_) => {
+                    player.songs.is_current(issued)
+                }
+                _ => true,
+            };
+            if current {
+                update(player, *reply)
+            } else {
+                Task::none()
+            }
         }
         Message::TrackPlayed { generation } => {
             // Only the current track's entry is ever read (see

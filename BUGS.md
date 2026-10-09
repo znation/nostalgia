@@ -117,7 +117,9 @@ rules already say a Refused entry is skipped and a fully-blocked backlog is a
 legitimate nothing-to-do; the scheduler should apply the same rule before it
 defers other roles or queues bugfix.
 
-### A browse reply is stored after a newer request was issued, so a navigation shows the previous level's rows (found by robustness 2026-10-08)
+## Fixed
+
+### A browse reply is stored after a newer request was issued, so a navigation shows the previous level's rows (found by robustness 2026-10-08, fixed 2026-10-08)
 
 Symptom: `loading::fetch_into` checks `RequestGeneration::is_current()` inside
 the `Task::perform` completion closure, which iced runs on its executor thread,
@@ -151,12 +153,20 @@ How to reproduce:
 Suspected cause: the generation guard is evaluated at reply time on the
 executor thread, not at store time on the UI thread, and the reply does not
 carry its generation, so the check cannot be re-evaluated once the message is
-dispatched. A fix carries the `RequestGeneration` (or its `issued` value) into
-the six `*Loaded`/`*LoadFailed` variants and re-checks it in each `update` arm
-before `store`/`fail`; that touches six variants and the ~59 construction
-sites across `ui` and its tests, larger than one robustness tick.
+dispatched.
 
-## Fixed
+**Fix:** `fetch_into` now wraps each `*Loaded`/`*LoadFailed` reply in a new
+`Message::BrowseReply { issued, reply }` that carries the producing
+`RequestGeneration`'s `issued` value, and `BrowseList::is_current(issued)`
+re-checks that stamp against the target list on the UI thread. The new
+`BrowseReply` arm in `update` dispatches the inner message only when the stamp
+is still current and otherwise returns `Task::none()`, so a reply that a
+navigation or Retry superseded after the executor-thread check is dropped
+instead of overwriting the newer list (or its error). Wrapping the existing
+replies avoided changing the six `*Loaded`/`*LoadFailed` variants and their
+construction sites.
+
+**Validation gap:** unclear-invariant — the existing stale-reply tests exercised only the executor-thread check, so the store-time invariant had to be reconstructed before the UI-thread window could be pinned (closest fit).
 
 ### The boot-time artists fetch races the async sign-in, so a signed-in user sees the sample library (found by robustness 2026-10-08, fixed 2026-10-08)
 

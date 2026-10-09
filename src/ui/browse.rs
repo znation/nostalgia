@@ -14,7 +14,10 @@
 //! the two navigation arms plus `LoadArtists` call `clear` before
 //! `begin_fetch`. `select` resolves the three selection arms' presses.
 
-use std::sync::{Arc, atomic::AtomicU64};
+use std::sync::{
+    Arc,
+    atomic::{AtomicU64, Ordering},
+};
 
 use super::loading::RequestGeneration;
 
@@ -67,6 +70,18 @@ impl<T> BrowseList<T> {
     /// the caller hands to `loading::fetch_into`.
     pub(super) fn begin_fetch(&mut self) -> RequestGeneration {
         RequestGeneration::issue(&self.generation)
+    }
+
+    /// Whether `generation` is still the latest request issued for this level.
+    ///
+    /// [`RequestGeneration::is_current`] makes the same comparison on iced's
+    /// executor thread, when the fetch's result is mapped to a message, but
+    /// `update` stores the reply later on the UI thread; a navigation in that
+    /// window issues a newer request. Re-checking here, at the store, lets the
+    /// `*Loaded`/`*LoadFailed` arm drop a reply the newer request superseded
+    /// instead of overwriting the newer list (or its error).
+    pub(super) fn is_current(&self, generation: u64) -> bool {
+        self.generation.load(Ordering::SeqCst) == generation
     }
 
     /// The row a selection message names, or `None` when the press is stale.

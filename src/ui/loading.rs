@@ -221,7 +221,11 @@ fn play_timeout_report(track_id: &str, timeout: Duration) -> String {
 /// `generation` names the request's place in its list's stream: when a newer
 /// request for the same list has been issued by the time this fetch completes,
 /// the reply is superseded and becomes [`Message::Ignored`] instead of
-/// overwriting the newer list. `timeout` bounds the wait via [`with_timeout`],
+/// overwriting the newer list. That check runs on iced's executor thread, so
+/// the mapped reply is also stamped with its generation (as
+/// [`Message::BrowseReply`]) for `update` to re-check on the UI thread, where
+/// the store happens — a navigation in between must still drop the reply.
+/// `timeout` bounds the wait via [`with_timeout`],
 /// so a backend that never answers is reported as a failed fetch instead of
 /// leaving the panel on "Loading…". Shared by the artists, albums, and songs
 /// load arms so none of them repeats the clone-the-service-then-`Task::perform`
@@ -247,7 +251,7 @@ where
             if !generation.is_current() {
                 return Message::Ignored;
             }
-            match result {
+            let reply = match result {
                 Some(Ok(items)) => loaded(items),
                 Some(Err(err)) => {
                     let report = fetch_failure_report(&context, &err);
@@ -259,6 +263,10 @@ where
                     eprintln!("{report}");
                     failed(report)
                 }
+            };
+            Message::BrowseReply {
+                issued: generation.issued(),
+                reply: Box::new(reply),
             }
         },
     )

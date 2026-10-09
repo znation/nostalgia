@@ -209,6 +209,16 @@ async fn task_output(task: Task<Message>, what: &str) -> Message {
     output.expect("drive_task must pass the output to its callback")
 }
 
+/// Unwraps the [`Message::BrowseReply`] stamp `fetch_into` puts on every
+/// browse reply into the `*Loaded`/`*LoadFailed` message it carries. A test
+/// inspecting a fetch's mapped message unwraps the stamp first.
+fn browse_reply(message: Message) -> Message {
+    match message {
+        Message::BrowseReply { reply, .. } => *reply,
+        other => panic!("expected a browse reply, got {other:?}"),
+    }
+}
+
 #[test]
 fn await_or_timeout_returns_the_output_when_the_future_completes() {
     let output = futures::executor::block_on(await_or_timeout(
@@ -707,6 +717,43 @@ async fn a_slow_stale_browse_failure_does_not_overwrite_the_newer_list_or_error(
     // must be dropped rather than wiping the newer list and recording its
     // error against it.
     assert_stale_album_reply_is_dropped(&mut player, second, first, &["album-1", "album-2"]).await;
+}
+
+// The stale-reply tests above hold a reply in its task until after a newer
+// request has landed, so `fetch_into`'s generation check on iced's executor
+// thread already sees the reply as stale. This covers the narrower window
+// that check cannot: the mapper runs while the reply is still current, and a
+// newer request is issued on the UI thread before `update` processes the
+// stamped reply. Re-checking the generation at store time must drop it, or the
+// cleared list is repopulated with the superseded reply and the panel shows
+// the previous level's rows.
+#[tokio::test]
+async fn a_reply_superseded_between_the_mapper_and_update_is_not_stored() {
+    let (mut player, _state) = test_player();
+
+    // Issue the first artists fetch and drive it to completion while it is
+    // still current, so the mapper stamps its reply as current.
+    let generation = player.artists.begin_fetch();
+    let task = fetch_into(
+        &player.apple_music_service,
+        "loading favorite artists".to_string(),
+        generation,
+        std::time::Duration::from_secs(1),
+        |service| async move { service.get_favorite_artists().await },
+        Message::ArtistsLoaded,
+        Message::ArtistsLoadFailed,
+    );
+    let reply = task_output(task, "first artists fetch").await;
+
+    // A newer request for the same list is issued before `update` processes
+    // the reply.
+    let _ = update(&mut player, Message::LoadArtists);
+
+    // The reply the newer request superseded must not be stored: the list
+    // stays cleared and loading for the newer fetch.
+    let _ = update(&mut player, reply);
+    assert!(player.artists.items.is_empty());
+    assert!(player.artists.loading);
 }
 
 // A play reply can complete out of order just like a browse reply: the user
@@ -1722,7 +1769,7 @@ async fn fetch_into_schedules_fetch_and_maps_result_to_loaded_message() {
     );
     drive_task(task, "fetch", |message| {
         assert!(matches!(
-            message,
+            browse_reply(message),
             Message::ArtistsLoaded(artists) if !artists.is_empty()
         ));
     })
@@ -1756,7 +1803,7 @@ async fn fetch_into_maps_a_failed_fetch_to_a_load_failed_message() {
     );
     drive_task(task, "failed fetch", |message| {
         assert!(matches!(
-            message,
+            browse_reply(message),
             Message::AlbumsLoadFailed(report)
                 if report
                     == "music-library fetch failed (loading albums for artist \"artist-1\"): boom"
@@ -1789,7 +1836,7 @@ async fn fetch_into_maps_a_hanging_fetch_to_a_failed_message() {
     );
     drive_task(task, "hanging fetch", |message| {
         assert!(matches!(
-            message,
+            browse_reply(message),
             Message::ArtistsLoadFailed(report)
                 if report
                     == "music-library fetch failed (loading favorite artists); timed out after 50ms"
