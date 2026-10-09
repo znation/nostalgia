@@ -302,10 +302,14 @@ an in-memory stub transport with no network.
     `ureq::Agent` (`agent.get(url)`; a fresh `ureq::get` per call would reopen
     the TCP/TLS connection) with an
     `Authorization: Bearer <developer_token>` header and a
-    `Music-User-Token: <user_token>` header, `.call()`, map any `ureq::Error`
-    to `AppleMusicError::new(...)`, then `response.body_mut().read_to_string()`.
-    ureq 3's default `http_status_as_error` makes a 4xx/5xx an `Err` here, so a
-    rejected request never parses as data. No error message includes a token.
+    `Music-User-Token: <user_token>` header, and `.call()`. The agent sets
+    `http_status_as_error(false)` so a 4xx/5xx stays an `Ok` with its body
+    intact; `get` then reads `response.body_mut().read_to_string()`, checks
+    `status.is_success()`, and on a non-2xx returns an `AppleMusicError`
+    naming the URL, the status, and the Apple error envelope's `detail`
+    (falling back to its `title`) through `api_error_cause`. A transport
+    `ureq::Error` is mapped to `AppleMusicError::new(...)`. No error message
+    includes a token.
   - `pub struct RestLibrary { transport: Box<dyn HttpTransport> }` with
     `pub fn new(transport: Box<dyn HttpTransport>) -> Self` and three
     synchronous methods, each taking `&MusicKitSession`:

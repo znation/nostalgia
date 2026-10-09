@@ -54,6 +54,11 @@ pub trait HttpTransport: Send + Sync {
 /// a request forever, and follows no redirects, so the `Music-User-Token`
 /// credential is only ever sent to the URL this client built (see
 /// [`agent_with_timeout`]).
+///
+/// The agent also disables `ureq`'s status-as-error shortcut
+/// (`http_status_as_error(false)`), so a 4xx/5xx response reaches
+/// [`UreqTransport::get`] with its body intact and the Apple Music error
+/// detail can be surfaced instead of a bare status code.
 pub struct UreqTransport {
     agent: ureq::Agent,
 }
@@ -107,6 +112,7 @@ fn agent_with_timeout(timeout: Duration) -> ureq::Agent {
     ureq::Agent::config_builder()
         .timeout_global(Some(timeout))
         .max_redirects(0)
+        .http_status_as_error(false)
         .build()
         .into()
 }
@@ -122,9 +128,24 @@ impl HttpTransport for UreqTransport {
             .call()
             .map_err(|error| AppleMusicError::new(format!("request to {url} failed: {error}")))?;
 
-        response.body_mut().read_to_string().map_err(|error| {
+        let status = response.status();
+        let body = response.body_mut().read_to_string().map_err(|error| {
             AppleMusicError::new(format!("reading response from {url} failed: {error}"))
-        })
+        })?;
+
+        // `http_status_as_error(false)` leaves a non-2xx response as `Ok`, so
+        // the status is checked here where the body is still available:
+        // Apple's error body names the cause ("Invalid developer token",
+        // say), which `ureq`'s bare `Error::StatusCode` would otherwise
+        // discard.
+        if status.is_success() {
+            Ok(body)
+        } else {
+            Err(AppleMusicError::new(match api_error_cause(&body) {
+                Some(cause) => format!("request to {url} failed with HTTP {status}: {cause}"),
+                None => format!("request to {url} failed with HTTP {status}"),
+            }))
+        }
     }
 }
 
@@ -277,6 +298,30 @@ fn encode_path_segment(segment: &str) -> String {
 #[derive(Deserialize)]
 struct Envelope<T> {
     data: Vec<T>,
+}
+
+/// The `{ "errors": [ ... ] }` envelope an Apple Music error response carries,
+/// whose entries name the cause that a bare status code drops.
+#[derive(Deserialize)]
+struct ErrorEnvelope {
+    errors: Vec<ApiError>,
+}
+
+/// One entry in an Apple Music error response: the longer human-readable
+/// `detail` and the shorter `title`, either of which the API may omit.
+#[derive(Deserialize)]
+struct ApiError {
+    title: Option<String>,
+    detail: Option<String>,
+}
+
+/// The human-readable cause in an Apple Music error body, preferring the first
+/// entry's `detail` and falling back to its `title`; `None` when `body` is not
+/// the documented envelope or carries neither field.
+fn api_error_cause(body: &str) -> Option<String> {
+    let envelope: ErrorEnvelope = serde_json::from_str(body).ok()?;
+    let error = envelope.errors.into_iter().next()?;
+    error.detail.or(error.title)
 }
 
 /// One entry in a collection response: its stable id plus the attributes the

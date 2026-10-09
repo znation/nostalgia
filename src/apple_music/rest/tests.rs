@@ -398,3 +398,58 @@ fn a_redirect_is_not_followed_so_the_user_token_cannot_leak() {
 fn the_shared_agent_does_not_follow_redirects() {
     assert_eq!(shared_agent().config().max_redirects(), 0);
 }
+
+// The `api_error_cause` unit tests pin the parsing `UreqTransport::get`
+// relies on, without a network: the documented envelope's `detail`, the
+// `title` fallback, and the bodies that must not be mistaken for a cause.
+
+#[test]
+fn api_error_cause_prefers_the_detail() {
+    let body = r#"{"errors":[{"title":"Unauthorized","detail":"Invalid developer token"}]}"#;
+    assert_eq!(
+        api_error_cause(body),
+        Some("Invalid developer token".to_string())
+    );
+}
+
+#[test]
+fn api_error_cause_falls_back_to_the_title() {
+    let body = r#"{"errors":[{"title":"Unauthorized"}]}"#;
+    assert_eq!(api_error_cause(body), Some("Unauthorized".to_string()));
+}
+
+#[test]
+fn api_error_cause_is_none_without_an_envelope_or_cause() {
+    assert_eq!(api_error_cause("not json"), None);
+    assert_eq!(api_error_cause(r#"{"errors":[]}"#), None);
+    assert_eq!(api_error_cause(r#"{"errors":[{"status":"401"}]}"#), None);
+    assert_eq!(api_error_cause(r#"{"data":[]}"#), None);
+}
+
+// `ureq` turns a 4xx/5xx into a bare `Error::StatusCode` unless
+// `http_status_as_error(false)` is set, which discards Apple's error body —
+// the part that names the cause. `UreqTransport` now checks the status where
+// the body is available and surfaces the envelope's `detail`, so a rejected
+// token reads as "Invalid developer token" rather than just "401".
+#[test]
+fn a_non_success_status_surfaces_the_api_error_detail() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    let body = r#"{"errors":[{"title":"Unauthorized","detail":"Invalid developer token"}]}"#;
+    std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut request = [0u8; 1024];
+        let _ = std::io::Read::read(&mut stream, &mut request);
+        let response = format!(
+            "HTTP/1.1 401 Unauthorized\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        let _ = std::io::Write::write_all(&mut stream, response.as_bytes());
+    });
+
+    let url = format!("http://{addr}/me/library/artists");
+    let error = UreqTransport::new().get(&url, &session()).unwrap_err();
+    let message = error.to_string();
+    assert!(message.contains("401 Unauthorized"), "{message}");
+    assert!(message.contains("Invalid developer token"), "{message}");
+}
