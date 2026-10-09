@@ -512,6 +512,17 @@ fn forbid(stream: &mut TcpStream) -> Connection {
     Connection::Continue
 }
 
+/// Splits `application/x-www-form-urlencoded` text into its `name=value`
+/// pairs.
+///
+/// Both the GET page request's query string and the POST callback's body use
+/// this syntax, so the `&`-separated pair scan lives here once; the caller
+/// decodes the value it wants with [`percent_decode`] and applies its own
+/// duplicate-field rule. A pair without `=` names no field and is skipped.
+fn form_pairs(form: &str) -> impl Iterator<Item = (&str, &str)> {
+    form.split('&').filter_map(|pair| pair.split_once('='))
+}
+
 /// Whether the page request's query carries this flow's `state` nonce.
 ///
 /// The browser is opened at `/?state=<nonce>`, so the legitimate page request
@@ -520,10 +531,7 @@ fn forbid(stream: &mut TcpStream) -> Connection {
 /// the sign-in page and the developer token it embeds.
 fn page_query_carries_nonce(query: Option<&str>, nonce: &str) -> bool {
     query.is_some_and(|query| {
-        query.split('&').any(|pair| {
-            pair.split_once('=')
-                .is_some_and(|(key, value)| key == "state" && percent_decode(value) == nonce)
-        })
+        form_pairs(query).any(|(key, value)| key == "state" && percent_decode(value) == nonce)
     })
 }
 
@@ -540,13 +548,11 @@ fn handle_token(
     let form = String::from_utf8_lossy(body);
     let mut state = None;
     let mut user_token = None;
-    for pair in form.split('&') {
-        if let Some((key, value)) = pair.split_once('=') {
-            match key {
-                "state" => state = Some(percent_decode(value)),
-                "userToken" => user_token = Some(percent_decode(value)),
-                _ => {}
-            }
+    for (key, value) in form_pairs(&form) {
+        match key {
+            "state" => state = Some(percent_decode(value)),
+            "userToken" => user_token = Some(percent_decode(value)),
+            _ => {}
         }
     }
 
