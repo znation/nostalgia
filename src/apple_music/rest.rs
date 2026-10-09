@@ -42,8 +42,8 @@ pub trait HttpTransport: Send + Sync {
     /// Returns an [`AppleMusicError`] when the request fails — a transport
     /// error, a non-success status, or a body that cannot be read. The message
     /// is the bare cause (the HTTP status and Apple's detail, or the underlying
-    /// error); [`RestLibrary`] prefixes it with the query it issued, so a
-    /// caller can tell which browse request broke.
+    /// error); [`RestLibrary`] passes it through unchanged and leaves the query
+    /// context to the UI, so the user-facing report names the query once.
     fn get(&self, url: &str, session: &MusicKitSession) -> Result<String, AppleMusicError>;
 }
 
@@ -176,11 +176,11 @@ impl RestLibrary {
         session: &MusicKitSession,
     ) -> Result<Vec<Artist>, AppleMusicError> {
         let url = format!("{API_BASE}/me/library/artists");
-        let resources = self.fetch(&url, session, "favorite artists")?;
+        let resources = self.fetch(&url, session)?;
         resources
             .into_iter()
             .map(|resource| {
-                let name = resource.required_name("artist", "favorite artists")?;
+                let name = resource.required_name("artist")?;
                 Ok(Artist {
                     id: resource.id,
                     name,
@@ -209,11 +209,11 @@ impl RestLibrary {
             "{API_BASE}/me/library/artists/{}/albums",
             encode_path_segment(artist_id)
         );
-        let resources = self.fetch(&url, session, "albums by artist")?;
+        let resources = self.fetch(&url, session)?;
         resources
             .into_iter()
             .map(|resource| {
-                let title = resource.required_name("album", "albums by artist")?;
+                let title = resource.required_name("album")?;
                 Ok(Album {
                     id: resource.id,
                     title,
@@ -243,11 +243,11 @@ impl RestLibrary {
             "{API_BASE}/me/library/albums/{}/tracks",
             encode_path_segment(album_id)
         );
-        let resources = self.fetch(&url, session, "songs from album")?;
+        let resources = self.fetch(&url, session)?;
         resources
             .into_iter()
             .map(|resource| {
-                let title = resource.required_name("song", "songs from album")?;
+                let title = resource.required_name("song")?;
                 Ok(Song {
                     id: resource.id,
                     title,
@@ -257,20 +257,20 @@ impl RestLibrary {
             .collect()
     }
 
-    /// Fetches `url` and parses the collection envelope, naming `query` in
-    /// every failure so the caller can tell which browse request broke.
+    /// Fetches `url` and parses the collection envelope.
+    ///
+    /// A transport failure propagates as the transport's own cause and a parse
+    /// failure names the parse. Neither names the query: the browse methods
+    /// leave that to the UI, which already labels the fetch it issued, so the
+    /// user-facing report names the query once rather than in both layers.
     fn fetch(
         &self,
         url: &str,
         session: &MusicKitSession,
-        query: &str,
     ) -> Result<Vec<Resource>, AppleMusicError> {
-        let body = self
-            .transport
-            .get(url, session)
-            .map_err(|error| AppleMusicError::new(format!("{query} request failed: {error}")))?;
+        let body = self.transport.get(url, session)?;
         let envelope: Envelope<Resource> = serde_json::from_str(&body).map_err(|error| {
-            AppleMusicError::new(format!("{query} response was not valid JSON: {error}"))
+            AppleMusicError::new(format!("response was not valid JSON: {error}"))
         })?;
         Ok(envelope.data)
     }
@@ -358,12 +358,12 @@ struct Attributes {
 }
 
 impl Resource {
-    /// The resource's non-blank name, or an [`AppleMusicError`] naming `kind`,
-    /// `query`, and this resource's id.
+    /// The resource's non-blank name, or an [`AppleMusicError`] naming `kind`
+    /// and this resource's id.
     ///
     /// A resource whose `attributes.name` is absent or only whitespace is
     /// rejected rather than mapped to a blank row the UI would render empty.
-    fn required_name(&self, kind: &str, query: &str) -> Result<String, AppleMusicError> {
+    fn required_name(&self, kind: &str) -> Result<String, AppleMusicError> {
         match self
             .attributes
             .as_ref()
@@ -371,7 +371,7 @@ impl Resource {
         {
             Some(name) if !name.trim().is_empty() => Ok(name.to_string()),
             _ => Err(AppleMusicError::new(format!(
-                "{query} response carried {kind} {:?} without a name",
+                "response carried {kind} {:?} without a name",
                 self.id
             ))),
         }

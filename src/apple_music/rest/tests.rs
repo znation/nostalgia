@@ -140,7 +140,7 @@ fn encode_path_segment_leaves_unreserved_bytes_and_encodes_the_rest() {
 }
 
 #[test]
-fn transport_error_names_the_query() {
+fn transport_error_propagates_the_bare_cause() {
     let stub = StubTransport::failing("network down");
     let library = library_over(&stub);
 
@@ -149,12 +149,13 @@ fn transport_error_names_the_query() {
         .unwrap_err()
         .to_string();
 
-    assert!(error.contains("favorite artists"), "{error}");
-    assert!(error.contains("network down"), "{error}");
+    // The cause is bare: the UI supplies the context naming the query, so
+    // this layer does not repeat it.
+    assert_eq!(error, "network down");
 }
 
 #[test]
-fn albums_by_artist_transport_error_names_the_query() {
+fn albums_by_artist_transport_error_propagates_the_bare_cause() {
     let stub = StubTransport::failing("network down");
     let library = library_over(&stub);
 
@@ -163,12 +164,11 @@ fn albums_by_artist_transport_error_names_the_query() {
         .unwrap_err()
         .to_string();
 
-    assert!(error.contains("albums by artist"), "{error}");
-    assert!(error.contains("network down"), "{error}");
+    assert_eq!(error, "network down");
 }
 
 #[test]
-fn songs_from_album_transport_error_names_the_query() {
+fn songs_from_album_transport_error_propagates_the_bare_cause() {
     let stub = StubTransport::failing("network down");
     let library = library_over(&stub);
 
@@ -177,12 +177,11 @@ fn songs_from_album_transport_error_names_the_query() {
         .unwrap_err()
         .to_string();
 
-    assert!(error.contains("songs from album"), "{error}");
-    assert!(error.contains("network down"), "{error}");
+    assert_eq!(error, "network down");
 }
 
 #[test]
-fn malformed_json_names_the_query() {
+fn malformed_json_surfaces_the_parse_error() {
     let stub = StubTransport::returning("not json");
     let library = library_over(&stub);
 
@@ -191,8 +190,7 @@ fn malformed_json_names_the_query() {
         .unwrap_err()
         .to_string();
 
-    assert!(error.contains("albums by artist"), "{error}");
-    assert!(error.contains("JSON"), "{error}");
+    assert!(error.starts_with("response was not valid JSON:"), "{error}");
 }
 
 #[test]
@@ -205,8 +203,7 @@ fn nameless_artist_is_an_error_naming_its_id() {
         .unwrap_err()
         .to_string();
 
-    assert!(error.contains("favorite artists"), "{error}");
-    assert!(error.contains("artist-1"), "{error}");
+    assert_eq!(error, "response carried artist \"artist-1\" without a name");
 }
 
 #[test]
@@ -220,8 +217,7 @@ fn blank_album_name_is_an_error() {
         .unwrap_err()
         .to_string();
 
-    assert!(error.contains("albums by artist"), "{error}");
-    assert!(error.contains("album-1"), "{error}");
+    assert_eq!(error, "response carried album \"album-1\" without a name");
 }
 
 #[test]
@@ -234,8 +230,7 @@ fn nameless_song_is_an_error() {
         .unwrap_err()
         .to_string();
 
-    assert!(error.contains("songs from album"), "{error}");
-    assert!(error.contains("song-1"), "{error}");
+    assert_eq!(error, "response carried song \"song-1\" without a name");
 }
 
 // `ureq` defaults every network timeout to `None`, so a server that accepts

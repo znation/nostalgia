@@ -709,10 +709,7 @@ async fn a_transport_error_propagates_from_a_signed_in_browse_query() {
 
     let error = service.get_favorite_artists().await.unwrap_err();
 
-    assert_eq!(
-        error.to_string(),
-        "favorite artists request failed: network down"
-    );
+    assert_eq!(error.to_string(), "network down");
 }
 
 #[tokio::test]

@@ -150,6 +150,42 @@ browse, volume, balance, or the equalizer.
 
 ## Done
 
+### De-duplicate the query label in a failed browse report (found 2026-10-08, done 2026-10-08)
+
+`RestLibrary::fetch` prefixed every failure with the query it issued
+("favorite artists request failed: ..."), and
+`ui::loading::fetch_failure_report` wrapped that again as
+`"music-library fetch failed (loading favorite artists): ..."`, so a
+user-facing fetch failure named the same query twice.
+
+**Goal.** The report names the query once, at the layer that owns the
+user-facing context.
+
+**Approach.**
+
+- `src/apple_music/rest.rs`: `fetch` no longer takes `query` and no longer
+  prefixes it. A transport failure propagates as the transport's own bare
+  cause (via `?`); a parse failure is `"response was not valid JSON: {error}"`;
+  `Resource::required_name` drops `query` and reports
+  `"response carried {kind} {id:?} without a name"`. The `HttpTransport::get`
+  and `fetch` docs now state the bare-cause contract.
+- `src/apple_music/rest/tests.rs`: the three transport-error tests and the
+  malformed-JSON test pin the bare cause / parse message instead of the query
+  label; the three nameless-resource tests pin the exact id-bearing message.
+- `src/apple_music/tests.rs`: the signed-in transport-error test expects the
+  bare `"network down"`.
+- `PLANS.md`: the REST-client Done entry's two query-label claims updated.
+
+The UI is unchanged: `fetch_failure_report` still produces
+`"music-library fetch failed ({context}): {err}"`, and `context` is now the
+single query label (the timeout report already named it once).
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- A failed browse reports "music-library fetch failed (loading favorite
+  artists): network down" — the query named once.
+
 ### Add a Winamp balance slider beside the volume slider (found 2026-10-08, done 2026-10-08)
 
 The transport row (`views::view_transport_controls`) carries the five chrome
@@ -424,8 +460,8 @@ an in-memory stub transport with no network.
     intact; `get` then reads `response.body_mut().read_to_string()`, checks
     `status.is_success()`, and on a non-2xx returns an `AppleMusicError`
     naming the status and the Apple error envelope's `detail` (falling back
-    to its `title`) through `api_error_cause`; the bare cause is left for
-    `RestLibrary::fetch` to prefix with the query label. A transport
+    to its `title`) through `api_error_cause`; the bare cause is propagated
+    unchanged, leaving the query label to the UI. A transport
     `ureq::Error` is mapped to `AppleMusicError::new(...)`. No error message
     includes a token.
   - `pub struct RestLibrary { transport: Box<dyn HttpTransport> }` with
@@ -450,8 +486,8 @@ an in-memory stub transport with no network.
     blank row.
   - Each method runs `transport.get(...)`, then
     `serde_json::from_str::<Envelope<Resource>>(...)`, then maps; every failure
-    (transport, JSON, a nameless resource) is an `AppleMusicError` whose
-    message names the query.
+    (transport, JSON, a nameless resource) is an `AppleMusicError` carrying the
+    cause (and a nameless resource's id), leaving the query label to the UI.
   - Only the first page is read: the API's `next` link is ignored, documented
     as a known limit (Apple caps a page at 100 items).
   - The id is interpolated into the URL directly. The service layer (the
