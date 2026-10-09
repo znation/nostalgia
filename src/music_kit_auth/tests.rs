@@ -1199,6 +1199,24 @@ fn reap_in_background_reaps_the_child() {
     }
 }
 
+/// Spawns a shell that exits with `exit_code`, reaps it through `reap_with`,
+/// and returns the receiver of the one report it emits (or none, for a zero
+/// exit). The two tests below share this scaffolding and differ only in the
+/// status they inject and the report they expect.
+#[cfg(unix)]
+fn reap_exit_code(exit_code: i32) -> std::sync::mpsc::Receiver<String> {
+    let child = Command::new("sh")
+        .arg("-c")
+        .arg(format!("exit {exit_code}"))
+        .spawn()
+        .expect("spawn a short-lived shell");
+    let (sender, receiver) = std::sync::mpsc::channel();
+    reap_with(child, move |report| {
+        let _ = sender.send(report);
+    });
+    receiver
+}
+
 // The opener reaps on a detached thread, so its exit status is the only signal
 // the flow has about whether the browser actually opened. A nonzero exit (a
 // broken or missing browser) used to be discarded: the sign-in then sat for
@@ -1208,15 +1226,7 @@ fn reap_in_background_reaps_the_child() {
 #[cfg(unix)]
 #[test]
 fn a_nonzero_opener_exit_is_reported() {
-    let child = Command::new("sh")
-        .args(["-c", "exit 3"])
-        .spawn()
-        .expect("spawn a child that exits nonzero");
-    let (sender, receiver) = std::sync::mpsc::channel();
-    reap_with(child, move |report| {
-        let _ = sender.send(report);
-    });
-    let report = receiver
+    let report = reap_exit_code(3)
         .recv_timeout(Duration::from_secs(10))
         .expect("a nonzero opener exit must be reported");
     assert!(
@@ -1236,16 +1246,10 @@ fn a_nonzero_opener_exit_is_reported() {
 #[cfg(unix)]
 #[test]
 fn a_successful_opener_exit_is_not_reported() {
-    let child = Command::new("sh")
-        .args(["-c", "exit 0"])
-        .spawn()
-        .expect("spawn a child that exits zero");
-    let (sender, receiver) = std::sync::mpsc::channel();
-    reap_with(child, move |report| {
-        let _ = sender.send(report);
-    });
     assert!(
-        receiver.recv_timeout(Duration::from_millis(500)).is_err(),
+        reap_exit_code(0)
+            .recv_timeout(Duration::from_millis(500))
+            .is_err(),
         "a successful opener exit must not be reported"
     );
 }
