@@ -773,10 +773,30 @@ async fn track_selected_plays_the_songs_preview_url() {
 // the wrong fetch — would open the app with an empty browse list, so the
 // wiring is pinned end to end.
 
-#[tokio::test]
-async fn boot_schedules_loading_the_artist_list() {
+/// Drives a `boot` task's stream until `expected` `LoadArtists` outputs have
+/// landed, then returns. `boot` batches the artists fetch with the window-id
+/// query, whose runtime `Action::Window` this test runtime does not service,
+/// so [`drive_task`]'s single-output drive cannot be used; the wait is
+/// bounded by [`TASK_TIMEOUT`]. The two boot tests below both count
+/// `LoadArtists` outputs — one for the initial fetch, two once the session
+/// wait re-issues it — so the counting loop lives here once.
+async fn await_boot_artist_loads(task: Task<Message>, expected: usize) {
     use futures::StreamExt;
 
+    let mut stream = iced_runtime::task::into_stream(task).expect("boot must schedule work");
+    let mut artist_loads = 0;
+    while artist_loads < expected {
+        let action = await_or_timeout("boot", TASK_TIMEOUT, stream.next())
+            .await
+            .expect("boot task must yield the artists fetch");
+        if matches!(action, iced_runtime::Action::Output(Message::LoadArtists)) {
+            artist_loads += 1;
+        }
+    }
+}
+
+#[tokio::test]
+async fn boot_schedules_loading_the_artist_list() {
     let state = Arc::new(Mutex::new(AppState::default()));
     let service =
         AppleMusicService::with_transport(state.clone(), Box::new(StubTransport::returning("")));
@@ -785,18 +805,9 @@ async fn boot_schedules_loading_the_artist_list() {
     assert_view(&player, CurrentView::Artists);
 
     // The batched task carries both the artists fetch and the window-id query,
-    // and iced runs both after the window opens. The query yields a runtime
-    // `Action::Window` this test runtime does not service, so drive the stream
-    // until the fetch's `LoadArtists` output lands.
-    let mut stream = iced_runtime::task::into_stream(task).expect("boot must schedule work");
-    loop {
-        let action = await_or_timeout("boot", TASK_TIMEOUT, stream.next())
-            .await
-            .expect("boot task must yield the artists fetch");
-        if matches!(action, iced_runtime::Action::Output(Message::LoadArtists)) {
-            return;
-        }
-    }
+    // and iced runs both after the window opens; the fetch's `LoadArtists`
+    // output is the first the stream yields.
+    await_boot_artist_loads(task, 1).await;
 }
 
 // The startup sign-in runs on a background thread, so the first artists fetch
@@ -804,11 +815,10 @@ async fn boot_schedules_loading_the_artist_list() {
 // boot task must watch for the session and re-issue `LoadArtists` when it
 // arrives, or a signed-in user keeps seeing the sample artists for the rest of
 // the process. A regression that dropped that watch would exhaust the boot
-// stream after the initial fetch, failing the second `expect` below.
+// stream after the initial fetch, so [`await_boot_artist_loads`] would time
+// out waiting for a second `LoadArtists`.
 #[tokio::test]
 async fn boot_reloads_artists_after_the_startup_sign_in_stores_a_session() {
-    use futures::StreamExt;
-
     let state = Arc::new(Mutex::new(AppState::default()));
     let service = AppleMusicService::new(state.clone());
     let sign_in_service = service.clone();
@@ -830,19 +840,8 @@ async fn boot_reloads_artists_after_the_startup_sign_in_stores_a_session() {
     });
 
     // The batched task carries the initial fetch, the session wait, and the
-    // window-id query; drive until the wait's second `LoadArtists` lands. The
-    // window query yields a runtime `Action::Window` this test does not
-    // service, and the initial fetch's output is the first `LoadArtists`.
-    let mut stream = iced_runtime::task::into_stream(task).expect("boot must schedule work");
-    let mut artist_loads = 0;
-    while artist_loads < 2 {
-        let action = await_or_timeout("boot", TASK_TIMEOUT, stream.next())
-            .await
-            .expect("boot task must yield a second artists fetch");
-        if matches!(action, iced_runtime::Action::Output(Message::LoadArtists)) {
-            artist_loads += 1;
-        }
-    }
+    // window-id query; drive until the wait's second `LoadArtists` lands.
+    await_boot_artist_loads(task, 2).await;
     sign_in.join().expect("the sign-in thread must not panic");
 }
 
