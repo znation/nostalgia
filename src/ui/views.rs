@@ -88,8 +88,9 @@ fn empty_list_label(view: &CurrentView) -> &'static str {
 /// rather than a browsed album's songs. A search that matched nothing then
 /// reads as "no matches" instead of the album-level [`empty_list_label`]
 /// wording, which would blame the album the search was issued from. The update
-/// loop's `SearchSubmitted` arm is the only setter and it always shows the
-/// Songs view, so the flag is only ever true with `view == Songs`. Pure, like
+/// loop's `SearchSubmitted` arm is the only arm that sets it true, and it
+/// always shows the Songs view, so the flag is only ever true with
+/// `view == Songs`. Pure, like
 /// [`empty_list_label`], so every wording is testable without an iced
 /// renderer.
 fn browse_placeholder<'a>(
