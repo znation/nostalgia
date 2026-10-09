@@ -129,18 +129,44 @@ impl AppleMusicService {
 /// never blocks. Returns the service so the caller hands that same instance to
 /// the UI: a clone shares the session handle, so the session stored at startup
 /// is visible through [`AppleMusicService::session`] on the UI's service. When
-/// the variable is unset or blank, sign-in is skipped and the sample library
-/// stays in use.
+/// the variable is unset, blank, or not valid UTF-8, sign-in is skipped and
+/// the sample library stays in use; the skip line names which of those three
+/// cases applies (see [`startup_token`]).
 pub fn init_service(state: Arc<Mutex<AppState>>) -> AppleMusicService {
     let service = AppleMusicService::new(state);
-    let developer_token = std::env::var("APPLE_MUSIC_DEVELOPER_TOKEN").unwrap_or_default();
-    if developer_token.trim().is_empty() {
-        println!("Apple Music sign-in skipped: APPLE_MUSIC_DEVELOPER_TOKEN is not set");
-        return service;
-    }
+    let developer_token = match startup_token(std::env::var("APPLE_MUSIC_DEVELOPER_TOKEN")) {
+        Ok(token) => token,
+        Err(reason) => {
+            println!("Apple Music sign-in skipped: {reason}");
+            return service;
+        }
+    };
     let sign_in_service = service.clone();
     std::thread::spawn(move || sign_in_service.sign_in(&developer_token, &browser_sign_in));
     service
+}
+
+/// Classifies the `APPLE_MUSIC_DEVELOPER_TOKEN` read: the token to sign in
+/// with, or the reason startup sign-in is skipped.
+///
+/// `std::env::var` collapses three distinct situations into values a single
+/// blank check cannot tell apart: the variable is absent (`Err(NotPresent)`),
+/// it is present but not valid UTF-8 (`Err(NotUnicode)`), or it is present and
+/// blank (`Ok` of only whitespace). The startup line should name the case that
+/// applies, so a user who exported a blank token is not told the variable is
+/// unset. A present, non-blank value is returned untouched — [`authorize`]
+/// trims it — so a token read from a file with a trailing newline still signs
+/// in. Pure and injectable so the three skip cases are testable without
+/// mutating the process environment, which is global.
+fn startup_token(token: Result<String, std::env::VarError>) -> Result<String, &'static str> {
+    match token {
+        Ok(value) if !value.trim().is_empty() => Ok(value),
+        Ok(_) => Err("APPLE_MUSIC_DEVELOPER_TOKEN is set but blank"),
+        Err(std::env::VarError::NotPresent) => Err("APPLE_MUSIC_DEVELOPER_TOKEN is not set"),
+        Err(std::env::VarError::NotUnicode(_)) => {
+            Err("APPLE_MUSIC_DEVELOPER_TOKEN is not valid UTF-8")
+        }
+    }
 }
 
 /// The production sign-in flow: opens the system browser and waits for the

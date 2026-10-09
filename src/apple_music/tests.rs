@@ -449,6 +449,45 @@ async fn next_and_previous_track_stubs_succeed_without_touching_state() {
     assert_playback_state(&state, Some("song-1"), true).await;
 }
 
+// `startup_token` decides whether startup sign-in runs and, when it does not,
+// which of the three skip cases the message should name. The three cases are
+// otherwise indistinguishable through `init_service` (which reads the real,
+// process-global environment), so the pure classifier is pinned directly. A
+// present, non-blank token is returned exactly as read — trimming happens
+// later, at the `authorize` boundary — so a token file's trailing newline
+// still signs in rather than being dropped here.
+#[test]
+fn startup_token_names_the_missing_blank_and_non_utf8_cases() {
+    assert_eq!(
+        startup_token(Ok("dev-token".to_string())),
+        Ok("dev-token".to_string())
+    );
+    assert_eq!(
+        startup_token(Ok("  dev-token  ".to_string())),
+        Ok("  dev-token  ".to_string())
+    );
+    assert_eq!(
+        startup_token(Ok("   ".to_string())),
+        Err("APPLE_MUSIC_DEVELOPER_TOKEN is set but blank")
+    );
+    assert_eq!(
+        startup_token(Err(std::env::VarError::NotPresent)),
+        Err("APPLE_MUSIC_DEVELOPER_TOKEN is not set")
+    );
+    // `OsString` only holds non-UTF-8 bytes on Unix; on other platforms the
+    // `NotUnicode` variant cannot be constructed portably, so that one arm is
+    // covered where it exists.
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStringExt;
+        let invalid = std::ffi::OsString::from_vec(vec![0xff, 0xfe]);
+        assert_eq!(
+            startup_token(Err(std::env::VarError::NotUnicode(invalid))),
+            Err("APPLE_MUSIC_DEVELOPER_TOKEN is not valid UTF-8")
+        );
+    }
+}
+
 // `init_service` is the startup seam `main` calls before the UI boots.
 // When `APPLE_MUSIC_DEVELOPER_TOKEN` is unset it skips sign-in and returns a
 // service with no session; when it is set it spawns a sign-in thread on a
