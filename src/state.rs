@@ -88,9 +88,11 @@ impl Default for AppState {
 }
 
 impl AppState {
-    /// Flip the play/pause flag in place. The UI's Play/Pause button is the
-    /// only toggle caller; keeping the flip here (rather than inlined at the
-    /// call site) puts the toggling semantics next to the field they mutate.
+    /// Flip the play/pause flag in place.
+    /// `AppleMusicService::toggle_play_pause` is its only caller — the UI's
+    /// Play/Pause button reaches it through that service method — so keeping
+    /// the flip here (rather than inlined at the call site) puts the toggling
+    /// semantics next to the field they mutate.
     pub fn toggle_playing(&mut self) {
         self.is_playing = !self.is_playing;
     }
