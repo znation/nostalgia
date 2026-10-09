@@ -275,14 +275,30 @@ async fn drive_fetch_and_assert_loaded<T, Buffer, Key>(
     assert_ids(buffer(player).as_slice(), key, expected_ids);
 }
 
-// The three toggle arms share one shape: read the flag, update, read it
-// again. `assert_toggles_shared_state` owns that shape, so each test only
-// names its message and the flag it flips. All three use `blocking_lock`,
-// which panics inside an async runtime, so they stay plain tests (no
-// `#[tokio::test]`).
-#[test]
-fn play_pause_toggles_is_playing() {
-    assert_toggles_shared_state(Message::PlayPause, |state| state.is_playing);
+// The repeat, shuffle, and equalizer toggle arms share one shape: read the
+// flag, update, read it again. `assert_toggles_shared_state` owns that shape,
+// so each test only names its message and the flag it flips. All three use
+// `blocking_lock`, which panics inside an async runtime, so they stay plain
+// tests (no `#[tokio::test]`). The Play/Pause arm is asynchronous now (it
+// drives the audio backend), so it has its own `#[tokio::test]` below.
+#[tokio::test]
+async fn play_pause_toggles_is_playing() {
+    let (mut player, state) = player_with_audio(Arc::new(RecordingAudio::default()));
+    // Load a preview so the toggle has audio to pause and resume.
+    player
+        .apple_music_service
+        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
+        .await
+        .unwrap();
+    assert!(state.lock().await.is_playing);
+
+    let task = update(&mut player, Message::PlayPause);
+    assert_transport_settled(task, "pause toggle").await;
+    assert!(!state.lock().await.is_playing);
+
+    let task = update(&mut player, Message::PlayPause);
+    assert_transport_settled(task, "resume toggle").await;
+    assert!(state.lock().await.is_playing);
 }
 
 #[test]
@@ -344,34 +360,126 @@ fn eq_preset_selected_applies_the_curve_and_selection() {
     assert_eq!(state.eq_preset(), Some(preset));
 }
 
-// `Message::Stop` uses `blocking_lock`, which panics inside an async
-// runtime, so this stays a plain test (no `#[tokio::test]`).
-#[test]
-fn stop_clears_is_playing() {
-    let (mut player, state) = test_player();
+// `Message::Stop` drives the audio backend through a `Task`, so it needs the
+// async runtime and `drive_task`.
+#[tokio::test]
+async fn stop_clears_is_playing() {
+    let (mut player, state) = player_with_audio(Arc::new(RecordingAudio::default()));
+    player
+        .apple_music_service
+        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
+        .await
+        .unwrap();
+    assert!(state.lock().await.is_playing);
 
-    let _ = update(&mut player, Message::PlayPause);
-    assert!(state.blocking_lock().is_playing);
-
-    let _ = update(&mut player, Message::Stop);
-    assert!(!state.blocking_lock().is_playing);
+    let task = update(&mut player, Message::Stop);
+    assert_transport_settled(task, "stop").await;
+    assert!(!state.lock().await.is_playing);
 }
 
-#[test]
-fn play_and_pause_set_the_playback_flag_explicitly() {
-    let (mut player, state) = test_player();
+#[tokio::test]
+async fn play_and_pause_set_the_playback_flag_explicitly() {
+    let (mut player, state) = player_with_audio(Arc::new(RecordingAudio::default()));
+    player
+        .apple_music_service
+        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
+        .await
+        .unwrap();
 
     // X plays even when already playing, unlike the Play/Pause toggle.
-    assert_message_schedules_no_work(&mut player, Message::Play);
-    assert!(state.blocking_lock().is_playing);
-    assert_message_schedules_no_work(&mut player, Message::Play);
-    assert!(state.blocking_lock().is_playing);
+    let task = update(&mut player, Message::Play);
+    assert_transport_settled(task, "play").await;
+    assert!(state.lock().await.is_playing);
+    let task = update(&mut player, Message::Play);
+    assert_transport_settled(task, "play again").await;
+    assert!(state.lock().await.is_playing);
 
     // C pauses even when already paused.
-    assert_message_schedules_no_work(&mut player, Message::Pause);
-    assert!(!state.blocking_lock().is_playing);
-    assert_message_schedules_no_work(&mut player, Message::Pause);
-    assert!(!state.blocking_lock().is_playing);
+    let task = update(&mut player, Message::Pause);
+    assert_transport_settled(task, "pause").await;
+    assert!(!state.lock().await.is_playing);
+    let task = update(&mut player, Message::Pause);
+    assert_transport_settled(task, "pause again").await;
+    assert!(!state.lock().await.is_playing);
+}
+
+// The four transport arms must reach the injected backend, not just flip the
+// shared flag. Each message is driven over its own recording backend and the
+// call it records is pinned: Play resumes a paused preview, Pause pauses, Stop
+// stops, and PlayPause pauses while playing. A regression that left an arm on
+// the synchronous `AppState` mutator would flip the flag but record no call.
+#[tokio::test]
+async fn transport_messages_drive_the_audio_backend() {
+    const URL: &str = "https://example.test/preview.m4a";
+
+    // Play (the X key): resume a paused preview.
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    player
+        .apple_music_service
+        .play_track("song-1", Some(URL), || true)
+        .await
+        .unwrap();
+    player.apple_music_service.pause().await.unwrap();
+    assert_transport_settled(update(&mut player, Message::Play), "play").await;
+    assert_eq!(
+        recording.calls(),
+        vec![
+            AudioCall::Play(URL.to_string()),
+            AudioCall::Pause,
+            AudioCall::Resume
+        ]
+    );
+    assert!(state.lock().await.is_playing);
+
+    // Pause (the C key).
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    player
+        .apple_music_service
+        .play_track("song-1", Some(URL), || true)
+        .await
+        .unwrap();
+    assert_transport_settled(update(&mut player, Message::Pause), "pause").await;
+    assert_eq!(
+        recording.calls(),
+        vec![AudioCall::Play(URL.to_string()), AudioCall::Pause]
+    );
+    assert!(!state.lock().await.is_playing);
+
+    // Stop.
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    player
+        .apple_music_service
+        .play_track("song-1", Some(URL), || true)
+        .await
+        .unwrap();
+    assert_transport_settled(update(&mut player, Message::Stop), "stop").await;
+    assert_eq!(
+        recording.calls(),
+        vec![AudioCall::Play(URL.to_string()), AudioCall::Stop]
+    );
+    assert!(!state.lock().await.is_playing);
+
+    // PlayPause while playing: pauses.
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    player
+        .apple_music_service
+        .play_track("song-1", Some(URL), || true)
+        .await
+        .unwrap();
+    assert_transport_settled(update(&mut player, Message::PlayPause), "toggle").await;
+    assert_eq!(
+        recording.calls(),
+        vec![AudioCall::Play(URL.to_string()), AudioCall::Pause]
+    );
+    assert!(!state.lock().await.is_playing);
 }
 
 #[test]
@@ -1113,6 +1221,18 @@ async fn assert_track_played(task: Task<Message>, expected_generation: u64) {
     drive_task(task, "play", |message| match message {
         Message::TrackPlayed { generation } => assert_eq!(generation, expected_generation),
         other => panic!("unexpected play task output: {other:?}"),
+    })
+    .await;
+}
+
+/// Drives `task` to its single output and asserts it is
+/// `Message::TransportSettled`, the completion the four transport arms emit.
+/// The arms all schedule the same payload-less completion, so the
+/// drive-and-assert block lives here once and each call site only names the
+/// action it drove.
+async fn assert_transport_settled(task: Task<Message>, what: &str) {
+    drive_task(task, what, |message| {
+        assert!(matches!(message, Message::TransportSettled));
     })
     .await;
 }

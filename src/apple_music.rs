@@ -6,10 +6,12 @@
 //! stored, and from the shared in-memory sample library
 //! ([`crate::sample_library::sample_library`]) otherwise; it plays the
 //! selected track's preview through an injected [`crate::audio::AudioOutput`],
-//! committing the shared-state transition (`play_track` records the selected
-//! track and marks it playing, `pause` pauses the audio and clears the flag).
-//! The still-unimplemented stubs (`next_track` and `previous_track`) stay so a
-//! real implementation has a surface to land on.
+//! committing the shared-state transition: `play_track` records the selected
+//! track and marks it playing, `pause` pauses the audio and clears the flag,
+//! `stop` stops the audio and clears the flag, and `resume` resumes (or
+//! restarts) the preview and sets the flag. The still-unimplemented stubs
+//! (`next_track` and `previous_track`) stay so a real implementation has a
+//! surface to land on.
 //!
 //! The service also holds the authenticated `MusicKit` session
 //! ([`crate::music_kit_auth::MusicKitSession`]) obtained by [`init_service`]
@@ -52,31 +54,135 @@ pub struct AppleMusicService {
     rest: Arc<rest::RestLibrary>,
     state: Arc<Mutex<AppState>>,
     audio: Arc<dyn audio::AudioOutput>,
+    /// The playback the audio backend currently holds, plus the most recent
+    /// preview URL, so a transport transition can tell a paused player
+    /// (`loaded`) from a discarded one and restart the latter. Guarded by its
+    /// own async mutex: every transport method holds it across the read,
+    /// the backend call, and the state write, so two concurrent transitions
+    /// (a double-clicked Play/Pause) serialize instead of both reading the
+    /// same flag.
+    transport: Arc<tokio::sync::Mutex<TransportState>>,
+}
+
+/// The service's view of the audio backend: whether a preview is loaded and
+/// paused (ready for [`crate::audio::AudioOutput::resume`]), and the last
+/// preview URL handed to [`crate::audio::AudioOutput::play`] so a stopped
+/// preview can be restarted. `last_url` is kept after a stop; `loaded` is
+/// cleared because the backend discards the player then.
+struct TransportState {
+    /// A preview is loaded and ready to resume.
+    loaded: bool,
+    /// The most recent preview URL, or `None` when no preview has played.
+    last_url: Option<String>,
+}
+
+/// The transport transitions the UI drives. Each is `pub(crate)` so the `ui`
+/// Play/Pause, Play, Pause, and Stop arms call one method each, and each
+/// reuses the matching [`AppState`] mutator so none of those goes dead.
+impl AppleMusicService {
+    /// Pauses the audio and clears the shared playing flag, keeping
+    /// `current_track` set so the Now Playing bar still names the track.
+    ///
+    /// The backend is called first: one that cannot accept the request reports
+    /// it before shared state claims playback stopped.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the audio backend cannot accept the
+    /// request.
+    pub(crate) async fn pause(&self) -> Result<(), AppleMusicError> {
+        let _transport = self.transport.lock().await;
+        self.audio.pause()?;
+        self.state.lock().await.pause();
+        println!("Paused playback");
+        Ok(())
+    }
+
+    /// Resumes a paused preview, or restarts a stopped one from the last
+    /// preview URL, and sets the shared playing flag. Does nothing when no
+    /// preview has ever played, so Play cannot claim playback with nothing to
+    /// sound.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the audio backend cannot accept the
+    /// request.
+    pub(crate) async fn resume(&self) -> Result<(), AppleMusicError> {
+        let mut transport = self.transport.lock().await;
+        self.resume_locked(&mut transport).await
+    }
+
+    /// Stops and discards the audio and clears the shared playing flag,
+    /// keeping `current_track` set so the Now Playing bar still names the
+    /// track. The last preview URL is kept so Play can restart it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the audio backend cannot accept the
+    /// request.
+    pub(crate) async fn stop(&self) -> Result<(), AppleMusicError> {
+        let mut transport = self.transport.lock().await;
+        self.audio.stop()?;
+        transport.loaded = false;
+        self.state.lock().await.stop();
+        println!("Stopped playback");
+        Ok(())
+    }
+
+    /// Flips the transport: pauses when playing, and resumes (or restarts)
+    /// when not. The flag read, the backend call, and the flag write all
+    /// happen under the transport lock, so two toggles that arrive together
+    /// cannot both read the same flag and both pause.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the audio backend cannot accept the
+    /// request.
+    pub(crate) async fn toggle_play_pause(&self) -> Result<(), AppleMusicError> {
+        let mut transport = self.transport.lock().await;
+        let playing = self.state.lock().await.is_playing;
+        if playing {
+            self.audio.pause()?;
+            self.state.lock().await.toggle_playing();
+            println!("Paused playback");
+            Ok(())
+        } else {
+            self.resume_locked(&mut transport).await
+        }
+    }
+
+    /// The shared body of [`resume`](Self::resume) and the resume half of
+    /// [`toggle_play_pause`](Self::toggle_play_pause), run with the transport
+    /// lock already held. Resumes a paused player; when the backend has
+    /// nothing loaded but a preview URL is remembered, replays it (a stop
+    /// discards the player, so Play after Stop restarts rather than resumes);
+    /// when neither is true, leaves the flag alone.
+    async fn resume_locked(&self, transport: &mut TransportState) -> Result<(), AppleMusicError> {
+        if transport.loaded {
+            self.audio.resume()?;
+        } else if let Some(url) = transport.last_url.clone() {
+            self.audio.play(&url)?;
+            transport.loaded = true;
+        } else {
+            // No preview has ever played, so there is nothing to sound; Play
+            // leaves the transport stopped rather than claiming playback.
+            println!("Nothing to resume");
+            return Ok(());
+        }
+        self.state.lock().await.play();
+        println!("Resumed playback");
+        Ok(())
+    }
 }
 
 /// Transport stubs kept as the seam a real Apple Music implementation will
-/// fill: none of `pause`, `next_track`, or `previous_track` has a production
-/// caller yet — the Pause button clears the playing flag through
-/// `AppState::pause`, and the Previous/Next buttons pick their song through
+/// fill: `next_track` and `previous_track` have no production caller — the
+/// Previous/Next buttons pick their song through
 /// `transport::next_track_id`/`previous_track_id` — so `dead_code` is allowed
 /// on exactly this block: a *newly* dead private field or method elsewhere
 /// still triggers the compiler's `dead_code` warning.
 #[allow(dead_code)]
 impl AppleMusicService {
-    async fn pause(&self) -> Result<(), AppleMusicError> {
-        // Pause the audio first: a backend that cannot accept the request
-        // reports it before shared state claims playback stopped. Only the
-        // shared-state transition is owned here; a real implementation would
-        // also confirm the pause with the API.
-        self.audio.pause()?;
-
-        let mut state = self.state.lock().await;
-        state.is_playing = false;
-
-        println!("Paused playback");
-        Ok(())
-    }
-
     async fn next_track(&self) -> Result<(), AppleMusicError> {
         // In a real implementation, this would:
         // 1. Get current track position
@@ -194,6 +300,10 @@ impl AppleMusicService {
             rest: Arc::new(rest::RestLibrary::new(transport)),
             state,
             audio,
+            transport: Arc::new(tokio::sync::Mutex::new(TransportState {
+                loaded: false,
+                last_url: None,
+            })),
         }
     }
 
@@ -330,6 +440,10 @@ impl AppleMusicService {
         ensure_id_is_valid(track_id, IdKind::Track)?;
         ensure_preview_url_is_valid(preview_url)?;
 
+        // Serialize with the transport transitions, so a Stop cannot land
+        // between this play's state commit and its backend call.
+        let mut transport = self.transport.lock().await;
+
         let mut state = self.state.lock().await;
         if !is_current() {
             return Ok(());
@@ -340,20 +454,26 @@ impl AppleMusicService {
 
         println!("{}", play_log_line(track_id));
 
-        if let Some(url) = preview_url
-            && let Err(error) = self.audio.play(url)
-        {
-            // The backend refused the preview, so shared state must not keep
-            // claiming playback. Roll the flag back only when no newer play
-            // has replaced this one: a newer play owns the state now, and
-            // clearing it here would make that track look stopped.
-            // `current_track` is left in place, as `stop` leaves it, so the
-            // bar still names the track the user selected.
-            let mut state = self.state.lock().await;
-            if is_current() {
-                state.is_playing = false;
+        // Remember the URL so a later Play can restart this preview after a
+        // Stop, and record whether the backend now holds it.
+        transport.last_url = preview_url.map(str::to_string);
+        transport.loaded = false;
+        if let Some(url) = preview_url {
+            if let Err(error) = self.audio.play(url) {
+                // The backend refused the preview, so shared state must not keep
+                // claiming playback. Roll the flag back only when no newer play
+                // has replaced this one: a newer play owns the state now, and
+                // clearing it here would make that track look stopped.
+                // `current_track` is left in place, as `stop` leaves it, so the
+                // bar still names the track the user selected.
+                let mut state = self.state.lock().await;
+                if is_current() {
+                    state.is_playing = false;
+                }
+                transport.last_url = None;
+                return Err(error);
             }
-            return Err(error);
+            transport.loaded = true;
         }
         Ok(())
     }

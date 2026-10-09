@@ -326,6 +326,8 @@ pub(crate) enum AudioCall {
     Play(String),
     /// `pause` was called.
     Pause,
+    /// `resume` was called.
+    Resume,
     /// `stop` was called.
     Stop,
 }
@@ -359,6 +361,11 @@ impl AudioOutput for RecordingAudio {
         Ok(())
     }
 
+    fn resume(&self) -> Result<(), AppleMusicError> {
+        self.calls.lock().unwrap().push(AudioCall::Resume);
+        Ok(())
+    }
+
     fn stop(&self) -> Result<(), AppleMusicError> {
         self.calls.lock().unwrap().push(AudioCall::Stop);
         Ok(())
@@ -376,6 +383,10 @@ impl AudioOutput for FailingAudio {
     }
 
     fn pause(&self) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn resume(&self) -> Result<(), AppleMusicError> {
         Ok(())
     }
 

@@ -68,6 +68,37 @@ where
     )
 }
 
+/// Runs a transport future through iced's runtime and maps its completion to
+/// [`Message::TransportSettled`].
+///
+/// The transport twin of [`play_into`], for the four Play/Pause/Stop
+/// transitions: they carry no track and no generation — a pause or stop cannot
+/// be superseded by a newer play — so success maps straight to the completion
+/// and a backend error is logged through [`transport_failure_report`] first.
+/// The completion message exists only so iced re-renders the Now Playing bar
+/// after the shared state changes; its payload is ignored. No timeout bounds
+/// this call: the service's transport methods lock and send a command to the
+/// audio worker, so unlike a fetch or a play they cannot hang on a network.
+/// `action` is injected so the UI's four arms share the clone-and-report
+/// plumbing while each names only the service call it runs.
+pub(super) fn transport_into<E, Fut>(
+    service: &AppleMusicService,
+    context: &'static str,
+    action: impl FnOnce(AppleMusicService) -> Fut + Send + 'static,
+) -> Task<Message>
+where
+    E: std::fmt::Display + Send + 'static,
+    Fut: Future<Output = Result<(), E>> + Send + 'static,
+{
+    let service = service.clone();
+    Task::perform(action(service), move |result| {
+        if let Err(err) = result {
+            eprintln!("{}", transport_failure_report(context, &err));
+        }
+        Message::TransportSettled
+    })
+}
+
 /// Formats the browse-fetch failure report: names the fetch that failed
 /// (e.g. "loading albums for artist \"artist-1\"") and includes the underlying
 /// error. The play path names the offending track; this names the offending
@@ -90,6 +121,14 @@ fn fetch_failure_report<E: std::fmt::Display>(context: &str, err: &E) -> String 
 /// cause rather than a struct dump.
 pub(super) fn play_failure_report<E: std::fmt::Display>(track_id: &str, err: &E) -> String {
     format!("failed to play track {track_id:?}: {err}")
+}
+
+/// Formats the transport failure report: names the action that failed (e.g.
+/// "pause") and includes the underlying error, the transport twin of
+/// [`fetch_failure_report`] and [`play_failure_report`]. Pure, like the other
+/// report formatters, so the contract is testable without capturing stderr.
+fn transport_failure_report<E: std::fmt::Display>(context: &str, err: &E) -> String {
+    format!("transport action failed ({context}): {err}")
 }
 
 /// The sequence position of one browse request within its list's request
@@ -316,6 +355,17 @@ mod tests {
         // would quote it as `"boom"`.
         let report = play_failure_report("track-1", &"boom");
         assert_eq!(report, "failed to play track \"track-1\": boom");
+    }
+
+    #[test]
+    fn transport_failure_report_names_the_action_and_includes_the_error() {
+        // The transport report must name which transition failed ("pause")
+        // and carry the backend's cause, so a rejected pause, resume, stop, or
+        // toggle is as diagnosable from the log as a failed fetch or play.
+        // `Display` formatting is pinned here too — `&str` renders bare, so a
+        // regression to `Debug` would quote it as `"boom"`.
+        let report = transport_failure_report("pause", &"boom");
+        assert_eq!(report, "transport action failed (pause): boom");
     }
 
     // `with_timeout` is the bound `fetch_into` puts on a backend reply. The

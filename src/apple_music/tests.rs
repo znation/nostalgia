@@ -74,6 +74,48 @@ fn service_with_audio(audio: Arc<dyn AudioOutput>) -> (AppleMusicService, Arc<Mu
     (service, state)
 }
 
+/// A recording backend whose `pause` blocks until released, so a test can hold
+/// one transport transition inside the backend and prove a second one waits on
+/// the service's transport lock rather than entering the backend alongside it.
+struct GatedAudio {
+    calls: std::sync::Mutex<Vec<AudioCall>>,
+    entered: std::sync::mpsc::Sender<()>,
+    release: std::sync::Mutex<std::sync::mpsc::Receiver<()>>,
+}
+
+impl GatedAudio {
+    fn calls(&self) -> Vec<AudioCall> {
+        self.calls.lock().unwrap().clone()
+    }
+}
+
+impl AudioOutput for GatedAudio {
+    fn play(&self, url: &str) -> Result<(), AppleMusicError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(AudioCall::Play(url.to_string()));
+        Ok(())
+    }
+
+    fn pause(&self) -> Result<(), AppleMusicError> {
+        self.calls.lock().unwrap().push(AudioCall::Pause);
+        let _ = self.entered.send(());
+        let _ = self.release.lock().unwrap().recv();
+        Ok(())
+    }
+
+    fn resume(&self) -> Result<(), AppleMusicError> {
+        self.calls.lock().unwrap().push(AudioCall::Resume);
+        Ok(())
+    }
+
+    fn stop(&self) -> Result<(), AppleMusicError> {
+        self.calls.lock().unwrap().push(AudioCall::Stop);
+        Ok(())
+    }
+}
+
 /// Asserts that both blank forms of an id — empty and whitespace-only —
 /// are rejected by the query, each with the seam's blank-id error naming
 /// `kind`. `ensure_id_is_valid` rejects the two forms through the same
@@ -492,9 +534,7 @@ async fn play_track_rollback_leaves_a_newer_plays_flag_alone() {
 }
 
 // `pause` pauses the injected backend as well as clearing the shared playing
-// flag; the test pins both halves of that contract. (The UI's Pause button
-// does not call this method yet — it only flips `AppState` — so the test
-// drives the service directly.)
+// flag; the test pins both halves of that contract.
 #[tokio::test]
 async fn pause_pauses_the_audio_backend() {
     let recording = Arc::new(RecordingAudio::default());
@@ -599,6 +639,206 @@ async fn pause_stops_playing_but_keeps_current_track() {
     service.pause().await.unwrap();
 
     assert_playback_state(&state, Some("song-1"), false).await;
+}
+
+// `resume` drives the injected backend and sets the shared playing flag, the
+// other half of `pause`. A `Some` preview is loaded first so the backend has a
+// paused player to resume (the service only resumes a loaded preview, or
+// restarts a stopped one).
+#[tokio::test]
+async fn resume_resumes_the_audio_backend() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+
+    service
+        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
+        .await
+        .unwrap();
+    service.pause().await.unwrap();
+    service.resume().await.unwrap();
+
+    assert_eq!(
+        recording.calls(),
+        vec![
+            AudioCall::Play("https://example.test/preview.m4a".to_string()),
+            AudioCall::Pause,
+            AudioCall::Resume
+        ]
+    );
+    assert_playback_state(&state, Some("song-1"), true).await;
+}
+
+// `stop` drives the injected backend and clears the shared playing flag while
+// keeping `current_track`, exactly as `AppState::stop` does.
+#[tokio::test]
+async fn stop_stops_the_audio_backend() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+
+    service
+        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
+        .await
+        .unwrap();
+    service.stop().await.unwrap();
+
+    assert_eq!(
+        recording.calls(),
+        vec![
+            AudioCall::Play("https://example.test/preview.m4a".to_string()),
+            AudioCall::Stop
+        ]
+    );
+    assert_playback_state(&state, Some("song-1"), false).await;
+}
+
+// The Play/Pause toggle pauses while playing.
+#[tokio::test]
+async fn toggle_play_pause_pauses_while_playing() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+
+    service
+        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
+        .await
+        .unwrap();
+    service.toggle_play_pause().await.unwrap();
+
+    assert_eq!(
+        recording.calls(),
+        vec![
+            AudioCall::Play("https://example.test/preview.m4a".to_string()),
+            AudioCall::Pause
+        ]
+    );
+    assert_playback_state(&state, Some("song-1"), false).await;
+}
+
+// The Play/Pause toggle resumes while paused.
+#[tokio::test]
+async fn toggle_play_pause_resumes_while_paused() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+
+    service
+        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
+        .await
+        .unwrap();
+    service.pause().await.unwrap();
+    service.toggle_play_pause().await.unwrap();
+
+    assert_eq!(
+        recording.calls(),
+        vec![
+            AudioCall::Play("https://example.test/preview.m4a".to_string()),
+            AudioCall::Pause,
+            AudioCall::Resume
+        ]
+    );
+    assert_playback_state(&state, Some("song-1"), true).await;
+}
+
+// Stop discards the backend's player, so `resume` cannot resume it; instead
+// the service replays the remembered preview URL, restarting it from the
+// beginning rather than claiming playback with nothing loaded. Without this,
+// Play after Stop would set `is_playing` while the backend held no player —
+// the desync this wiring exists to prevent.
+#[tokio::test]
+async fn resume_after_stop_restarts_the_preview() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+
+    service
+        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
+        .await
+        .unwrap();
+    service.stop().await.unwrap();
+    service.resume().await.unwrap();
+
+    assert_eq!(
+        recording.calls(),
+        vec![
+            AudioCall::Play("https://example.test/preview.m4a".to_string()),
+            AudioCall::Stop,
+            AudioCall::Play("https://example.test/preview.m4a".to_string())
+        ]
+    );
+    assert_playback_state(&state, Some("song-1"), true).await;
+}
+
+// With no preview ever played there is nothing to resume or restart, so Play
+// leaves the transport stopped rather than claiming playback the backend
+// cannot produce.
+#[tokio::test]
+async fn resume_without_a_preview_leaves_the_transport_stopped() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+
+    service.resume().await.unwrap();
+
+    assert!(recording.calls().is_empty());
+    assert_playback_state(&state, None, false).await;
+}
+
+// Two Play/Pause toggles can arrive close together (a double-click), and each
+// runs as its own task. The service holds the transport lock across the flag
+// read, the backend call, and the flag write, so the second toggle observes
+// the first's write instead of both reading "playing" and both pausing. This
+// test holds the first toggle inside the backend's `pause`, starts the second,
+// and proves it has not entered the backend: were the lock dropped before the
+// backend call, the second pause would enter concurrently, the gate would fire
+// twice, and the call list would end with two `Pause`s and the wrong flag.
+#[test]
+fn concurrent_toggles_serialize_on_the_transport_lock() {
+    let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    let audio = Arc::new(GatedAudio {
+        calls: std::sync::Mutex::new(Vec::new()),
+        entered: entered_tx,
+        release: std::sync::Mutex::new(release_rx),
+    });
+    let (service, state) = service_with_audio(Arc::clone(&audio) as Arc<dyn AudioOutput>);
+    futures::executor::block_on(service.play_track(
+        "song-1",
+        Some("https://example.test/preview.m4a"),
+        || true,
+    ))
+    .unwrap();
+
+    let first = service.clone();
+    let first = std::thread::spawn(move || {
+        futures::executor::block_on(first.toggle_play_pause()).unwrap();
+    });
+    entered_rx
+        .recv_timeout(std::time::Duration::from_secs(5))
+        .expect("the first toggle must reach the backend");
+
+    let second = service.clone();
+    let second = std::thread::spawn(move || {
+        futures::executor::block_on(second.toggle_play_pause()).unwrap();
+    });
+
+    // A second entry while the first is held means the toggles overlapped in
+    // the backend. `recv_timeout` returning `Ok` is that failure.
+    assert!(
+        entered_rx
+            .recv_timeout(std::time::Duration::from_millis(200))
+            .is_err(),
+        "a second toggle entered the backend while the first was still in it"
+    );
+
+    release_tx.send(()).unwrap();
+    first.join().unwrap();
+    second.join().unwrap();
+
+    assert_eq!(
+        audio.calls(),
+        vec![
+            AudioCall::Play("https://example.test/preview.m4a".to_string()),
+            AudioCall::Pause,
+            AudioCall::Resume
+        ]
+    );
+    assert!(futures::executor::block_on(state.lock()).is_playing);
 }
 
 // `pause`'s test above pins its state change; its two sibling stubs,

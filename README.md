@@ -21,7 +21,8 @@ at startup when `APPLE_MUSIC_DEVELOPER_TOKEN` is set: browse queries read the si
 Music library through the REST API, following `next` pages for large libraries, and fall back
 to the in-memory sample library otherwise. Playback plays the selected song's Apple Music preview
 through `rodio`, behind an injectable audio-output seam that falls back to silence when no output
-device opens; Pause and Stop still only update UI state. Open work lives in PLANS.md, BUGS.md,
+device opens. Pause and Stop silence the preview through that seam, and Play resumes a paused
+preview or restarts a stopped one from its remembered URL. Open work lives in PLANS.md, BUGS.md,
 and QUESTIONS.md.
 <!-- tumwater:status:end -->
 
@@ -61,9 +62,9 @@ playback: Z and B step back and forward, X plays, C pauses, V stops, and the up/
 the volume. Setting `APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a browser-based MusicKit
 sign-in: browse queries then read your Apple Music library through the REST API, and fall back to
 the built-in sample library when it is unset. Playback plays the selected song's Apple Music
-preview through `rodio` when the library supplies one, and updates the UI state either way; the
-Pause and Stop controls still only change that UI state, so they do not silence the preview yet.
-There are no CLI flags or config files yet.
+preview through `rodio` when the library supplies one, and updates the UI state either way. Pause
+and Stop silence the preview through the audio backend, and Play resumes a paused preview or
+restarts a stopped one from the beginning. There are no CLI flags or config files yet.
 
 ## Development
 

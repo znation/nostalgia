@@ -60,6 +60,17 @@ pub trait AudioOutput: Send + Sync {
     /// request (see [`AudioOutput::play`]).
     fn pause(&self) -> Result<(), AppleMusicError>;
 
+    /// Resumes a paused player.
+    ///
+    /// Has no effect when nothing is loaded — this resumes a paused player, it
+    /// does not restart a stopped one (see [`AudioOutput::stop`]).
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the backend cannot accept the
+    /// request (see [`AudioOutput::play`]).
+    fn resume(&self) -> Result<(), AppleMusicError>;
+
     /// Stops the current audio and discards it.
     ///
     /// # Errors
@@ -89,6 +100,11 @@ impl AudioOutput for SilentOutput {
         Ok(())
     }
 
+    fn resume(&self) -> Result<(), AppleMusicError> {
+        println!("Audio output is silent; nothing to resume");
+        Ok(())
+    }
+
     fn stop(&self) -> Result<(), AppleMusicError> {
         println!("Audio output is silent; nothing to stop");
         Ok(())
@@ -101,6 +117,8 @@ enum Command {
     Play(String),
     /// Pause the current player.
     Pause,
+    /// Resume the current player, if one is loaded.
+    Resume,
     /// Stop and discard the current player.
     Stop,
 }
@@ -168,6 +186,10 @@ impl AudioOutput for RodioOutput {
         self.send(Command::Pause)
     }
 
+    fn resume(&self) -> Result<(), AppleMusicError> {
+        self.send(Command::Resume)
+    }
+
     fn stop(&self) -> Result<(), AppleMusicError> {
         self.send(Command::Stop)
     }
@@ -207,6 +229,11 @@ fn run_worker(receiver: Receiver<Command>, ready: Sender<Result<(), AppleMusicEr
             Command::Pause => {
                 if let Some(player) = &player {
                     player.pause();
+                }
+            }
+            Command::Resume => {
+                if let Some(player) = &player {
+                    player.play();
                 }
             }
             Command::Stop => {
@@ -307,6 +334,7 @@ mod tests {
         let output = SilentOutput;
         assert!(output.play("https://example.test/preview.m4a").is_ok());
         assert!(output.pause().is_ok());
+        assert!(output.resume().is_ok());
         assert!(output.stop().is_ok());
     }
 
@@ -332,6 +360,7 @@ mod tests {
 
         assert!(output.play("https://example.test/preview.m4a").is_ok());
         assert!(output.pause().is_ok());
+        assert!(output.resume().is_ok());
         assert!(output.stop().is_ok());
     }
 
@@ -385,6 +414,7 @@ mod tests {
 
         output.play("https://example.test/preview.m4a").unwrap();
         output.pause().unwrap();
+        output.resume().unwrap();
         output.stop().unwrap();
 
         match receiver.try_recv() {
@@ -392,6 +422,7 @@ mod tests {
             _ => panic!("play did not send Command::Play"),
         }
         assert!(matches!(receiver.try_recv(), Ok(Command::Pause)));
+        assert!(matches!(receiver.try_recv(), Ok(Command::Resume)));
         assert!(matches!(receiver.try_recv(), Ok(Command::Stop)));
     }
 
@@ -415,6 +446,10 @@ mod tests {
         );
         assert_eq!(
             output.pause().unwrap_err().to_string(),
+            "the audio thread is gone"
+        );
+        assert_eq!(
+            output.resume().unwrap_err().to_string(),
             "the audio thread is gone"
         );
         assert_eq!(
