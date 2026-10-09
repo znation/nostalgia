@@ -659,6 +659,38 @@ fn authorize_rejects_a_malformed_user_token_naming_the_defect() {
 }
 
 #[test]
+fn a_malformed_user_token_is_named_in_the_400_body_without_echoing_it() {
+    // The 400 body is what the browser displays, so it must name the shape
+    // defect the returned error names and must not echo the token, which is a
+    // secret. A rejection is terminal, so `response_to_probe` — which expects
+    // the flow to finish with a valid callback — cannot observe it; capture
+    // the response the browser actually receives instead.
+    let observed = Arc::new(Mutex::new(String::new()));
+    let observed_for_flow = Arc::clone(&observed);
+    let (opener, handles) = background(move |port, state| {
+        *observed_for_flow.lock().expect("observed lock") =
+            request(port, &token_request(&state, "aaa.bbb.cc!"));
+    });
+    authorize_with_timeout(SAMPLE_DEVELOPER_TOKEN, &opener, Duration::from_secs(5))
+        .expect_err("a malformed user token is rejected");
+    join_all(&handles);
+
+    let response = observed.lock().expect("observed lock").clone();
+    assert!(
+        response.starts_with("HTTP/1.1 400"),
+        "the callback should be answered 400, got: {response}"
+    );
+    assert!(
+        response.contains("character outside the base64url alphabet"),
+        "the body must name the defect, got: {response}"
+    );
+    assert!(
+        !response.contains("aaa.bbb.cc!"),
+        "the body must not echo the user token, got: {response}"
+    );
+}
+
+#[test]
 fn authorize_rejects_a_callback_without_a_user_token_field() {
     // A callback missing `userToken` altogether is rejected with a message
     // distinct from a malformed one, so the two causes are not conflated.
