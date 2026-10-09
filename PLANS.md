@@ -123,6 +123,40 @@ the Now Playing bar wiring in `src/ui/mod.rs`.
   (`now_playing_label_keeps_the_track_name_after_browsing_to_another_album`)
   still passes.
 
+### Bound the audio worker's preview download with a timeout (found 2026-10-08, done 2026-10-08)
+
+The audio seam's worker downloaded the preview with `ureq::get(url)`, whose
+default agent leaves every network timeout `None`. A server that accepted the
+connection and then stalled blocked the worker thread forever, and because the
+worker serves commands one at a time, every later play, pause, and stop queued
+behind it. The REST client already bounded its requests; this applies the same
+bound to the app's other network call.
+
+**Goal.** A preview download that stalls fails with a logged error within a
+fixed bound, so the worker keeps serving later commands, and the production
+agent still reuses its pooled connection.
+
+**Approach.**
+
+- `src/audio.rs`: add `PREVIEW_TIMEOUT: Duration = Duration::from_secs(30)`,
+  matching the REST client's `REQUEST_TIMEOUT`.
+- Add `preview_agent() -> &'static ureq::Agent` (a `OnceLock`, built by
+  `agent_with_timeout`) so consecutive plays reuse one pooled agent, and
+  `agent_with_timeout(timeout)`, split out so a test can bound a download
+  against a stalled loopback server without waiting out the production 30s.
+- `download_and_decode(agent, url)` takes the agent and calls `agent.get(url)`;
+  the worker passes `preview_agent()`. The download error already logs on the
+  worker, so a timeout reads like any other download failure.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- A stalled loopback preview server makes `download_and_decode` return `Err`
+  within a short injected bound, asserted from a worker thread so an unbounded
+  download fails the test instead of hanging the suite.
+
+**Files touched.** `src/audio.rs`.
+
 ### Add the audio-output seam and a rodio backend (found 2026-10-08, done 2026-10-08)
 
 The audio-output decision (QUESTIONS.md `## Answered`, 2026-10-08) scopes

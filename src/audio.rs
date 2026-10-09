@@ -13,14 +13,27 @@
 //! then owns the `rodio` stream and player. Commands cross to that thread over
 //! a channel, so the seam stays `Send + Sync` regardless of the platform
 //! handle's own thread bounds, and a download or decode failure is logged on
-//! the worker rather than surfacing as a caller error.
+//! the worker rather than surfacing as a caller error. Each download is bounded
+//! by [`PREVIEW_TIMEOUT`], so a stalled server cannot block the worker — and
+//! with it every later play, pause, and stop command — forever.
 
 use std::io::Cursor;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::OnceLock;
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::time::Duration;
 
 use crate::music_error::AppleMusicError;
+
+/// The end-to-end bound on one preview download, from DNS lookup through
+/// reading the response body. `ureq` defaults every network timeout to `None`,
+/// so without this a server that accepts the connection and then stalls would
+/// block the audio worker forever; because the worker serves commands one at a
+/// time, every later play, pause, and stop would queue behind it. Matches the
+/// REST client's `REQUEST_TIMEOUT` so both of the app's network calls share one
+/// bound.
+const PREVIEW_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// The audio-output seam: a backend that can play, pause, and stop a track.
 ///
@@ -181,7 +194,7 @@ fn run_worker(receiver: Receiver<Command>, ready: Sender<Result<(), AppleMusicEr
     let mut player: Option<rodio::Player> = None;
     while let Ok(command) = receiver.recv() {
         match command {
-            Command::Play(url) => match download_and_decode(&url) {
+            Command::Play(url) => match download_and_decode(preview_agent(), &url) {
                 Ok(decoder) => {
                     // A fresh player per track replaces the previous one, so a
                     // new selection does not queue behind the old track.
@@ -206,19 +219,42 @@ fn run_worker(receiver: Receiver<Command>, ready: Sender<Result<(), AppleMusicEr
     }
 }
 
-/// Downloads `url` and decodes it as an `MP4`/`AAC` preview.
+/// The process-wide [`ureq::Agent`] the audio worker downloads previews
+/// through, so consecutive plays reuse its pooled connection. It carries
+/// [`PREVIEW_TIMEOUT`] as its global timeout, so a stalled server cannot block
+/// the worker forever.
+fn preview_agent() -> &'static ureq::Agent {
+    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+    AGENT.get_or_init(|| agent_with_timeout(PREVIEW_TIMEOUT))
+}
+
+/// Builds an agent with `timeout` as its global bound. Split out from
+/// [`preview_agent`] so a test can bound a download against a stalled loopback
+/// server without waiting out the production 30 seconds.
+fn agent_with_timeout(timeout: Duration) -> ureq::Agent {
+    ureq::Agent::config_builder()
+        .timeout_global(Some(timeout))
+        .build()
+        .into()
+}
+
+/// Downloads `url` through `agent` and decodes it as an `MP4`/`AAC` preview.
 ///
 /// The Apple Music preview is an `M4A` (AAC in an `MP4` container), so the
 /// decoder is hinted with that format. The whole asset is buffered in memory
 /// before decoding because the preview is short and the decoder needs a
-/// `Seek` source.
+/// `Seek` source; `ureq` caps that buffer at its 10 MiB body limit.
 ///
 /// # Errors
 ///
-/// Returns an [`AppleMusicError`] when the download fails, the response is not
-/// a success status, the body cannot be read, or the bytes do not decode.
-fn download_and_decode(url: &str) -> Result<rodio::Decoder<Cursor<Vec<u8>>>, AppleMusicError> {
-    let mut response = ureq::get(url).call().map_err(|error| {
+/// Returns an [`AppleMusicError`] when the download fails (including its
+/// timeout), the response is not a success status, the body cannot be read, or
+/// the bytes do not decode.
+fn download_and_decode(
+    agent: &ureq::Agent,
+    url: &str,
+) -> Result<rodio::Decoder<Cursor<Vec<u8>>>, AppleMusicError> {
+    let mut response = agent.get(url).call().map_err(|error| {
         AppleMusicError::new(format!("downloading the preview failed: {error}"))
     })?;
     let status = response.status();
@@ -257,6 +293,7 @@ pub(crate) fn audio_with_fallback(
 mod tests {
     use super::*;
     use crate::test_support::{AudioCall, RecordingAudio};
+    use std::time::Instant;
 
     #[test]
     fn silent_output_reports_success_for_every_command() {
@@ -289,6 +326,37 @@ mod tests {
         assert!(output.play("https://example.test/preview.m4a").is_ok());
         assert!(output.pause().is_ok());
         assert!(output.stop().is_ok());
+    }
+
+    // `ureq` defaults every network timeout to `None`, so a preview server
+    // that accepts the connection and never responds used to block the audio
+    // worker forever, and every later play/pause/stop command queued behind
+    // it. The bound is asserted from a worker thread with `recv_timeout`, so
+    // an unbounded download fails this test at 5s instead of hanging the
+    // suite.
+    #[test]
+    fn a_stalled_preview_download_is_bounded_by_the_timeout() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let agent = agent_with_timeout(Duration::from_millis(200));
+        let url = format!("http://{address}/stalled");
+        let (sender, receiver) = mpsc::channel();
+        let started = Instant::now();
+        std::thread::spawn(move || {
+            let _ = sender.send(download_and_decode(&agent, &url));
+        });
+        let result = receiver
+            .recv_timeout(Duration::from_secs(5))
+            .expect("the download must return within its bound");
+        assert!(result.is_err(), "a stalled preview download must error");
+        // A connect failure would also return `Err`, instantly; require that
+        // the call actually waited for the bound, so this test only passes
+        // because the stalled response was timed out.
+        assert!(
+            started.elapsed() >= Duration::from_millis(100),
+            "returned before the 200ms bound: {:?}",
+            started.elapsed()
+        );
     }
 
     #[test]
