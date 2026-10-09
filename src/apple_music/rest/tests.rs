@@ -996,6 +996,31 @@ fn a_nameless_resource_on_a_later_page_names_the_page() {
     );
 }
 
+// `fetch` maps each page's resources as that page is read, before it follows
+// the response's `next` link, so a resource that fails validation on page 1 is
+// reported immediately and the linked page is never fetched. Pinning the
+// single recorded call proves the link was not followed; a regression that
+// accumulated every page before mapping (the shape this refactor replaced)
+// would request page 2 first, and its transport error would surface instead of
+// the page-1 validation failure. The body deliberately links a page the stub
+// would answer with a transport error, so the two failures are distinguishable.
+#[test]
+fn a_nameless_resource_on_the_first_page_stops_before_the_next_page() {
+    let stub = StubTransport::returning_results(&[
+        Ok(r#"{"data":[{"id":"artist-1","attributes":{}}],"next":"/v1/me/library/artists?offset=1"}"#.to_string()),
+        Err(AppleMusicError::new("connection reset")),
+    ]);
+    let library = library_over(&stub);
+
+    let error = library
+        .get_favorite_artists(&session())
+        .unwrap_err()
+        .to_string();
+
+    assert_eq!(error, "response carried artist \"artist-1\" without a name");
+    assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/artists");
+}
+
 // The page suffix is only appended when it adds information: the first page is
 // the query the UI already names, so its cause stays bare (the transport and
 // parse tests above pin that end to end). A unit test pins the boundary
