@@ -808,7 +808,7 @@ async fn get_albums_by_artist_uses_the_rest_library_when_signed_in() {
 #[tokio::test]
 async fn get_songs_from_album_uses_the_rest_library_when_signed_in() {
     let stub = StubTransport::returning(
-        r#"{"data":[{"id":"song-1","attributes":{"name":"Opening","durationInMillis":210000}}]}"#,
+        r#"{"data":[{"id":"song-1","attributes":{"name":"Opening","artistName":"The Sample Band","durationInMillis":210000}}]}"#,
     );
     let service = signed_in_service(&stub);
 
@@ -819,6 +819,7 @@ async fn get_songs_from_album_uses_the_rest_library_when_signed_in() {
         vec![Song {
             id: "song-1".to_string(),
             title: "Opening".to_string(),
+            artist: "The Sample Band".to_string(),
             album_id: "album-9".to_string(),
             duration_ms: 210_000,
             preview_url: None,

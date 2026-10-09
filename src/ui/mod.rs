@@ -168,12 +168,13 @@ struct WinampPlayer {
     artists: BrowseList<Artist>,
     albums: BrowseList<Album>,
     songs: BrowseList<Song>,
-    /// Each played song's id mapped to its [`views::KnownTrack`] (title and
-    /// duration), so the Now Playing bar can still name and time the playing
-    /// track after the user browses to a different album (whose list replaces
-    /// `songs.items`). The `TrackSelected` arm records a track's title and
-    /// duration once, when it is played, and `now_playing_label` /
-    /// `now_playing_time` resolve the per-frame bar with a single get instead
+    /// Each played song's id mapped to its [`views::KnownTrack`] (title,
+    /// artist, and duration), so the Now Playing bar can still name and time
+    /// the playing track after the user browses to a different album (whose
+    /// list replaces `songs.items`). The `TrackSelected` arm records a track's
+    /// title, artist, and duration once, when it is played, and
+    /// `now_playing_label` / `now_playing_artist` / `now_playing_time` resolve
+    /// the per-frame bar with a single get instead
     /// of scanning a growing list on every frame. Recording on play — rather
     /// than folding every song of every browsed album into the map — keeps the
     /// map proportional to songs actually played and takes the per-album fold
@@ -238,6 +239,15 @@ impl WinampPlayer {
     /// same path.
     fn now_playing_label<'a>(&'a self, current_track: Option<&str>) -> Cow<'a, str> {
         views::now_playing_label(&self.known_tracks, current_track)
+    }
+
+    /// The Now Playing bar's artist for `current_track`, resolved against the
+    /// accumulated [`Self::known_tracks`] index like
+    /// [`Self::now_playing_label`]: the artist is borrowed from the index, or
+    /// the `""` literal when the track is unknown or none is current, so
+    /// `view` renders the artist before the title only when one is known.
+    fn now_playing_artist<'a>(&'a self, current_track: Option<&str>) -> Cow<'a, str> {
+        views::now_playing_artist(&self.known_tracks, current_track)
     }
 
     /// The Now Playing bar's length readout for `current_track`, formatted
@@ -430,18 +440,20 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             };
             let track_id = song.id.clone();
             let preview_url = song.preview_url.clone();
-            // Record the played track's title and duration before handing the
-            // id to the async play: the Now Playing bar resolves its label and
-            // time from `known_tracks`, and the entry must survive a later
-            // browse to a different album (which replaces `songs.items`).
-            // Recording once per play — rather than folding every song of
-            // every browsed album into the map — keeps the index proportional
-            // to songs actually played and takes the fold off the browse path.
+            // Record the played track's title, artist, and duration before
+            // handing the id to the async play: the Now Playing bar resolves
+            // its label, artist, and time from `known_tracks`, and the entry
+            // must survive a later browse to a different album (which replaces
+            // `songs.items`). Recording once per play — rather than folding
+            // every song of every browsed album into the map — keeps the index
+            // proportional to songs actually played and takes the fold off the
+            // browse path.
             player
                 .known_tracks
                 .entry(track_id.clone())
                 .or_insert_with(|| views::KnownTrack {
                     title: song.title.clone(),
+                    artist: song.artist.clone(),
                     duration_ms: song.duration_ms,
                 });
             // A newer selection must win even when an older play's backend
@@ -671,15 +683,17 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
         return views::view_title_bar(player.always_on_top);
     }
 
-    // The now-playing title and time are resolved while the state lock is
-    // held, from a borrowed `current_track` against the accumulated
-    // `known_tracks` index (see [`WinampPlayer::now_playing_label`] and
-    // [`WinampPlayer::now_playing_time`]). The label borrows the title from
-    // `known_tracks` (or the `"Nothing"` literal), so the label path allocates
-    // only in the unknown-id fallback; the time readout formats a fresh
-    // `String` every frame, so it always allocates.
+    // The now-playing title, artist, and time are resolved while the state
+    // lock is held, from a borrowed `current_track` against the accumulated
+    // `known_tracks` index (see [`WinampPlayer::now_playing_label`],
+    // [`WinampPlayer::now_playing_artist`], and
+    // [`WinampPlayer::now_playing_time`]). The label and artist borrow from
+    // `known_tracks` (or the `"Nothing"`/`""` literals), so those paths
+    // allocate only in the unknown-id label fallback; the time readout formats
+    // a fresh `String` every frame, so it always allocates.
     let (
         now_playing,
+        now_playing_artist,
         now_playing_time,
         is_playing,
         volume,
@@ -694,6 +708,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
         let state = player.state.blocking_lock();
         (
             player.now_playing_label(state.current_track.as_deref()),
+            player.now_playing_artist(state.current_track.as_deref()),
             player.now_playing_time(state.current_track.as_deref()),
             state.is_playing,
             state.volume(),
@@ -739,7 +754,11 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
 
     let mut column = Column::new()
         .push(views::view_title_bar(player.always_on_top))
-        .push(views::view_now_playing(now_playing, now_playing_time))
+        .push(views::view_now_playing(
+            now_playing,
+            now_playing_artist,
+            now_playing_time,
+        ))
         .push(views::view_transport_controls(
             is_playing, volume, balance, repeat, shuffle,
         ))

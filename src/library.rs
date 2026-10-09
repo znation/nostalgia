@@ -37,6 +37,10 @@ pub struct Song {
     pub id: String,
     /// The display title the Songs view and the Now Playing bar render.
     pub title: String,
+    /// The performing artist's display name; `""` means the source supplied
+    /// no artist. The Now Playing bar renders `<artist> - <title>` when it is
+    /// non-empty.
+    pub artist: String,
     /// The [`Album::id`] of the album this song belongs to.
     pub album_id: String,
     /// The track's length in milliseconds; `0` means the source supplied no
@@ -84,6 +88,7 @@ mod tests {
         json!({
             "id": "song-1",
             "title": "Opening",
+            "artist": "The Sample Band",
             "album_id": "album-1",
             "duration_ms": 210_000,
             "preview_url": null
@@ -96,7 +101,7 @@ mod tests {
     /// clear the probe for `preview_url`: a `#[serde(default)]` field is
     /// allowed to be missing.
     fn song_required_fields_payload() -> serde_json::Value {
-        json!({ "id": "song-1", "title": "Opening", "album_id": "album-1", "duration_ms": 210_000 })
+        json!({ "id": "song-1", "title": "Opening", "artist": "The Sample Band", "album_id": "album-1", "duration_ms": 210_000 })
     }
 
     /// The real Apple Music API will hand these types to the app as JSON, so
@@ -164,6 +169,7 @@ mod tests {
             json!({
                 "id": "song-1",
                 "title": "Opening",
+                "artist": "The Sample Band",
                 "album_id": "album-1",
                 "duration_ms": 210_000,
                 "genre": "rock"
@@ -210,6 +216,7 @@ mod tests {
         let parsed: Song = serde_json::from_value(json!({
             "id": "song-1",
             "title": "Opening",
+            "artist": "The Sample Band",
             "album_id": "album-1",
             "duration_ms": 210_000,
             "preview_url": "https://example.test/preview.m4a"

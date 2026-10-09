@@ -29,7 +29,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Show the playing track's artist in the Now Playing bar (found 2026-10-08)
+_None yet._
+
+## Done
+
+### Show the playing track's artist in the Now Playing bar (found 2026-10-08, done 2026-10-08)
 
 Classic Winamp's main-window marquee reads "Artist - Title", and the Apple
 Music browse response already carries each track's `attributes.artistName`.
@@ -118,8 +122,6 @@ the Now Playing bar wiring in `src/ui/mod.rs`.
   the browse-away regression
   (`now_playing_label_keeps_the_track_name_after_browsing_to_another_album`)
   still passes.
-
-## Done
 
 ### Add the audio-output seam and a rodio backend (found 2026-10-08, done 2026-10-08)
 

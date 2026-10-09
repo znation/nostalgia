@@ -79,6 +79,7 @@ impl SampleLibrary {
             Song {
                 id: "song-1".to_string(),
                 title: "Opening".to_string(),
+                artist: "The Sample Band".to_string(),
                 album_id: "album-1".to_string(),
                 duration_ms: 210_000,
                 preview_url: None,
@@ -86,6 +87,7 @@ impl SampleLibrary {
             Song {
                 id: "song-2".to_string(),
                 title: "Middle".to_string(),
+                artist: "The Sample Band".to_string(),
                 album_id: "album-1".to_string(),
                 duration_ms: 240_000,
                 preview_url: None,
@@ -93,6 +95,7 @@ impl SampleLibrary {
             Song {
                 id: "song-3".to_string(),
                 title: "Ending".to_string(),
+                artist: "The Sample Band".to_string(),
                 album_id: "album-1".to_string(),
                 duration_ms: 180_000,
                 preview_url: None,
@@ -100,6 +103,7 @@ impl SampleLibrary {
             Song {
                 id: "song-4".to_string(),
                 title: "B-side".to_string(),
+                artist: "The Sample Band".to_string(),
                 album_id: "album-2".to_string(),
                 duration_ms: 95_000,
                 preview_url: None,
@@ -107,6 +111,7 @@ impl SampleLibrary {
             Song {
                 id: "song-5".to_string(),
                 title: "Headliner".to_string(),
+                artist: "Echo Chamber".to_string(),
                 album_id: "album-3".to_string(),
                 duration_ms: 200_000,
                 preview_url: None,
@@ -266,6 +271,35 @@ mod tests {
                 ("song-3", 180_000),
                 ("song-4", 95_000),
                 ("song-5", 200_000),
+            ]
+        );
+    }
+
+    // The Now Playing bar renders `<artist> - <title>` from `Song::artist`,
+    // and `sample_library` is what the app browses when no Apple Music
+    // session is stored, so these values are user-visible. As with the
+    // duration test above, the index tests pin each song's id and title but
+    // never its artist, so a wrong or empty artist here would make the bar
+    // read a wrong name (or drop the artist) while every existing test stayed
+    // green. Pin every song's artist, in library order, matching its album's
+    // `artist_id`.
+    #[test]
+    fn songs_carry_the_documented_artists() {
+        let library = sample_library();
+        let artists: Vec<(&str, &str)> = ["album-1", "album-2", "album-3"]
+            .iter()
+            .flat_map(|album_id| &library.songs_by_album[*album_id])
+            .map(|song| (song.id.as_str(), song.artist.as_str()))
+            .collect();
+
+        assert_eq!(
+            artists,
+            vec![
+                ("song-1", "The Sample Band"),
+                ("song-2", "The Sample Band"),
+                ("song-3", "The Sample Band"),
+                ("song-4", "The Sample Band"),
+                ("song-5", "Echo Chamber"),
             ]
         );
     }

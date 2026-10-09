@@ -83,7 +83,7 @@ fn albums_by_artist_map_library_json_and_set_the_artist_id() {
 #[test]
 fn songs_from_album_map_library_json_and_set_the_album_id() {
     let stub = StubTransport::returning(
-        r#"{"data":[{"id":"song-1","attributes":{"name":"Opening","durationInMillis":210000}}]}"#,
+        r#"{"data":[{"id":"song-1","attributes":{"name":"Opening","artistName":"The Sample Band","durationInMillis":210000}}]}"#,
     );
     let library = library_over(&stub);
 
@@ -94,6 +94,7 @@ fn songs_from_album_map_library_json_and_set_the_album_id() {
         vec![Song {
             id: "song-1".to_string(),
             title: "Opening".to_string(),
+            artist: "The Sample Band".to_string(),
             album_id: "album-9".to_string(),
             duration_ms: 210_000,
             preview_url: None,
@@ -122,11 +123,34 @@ fn songs_from_album_maps_a_missing_duration_to_zero() {
         vec![Song {
             id: "song-1".to_string(),
             title: "Opening".to_string(),
+            artist: String::new(),
             album_id: "album-9".to_string(),
             duration_ms: 0,
             preview_url: None,
         }]
     );
+}
+
+// A track the API returns without `attributes.artistName` (or with a blank
+// one) must map to the model's `""` "no artist supplied" sentinel rather than
+// failing the whole response, so the Now Playing bar falls back to the title
+// alone instead of dropping the song or rendering a blank artist.
+#[test]
+fn songs_from_album_maps_a_missing_or_blank_artist_to_empty() {
+    for attributes in [
+        r#"{"name":"Opening"}"#,
+        r#"{"name":"Opening","artistName":""}"#,
+        r#"{"name":"Opening","artistName":"   "}"#,
+    ] {
+        let stub = StubTransport::returning(&format!(
+            r#"{{"data":[{{"id":"song-1","attributes":{attributes}}}]}}"#
+        ));
+        let library = library_over(&stub);
+
+        let songs = library.get_songs_from_album(&session(), "album-9").unwrap();
+
+        assert_eq!(songs[0].artist, "");
+    }
 }
 
 // The audio-output decision (QUESTIONS.md `## Answered`, 2026-10-08) scopes

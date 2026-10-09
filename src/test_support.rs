@@ -27,6 +27,7 @@ pub(crate) fn stepping_songs() -> Vec<Song> {
         Song {
             id: "song-1".to_string(),
             title: "One".to_string(),
+            artist: "The Sample Band".to_string(),
             album_id: "album-1".to_string(),
             duration_ms: 210_000,
             preview_url: None,
@@ -34,6 +35,7 @@ pub(crate) fn stepping_songs() -> Vec<Song> {
         Song {
             id: "song-2".to_string(),
             title: "Two".to_string(),
+            artist: "The Sample Band".to_string(),
             album_id: "album-1".to_string(),
             duration_ms: 125_000,
             preview_url: None,
@@ -41,6 +43,7 @@ pub(crate) fn stepping_songs() -> Vec<Song> {
         Song {
             id: "song-3".to_string(),
             title: "Three".to_string(),
+            artist: "The Sample Band".to_string(),
             album_id: "album-1".to_string(),
             duration_ms: 95_000,
             preview_url: None,
@@ -58,6 +61,7 @@ pub(crate) fn single_song_album() -> Vec<Song> {
     vec![Song {
         id: "song-1".to_string(),
         title: "Only".to_string(),
+        artist: "The Sample Band".to_string(),
         album_id: "album-1".to_string(),
         duration_ms: 180_000,
         preview_url: None,
@@ -76,6 +80,7 @@ pub(crate) fn second_album_songs() -> Vec<Song> {
     vec![Song {
         id: "song-4".to_string(),
         title: "B-side".to_string(),
+        artist: "The Sample Band".to_string(),
         album_id: "album-2".to_string(),
         duration_ms: 95_000,
         preview_url: None,
@@ -106,6 +111,7 @@ pub(crate) fn sample_song() -> Song {
     Song {
         id: "song-1".to_string(),
         title: "Opening".to_string(),
+        artist: "The Sample Band".to_string(),
         album_id: "album-1".to_string(),
         duration_ms: 210_000,
         preview_url: None,

@@ -254,6 +254,7 @@ impl RestLibrary {
             Ok(Song {
                 id,
                 title,
+                artist: resource.artist_name(),
                 album_id: album_id.to_string(),
                 duration_ms: resource.duration_ms(),
                 preview_url: resource.preview_url(),
@@ -494,6 +495,9 @@ struct Resource {
 struct Attributes {
     /// The display name; absent when the API omits it.
     name: Option<String>,
+    /// The performing artist's display name; absent when the API omits it.
+    #[serde(rename = "artistName")]
+    artist_name: Option<String>,
     /// The track's length in milliseconds; absent when the API omits it.
     #[serde(rename = "durationInMillis")]
     duration_in_millis: Option<u64>,
@@ -536,6 +540,19 @@ impl Resource {
             .as_ref()
             .and_then(|attributes| attributes.duration_in_millis)
             .unwrap_or(0)
+    }
+
+    /// The resource's performing-artist display name, or `""` when the API
+    /// omitted `attributes.artistName` or supplied only whitespace. `""` is
+    /// [`Song::artist`]'s "source supplied no artist" sentinel, so the Now
+    /// Playing bar falls back to the title alone.
+    fn artist_name(&self) -> String {
+        self.attributes
+            .as_ref()
+            .and_then(|attributes| attributes.artist_name.as_deref())
+            .filter(|name| !name.trim().is_empty())
+            .unwrap_or_default()
+            .to_string()
     }
 
     /// The first non-blank URL in `attributes.previews`, or `None` when

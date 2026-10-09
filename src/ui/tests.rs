@@ -750,6 +750,7 @@ async fn track_selected_plays_the_songs_preview_url() {
     player.songs.items = vec![Song {
         id: "song-1".to_string(),
         title: "One".to_string(),
+        artist: "The Sample Band".to_string(),
         album_id: "album-1".to_string(),
         duration_ms: 210_000,
         preview_url: Some("https://example.test/preview.m4a".to_string()),
@@ -1617,6 +1618,7 @@ fn a_failed_play_completion_clears_the_index_when_nothing_committed() {
     player.songs.items = vec![Song {
         id: String::new(),
         title: "Blank".to_string(),
+        artist: "The Sample Band".to_string(),
         album_id: "album-1".to_string(),
         duration_ms: 0,
         preview_url: None,
