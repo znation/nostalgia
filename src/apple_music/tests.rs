@@ -74,6 +74,22 @@ fn service_with_audio(audio: Arc<dyn AudioOutput>) -> (AppleMusicService, Arc<Mu
     (service, state)
 }
 
+/// A service over `audio` and its shared state with `song-1`'s preview already
+/// playing, so the backend holds a loaded player. The transport tests whose
+/// subject is a *later* transition — resume, stop, resume-after-stop, and the
+/// two toggle directions — all need that starting point, so the `Some`-preview
+/// play lives here once and each test names only the transition it drives.
+async fn service_with_preview_playing(
+    audio: Arc<dyn AudioOutput>,
+) -> (AppleMusicService, Arc<Mutex<AppState>>) {
+    let (service, state) = service_with_audio(audio);
+    service
+        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
+        .await
+        .unwrap();
+    (service, state)
+}
+
 /// A recording backend whose `pause` blocks until released, so a test can hold
 /// one transport transition inside the backend and prove a second one waits on
 /// the service's transport lock rather than entering the backend alongside it.
@@ -648,12 +664,9 @@ async fn pause_stops_playing_but_keeps_current_track() {
 #[tokio::test]
 async fn resume_resumes_the_audio_backend() {
     let recording = Arc::new(RecordingAudio::default());
-    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+    let (service, state) =
+        service_with_preview_playing(Arc::clone(&recording) as Arc<dyn AudioOutput>).await;
 
-    service
-        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
-        .await
-        .unwrap();
     service.pause().await.unwrap();
     service.resume().await.unwrap();
 
@@ -673,12 +686,9 @@ async fn resume_resumes_the_audio_backend() {
 #[tokio::test]
 async fn stop_stops_the_audio_backend() {
     let recording = Arc::new(RecordingAudio::default());
-    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+    let (service, state) =
+        service_with_preview_playing(Arc::clone(&recording) as Arc<dyn AudioOutput>).await;
 
-    service
-        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
-        .await
-        .unwrap();
     service.stop().await.unwrap();
 
     assert_eq!(
@@ -695,12 +705,9 @@ async fn stop_stops_the_audio_backend() {
 #[tokio::test]
 async fn toggle_play_pause_pauses_while_playing() {
     let recording = Arc::new(RecordingAudio::default());
-    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+    let (service, state) =
+        service_with_preview_playing(Arc::clone(&recording) as Arc<dyn AudioOutput>).await;
 
-    service
-        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
-        .await
-        .unwrap();
     service.toggle_play_pause().await.unwrap();
 
     assert_eq!(
@@ -717,12 +724,9 @@ async fn toggle_play_pause_pauses_while_playing() {
 #[tokio::test]
 async fn toggle_play_pause_resumes_while_paused() {
     let recording = Arc::new(RecordingAudio::default());
-    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+    let (service, state) =
+        service_with_preview_playing(Arc::clone(&recording) as Arc<dyn AudioOutput>).await;
 
-    service
-        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
-        .await
-        .unwrap();
     service.pause().await.unwrap();
     service.toggle_play_pause().await.unwrap();
 
@@ -745,12 +749,9 @@ async fn toggle_play_pause_resumes_while_paused() {
 #[tokio::test]
 async fn resume_after_stop_restarts_the_preview() {
     let recording = Arc::new(RecordingAudio::default());
-    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+    let (service, state) =
+        service_with_preview_playing(Arc::clone(&recording) as Arc<dyn AudioOutput>).await;
 
-    service
-        .play_track("song-1", Some("https://example.test/preview.m4a"), || true)
-        .await
-        .unwrap();
     service.stop().await.unwrap();
     service.resume().await.unwrap();
 
