@@ -108,8 +108,9 @@ where
 /// HTTP response it received; the real callback then completes the flow.
 ///
 /// The tests that inspect the response to an unusual request — the browser's
-/// `/?state=` page query, an unknown path, and a foreign `Host` — share this
-/// scaffold, so each keeps only its own assertion on the returned response.
+/// `/?state=` page query, a wrong-state `POST /token`, an unknown path, and a
+/// foreign `Host` — share this scaffold, so each keeps only its own assertion
+/// on the returned response.
 fn response_to_probe<F>(probe: F) -> String
 where
     F: Fn(&str) -> String + Send + 'static,
@@ -358,20 +359,9 @@ fn authorize_ignores_a_callback_with_the_wrong_state() {
     // Any local client can reach `POST /token` without knowing the nonce, so a
     // wrong-state request must not abort the sign-in: it is answered 400 and
     // the real callback still completes on a later connection.
-    let observed = Arc::new(Mutex::new(String::new()));
-    let observed_for_flow = Arc::clone(&observed);
-    authorize_with_flow(move |port, state| {
-        let wrong = request(port, &token_request("wrong-state", SAMPLE_USER_TOKEN));
-        let _ = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
-        *observed_for_flow.lock().expect("observed lock") = wrong;
-    })
-    .expect("a wrong state does not abort the flow");
-
+    let wrong = response_to_probe(|_state| token_request("wrong-state", SAMPLE_USER_TOKEN));
     assert!(
-        observed
-            .lock()
-            .expect("observed lock")
-            .starts_with("HTTP/1.1 400"),
+        wrong.starts_with("HTTP/1.1 400"),
         "a wrong state should be rejected with 400"
     );
 }
