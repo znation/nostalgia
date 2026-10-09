@@ -1,10 +1,10 @@
-//! NaN-safe float clamping shared by the two shared-state float rules.
+//! NaN-safe float clamping shared by the three clamp wrappers.
 //!
-//! `state::clamp_volume` and `equalizer::clamp_gain` both apply the same rule
-//! to a slider value: clamp an in-range value to its bounds, but map a NaN to
-//! a caller-chosen neutral value instead of letting `f32::clamp` pass it
-//! through. The rule lives here once, so each domain wrapper only names its
-//! own range and fallback.
+//! `state::clamp_volume`, `state::clamp_balance`, and `equalizer::clamp_gain`
+//! all apply the same rule to a slider value: clamp an in-range value to its
+//! bounds, but map a NaN to a caller-chosen neutral value instead of letting
+//! `f32::clamp` pass it through. The rule lives here once, so each domain
+//! wrapper only names its own range and fallback.
 
 /// Clamps `value` to `[min, max]`, mapping NaN to `nan_fallback`.
 ///
