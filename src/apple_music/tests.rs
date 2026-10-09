@@ -36,10 +36,10 @@ fn sign_in_session() -> MusicKitSession {
 
 /// A fresh service plus its shared state with `song-1` already playing.
 /// The tests whose subject is a *later* operation — replacing the track,
-/// pausing, rejecting a blank or control-character id mid-playback, and
-/// the transport stubs — all need that same starting point, so the
-/// ordinary play (guard reporting "not superseded") lives here once and
-/// each test names only the state it drives to.
+/// pausing, rejecting a blank id, a control-character id, or a blank
+/// preview URL mid-playback, and the transport stubs — all need that same
+/// starting point, so the ordinary play (guard reporting "not superseded")
+/// lives here once and each test names only the state it drives to.
 async fn service_with_song_1_playing() -> (AppleMusicService, Arc<Mutex<AppState>>) {
     let (service, state) = test_service_with_state();
     service.play_track("song-1", None, || true).await.unwrap();
