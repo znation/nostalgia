@@ -1093,6 +1093,31 @@ fn read_http_request_reads_a_body_across_multiple_reads() {
     );
 }
 
+// The flow's deadline is the outer bound on the whole sign-in, so a
+// connection accepted just as it expires must not be served. `read_http_request`
+// is documented to treat an already-arrived `deadline` as an unusable request
+// and return `Ok(None)` without blocking; `arm_read_timeout` is what refuses to
+// arm a read once the deadline has passed (a zero timeout would mean "block
+// forever"). Every other test passes a future deadline, so this branch is
+// otherwise unentered. The client here has a complete request ready, so if the
+// deadline check were dropped the read would succeed and return `Some`;
+// asserting `None` pins the check rather than relying on timing.
+#[test]
+fn read_http_request_gives_up_when_the_deadline_has_already_arrived() {
+    let (mut server, mut client) = connected_pair();
+    client
+        .write_all(b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+        .expect("write a complete request");
+
+    let request = read_http_request(&mut server, Instant::now() - Duration::from_secs(1))
+        .expect("an expired deadline is not an I/O error");
+
+    assert!(
+        request.is_none(),
+        "an expired deadline must give up instead of serving the buffered request"
+    );
+}
+
 #[test]
 fn authorize_times_out_without_a_callback_and_names_the_bound() {
     let opener = |_url: &str| Ok(());
