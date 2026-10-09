@@ -72,3 +72,9 @@ There are no CLI flags or config files yet.
 names contain `<name>`, for a fast loop while iterating on one behavior;
 `make fix` applies formatting and clippy's machine-applicable fixes in place,
 and `make run` is the same as `cargo run`.
+
+On Linux the build links against the system audio library, so install the ALSA
+development headers first — `libasound2-dev` on Debian/Ubuntu, `alsa-lib-devel`
+on Fedora — or `rodio`'s `cpal` backend fails to build. CI
+(`.github/workflows/ci.yml`) installs them and runs `make check` on every push
+and pull request.

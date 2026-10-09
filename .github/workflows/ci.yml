@@ -1,0 +1,32 @@
+# The landing gate on every push and pull request, mirroring `make check`.
+#
+# `rodio`'s Linux backend (`cpal`) links against ALSA through `alsa-sys`, whose
+# build script runs `pkg-config` and fails without the ALSA development
+# headers; the apt step installs them before cargo builds. The toolchain action
+# provides a current stable Rust with the `rustfmt` and `clippy` components
+# `make check` requires. The runner's `TMPDIR` is a normal disk-backed path,
+# unlike some sandboxes, so no extra temp-dir override is needed.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: make check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install the Linux audio build dependency
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libasound2-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Run the landing gate
+        run: make check
