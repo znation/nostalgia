@@ -54,7 +54,9 @@ Build and run with `cargo run`; the player opens an iced window showing the Now 
 playing track's artist and title, with its length at the right), the
 Play/Pause/Stop/Previous/Next controls, Repeat and Shuffle toggles, volume and balance sliders,
 an equalizer panel (an EQ on/off button, a preset pick list, a preamp slider, and ten band
-sliders), and a browse list whose song rows show each track's length. The title bar's `A` button
+sliders), and a browse list whose song rows show each track's length. A `Search library` box above
+the browse list searches the library when you press Enter, replacing the list with the matching
+songs; Back leaves a search for the artists list. The title bar's `A` button
 toggles always-on-top, its shade button (or a double-click on the bar) rolls the window up to
 just that title bar and back, and its `–` and `✕` buttons minimize and close. With the window
 focused, the classic Winamp keys drive
