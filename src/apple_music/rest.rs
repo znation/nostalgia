@@ -297,18 +297,7 @@ impl RestLibrary {
             "{API_BASE}/me/library/albums/{}/tracks",
             encode_path_segment(album_id)
         );
-        self.fetch(&url, session, |resource| {
-            let id = resource.required_id("song")?;
-            let title = resource.required_name("song")?;
-            Ok(Song {
-                id,
-                title,
-                artist: resource.artist_name(),
-                album_id: album_id.to_string(),
-                duration_ms: resource.duration_ms(),
-                preview_url: resource.preview_url(),
-            })
-        })
+        self.fetch(&url, session, |resource| resource.to_song(album_id))
     }
 
     /// Songs in the signed-in user's library matching `query`.
@@ -334,16 +323,7 @@ impl RestLibrary {
             encode_path_segment(query)
         );
         self.fetch_parsed(&url, session, parse_search_envelope, |resource| {
-            let id = resource.required_id("song")?;
-            let title = resource.required_name("song")?;
-            Ok(Song {
-                id,
-                title,
-                artist: resource.artist_name(),
-                album_id: String::new(),
-                duration_ms: resource.duration_ms(),
-                preview_url: resource.preview_url(),
-            })
+            resource.to_song("")
         })
     }
 
@@ -743,6 +723,23 @@ impl Resource {
                         .map(str::to_string)
                 })
             })
+    }
+
+    /// Maps this resource to a [`Song`] linked to `album_id`.
+    ///
+    /// A search result carries no album id, so its caller passes `""`. The id
+    /// and title are required (see [`Self::required_id`] and
+    /// [`Self::required_name`]); the artist, duration, and preview URL fall
+    /// back to their "source supplied none" sentinels.
+    fn to_song(&self, album_id: &str) -> Result<Song, AppleMusicError> {
+        Ok(Song {
+            id: self.required_id("song")?,
+            title: self.required_name("song")?,
+            artist: self.artist_name(),
+            album_id: album_id.to_string(),
+            duration_ms: self.duration_ms(),
+            preview_url: self.preview_url(),
+        })
     }
 
     /// The resource's non-blank name, or an [`AppleMusicError`] naming `kind`
