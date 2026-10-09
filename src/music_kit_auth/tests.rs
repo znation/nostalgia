@@ -772,6 +772,54 @@ fn read_http_request_refuses_a_declared_body_past_the_cap() {
     let _ = writer.join();
 }
 
+// The cap's accept side: a request whose headers and body together fill
+// `MAX_REQUEST_BYTES` exactly is still served, not refused. The test above and
+// the header one below pin only the reject side (`MAX + 1` body, over-cap
+// headers), so the `<=` in the cap check (`end <= MAX_REQUEST_BYTES`) has its
+// boundary unpinned: a regression to `<` would reject only an exact-fill
+// request while every smaller one and every over-cap one still behaved as
+// tested. Build the request so its total length is exactly the cap and assert
+// the declared body comes back whole.
+#[test]
+fn read_http_request_accepts_a_request_filling_the_cap_exactly() {
+    let (mut server, mut client) = connected_pair();
+
+    // Solve for the body length that makes header + body exactly the cap. The
+    // header embeds the length, and its digit count is the only thing that
+    // changes as the length changes, so a few iterations converge.
+    let header = |length: usize| {
+        format!("POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: {length}\r\n\r\n")
+    };
+    let mut body_len = http::MAX_REQUEST_BYTES;
+    for _ in 0..4 {
+        body_len = http::MAX_REQUEST_BYTES - header(body_len).len();
+    }
+    assert_eq!(
+        header(body_len).len() + body_len,
+        http::MAX_REQUEST_BYTES,
+        "the fixture must fill the cap exactly"
+    );
+
+    let raw = format!("{}{}", header(body_len), "x".repeat(body_len));
+    let writer = std::thread::spawn(move || {
+        let _ = client.write_all(raw.as_bytes());
+    });
+
+    let request = read_http_request(&mut server, Instant::now() + Duration::from_secs(5))
+        .expect("an exact-cap request is not an I/O error")
+        .expect("a request filling the cap exactly is accepted");
+    assert_eq!(request.method, "POST");
+    assert_eq!(request.path, "/token");
+    assert_eq!(
+        request.body,
+        vec![b'x'; body_len],
+        "the exact-cap body must be read whole"
+    );
+
+    drop(server);
+    let _ = writer.join();
+}
+
 #[test]
 fn read_http_request_refuses_headers_past_the_cap() {
     let (mut server, mut client) = connected_pair();
