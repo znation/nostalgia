@@ -107,7 +107,9 @@ impl RestLibrary {
     /// Albums by `artist_id` in the signed-in user's library.
     ///
     /// The query already scopes the results to `artist_id`, so every mapped
-    /// [`Album`] carries it as its `artist_id`.
+    /// [`Album`] carries it as its `artist_id`. The id is percent-encoded as
+    /// one path segment, so an id carrying a reserved character cannot split
+    /// the path or start a query.
     ///
     /// # Errors
     ///
@@ -118,7 +120,10 @@ impl RestLibrary {
         session: &MusicKitSession,
         artist_id: &str,
     ) -> Result<Vec<Album>, AppleMusicError> {
-        let url = format!("{API_BASE}/me/library/artists/{artist_id}/albums");
+        let url = format!(
+            "{API_BASE}/me/library/artists/{}/albums",
+            encode_path_segment(artist_id)
+        );
         let resources = self.fetch(&url, session, "albums by artist")?;
         resources
             .into_iter()
@@ -136,7 +141,9 @@ impl RestLibrary {
     /// Songs on `album_id` in the signed-in user's library.
     ///
     /// The query already scopes the results to `album_id`, so every mapped
-    /// [`Song`] carries it as its `album_id`.
+    /// [`Song`] carries it as its `album_id`. The id is percent-encoded as one
+    /// path segment, so an id carrying a reserved character cannot split the
+    /// path or start a query.
     ///
     /// # Errors
     ///
@@ -147,7 +154,10 @@ impl RestLibrary {
         session: &MusicKitSession,
         album_id: &str,
     ) -> Result<Vec<Song>, AppleMusicError> {
-        let url = format!("{API_BASE}/me/library/albums/{album_id}/tracks");
+        let url = format!(
+            "{API_BASE}/me/library/albums/{}/tracks",
+            encode_path_segment(album_id)
+        );
         let resources = self.fetch(&url, session, "songs from album")?;
         resources
             .into_iter()
@@ -179,6 +189,25 @@ impl RestLibrary {
         })?;
         Ok(envelope.data)
     }
+}
+
+/// Percent-encodes `segment` for use as a single URL path segment.
+///
+/// Every byte outside the RFC 3986 unreserved set (`A`-`Z`, `a`-`z`, `0`-`9`,
+/// `-`, `.`, `_`, `~`) becomes `%XX`, so an id carrying a space, `/`, `?`,
+/// `#`, or a non-ASCII character cannot split the path or start a query. An
+/// unreserved byte is never encoded, so a normal Apple Music id (letters,
+/// digits, and dots) passes through unchanged.
+fn encode_path_segment(segment: &str) -> String {
+    let mut encoded = String::with_capacity(segment.len());
+    for byte in segment.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_' | b'~') {
+            encoded.push(char::from(byte));
+        } else {
+            encoded.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    encoded
 }
 
 /// The `{ "data": [ ... ] }` envelope every Apple Music collection response

@@ -144,6 +144,43 @@ fn songs_from_album_map_library_json_and_set_the_album_id() {
 }
 
 #[test]
+fn albums_by_artist_percent_encodes_the_id() {
+    let stub = StubTransport::returning(r#"{"data":[]}"#);
+    let library = library_over(&stub);
+
+    library
+        .get_albums_by_artist(&session(), "a/b c?d#e")
+        .unwrap();
+
+    assert_single_call(
+        &stub,
+        "https://api.music.apple.com/v1/me/library/artists/a%2Fb%20c%3Fd%23e/albums",
+    );
+}
+
+#[test]
+fn songs_from_album_percent_encodes_the_id() {
+    let stub = StubTransport::returning(r#"{"data":[]}"#);
+    let library = library_over(&stub);
+
+    library
+        .get_songs_from_album(&session(), "caf\u{e9}")
+        .unwrap();
+
+    assert_single_call(
+        &stub,
+        "https://api.music.apple.com/v1/me/library/albums/caf%C3%A9/tracks",
+    );
+}
+
+#[test]
+fn encode_path_segment_leaves_unreserved_bytes_and_encodes_the_rest() {
+    assert_eq!(encode_path_segment("i.abc-123_~"), "i.abc-123_~");
+    assert_eq!(encode_path_segment("a b/c?d#e"), "a%20b%2Fc%3Fd%23e");
+    assert_eq!(encode_path_segment("caf\u{e9}"), "caf%C3%A9");
+}
+
+#[test]
 fn transport_error_names_the_query() {
     let stub = StubTransport::failing("network down");
     let library = library_over(&stub);
