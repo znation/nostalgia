@@ -433,17 +433,35 @@ fn a_non_success_status_surfaces_the_api_error_detail() {
 
     let url = format!("http://{addr}/me/library/artists");
     let error = UreqTransport::new().get(&url, &session()).unwrap_err();
-    let message = error.to_string();
-    assert!(message.contains("401 Unauthorized"), "{message}");
-    assert!(message.contains("Invalid developer token"), "{message}");
+    assert_eq!(
+        error.to_string(),
+        "HTTP 401 Unauthorized: Invalid developer token"
+    );
+}
+
+// The `None` arm of the same status check: a non-2xx response whose body is
+// not the documented error envelope has no cause to add, so the message names
+// only the status. Pinned so a regression cannot drop the status itself or
+// invent a cause from an unrelated body.
+#[test]
+fn a_non_success_status_without_an_api_error_body_reports_just_the_status() {
+    let body = "Not found";
+    let addr = serve_one_response(&format!(
+        "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    ));
+
+    let url = format!("http://{addr}/me/library/artists");
+    let error = UreqTransport::new().get(&url, &session()).unwrap_err();
+    assert_eq!(error.to_string(), "HTTP 404 Not Found");
 }
 
 // `UreqTransport::get` has a second failure path the stalled-server test does
 // not reach: a response whose headers arrive but whose body cannot be read
 // whole. A server that declares a `Content-Length` and then closes the
 // connection before sending that many bytes makes `read_to_string` fail; this
-// pins that the read error is reported with the URL rather than surfacing as a
-// truncated body or a panic.
+// pins that the read error is reported as a body-read failure rather than
+// surfacing as a truncated body or a panic.
 #[test]
 fn a_truncated_response_body_reports_a_read_error() {
     // Declare 100 bytes but send only five, then close the connection.
@@ -455,6 +473,8 @@ fn a_truncated_response_body_reports_a_read_error() {
 
     let error = transport.get(&url, &session()).unwrap_err().to_string();
 
-    assert!(error.contains("reading response from"), "{error}");
-    assert!(error.contains(&url), "{error}");
+    assert!(
+        error.starts_with("reading the response body failed:"),
+        "{error}"
+    );
 }

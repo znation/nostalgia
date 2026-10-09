@@ -40,7 +40,10 @@ pub trait HttpTransport: Send + Sync {
     /// # Errors
     ///
     /// Returns an [`AppleMusicError`] when the request fails — a transport
-    /// error, a non-success status, or a body that cannot be read.
+    /// error, a non-success status, or a body that cannot be read. The message
+    /// is the bare cause (the HTTP status and Apple's detail, or the underlying
+    /// error); [`RestLibrary`] prefixes it with the query it issued, so a
+    /// caller can tell which browse request broke.
     fn get(&self, url: &str, session: &MusicKitSession) -> Result<String, AppleMusicError>;
 }
 
@@ -126,11 +129,11 @@ impl HttpTransport for UreqTransport {
             .header("Authorization", authorization.as_str())
             .header("Music-User-Token", session.user_token.as_str())
             .call()
-            .map_err(|error| AppleMusicError::new(format!("request to {url} failed: {error}")))?;
+            .map_err(|error| AppleMusicError::new(error.to_string()))?;
 
         let status = response.status();
         let body = response.body_mut().read_to_string().map_err(|error| {
-            AppleMusicError::new(format!("reading response from {url} failed: {error}"))
+            AppleMusicError::new(format!("reading the response body failed: {error}"))
         })?;
 
         // `http_status_as_error(false)` leaves a non-2xx response as `Ok`, so
@@ -142,8 +145,8 @@ impl HttpTransport for UreqTransport {
             Ok(body)
         } else {
             Err(AppleMusicError::new(match api_error_cause(&body) {
-                Some(cause) => format!("request to {url} failed with HTTP {status}: {cause}"),
-                None => format!("request to {url} failed with HTTP {status}"),
+                Some(cause) => format!("HTTP {status}: {cause}"),
+                None => format!("HTTP {status}"),
             }))
         }
     }

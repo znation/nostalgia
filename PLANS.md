@@ -298,7 +298,7 @@ an in-memory stub transport with no network.
   - `pub trait HttpTransport: Send + Sync` with
     `fn get(&self, url: &str, session: &MusicKitSession) -> Result<String, AppleMusicError>`
     — the narrow seam the tests stub.
-  - `pub struct UreqTransport;` implementing it over one process-wide
+  - `pub struct UreqTransport { agent: ureq::Agent }` implementing it over one process-wide
     `ureq::Agent` (`agent.get(url)`; a fresh `ureq::get` per call would reopen
     the TCP/TLS connection) with an
     `Authorization: Bearer <developer_token>` header and a
@@ -306,8 +306,9 @@ an in-memory stub transport with no network.
     `http_status_as_error(false)` so a 4xx/5xx stays an `Ok` with its body
     intact; `get` then reads `response.body_mut().read_to_string()`, checks
     `status.is_success()`, and on a non-2xx returns an `AppleMusicError`
-    naming the URL, the status, and the Apple error envelope's `detail`
-    (falling back to its `title`) through `api_error_cause`. A transport
+    naming the status and the Apple error envelope's `detail` (falling back
+    to its `title`) through `api_error_cause`; the bare cause is left for
+    `RestLibrary::fetch` to prefix with the query label. A transport
     `ureq::Error` is mapped to `AppleMusicError::new(...)`. No error message
     includes a token.
   - `pub struct RestLibrary { transport: Box<dyn HttpTransport> }` with
