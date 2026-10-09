@@ -29,7 +29,95 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
+### Show the playing track's artist in the Now Playing bar (found 2026-10-08)
+
+Classic Winamp's main-window marquee reads "Artist - Title", and the Apple
+Music browse response already carries each track's `attributes.artistName`.
+Nostalgia's `Song` drops it — `rest::Attributes` reads only `name`,
+`durationInMillis`, and `previews` — so the Now Playing bar can only name the
+title. This carries the artist onto the model and shows it beside the title.
+The playlist editor's rows keep their `title + length` layout, and the artist
+never reaches the transport, browse navigation, volume, balance, or
+equalizer.
+
+**Goal.** `Song` carries `artist: String` — the performing artist's display
+name, `""` when the source supplied none. The REST browse client parses
+`attributes.artistName` into it; the sample library and test fixtures fill
+it. The Now Playing bar renders `<artist> - <title>` when the artist is known
+and falls back to the title alone when it is empty. No new dependency.
+
+**Approach.**
+
+- `src/library.rs`: add `pub artist: String` to `Song`, documented as the
+  performing artist's display name with `""` meaning the source supplied
+  none. Add `"artist": "The Sample Band"` to `song_payload()` and to
+  `song_required_fields_payload()`, so `assert_every_field_required` still
+  covers every required key and the round-trip test pins the field name.
+- `src/apple_music/rest.rs`: add `#[serde(rename = "artistName")]
+  artist_name: Option<String>` to `Attributes`, and set `artist:
+  resource.artist_name.clone().filter(|name| !name.trim().is_empty())
+  .unwrap_or_default()` in the `get_songs_from_album` mapping — an absent or
+  blank name maps to `""`, the model's "no artist" sentinel, matching the
+  `duration_ms`/`preview_url` treatment of missing source data.
+- `src/sample_library.rs`: every `Song` literal gains `artist` — "The Sample
+  Band" for the `album-1`/`album-2` songs, "Echo Chamber" for the `album-3`
+  song — matching the album's `artist_id`. Add a `songs_carry_the_documented_artists`
+  test mirroring `songs_carry_the_documented_durations`, pinning every song's
+  artist in library order.
+- `src/test_support.rs`: `sample_song`, `stepping_songs`,
+  `single_song_album`, and `second_album_songs` gain
+  `artist: "The Sample Band".to_string()`.
+- The remaining `Song { … }` literals (`src/apple_music/tests.rs`,
+  `src/apple_music/rest/tests.rs`, `src/ui/tests.rs`) gain the field.
+- `src/apple_music/rest/tests.rs`: the `songs_from_album` fixture carries
+  `"artistName": "The Sample Band"` and its expected `Song` carries that
+  artist; a companion test pins an absent `artistName` to `""`.
+- `src/ui/views.rs`:
+  - Add `pub artist: String` to `KnownTrack`, documented beside `title` and
+    `duration_ms`.
+  - Add `pub fn now_playing_artist<'a>(tracks: &'a HashMap<String,
+    KnownTrack>, current_track: Option<&str>) -> Cow<'a, str>`: the known
+    track's artist borrowed from the map, or the `""` literal when the track
+    is unknown or none is current. It mirrors `now_playing_label`, so the
+    artist adds no per-frame `String` allocation.
+  - Change `view_now_playing(label: Cow<'_, str>, artist: Cow<'_, str>, time:
+    String)` to push the artist and a `" - "` separator before the title only
+    when `artist` is non-empty, so an artist-less track still reads `Now
+    Playing: <title>`.
+  - In the `#[cfg(test)] mod tests`: the `known_tracks` helper takes
+    `(id, artist, title)` triples; add value and borrow tests for
+    `now_playing_artist`; pass the artist to the `view_now_playing` construct
+    call.
+- `src/ui/mod.rs`:
+  - Add a `WinampPlayer::now_playing_artist` method mirroring
+    `now_playing_label`.
+  - The `TrackSelected` arm records `artist: song.artist.clone()` in the
+    `KnownTrack` entry.
+  - `view` resolves the artist in the same state-lock block as the label and
+    passes it to `view_now_playing`.
+
+**Files touched.** `src/library.rs`, `src/apple_music/rest.rs`,
+`src/apple_music/rest/tests.rs`, `src/sample_library.rs`,
+`src/test_support.rs`, plus the `Song` literals and the `KnownTrack` fixture
+in `src/apple_music/tests.rs`, `src/ui/tests.rs`, and `src/ui/views.rs`, and
+the Now Playing bar wiring in `src/ui/mod.rs`.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- A `get_songs_from_album` stub response carrying `"artistName": "The Sample
+  Band"` maps that string to `Song::artist`; a response omitting it (or
+  carrying a blank one) maps to `""`.
+- Every `sample_library()` song carries its album's artist name, pinned by
+  `songs_carry_the_documented_artists`.
+- `now_playing_artist` returns the known track's artist, `""` for an unknown
+  id, and `""` when no track is current; the known case borrows from the map
+  (`Cow::Borrowed`).
+- `view_now_playing` builds with a non-empty artist and with an empty one.
+- The `now_playing_label` value and borrow tests still pass unchanged, and
+  the browse-away regression
+  (`now_playing_label_keeps_the_track_name_after_browsing_to_another_album`)
+  still passes.
 
 ## Done
 
