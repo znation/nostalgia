@@ -54,41 +54,28 @@ fn request(port: u16, raw: &str) -> String {
     response
 }
 
-/// Wraps `flow` as an opener that runs it on a background thread, so the
-/// blocking `authorize` call can accept the connection. The returned
-/// handles let a test join the thread (and surface any panic in it) once
-/// `authorize` has returned.
-///
-/// The opener receives the path of the private bootstrap page, not the
-/// sign-in URL, so it reads the page to recover the port and nonce the way a
-/// browser would follow the redirect.
+/// The recording-free variant of [`background_capturing`]: wraps `flow` as an
+/// opener that runs it on a background thread and returns the handles a test
+/// joins once `authorize` has returned. The calls [`background_capturing`]
+/// records are dropped.
 fn background<F>(flow: F) -> (impl Fn(&str) -> io::Result<()>, OpenerHandles)
 where
     F: FnOnce(u16, String) + Send + 'static,
 {
-    let slot = Arc::new(Mutex::new(Some(flow)));
-    let handles = Arc::new(Mutex::new(Vec::new()));
-    let handles_for_opener = Arc::clone(&handles);
-    let opener = move |page_path: &str| {
-        let html = std::fs::read_to_string(page_path).expect("the bootstrap page is readable");
-        let url = url_of_bootstrap(&html);
-        let port = port_of(&url);
-        let state = state_of(&url);
-        let flow = slot.lock().expect("opener slot lock").take();
-        if let Some(flow) = flow {
-            let handle = thread::spawn(move || flow(port, state));
-            handles_for_opener
-                .lock()
-                .expect("handles lock")
-                .push(handle);
-        }
-        Ok(())
-    };
+    let (opener, handles, _calls) = background_capturing(flow);
     (opener, handles)
 }
 
-/// Like [`background`], but also records each `(bootstrap path, sign-in URL)`
-/// pair the opener received, so a test can inspect what reached the opener.
+/// Wraps `flow` as an opener that runs it on a background thread, so the
+/// blocking `authorize` call can accept the connection, and records each
+/// `(bootstrap path, sign-in URL)` pair the opener received so a test can
+/// inspect what reached the opener. The returned handles let a test join the
+/// thread (and surface any panic in it) once `authorize` has returned.
+///
+/// The opener receives the path of the private bootstrap page, not the
+/// sign-in URL, so it reads the page to recover the port and nonce the way a
+/// browser would follow the redirect. [`background`] is the recording-free
+/// variant and delegates here, so the opener contract lives once.
 fn background_capturing<F>(flow: F) -> (impl Fn(&str) -> io::Result<()>, OpenerHandles, OpenerCalls)
 where
     F: FnOnce(u16, String) + Send + 'static,
