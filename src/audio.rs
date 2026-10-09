@@ -290,18 +290,27 @@ fn preview_agent() -> &'static ureq::Agent {
     AGENT.get_or_init(|| agent_with_timeout(PREVIEW_TIMEOUT))
 }
 
-/// Builds an agent with `timeout` as its global bound. Split out from
-/// [`preview_agent`] so a test can bound a download against a stalled loopback
-/// server without waiting out the production 30 seconds.
+/// Builds an agent with `timeout` as its global bound and no redirect
+/// following. Split out from [`preview_agent`] so a test can bound a download
+/// against a stalled loopback server without waiting out the production 30
+/// seconds.
 ///
 /// The agent disables `ureq`'s status-as-error shortcut
 /// (`http_status_as_error(false)`), so a 4xx/5xx response reaches
 /// [`download_and_decode`] as an `Ok` response and its own status check
 /// reports "the preview download returned HTTP …" instead of `ureq`'s bare
 /// status error.
+///
+/// The agent follows no redirects (`max_redirects(0)`), matching the REST
+/// agent. `preview_url_problem` validates the preview URL's host once, before
+/// the fetch, and `ureq` follows redirects by default; a `Location` to an
+/// address that validation refused (an internal address literal, say) would
+/// otherwise be fetched, so refusing to follow one keeps the fetch on the
+/// single URL that passed validation.
 fn agent_with_timeout(timeout: Duration) -> ureq::Agent {
     ureq::Agent::config_builder()
         .timeout_global(Some(timeout))
+        .max_redirects(0)
         .http_status_as_error(false)
         .build()
         .into()
@@ -361,7 +370,10 @@ pub(crate) fn audio_with_fallback(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{AudioCall, PREVIEW_URL, RecordingAudio, serve_one_response};
+    use crate::test_support::{
+        AudioCall, PREVIEW_URL, RecordingAudio, loopback_listener, read_some_request,
+        serve_one_response,
+    };
     use std::time::Instant;
 
     #[test]
@@ -520,6 +532,66 @@ mod tests {
         assert_eq!(
             error.to_string(),
             "the preview download returned HTTP 404 Not Found"
+        );
+    }
+
+    // A preview URL's host is validated before it reaches this backend, but a
+    // hostile or compromised API reply can point a public preview URL at a
+    // server that answers 302 to an internal address, which the one-time host
+    // check cannot see. `ureq` follows redirects by default, so without this
+    // guard the fetch would reach an address the preview validation refused.
+    // Pin that the preview agent refuses to follow one, mirroring the REST
+    // agent.
+    #[test]
+    fn a_redirecting_preview_is_not_followed() {
+        let (foreign, foreign_addr) = loopback_listener();
+
+        // The redirecting server answers the one request with a 302 pointing
+        // at the "foreign" server, exactly what a hostile or compromised API
+        // reply could return.
+        let redirector_addr = serve_one_response(&format!(
+            "HTTP/1.1 302 Found\r\nLocation: http://{foreign_addr}/preview.m4a\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        ));
+
+        // The foreign server records whether any redirected request arrived. A
+        // one-second poll makes "no request" a bounded, observable result
+        // rather than a hang.
+        let foreign_thread = std::thread::spawn(move || {
+            foreign.set_nonblocking(true).unwrap();
+            let deadline = Instant::now() + Duration::from_secs(1);
+            loop {
+                match foreign.accept() {
+                    Ok((mut stream, _)) => return Some(read_some_request(&mut stream)),
+                    Err(ref error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        if Instant::now() >= deadline {
+                            return None;
+                        }
+                        std::thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(error) => panic!("foreign listener failed: {error}"),
+                }
+            }
+        });
+
+        let agent = agent_with_timeout(Duration::from_secs(2));
+        let url = format!("http://{redirector_addr}/preview.m4a");
+        let (sender, receiver) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = sender.send(download_and_decode(&agent, &url));
+        });
+        let result = receiver
+            .recv_timeout(Duration::from_secs(5))
+            .expect("the redirecting preview must return within its bound");
+        let error = result.err().expect("a 302 preview must not decode");
+        assert_eq!(
+            error.to_string(),
+            "the preview download returned HTTP 302 Found"
+        );
+
+        let followed = foreign_thread.join().unwrap();
+        assert!(
+            followed.is_none(),
+            "the preview fetch reached the redirect target: {followed:?}"
         );
     }
 

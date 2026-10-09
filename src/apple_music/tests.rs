@@ -587,6 +587,8 @@ async fn play_track_rejects_a_preview_url_that_is_not_a_public_https_url() {
 
 // The guard must not reject a legitimate preview URL, so Apple's CDN host, a
 // plain public host, and a public address literal all still reach the backend.
+// `play_track` first forwards the state's volume (the default 0.5) so the
+// preview starts at the slider's value, then starts the play.
 #[tokio::test]
 async fn play_track_accepts_a_public_https_preview_url() {
     for url in [
