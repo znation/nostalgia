@@ -924,10 +924,22 @@ fn a_redirect_is_not_followed_so_the_user_token_cannot_leak() {
 
 // The production transport is the one that carries real credentials, and it
 // uses the process-wide `shared_agent` rather than the test-only
-// `with_timeout` path, so pin the shared agent's redirect policy directly.
+// `with_timeout` path. The stalled-server and redirect tests construct their
+// transport with `with_timeout`, so they pin `agent_with_timeout` but would
+// stay green if `shared_agent` stopped calling it; the non-success-status
+// tests go through `UreqTransport::new()` and so cover the status policy
+// behaviorally. Pin the shared agent's three transport choices directly: a
+// regression rebuilding it from `ureq`'s defaults — no global timeout,
+// redirects followed, status-as-error on — could otherwise block the detached
+// browse thread forever, send the `Music-User-Token` past a redirect, or
+// discard Apple's error body.
 #[test]
-fn the_shared_agent_does_not_follow_redirects() {
-    assert_eq!(shared_agent().config().max_redirects(), 0);
+fn the_shared_agent_carries_the_documented_transport_settings() {
+    assert_eq!(REQUEST_TIMEOUT, Duration::from_secs(30));
+    let config = shared_agent().config();
+    assert_eq!(config.timeouts().global, Some(REQUEST_TIMEOUT));
+    assert_eq!(config.max_redirects(), 0);
+    assert!(!config.http_status_as_error());
 }
 
 // The `api_error_cause` unit tests pin the parsing `UreqTransport::get`
