@@ -12,18 +12,11 @@ Nostalgia is a (very close if not pixel-perfect) clone of the classic Winamp UI,
 ## Status
 
 <!-- tumwater:status:start -->
-Early skeleton (0.1.0): an iced (0.14) desktop shell themed with a Winamp 2.x base-skin palette —
-a raised title bar (always-on-top, shade, minimize, close), a Now Playing LCD bar
-showing the current track's artist, title, and length, chrome transport controls with Repeat and
-Shuffle, volume and balance sliders, an equalizer panel with a preset pick list, and an artist →
-album → song browser whose song rows show each track's length. A MusicKit loopback sign-in runs
-at startup when `APPLE_MUSIC_DEVELOPER_TOKEN` is set: browse and search queries read the signed-in Apple
-Music library through the REST API, following `next` pages for large libraries, and fall back
-to the in-memory sample library otherwise. Playback plays the selected song's Apple Music preview
-through `rodio`, behind an injectable audio-output seam that falls back to silence when no output
-device opens. Pause and Stop silence the preview through that seam, and Play resumes a paused
-preview or restarts a stopped one from its remembered URL. Open work lives in PLANS.md, BUGS.md,
-and QUESTIONS.md.
+Early skeleton (0.1.0): an iced (0.14) desktop clone of the Winamp 2.x UI, with a themed player
+(Now Playing LCD, transport, volume and balance, equalizer) and an artist → album → song browser
+with library search and a flat All Songs view. Apple Music browse/search and preview playback sit
+behind injectable seams and fall back to the sample library and silence.
+Open work lives in PLANS.md, BUGS.md, and QUESTIONS.md.
 <!-- tumwater:status:end -->
 
 ## Screenshots
@@ -56,7 +49,10 @@ Play/Pause/Stop/Previous/Next controls, Repeat and Shuffle toggles, volume and b
 an equalizer panel (an EQ on/off button, a preset pick list, a preamp slider, and ten band
 sliders), and a browse list whose song rows show each track's length. A `Search library` box above
 the browse list searches the library when you press Enter, replacing the list with the matching
-songs; Back leaves a search for the artists list. The title bar's `A` button
+songs; Back leaves a search for the artists list. The Artists list also has an `All Songs` button
+that opens a flat list of every song in the library, whose rows play like any other song row; Back
+returns to the artists list, and Next/Previous step through the flat list while it is showing. The
+title bar's `A` button
 toggles always-on-top, its shade button (or a double-click on the bar) rolls the window up to
 just that title bar and back, and its `–` and `✕` buttons minimize and close. With the window
 focused, the classic Winamp keys drive
