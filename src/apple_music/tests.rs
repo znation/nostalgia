@@ -161,6 +161,9 @@ enum RejectedCommand {
     Resume,
     Stop,
     SetVolume,
+    /// Every `play` after the first, so a test can load the first preview and
+    /// then refuse the restart a Play-after-Stop issues.
+    PlayAfterFirst,
 }
 
 /// An audio backend that records every command and refuses one chosen command,
@@ -173,6 +176,9 @@ enum RejectedCommand {
 struct RejectingAudio {
     rejected: RejectedCommand,
     calls: std::sync::Mutex<Vec<AudioCall>>,
+    /// Counts `play` calls so [`RejectedCommand::PlayAfterFirst`] lets the
+    /// initial preview load before refusing its restart.
+    plays: std::sync::Mutex<usize>,
 }
 
 impl RejectingAudio {
@@ -180,6 +186,7 @@ impl RejectingAudio {
         Self {
             rejected,
             calls: std::sync::Mutex::new(Vec::new()),
+            plays: std::sync::Mutex::new(0),
         }
     }
 
@@ -202,6 +209,13 @@ impl AudioOutput for RejectingAudio {
             .lock()
             .unwrap()
             .push(AudioCall::Play(url.to_string()));
+        if self.rejected == RejectedCommand::PlayAfterFirst {
+            let mut plays = self.plays.lock().unwrap();
+            *plays += 1;
+            if *plays > 1 {
+                return Err(AppleMusicError::new("the audio device is gone"));
+            }
+        }
         Ok(())
     }
 
@@ -1090,6 +1104,38 @@ async fn resume_after_stop_restarts_the_preview() {
         &[AudioCall::Stop, AudioCall::Play(PREVIEW_URL.to_string())],
     );
     assert_playback_state(&state, Some("song-1"), true).await;
+}
+
+// A restart after Stop is a fresh `play`, so a backend that rejects it must
+// surface the error and leave the transport stopped; the service must not
+// claim a loaded player or set the playing flag. A regression that marked the
+// transport loaded before the backend accepted the restart would send the
+// next resume as a `Resume` to a backend with no player, so the second attempt
+// here must issue another `Play`.
+#[tokio::test]
+async fn resume_after_stop_reports_a_restart_failure_without_claiming_playback() {
+    let audio = Arc::new(RejectingAudio::new(RejectedCommand::PlayAfterFirst));
+    let (service, state) =
+        service_with_preview_playing(Arc::clone(&audio) as Arc<dyn AudioOutput>).await;
+    service.stop().await.unwrap();
+
+    let error = service.resume().await.unwrap_err();
+    assert_eq!(error.to_string(), "the audio device is gone");
+    assert_playback_state(&state, Some("song-1"), false).await;
+
+    let error = service.resume().await.unwrap_err();
+    assert_eq!(error.to_string(), "the audio device is gone");
+    assert_eq!(
+        audio.calls(),
+        vec![
+            AudioCall::SetVolume(0.5),
+            AudioCall::Play(PREVIEW_URL.to_string()),
+            AudioCall::Stop,
+            AudioCall::Play(PREVIEW_URL.to_string()),
+            AudioCall::Play(PREVIEW_URL.to_string()),
+        ]
+    );
+    assert_playback_state(&state, Some("song-1"), false).await;
 }
 
 // With no preview ever played there is nothing to resume or restart, so Play
