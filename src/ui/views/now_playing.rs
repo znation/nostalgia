@@ -161,6 +161,19 @@ pub fn view_now_playing<'a>(
     bevel::lcd_well(now_playing_row(label, artist, time, marquee_offset))
 }
 
+/// The LCD's text style: 20px in [`theme::LCD_GREEN`], shared by every green
+/// fragment of the Now Playing line so no branch drifts from another.
+fn lcd_text<'a, Theme, Renderer>(
+    fragment: impl iced::widget::text::IntoFragment<'a>,
+) -> Text<'a, Theme, Renderer>
+where
+    Theme: iced::widget::text::Catalog + 'a,
+    Theme::Class<'a>: From<iced::widget::text::StyleFn<'a, Theme>>,
+    Renderer: iced::advanced::text::Renderer,
+{
+    Text::new(fragment).size(20).color(theme::LCD_GREEN)
+}
+
 /// Builds the LCD row before the bevel wraps it, generic over the theme and
 /// renderer so the tests can lay it out with iced's null renderer and read
 /// back the text it would draw.
@@ -184,25 +197,21 @@ where
     let mut row = Row::new().push(Text::new("Now Playing: ").size(20));
     if display_len <= MARQUEE_WIDTH {
         if !artist.is_empty() {
-            row = row
-                .push(Text::new(artist).size(20).color(theme::LCD_GREEN))
-                .push(Text::new(" - ").size(20).color(theme::LCD_GREEN));
+            row = row.push(lcd_text(artist)).push(lcd_text(" - "));
         }
-        return row
-            .push(Text::new(label).size(20).color(theme::LCD_GREEN))
-            .push(Space::new().width(Length::Fill))
-            .push(Text::new(time).size(20).color(theme::LCD_GREEN));
-    }
-    let display = if artist.is_empty() {
-        label.into_owned()
+        row = row.push(lcd_text(label));
     } else {
-        format!("{artist} - {label}")
-    };
-    row.push(
-        Text::new(marquee_text(&display, marquee_offset, MARQUEE_WIDTH))
-            .size(20)
-            .color(theme::LCD_GREEN),
-    )
-    .push(Space::new().width(Length::Fill))
-    .push(Text::new(time).size(20).color(theme::LCD_GREEN))
+        let display = if artist.is_empty() {
+            label.into_owned()
+        } else {
+            format!("{artist} - {label}")
+        };
+        row = row.push(lcd_text(marquee_text(
+            &display,
+            marquee_offset,
+            MARQUEE_WIDTH,
+        )));
+    }
+    row.push(Space::new().width(Length::Fill))
+        .push(lcd_text(time))
 }
