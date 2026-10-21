@@ -1171,6 +1171,23 @@ mod tests {
         );
     }
 
+    // The worker fetches through `preview_agent`, but the redirect test above
+    // and the non-success-status test below build their agents with
+    // `agent_with_timeout` directly. A regression that built `preview_agent`
+    // from `ureq`'s default configuration — no global timeout, redirects
+    // followed, status-as-error on — would leave those tests green while the
+    // production fetch could stall the worker forever, follow a redirect past
+    // the one-time host check, or discard Apple's error body. Pin the three
+    // shared transport choices on the production agent itself.
+    #[test]
+    fn the_preview_agent_carries_the_documented_transport_settings() {
+        assert_eq!(PREVIEW_TIMEOUT, Duration::from_secs(30));
+        let config = preview_agent().config();
+        assert_eq!(config.timeouts().global, Some(PREVIEW_TIMEOUT));
+        assert_eq!(config.max_redirects(), 0);
+        assert!(!config.http_status_as_error());
+    }
+
     // An HTTP(S) CONNECT proxy resolves the target host itself, so with
     // `HTTPS_PROXY` (or `ALL_PROXY`) set, `ureq` sends the preview hostname to
     // the proxy and never consults `preview_agent`'s resolver — the SSRF guard
