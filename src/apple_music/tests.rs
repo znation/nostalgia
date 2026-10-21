@@ -1635,10 +1635,35 @@ fn ip_is_internal_refuses_every_internal_range_and_allows_public_addresses() {
         ("fe80::1", true),
         ("::ffff:127.0.0.1", true),
         ("::ffff:10.0.0.1", true),
-        // IPv6 public: a public v4-mapped address and ordinary public v6.
+        // IPv6 internal via an IPv4-embedding transition prefix, which
+        // `to_ipv4` does not decode: 6to4 (2002::/16), NAT64 (64:ff9b::/96
+        // and 64:ff9b:1::/48), and Teredo (2001:0000::/32, server IPv4 in
+        // bytes 4..8 and client IPv4 in bytes 12..16, each XORed with
+        // 0xFFFFFFFF). Each embeds 127.0.0.1 or 169.254.169.254.
+        ("2002:7f00:1::", true),
+        ("2002:a9fe:a9fe::", true),
+        ("64:ff9b::7f00:1", true),
+        ("64:ff9b::a9fe:a9fe", true),
+        // NAT64 /48 (`64:ff9b:1::/48`): RFC 6052 splits the IPv4 address
+        // around the reserved octet, so the last 32 bits are the suffix, not
+        // the IPv4. The first row embeds 127.0.0.1 while its suffix is
+        // 8.8.8.8, so a last-32-bits decode would call it public.
+        ("64:ff9b:1:7f00:0:100:808:808", true),
+        ("64:ff9b:1:a9fe:0:a9fe:0:0", true),
+        // Teredo with an internal client (127.0.0.1) and a public server.
+        ("2001:0:f7f7:f7f7:0:0:80ff:fffe", true),
+        // Teredo with an internal server (127.0.0.1) and a public client.
+        ("2001:0:80ff:fffe:0:0:f7f7:f7f7", true),
+        // IPv6 public: a public v4-mapped address, ordinary public v6, a
+        // 6to4 address embedding 8.8.8.8, a NAT64 address embedding 8.8.8.8,
+        // and a Teredo address whose server and client are both public.
         ("::ffff:8.8.8.8", false),
         ("2001:4860:4860::8888", false),
         ("2606:4700:4700::1111", false),
+        ("2002:808:808::", false),
+        ("64:ff9b::808:808", false),
+        ("64:ff9b:1:808:0:808:808:808", false),
+        ("2001:0:f7f7:f7f7:0:0:f7f7:fbfb", false),
     ] {
         let ip: std::net::IpAddr = text
             .parse()

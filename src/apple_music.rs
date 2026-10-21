@@ -871,7 +871,8 @@ fn is_numeric_component(part: &str) -> bool {
 
 /// Whether `ip` is an address the preview fetch must not reach: one that names
 /// the local machine or a private, loopback, link-local, or unspecified
-/// network. Public addresses are allowed.
+/// network, including an internal IPv4 address embedded in an IPv6 transition
+/// prefix. Public addresses are allowed.
 ///
 /// Shared with [`crate::audio`], whose preview agent resolves a preview URL's
 /// hostname and rejects any internal address it resolves to — the check that
@@ -897,8 +898,52 @@ pub(crate) fn ip_is_internal(ip: std::net::IpAddr) -> bool {
                 || v6
                     .to_ipv4()
                     .is_some_and(|v4| ip_is_internal(std::net::IpAddr::V4(v4)))
+                || v6_embeds_internal_ipv4(v6)
         }
     }
+}
+
+/// Whether `v6` is an IPv6 transition address that embeds an internal IPv4
+/// address.
+///
+/// `Ipv6Addr::to_ipv4` decodes only the IPv4-mapped (`::ffff:0:0/96`) and
+/// IPv4-compatible (`::/96`) forms, which [`ip_is_internal`] checks before
+/// calling this. Three transition prefixes embed an IPv4 address it does not
+/// decode, so a preview hostname that resolves to one of them would otherwise
+/// route to an internal address through the transition instead of being
+/// refused: 6to4 (`2002::/16`, the IPv4 in bytes 2..6), NAT64
+/// (`64:ff9b::/96`, the IPv4 in the last 32 bits, and `64:ff9b:1::/48`, whose
+/// RFC 6052 `/48` layout splits the IPv4 address around the reserved octet), and
+/// Teredo (`2001:0000::/32`, whose server IPv4 in bytes 4..8 and client IPv4
+/// in bytes 12..16 are each stored as the bitwise complement of the address; a
+/// connection goes to the server and then to the client, so an internal either
+/// way is refused).
+fn v6_embeds_internal_ipv4(v6: std::net::Ipv6Addr) -> bool {
+    let octets = v6.octets();
+    let internal = |a: u8, b: u8, c: u8, d: u8| {
+        ip_is_internal(std::net::IpAddr::V4(std::net::Ipv4Addr::new(a, b, c, d)))
+    };
+    // 6to4: 2002:VVVV:WWWW::/48.
+    if octets[0] == 0x20 && octets[1] == 0x02 {
+        return internal(octets[2], octets[3], octets[4], octets[5]);
+    }
+    // NAT64: 64:ff9b::/96 and 64:ff9b:1::/48. Only those two sub-prefixes are
+    // assigned inside 64:ff9b::/32. The /96 form embeds the IPv4 in the last
+    // 32 bits; the /48 form uses RFC 6052's /48 layout, with the first 16 IPv4
+    // bits in octets 6 and 7 and the last 16 in octets 9 and 10 (octet 8 is
+    // the reserved u octet, and octets 11..16 are the suffix).
+    if octets[0] == 0x00 && octets[1] == 0x64 && octets[2] == 0xff && octets[3] == 0x9b {
+        if octets[4] == 0x00 && octets[5] == 0x01 {
+            return internal(octets[6], octets[7], octets[9], octets[10]);
+        }
+        return internal(octets[12], octets[13], octets[14], octets[15]);
+    }
+    // Teredo: 2001:0000::/32.
+    if octets[0] == 0x20 && octets[1] == 0x01 && octets[2] == 0x00 && octets[3] == 0x00 {
+        return internal(!octets[4], !octets[5], !octets[6], !octets[7])
+            || internal(!octets[12], !octets[13], !octets[14], !octets[15]);
+    }
+    false
 }
 
 /// The playback log line for `track_id`, escaped so a hostile library id
