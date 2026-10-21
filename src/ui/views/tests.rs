@@ -300,6 +300,19 @@ fn format_track_time_keeps_counting_minutes_past_an_hour() {
     assert_eq!(format_track_time(3_665_000), "61:05");
 }
 
+// `0` is the only "source supplied no duration" sentinel (see
+// `Song::duration_ms`); every nonzero value is a real length and formats by
+// truncating its sub-second remainder. Pin the boundary so a regression that
+// treated a duration under one second as missing would show `--:--` for a
+// real short track instead of `0:00`, while the first full second still
+// advances the display.
+#[test]
+fn format_track_time_distinguishes_no_duration_from_a_sub_second_track() {
+    assert_eq!(format_track_time(1), "0:00");
+    assert_eq!(format_track_time(999), "0:00");
+    assert_eq!(format_track_time(1_000), "0:01");
+}
+
 // The bar is rebuilt on every frame, and `now_playing_label` documents
 // that the common cases borrow — the title straight out of the id→title
 // index, or the static "Nothing" literal — so only the rare unknown-id
