@@ -33,6 +33,12 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ### Add the playback-position readout to the Now Playing bar (Playback position, part 2/2: planned 2026-10-21 by the plan role, requires part 1/2 landed)
 
+**Needs replan 2026-10-21 by feature: rejected after 3 review rounds.**
+
+> 1. (prior 1) The guard is still not playback-scoped. `reset_position` sets `position_tracking = false`, but `TrackPlayed` (`src/ui/mod.rs:1106-1112`) turns it back on whenever `state.is_playing` is true. A selected track with `preview_url: None` sets `is_playing = true` but sends no audio command (`sr…
+> 2. (prior 3) The asynchronous failed-start path is still incomplete; the revision only narrowed the documentation. `play_track` returns `Ok` after queuing `Command::Play`, and `handle_play` later drops the player on a download/decode failure without touching shared state (`src/audio/player.rs:490-501`…
+> 3. The RISK claim that “no code or docs changed this round” is false against the interdiff: revision 2 adds `position_tracking`, `reset_position`, `TransportSettled` behavior, new tests, and changed README/invariant text. The summary understates the actual revision and hides the new state-machine chan…
+
 **Goal.** The Now Playing bar's right-hand readout shows the current track's elapsed and total time as `"<elapsed>/<total>"` (for example `0:45/3:12`) while a preview is loaded, and keeps the existing `"--:--"` when no track is current. The elapsed value is the position part 1 reads from the audio backend, so pause freezes it, a seek steps it, and Stop or a new track resets it.
 
 **Approach.**
