@@ -1085,6 +1085,38 @@ mod tests {
         assert_eq!(seek_target(Duration::from_secs(3), -5), Duration::ZERO);
     }
 
+    // A preview's position carries its sub-second part (rodio reports the
+    // decoder's exact position), so a five-second step must move by exactly
+    // five seconds rather than snapping to or dropping the whole-second part.
+    #[test]
+    fn seek_target_preserves_the_sub_second_position() {
+        let position = Duration::from_millis(10_250);
+        assert_eq!(seek_target(position, 5), Duration::from_millis(15_250));
+        assert_eq!(seek_target(position, -5), Duration::from_millis(5_250));
+    }
+
+    // The forward twin of `seek_target_saturates_at_the_start`: the doc comment
+    // promises saturation at `Duration::MAX` instead of overflowing, so a
+    // position close enough to the end to overflow stays there.
+    #[test]
+    fn seek_target_saturates_at_the_end() {
+        assert_eq!(
+            seek_target(Duration::MAX - Duration::from_secs(1), 5),
+            Duration::MAX
+        );
+    }
+
+    // `i64::MIN` cannot be negated in an `i64`, so the offset's magnitude is
+    // taken with `unsigned_abs`; a regression to `-(offset)` would panic in
+    // debug builds on this boundary instead of seeking to the start.
+    #[test]
+    fn seek_target_handles_the_largest_negative_offset() {
+        assert_eq!(
+            seek_target(Duration::from_secs(10), i64::MIN),
+            Duration::ZERO
+        );
+    }
+
     /// A [`SeekablePlayer`] that reports a fixed position and records the
     /// absolute target each seek asks for, so a test can pin the composition
     /// in [`seek_player`] without a `rodio::Player` or an output device.
