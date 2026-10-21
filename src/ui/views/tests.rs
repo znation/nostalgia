@@ -657,6 +657,34 @@ fn transport_buttons_keep_a_fixed_width_across_label_changes() {
     }
 }
 
+// The label-reflow test above pins only that every transport button is
+// fixed-width and that its width is independent of the play, repeat, and
+// shuffle state; a zeroed, widened, or otherwise wrong width literal would
+// clear it while the label clipped or the row moved. Pin the face widths
+// measured from the running window when the transport row was fixed (see
+// "Transport buttons resize to their label text" in BUGS-FIXED.md), in row
+// order: Play/Pause 65, Stop 54, Previous 84, Next 54, Repeat 104, Shuffle
+// 112. Each is the width of that button's widest label, so a deliberate
+// label or width change must update this pin.
+#[test]
+fn transport_buttons_keep_their_measured_face_widths() {
+    let widths: Vec<Length> = transport_buttons(false, false, false)
+        .iter()
+        .map(|button| button.as_widget().size().width)
+        .collect();
+    assert_eq!(
+        widths,
+        [
+            Length::Fixed(65.0),
+            Length::Fixed(54.0),
+            Length::Fixed(84.0),
+            Length::Fixed(54.0),
+            Length::Fixed(104.0),
+            Length::Fixed(112.0),
+        ]
+    );
+}
+
 #[test]
 fn transport_controls_construct_for_both_play_states_volume_endpoints_and_repeat_states() {
     // `view()` passes the shared state's `is_playing`, clamped `volume`,
