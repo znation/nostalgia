@@ -341,6 +341,36 @@ mod tests {
     }
 
     #[test]
+    fn chrome_text_input_style_hover_lifts_the_face_and_focus_still_wins() {
+        let active = chrome_text_input_style(text_input::Status::Active);
+        let hovered = chrome_text_input_style(text_input::Status::Hovered);
+
+        // The search box's doc promises "resting and hovered stay raised":
+        // hovering lifts only the face, keeping the light top-left edge and
+        // the 1px square geometry. Without this assertion a regression that
+        // dropped the hover branch would leave the box looking inert under
+        // the cursor while every other style test stayed green.
+        assert_eq!(
+            hovered.background,
+            Background::Color(theme::BUTTON_FACE_HOVERED)
+        );
+        assert_eq!(hovered.border.color, active.border.color);
+        assert_eq!(hovered.border.width, active.border.width);
+        assert_eq!(hovered.border.radius, active.border.radius);
+        assert_eq!(hovered.placeholder, active.placeholder);
+        assert_eq!(hovered.selection, active.selection);
+
+        // Focus outranks hover: a focused box looks the same whether the
+        // pointer is over it or not, so moving the cursor over a focused box
+        // cannot lift it back out of the sunken face.
+        let focused = chrome_text_input_style(text_input::Status::Focused { is_hovered: false });
+        let focused_hovered =
+            chrome_text_input_style(text_input::Status::Focused { is_hovered: true });
+        assert_eq!(focused_hovered.background, focused.background);
+        assert_eq!(focused_hovered.border.color, focused.border.color);
+    }
+
+    #[test]
     fn chrome_text_input_style_focus_sinks_the_face_and_reverses_the_edge() {
         let active = chrome_text_input_style(text_input::Status::Active);
         let focused = chrome_text_input_style(text_input::Status::Focused { is_hovered: false });
