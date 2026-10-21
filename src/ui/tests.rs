@@ -1508,7 +1508,10 @@ fn volume_messages_forward_to_the_audio_backend() {
 // The left and right arrow arms must reach the injected backend: a seek that
 // only changed UI state would leave the playing preview at its old position.
 // This drives both arms through `update` over a recording backend and pins
-// the signed five-second offsets they forwarded.
+// the signed five-second offsets they forwarded. The expected offsets are
+// literals rather than `views::SEEK_STEP_SECS`: the README promises the
+// arrows seek five seconds, and an assertion written in terms of the same
+// constant the arms read would still pass if that documented step changed.
 #[test]
 fn seek_messages_drive_the_audio_backend() {
     let recording = Arc::new(RecordingAudio::default());
@@ -1520,10 +1523,7 @@ fn seek_messages_drive_the_audio_backend() {
 
     assert_eq!(
         recording.calls(),
-        vec![
-            AudioCall::SeekBy(-views::SEEK_STEP_SECS),
-            AudioCall::SeekBy(views::SEEK_STEP_SECS),
-        ]
+        vec![AudioCall::SeekBy(-5), AudioCall::SeekBy(5)]
     );
     assert_eq!(*state.blocking_lock(), AppState::default());
 }
