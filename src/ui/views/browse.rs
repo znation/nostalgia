@@ -1,7 +1,7 @@
 //! The browse views — the artist → album → song drill-down, the flat All
 //! Songs and All Albums lists, and the Playlists list: the scrollable list,
-//! its per-level row mappings, the search box, and the Back, All Songs, All
-//! Albums, Playlists, and Retry buttons above it.
+//! its per-level row mappings, the search box, and the Back, Top, All Songs,
+//! All Albums, Playlists, and Retry buttons above it.
 //!
 //! Every builder is pure — it turns `&[Artist]` / `&[Album]` / `&[Song]` /
 //! `&[Playlist]` (or the rows they map to) into an `Element` and knows nothing

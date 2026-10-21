@@ -3264,8 +3264,9 @@ fn construct_view_in_every_browse_view(player: &mut WinampPlayer) {
 
 // `view` is the per-frame assembly: it locks the shared state, resolves
 // the now-playing label, matches the current browse view onto its list
-// buffer, and stacks the Now Playing bar, the transport row, the optional
-// Back button (only below the artist list), and the browse list. No other
+// buffer, and stacks the Now Playing bar, the transport row, the browse
+// controls (Back, Retry, Top, the flat-list buttons, and the search box),
+// and the browse list. No other
 // test reaches this assembly — the shade test stops at `view`'s title-bar
 // early return, the `views` tests stop at the individual builders, and
 // the `update` tests stop before the view layer — so a regression

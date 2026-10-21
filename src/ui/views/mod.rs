@@ -61,8 +61,8 @@ fn spacer(width: f32) -> Space {
 
 /// A button showing a single text label that emits `message` on press.
 ///
-/// The browse Back, All Songs, All Albums, Playlists, and Retry buttons and the
-/// equalizer panel's on/off button call this directly; the transport row's six
+/// The browse Back, Top, All Songs, All Albums, Playlists, and Retry buttons and
+/// the equalizer panel's on/off button call this directly; the transport row's six
 /// buttons (Play/Pause, Stop, Previous, Next, Repeat, Shuffle) and the title
 /// bar's shade, minimize, and close buttons reach it through
 /// [`fixed_width_button`]. They all build the same
