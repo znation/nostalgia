@@ -113,7 +113,7 @@ enum Message {
     Stop,
     ToggleRepeat,
     // The Shuffle toggle: with it on, a forward step picks a random
-    // non-current song from the loaded album instead of the next in order.
+    // non-current song from the loaded song list instead of the next in order.
     ToggleShuffle,
     VolumeChange(f32),
     // The balance slider's change message, clamped by `AppState::set_balance`.
@@ -281,14 +281,14 @@ struct WinampPlayer {
     search_active: bool,
     /// Each played song's id mapped to its [`views::KnownTrack`] (title,
     /// artist, and formatted length), so the Now Playing bar can still name and
-    /// time the playing track after the user browses to a different album
-    /// (whose list replaces `songs.items`). The `TrackSelected` arm records a
-    /// track's title, artist, and formatted length once, when it is played, and
-    /// `now_playing_label` / `now_playing_artist` / `now_playing_time` resolve
-    /// the per-frame bar with a single get instead
+    /// time the playing track after the user browses to a different list
+    /// (whose load replaces the visible song buffer). The `TrackSelected` arm
+    /// records a track's title, artist, and formatted length once, when it is
+    /// played, and `now_playing_label` / `now_playing_artist` /
+    /// `now_playing_time` resolve the per-frame bar with a single get instead
     /// of scanning a growing list on every frame. Recording on play — rather
-    /// than folding every song of every browsed album into the map — keeps the
-    /// map proportional to songs actually played and takes the per-album fold
+    /// than folding every song of every loaded list into the map — keeps the
+    /// map proportional to songs actually played and takes the per-list fold
     /// off the browse path. Only the current track's entry is ever read, so
     /// the latest play's completion prunes the map back to that entry (or
     /// clears it when nothing committed): without the prune the map would grow
@@ -377,11 +377,10 @@ impl WinampPlayer {
     }
 
     /// The Now Playing bar's label for `current_track`, resolved against the
-    /// accumulated [`Self::known_tracks`] index rather than the
-    /// currently-browsed album's `songs`: `view` renders the bar from this, so
-    /// the bar keeps naming a playing track even after a browse to another
-    /// album replaced `songs`. The browse-away regression test asserts this
-    /// same path.
+    /// accumulated [`Self::known_tracks`] index rather than the currently
+    /// loaded song list: `view` renders the bar from this, so the bar keeps
+    /// naming a playing track even after a browse replaced the visible song
+    /// buffer. The browse-away regression test asserts this same path.
     fn now_playing_label<'a>(&'a self, current_track: Option<&str>) -> Cow<'a, str> {
         views::now_playing_label(&self.known_tracks, current_track)
     }
@@ -718,11 +717,11 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             // Record the played track's title, artist, and formatted length
             // before handing the id to the async play: the Now Playing bar
             // resolves its label, artist, and time from `known_tracks`, and the
-            // entry must survive a later browse to a different album (which
-            // replaces `songs.items`). Recording once per play — rather than
-            // folding every song of every browsed album into the map — keeps the
-            // index proportional to songs actually played and takes the fold off
-            // the browse path.
+            // entry must survive a later browse to a different list (which
+            // replaces the visible song buffer). Recording once per play —
+            // rather than folding every song of every loaded list into the map —
+            // keeps the index proportional to songs actually played and takes
+            // the fold off the browse path.
             player
                 .known_tracks
                 .entry(track_id.clone())
@@ -945,9 +944,9 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             player.search_query = query.clone();
             player.search_active = true;
             player.current_view = CurrentView::Songs;
-            // The search results reuse the songs buffer, so the album's rows
-            // are dropped and a press during the fetch cannot resolve against
-            // them (the same clear-before-fetch the navigation arms do).
+            // The search results reuse the songs buffer, so the previous list's
+            // rows are dropped and a press during the fetch cannot resolve
+            // against them (the same clear-before-fetch the navigation arms do).
             fetch_at_top(fetch_level(
                 &mut player.songs,
                 &player.apple_music_service,

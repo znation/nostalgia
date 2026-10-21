@@ -1,8 +1,9 @@
 //! Pure transport sequencing: which song the Previous/Next buttons land on.
 //!
-//! The transport buttons are a player concern — they step through the
-//! currently loaded album's songs — so the index logic lives here as pure
-//! functions, mirroring `views`, and knows nothing about `WinampPlayer` or
+//! The transport buttons are a player concern — they step through the loaded
+//! song list (a browsed album, a playlist, a search's results, or the flat
+//! All Songs list) — so the index logic lives here as pure functions,
+//! mirroring `views`, and knows nothing about `WinampPlayer` or
 //! the update loop. `AppleMusicService` stays the library API seam and keeps
 //! its `next_track`/`previous_track` stubs untouched.
 
@@ -91,7 +92,7 @@ pub fn previous_track_id(songs: &[Song], current: Option<&str>, repeat: bool) ->
 /// already playing. `roll` selects among the candidates (taken modulo their
 /// count), which keeps the function pure and testable — production passes a
 /// fresh [`shuffle_roll`]. `None` when `songs` is empty; when every song is
-/// the current one (a one-song album already current) there is no other song
+/// the current one (a one-song list already current) there is no other song
 /// to pick, so the current song's id is returned.
 ///
 /// `#[must_use]`: the returned id is the call's entire purpose, so a caller
@@ -259,7 +260,7 @@ impl PlayHistory {
 /// `std::collections::hash_map::RandomState` — std's per-thread random hash
 /// seed, so no new dependency is needed. Called once per Shuffled Next press;
 /// the candidate modulo in `shuffled_track_id` spreads the value over the
-/// album.
+/// candidate songs.
 ///
 /// `#[must_use]`: a dropped roll is a call that produced no randomness for
 /// its caller, which is always a mistake.
