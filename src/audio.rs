@@ -1200,11 +1200,13 @@ mod tests {
     }
 
     /// A recording [`WorkerPlayer`] for the command-loop tests: it records the
-    /// previews appended, the pause/resume calls, and whether it was stopped,
-    /// and remembers its gain, without needing an output device.
+    /// previews appended, the calls made and their order, the pause/resume
+    /// calls, and whether it was stopped, and remembers its gain, without
+    /// needing an output device.
     #[derive(Clone, Default)]
     struct RecordingPlayer {
         appended: Arc<AtomicUsize>,
+        calls: Arc<Mutex<Vec<&'static str>>>,
         paused: Arc<AtomicUsize>,
         resumed: Arc<AtomicUsize>,
         stopped: Arc<AtomicBool>,
@@ -1216,6 +1218,7 @@ mod tests {
         type Preview = ();
 
         fn set_volume(&self, volume: f32) {
+            self.calls.lock().unwrap().push("volume");
             *self.volume.lock().unwrap() = volume;
         }
 
@@ -1224,18 +1227,22 @@ mod tests {
         }
 
         fn append(&self, _preview: ()) {
+            self.calls.lock().unwrap().push("append");
             self.appended.fetch_add(1, Ordering::SeqCst);
         }
 
         fn pause(&self) {
+            self.calls.lock().unwrap().push("pause");
             self.paused.fetch_add(1, Ordering::SeqCst);
         }
 
         fn play(&self) {
+            self.calls.lock().unwrap().push("resume");
             self.resumed.fetch_add(1, Ordering::SeqCst);
         }
 
         fn stop(&self) {
+            self.calls.lock().unwrap().push("stop");
             self.stopped.store(true, Ordering::SeqCst);
         }
     }
@@ -1466,6 +1473,75 @@ mod tests {
             players[0].appended.load(Ordering::SeqCst),
             1,
             "only the newer preview may be appended"
+        );
+    }
+
+    // Not every command that arrives during a download supersedes it: Pause,
+    // Resume and SetVolume all act on the player the preview installs. The
+    // loop drains them into `queued` and handles them only after installing
+    // the preview, since before that there is no player to receive them. A
+    // drain that dropped them (or applied them ahead of the install) would
+    // silently lose the user's volume or transport action, so this pins that
+    // they reach the new player in the order they arrived.
+    #[test]
+    fn commands_queued_during_a_download_apply_to_the_new_player() {
+        let (sender, receiver) = mpsc::channel();
+        let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
+        let fetched: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+
+        let recorded = Arc::clone(&players);
+        let create_player = move || {
+            let player = RecordingPlayer::default();
+            recorded.lock().unwrap().push(player.clone());
+            player
+        };
+        // The commands are sent from inside the fetch, while the preview is
+        // still downloading, so they are waiting in the channel when the loop
+        // drains it. The sender clone is taken (and so dropped) with the
+        // sends, letting the channel close and the worker loop end.
+        let fetch_sender = Arc::new(Mutex::new(Some(sender.clone())));
+        let seen = Arc::clone(&fetched);
+        let fetch = move |url: &str| -> Result<(), AppleMusicError> {
+            seen.lock().unwrap().push(url.to_string());
+            if let Some(sender) = fetch_sender.lock().unwrap().take() {
+                sender.send(Command::SetVolume(0.3)).unwrap();
+                sender.send(Command::Pause).unwrap();
+                sender.send(Command::Resume).unwrap();
+            }
+            Ok(())
+        };
+
+        sender.send(Command::Play("first".to_string())).unwrap();
+        drop(sender);
+        serve_commands(receiver, create_player, fetch);
+
+        assert_eq!(
+            *fetched.lock().unwrap(),
+            vec!["first".to_string()],
+            "the queued commands must not supersede the download"
+        );
+        let players = players.lock().unwrap();
+        assert_eq!(players.len(), 1, "the download must install one player");
+        assert_eq!(players[0].appended.load(Ordering::SeqCst), 1);
+        assert_eq!(
+            *players[0].volume.lock().unwrap(),
+            0.3,
+            "the SetVolume queued during the download must reach the new player"
+        );
+        assert_eq!(
+            players[0].paused.load(Ordering::SeqCst),
+            1,
+            "the Pause queued during the download must reach the new player"
+        );
+        assert_eq!(
+            players[0].resumed.load(Ordering::SeqCst),
+            1,
+            "the Resume queued during the download must reach the new player"
+        );
+        assert_eq!(
+            *players[0].calls.lock().unwrap(),
+            vec!["volume", "append", "volume", "pause", "resume"],
+            "the queued commands must reach the new player after the install, in arrival order"
         );
     }
 
