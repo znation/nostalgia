@@ -1,7 +1,7 @@
 use super::super::{CurrentView, Message, style, theme};
 use super::browse::{
     BROWSE_VIEWS, album_row, artist_row, browse_placeholder, current_row_style, empty_list_label,
-    playlist_row, song_list_summary, song_row,
+    playlist_row, row_prefix, song_list_summary, song_row,
 };
 use super::equalizer::eq_enabled_label;
 use super::now_playing::{
@@ -373,6 +373,14 @@ fn eq_enabled_label_mirrors_enabled_state() {
 // input space the app actually produces: every browse view over both the
 // loaded library and the pre-load empty buffer, both play states, the
 // volume endpoints the update arm can store, and both repeat states.
+
+#[test]
+fn row_prefix_numbers_rows_and_puts_the_play_marker_first() {
+    assert_eq!(row_prefix(0, false), "1. ");
+    assert_eq!(row_prefix(9, false), "10. ");
+    assert_eq!(row_prefix(99, false), "100. ");
+    assert_eq!(row_prefix(0, true), "▶ 1. ");
+}
 
 #[test]
 fn browse_views_construct_over_the_loaded_library() {

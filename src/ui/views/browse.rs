@@ -86,10 +86,23 @@ pub(super) fn current_row_style(status: button::Status) -> button::Style {
     row
 }
 
-/// Builds a scrollable list where each item is a button showing a title
-/// followed by a secondary label, emitting the given message on press.
-/// Shared by every browse list view. The last tuple element
-/// marks the currently playing row: such a row gets a `▶` prefix and a
+/// The prefix the browse list puts before a row's title: its 1-based
+/// position and a period, with a `▶ ` marker first when the row is the
+/// currently playing track. Pure, so the marker/number order is testable
+/// without an iced renderer and the composition lives in one place.
+pub(super) fn row_prefix(position: usize, is_current: bool) -> String {
+    let number = position + 1;
+    if is_current {
+        format!("▶ {number}. ")
+    } else {
+        format!("{number}. ")
+    }
+}
+
+/// Builds a scrollable list where each item is a button showing its 1-based
+/// position, a title, and a secondary label, emitting the given message on
+/// press. Shared by every browse list view. The last tuple element marks the
+/// currently playing row: its prefix carries a `▶` marker first and it gets a
 /// highlighted background so the list reads as a playlist. Only `song_row`
 /// ever sets the flag to true.
 ///
@@ -104,9 +117,10 @@ pub(super) fn current_row_style(status: button::Status) -> button::Style {
 /// secondary label is a [`Cow`] because a song row's label is the track's
 /// formatted length, borrowed from the loaded list's label cache in the
 /// common case, while the artist, album, and playlist rows keep their static
-/// hints borrowed. The playing row's `▶` marker is pushed as
-/// its own static label beside the borrowed title rather than formatted into
-/// an owned one, so the marker adds no `String` allocation per frame either.
+/// hints borrowed. The row prefix is one owned `String` per row per refresh,
+/// since it depends on the row's position; it is not cached in `BrowseList`
+/// because that would need invalidating on every store for no correctness
+/// gain.
 fn scrollable_list<'a>(
     items: impl IntoIterator<Item = (&'a str, Cow<'a, str>, Message, bool)>,
     empty_label: &'a str,
@@ -114,15 +128,12 @@ fn scrollable_list<'a>(
     let mut column = Column::new().padding(20);
     let mut is_empty = true;
 
-    for (title, label, message, is_current) in items {
+    for (position, (title, label, message, is_current)) in items.into_iter().enumerate() {
         is_empty = false;
-        let row = if is_current {
-            Row::new().push(Text::new("▶ ").size(18))
-        } else {
-            Row::new()
-        };
         let button = Button::new(
-            row.push(Text::new(title).size(18))
+            Row::new()
+                .push(Text::new(row_prefix(position, is_current)).size(18))
+                .push(Text::new(title).size(18))
                 .push(spacer(10.0))
                 .push(Text::new(label).size(14)),
         )

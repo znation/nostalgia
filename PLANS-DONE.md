@@ -5,6 +5,29 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
+### Number every browse-list row (planned 2026-10-21 by the plan role; done 2026-10-21)
+
+**Goal.** Each row in every browse list opens with its 1-based position and a period (`1. The Sample Band`, `2. First Record`), as the classic Winamp playlist editor does; the currently playing row keeps its `▶` marker before the number (`▶ 3. Opening`). This is independent of the planned count/time footer and of the browse data: numbering is derived from each list's row order, so it needs no service or model change.
+
+**Approach.**
+
+- `src/ui/views/browse.rs`: add a pure `pub(super) fn row_prefix(position: usize, is_current: bool) -> String` that returns `"{n}. "` for zero-based `position`, with `"▶ "` before the number when `is_current` is true (so `row_prefix(0, false)` is `"1. "` and `row_prefix(0, true)` is `"▶ 1. "`). It is the one place the marker and number order are composed, so a marker moved after the number cannot slip in untested.
+- In `fn scrollable_list`, enumerate the incoming items (`for (position, (title, label, message, is_current)) in items.into_iter().enumerate()`) and build the row's leading label from `row_prefix(position, is_current)` instead of the current conditional `▶ ` row. Keep the title and secondary label as they are, and keep the existing per-row style selection (`current_row_style` for the playing row, `playlist_row_style` otherwise) and the empty-placeholder branch unchanged. Every browse list — Artists, Albums, Songs, All Songs, All Albums, Playlists — renders through `scrollable_list`, so all six gain numbering with no row-builder or call-site change.
+- Update `scrollable_list`'s doc comment: it now says each row is prefixed with its 1-based position (and the playing marker), and that the prefix is one owned `String` per row per refresh while the title and secondary label still borrow. Do not cache prefixes in `BrowseList`: the position comes from the iterator and a cached list would need invalidation on every store for no correctness gain.
+- `src/ui/views/tests.rs`: add a direct test for the helper, `row_prefix_numbers_rows_and_puts_the_play_marker_first`, asserting `row_prefix(0, false) == "1. "`, `row_prefix(9, false) == "10. "`, `row_prefix(99, false) == "100. "`, and `row_prefix(0, true) == "▶ 1. "`. The existing `browse_views_construct_over_the_loaded_library` and `browse_views_construct_over_an_empty_list` continue to build every numbered view through the shared constructor.
+- `README.md`: add one sentence to the Usage paragraph saying every browse list numbers its rows from 1 like a Winamp playlist. Keep the hunk to that sentence.
+- `docs/invariants.md` records browse navigation, reply freshness, and the Now Playing label; row numbering changes none of those guarantees, so leave it unchanged.
+
+**Files touched.** `src/ui/views/browse.rs`, `src/ui/views/tests.rs`, `README.md`.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- `row_prefix` returns `"1. "`, `"10. "`, and `"100. "` for positions 0, 9, and 99 with `is_current == false`, and `"▶ 1. "` for position 0 with `is_current == true`.
+- Every row built by `scrollable_list` gets the prefix before its title in both the playing and non-playing branches; the playing-row background and style are unchanged, and an empty list still shows only its placeholder with no number.
+- Row selection messages, cached length labels, list order, and empty/loading/error wording are unchanged, and the construct tests build every browse view over both the loaded and empty library without panicking.
+- The feature itself changes only the three files listed above (the `PLANS.md`/`PLANS-DONE.md` move aside), and the README hunk is limited to the numbering sentence.
+
 ### Show each song list's count and total playing time (planned 2026-10-21 by the plan role, done 2026-10-21)
 
 **Goal.** Every loaded song list shows, beneath its rows, how many songs it holds and their combined playing time — the classic Winamp playlist editor's status line. Today `song_list` in `src/ui/views/browse.rs` builds only the scrollable rows: each row shows its own formatted length (`song_row` via `format_track_time`), but the list never aggregates them. This is independent of the planned Shuffle-On Previous history: it reads only the `[Song]` slice the view already receives.
