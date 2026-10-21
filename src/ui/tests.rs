@@ -4,9 +4,9 @@ use super::*;
 use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB};
 use crate::sample_library::sample_library;
 use crate::test_support::{
-    AudioCall, PREVIEW_URL, RecordingAudio, StubTransport, assert_ids, assert_preview_calls,
-    rock_preset, sample_album, sample_artist, sample_playlist, sample_song, second_album_songs,
-    sign_in_session, stepping_songs,
+    AudioCall, FailingTransportAudio, PREVIEW_URL, RecordingAudio, StubTransport, assert_ids,
+    assert_preview_calls, rock_preset, sample_album, sample_artist, sample_playlist, sample_song,
+    second_album_songs, sign_in_session, stepping_songs,
 };
 
 /// A fresh player over its own shared state, so a test can inspect the
@@ -449,6 +449,41 @@ async fn transport_messages_drive_the_audio_backend() {
     assert_transport_settled(update(&mut player, Message::PlayPause), "toggle").await;
     assert_preview_calls(&recording.calls(), &[AudioCall::Pause]);
     assert!(!state.lock().await.is_playing);
+}
+
+// Every transport arm shares `transport_into`, whose error branch logs the
+// backend's rejection and then still emits `TransportSettled` so the view
+// re-renders. No other UI test reaches that branch: the recording fake
+// succeeds at every command. The service calls the backend before it writes
+// shared state, so a rejected command must also leave the playing flag alone.
+// `attempts` proves each arm reached a failing backend rather than skipping
+// it, which a settled-and-unchanged assertion alone could not tell apart.
+#[tokio::test]
+async fn rejected_transport_commands_still_settle_and_keep_playing_state() {
+    let audio = Arc::new(FailingTransportAudio::default());
+    let (mut player, state) =
+        player_with_audio(Arc::clone(&audio) as Arc<dyn crate::audio::AudioOutput>);
+    player
+        .apple_music_service
+        .play_track("song-1", Some(PREVIEW_URL), || true)
+        .await
+        .unwrap();
+    assert!(state.lock().await.is_playing);
+
+    for (message, what) in [
+        (Message::Pause, "rejected pause"),
+        (Message::Stop, "rejected stop"),
+        (Message::Play, "rejected resume"),
+        (Message::PlayPause, "rejected toggle"),
+    ] {
+        assert_transport_settled(update(&mut player, message), what).await;
+        assert!(
+            state.lock().await.is_playing,
+            "{what} must leave the playing flag set"
+        );
+    }
+
+    assert_eq!(audio.attempts(), 4);
 }
 
 #[test]

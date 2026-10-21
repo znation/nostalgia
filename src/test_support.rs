@@ -14,6 +14,7 @@
 use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -479,6 +480,55 @@ impl AudioOutput for FailingAudio {
 
     fn stop(&self) -> Result<(), AppleMusicError> {
         Ok(())
+    }
+
+    fn set_volume(&self, _volume: f32) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn set_balance(&self, _balance: f32) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+}
+
+/// An [`AudioOutput`] whose `play`, volume, and balance commands succeed but
+/// whose pause, resume, and stop commands fail, so a UI test can reach a
+/// loaded preview and then drive each transport arm through
+/// `loading::transport_into`'s error branch. `attempts` counts the rejected
+/// calls, letting a test prove the arm actually reached the failing backend
+/// instead of skipping it.
+#[derive(Debug, Default)]
+pub(crate) struct FailingTransportAudio {
+    attempts: AtomicUsize,
+}
+
+impl FailingTransportAudio {
+    /// How many pause/resume/stop commands the backend rejected.
+    pub(crate) fn attempts(&self) -> usize {
+        self.attempts.load(Ordering::SeqCst)
+    }
+
+    fn reject(&self) -> Result<(), AppleMusicError> {
+        self.attempts.fetch_add(1, Ordering::SeqCst);
+        Err(AppleMusicError::new("the audio device is gone"))
+    }
+}
+
+impl AudioOutput for FailingTransportAudio {
+    fn play(&self, _url: &str) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn pause(&self) -> Result<(), AppleMusicError> {
+        self.reject()
+    }
+
+    fn resume(&self) -> Result<(), AppleMusicError> {
+        self.reject()
+    }
+
+    fn stop(&self) -> Result<(), AppleMusicError> {
+        self.reject()
     }
 
     fn set_volume(&self, _volume: f32) -> Result<(), AppleMusicError> {
