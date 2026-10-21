@@ -17,8 +17,7 @@ Early skeleton (0.1.0): an iced (0.14) desktop clone of the Winamp 2.x UI, with 
 with library search and flat All Songs, All Albums, and Playlists views. Apple Music
 browse/search and preview playback sit behind injectable seams and fall back to the sample
 library and silence.
-Open work lives in PLANS.md, BUGS.md, and QUESTIONS.md; finished entries move to PLANS-DONE.md
-and BUGS-FIXED.md.
+Open work lives in PLANS.md, BUGS.md, and QUESTIONS.md.
 <!-- tumwater:status:end -->
 
 ## Screenshots
@@ -50,21 +49,23 @@ playing track's artist and title, with its length at the right), the Play/Pause/
 controls, Repeat and Shuffle toggles, volume and balance sliders, an equalizer panel (an EQ on/off
 button, a preset pick list, a preamp slider, and ten band sliders), and a browse list whose song
 rows show each track's length, with each song list showing its song count and total playing time
-beneath the rows. Every browse list numbers its rows from 1 like a Winamp playlist, with the playing song marked by `▶` before its number. A `Search library` box above the browse list searches the library
-when you press Enter, replacing the list with the matching songs; Back leaves a search for the
-artists list. The Artists list also has `All Songs`, `All Albums`, and `Playlists` buttons: the
-first opens a flat list of every song in the library, whose rows play like any other song row, the
-second opens a flat list of every album, whose rows open that album's songs, and the third opens a
-flat list of every playlist, whose rows open that playlist's songs. Back from any of these lists
+beneath the rows. Every browse list numbers its rows from 1 like a Winamp playlist, with the
+playing song marked by `▶` before its number. A `Search library` box above the browse list
+searches the library when you press Enter, replacing the list with the matching songs; Back
+leaves a search for the artists list. The Artists list also has `All Songs`, `All Albums`, and
+`Playlists` buttons: the first opens a flat list of every song in the library, whose rows play
+like any other song row, the second opens a flat list of every album, whose rows open that
+album's songs, and the third opens a flat list of every playlist, whose rows open that playlist's
+songs. Back from any of these lists
 returns to the artists list, Back from songs opened through All Albums returns to All Albums, Back
 from songs opened through Playlists returns to Playlists, and Next/Previous step through the flat
 song list while it is showing. The title bar's `A` button toggles always-on-top, its shade button
 (or a double-click on the bar) rolls the window up to just that title bar and back, and its `–` and
 `✕` buttons minimize and close. With the window focused, the classic Winamp keys drive playback: Z
 and B step back and forward, X plays, C pauses, V stops, R toggles Repeat and S toggles Shuffle,
-and the up/down arrows nudge the volume while the left/right arrows seek five
-seconds back or forward. With Shuffle on, Previous retraces the tracks actually
-played before the current one instead of stepping one row backward in the list.
+and the up/down arrows nudge the volume while the left/right arrows seek five seconds back or
+forward. With Shuffle on, Previous retraces the tracks actually played before the current one
+instead of stepping one row backward in the list.
 The volume slider and the up/down arrows set the audio backend's playback level, the balance slider
 sets its stereo balance, and the equalizer panel's toggles, sliders, and presets change the
 playing preview's curve live; the volume and balance are remembered for the next track.
