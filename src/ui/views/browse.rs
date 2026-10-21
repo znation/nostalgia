@@ -254,15 +254,53 @@ pub(super) fn song_row<'a>(
 /// Builds an album list: the shared body of [`view_albums`] and
 /// [`view_all_albums`], mapping each album to an [`album_row`] by its
 /// position in `albums` and carrying `epoch`. `placeholder` is the caller's
-/// [`browse_placeholder`] wording for an empty list.
+/// [`browse_placeholder`] wording for an empty list. A non-empty list also
+/// appends its item-count footer ([`list_with_count`]).
 fn album_list<'a>(albums: &'a [Album], epoch: u64, placeholder: &'a str) -> Element<'a, Message> {
-    scrollable_list(
-        albums
-            .iter()
-            .enumerate()
-            .map(|(index, album)| album_row(epoch, index, album)),
-        placeholder,
+    list_with_count(
+        scrollable_list(
+            albums
+                .iter()
+                .enumerate()
+                .map(|(index, album)| album_row(epoch, index, album)),
+            placeholder,
+        ),
+        albums.len(),
+        "album",
+        "albums",
     )
+}
+
+/// The item-count footer for a loaded artist, album, or playlist list:
+/// `"<count> <noun>"`, with `singular` chosen exactly when `count == 1` and
+/// `plural` otherwise. Unlike [`song_list_summary`] it has no time total and
+/// formats any count, including `0`, so the wording is testable without an
+/// iced renderer.
+pub(super) fn list_count_summary(count: usize, singular: &str, plural: &str) -> String {
+    let noun = if count == 1 { singular } else { plural };
+    format!("{count} {noun}")
+}
+
+/// Wraps a non-song browse list in a footer naming how many rows it holds,
+/// matching the song list's count-and-time footer above it. A zero count
+/// returns `list` unchanged: the list is then showing its loading, error, or
+/// empty placeholder, and a `0 artists` footer beneath that wording would
+/// describe rows the panel does not have.
+fn list_with_count<'a>(
+    list: Element<'a, Message>,
+    count: usize,
+    singular: &str,
+    plural: &str,
+) -> Element<'a, Message> {
+    if count == 0 {
+        return list;
+    }
+    Column::new()
+        .push(list)
+        .push(Text::new(list_count_summary(count, singular, plural)).size(14))
+        .width(Length::Fill)
+        .height(Length::FillPortion(3))
+        .into()
 }
 
 /// The count-and-time footer beneath a loaded song list: `"<count> song(s) -
@@ -332,19 +370,25 @@ fn song_list<'a>(
 /// emitting [`Message::ArtistSelected`] with the artist's index in the list
 /// and the list's `epoch`. `loading` and `error` select the placeholder
 /// wording (see [`browse_placeholder`]); a fetch failure wins. Built by
-/// [`scrollable_list`] from the [`artist_row`] mapping.
+/// [`scrollable_list`] from the [`artist_row`] mapping; a non-empty list also
+/// appends its item-count footer ([`list_with_count`]).
 pub fn view_artists<'a>(
     artists: &'a [Artist],
     epoch: u64,
     loading: bool,
     error: Option<&'a str>,
 ) -> Element<'a, Message> {
-    scrollable_list(
-        artists
-            .iter()
-            .enumerate()
-            .map(|(index, artist)| artist_row(epoch, index, artist)),
-        browse_placeholder(&CurrentView::Artists, loading, error, false),
+    list_with_count(
+        scrollable_list(
+            artists
+                .iter()
+                .enumerate()
+                .map(|(index, artist)| artist_row(epoch, index, artist)),
+            browse_placeholder(&CurrentView::Artists, loading, error, false),
+        ),
+        artists.len(),
+        "artist",
+        "artists",
     )
 }
 
@@ -443,19 +487,25 @@ pub fn view_all_albums<'a>(
 /// emitting [`Message::PlaylistSelected`] with the playlist's index in the
 /// list and the list's `epoch`. `loading` and `error` select the placeholder
 /// wording (see [`browse_placeholder`]); a fetch failure wins. Built by
-/// [`scrollable_list`] from the [`playlist_row`] mapping.
+/// [`scrollable_list`] from the [`playlist_row`] mapping; a non-empty list
+/// also appends its item-count footer ([`list_with_count`]).
 pub fn view_playlists<'a>(
     playlists: &'a [Playlist],
     epoch: u64,
     loading: bool,
     error: Option<&'a str>,
 ) -> Element<'a, Message> {
-    scrollable_list(
-        playlists
-            .iter()
-            .enumerate()
-            .map(|(index, playlist)| playlist_row(epoch, index, playlist)),
-        browse_placeholder(&CurrentView::Playlists, loading, error, false),
+    list_with_count(
+        scrollable_list(
+            playlists
+                .iter()
+                .enumerate()
+                .map(|(index, playlist)| playlist_row(epoch, index, playlist)),
+            browse_placeholder(&CurrentView::Playlists, loading, error, false),
+        ),
+        playlists.len(),
+        "playlist",
+        "playlists",
     )
 }
 

@@ -5,6 +5,31 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
+### Show the item count beneath artist, album, and playlist lists (planned 2026-10-21 by the plan role, done 2026-10-21)
+
+**Goal.** Every loaded non-song browse list shows how many rows it holds beneath the rows — `3 artists`, `2 albums`, `1 playlist` — as the library mockup's status area does (`docs/screenshots/library.png`). The song lists keep their existing count-and-time footer and gain nothing new. This is independent of the pending row numbering: it reads only the slice length each view already receives.
+
+**Approach.**
+
+- `src/ui/views/browse.rs`: add a pure `pub(super) fn list_count_summary(count: usize, singular: &str, plural: &str) -> String` returning `"<count> <noun>"`, with `singular` chosen exactly when `count == 1` and `plural` otherwise. It formats any count, including `0`, so the wording is testable without an iced renderer (`format_list_time` is the sibling formatter for the song footer).
+- Add a private `fn list_with_count<'a>(list: Element<'a, Message>, count: usize, singular: &str, plural: &str) -> Element<'a, Message>`: when `count` is non-zero, wrap `list` in a `Column::new().push(list).push(Text::new(list_count_summary(...)).size(14))` with `Length::Fill` width and `Length::FillPortion(3)` height, mirroring the song footer in `song_list`; when `count` is zero, return `list` unchanged so a loading, error, or empty placeholder gets no `0 artists` footer.
+- Wrap the three non-song list builders at their row-construction sites: `view_artists` passes `artists.len()` with `"artist"`/`"artists"`, `album_list` passes `albums.len()` with `"album"`/`"albums"` (so both `view_albums` and `view_all_albums` gain the footer once), and `view_playlists` passes `playlists.len()` with `"playlist"`/`"playlists"`. Do not wrap inside `scrollable_list` itself: `song_list` already appends its own count-and-time footer, so wrapping there would give every song list a second footer.
+- Update the doc comments of `view_artists`, `album_list` (which `view_albums` and `view_all_albums` both delegate to), and `view_playlists` to say a non-empty list appends its item-count footer, and note in `list_with_count` why it skips an empty list.
+- `src/ui/views/tests.rs`: import `list_count_summary` and add `list_count_summary_uses_the_singular_and_plural`, asserting `"1 artist"` for a count of one, `"3 artists"` for a count of three, `"1 playlist"`, and `"0 albums"`. The existing `browse_views_construct_over_the_loaded_library` and `browse_views_construct_over_an_empty_list` build the populated and empty branches of every wrapped builder through `construct_every_browse_view`.
+- `README.md`: extend the existing Usage sentence — which already says each song list shows its song count and total playing time — to also say artist, album, and playlist lists show their item count beneath the rows. Keep the hunk to that sentence.
+- `docs/invariants.md`: the browse-hierarchy and reply-freshness guarantees do not change, and the document makes no claim about footers, so leave it unchanged.
+
+**Files touched.** `src/ui/views/browse.rs`, `src/ui/views/tests.rs`, `README.md`.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- `list_count_summary` returns `"1 artist"` for `(1, "artist", "artists")`, `"3 artists"` for `(3, "artist", "artists")`, `"1 playlist"` for `(1, "playlist", "playlists")`, and `"0 albums"` for `(0, "album", "albums")`.
+- A loaded Artists, Albums, All Albums, or Playlists view renders its rows followed by exactly one footer whose count equals the number of rows passed in; an empty, loading, or failed one still renders only its placeholder, with no `0 …` footer.
+- Song lists keep the existing `song_list_summary` footer and call no new footer helper, so no song list shows two footers.
+- Row order, row labels, selection messages, epochs, and placeholder wording are unchanged, and both construct tests build every browse view without panicking.
+- The change touches only the three files listed above (plus the `PLANS.md` edit and backlog moves), and the README hunk is limited to the item-count clause.
+
 ### Number every browse-list row (planned 2026-10-21 by the plan role; done 2026-10-21)
 
 **Goal.** Each row in every browse list opens with its 1-based position and a period (`1. The Sample Band`, `2. First Record`), as the classic Winamp playlist editor does; the currently playing row keeps its `▶` marker before the number (`▶ 3. Opening`). This is independent of the planned count/time footer and of the browse data: numbering is derived from each list's row order, so it needs no service or model change.

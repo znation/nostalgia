@@ -1,7 +1,7 @@
 use super::super::{CurrentView, Message, style, theme};
 use super::browse::{
     BROWSE_VIEWS, album_row, artist_row, browse_placeholder, current_row_style, empty_list_label,
-    playlist_row, row_prefix, song_list_summary, song_row,
+    list_count_summary, playlist_row, row_prefix, song_list_summary, song_row,
 };
 use super::equalizer::eq_enabled_label;
 use super::now_playing::{
@@ -380,6 +380,14 @@ fn row_prefix_numbers_rows_and_puts_the_play_marker_first() {
     assert_eq!(row_prefix(9, false), "10. ");
     assert_eq!(row_prefix(99, false), "100. ");
     assert_eq!(row_prefix(0, true), "▶ 1. ");
+}
+
+#[test]
+fn list_count_summary_uses_the_singular_and_plural() {
+    assert_eq!(list_count_summary(1, "artist", "artists"), "1 artist");
+    assert_eq!(list_count_summary(3, "artist", "artists"), "3 artists");
+    assert_eq!(list_count_summary(1, "playlist", "playlists"), "1 playlist");
+    assert_eq!(list_count_summary(0, "album", "albums"), "0 albums");
 }
 
 #[test]
