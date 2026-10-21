@@ -4,8 +4,9 @@ use super::*;
 use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB};
 use crate::sample_library::sample_library;
 use crate::test_support::{
-    AudioCall, PREVIEW_URL, RecordingAudio, StubTransport, assert_ids, rock_preset, sample_album,
-    sample_artist, sample_song, second_album_songs, sign_in_session, stepping_songs,
+    AudioCall, PREVIEW_URL, RecordingAudio, StubTransport, assert_ids, assert_preview_calls,
+    rock_preset, sample_album, sample_artist, sample_song, second_album_songs, sign_in_session,
+    stepping_songs,
 };
 
 /// A fresh player over its own shared state, so a test can inspect the
@@ -420,57 +421,28 @@ async fn transport_messages_drive_the_audio_backend() {
     let (mut player, state) = player_playing_preview(Arc::clone(&recording)).await;
     player.apple_music_service.pause().await.unwrap();
     assert_transport_settled(update(&mut player, Message::Play), "play").await;
-    assert_eq!(
-        recording.calls(),
-        vec![
-            AudioCall::SetVolume(0.5),
-            AudioCall::Play(PREVIEW_URL.to_string()),
-            AudioCall::Pause,
-            AudioCall::Resume
-        ]
-    );
+    assert_preview_calls(&recording.calls(), &[AudioCall::Pause, AudioCall::Resume]);
     assert!(state.lock().await.is_playing);
 
     // Pause (the C key).
     let recording = Arc::new(RecordingAudio::default());
     let (mut player, state) = player_playing_preview(Arc::clone(&recording)).await;
     assert_transport_settled(update(&mut player, Message::Pause), "pause").await;
-    assert_eq!(
-        recording.calls(),
-        vec![
-            AudioCall::SetVolume(0.5),
-            AudioCall::Play(PREVIEW_URL.to_string()),
-            AudioCall::Pause
-        ]
-    );
+    assert_preview_calls(&recording.calls(), &[AudioCall::Pause]);
     assert!(!state.lock().await.is_playing);
 
     // Stop.
     let recording = Arc::new(RecordingAudio::default());
     let (mut player, state) = player_playing_preview(Arc::clone(&recording)).await;
     assert_transport_settled(update(&mut player, Message::Stop), "stop").await;
-    assert_eq!(
-        recording.calls(),
-        vec![
-            AudioCall::SetVolume(0.5),
-            AudioCall::Play(PREVIEW_URL.to_string()),
-            AudioCall::Stop
-        ]
-    );
+    assert_preview_calls(&recording.calls(), &[AudioCall::Stop]);
     assert!(!state.lock().await.is_playing);
 
     // PlayPause while playing: pauses.
     let recording = Arc::new(RecordingAudio::default());
     let (mut player, state) = player_playing_preview(Arc::clone(&recording)).await;
     assert_transport_settled(update(&mut player, Message::PlayPause), "toggle").await;
-    assert_eq!(
-        recording.calls(),
-        vec![
-            AudioCall::SetVolume(0.5),
-            AudioCall::Play(PREVIEW_URL.to_string()),
-            AudioCall::Pause
-        ]
-    );
+    assert_preview_calls(&recording.calls(), &[AudioCall::Pause]);
     assert!(!state.lock().await.is_playing);
 }
 
@@ -1135,13 +1107,7 @@ async fn track_selected_plays_the_songs_preview_url() {
     let task = update(&mut player, Message::TrackSelected { epoch: 0, index: 0 });
     drive_task(task, "play", |_| {}).await;
 
-    assert_eq!(
-        recording.calls(),
-        vec![
-            AudioCall::SetVolume(0.5),
-            AudioCall::Play(PREVIEW_URL.to_string())
-        ]
-    );
+    assert_preview_calls(&recording.calls(), &[]);
 }
 
 // The volume arms must reach the injected backend, not just write shared
@@ -1864,13 +1830,7 @@ async fn track_selected_in_all_songs_plays_the_flat_lists_song() {
     drive_task(task, "flat-list play", |_| {}).await;
 
     assert_eq!(state.lock().await.current_track.as_deref(), Some("song-4"));
-    assert_eq!(
-        recording.calls(),
-        vec![
-            AudioCall::SetVolume(0.5),
-            AudioCall::Play(PREVIEW_URL.to_string())
-        ]
-    );
+    assert_preview_calls(&recording.calls(), &[]);
 }
 
 // Next/Previous must step the list the current view shows: the flat All

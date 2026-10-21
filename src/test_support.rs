@@ -378,6 +378,20 @@ pub(crate) enum AudioCall {
     SetVolume(f32),
 }
 
+/// Asserts `calls` recorded the two [`AudioCall`]s that starting a preview
+/// always emits — the play-time volume set to the default `0.5`, then
+/// [`PREVIEW_URL`] — followed by `expected`, the calls under test. The
+/// `apple_music` service tests and the `ui` transport tests each used to spell
+/// out that prefix, so it lives here once.
+pub(crate) fn assert_preview_calls(calls: &[AudioCall], expected: &[AudioCall]) {
+    let mut wanted = vec![
+        AudioCall::SetVolume(0.5),
+        AudioCall::Play(PREVIEW_URL.to_string()),
+    ];
+    wanted.extend_from_slice(expected);
+    assert_eq!(calls, wanted);
+}
+
 /// A recording [`AudioOutput`] so a test observes the commands issued to the
 /// backend without touching an audio device. The `apple_music`, `ui`, and
 /// `audio` suites all need one, so the fake lives here once.

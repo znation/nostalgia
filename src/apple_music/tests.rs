@@ -2,7 +2,8 @@ use super::*;
 use crate::audio::AudioOutput;
 use crate::test_support::{
     AudioCall, FailingAudio, PREVIEW_URL, RecordingAudio, StubTransport, assert_ids,
-    assert_single_call, rest_session, sample_album, sample_artist, sample_song, sign_in_session,
+    assert_preview_calls, assert_single_call, rest_session, sample_album, sample_artist,
+    sample_song, sign_in_session,
 };
 
 fn test_service() -> AppleMusicService {
@@ -101,19 +102,6 @@ async fn recording_service_with_preview() -> RecordingService {
     let (service, state) =
         service_with_preview_playing(Arc::clone(&recording) as Arc<dyn AudioOutput>).await;
     (service, state, recording)
-}
-
-/// Asserts `calls` recorded the two `AudioCall`s that starting a preview
-/// always emits — the play-time volume set, then `PREVIEW_URL` — followed by
-/// `expected`, the transport transition under test. Both
-/// `service_with_preview_playing` and a direct `play_track` leave that prefix.
-fn assert_preview_calls(calls: &[AudioCall], expected: &[AudioCall]) {
-    let mut wanted = vec![
-        AudioCall::SetVolume(0.5),
-        AudioCall::Play(PREVIEW_URL.to_string()),
-    ];
-    wanted.extend_from_slice(expected);
-    assert_eq!(calls, wanted);
 }
 
 /// A recording backend whose `pause` blocks until released, so a test can hold
