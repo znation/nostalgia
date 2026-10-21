@@ -697,11 +697,18 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::SongsLoaded(songs) => {
-            player.songs.store(songs);
+            // Cache each row's formatted length once, when the list loads, so
+            // a view refresh borrows the labels instead of formatting every
+            // row's duration again (see `BrowseList::store_with_labels`).
+            player
+                .songs
+                .store_with_labels(songs, |song| views::format_track_time(song.duration_ms));
             Task::none()
         }
         Message::AllSongsLoaded(songs) => {
-            player.all_songs.store(songs);
+            player
+                .all_songs
+                .store_with_labels(songs, |song| views::format_track_time(song.duration_ms));
             Task::none()
         }
         Message::ArtistsLoadFailed(report) => {
@@ -908,6 +915,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
             let state = player.state.blocking_lock();
             views::view_songs(
                 &player.songs.items,
+                &player.songs.labels,
                 player.songs.epoch,
                 player.songs.loading,
                 player.songs.error.as_deref(),
@@ -921,6 +929,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
             let state = player.state.blocking_lock();
             views::view_all_songs(
                 &player.all_songs.items,
+                &player.all_songs.labels,
                 player.all_songs.epoch,
                 player.all_songs.loading,
                 player.all_songs.error.as_deref(),

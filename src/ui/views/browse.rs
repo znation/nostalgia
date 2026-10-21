@@ -99,8 +99,9 @@ pub(super) fn current_row_style(status: button::Status) -> button::Style {
 /// than owning clones: this builder runs on every view refresh, so the
 /// borrowed title avoids a `String` allocation per row per frame. The
 /// secondary label is a [`Cow`] because a song row's label is the track's
-/// formatted length, which is owned, while the artist and album rows keep
-/// their static hints borrowed. The playing row's `▶` marker is pushed as
+/// formatted length, borrowed from the loaded list's label cache in the
+/// common case, while the artist and album rows keep their static hints
+/// borrowed. The playing row's `▶` marker is pushed as
 /// its own static label beside the borrowed title rather than formatted into
 /// an owned one, so the marker adds no `String` allocation per frame either.
 fn scrollable_list<'a>(
@@ -192,18 +193,26 @@ pub(super) fn album_row<'a>(
 /// loaded-list epoch and the song's position in that list, carried so
 /// building a row never clones the song's id (see [`artist_row`]). The flag
 /// feeds `scrollable_list`'s `▶` + highlight marker, so the song list reads
-/// as a playlist. The length is a small owned `String` formatted per row per
-/// frame — the same per-frame allocation `now_playing_time` makes — while
-/// the title still borrows.
+/// as a playlist. `cached_label` is the length label the loaded list stored
+/// for this row (see `BrowseList::store_with_labels`), borrowed so a refresh
+/// of a large library does not format and allocate a fresh `String` per
+/// track; `None` — a list stored without labels, as a test may do — falls
+/// back to formatting the duration for this row so the rendered label is
+/// unchanged. The title always borrows.
 pub(super) fn song_row<'a>(
     epoch: u64,
     index: usize,
     song: &'a Song,
+    cached_label: Option<&'a str>,
     current_track: Option<&str>,
 ) -> (&'a str, Cow<'a, str>, Message, bool) {
+    let label = match cached_label {
+        Some(label) => Cow::Borrowed(label),
+        None => Cow::Owned(format_track_time(song.duration_ms)),
+    };
     (
         song.title.as_str(),
-        Cow::Owned(format_track_time(song.duration_ms)),
+        label,
         Message::TrackSelected { epoch, index },
         Some(song.id.as_str()) == current_track,
     )
@@ -276,12 +285,16 @@ pub fn view_albums<'a>(
 /// The Songs browse view: one row per song, in the order given, each emitting
 /// [`Message::TrackSelected`] with the song's index in the list and the
 /// list's `epoch`; the row whose id is `current_track` is marked as playing.
-/// `loading`, `error`, and `search_active` select the placeholder wording (see
+/// `labels` holds the formatted lengths the loaded list cached in the same
+/// order as `songs` (see `BrowseList::store_with_labels`); an index without a
+/// cached label falls back to formatting that song's duration. `loading`,
+/// `error`, and `search_active` select the placeholder wording (see
 /// [`browse_placeholder`]); a fetch failure wins, and a loaded-empty search
 /// reads as "no matches" rather than as an empty album. Built by
 /// [`browse_view`] from the [`song_row`] mapping.
 pub fn view_songs<'a>(
     songs: &'a [Song],
+    labels: &'a [String],
     epoch: u64,
     loading: bool,
     error: Option<&'a str>,
@@ -290,10 +303,15 @@ pub fn view_songs<'a>(
 ) -> Element<'a, Message> {
     browse_view(
         CurrentView::Songs,
-        songs
-            .iter()
-            .enumerate()
-            .map(|(index, song)| song_row(epoch, index, song, current_track)),
+        songs.iter().enumerate().map(|(index, song)| {
+            song_row(
+                epoch,
+                index,
+                song,
+                labels.get(index).map(String::as_str),
+                current_track,
+            )
+        }),
         loading,
         error,
         search_active,
@@ -303,11 +321,13 @@ pub fn view_songs<'a>(
 /// The All Songs browse view: one row per song in the whole library, in the
 /// order given, each emitting [`Message::TrackSelected`] with the song's
 /// index in the list and the list's `epoch`; the row whose id is
-/// `current_track` is marked as playing. It mirrors [`view_songs`] but never
-/// shows the search wording, because the flat list is not a search's result.
-/// Built by [`browse_view`] from the [`song_row`] mapping.
+/// `current_track` is marked as playing. `labels` is the same cached
+/// formatted-length slice [`view_songs`] takes. It mirrors [`view_songs`] but
+/// never shows the search wording, because the flat list is not a search's
+/// result. Built by [`browse_view`] from the [`song_row`] mapping.
 pub fn view_all_songs<'a>(
     songs: &'a [Song],
+    labels: &'a [String],
     epoch: u64,
     loading: bool,
     error: Option<&'a str>,
@@ -315,10 +335,15 @@ pub fn view_all_songs<'a>(
 ) -> Element<'a, Message> {
     browse_view(
         CurrentView::AllSongs,
-        songs
-            .iter()
-            .enumerate()
-            .map(|(index, song)| song_row(epoch, index, song, current_track)),
+        songs.iter().enumerate().map(|(index, song)| {
+            song_row(
+                epoch,
+                index,
+                song,
+                labels.get(index).map(String::as_str),
+                current_track,
+            )
+        }),
         loading,
         error,
         false,

@@ -1804,6 +1804,12 @@ fn all_songs_loaded_stores_the_flat_list() {
         |player| &mut player.all_songs.items,
         |player| player.all_songs.loading,
     );
+
+    // The flat list caches each row's formatted length when it is stored, in
+    // row order, so a view refresh borrows the labels instead of formatting
+    // every duration again (see `BrowseList::store_with_labels`).
+    let _ = update(&mut player, Message::AllSongsLoaded(stepping_songs()));
+    assert_eq!(player.all_songs.labels, ["3:30", "2:05", "1:35"]);
 }
 
 // Selecting a row in the flat All Songs view must play the song the flat
@@ -2103,6 +2109,28 @@ fn songs_loaded_replaces_the_previous_albums_songs() {
     let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
 
     assert_ids(&player.songs.items, |song| song.id.as_str(), &["song-4"]);
+}
+
+// The songs list caches each row's formatted length when it is stored, so a
+// view refresh of a large library borrows the labels instead of formatting
+// every duration again. Pin that the cache is built in row order and replaced
+// with the rows, and dropped when a navigation clears the list, so a refresh
+// can never show a stale length beside a new row.
+#[test]
+fn songs_loaded_caches_each_rows_formatted_length() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    assert_eq!(player.songs.labels, ["3:30", "2:05", "1:35"]);
+
+    // Navigate into an album: the fetch starts by clearing the previous
+    // level's rows, and the labels must be dropped with them.
+    player.albums.items = vec![sample_album()];
+    let _ = update(&mut player, Message::AlbumSelected { epoch: 0, index: 0 });
+    assert!(player.songs.labels.is_empty());
+
+    // The next load caches the new list's labels only.
+    let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
+    assert_eq!(player.songs.labels, ["1:35"]);
 }
 
 /// Plays song-1 (title "One", artist "The Sample Band") from the shared

@@ -70,7 +70,7 @@ fn song_row_uses_title_and_selects_the_song_by_index() {
     // `track_selected_starts_playback_of_the_selected_track` in
     // `ui::tests` pins the index-to-id mapping.
     let song = sample_song();
-    let (title, label, message, is_current) = song_row(0, 0, &song, None);
+    let (title, label, message, is_current) = song_row(0, 0, &song, None, None);
     assert_eq!(title, "Opening");
     // `sample_song` is 210_000 ms long, so the secondary label is its
     // `m:ss` length rather than the old static "Play" hint.
@@ -83,12 +83,23 @@ fn song_row_uses_title_and_selects_the_song_by_index() {
 }
 
 #[test]
+fn song_row_prefers_the_lists_cached_length_label() {
+    // The loaded song list caches each row's formatted length, and the row
+    // builder must use it rather than formatting the duration again. A
+    // cached label that differs from the duration's formatting proves the
+    // row borrows the cache; the `None` tests above pin the fallback.
+    let song = sample_song();
+    let (_, label, _, _) = song_row(0, 0, &song, Some("1:23"), None);
+    assert_eq!(label, "1:23");
+}
+
+#[test]
 fn song_row_shows_an_unknown_duration_as_blank_time() {
     // A song whose source supplied no duration (`0`) renders the same
     // `--:--` placeholder as the Now Playing bar, not `0:00`.
     let mut song = sample_song();
     song.duration_ms = 0;
-    let (_, label, _, _) = song_row(0, 0, &song, None);
+    let (_, label, _, _) = song_row(0, 0, &song, None, None);
     assert_eq!(label, "--:--");
 }
 
@@ -97,13 +108,13 @@ fn song_row_marks_the_current_track() {
     // The flag is true only when `current_track` names exactly this
     // song; a different id — or no track at all — leaves the row
     // unmarked, so the `▶`/highlight marker follows the playback state.
-    let (_, _, _, is_current) = song_row(0, 0, &sample_song(), Some("song-1"));
+    let (_, _, _, is_current) = song_row(0, 0, &sample_song(), None, Some("song-1"));
     assert!(is_current);
 
-    let (_, _, _, is_current) = song_row(0, 0, &sample_song(), Some("other-song"));
+    let (_, _, _, is_current) = song_row(0, 0, &sample_song(), None, Some("other-song"));
     assert!(!is_current);
 
-    let (_, _, _, is_current) = song_row(0, 0, &sample_song(), None);
+    let (_, _, _, is_current) = song_row(0, 0, &sample_song(), None, None);
     assert!(!is_current);
 }
 
@@ -341,11 +352,11 @@ fn construct_every_browse_view(
 ) {
     let _artists = view_artists(artists, epoch, loading, None);
     let _albums = view_albums(albums, epoch, loading, None);
-    let _songs = view_songs(songs, epoch, loading, None, None, false);
-    let _songs_marked = view_songs(songs, epoch, loading, None, Some("song-1"), false);
-    let _songs_searched = view_songs(songs, epoch, loading, None, None, true);
-    let _all_songs = view_all_songs(songs, epoch, loading, None, None);
-    let _all_songs_marked = view_all_songs(songs, epoch, loading, None, Some("song-1"));
+    let _songs = view_songs(songs, &[], epoch, loading, None, None, false);
+    let _songs_marked = view_songs(songs, &[], epoch, loading, None, Some("song-1"), false);
+    let _songs_searched = view_songs(songs, &[], epoch, loading, None, None, true);
+    let _all_songs = view_all_songs(songs, &[], epoch, loading, None, None);
+    let _all_songs_marked = view_all_songs(songs, &[], epoch, loading, None, Some("song-1"));
 }
 
 // The currently playing row is marked by a selection bar. iced's `Element`
