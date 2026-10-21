@@ -987,11 +987,13 @@ mod tests {
     }
 
     /// A recording [`WorkerPlayer`] for the command-loop tests: it records the
-    /// previews appended and whether it was stopped, and remembers its gain,
-    /// without needing an output device.
+    /// previews appended, the pause/resume calls, and whether it was stopped,
+    /// and remembers its gain, without needing an output device.
     #[derive(Clone, Default)]
     struct RecordingPlayer {
         appended: Arc<AtomicUsize>,
+        paused: Arc<AtomicUsize>,
+        resumed: Arc<AtomicUsize>,
         stopped: Arc<AtomicBool>,
         volume: Arc<Mutex<f32>>,
     }
@@ -1007,9 +1009,13 @@ mod tests {
             self.appended.fetch_add(1, Ordering::SeqCst);
         }
 
-        fn pause(&self) {}
+        fn pause(&self) {
+            self.paused.fetch_add(1, Ordering::SeqCst);
+        }
 
-        fn play(&self) {}
+        fn play(&self) {
+            self.resumed.fetch_add(1, Ordering::SeqCst);
+        }
 
         fn stop(&self) {
             self.stopped.store(true, Ordering::SeqCst);
@@ -1110,6 +1116,48 @@ mod tests {
         assert_eq!(players.len(), 2, "each successful Play installs a player");
         assert_eq!(*players[0].volume.lock().unwrap(), 0.4);
         assert_eq!(*players[1].volume.lock().unwrap(), 0.4);
+    }
+
+    // Pause, Resume, SetVolume and Stop drive the player a previous Play
+    // installed; their `if let Some(player)` arms are the only way those
+    // commands reach the output. The commands are sent from inside the first
+    // `create_player` call, once that player is recorded, so they arrive in
+    // order after the Play installs it. The final Pause proves Stop dropped the
+    // player instead of leaving it for later commands: it must not reach the
+    // stopped player.
+    #[test]
+    fn transport_and_volume_commands_drive_the_installed_player() {
+        let (sender, receiver) = mpsc::channel();
+        let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
+        let recorded = Arc::clone(&players);
+        let command_sender = Arc::new(Mutex::new(Some(sender.clone())));
+        let create_player = move || {
+            let player = RecordingPlayer::default();
+            recorded.lock().unwrap().push(player.clone());
+            if let Some(sender) = command_sender.lock().unwrap().take() {
+                sender.send(Command::Pause).unwrap();
+                sender.send(Command::Resume).unwrap();
+                sender.send(Command::SetVolume(0.6)).unwrap();
+                sender.send(Command::Stop).unwrap();
+                sender.send(Command::Pause).unwrap();
+            }
+            player
+        };
+        let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+
+        sender.send(Command::Play("first".to_string())).unwrap();
+        drop(sender);
+        serve_commands(receiver, create_player, fetch);
+
+        let players = players.lock().unwrap();
+        assert_eq!(players.len(), 1, "the Play must install one player");
+        assert_eq!(players[0].paused.load(Ordering::SeqCst), 1);
+        assert_eq!(players[0].resumed.load(Ordering::SeqCst), 1);
+        assert_eq!(*players[0].volume.lock().unwrap(), 0.6);
+        assert!(
+            players[0].stopped.load(Ordering::SeqCst),
+            "Stop must stop the installed player"
+        );
     }
 
     // A Play's download runs on the worker, so commands issued meanwhile wait
