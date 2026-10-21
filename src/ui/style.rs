@@ -1,11 +1,12 @@
 //! Winamp widget chrome styles.
 //!
-//! Every iced widget this player dresses — buttons, the preset pick list and
-//! its menu, sliders, playlist rows, the playlist scroll well, and the title
-//! bar — gets its base-skin colours and 1px chrome geometry here. Each style
-//! is a pure `Status` → `Style` builder, so its colour rule is testable
-//! without building a widget. The reusable two-tone bevel the buttons and
-//! sliders draw their edges from lives in the sibling `bevel` module.
+//! Every iced widget this player dresses — buttons, the library search box,
+//! the preset pick list and its menu, sliders, playlist rows, the playlist
+//! scroll well, and the title bar — gets its base-skin colours and 1px chrome
+//! geometry here. Each style is a pure `Status` → `Style` builder, so its
+//! colour rule is testable without building a widget. The reusable edge-colour
+//! rule the buttons and search box draw from lives in the sibling `bevel`
+//! module.
 
 use iced::{
     Background, Border, Color, Shadow, Vector,
@@ -43,12 +44,13 @@ fn square_shadow(color: Color) -> Shadow {
 }
 
 /// The chrome face shade for an interaction state: pressed when `pressed`,
-/// hovered when `hovered`, and the resting shade otherwise. Both chrome styles
-/// map their own status enum onto this same ladder — the button by
-/// Active/Hovered/Pressed and the slider by Active/Hovered/Dragged — so the
-/// ladder lives here once and the two stay in lockstep. `pressed` wins when
-/// both are true, though no current status is both. Pure, so it needs no
-/// widget to test.
+/// hovered when `hovered`, and the resting shade otherwise. The button, search
+/// box, preset pick list, and slider map their own status enums onto this same
+/// ladder — the button by Active/Hovered/Pressed, the search box by
+/// Active/Hovered/Focused, the pick list by Active/Opened, and the slider by
+/// Active/Hovered/Dragged — so the ladder lives here once and they stay in
+/// lockstep. `pressed` wins when both are true, though no current status is
+/// both. Pure, so it needs no widget to test.
 fn chrome_face(hovered: bool, pressed: bool) -> Color {
     if pressed {
         theme::BUTTON_FACE_PRESSED
