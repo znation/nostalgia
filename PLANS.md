@@ -33,6 +33,10 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ### Seek the playing preview five seconds with the left and right arrow keys (planned 2026-10-20 by the plan role)
 
+**Needs replan 2026-10-20 by feature: rejected after 2 review rounds**
+1. The inter-channel phase bug is only fixed in the outer wrapper. `EqSource::try_seek` is still `self.inner.try_seek(pos)?; self.channel = 0; ...` (src/audio.rs:510-515), and the production chain is `BalanceSource<EqSource<preview>>` (src/audio.rs:552-554). rodio 0.22.2's `SymphoniaDecoder:…
+2. The commit's scope and risk claims are false for the diff being merged. The summary says only README's open-work pointer is kept unchanged and RISK says "None; no files changed," but the diff against a9ed780a changes eleven files and lands the whole seek feature: new `AudioOutput::seek_by`, `Comman…
+
 **Goal.** Pressing Left seeks the playing preview back five seconds and pressing Right seeks it forward five seconds, matching classic Winamp's keyboard bindings. Today `shortcuts::shortcut` maps only ArrowUp/ArrowDown (to `Message::VolumeUp`/`VolumeDown`), `Message` has no seek variant, and `AudioOutput` exposes only play/pause/resume/stop/`set_volume`/`set_balance`. `rodio` 0.22's `Player` already provides `get_pos` and `try_seek`, but nothing in `src/audio.rs` calls them, so the left/right keys currently do nothing.
 
 **Approach.**
