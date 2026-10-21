@@ -1054,6 +1054,47 @@ mod tests {
         (players, create_player)
     }
 
+    /// Runs one [`serve_commands`] loop whose first preview download (for
+    /// `"first"`) queues `supersede` from inside the fetch, so the command
+    /// lands while that download is still in flight. Returns the players the
+    /// loop installed, in creation order, and the URLs whose downloads ran.
+    ///
+    /// The queued command is sent from inside the fetch, and its sender clone
+    /// is dropped with the send, so the channel closes and the worker loop
+    /// ends. The two supersession tests share this setup; only the command
+    /// (a newer Play or a Stop) and their assertions differ.
+    fn run_with_superseding_command(supersede: Command) -> (Vec<RecordingPlayer>, Vec<String>) {
+        let (sender, receiver) = mpsc::channel();
+        let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
+        let fetched: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
+
+        let recorded = Arc::clone(&players);
+        let create_player = move || {
+            let player = RecordingPlayer::default();
+            recorded.lock().unwrap().push(player.clone());
+            player
+        };
+        let queued = Arc::new(Mutex::new(Some((sender.clone(), supersede))));
+        let seen = Arc::clone(&fetched);
+        let fetch = move |url: &str| -> Result<(), AppleMusicError> {
+            seen.lock().unwrap().push(url.to_string());
+            if url == "first"
+                && let Some((sender, command)) = queued.lock().unwrap().take()
+            {
+                sender.send(command).unwrap();
+            }
+            Ok(())
+        };
+
+        sender.send(Command::Play("first".to_string())).unwrap();
+        drop(sender);
+        serve_commands(receiver, create_player, fetch);
+
+        let players = players.lock().unwrap().clone();
+        let fetched = fetched.lock().unwrap().clone();
+        (players, fetched)
+    }
+
     // `play_track` commits the new track and returns `Ok` as soon as the
     // command is queued, so the worker's later download failure is invisible
     // to the caller. If that failure left the previous player running, the old
@@ -1167,42 +1208,15 @@ mod tests {
     // must drop the superseded preview and handle the queued selection.
     #[test]
     fn a_preview_superseded_during_its_download_is_not_installed() {
-        let (sender, receiver) = mpsc::channel();
-        let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
-        let fetched: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
-
-        let recorded = Arc::clone(&players);
-        let create_player = move || {
-            let player = RecordingPlayer::default();
-            recorded.lock().unwrap().push(player.clone());
-            player
-        };
         // "first" is still downloading when the user selects "second", so the
-        // second Play is sent from inside the first fetch. The clone is taken
-        // (and so dropped) with the send, letting the channel close and the
-        // worker loop end.
-        let fetch_sender = Arc::new(Mutex::new(Some(sender.clone())));
-        let seen = Arc::clone(&fetched);
-        let fetch = move |url: &str| -> Result<(), AppleMusicError> {
-            seen.lock().unwrap().push(url.to_string());
-            if url == "first"
-                && let Some(sender) = fetch_sender.lock().unwrap().take()
-            {
-                sender.send(Command::Play("second".to_string())).unwrap();
-            }
-            Ok(())
-        };
-
-        sender.send(Command::Play("first".to_string())).unwrap();
-        drop(sender);
-        serve_commands(receiver, create_player, fetch);
+        // second Play is sent from inside the first fetch.
+        let (players, fetched) = run_with_superseding_command(Command::Play("second".to_string()));
 
         assert_eq!(
-            *fetched.lock().unwrap(),
+            fetched,
             vec!["first".to_string(), "second".to_string()],
             "the superseded download still ran; only its preview is dropped"
         );
-        let players = players.lock().unwrap();
         assert_eq!(
             players.len(),
             1,
@@ -1225,42 +1239,17 @@ mod tests {
     // this is the case that pins the Stop half of the check.
     #[test]
     fn a_preview_superseded_by_stop_during_its_download_is_not_installed() {
-        let (sender, receiver) = mpsc::channel();
-        let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
-        let fetched: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
-
-        let recorded = Arc::clone(&players);
-        let create_player = move || {
-            let player = RecordingPlayer::default();
-            recorded.lock().unwrap().push(player.clone());
-            player
-        };
         // "first" is still downloading when the user presses Stop, so the Stop
-        // is sent from inside the fetch. The clone is taken (and so dropped)
-        // with the send, letting the channel close and the worker loop end.
-        let fetch_sender = Arc::new(Mutex::new(Some(sender.clone())));
-        let seen = Arc::clone(&fetched);
-        let fetch = move |url: &str| -> Result<(), AppleMusicError> {
-            seen.lock().unwrap().push(url.to_string());
-            if url == "first"
-                && let Some(sender) = fetch_sender.lock().unwrap().take()
-            {
-                sender.send(Command::Stop).unwrap();
-            }
-            Ok(())
-        };
-
-        sender.send(Command::Play("first".to_string())).unwrap();
-        drop(sender);
-        serve_commands(receiver, create_player, fetch);
+        // is sent from inside the fetch.
+        let (players, fetched) = run_with_superseding_command(Command::Stop);
 
         assert_eq!(
-            *fetched.lock().unwrap(),
+            fetched,
             vec!["first".to_string()],
             "the superseded download still ran; only its preview is dropped"
         );
         assert!(
-            players.lock().unwrap().is_empty(),
+            players.is_empty(),
             "a preview superseded by Stop must not install a player"
         );
     }
