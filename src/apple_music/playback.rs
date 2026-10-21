@@ -180,9 +180,9 @@ impl AppleMusicService {
     /// (see [`crate::audio::AudioOutput::position`]), so callers on the UI
     /// thread should still run it as a task rather than blocking `update`.
     ///
-    /// It has no production caller until the Now Playing readout (Playback
-    /// position part 2/2) polls it, so `dead_code` is allowed here; the
-    /// service suite tests it through the injected backend.
+    /// It has no production caller until the Now Playing readout consumes it,
+    /// so `dead_code` is allowed here; the service suite tests it through the
+    /// injected backend.
     #[allow(dead_code)]
     pub(crate) fn playback_position(&self) -> Option<Duration> {
         self.audio.position()
