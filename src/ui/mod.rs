@@ -110,10 +110,12 @@ enum Message {
     // show them under the Playlists view.
     ShowPlaylists,
     // The library search box: `SearchChanged` carries each keystroke into
-    // `search_query`; `SearchSubmitted` carries the box's text when Enter is
-    // pressed and replaces the songs list with the search results.
+    // `search_query`; `SearchSubmitted` takes that stored text when Enter is
+    // pressed and replaces the songs list with the search results. The submit
+    // carries no payload so the per-view widget build does not clone the
+    // query String just to have a message ready for a press.
     SearchChanged(String),
-    SearchSubmitted(String),
+    SearchSubmitted,
     LoadArtists,
     ArtistsLoaded(Vec<Artist>),
     AlbumsLoaded(Vec<Album>),
@@ -781,11 +783,11 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             player.search_query = text;
             Task::none()
         }
-        Message::SearchSubmitted(query) => {
+        Message::SearchSubmitted => {
             // A blank query has nothing to match: `search_songs` rejects it,
             // and issuing the fetch would only turn the empty box into an
             // error report. Leave the current list and view alone.
-            let query = query.trim().to_string();
+            let query = player.search_query.trim().to_string();
             if query.is_empty() {
                 return Task::none();
             }

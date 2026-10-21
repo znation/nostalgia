@@ -475,14 +475,16 @@ pub fn view_retry_button() -> Element<'static, Message> {
 
 /// The library search box shown above the browse list: an iced text input with
 /// the `Search library` placeholder. Typing emits [`Message::SearchChanged`]
-/// so the player stores the box's text; pressing Enter emits
-/// [`Message::SearchSubmitted`] with that text, which the update loop turns
-/// into a library search. Rendered on every browse screen, so a search can be
-/// started from any level of the hierarchy.
+/// so the player stores the box's text; pressing Enter emits the payload-free
+/// [`Message::SearchSubmitted`], which the update loop resolves against that
+/// stored text into a library search. Rendered on every browse screen, so a
+/// search can be started from any level of the hierarchy. The submit message
+/// owns no copy of the query, so this per-view builder allocates nothing for
+/// the submit path; the text input itself still builds its own value.
 pub fn view_search_box(query: &str) -> Element<'_, Message> {
     TextInput::new("Search library", query)
         .on_input(Message::SearchChanged)
-        .on_submit(Message::SearchSubmitted(query.to_string()))
+        .on_submit(Message::SearchSubmitted)
         .style(|_theme, status| style::chrome_text_input_style(status))
         .into()
 }

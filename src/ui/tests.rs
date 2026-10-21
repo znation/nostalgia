@@ -969,8 +969,10 @@ async fn search_submitted_replaces_the_songs_list_with_the_matches() {
     let (mut player, _state) = test_player();
     // Seed a browsed album's songs so the search visibly replaces them.
     let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    // The submit resolves the text `SearchChanged` stored, so type it first.
+    let _ = update(&mut player, Message::SearchChanged("  echo  ".to_string()));
 
-    let task = update(&mut player, Message::SearchSubmitted("echo".to_string()));
+    let task = update(&mut player, Message::SearchSubmitted);
     drive_fetch_and_assert_loaded(
         &mut player,
         task,
@@ -994,8 +996,9 @@ fn search_submitted_with_a_blank_query_is_a_no_op() {
     let (mut player, _state) = test_player();
     let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
     player.current_view = CurrentView::Songs;
+    let _ = update(&mut player, Message::SearchChanged("   ".to_string()));
 
-    assert_message_schedules_no_work(&mut player, Message::SearchSubmitted("   ".to_string()));
+    assert_message_schedules_no_work(&mut player, Message::SearchSubmitted);
 
     assert_view(&player, CurrentView::Songs);
     assert!(!player.search_active);
