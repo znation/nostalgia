@@ -27,17 +27,27 @@ use rodio::{ChannelCount, Sample, SampleRate, Source};
 use ureq::unversioned::resolver::Resolver;
 use ureq::unversioned::transport::NextTimeout;
 
+/// Runs every fallible [`AudioOutput`] command once, paired with the method
+/// name for failure messages, so the "every command" tests cover the same
+/// seam methods and cannot drift apart as the trait grows.
+fn every_command(output: &dyn AudioOutput) -> Vec<(&'static str, Result<(), AppleMusicError>)> {
+    vec![
+        ("play", output.play(PREVIEW_URL)),
+        ("pause", output.pause()),
+        ("resume", output.resume()),
+        ("stop", output.stop()),
+        ("set_volume", output.set_volume(0.4)),
+        ("set_balance", output.set_balance(-0.4)),
+        ("seek_by", output.seek_by(-5)),
+        ("set_equalizer", output.set_equalizer(EqSnapshot::default())),
+    ]
+}
+
 #[test]
 fn silent_output_reports_success_for_every_command() {
-    let output = SilentOutput;
-    assert!(output.play(PREVIEW_URL).is_ok());
-    assert!(output.pause().is_ok());
-    assert!(output.resume().is_ok());
-    assert!(output.stop().is_ok());
-    assert!(output.set_volume(0.4).is_ok());
-    assert!(output.set_balance(-0.4).is_ok());
-    assert!(output.seek_by(-5).is_ok());
-    assert!(output.set_equalizer(EqSnapshot::default()).is_ok());
+    for (command, result) in every_command(&SilentOutput) {
+        assert!(result.is_ok(), "SilentOutput::{command} must succeed");
+    }
 }
 
 // The silent fallback cannot report a position: the trait's default answers
@@ -486,13 +496,12 @@ fn audio_with_fallback_returns_the_opened_output() {
 fn audio_with_fallback_falls_back_to_silence_when_open_fails() {
     let output = audio_with_fallback(|| Err(AppleMusicError::new("no device")));
 
-    assert!(output.play(PREVIEW_URL).is_ok());
-    assert!(output.pause().is_ok());
-    assert!(output.resume().is_ok());
-    assert!(output.stop().is_ok());
-    assert!(output.set_volume(0.4).is_ok());
-    assert!(output.set_balance(-0.4).is_ok());
-    assert!(output.set_equalizer(EqSnapshot::default()).is_ok());
+    for (command, result) in every_command(output.as_ref()) {
+        assert!(
+            result.is_ok(),
+            "the silent fallback's {command} must succeed"
+        );
+    }
 }
 
 // `ureq` defaults every network timeout to `None`, so a preview server
@@ -600,19 +609,12 @@ fn rodio_output_maps_each_seam_method_to_its_worker_command() {
         commands: Mutex::new(commands),
     };
 
-    output.play(PREVIEW_URL).unwrap();
-    output.pause().unwrap();
-    output.resume().unwrap();
-    output.stop().unwrap();
-    output.set_volume(0.4).unwrap();
-    output.set_balance(-0.4).unwrap();
-    output.seek_by(-5).unwrap();
-    let equalizer = EqSnapshot {
-        enabled: true,
-        preamp_db: 3.0,
-        bands_db: [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0],
-    };
-    output.set_equalizer(equalizer).unwrap();
+    for (command, result) in every_command(&output) {
+        assert!(
+            result.is_ok(),
+            "RodioOutput::{command} must reach the worker"
+        );
+    }
 
     match receiver.try_recv() {
         Ok(Command::Play(url)) => assert_eq!(url, PREVIEW_URL),
@@ -624,7 +626,9 @@ fn rodio_output_maps_each_seam_method_to_its_worker_command() {
     assert!(matches!(receiver.try_recv(), Ok(Command::SetVolume(v)) if v == 0.4));
     assert!(matches!(receiver.try_recv(), Ok(Command::SetBalance(v)) if v == -0.4));
     assert!(matches!(receiver.try_recv(), Ok(Command::SeekBy(v)) if v == -5));
-    assert!(matches!(receiver.try_recv(), Ok(Command::SetEqualizer(v)) if v == equalizer));
+    assert!(
+        matches!(receiver.try_recv(), Ok(Command::SetEqualizer(v)) if v == EqSnapshot::default())
+    );
 }
 
 // A position query crosses to the worker and returns the reply it sends,
@@ -700,41 +704,13 @@ fn rodio_output_reports_a_closed_worker_for_every_command() {
         commands: Mutex::new(commands),
     };
 
-    assert_eq!(
-        output.play(PREVIEW_URL).unwrap_err().to_string(),
-        "the audio thread is gone"
-    );
-    assert_eq!(
-        output.pause().unwrap_err().to_string(),
-        "the audio thread is gone"
-    );
-    assert_eq!(
-        output.resume().unwrap_err().to_string(),
-        "the audio thread is gone"
-    );
-    assert_eq!(
-        output.stop().unwrap_err().to_string(),
-        "the audio thread is gone"
-    );
-    assert_eq!(
-        output.set_volume(0.4).unwrap_err().to_string(),
-        "the audio thread is gone"
-    );
-    assert_eq!(
-        output.set_balance(-0.4).unwrap_err().to_string(),
-        "the audio thread is gone"
-    );
-    assert_eq!(
-        output.seek_by(-5).unwrap_err().to_string(),
-        "the audio thread is gone"
-    );
-    assert_eq!(
-        output
-            .set_equalizer(EqSnapshot::default())
-            .unwrap_err()
-            .to_string(),
-        "the audio thread is gone"
-    );
+    for (command, result) in every_command(&output) {
+        assert_eq!(
+            result.map_err(|error| error.to_string()),
+            Err("the audio thread is gone".to_string()),
+            "RodioOutput::{command} must report the closed worker"
+        );
+    }
     assert!(
         output.position().is_none(),
         "a closed worker cannot answer a position query"
