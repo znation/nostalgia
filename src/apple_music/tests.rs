@@ -1015,6 +1015,52 @@ fn preview_url_problem_unwraps_a_disguised_internal_host() {
     }
 }
 
+// The disguised-host table above only reaches the host checks: every row has
+// a lowercase `https` scheme and a non-empty host. Pin the earlier refusal
+// arms too — no `://`, a cleartext scheme, and an authority that yields an
+// empty or non-name host — so a dropped early return cannot fall through to
+// the host parse and accept the URL.
+#[test]
+fn preview_url_problem_rejects_a_url_without_a_usable_https_host() {
+    for (url, reason) in [
+        ("preview.m4a", "must be an absolute https URL"),
+        ("https:/preview.m4a", "must be an absolute https URL"),
+        (
+            "http://audio.example/preview.m4a",
+            "must use the https scheme",
+        ),
+        ("https:///preview.m4a", "must name a host"),
+        ("https://:443/preview.m4a", "must name a host"),
+        ("https://user@/preview.m4a", "must name a host"),
+        ("https://-/preview.m4a", "must name a host"),
+        ("https://1.2.3.4.5/preview.m4a", "must name a host"),
+    ] {
+        assert_eq!(
+            preview_url_problem(url),
+            Some(reason),
+            "unexpected reason for {url:?}"
+        );
+    }
+}
+
+// The scheme match ignores ASCII case and the authority ends at the first
+// `/`, `?`, or `#`, so these valid shapes must still be accepted rather than
+// refused by a stricter regression in either step.
+#[test]
+fn preview_url_problem_accepts_uppercase_https_and_a_query_only_authority() {
+    for url in [
+        "HTTPS://audio.example/preview.m4a",
+        "https://audio.example?token=x",
+        "https://audio.example#part",
+    ] {
+        assert_eq!(
+            preview_url_problem(url),
+            None,
+            "unexpected refusal for {url:?}"
+        );
+    }
+}
+
 // The guard must not reject a legitimate preview URL, so Apple's CDN host, a
 // plain public host, and a public address literal all still reach the backend.
 // `play_track` first forwards the state's volume (the default 0.5) and
