@@ -29,6 +29,16 @@ use super::preview::{download_and_decode, preview_agent};
 /// enough that a wedged one is reported instead of hanging.
 pub(super) const DEVICE_OPEN_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// The longest [`RodioOutput::position`] waits for the worker to answer.
+///
+/// The worker handles commands in channel order, so a position query issued
+/// while the worker is downloading a preview is answered only after that
+/// download installs the new player. A download can hold the worker for up to
+/// [`super::preview::PREVIEW_TIMEOUT`], far longer than a UI poll should
+/// block, so this bound is short: a query that misses it reports `None`
+/// rather than stalling the caller, and the next poll asks again.
+pub(super) const POSITION_QUERY_TIMEOUT: Duration = Duration::from_millis(100);
+
 /// A command sent from [`RodioOutput`] to its worker thread.
 pub(super) enum Command {
     /// Download, decode, and play the URL, replacing the current player.
@@ -45,6 +55,9 @@ pub(super) enum Command {
     SetBalance(f32),
     /// Seek the current player by this many seconds (negative moves backward).
     SeekBy(i64),
+    /// Report the current player's position on `reply` (zero when none is
+    /// loaded).
+    Position(Sender<Duration>),
     /// Set the equalizer curve applied to the output.
     SetEqualizer(EqSnapshot),
 }
@@ -67,6 +80,8 @@ pub(super) trait WorkerPlayer {
     fn set_balance(&self, balance: f32);
     /// Seeks the player relative to its current position.
     fn seek_by(&self, offset_secs: i64);
+    /// Reports the player's current position.
+    fn position(&self) -> Duration;
     /// Sets the player's equalizer curve.
     fn set_equalizer(&self, equalizer: EqSnapshot);
     /// Appends `preview` to the player's queue.
@@ -146,6 +161,10 @@ impl WorkerPlayer for RodioPlayer {
 
     fn seek_by(&self, offset_secs: i64) {
         seek_player(&self.player, offset_secs);
+    }
+
+    fn position(&self) -> Duration {
+        self.player.get_pos()
     }
 
     fn set_equalizer(&self, equalizer: EqSnapshot) {
@@ -252,6 +271,14 @@ impl AudioOutput for RodioOutput {
 
     fn seek_by(&self, offset_secs: i64) -> Result<(), AppleMusicError> {
         self.send(Command::SeekBy(offset_secs))
+    }
+
+    fn position(&self) -> Option<Duration> {
+        let (reply, replies) = mpsc::channel();
+        if self.send(Command::Position(reply)).is_err() {
+            return None;
+        }
+        replies.recv_timeout(POSITION_QUERY_TIMEOUT).ok()
     }
 
     fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
@@ -422,6 +449,12 @@ pub(super) fn serve_commands<P, D>(
                 if let Some(player) = &player {
                     player.seek_by(offset_secs);
                 }
+            }
+            Command::Position(reply) => {
+                let position = player
+                    .as_ref()
+                    .map_or(Duration::ZERO, WorkerPlayer::position);
+                let _ = reply.send(position);
             }
             Command::SetEqualizer(new_equalizer) => {
                 settings.equalizer = new_equalizer;

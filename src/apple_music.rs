@@ -27,6 +27,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::Mutex;
 
 use crate::audio;
@@ -229,6 +230,21 @@ impl AppleMusicService {
     /// the request.
     pub(crate) fn seek_output(&self, offset_secs: i64) -> Result<(), AppleMusicError> {
         self.audio.seek_by(offset_secs)
+    }
+
+    /// Reports the loaded preview's playback position, or `None` when the
+    /// audio backend cannot answer.
+    ///
+    /// Synchronous and touches no shared state. The backend bounds the wait
+    /// (see [`crate::audio::AudioOutput::position`]), so callers on the UI
+    /// thread should still run it as a task rather than blocking `update`.
+    ///
+    /// It has no production caller until the Now Playing readout (Playback
+    /// position part 2/2) polls it, so `dead_code` is allowed here; the
+    /// service suite tests it through the injected backend.
+    #[allow(dead_code)]
+    pub(crate) fn playback_position(&self) -> Option<Duration> {
+        self.audio.position()
     }
 
     /// Forwards `equalizer` to the audio backend, so a preview starts at the

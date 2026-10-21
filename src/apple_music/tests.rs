@@ -5,6 +5,7 @@ use crate::test_support::{
     assert_ids, assert_preview_calls, assert_single_call, rest_session, sample_album,
     sample_artist, sample_song, sign_in_session,
 };
+use std::time::Duration;
 
 fn test_service() -> AppleMusicService {
     // Over a stub transport and the silent audio backend, so a test never
@@ -840,6 +841,15 @@ async fn seek_output_propagates_an_audio_backend_failure() {
     assert_eq!(error.to_string(), "the audio device is gone");
     assert_eq!(audio.attempts(), 1);
     assert_eq!(*state.lock().await, AppState::default());
+}
+
+// `playback_position` reports exactly what the injected backend answers, so
+// the UI's readout has one seam to the loaded preview's clock.
+#[tokio::test]
+async fn playback_position_forwards_the_audio_output_position() {
+    let (service, _state) = service_with_audio(Arc::new(RecordingAudio::default()));
+
+    assert_eq!(service.playback_position(), Some(Duration::from_secs(7)));
 }
 
 // `set_output_equalizer` forwards to the injected backend without touching the

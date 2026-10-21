@@ -4,8 +4,8 @@
 use super::balance::BalanceSource;
 use super::equalizer::{EqSettings, EqSource};
 use super::player::{
-    Command, SeekablePlayer, WorkerPlayer, await_device_ready, seek_player, seek_target,
-    serve_commands,
+    Command, POSITION_QUERY_TIMEOUT, SeekablePlayer, WorkerPlayer, await_device_ready, seek_player,
+    seek_target, serve_commands,
 };
 use super::preview::{
     PREVIEW_TIMEOUT, PublicAddressResolver, download_and_decode, preview_agent,
@@ -612,6 +612,53 @@ fn rodio_output_maps_each_seam_method_to_its_worker_command() {
     assert!(matches!(receiver.try_recv(), Ok(Command::SetEqualizer(v)) if v == equalizer));
 }
 
+// A position query crosses to the worker and returns the reply it sends,
+// rather than reading anything on the caller's thread.
+#[test]
+fn rodio_output_asks_the_worker_for_its_position() {
+    let (commands, receiver) = std::sync::mpsc::channel();
+    let output = RodioOutput {
+        commands: Mutex::new(commands),
+    };
+    let worker = std::thread::spawn(move || match receiver.recv() {
+        Ok(Command::Position(reply)) => {
+            reply.send(Duration::from_secs(3)).unwrap();
+        }
+        _ => panic!("position did not send Command::Position"),
+    });
+
+    assert_eq!(output.position(), Some(Duration::from_secs(3)));
+    worker.join().unwrap();
+}
+
+// A worker that accepts the query but does not answer must not hold the
+// caller past the seam's bound: the query reports `None` instead of waiting
+// for the reply.
+#[test]
+fn rodio_output_reports_none_when_the_position_reply_times_out() {
+    let (commands, receiver) = std::sync::mpsc::channel();
+    let output = RodioOutput {
+        commands: Mutex::new(commands),
+    };
+    let worker = std::thread::spawn(move || match receiver.recv() {
+        Ok(Command::Position(reply)) => {
+            // Keep the reply channel alive well past the seam's bound, as a
+            // worker busy installing a preview would.
+            std::thread::sleep(POSITION_QUERY_TIMEOUT * 10);
+            drop(reply);
+        }
+        _ => panic!("position did not send Command::Position"),
+    });
+
+    let started = Instant::now();
+    assert_eq!(output.position(), None);
+    assert!(
+        started.elapsed() < POSITION_QUERY_TIMEOUT * 5,
+        "a missing position reply must time out instead of blocking"
+    );
+    worker.join().unwrap();
+}
+
 #[test]
 fn rodio_output_reports_a_closed_worker_for_every_command() {
     // Dropping the receiver stands in for a worker thread that has ended,
@@ -657,6 +704,10 @@ fn rodio_output_reports_a_closed_worker_for_every_command() {
             .unwrap_err()
             .to_string(),
         "the audio thread is gone"
+    );
+    assert!(
+        output.position().is_none(),
+        "a closed worker cannot answer a position query"
     );
 }
 
@@ -949,6 +1000,10 @@ impl WorkerPlayer for RecordingPlayer {
         self.seeks.lock().unwrap().push(offset_secs);
     }
 
+    fn position(&self) -> Duration {
+        Duration::from_secs(42)
+    }
+
     fn set_equalizer(&self, equalizer: EqSnapshot) {
         *self.equalizer.lock().unwrap() = equalizer;
     }
@@ -1192,6 +1247,57 @@ fn a_seek_while_stopped_reaches_no_player() {
         players[0].stopped.load(Ordering::SeqCst),
         "Stop must drop the installed player"
     );
+}
+
+// A position query with a player installed must answer from that player.
+// The Position command follows the Play in the channel, so the worker
+// handles it after the Play's download installs the player.
+#[test]
+fn position_query_returns_the_loaded_players_position() {
+    let (sender, receiver) = mpsc::channel();
+    let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
+    let recorded = Arc::clone(&players);
+    let create_player = move || {
+        let player = RecordingPlayer::default();
+        recorded.lock().unwrap().push(player.clone());
+        player
+    };
+    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+    let (reply, replies) = mpsc::channel();
+
+    sender.send(Command::Play("first".to_string())).unwrap();
+    sender.send(Command::Position(reply)).unwrap();
+    drop(sender);
+    serve_commands(receiver, create_player, fetch);
+
+    assert_eq!(
+        players.lock().unwrap().len(),
+        1,
+        "the Play installs a player"
+    );
+    assert_eq!(
+        replies.recv().unwrap(),
+        Duration::from_secs(42),
+        "the query must answer with the installed player's position"
+    );
+}
+
+// With no player installed, a position query answers zero instead of
+// creating a player or leaving the caller waiting.
+#[test]
+fn position_query_returns_zero_when_nothing_is_loaded() {
+    let (sender, receiver) = mpsc::channel();
+    let create_player = || -> RecordingPlayer {
+        panic!("a position query must not create a player");
+    };
+    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+    let (reply, replies) = mpsc::channel();
+
+    sender.send(Command::Position(reply)).unwrap();
+    drop(sender);
+    serve_commands(receiver, create_player, fetch);
+
+    assert_eq!(replies.recv().unwrap(), Duration::ZERO);
 }
 
 // A balance set while stopped must carry to the player a later Play

@@ -25,6 +25,7 @@
 //! service at startup.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::music_error::AppleMusicError;
 
@@ -120,6 +121,17 @@ pub trait AudioOutput: Send + Sync {
     /// Returns an [`AppleMusicError`] when the backend cannot accept the
     /// request (see [`AudioOutput::play`]).
     fn seek_by(&self, offset_secs: i64) -> Result<(), AppleMusicError>;
+
+    /// Reports the loaded preview's playback position.
+    ///
+    /// Returns `Some` with the player's position, [`Duration::ZERO`] when the
+    /// backend has no loaded player, or `None` when the backend cannot answer
+    /// (the silent fallback, a test fake, or a query that waits past the
+    /// backend's bound). The default keeps every existing implementor
+    /// compiling without a position of its own.
+    fn position(&self) -> Option<Duration> {
+        None
+    }
 
     /// Sets the equalizer curve applied to the output.
     ///

@@ -474,6 +474,12 @@ impl AudioOutput for RecordingAudio {
         Ok(())
     }
 
+    /// Reports a fixed stub position; the recording fake models no real
+    /// playback clock, so tests that need a known elapsed value use this one.
+    fn position(&self) -> Option<Duration> {
+        Some(Duration::from_secs(7))
+    }
+
     fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
         self.calls
             .lock()
