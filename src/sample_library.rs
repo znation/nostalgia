@@ -1,15 +1,17 @@
 //! The in-memory stand-in for a real Apple Music library.
 //!
-//! The Apple Music service (`crate::apple_music`) answers every browse query
-//! from this shared stub until the real API lands, so the UI and its tests
-//! agree on the same data. This is the stub behind the service seam: when a
-//! real Apple Music library arrives, this whole module is deleted and the
-//! service's browse methods get real implementations.
+//! The Apple Music service (`crate::apple_music`) answers a browse query from
+//! this shared stub when no session is stored; the playlist queries still read
+//! it even with a session until their REST sibling lands (see the part-2
+//! plan). The UI and its tests therefore agree on the same data. This is the
+//! stub behind the service seam: when a real Apple Music library arrives, this
+//! whole module is deleted and the service's browse methods get real
+//! implementations.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-use crate::library::{Album, Artist, Song};
+use crate::library::{Album, Artist, Playlist, Song};
 
 /// The in-memory stand-in for a real Apple Music library, kept in one place
 /// so the browse flow and its tests agree on the data.
@@ -23,6 +25,12 @@ pub struct SampleLibrary {
     pub albums_by_artist: HashMap<String, Vec<Album>>,
     /// Songs of each album, keyed by [`Song::album_id`], as above.
     pub songs_by_album: HashMap<String, Vec<Song>>,
+    /// Every playlist in the library, in the order the Playlists view renders
+    /// them.
+    pub playlists: Vec<Playlist>,
+    /// Songs of each playlist, keyed by [`Playlist::id`], in the playlist's
+    /// named order rather than library order.
+    pub songs_by_playlist: HashMap<String, Vec<Song>>,
 }
 
 /// Groups `items` by the key each element yields, keeping each group in its
@@ -40,9 +48,21 @@ fn index_by<T: Clone>(items: &[T], key: impl Fn(&T) -> &str) -> HashMap<String, 
     index
 }
 
+/// The songs named by `ids`, in that order, cloned from `songs`. A playlist
+/// keeps its own named order, which need not match the album order the songs
+/// were built in, so its group cannot come from [`index_by`]. An id with no
+/// matching song is skipped; the content test pins every group, so a missing
+/// song cannot pass silently.
+fn songs_in_named_order(songs: &[Song], ids: &[&str]) -> Vec<Song> {
+    ids.iter()
+        .filter_map(|id| songs.iter().find(|song| song.id == *id).cloned())
+        .collect()
+}
+
 impl SampleLibrary {
     /// Builds the sample library: three artists — two with one or two albums
-    /// each, one with none — and one to three songs per album.
+    /// each, one with none — one to three songs per album, and three playlists
+    /// drawing songs from those albums in their own order.
     fn new() -> Self {
         let artists = vec![
             Artist {
@@ -117,10 +137,40 @@ impl SampleLibrary {
                 preview_url: None,
             },
         ];
+        let playlists = vec![
+            Playlist {
+                id: "playlist-1".to_string(),
+                name: "Morning Drive".to_string(),
+            },
+            Playlist {
+                id: "playlist-2".to_string(),
+                name: "Focus".to_string(),
+            },
+            Playlist {
+                id: "playlist-3".to_string(),
+                name: "Sample Favorites".to_string(),
+            },
+        ];
+        let songs_by_playlist = HashMap::from([
+            (
+                "playlist-1".to_string(),
+                songs_in_named_order(&songs, &["song-1", "song-4"]),
+            ),
+            (
+                "playlist-2".to_string(),
+                songs_in_named_order(&songs, &["song-2", "song-5"]),
+            ),
+            (
+                "playlist-3".to_string(),
+                songs_in_named_order(&songs, &["song-1", "song-2", "song-3"]),
+            ),
+        ]);
         SampleLibrary {
             artists,
             albums_by_artist: index_by(&albums, |album| &album.artist_id),
             songs_by_album: index_by(&songs, |song| &song.album_id),
+            playlists,
+            songs_by_playlist,
         }
     }
 }
@@ -130,10 +180,11 @@ static SAMPLE_LIBRARY: OnceLock<SampleLibrary> = OnceLock::new();
 
 /// Returns the shared sample library, building it at most once.
 ///
-/// Every browse query (favorite artists, albums by artist, songs from album)
-/// reads this on navigation, so it is cached in a [`OnceLock`] instead of
-/// being reconstructed per call — building the library allocates every
-/// artist, album, and song `String`, and the data never changes.
+/// Every browse query (favorite artists, albums by artist, songs from album,
+/// every song, every album, every playlist, and songs from a playlist) reads
+/// this on navigation, so it is cached in a [`OnceLock`] instead of being
+/// reconstructed per call — building the library allocates every artist,
+/// album, song, and playlist `String`, and the data never changes.
 pub fn sample_library() -> &'static SampleLibrary {
     SAMPLE_LIBRARY.get_or_init(SampleLibrary::new)
 }
@@ -164,6 +215,8 @@ mod tests {
         assert!(!library.artists.is_empty());
         assert!(!library.albums_by_artist.is_empty());
         assert!(!library.songs_by_album.is_empty());
+        assert!(!library.playlists.is_empty());
+        assert!(!library.songs_by_playlist.is_empty());
     }
 
     // The browse views render these exact names, so the library's content is
@@ -244,6 +297,59 @@ mod tests {
             |song| song.id.as_str(),
             |song| song.title.as_str(),
             &[("song-5", "Headliner")],
+        );
+    }
+
+    // Playlists render in their own order, and each playlist's songs keep the
+    // order the playlist names, which deliberately differs from album order
+    // (playlist-1 interleaves album-1 and album-2 songs). Pin every group's ids
+    // and titles so a reordered or dropped group cannot pass.
+    #[test]
+    fn playlists_are_indexed_with_their_songs_in_named_order() {
+        let library = sample_library();
+
+        assert_id_label_pairs(
+            &library.playlists,
+            |playlist| playlist.id.as_str(),
+            |playlist| playlist.name.as_str(),
+            &[
+                ("playlist-1", "Morning Drive"),
+                ("playlist-2", "Focus"),
+                ("playlist-3", "Sample Favorites"),
+            ],
+        );
+
+        assert_eq!(library.songs_by_playlist.len(), 3);
+        assert!(
+            library
+                .songs_by_playlist
+                .values()
+                .all(|songs| !songs.is_empty())
+        );
+
+        assert_id_label_pairs(
+            &library.songs_by_playlist["playlist-1"],
+            |song| song.id.as_str(),
+            |song| song.title.as_str(),
+            &[("song-1", "Opening"), ("song-4", "B-side")],
+        );
+
+        assert_id_label_pairs(
+            &library.songs_by_playlist["playlist-2"],
+            |song| song.id.as_str(),
+            |song| song.title.as_str(),
+            &[("song-2", "Middle"), ("song-5", "Headliner")],
+        );
+
+        assert_id_label_pairs(
+            &library.songs_by_playlist["playlist-3"],
+            |song| song.id.as_str(),
+            |song| song.title.as_str(),
+            &[
+                ("song-1", "Opening"),
+                ("song-2", "Middle"),
+                ("song-3", "Ending"),
+            ],
         );
     }
 

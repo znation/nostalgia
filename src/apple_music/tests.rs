@@ -546,6 +546,87 @@ async fn get_songs_from_album_returns_single_song_albums_song() {
     assert_ids(&songs, |song| song.id.as_str(), &["song-4"]);
 }
 
+#[tokio::test]
+async fn get_playlists_returns_the_sample_playlists_in_order() {
+    let playlists = test_service().get_playlists().await.unwrap();
+    assert_ids(
+        &playlists,
+        |playlist| playlist.id.as_str(),
+        &["playlist-1", "playlist-2", "playlist-3"],
+    );
+    assert_eq!(
+        playlists
+            .iter()
+            .map(|playlist| playlist.name.as_str())
+            .collect::<Vec<_>>(),
+        vec!["Morning Drive", "Focus", "Sample Favorites"]
+    );
+}
+
+#[tokio::test]
+async fn get_songs_from_playlist_returns_its_sample_songs_in_order() {
+    // Playlist 1 interleaves album-1 and album-2 songs in its own named
+    // order, so the exact ids distinguish the playlist lookup from an album
+    // lookup.
+    let songs = test_service()
+        .get_songs_from_playlist("playlist-1")
+        .await
+        .unwrap();
+    assert_ids(&songs, |song| song.id.as_str(), &["song-1", "song-4"]);
+}
+
+#[tokio::test]
+async fn get_songs_from_playlist_returns_empty_for_an_unknown_playlist() {
+    let songs = test_service()
+        .get_songs_from_playlist("no-such-playlist")
+        .await
+        .unwrap();
+    assert!(songs.is_empty());
+}
+
+// The playlist-query twin of the blank-album-id rejection above,
+// whitespace case included.
+#[tokio::test]
+async fn get_songs_from_playlist_rejects_a_blank_id() {
+    let service = test_service();
+    assert_blank_id_rejected(
+        service.get_songs_from_playlist(""),
+        service.get_songs_from_playlist("   "),
+        IdKind::Playlist,
+    )
+    .await;
+}
+
+// The playlist-query control-character twin of the album test above.
+#[tokio::test]
+async fn get_songs_from_playlist_rejects_a_control_character_id() {
+    let service = test_service();
+    let id = "playlist\u{1b}1";
+    assert_control_character_id_rejected(service.get_songs_from_playlist(id), IdKind::Playlist, id)
+        .await;
+}
+
+// Part 1's documented behaviour: playlists still answer from the sample
+// library while a session is stored. The REST sibling deliberately changes
+// this, so pin it until that change lands.
+#[tokio::test]
+async fn get_playlists_returns_the_sample_playlists_with_a_session_stored() {
+    let service = signed_in_service(&StubTransport::returning(""));
+    let playlists = service.get_playlists().await.unwrap();
+    assert_ids(
+        &playlists,
+        |playlist| playlist.id.as_str(),
+        &["playlist-1", "playlist-2", "playlist-3"],
+    );
+}
+
+#[tokio::test]
+async fn get_songs_from_playlist_returns_its_sample_songs_with_a_session_stored() {
+    let service = signed_in_service(&StubTransport::returning(""));
+    let songs = service.get_songs_from_playlist("playlist-1").await.unwrap();
+    assert_ids(&songs, |song| song.id.as_str(), &["song-1", "song-4"]);
+}
+
 // The library search is the UI search box's backend: it answers with the
 // sample songs whose title or artist contains the query, case-insensitively,
 // so a user can find a track by either field without matching the exact case.

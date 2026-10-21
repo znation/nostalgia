@@ -1,5 +1,5 @@
-//! The music-library data model — `Artist`, `Album`, `Song` — shared by the
-//! Apple Music service and the UI.
+//! The music-library data model — `Artist`, `Album`, `Song`, and `Playlist` —
+//! shared by the Apple Music service and the UI.
 //!
 //! The types live outside `apple_music` because both the integration seam
 //! (which populates them) and the presentation layer (which renders them)
@@ -29,6 +29,16 @@ pub struct Album {
     pub artist_id: String,
 }
 
+/// A user-created playlist in the library.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Playlist {
+    /// The playlist's stable identifier; the browse query that loads its
+    /// songs takes it.
+    pub id: String,
+    /// The display name the Playlists view renders.
+    pub name: String,
+}
+
 /// A song on an [`Album`], linked to it by [`Song::album_id`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Song {
@@ -55,10 +65,10 @@ pub struct Song {
 
 #[cfg(test)]
 mod tests {
-    use super::{Album, Artist, Song};
+    use super::{Album, Artist, Playlist, Song};
     use crate::test_support::{
         PREVIEW_URL, assert_every_field_required, assert_serializes_as,
-        assert_unknown_fields_tolerated, sample_album, sample_artist, sample_song,
+        assert_unknown_fields_tolerated, sample_album, sample_artist, sample_playlist, sample_song,
     };
     use serde_json::json;
 
@@ -77,6 +87,12 @@ mod tests {
     /// the album round-trip and missing-field tests share.
     fn album_payload() -> serde_json::Value {
         json!({ "id": "album-1", "title": "First Record", "artist_id": "artist-1" })
+    }
+
+    /// The [`Playlist`] twin of [`artist_payload`]: the full, valid wire
+    /// payload the playlist field-name and missing-field tests share.
+    fn playlist_payload() -> serde_json::Value {
+        json!({ "id": "playlist-1", "name": "Morning Drive" })
     }
 
     /// The [`Song`] twin of [`artist_payload`]: the full, valid wire payload
@@ -130,6 +146,13 @@ mod tests {
     }
 
     #[test]
+    fn playlist_serializes_field_names_and_round_trips() {
+        // As with Artist and Album: field names are serialized as-is, the
+        // wire contract a real Apple Music payload must satisfy.
+        assert_serializes_as(sample_playlist(), playlist_payload());
+    }
+
+    #[test]
     fn deserialization_ignores_unknown_fields() {
         // Real Apple Music payloads carry more than the model's fields; serde's
         // default must tolerate the extras rather than failing the whole parse.
@@ -179,6 +202,18 @@ mod tests {
     }
 
     #[test]
+    fn playlist_deserialization_ignores_unknown_fields() {
+        assert_unknown_fields_tolerated::<Playlist>(
+            json!({
+                "id": "playlist-1",
+                "name": "Morning Drive",
+                "curator_name": "The Sample Band"
+            }),
+            sample_playlist(),
+        );
+    }
+
+    #[test]
     fn deserialization_rejects_missing_required_fields() {
         // A payload missing any required field must error, not silently yield
         // a half-populated model the UI would render as blank data.
@@ -199,6 +234,11 @@ mod tests {
     #[test]
     fn song_deserialization_rejects_missing_required_fields() {
         assert_every_field_required::<Song>(song_required_fields_payload());
+    }
+
+    #[test]
+    fn playlist_deserialization_rejects_missing_required_fields() {
+        assert_every_field_required::<Playlist>(playlist_payload());
     }
 
     #[test]

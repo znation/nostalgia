@@ -13,8 +13,10 @@ exactly one level up, and Back never falls through to the wrong level:
 - Albums → Artists.
 - Songs → Albums when the songs were opened from an artist's album list.
 - Songs → All Albums when the songs were opened from the All Albums list.
+- Songs → Playlists when the songs were opened from a playlist.
 - All Songs → Artists.
 - All Albums → Artists.
+- Playlists → Artists.
 - An active search's result list → Artists, not the album the search was issued from.
 
 Artists itself has no level above it, so Back there is a no-op (and the Back button is not shown).
@@ -31,13 +33,15 @@ shown; it returns false only for `CurrentView::Artists`.
 - `back_from_artists_is_a_noop`
 - `back_from_all_songs_returns_to_the_artists_list`
 - `back_from_all_albums_returns_to_the_artists_list`
+- `back_from_playlists_returns_to_the_artists_list`
+- `playlist_selected_in_playlists_loads_its_songs_and_back_returns_to_playlists`
 - `back_leaves_an_active_search_for_the_artists_list`
   (all in `src/ui/tests.rs`)
 - `back_button_is_available_only_below_the_artist_list` (`src/ui/views/tests.rs`)
 
 **History.** Reconstructed from "Browse view can only move forward — no way back from
-Albums/Songs, a dead end" in `BUGS-FIXED.md`. The All Songs and All Albums levels were added
-later and are covered here too.
+Albums/Songs, a dead end" in `BUGS-FIXED.md`. The All Songs, All Albums, and Playlists levels
+were added later and are covered here too.
 
 ## Browse reply freshness
 

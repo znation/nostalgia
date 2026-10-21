@@ -1,7 +1,7 @@
 use super::super::{CurrentView, Message, style, theme};
 use super::browse::{
     BROWSE_VIEWS, album_row, artist_row, browse_placeholder, current_row_style, empty_list_label,
-    song_row,
+    playlist_row, song_row,
 };
 use super::equalizer::eq_enabled_label;
 use super::now_playing::{
@@ -12,13 +12,14 @@ use super::{
     BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, EQ_STEP, VOLUME_MAX, VOLUME_MIN, VOLUME_STEP,
     can_go_back, can_retry_artists, view_albums, view_all_albums, view_all_albums_button,
     view_all_songs, view_all_songs_button, view_artists, view_back_button, view_equalizer,
-    view_now_playing, view_retry_button, view_search_box, view_songs, view_transport_controls,
+    view_now_playing, view_playlists, view_playlists_button, view_retry_button, view_search_box,
+    view_songs, view_transport_controls,
 };
 use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, clamp_gain};
-use crate::library::{Album, Artist, Song};
+use crate::library::{Album, Artist, Playlist, Song};
 use crate::sample_library::sample_library;
 use crate::state::{clamp_balance, clamp_volume};
-use crate::test_support::{sample_album, sample_artist, sample_song};
+use crate::test_support::{sample_album, sample_artist, sample_playlist, sample_song};
 use iced::Length;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -61,6 +62,23 @@ fn album_row_uses_title_and_selects_the_album_by_index() {
     assert!(matches!(
         message,
         Message::AlbumSelected { epoch: 0, index: 0 }
+    ));
+    assert!(!is_current);
+}
+
+#[test]
+fn playlist_row_uses_name_and_selects_the_playlist_by_index() {
+    // As with the other rows: the message carries the row's position and
+    // the list's epoch, and
+    // `playlist_selected_in_playlists_loads_its_songs_and_back_returns_to_playlists`
+    // in `ui::tests` pins the index-to-id mapping.
+    let playlist = sample_playlist();
+    let (title, label, message, is_current) = playlist_row(0, 0, &playlist);
+    assert_eq!(title, "Morning Drive");
+    assert_eq!(label, "View Songs");
+    assert!(matches!(
+        message,
+        Message::PlaylistSelected { epoch: 0, index: 0 }
     ));
     assert!(!is_current);
 }
@@ -346,6 +364,7 @@ fn browse_views_construct_over_the_loaded_library() {
         &library.artists,
         &library.albums_by_artist["artist-1"],
         &library.songs_by_album["album-1"],
+        &library.playlists,
         1,
         false,
     );
@@ -356,20 +375,21 @@ fn browse_views_construct_over_an_empty_list() {
     // Every browse view renders its pre-load state — an empty buffer —
     // before the first fetch lands, so `scrollable_list` must build a
     // scrollable over zero rows, with or without a current track set.
-    construct_every_browse_view(&[], &[], &[], 0, true);
+    construct_every_browse_view(&[], &[], &[], &[], 0, true);
 }
 
-/// Builds every browse view over `artists`, `albums`, and `songs`, each
-/// with the given `epoch`, `loading`, and no error: the Artists, Albums,
-/// and Songs views, the last once with no current track and once with
-/// `song-1` marked as playing. iced `Element`s expose no tree
-/// introspection, so the only observable contract is that each builder
-/// constructs without panicking; the two tests above call this over the
-/// loaded sample library and over the pre-load empty buffers.
+/// Builds every browse view over `artists`, `albums`, `songs`, and
+/// `playlists`, each with the given `epoch`, `loading`, and no error: the
+/// Artists, Albums, Songs, and Playlists views, the Songs view once with no
+/// current track and once with `song-1` marked as playing. iced `Element`s
+/// expose no tree introspection, so the only observable contract is that each
+/// builder constructs without panicking; the two tests above call this over
+/// the loaded sample library and over the pre-load empty buffers.
 fn construct_every_browse_view(
     artists: &[Artist],
     albums: &[Album],
     songs: &[Song],
+    playlists: &[Playlist],
     epoch: u64,
     loading: bool,
 ) {
@@ -381,6 +401,7 @@ fn construct_every_browse_view(
     let _all_songs = view_all_songs(songs, &[], epoch, loading, None, None);
     let _all_songs_marked = view_all_songs(songs, &[], epoch, loading, None, Some("song-1"));
     let _all_albums = view_all_albums(albums, epoch, loading, None);
+    let _playlists = view_playlists(playlists, epoch, loading, None);
 }
 
 // The currently playing row is marked by a selection bar. iced's `Element`
@@ -430,6 +451,7 @@ fn empty_list_label_names_the_empty_browse_level() {
     assert_eq!(empty_list_label(&CurrentView::Songs), "No songs");
     assert_eq!(empty_list_label(&CurrentView::AllSongs), "No songs");
     assert_eq!(empty_list_label(&CurrentView::AllAlbums), "No albums");
+    assert_eq!(empty_list_label(&CurrentView::Playlists), "No playlists");
 }
 
 // The placeholder distinguishes a list whose first reply has not landed
@@ -501,6 +523,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
     let _retry = view_retry_button();
     let _all_songs = view_all_songs_button();
     let _all_albums = view_all_albums_button();
+    let _playlists = view_playlists_button();
 }
 
 // The search box is an iced `TextInput`, whose placeholder and callbacks

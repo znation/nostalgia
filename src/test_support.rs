@@ -1,6 +1,7 @@
 //! Test-only fixtures and assertions shared across the crate's unit tests.
 //!
-//! These are the sample `Artist`/`Album`/`Song` values and stepping fixtures,
+//! These are the sample `Artist`/`Album`/`Song`/`Playlist` values and stepping
+//! fixtures,
 //! the shared preview URL, the sign-in session fixtures, the `"Rock"` preset,
 //! the serde-contract assertions, the transport stub, the audio fakes, and the
 //! loopback HTTP server fixtures
@@ -20,7 +21,7 @@ use crate::apple_music::AppleMusicError;
 use crate::apple_music::rest::HttpTransport;
 use crate::audio::AudioOutput;
 use crate::equalizer::{PRESETS, Preset};
-use crate::library::{Album, Artist, Song};
+use crate::library::{Album, Artist, Playlist, Song};
 use crate::music_kit_auth::MusicKitSession;
 
 /// The preview asset URL the transport and audio tests load and assert on, and
@@ -123,6 +124,13 @@ pub(crate) fn sample_album() -> Album {
         id: "album-1".to_string(),
         title: "First Record".to_string(),
         artist_id: "artist-1".to_string(),
+    }
+}
+
+pub(crate) fn sample_playlist() -> Playlist {
+    Playlist {
+        id: "playlist-1".to_string(),
+        name: "Morning Drive".to_string(),
     }
 }
 

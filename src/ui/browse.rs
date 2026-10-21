@@ -9,13 +9,14 @@
 //! transition (`store`, `store_with_labels`, `clear`, `fail`, `begin_fetch`)
 //! instead of spelling out the parallel-field bookkeeping at each site.
 //!
-//! Thirteen `update` arms go through `store`/`store_with_labels`/`clear`/`fail`:
-//! the Artists and Albums `*Loaded` arms call `store`, the Songs and All Songs
-//! `*Loaded` arms call `store_with_labels` so each track's length is formatted
-//! once per load, the four `*LoadFailed` arms call `fail`, and the navigation
-//! arms, `LoadArtists`, `ShowAllSongs`, and `SearchSubmitted` start their fetch
-//! through the event loop's `fetch_level`, which calls `clear` before
-//! `begin_fetch`. `select` resolves the three selection arms' presses.
+//! The `update` arms go through `store`/`store_with_labels`/`clear`/`fail`: the
+//! Artists, Albums, All Albums, and Playlists `*Loaded` arms call `store`, the
+//! Songs and All Songs `*Loaded` arms call `store_with_labels` so each track's
+//! length is formatted once per load, every `*LoadFailed` arm calls `fail`, and
+//! the navigation arms, `LoadArtists`, the flat-list/Playlists buttons, and
+//! `SearchSubmitted` start their fetch through the event loop's `fetch_level`,
+//! which calls `clear` before `begin_fetch`. `select` resolves the three
+//! selection arms' presses.
 
 use std::sync::{
     Arc,

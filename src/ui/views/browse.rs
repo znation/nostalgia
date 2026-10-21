@@ -14,16 +14,16 @@ use iced::{
     widget::{Button, Column, Row, Scrollable, Text, TextInput, button},
 };
 
-use crate::library::{Album, Artist, Song};
+use crate::library::{Album, Artist, Playlist, Song};
 use crate::ui::{CurrentView, Message, style, theme};
 
 use super::{labeled_button, now_playing::format_track_time, spacer};
 
 /// The placeholder a browse view shows when its list has no rows: one wording
-/// per browse level, so an empty Artists, Albums, Songs, All Songs, or All
-/// Albums panel names the list rather than showing a blank panel. Pure so the per-level
-/// wording is testable without an iced renderer, like the button label helpers
-/// below.
+/// per browse level, so an empty Artists, Albums, Songs, All Songs, All
+/// Albums, or Playlists panel names the list rather than showing a blank
+/// panel. Pure so the per-level wording is testable without an iced renderer,
+/// like the button label helpers below.
 pub(super) fn empty_list_label(view: &CurrentView) -> &'static str {
     match view {
         CurrentView::Artists => "No artists",
@@ -31,6 +31,7 @@ pub(super) fn empty_list_label(view: &CurrentView) -> &'static str {
         CurrentView::Songs => "No songs",
         CurrentView::AllSongs => "No songs",
         CurrentView::AllAlbums => "No albums",
+        CurrentView::Playlists => "No playlists",
     }
 }
 
@@ -183,6 +184,25 @@ pub(super) fn album_row<'a>(
         album.title.as_str(),
         Cow::Borrowed("View Songs"),
         Message::AlbumSelected { epoch, index },
+        false,
+    )
+}
+
+/// The browse row a playlist becomes: its name, the "View Songs" hint, the
+/// message emitted when it is pressed, and the current-track flag. `epoch` and
+/// `index` are the loaded-list epoch and the playlist's position in that list,
+/// carried so building a row never clones the playlist's id (see
+/// [`artist_row`]). Playlists are never the currently playing row, so the flag
+/// is always false.
+pub(super) fn playlist_row<'a>(
+    epoch: u64,
+    index: usize,
+    playlist: &'a Playlist,
+) -> (&'a str, Cow<'a, str>, Message, bool) {
+    (
+        playlist.name.as_str(),
+        Cow::Borrowed("View Songs"),
+        Message::PlaylistSelected { epoch, index },
         false,
     )
 }
@@ -376,9 +396,32 @@ pub fn view_all_albums<'a>(
     )
 }
 
-/// Whether the browse view has a level above it to return to. The Albums and
-/// Songs views do — the Back button is shown above their lists — while the
-/// top-level Artists list has nothing to go back to.
+/// The Playlists browse view: one row per playlist, in the order given, each
+/// emitting [`Message::PlaylistSelected`] with the playlist's index in the
+/// list and the list's `epoch`. `loading` and `error` select the placeholder
+/// wording (see [`browse_placeholder`]); a fetch failure wins. Built by
+/// [`browse_view`] from the [`playlist_row`] mapping.
+pub fn view_playlists<'a>(
+    playlists: &'a [Playlist],
+    epoch: u64,
+    loading: bool,
+    error: Option<&'a str>,
+) -> Element<'a, Message> {
+    browse_view(
+        CurrentView::Playlists,
+        playlists
+            .iter()
+            .enumerate()
+            .map(|(index, playlist)| playlist_row(epoch, index, playlist)),
+        loading,
+        error,
+        false,
+    )
+}
+
+/// Whether the browse view has a level above it to return to. The Albums,
+/// Songs, and Playlists views do — the Back button is shown above their
+/// lists — while the top-level Artists list has nothing to go back to.
 ///
 /// `#[must_use]`: a discarded result is a logic bug — the caller that decides
 /// whether to show the Back button would silently never show it.
@@ -422,6 +465,14 @@ pub fn view_all_albums_button() -> Element<'static, Message> {
     labeled_button("All Albums", Message::ShowAllAlbums).into()
 }
 
+/// The Artists view's Playlists button, opening the library's playlist list.
+/// Rendered only on the Artists view, beside the All Songs and All Albums
+/// buttons; the update loop's `ShowPlaylists` arm switches to
+/// `CurrentView::Playlists` and issues the fetch.
+pub fn view_playlists_button() -> Element<'static, Message> {
+    labeled_button("Playlists", Message::ShowPlaylists).into()
+}
+
 /// The Artists view's Retry button, re-running the top-level artists fetch
 /// after it failed. Rendered only where [`can_retry_artists`] is true; the
 /// update loop's `LoadArtists` arm clears the failure and re-issues the
@@ -450,10 +501,11 @@ pub fn view_search_box(query: &str) -> Element<'_, Message> {
 /// naming the list once means a new view is added here rather than to each
 /// loop's literal.
 #[cfg(test)]
-pub const BROWSE_VIEWS: [CurrentView; 5] = [
+pub const BROWSE_VIEWS: [CurrentView; 6] = [
     CurrentView::Artists,
     CurrentView::Albums,
     CurrentView::Songs,
     CurrentView::AllSongs,
     CurrentView::AllAlbums,
+    CurrentView::Playlists,
 ];

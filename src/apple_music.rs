@@ -30,7 +30,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::audio;
-use crate::library::{Album, Artist, Song};
+use crate::library::{Album, Artist, Playlist, Song};
 use crate::music_kit_auth::{MusicKitSession, authorize, open_in_browser};
 use crate::sample_library::sample_library;
 use crate::state::AppState;
@@ -641,6 +641,43 @@ impl AppleMusicService {
         .await
     }
 
+    /// Every playlist in the library. Until the REST sibling lands, this
+    /// answers from the sample library even when a session is stored; the
+    /// sibling "Back the playlists browse with the Apple Music REST
+    /// endpoints" rewires it through [`AppleMusicService::browse`].
+    ///
+    /// # Errors
+    ///
+    /// This sample-library answer never fails; the signature already matches
+    /// the REST sibling's fallible one.
+    pub async fn get_playlists(&self) -> Result<Vec<Playlist>, AppleMusicError> {
+        Ok(sample_library().playlists.clone())
+    }
+
+    /// Songs in the given playlist, in the playlist's named order. Until the
+    /// REST sibling lands, this answers from the sample library even when a
+    /// session is stored (unknown playlists yield an empty list); the sibling
+    /// rewires it through [`AppleMusicService::browse`], keeping this
+    /// signature and id guard.
+    ///
+    /// A blank `playlist_id` — empty or only whitespace — or one carrying a
+    /// control character is rejected with an [`AppleMusicError`], the
+    /// playlist-query twin of
+    /// [`AppleMusicService::get_songs_from_album`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when `playlist_id` is blank (empty or
+    /// only whitespace) or carries a control character; the sample-library
+    /// lookup otherwise never fails.
+    pub async fn get_songs_from_playlist(
+        &self,
+        playlist_id: &str,
+    ) -> Result<Vec<Song>, AppleMusicError> {
+        ensure_id_is_valid(playlist_id, IdKind::Playlist)?;
+        Ok(lookup(&sample_library().songs_by_playlist, playlist_id))
+    }
+
     /// Every song in the library: the signed-in user's whole Apple Music
     /// library when a session is stored, and every sample-library song
     /// otherwise.
@@ -730,15 +767,16 @@ impl AppleMusicService {
 
 /// The resource an id names, so the seam's validation error can label it.
 ///
-/// [`ensure_id_is_valid`] serves the three id-taking queries; naming the id
+/// [`ensure_id_is_valid`] serves the four id-taking queries; naming the id
 /// kinds as a closed enum (rather than passing a `&str`) makes a misspelled
-/// label impossible to compile and keeps the three kinds the only ones the
+/// label impossible to compile and keeps the four kinds the only ones the
 /// guard accepts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum IdKind {
     Track,
     Artist,
     Album,
+    Playlist,
 }
 
 impl std::fmt::Display for IdKind {
@@ -747,6 +785,7 @@ impl std::fmt::Display for IdKind {
             Self::Track => "track",
             Self::Artist => "artist",
             Self::Album => "album",
+            Self::Playlist => "playlist",
         })
     }
 }

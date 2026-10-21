@@ -33,7 +33,7 @@ use shortcuts::message_for;
 use crate::{
     apple_music::AppleMusicService,
     equalizer::Preset,
-    library::{Album, Artist, Song},
+    library::{Album, Artist, Playlist, Song},
     state::AppState,
 };
 use loading::{
@@ -98,6 +98,7 @@ enum Message {
     TrackSelected { epoch: u64, index: usize },
     ArtistSelected { epoch: u64, index: usize },
     AlbumSelected { epoch: u64, index: usize },
+    PlaylistSelected { epoch: u64, index: usize },
     Back,
     // The Artists view's All Songs button: fetch the whole library flat and
     // show it under the All Songs view.
@@ -105,6 +106,9 @@ enum Message {
     // The Artists view's All Albums button: fetch every library album flat and
     // show it under the All Albums view.
     ShowAllAlbums,
+    // The Artists view's Playlists button: fetch the library's playlists and
+    // show them under the Playlists view.
+    ShowPlaylists,
     // The library search box: `SearchChanged` carries each keystroke into
     // `search_query`; `SearchSubmitted` carries the box's text when Enter is
     // pressed and replaces the songs list with the search results.
@@ -116,6 +120,7 @@ enum Message {
     SongsLoaded(Vec<Song>),
     AllSongsLoaded(Vec<Song>),
     AllAlbumsLoaded(Vec<Album>),
+    PlaylistsLoaded(Vec<Playlist>),
     // A browse fetch that returned an error. The payload is the formatted
     // report (see `loading::fetch_failure_report`): it names the failed fetch
     // and carries the backend's cause, so the browse panel can show why the
@@ -125,6 +130,7 @@ enum Message {
     SongsLoadFailed(String),
     AllSongsLoadFailed(String),
     AllAlbumsLoadFailed(String),
+    PlaylistsLoadFailed(String),
     // A browse reply stamped with the generation that produced it. The
     // mapper's `RequestGeneration::is_current` check runs on iced's executor
     // thread; `update` stores the reply later on the UI thread, and a
@@ -203,10 +209,13 @@ struct WinampPlayer {
     /// The flat whole-library album list behind the Artists view's All Albums
     /// button.
     all_albums: BrowseList<Album>,
+    /// The library's playlists behind the Artists view's Playlists button.
+    playlists: BrowseList<Playlist>,
     /// Which list the Songs view was opened from. `Album` returns to the
     /// per-artist Albums view on Back; `AllAlbums` returns to the flat All
-    /// Albums view instead. Set by `AlbumSelected` from the view that rendered
-    /// the pressed row, so Back always steps to the level the row came from.
+    /// Albums view; `Playlist` returns to the Playlists view. Set by the
+    /// selection arm from the view that rendered the pressed row, so Back
+    /// always steps to the level the row came from.
     songs_origin: SongsOrigin,
     /// The library search box's text, as typed. `Message::SearchChanged`
     /// stores each keystroke here and the search box renders it back; a submit
@@ -256,6 +265,7 @@ enum CurrentView {
     Songs,
     AllSongs,
     AllAlbums,
+    Playlists,
 }
 
 /// Which browse list a Songs view was opened from, so `Back` can step to it.
@@ -266,6 +276,8 @@ enum SongsOrigin {
     /// The flat whole-library All Albums view: Back returns to
     /// `CurrentView::AllAlbums`.
     AllAlbums,
+    /// The Playlists view: Back returns to `CurrentView::Playlists`.
+    Playlist,
 }
 
 impl WinampPlayer {
@@ -289,6 +301,7 @@ impl WinampPlayer {
             songs: BrowseList::new(false),
             all_songs: BrowseList::new(false),
             all_albums: BrowseList::new(false),
+            playlists: BrowseList::new(false),
             songs_origin: SongsOrigin::Album,
             search_query: String::new(),
             search_active: false,
@@ -659,6 +672,33 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 Message::SongsLoadFailed,
             )
         }
+        Message::PlaylistSelected { epoch, index } => {
+            // The playlist twin of the album arm above: resolve the press
+            // against the Playlists list that rendered it, rejecting a stale
+            // epoch or out-of-range index, then load the playlist's songs into
+            // the shared songs buffer and record the origin for Back.
+            let Some(playlist_id) = player
+                .playlists
+                .select(epoch, index)
+                .map(|playlist| playlist.id.clone())
+            else {
+                return Task::none();
+            };
+            player.songs_origin = SongsOrigin::Playlist;
+            player.current_view = CurrentView::Songs;
+            player.search_active = false;
+            // Clear the previous list before the fetch lands, as the album arm
+            // does, so a press during the fetch cannot resolve against stale
+            // rows.
+            fetch_level(
+                &mut player.songs,
+                &player.apple_music_service,
+                format!("loading songs from playlist {playlist_id:?}"),
+                move |service| async move { service.get_songs_from_playlist(&playlist_id).await },
+                Message::SongsLoaded,
+                Message::SongsLoadFailed,
+            )
+        }
         // The browse hierarchy is navigable both ways: ArtistSelected and
         // AlbumSelected step down (Artists → Albums → Songs), Back steps up
         // again. The Back button is only rendered below the artist list, so
@@ -677,10 +717,12 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                     CurrentView::Songs => match player.songs_origin {
                         SongsOrigin::Album => CurrentView::Albums,
                         SongsOrigin::AllAlbums => CurrentView::AllAlbums,
+                        SongsOrigin::Playlist => CurrentView::Playlists,
                     },
                     CurrentView::Albums => CurrentView::Artists,
                     CurrentView::AllSongs => CurrentView::Artists,
                     CurrentView::AllAlbums => CurrentView::Artists,
+                    CurrentView::Playlists => CurrentView::Artists,
                     CurrentView::Artists => CurrentView::Artists,
                 };
             }
@@ -717,6 +759,22 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 |service| async move { service.get_all_albums().await },
                 Message::AllAlbumsLoaded,
                 Message::AllAlbumsLoadFailed,
+            )
+        }
+        Message::ShowPlaylists => {
+            // Like the flat lists, Playlists hangs off the artists list: leave
+            // an active search behind and let Back return to Artists.
+            player.search_active = false;
+            player.current_view = CurrentView::Playlists;
+            // Clear the previous list before the fetch lands, so a press during
+            // the fetch cannot resolve against stale rows.
+            fetch_level(
+                &mut player.playlists,
+                &player.apple_music_service,
+                "loading library playlists".to_string(),
+                |service| async move { service.get_playlists().await },
+                Message::PlaylistsLoaded,
+                Message::PlaylistsLoadFailed,
             )
         }
         Message::SearchChanged(text) => {
@@ -788,6 +846,10 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             player.all_albums.store(albums);
             Task::none()
         }
+        Message::PlaylistsLoaded(playlists) => {
+            player.playlists.store(playlists);
+            Task::none()
+        }
         Message::ArtistsLoadFailed(report) => {
             player.artists.fail(report);
             Task::none()
@@ -806,6 +868,10 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         }
         Message::AllAlbumsLoadFailed(report) => {
             player.all_albums.fail(report);
+            Task::none()
+        }
+        Message::PlaylistsLoadFailed(report) => {
+            player.playlists.fail(report);
             Task::none()
         }
         // The executor-thread check in `fetch_into` already dropped replies a
@@ -830,6 +896,9 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 }
                 Message::AllAlbumsLoaded(_) | Message::AllAlbumsLoadFailed(_) => {
                     player.all_albums.is_current(issued)
+                }
+                Message::PlaylistsLoaded(_) | Message::PlaylistsLoadFailed(_) => {
+                    player.playlists.is_current(issued)
                 }
                 _ => true,
             };
@@ -1027,6 +1096,12 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
             player.all_albums.loading,
             player.all_albums.error.as_deref(),
         ),
+        CurrentView::Playlists => views::view_playlists(
+            &player.playlists.items,
+            player.playlists.epoch,
+            player.playlists.loading,
+            player.playlists.error.as_deref(),
+        ),
     };
 
     let mut column = Column::new()
@@ -1054,13 +1129,14 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     if views::can_retry_artists(&player.current_view, player.artists.error.as_deref()) {
         column = column.push(views::view_retry_button());
     }
-    // The All Songs and All Albums buttons open the flat whole-library lists;
-    // they live on the Artists view, beside Back/Retry, so each flat list is
-    // one press from the top of the hierarchy.
+    // The All Songs, All Albums, and Playlists buttons open the flat lists;
+    // they live on the Artists view, beside Back/Retry, so each list is one
+    // press from the top of the hierarchy.
     if matches!(player.current_view, CurrentView::Artists) {
         column = column
             .push(views::view_all_songs_button())
-            .push(views::view_all_albums_button());
+            .push(views::view_all_albums_button())
+            .push(views::view_playlists_button());
     }
     // The search box sits on every browse screen, so a query can be typed
     // from any level of the hierarchy.

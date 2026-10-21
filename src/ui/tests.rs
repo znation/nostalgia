@@ -5,8 +5,8 @@ use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB};
 use crate::sample_library::sample_library;
 use crate::test_support::{
     AudioCall, PREVIEW_URL, RecordingAudio, StubTransport, assert_ids, assert_preview_calls,
-    rock_preset, sample_album, sample_artist, sample_song, second_album_songs, sign_in_session,
-    stepping_songs,
+    rock_preset, sample_album, sample_artist, sample_playlist, sample_song, second_album_songs,
+    sign_in_session, stepping_songs,
 };
 
 /// A fresh player over its own shared state, so a test can inspect the
@@ -106,6 +106,7 @@ fn seed_browse_lists(player: &mut WinampPlayer) {
     player.songs.items = vec![sample_song()];
     player.all_songs.items = vec![sample_song()];
     player.all_albums.items = vec![sample_album()];
+    player.playlists.items = vec![sample_playlist()];
 }
 
 /// Asserts the player has no rows in any of its browse buffers. The
@@ -118,6 +119,7 @@ fn assert_browse_lists_empty(player: &WinampPlayer) {
     assert!(player.songs.items.is_empty());
     assert!(player.all_songs.items.is_empty());
     assert!(player.all_albums.items.is_empty());
+    assert!(player.playlists.items.is_empty());
 }
 
 /// Asserts the player is showing `expected`. The tests pin the current
@@ -729,6 +731,128 @@ async fn show_all_albums_fetches_the_flat_list_and_switches_view() {
     assert_view(&player, CurrentView::AllAlbums);
     assert!(!player.search_active);
     assert_eq!(player.albums.items.len(), 1);
+}
+
+// The Playlists button fetches the library's playlists and shows them under
+// their own view, leaving the other browse buffers alone.
+#[tokio::test]
+async fn show_playlists_fetches_and_switches_view() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+
+    let task = update(&mut player, Message::ShowPlaylists);
+    drive_fetch_and_assert_loaded(
+        &mut player,
+        task,
+        "load library playlists",
+        |player| &mut player.playlists.items,
+        |playlist| playlist.id.as_str(),
+        &["playlist-1", "playlist-2", "playlist-3"],
+    )
+    .await;
+
+    assert_view(&player, CurrentView::Playlists);
+    assert!(!player.search_active);
+    assert_eq!(player.songs.items.len(), 3);
+}
+
+#[test]
+fn playlists_loaded_stores_the_list() {
+    let (mut player, _state) = test_player();
+
+    let _ = update(
+        &mut player,
+        Message::PlaylistsLoaded(vec![sample_playlist()]),
+    );
+
+    assert_eq!(player.playlists.items, vec![sample_playlist()]);
+    assert!(!player.playlists.loading);
+}
+
+// The Playlists list hangs off the artists list, not off a search's results,
+// so opening it clears an active search.
+#[test]
+fn show_playlists_clears_an_active_search() {
+    let (mut player, _state) = test_player();
+    player.search_active = true;
+    player.current_view = CurrentView::Songs;
+
+    let _ = update(&mut player, Message::ShowPlaylists);
+
+    assert!(!player.search_active);
+    assert_view(&player, CurrentView::Playlists);
+}
+
+#[test]
+fn back_from_playlists_returns_to_the_artists_list() {
+    let (mut player, _state) = test_player();
+    player.current_view = CurrentView::Playlists;
+
+    let _ = update(&mut player, Message::Back);
+
+    assert_view(&player, CurrentView::Artists);
+}
+
+// A playlist row press resolves against `playlists`, loads that playlist's
+// songs into the shared `songs` buffer, and records the origin so Back returns
+// to Playlists. Playlist 1's named order (song-1 then song-4) differs from
+// album order, so the exact ids pin the playlist query rather than an album
+// lookup.
+#[tokio::test]
+async fn playlist_selected_in_playlists_loads_its_songs_and_back_returns_to_playlists() {
+    let (mut player, _state) = test_player();
+    let _ = update(
+        &mut player,
+        Message::PlaylistsLoaded(vec![sample_playlist()]),
+    );
+    player.current_view = CurrentView::Playlists;
+
+    let task = update(
+        &mut player,
+        Message::PlaylistSelected { epoch: 1, index: 0 },
+    );
+    drive_fetch_and_assert_loaded(
+        &mut player,
+        task,
+        "load songs from a playlist",
+        |player| &mut player.songs.items,
+        |song| song.id.as_str(),
+        &["song-1", "song-4"],
+    )
+    .await;
+
+    assert_view(&player, CurrentView::Songs);
+    assert_eq!(player.songs_origin, SongsOrigin::Playlist);
+
+    let _ = update(&mut player, Message::Back);
+    assert_view(&player, CurrentView::Playlists);
+}
+
+// A stale playlist press names no row in the current list, so it must issue no
+// fetch and leave the view and songs buffer untouched.
+#[test]
+fn a_stale_playlist_press_issues_no_fetch_and_leaves_the_view_unchanged() {
+    let (mut player, _state) = test_player();
+    let _ = update(
+        &mut player,
+        Message::PlaylistsLoaded(vec![sample_playlist()]),
+    );
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    player.current_view = CurrentView::Playlists;
+
+    assert_message_schedules_no_work(
+        &mut player,
+        Message::PlaylistSelected { epoch: 0, index: 0 },
+    );
+    assert_view(&player, CurrentView::Playlists);
+    assert_eq!(player.songs.items.len(), 3);
+
+    assert_message_schedules_no_work(
+        &mut player,
+        Message::PlaylistSelected { epoch: 1, index: 9 },
+    );
+    assert_view(&player, CurrentView::Playlists);
+    assert_eq!(player.songs.items.len(), 3);
 }
 
 // The flat album list hangs off the artists list, not off a search's
@@ -2026,6 +2150,7 @@ fn each_browse_failure_stores_its_report_in_its_own_list() {
     player.songs.loading = true;
     player.all_songs.loading = true;
     player.all_albums.loading = true;
+    player.playlists.loading = true;
 
     let artists_report = "music-library fetch failed (loading favorite artists): artists boom";
     let albums_report =
@@ -2035,6 +2160,7 @@ fn each_browse_failure_stores_its_report_in_its_own_list() {
     let all_songs_report = "music-library fetch failed (loading all library songs): all songs boom";
     let all_albums_report =
         "music-library fetch failed (loading all library albums): all albums boom";
+    let playlists_report = "music-library fetch failed (loading library playlists): playlists boom";
 
     let _ = update(
         &mut player,
@@ -2056,6 +2182,10 @@ fn each_browse_failure_stores_its_report_in_its_own_list() {
         &mut player,
         Message::AllAlbumsLoadFailed(all_albums_report.to_string()),
     );
+    let _ = update(
+        &mut player,
+        Message::PlaylistsLoadFailed(playlists_report.to_string()),
+    );
 
     assert_browse_lists_empty(&player);
     assert!(!player.artists.loading);
@@ -2063,11 +2193,13 @@ fn each_browse_failure_stores_its_report_in_its_own_list() {
     assert!(!player.songs.loading);
     assert!(!player.all_songs.loading);
     assert!(!player.all_albums.loading);
+    assert!(!player.playlists.loading);
     assert_eq!(player.artists.error.as_deref(), Some(artists_report));
     assert_eq!(player.albums.error.as_deref(), Some(albums_report));
     assert_eq!(player.songs.error.as_deref(), Some(songs_report));
     assert_eq!(player.all_songs.error.as_deref(), Some(all_songs_report));
     assert_eq!(player.all_albums.error.as_deref(), Some(all_albums_report));
+    assert_eq!(player.playlists.error.as_deref(), Some(playlists_report));
 }
 
 // `BrowseList::clear` runs on every navigation step and must reset all three
@@ -2503,6 +2635,7 @@ fn new_player_starts_at_artists_with_nothing_selected() {
     assert!(!player.songs.loading);
     assert!(!player.all_songs.loading);
     assert!(!player.all_albums.loading);
+    assert!(!player.playlists.loading);
 }
 
 /// Builds `view` once per browse level — the pre-load, loaded, and failed
@@ -2588,11 +2721,13 @@ fn view_constructs_over_the_apps_full_input_space() {
     player.songs.items.clear();
     player.all_songs.items.clear();
     player.all_albums.items.clear();
+    player.playlists.items.clear();
     player.artists.error = Some("music-library fetch failed: boom".to_string());
     player.albums.error = Some("music-library fetch failed: boom".to_string());
     player.songs.error = Some("music-library fetch failed: boom".to_string());
     player.all_songs.error = Some("music-library fetch failed: boom".to_string());
     player.all_albums.error = Some("music-library fetch failed: boom".to_string());
+    player.playlists.error = Some("music-library fetch failed: boom".to_string());
     construct_view_in_every_browse_view(&mut player);
 }
 
