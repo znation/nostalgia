@@ -33,6 +33,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ### Add the playback-position readout to the Now Playing bar (Playback position, part 2/2: planned 2026-10-21 by the plan role, requires part 1/2 landed)
 
+**Needs replan 2026-10-21 by feature: rejected after 5 review rounds.**
+
+> 1. `README.md:20` reintroduces the archive-narrative sentence that main deliberately removed in `762af8c` (“prune status to its state-only pointer”), whose commit body says a prior edit had added archive narrative beyond the status section’s two permitted items. This change is unrelated to the playbac…
+> 2. The part 2/2 acceptance criteria promise that Pause keeps the frozen elapsed value and that a seek is reflected by the next poll, but no test exercises either behavior. The new UI tests cover selection, Stop, stale replies, re-arming, and tick scheduling; `play_pause_toggles_is_playing` checks only…
+
 **Goal.** The Now Playing bar's right-hand readout shows the current track's elapsed and total time as `"<elapsed>/<total>"` (for example `0:45/3:12`) whenever the audio backend has a loaded preview, and falls back to the existing plain total (`"--:--"` when no track is current) when it does not. Pause freezes the elapsed value, a seek steps it, Stop and a new selection clear it, and a play whose preview fails to install — including the asynchronous download/decode failure `handle_play` reports on the audio worker — leaves the plain total rather than a frozen `0:00`.
 
 This revision replaces the rejected `position_tracking`/`reset_position` state machine. Rather than infer from shared `is_playing` whether audio is loaded, it makes the audio backend authoritative: `AudioOutput::position` answers `None` when no preview is loaded, so the UI keeps no playback guard and a selected track with no preview URL never turns one on.
