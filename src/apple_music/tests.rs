@@ -1075,6 +1075,24 @@ async fn toggle_play_pause_pauses_while_playing() {
     assert_playback_state(&state, Some("song-1"), false).await;
 }
 
+// `toggle_play_pause`'s pause arm keeps the same backend-first order as
+// `pause`: a backend that rejects the pause must report it before the toggle
+// flips the shared playing flag, or the Now Playing bar would read "paused"
+// while the preview kept sounding. `pause_reports_a_backend_failure_without_clearing_playing`
+// pins the plain path; this pins the toggle's separately written arm.
+#[tokio::test]
+async fn toggle_play_pause_reports_a_backend_failure_without_clearing_playing() {
+    let audio = Arc::new(RejectingAudio::new(RejectedCommand::Pause));
+    let (service, state) =
+        service_with_preview_playing(Arc::clone(&audio) as Arc<dyn AudioOutput>).await;
+
+    let error = service.toggle_play_pause().await.unwrap_err();
+
+    assert_eq!(error.to_string(), "the audio device is gone");
+    assert_preview_calls(&audio.calls(), &[AudioCall::Pause]);
+    assert_playback_state(&state, Some("song-1"), true).await;
+}
+
 // The Play/Pause toggle resumes while paused.
 #[tokio::test]
 async fn toggle_play_pause_resumes_while_paused() {
