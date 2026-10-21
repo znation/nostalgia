@@ -140,12 +140,20 @@ fn song_row_marks_the_current_track() {
 
 // The Back button is a browse-navigation control: it must exist only
 // where there is a level above to return to, so the visibility predicate
-// is pinned alongside the other pure browse helpers.
+// is pinned alongside the other pure browse helpers. Every view below
+// Artists must offer Back, including the flat lists and Playlists: the
+// update arms route their Back presses, but a hidden button would leave the
+// user with no way to press it. Drive the shared view list so a newly added
+// level is covered here too.
 #[test]
 fn back_button_is_available_only_below_the_artist_list() {
-    assert!(!can_go_back(&CurrentView::Artists));
-    assert!(can_go_back(&CurrentView::Albums));
-    assert!(can_go_back(&CurrentView::Songs));
+    for view in BROWSE_VIEWS {
+        assert_eq!(
+            can_go_back(&view),
+            view != CurrentView::Artists,
+            "Back visibility for {view:?}"
+        );
+    }
 }
 
 // Retry exists only for the one failed fetch navigation cannot re-issue:

@@ -410,9 +410,9 @@ pub fn view_playlists<'a>(
     )
 }
 
-/// Whether the browse view has a level above it to return to. The Albums,
-/// Songs, and Playlists views do — the Back button is shown above their
-/// lists — while the top-level Artists list has nothing to go back to.
+/// Whether the browse view has a level above it to return to. Every view
+/// below the top-level Artists list does — the Back button is shown above
+/// their lists — while Artists itself has nothing to go back to.
 ///
 /// `#[must_use]`: a discarded result is a logic bug — the caller that decides
 /// whether to show the Back button would silently never show it.
