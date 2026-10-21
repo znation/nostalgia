@@ -475,6 +475,26 @@ mod tests {
         }
     }
 
+    // Toggling the equalizer off must bypass the stored curve, not merely
+    // skip a flat one: shared state keeps the preamp and band gains while
+    // enabled is false, so a filter that applied the gain before checking
+    // enabled would keep boosting a preview the user switched off. The test
+    // above starts from `new`'s flat preamp, which cannot tell that order
+    // apart; this one first runs the curve enabled and then disables it with
+    // the same non-zero gains.
+    #[test]
+    fn band_filter_disabled_bypasses_a_non_zero_stored_curve() {
+        let mut filter = BandFilter::new(44_100);
+        filter.set_curve(true, 6.020_6, &gain_curve(4, 12.0));
+        // Let the enabled filter record state, as it would during playback.
+        let _ = filter.process(1.0);
+
+        filter.set_curve(false, 6.020_6, &gain_curve(4, 12.0));
+        for sample in [0.0, 0.5, -0.25, 1.0, -1.0] {
+            assert_eq!(filter.process(sample), sample);
+        }
+    }
+
     #[test]
     fn band_filter_enabled_flat_curve_passes_samples_through() {
         let mut filter = BandFilter::new(44_100);
