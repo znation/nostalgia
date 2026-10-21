@@ -88,3 +88,21 @@ pub fn view_title_bar(always_on_top: bool) -> Element<'static, Message> {
         .style(|_theme| style::title_bar_style()),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // The title bar's buttons must stay pinned, for the same reason the
+    // transport buttons were pinned after the label-reflow bug: a glyph whose
+    // metrics change would otherwise resize its button and shift the drag
+    // region or the buttons after it. These widths are private to this module
+    // and no other test reads them, so a zeroed or widened button could pass
+    // the suite while the bar reflowed. Pin the widths; the 22 > 18 split is
+    // the documented narrow A slot.
+    #[test]
+    fn title_bar_buttons_keep_their_pinned_widths() {
+        assert_eq!(TITLE_BAR_BUTTON_WIDTH, 22.0);
+        assert_eq!(CLUTTER_BUTTON_WIDTH, 18.0);
+    }
+}
