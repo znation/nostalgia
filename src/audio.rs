@@ -124,11 +124,11 @@ pub trait AudioOutput: Send + Sync {
 
     /// Reports the loaded preview's playback position.
     ///
-    /// Returns `Some` with the player's position, [`Duration::ZERO`] when the
-    /// backend has no loaded player, or `None` when the backend cannot answer
-    /// (the silent fallback, a test fake, or a query that waits past the
-    /// backend's bound). The default keeps every existing implementor
-    /// compiling without a position of its own.
+    /// Returns `Some` while a player is loaded — including [`Duration::ZERO`]
+    /// at the start of its preview — and `None` when no player is loaded or
+    /// the backend cannot answer (the silent fallback, a test fake, or a query
+    /// that waits past the backend's bound). The default keeps every existing
+    /// implementor compiling without a position of its own.
     fn position(&self) -> Option<Duration> {
         None
     }

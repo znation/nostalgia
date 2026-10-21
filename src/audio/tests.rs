@@ -641,7 +641,7 @@ fn rodio_output_asks_the_worker_for_its_position() {
     };
     let worker = std::thread::spawn(move || match receiver.recv() {
         Ok(Command::Position(reply)) => {
-            reply.send(Duration::from_secs(3)).unwrap();
+            reply.send(Some(Duration::from_secs(3))).unwrap();
         }
         _ => panic!("position did not send Command::Position"),
     });
@@ -975,8 +975,9 @@ fn with_a_proxy_set_the_preview_agent_stays_direct() {
 
 /// A recording [`WorkerPlayer`] for the command-loop tests: it records the
 /// previews appended, the calls made and their order, the pause/resume
-/// calls, and whether it was stopped, and remembers its gain, without
-/// needing an output device.
+/// calls, and whether it was stopped, and remembers its gain. Its position
+/// starts at 42 seconds and moves by every recorded seek, so a test can pin
+/// that a seek reaches the next position query.
 #[derive(Clone, Default)]
 struct RecordingPlayer {
     appended: Arc<AtomicUsize>,
@@ -1007,7 +1008,13 @@ impl WorkerPlayer for RecordingPlayer {
     }
 
     fn position(&self) -> Duration {
-        Duration::from_secs(42)
+        self.seeks
+            .lock()
+            .unwrap()
+            .iter()
+            .fold(Duration::from_secs(42), |position, offset| {
+                seek_target(position, *offset)
+            })
     }
 
     fn set_equalizer(&self, equalizer: EqSnapshot) {
@@ -1283,15 +1290,80 @@ fn position_query_returns_the_loaded_players_position() {
     );
     assert_eq!(
         replies.recv().unwrap(),
-        Duration::from_secs(42),
+        Some(Duration::from_secs(42)),
         "the query must answer with the installed player's position"
     );
 }
 
-// With no player installed, a position query answers zero instead of
-// creating a player or leaving the caller waiting.
+// A seek must move the player, so the next position query reports the new
+// position rather than the one before it. SeekBy follows the Play in the
+// channel, and the Position query follows the seek.
 #[test]
-fn position_query_returns_zero_when_nothing_is_loaded() {
+fn a_seek_is_reflected_by_the_next_position_query() {
+    let (sender, receiver) = mpsc::channel();
+    let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
+    let recorded = Arc::clone(&players);
+    let create_player = move || {
+        let player = RecordingPlayer::default();
+        recorded.lock().unwrap().push(player.clone());
+        player
+    };
+    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+    let (reply, replies) = mpsc::channel();
+
+    sender.send(Command::Play("first".to_string())).unwrap();
+    sender.send(Command::SeekBy(5)).unwrap();
+    sender.send(Command::Position(reply)).unwrap();
+    drop(sender);
+    serve_commands(receiver, create_player, fetch);
+
+    assert_eq!(*players.lock().unwrap()[0].seeks.lock().unwrap(), vec![5]);
+    assert_eq!(
+        replies.recv().unwrap(),
+        Some(Duration::from_secs(47)),
+        "the query must report the position the seek moved the player to"
+    );
+}
+
+// Pause must not unload the player: the worker keeps it installed and
+// paused, so the next poll reads its own frozen clock instead of reporting
+// that no preview is loaded.
+#[test]
+fn a_pause_keeps_the_loaded_player_reporting_its_position() {
+    let (sender, receiver) = mpsc::channel();
+    let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
+    let recorded = Arc::clone(&players);
+    let create_player = move || {
+        let player = RecordingPlayer::default();
+        recorded.lock().unwrap().push(player.clone());
+        player
+    };
+    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+    let (reply, replies) = mpsc::channel();
+
+    sender.send(Command::Play("first".to_string())).unwrap();
+    sender.send(Command::Pause).unwrap();
+    sender.send(Command::Position(reply)).unwrap();
+    drop(sender);
+    serve_commands(receiver, create_player, fetch);
+
+    let players = players.lock().unwrap();
+    assert_eq!(players[0].paused.load(Ordering::SeqCst), 1);
+    assert!(
+        !players[0].stopped.load(Ordering::SeqCst),
+        "Pause must not stop the player"
+    );
+    assert_eq!(
+        replies.recv().unwrap(),
+        Some(Duration::from_secs(42)),
+        "a paused player must still report its position"
+    );
+}
+
+// With no player installed, a position query reports `None` instead of
+// creating a player or inventing a zero position.
+#[test]
+fn position_query_reports_none_when_nothing_is_loaded() {
     let (sender, receiver) = mpsc::channel();
     let create_player = || -> RecordingPlayer {
         panic!("a position query must not create a player");
@@ -1303,7 +1375,45 @@ fn position_query_returns_zero_when_nothing_is_loaded() {
     drop(sender);
     serve_commands(receiver, create_player, fetch);
 
-    assert_eq!(replies.recv().unwrap(), Duration::ZERO);
+    assert_eq!(replies.recv().unwrap(), None);
+}
+
+// A selection whose preview fails to install leaves no player behind, so
+// the following position query reports `None` rather than a stale position
+// for audio that is not playing. The second selection and the query are
+// queued from inside the first player's creation, and both senders are
+// dropped before the loop drains them, so it ends after answering.
+#[test]
+fn a_failed_preview_leaves_no_position_to_report() {
+    let (sender, receiver) = mpsc::channel();
+    let (reply, replies) = mpsc::channel();
+    let queued = Arc::new(Mutex::new(Some((sender.clone(), reply))));
+    let create_player = move || {
+        let player = RecordingPlayer::default();
+        if let Some((sender, reply)) = queued.lock().unwrap().take() {
+            sender.send(Command::Play("second".to_string())).unwrap();
+            sender.send(Command::Position(reply)).unwrap();
+        }
+        player
+    };
+    let fetches = Arc::new(AtomicUsize::new(0));
+    let fetch = move |_url: &str| {
+        if fetches.fetch_add(1, Ordering::SeqCst) == 0 {
+            Ok(())
+        } else {
+            Err(AppleMusicError::new("the preview download failed"))
+        }
+    };
+
+    sender.send(Command::Play("first".to_string())).unwrap();
+    drop(sender);
+    serve_commands(receiver, create_player, fetch);
+
+    assert_eq!(
+        replies.recv().unwrap(),
+        None,
+        "a failed preview must leave no position to report"
+    );
 }
 
 // A balance set while stopped must carry to the player a later Play

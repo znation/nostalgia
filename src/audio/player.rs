@@ -55,9 +55,9 @@ pub(super) enum Command {
     SetBalance(f32),
     /// Seek the current player by this many seconds (negative moves backward).
     SeekBy(i64),
-    /// Report the current player's position on `reply` (zero when none is
+    /// Report the current player's position on `reply` (`None` when none is
     /// loaded).
-    Position(Sender<Duration>),
+    Position(Sender<Option<Duration>>),
     /// Set the equalizer curve applied to the output.
     SetEqualizer(EqSnapshot),
 }
@@ -281,7 +281,7 @@ impl AudioOutput for RodioOutput {
         if self.send(Command::Position(reply)).is_err() {
             return None;
         }
-        replies.recv_timeout(POSITION_QUERY_TIMEOUT).ok()
+        replies.recv_timeout(POSITION_QUERY_TIMEOUT).ok().flatten()
     }
 
     fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
@@ -454,10 +454,7 @@ pub(super) fn serve_commands<P, D>(
                 }
             }
             Command::Position(reply) => {
-                let position = player
-                    .as_ref()
-                    .map_or(Duration::ZERO, WorkerPlayer::position);
-                let _ = reply.send(position);
+                let _ = reply.send(player.as_ref().map(WorkerPlayer::position));
             }
             Command::SetEqualizer(new_equalizer) => {
                 settings.equalizer = new_equalizer;

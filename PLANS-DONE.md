@@ -5,6 +5,31 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
+### Add the playback-position readout to the Now Playing bar (Playback position, part 2/3: planned 2026-10-21 by the plan role, requires part 1/2 landed, done 2026-10-21)
+
+**Goal.** The audio seam answers a position only while a preview is loaded: `AudioOutput::position` returns `Some(position)` when a player is installed (including `Some(Duration::ZERO)` at the start of a preview) and `None` when no player is loaded or the backend cannot answer. This is the first half of the former part 2/2, split so the seam contract and its Pause/seek behavior are reviewed apart from the Now Playing readout that consumes them. The silent backend keeps the trait's default `None`, so a machine with no audio device shows no elapsed value rather than a frozen `0:00`.
+
+This revision leaves the seam approach as it stands, since no recorded review objection names the code path, and fixes the scope wording that produced a commit body contradicting its own diff: finishing a plan also moves its entry from `PLANS.md` to `PLANS-DONE.md`, so that move is part of this change and must be reported as such rather than denied in RISK or VERIFIED.
+
+**Approach.**
+
+- `src/audio.rs`: revise `AudioOutput::position`'s contract and doc to "`Some` while a player is loaded (including `Duration::ZERO` at its start), `None` when no player is loaded or the backend cannot answer"; the default stays `None`. `SilentOutput` needs no method because the default already answers `None`.
+- `src/audio/player.rs`: change `Command::Position` to carry `Sender<Option<Duration>>` and update its doc to say `None` when no player is loaded. In `serve_commands`, reply with `player.as_ref().map(WorkerPlayer::position)`. In `RodioOutput::position`, return `replies.recv_timeout(POSITION_QUERY_TIMEOUT).ok().flatten()`, so a closed worker or timed-out reply is `None`.
+- `src/audio/tests.rs`: update `rodio_output_asks_the_worker_for_its_position` to send `Some(Duration::from_secs(3))`; make `position_query_returns_the_loaded_players_position` expect `Some(Duration::from_secs(42))`; rename `position_query_returns_zero_when_nothing_is_loaded` to `position_query_reports_none_when_nothing_is_loaded`, expect `None`, and update its comment from "answers zero" to "reports `None`". The timeout and closed-worker tests already expect `None`.
+- `src/audio/tests.rs`: make `RecordingPlayer::seek_by` record the offset and make its `position` account for the recorded offsets via `seek_target(Duration::from_secs(42), ...)`, so the fake models a player whose clock moves on a seek while its no-seek position stays `42s` for the existing test. Add `a_seek_is_reflected_by_the_next_position_query` (Play, `SeekBy(5)`, `Position` replies `Some(47)`) and `a_pause_keeps_the_loaded_player_reporting_its_position` (Play, `Pause`, `Position` still answers `Some(42)`, the player was paused, and it was not stopped). The pause test pins the worker's half of the guarantee: Pause reaches the player and the worker keeps it installed, so the next poll reads the player's own frozen clock; the fake has no advancing clock, so it cannot itself prove rodio's clock stops.
+- `src/audio/tests.rs`: add `a_failed_preview_leaves_no_position_to_report`. Its `create_player` factory, built like `recording_players` with a `Mutex<Option<...>>` so it queues only on its first call and stays `Fn`, sends `Command::Play("second")` and then `Command::Position(reply)` through the test's sender; its `fetch` succeeds for `"first"` and fails for `"second"`. The factory drops its sender clone and the test drops its own before `serve_commands`, so the loop ends after the query. The failed second `Play` drops the player, so `replies.recv()` is `None`.
+- Completion: move this entry from `PLANS.md` `## Planned` to `PLANS-DONE.md` `## Done` under its part 2/3 heading with a `done <landing date>` stamp, leaving part 3/3 in `## Planned`.
+
+**Files touched.** `src/audio.rs`, `src/audio/player.rs`, `src/audio/tests.rs`, plus `PLANS.md` and `PLANS-DONE.md` (this entry moved to Done).
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- A loaded player makes `Command::Position` answer `Some(player.position())`; no player answers `None`; a closed worker and a timed-out reply answer `None`; the silent backend answers `None`.
+- `a_seek_is_reflected_by_the_next_position_query` shows the fake player's reported position moving by the seek (`42s` to `47s`), and `a_pause_keeps_the_loaded_player_reporting_its_position` shows the paused player still installed and reporting its position.
+- A failed asynchronous preview start leaves no player, so the following position query answers `None`.
+- The implementation changes exactly `src/audio.rs`, `src/audio/player.rs`, `src/audio/tests.rs`, `PLANS.md`, and `PLANS-DONE.md` (this entry moved to `## Done`), and no other file. The commit body's SUMMARY, RISK, and VERIFIED name all five files and agree with `git diff --stat`; none claims `PLANS-DONE.md` is untouched.
+
 ### Scroll an overlong Now Playing title across the LCD (planned 2026-10-21 by the plan role, done 2026-10-21)
 
 **Goal.** The brief's mockup says "The song title scrolls across the display": when the Now Playing bar's combined `artist - title` line is wider than the LCD, it scrolls one character per tick and wraps through a short gap, so the full track name is readable instead of running under the time readout. A line that fits stays still and keeps the existing zero-allocation rendering. This is independent of the playback-position series: it reads only the label and artist the bar already resolves, and touches neither the audio seam nor the time readout.
