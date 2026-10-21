@@ -690,6 +690,7 @@ async fn play_track_rejects_a_preview_url_that_is_not_a_public_https_url() {
         "https://2130706433/preview.m4a",
         "https://127.1/preview.m4a",
         "https://0x7f000001/preview.m4a",
+        "https://0X7F000001/preview.m4a",
         "https://0x7f.0.0.1/preview.m4a",
         "https://0177.0.0.1/preview.m4a",
         "file:///etc/passwd",
@@ -1672,6 +1673,59 @@ fn ip_is_internal_refuses_every_internal_range_and_allows_public_addresses() {
             ip_is_internal(ip),
             expected,
             "ip_is_internal({text}) should be {expected}"
+        );
+    }
+}
+
+// `preview_url_problem` lowercases the host before it calls
+// `is_numeric_host_form`, so the helper never sees the uppercase `0X` prefix
+// in production; that case below pins the helper's documented spelling as a
+// defensive contract, not a separate guard on the URL path. The URL-level
+// rejection test above exercises several legacy forms end-to-end, including
+// the uppercase spelling. This table pins each parser branch directly,
+// including the shapes that must stay names, so a regression in a component
+// spelling fails here rather than only at a real fetch.
+#[test]
+fn is_numeric_host_form_recognizes_legacy_spellings_and_leaves_names_alone() {
+    for host in [
+        // One 32-bit decimal, hex (either prefix case), or octal component.
+        "2130706433",
+        "0x7f000001",
+        "0X7F000001",
+        "017700000001",
+        // Two, three, and four dotted components, decimal and mixed radix.
+        "127.1",
+        "127.0.1",
+        "1.2.3.4",
+        "0x7f.0.0.1",
+        "0177.0.0.1",
+    ] {
+        assert!(
+            is_numeric_host_form(host),
+            "{host:?} is a numeric host form"
+        );
+    }
+
+    for host in [
+        // Ordinary DNS names, including the preview CDN's.
+        "localhost",
+        "example.com",
+        "audio-ssl.itunes.apple.com",
+        // Shapes that start like a numeric form but are not one: an empty
+        // `0x` body, a non-hex digit, an empty component, five components,
+        // invalid octal, a letter, a sign, and the empty host.
+        "0x",
+        "0x7g",
+        "1..2",
+        "1.2.3.4.5",
+        "09",
+        "123abc",
+        "-1",
+        "",
+    ] {
+        assert!(
+            !is_numeric_host_form(host),
+            "{host:?} is not a numeric host form"
         );
     }
 }
