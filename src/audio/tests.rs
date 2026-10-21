@@ -40,6 +40,21 @@ fn silent_output_reports_success_for_every_command() {
     assert!(output.set_equalizer(EqSnapshot::default()).is_ok());
 }
 
+// The silent fallback cannot report a position: the trait's default answers
+// `None`, which the Now Playing readout treats as "no elapsed value" and
+// falls back to the plain track length. `Some(Duration::ZERO)` would instead
+// show a frozen `0:00` beside the total on a machine with no audio device.
+// Pin both the direct `SilentOutput` and the fallback object
+// `audio_with_fallback` returns, since that is what the service holds when
+// the device open fails.
+#[test]
+fn silent_output_reports_no_playback_position() {
+    assert_eq!(SilentOutput.position(), None);
+
+    let output = audio_with_fallback(|| Err(AppleMusicError::new("no device")));
+    assert_eq!(output.position(), None);
+}
+
 #[test]
 fn seek_target_moves_forward_and_backward() {
     assert_eq!(
