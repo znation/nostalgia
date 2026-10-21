@@ -18,7 +18,11 @@ use iced::{
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::ui::{CurrentView, Message, style, theme};
 
-use super::{labeled_button, now_playing::format_track_time, spacer};
+use super::{
+    labeled_button,
+    now_playing::{format_minutes_seconds, format_track_time},
+    spacer,
+};
 
 /// The placeholder a browse view shows when its list has no rows: one wording
 /// per browse level, so an empty Artists, Albums, Songs, All Songs, All
@@ -305,7 +309,8 @@ fn list_with_count<'a>(
 
 /// The count-and-time footer beneath a loaded song list: `"<count> song(s) -
 /// <total>"`, with the singular `song` for a count of one and the total from
-/// [`format_list_time`]. Every entry counts, including one whose
+/// [`format_minutes_seconds`] (whose zero total is a real `"0:00"`, not the
+/// per-track `"--:--"` placeholder). Every entry counts, including one whose
 /// `duration_ms` is `0`; the durations are summed with `u64::saturating_add`
 /// so a large list cannot overflow the total. Pure so the wording and
 /// arithmetic are testable without an iced renderer.
@@ -314,17 +319,12 @@ pub(super) fn song_list_summary(songs: &[Song]) -> String {
         .iter()
         .fold(0u64, |total, song| total.saturating_add(song.duration_ms));
     let noun = if songs.len() == 1 { "song" } else { "songs" };
-    format!("{} {} - {}", songs.len(), noun, format_list_time(total_ms))
-}
-
-/// Formats a song list's total playing time as zero-padded `m:ss`, with
-/// unbounded minutes, so a library past an hour reads as `61:05` rather than
-/// rolling over. Unlike [`format_track_time`], `0` is a valid total (every
-/// duration unknown) and formats as `"0:00"`, not the per-track `"--:--"`
-/// placeholder.
-fn format_list_time(total_ms: u64) -> String {
-    let total_seconds = total_ms / 1000;
-    format!("{}:{:02}", total_seconds / 60, total_seconds % 60)
+    format!(
+        "{} {} - {}",
+        songs.len(),
+        noun,
+        format_minutes_seconds(total_ms)
+    )
 }
 
 /// Builds a song list: the shared body of [`view_songs`] and

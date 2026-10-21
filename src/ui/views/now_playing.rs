@@ -82,17 +82,26 @@ pub fn now_playing_time<'a>(
         .unwrap_or(Cow::Borrowed("--:--"))
 }
 
+/// Formats `duration_ms` as zero-padded `m:ss`, with unbounded minutes so an
+/// hour or more reads as `60:00`/`61:05` rather than rolling over. This is the
+/// shared core of [`format_track_time`], whose zero case is the per-track
+/// `"--:--"` placeholder, and the browse song list's total-playing-time
+/// footer, whose zero total is a real `"0:00"`.
+pub(super) fn format_minutes_seconds(duration_ms: u64) -> String {
+    let total_seconds = duration_ms / 1000;
+    format!("{}:{:02}", total_seconds / 60, total_seconds % 60)
+}
+
 /// The Now Playing bar's length readout for `duration_ms`: `"--:--"` when the
-/// source supplied no duration (`0`), else zero-padded `m:ss` (so a track
-/// under a minute reads `0:45` and one over an hour keeps counting minutes
-/// rather than rolling into hours). Pure so the formatting is testable without
-/// an iced renderer.
+/// source supplied no duration (`0`), else the shared
+/// [`format_minutes_seconds`] form (so a track under a minute reads `0:45` and
+/// one over an hour keeps counting minutes rather than rolling into hours).
+/// Pure so the formatting is testable without an iced renderer.
 pub fn format_track_time(duration_ms: u64) -> String {
     if duration_ms == 0 {
         return "--:--".to_string();
     }
-    let total_seconds = duration_ms / 1000;
-    format!("{}:{:02}", total_seconds / 60, total_seconds % 60)
+    format_minutes_seconds(duration_ms)
 }
 
 /// The Now Playing bar: the "Now Playing:" caption followed by the current
