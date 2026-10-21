@@ -120,18 +120,17 @@ pub const BROWSE_LIST_ID: &str = "nostalgia-browse-list";
 /// which distinguishes a fetch failure, a buffer no reply has populated yet
 /// (still loading), and one that loaded empty and names the list.
 ///
-/// The rows borrow their titles from the list the caller passes in rather
-/// than owning clones: this builder runs on every view refresh, so the
-/// borrowed title avoids a `String` allocation per row per frame. The
-/// secondary label is a [`Cow`] because a song row's label is the track's
-/// formatted length, borrowed from the loaded list's label cache in the
-/// common case, while the artist, album, and playlist rows keep their static
-/// hints borrowed. The row prefix is one owned `String` per row per refresh,
+/// The primary title and the secondary label are both [`Cow`]s: a song row's
+/// title and length are borrowed from the loaded list's caches in the common
+/// case and only composed on the fallback path, while the artist, album, and
+/// playlist rows borrow their names and static hints. This builder runs on
+/// every view refresh, so borrowing avoids a `String` allocation per row per
+/// frame. The row prefix is one owned `String` per row per refresh,
 /// since it depends on the row's position; it is not cached in `BrowseList`
 /// because that would need invalidating on every store for no correctness
 /// gain.
 fn scrollable_list<'a>(
-    items: impl IntoIterator<Item = (&'a str, Cow<'a, str>, Message, bool)>,
+    items: impl IntoIterator<Item = (Cow<'a, str>, Cow<'a, str>, Message, bool)>,
     empty_label: &'a str,
 ) -> Element<'a, Message> {
     let mut column = Column::new().padding(20);
@@ -182,9 +181,9 @@ pub(super) fn artist_row<'a>(
     epoch: u64,
     index: usize,
     artist: &'a Artist,
-) -> (&'a str, Cow<'a, str>, Message, bool) {
+) -> (Cow<'a, str>, Cow<'a, str>, Message, bool) {
     (
-        artist.name.as_str(),
+        Cow::Borrowed(artist.name.as_str()),
         Cow::Borrowed("View Albums"),
         Message::ArtistSelected { epoch, index },
         false,
@@ -201,9 +200,9 @@ pub(super) fn album_row<'a>(
     epoch: u64,
     index: usize,
     album: &'a Album,
-) -> (&'a str, Cow<'a, str>, Message, bool) {
+) -> (Cow<'a, str>, Cow<'a, str>, Message, bool) {
     (
-        album.title.as_str(),
+        Cow::Borrowed(album.title.as_str()),
         Cow::Borrowed("View Songs"),
         Message::AlbumSelected { epoch, index },
         false,
@@ -220,41 +219,49 @@ pub(super) fn playlist_row<'a>(
     epoch: u64,
     index: usize,
     playlist: &'a Playlist,
-) -> (&'a str, Cow<'a, str>, Message, bool) {
+) -> (Cow<'a, str>, Cow<'a, str>, Message, bool) {
     (
-        playlist.name.as_str(),
+        Cow::Borrowed(playlist.name.as_str()),
         Cow::Borrowed("View Songs"),
         Message::PlaylistSelected { epoch, index },
         false,
     )
 }
 
-/// The browse row a song becomes: its title, the track's formatted length
-/// ([`format_track_time`]) as the secondary label, the message emitted when
-/// it is pressed, and whether it is the currently playing track (true only
-/// when `current_track` names this song). `epoch` and `index` are the
-/// loaded-list epoch and the song's position in that list, carried so
-/// building a row never clones the song's id (see [`artist_row`]). The flag
-/// feeds `scrollable_list`'s `▶` + highlight marker, so the song list reads
-/// as a playlist. `cached_label` is the length label the loaded list stored
-/// for this row (see `BrowseList::store_with_labels`), borrowed so a refresh
-/// of a large library does not format and allocate a fresh `String` per
-/// track; `None` — a list stored without labels, as a test may do — falls
-/// back to formatting the duration for this row so the rendered label is
-/// unchanged. The title always borrows.
+/// The browse row a song becomes: its display title (`<artist> - <title>`,
+/// or the title alone when the artist is empty; see [`Song::display_title`]),
+/// the track's formatted length ([`format_track_time`]) as the secondary
+/// label, the message emitted when it is pressed, and whether it is the
+/// currently playing track (true only when `current_track` names this song).
+/// `epoch` and `index` are the loaded-list epoch and the song's position in
+/// that list, carried so building a row never clones the song's id (see
+/// [`artist_row`]). The flag feeds `scrollable_list`'s `▶` + highlight
+/// marker, so the song list reads as a playlist.
+///
+/// `cached_title` and `cached_label` are the title and length the loaded list
+/// stored for this row (see `BrowseList::store_with_row_text`), borrowed so a
+/// refresh of a large library does not compose and allocate a fresh `String`
+/// per track. `None` — a list stored without caches, as a test may do — falls
+/// back to composing the title and formatting the duration for this row, so
+/// the rendered row is unchanged.
 pub(super) fn song_row<'a>(
     epoch: u64,
     index: usize,
     song: &'a Song,
+    cached_title: Option<&'a str>,
     cached_label: Option<&'a str>,
     current_track: Option<&str>,
-) -> (&'a str, Cow<'a, str>, Message, bool) {
+) -> (Cow<'a, str>, Cow<'a, str>, Message, bool) {
+    let title = match cached_title {
+        Some(title) => Cow::Borrowed(title),
+        None => song.display_title(),
+    };
     let label = match cached_label {
         Some(label) => Cow::Borrowed(label),
         None => Cow::Owned(format_track_time(song.duration_ms)),
     };
     (
-        song.title.as_str(),
+        title,
         label,
         Message::TrackSelected { epoch, index },
         Some(song.id.as_str()) == current_track,
@@ -335,8 +342,8 @@ pub(super) fn song_list_summary(songs: &[Song]) -> String {
 
 /// Builds a song list: the shared body of [`view_songs`] and
 /// [`view_all_songs`], mapping each song to a [`song_row`] by its position in
-/// `songs` and pairing it with the cached length label at the same index (see
-/// [`song_row`]). `placeholder` is the caller's [`browse_placeholder`]
+/// `songs` and pairing it with the cached title and length at the same index
+/// (see [`song_row`]). `placeholder` is the caller's [`browse_placeholder`]
 /// wording for an empty list; it differs between the two callers because only
 /// a search reads as "no matches". A non-empty list also appends the
 /// count-and-time footer ([`song_list_summary`]) beneath its rows; an empty
@@ -344,6 +351,7 @@ pub(super) fn song_list_summary(songs: &[Song]) -> String {
 /// placeholder stays alone.
 fn song_list<'a>(
     songs: &'a [Song],
+    titles: &'a [String],
     labels: &'a [String],
     epoch: u64,
     current_track: Option<&str>,
@@ -355,6 +363,7 @@ fn song_list<'a>(
                 epoch,
                 index,
                 song,
+                titles.get(index).map(String::as_str),
                 labels.get(index).map(String::as_str),
                 current_track,
             )
@@ -419,15 +428,22 @@ pub fn view_albums<'a>(
 /// The Songs browse view: one row per song, in the order given, each emitting
 /// [`Message::TrackSelected`] with the song's index in the list and the
 /// list's `epoch`; the row whose id is `current_track` is marked as playing.
-/// `labels` holds the formatted lengths the loaded list cached in the same
-/// order as `songs` (see `BrowseList::store_with_labels`); an index without a
-/// cached label falls back to formatting that song's duration. `loading`,
+/// `titles` and `labels` hold the display titles and formatted lengths the
+/// loaded list cached in the same order as `songs` (see
+/// `BrowseList::store_with_row_text`); an index without a cached title or
+/// label falls back to composing that song's title or formatting its duration.
+/// `loading`,
 /// `error`, and `search_active` select the placeholder wording (see
 /// [`browse_placeholder`]); a fetch failure wins, and a loaded-empty search
 /// reads as "no matches" rather than as an empty album. Built by
 /// [`song_list`] from the [`song_row`] mapping.
+// `titles` and `labels` join the existing per-level view state; grouping them
+// into a wrapper type would add a concept without making the call site
+// clearer.
+#[allow(clippy::too_many_arguments)]
 pub fn view_songs<'a>(
     songs: &'a [Song],
+    titles: &'a [String],
     labels: &'a [String],
     epoch: u64,
     loading: bool,
@@ -437,6 +453,7 @@ pub fn view_songs<'a>(
 ) -> Element<'a, Message> {
     song_list(
         songs,
+        titles,
         labels,
         epoch,
         current_track,
@@ -447,12 +464,14 @@ pub fn view_songs<'a>(
 /// The All Songs browse view: one row per song in the whole library, in the
 /// order given, each emitting [`Message::TrackSelected`] with the song's
 /// index in the list and the list's `epoch`; the row whose id is
-/// `current_track` is marked as playing. `labels` is the same cached
-/// formatted-length slice [`view_songs`] takes. It mirrors [`view_songs`] but
+/// `current_track` is marked as playing. `titles` and `labels` are the same
+/// cached display-title and formatted-length slices [`view_songs`] takes. It
+/// mirrors [`view_songs`] but
 /// never shows the search wording, because the flat list is not a search's
 /// result. Built by [`song_list`] from the [`song_row`] mapping.
 pub fn view_all_songs<'a>(
     songs: &'a [Song],
+    titles: &'a [String],
     labels: &'a [String],
     epoch: u64,
     loading: bool,
@@ -461,6 +480,7 @@ pub fn view_all_songs<'a>(
 ) -> Element<'a, Message> {
     song_list(
         songs,
+        titles,
         labels,
         epoch,
         current_track,

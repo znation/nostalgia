@@ -2658,10 +2658,19 @@ fn all_songs_loaded_stores_the_flat_list() {
         |player| player.all_songs.loading,
     );
 
-    // The flat list caches each row's formatted length when it is stored, in
-    // row order, so a view refresh borrows the labels instead of formatting
-    // every duration again (see `BrowseList::store_with_labels`).
+    // The flat list caches each row's display title and formatted length when
+    // it is stored, in row order, so a view refresh borrows them instead of
+    // re-joining every artist and title and formatting every duration again
+    // (see `BrowseList::store_with_row_text`).
     let _ = update(&mut player, Message::AllSongsLoaded(stepping_songs()));
+    assert_eq!(
+        player.all_songs.titles,
+        [
+            "The Sample Band - One",
+            "The Sample Band - Two",
+            "The Sample Band - Three"
+        ]
+    );
     assert_eq!(player.all_songs.labels, ["3:30", "2:05", "1:35"]);
 }
 
@@ -2995,25 +3004,35 @@ fn songs_loaded_replaces_the_previous_albums_songs() {
     assert_ids(&player.songs.items, |song| song.id.as_str(), &["song-4"]);
 }
 
-// The songs list caches each row's formatted length when it is stored, so a
-// view refresh of a large library borrows the labels instead of formatting
-// every duration again. Pin that the cache is built in row order and replaced
-// with the rows, and dropped when a navigation clears the list, so a refresh
-// can never show a stale length beside a new row.
+// The songs list caches each row's display title and formatted length when it
+// is stored, so a view refresh of a large library borrows them instead of
+// recomposing every row. Pin that both caches are built in row order and
+// replaced with the rows, and dropped when a navigation clears the list, so a
+// refresh can never show a stale title or length beside a new row.
 #[test]
-fn songs_loaded_caches_each_rows_formatted_length() {
+fn songs_loaded_caches_each_rows_display_title_and_length() {
     let (mut player, _state) = test_player();
     let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    assert_eq!(
+        player.songs.titles,
+        [
+            "The Sample Band - One",
+            "The Sample Band - Two",
+            "The Sample Band - Three"
+        ]
+    );
     assert_eq!(player.songs.labels, ["3:30", "2:05", "1:35"]);
 
     // Navigate into an album: the fetch starts by clearing the previous
-    // level's rows, and the labels must be dropped with them.
+    // level's rows, and both caches must be dropped with them.
     player.albums.items = vec![sample_album()];
     let _ = update(&mut player, Message::AlbumSelected { epoch: 0, index: 0 });
+    assert!(player.songs.titles.is_empty());
     assert!(player.songs.labels.is_empty());
 
-    // The next load caches the new list's labels only.
+    // The next load caches the new list's title and length only.
     let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
+    assert_eq!(player.songs.titles, ["The Sample Band - B-side"]);
     assert_eq!(player.songs.labels, ["1:35"]);
 }
 

@@ -2,17 +2,18 @@
 //! plus the state that guards them.
 //!
 //! The `WinampPlayer` holds one `BrowseList<T>` per level. The rows, the
-//! cached row labels, the epoch that makes an index-carrying selection message
+//! cached row titles and labels, the epoch that makes an index-carrying selection message
 //! safe, the loading flag the view reads for its "Loading…" placeholder, the
 //! failure report it shows instead, and the request counter that drops a
 //! superseded reply all live together here, so an `update` arm names the
-//! transition (`store`, `store_with_labels`, `clear`, `fail`, `begin_fetch`)
+//! transition (`store`, `store_with_row_text`, `clear`, `fail`, `begin_fetch`)
 //! instead of spelling out the parallel-field bookkeeping at each site.
 //!
-//! The `update` arms go through `store`/`store_with_labels`/`clear`/`fail`: the
+//! The `update` arms go through `store`/`store_with_row_text`/`clear`/`fail`: the
 //! Artists, Albums, All Albums, and Playlists `*Loaded` arms call `store`, the
-//! Songs and All Songs `*Loaded` arms call `store_with_labels` so each track's
-//! length is formatted once per load, every `*LoadFailed` arm calls `fail`, and
+//! Songs and All Songs `*Loaded` arms call `store_with_row_text` so each track's
+//! display title and formatted length are composed once per load, every
+//! `*LoadFailed` arm calls `fail`, and
 //! the navigation arms, `LoadArtists`, the flat-list/Playlists buttons, and
 //! `SearchSubmitted` start their fetch through the event loop's `fetch_level`,
 //! which calls `clear` before `begin_fetch`. `select` resolves all four
@@ -30,12 +31,20 @@ pub(super) struct BrowseList<T> {
     /// The rows the view renders. Empty while a fetch for this level is in
     /// flight or after a failure.
     pub(super) items: Vec<T>,
+    /// The primary title each row renders, cached when the rows are stored
+    /// (see [`Self::store_with_row_text`]) so a view refresh does not re-join
+    /// every artist and title. Only the song lists populate it; [`Self::store`]
+    /// leaves it empty, and the row builder falls back to composing the title
+    /// in that case. Every transition that changes `items` keeps the two in
+    /// lockstep: `store` clears the titles, `store_with_row_text` rebuilds
+    /// them beside the rows, and `clear`/`fail` drop them with the rows.
+    pub(super) titles: Vec<String>,
     /// The secondary label each row renders, cached when the rows are stored
-    /// (see [`Self::store_with_labels`]) so a view refresh does not reformat
+    /// (see [`Self::store_with_row_text`]) so a view refresh does not reformat
     /// every row. Only the song lists populate it; [`Self::store`] leaves it
     /// empty, and the row builder falls back to formatting in that case. Every
     /// transition that changes `items` keeps the two in lockstep: `store`
-    /// clears the labels, `store_with_labels` rebuilds them beside the rows,
+    /// clears the labels, `store_with_row_text` rebuilds them beside the rows,
     /// and `clear`/`fail` drop them with the rows.
     pub(super) labels: Vec<String>,
     /// Counts list replacements, bumped by [`Self::store`] whenever a fetched
@@ -71,6 +80,7 @@ impl<T> BrowseList<T> {
     pub(super) fn new(loading: bool) -> Self {
         Self {
             items: Vec::new(),
+            titles: Vec::new(),
             labels: Vec::new(),
             epoch: 0,
             loading,
@@ -122,25 +132,33 @@ impl<T> BrowseList<T> {
     /// the epoch, so the replacing list's epoch is bumped past the cleared
     /// one's and differs from it.
     pub(super) fn store(&mut self, items: Vec<T>) {
+        self.titles.clear();
         self.labels.clear();
         self.replace_rows(items);
     }
 
-    /// Replaces the rows like [`Self::store`], and caches one secondary label
-    /// per row by running `label` once per item. The song lists use this so
-    /// each track's formatted length is computed when the list is loaded —
-    /// once per fetch — instead of once per row on every view refresh, which
-    /// for the whole-library list is a format allocation per track per
-    /// refresh. `label` sees the same items the rows will render, so the
-    /// labels stay index-aligned with `items`.
-    pub(super) fn store_with_labels(&mut self, items: Vec<T>, label: impl Fn(&T) -> String) {
+    /// Replaces the rows like [`Self::store`], and caches one primary title
+    /// and one secondary label per row by running `title` and `label` once per
+    /// item, in row order. The song lists use this so each track's display
+    /// title and formatted length are composed when the list is loaded — once
+    /// per fetch — instead of once per row on every view refresh, which for
+    /// the whole-library list is an allocation per track per refresh. Both
+    /// closures see the same items the rows will render, so the caches stay
+    /// index-aligned with `items`.
+    pub(super) fn store_with_row_text(
+        &mut self,
+        items: Vec<T>,
+        title: impl Fn(&T) -> String,
+        label: impl Fn(&T) -> String,
+    ) {
+        self.titles = items.iter().map(title).collect();
         self.labels = items.iter().map(label).collect();
         self.replace_rows(items);
     }
 
     /// Replaces `items` and bumps the list state that a replacement changes,
-    /// leaving the cached labels to the caller: [`Self::store`] clears them
-    /// and [`Self::store_with_labels`] rebuilds them.
+    /// leaving the cached row text to the caller: [`Self::store`] clears both
+    /// caches and [`Self::store_with_row_text`] rebuilds them.
     fn replace_rows(&mut self, items: Vec<T>) {
         self.items = items;
         self.epoch = self.epoch.wrapping_add(1);
@@ -159,6 +177,7 @@ impl<T> BrowseList<T> {
     /// shows "Loading…" rather than the stale error.
     pub(super) fn clear(&mut self) {
         self.items.clear();
+        self.titles.clear();
         self.labels.clear();
         self.loading = true;
         self.error = None;
@@ -170,6 +189,7 @@ impl<T> BrowseList<T> {
     /// view can show it (see `views::browse::browse_placeholder`).
     pub(super) fn fail(&mut self, report: String) {
         self.items.clear();
+        self.titles.clear();
         self.labels.clear();
         self.loading = false;
         self.error = Some(report);

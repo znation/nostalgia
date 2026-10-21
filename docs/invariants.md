@@ -61,7 +61,7 @@ that rendered it is still current: a press that outlived its list is a no-op.
   navigation issues a newer request between the executor check and the store.
 - `BrowseList::select` rejects a selection whose epoch no longer matches the list's epoch (the
   list was replaced after the row rendered) or whose index no longer names a row.
-  `store`/`store_with_labels` bump the epoch on replacement; `clear` deliberately leaves it alone,
+  `store`/`store_with_row_text` bump the epoch on replacement; `clear` deliberately leaves it alone,
   so the replacing list's epoch still differs from the cleared one's. Selection messages carry the
   epoch of the list that rendered the pressed row.
 

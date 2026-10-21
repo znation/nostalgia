@@ -922,18 +922,23 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::SongsLoaded(songs) => {
-            // Cache each row's formatted length once, when the list loads, so
-            // a view refresh borrows the labels instead of formatting every
-            // row's duration again (see `BrowseList::store_with_labels`).
-            player
-                .songs
-                .store_with_labels(songs, |song| views::format_track_time(song.duration_ms));
+            // Cache each row's display title and formatted length once, when
+            // the list loads, so a view refresh borrows them instead of
+            // re-joining every artist and title and formatting every row's
+            // duration again (see `BrowseList::store_with_row_text`).
+            player.songs.store_with_row_text(
+                songs,
+                |song| song.display_title().into_owned(),
+                |song| views::format_track_time(song.duration_ms),
+            );
             Task::none()
         }
         Message::AllSongsLoaded(songs) => {
-            player
-                .all_songs
-                .store_with_labels(songs, |song| views::format_track_time(song.duration_ms));
+            player.all_songs.store_with_row_text(
+                songs,
+                |song| song.display_title().into_owned(),
+                |song| views::format_track_time(song.duration_ms),
+            );
             Task::none()
         }
         Message::AllAlbumsLoaded(albums) => {
@@ -1172,6 +1177,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
             let state = player.state.blocking_lock();
             views::view_songs(
                 &player.songs.items,
+                &player.songs.titles,
                 &player.songs.labels,
                 player.songs.epoch,
                 player.songs.loading,
@@ -1186,6 +1192,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
             let state = player.state.blocking_lock();
             views::view_all_songs(
                 &player.all_songs.items,
+                &player.all_songs.titles,
                 &player.all_songs.labels,
                 player.all_songs.epoch,
                 player.all_songs.loading,

@@ -7,6 +7,8 @@
 //! here, beside the shared `state` module, lets the service answer from either
 //! the REST library or the sample stub without touching the model or the UI.
 
+use std::borrow::Cow;
+
 use serde::{Deserialize, Serialize};
 
 /// An artist in the user's library.
@@ -61,6 +63,21 @@ pub struct Song {
     /// deserializable, as an older or partial response may omit it.
     #[serde(default)]
     pub preview_url: Option<String>,
+}
+
+impl Song {
+    /// The text a browse row renders for this song: `<artist> - <title>` when
+    /// the source supplied an artist, and just the title when
+    /// [`Self::artist`] is empty. Presentation-only; the serialized model is
+    /// unchanged. The title is borrowed in the artist-less case so a view
+    /// refresh of a large library does not allocate for it.
+    pub fn display_title(&self) -> Cow<'_, str> {
+        if self.artist.is_empty() {
+            Cow::Borrowed(&self.title)
+        } else {
+            Cow::Owned(format!("{} - {}", self.artist, self.title))
+        }
+    }
 }
 
 #[cfg(test)]
@@ -252,6 +269,30 @@ mod tests {
         let parsed: Song = serde_json::from_value(song_required_fields_payload())
             .expect("a Song without preview_url must deserialize");
         assert_eq!(parsed.preview_url, None);
+    }
+
+    #[test]
+    fn display_title_joins_the_artist_and_title() {
+        // The sample song carries both fields, so the row text reads like the
+        // mockup's playlist rows rather than the bare title it used to show.
+        assert_eq!(sample_song().display_title(), "The Sample Band - Opening");
+        assert!(matches!(
+            sample_song().display_title(),
+            std::borrow::Cow::Owned(_)
+        ));
+    }
+
+    #[test]
+    fn display_title_borrows_the_title_when_the_artist_is_empty() {
+        // An artist-less song must not render a dangling `" - "` prefix; it
+        // renders its title alone, borrowed rather than reallocated.
+        let mut song = sample_song();
+        song.artist = String::new();
+        assert_eq!(song.display_title(), "Opening");
+        assert!(matches!(
+            song.display_title(),
+            std::borrow::Cow::Borrowed(_)
+        ));
     }
 
     #[test]

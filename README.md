@@ -48,7 +48,8 @@ Build and run with `cargo run`; the player opens an iced window showing the Now 
 playing track's artist and title, with its length at the right), the Play/Pause/Stop/Previous/Next
 controls, Repeat and Shuffle toggles, volume and balance sliders, an equalizer panel (an EQ on/off
 button, a preset pick list, a preamp slider, and ten band sliders), and a browse list whose song
-rows show each track's length, with each song list showing its song count and total playing time
+rows read `artist - title` (or the title alone when the source supplies no artist) and show each
+track's length, with each song list showing its song count and total playing time
 beneath the rows and artist, album, and playlist lists showing their item count beneath theirs.
 Every browse list numbers its rows from 1 like a Winamp playlist, with the playing song marked by
 `▶` before its number. A `Search library` box above the browse list searches the library when you
