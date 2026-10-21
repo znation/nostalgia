@@ -1056,9 +1056,33 @@ mod tests {
         );
     }
 
+    // A response whose headers arrive but whose body cannot be read whole (a
+    // dropped connection mid-download) must be reported as a read failure,
+    // before its partial bytes reach the decoder. This is the preview
+    // downloader's read-error arm (the REST transport has the twin test);
+    // without it a truncated body would surface as a decode failure, naming
+    // the wrong cause, or a partial decode.
+    #[test]
+    fn a_truncated_preview_body_reports_a_read_error() {
+        // Declare 100 bytes but send only four, then close the connection.
+        let address = serve_one_response(
+            "HTTP/1.1 200 OK\r\nContent-Type: audio/mp4\r\nContent-Length: 100\r\nConnection: close\r\n\r\nJUNK",
+        );
+        let agent = agent_with_timeout(Duration::from_secs(5));
+        let url = format!("http://{address}/truncated.m4a");
+
+        let error = download_and_decode(&agent, &url)
+            .err()
+            .expect("a truncated preview must not reach the decoder");
+        assert!(
+            error.to_string().starts_with("reading the preview failed:"),
+            "unexpected error: {error}"
+        );
+    }
+
     // A 2xx response whose body is not an MP4/AAC preview (a captive portal's
-    // HTML, a truncated download) must be reported as a decode failure, not
-    // panic the worker or play noise.
+    // HTML) must be reported as a decode failure, not panic the worker or play
+    // noise.
     #[test]
     fn a_preview_download_that_does_not_decode_is_reported() {
         let address = serve_one_response(
