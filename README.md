@@ -17,7 +17,8 @@ Early skeleton (0.1.0): an iced (0.14) desktop clone of the Winamp 2.x UI, with 
 with library search and flat All Songs, All Albums, and Playlists views. Apple Music
 browse/search and preview playback sit behind injectable seams and fall back to the sample
 library and silence.
-Open work lives in PLANS.md, BUGS.md, and QUESTIONS.md.
+Open work lives in PLANS.md, BUGS.md, and QUESTIONS.md; finished entries move to PLANS-DONE.md
+and BUGS-FIXED.md.
 <!-- tumwater:status:end -->
 
 ## Screenshots
@@ -60,8 +61,9 @@ song list while it is showing. The title bar's `A` button toggles always-on-top,
 (or a double-click on the bar) rolls the window up to just that title bar and back, and its `–` and
 `✕` buttons minimize and close. With the window focused, the classic Winamp keys drive playback: Z
 and B step back and forward, X plays, C pauses, V stops, R toggles Repeat and S toggles Shuffle,
-and the up/down arrows nudge the volume.
-The volume slider and the arrow keys set the audio backend's playback level, the balance slider
+and the up/down arrows nudge the volume while the left/right arrows seek five
+seconds back or forward.
+The volume slider and the up/down arrows set the audio backend's playback level, the balance slider
 sets its stereo balance, and the equalizer panel's toggles, sliders, and presets change the
 playing preview's curve live; the volume and balance are remembered for the next track.
 Setting `APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a browser-based MusicKit sign-in: browse and

@@ -207,6 +207,19 @@ pub trait AudioOutput: Send + Sync {
     /// request (see [`AudioOutput::play`]).
     fn set_balance(&self, balance: f32) -> Result<(), AppleMusicError>;
 
+    /// Seeks the current player by `offset_secs` relative to its position.
+    ///
+    /// Positive offsets move forward and negative offsets move backward; a
+    /// backward seek past the start lands at zero. Applies only to the
+    /// current player, if one is loaded: a seek while stopped does nothing,
+    /// and the offset is not remembered for the next [`play`](Self::play).
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the backend cannot accept the
+    /// request (see [`AudioOutput::play`]).
+    fn seek_by(&self, offset_secs: i64) -> Result<(), AppleMusicError>;
+
     /// Sets the equalizer curve applied to the output.
     ///
     /// Applies to the current player, if one is loaded, and is remembered so
@@ -260,6 +273,11 @@ impl AudioOutput for SilentOutput {
         Ok(())
     }
 
+    fn seek_by(&self, offset_secs: i64) -> Result<(), AppleMusicError> {
+        println!("Audio output is silent; nothing to seek by {offset_secs}s");
+        Ok(())
+    }
+
     fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
         println!("Audio output is silent; equalizer set to {equalizer:?}");
         Ok(())
@@ -280,6 +298,8 @@ enum Command {
     SetVolume(f32),
     /// Set the stereo balance (`-1.0` hard left, `1.0` hard right).
     SetBalance(f32),
+    /// Seek the current player by this many seconds (negative moves backward).
+    SeekBy(i64),
     /// Set the equalizer curve applied to the output.
     SetEqualizer(EqSnapshot),
 }
@@ -300,6 +320,8 @@ trait WorkerPlayer {
     fn set_volume(&self, volume: f32);
     /// Sets the player's stereo balance.
     fn set_balance(&self, balance: f32);
+    /// Seeks the player relative to its current position.
+    fn seek_by(&self, offset_secs: i64);
     /// Sets the player's equalizer curve.
     fn set_equalizer(&self, equalizer: EqSnapshot);
     /// Appends `preview` to the player's queue.
@@ -381,6 +403,10 @@ impl<S: Source> Source for BalanceSource<S> {
     }
 
     fn try_seek(&mut self, pos: Duration) -> Result<(), SeekError> {
+        // rodio's seek implementations leave the next sample on the same
+        // channel as before the seek (see `SamplesBuffer::try_seek` and
+        // `SymphoniaDecoder::try_seek`), so this wrapper's cursor must stay
+        // in that phase rather than resetting to zero.
         self.inner.try_seek(pos)
     }
 }
@@ -475,9 +501,50 @@ impl<S: Source> Source for EqSource<S> {
 
     fn try_seek(&mut self, pos: Duration) -> Result<(), SeekError> {
         self.inner.try_seek(pos)?;
-        self.channel = 0;
+        // rodio's seek leaves the next sample on the same channel, so keep
+        // `channel` in phase; only the filter state is cleared, so a seek
+        // does not replay ringing from the old position.
         self.rebuild_filters();
         Ok(())
+    }
+}
+
+/// Returns `position` moved by `offset_secs`, saturating at zero when a
+/// backward seek would pass the start and at `Duration::MAX` when a forward
+/// seek would overflow.
+fn seek_target(position: Duration, offset_secs: i64) -> Duration {
+    let offset = Duration::from_secs(offset_secs.unsigned_abs());
+    if offset_secs < 0 {
+        position.saturating_sub(offset)
+    } else {
+        position.saturating_add(offset)
+    }
+}
+
+/// The two player operations a relative seek needs, split from
+/// [`RodioPlayer`] so the composition of reading the position and seeking to
+/// [`seek_target`] from it is testable without an output device.
+trait SeekablePlayer {
+    fn position(&self) -> Duration;
+    fn seek_to(&self, position: Duration) -> Result<(), SeekError>;
+}
+
+impl SeekablePlayer for rodio::Player {
+    fn position(&self) -> Duration {
+        self.get_pos()
+    }
+
+    fn seek_to(&self, position: Duration) -> Result<(), SeekError> {
+        self.try_seek(position)
+    }
+}
+
+/// Seeks `player` by `offset_secs` from its current position, logging a
+/// rejected seek without changing any state.
+fn seek_player(player: &impl SeekablePlayer, offset_secs: i64) {
+    let position = player.position();
+    if let Err(error) = player.seek_to(seek_target(position, offset_secs)) {
+        eprintln!("seeking the preview failed: {error}");
     }
 }
 
@@ -508,6 +575,10 @@ impl WorkerPlayer for RodioPlayer {
 
     fn set_balance(&self, balance: f32) {
         self.balance.store(balance.to_bits(), Ordering::Relaxed);
+    }
+
+    fn seek_by(&self, offset_secs: i64) {
+        seek_player(&self.player, offset_secs);
     }
 
     fn set_equalizer(&self, equalizer: EqSnapshot) {
@@ -610,6 +681,10 @@ impl AudioOutput for RodioOutput {
 
     fn set_balance(&self, balance: f32) -> Result<(), AppleMusicError> {
         self.send(Command::SetBalance(balance))
+    }
+
+    fn seek_by(&self, offset_secs: i64) -> Result<(), AppleMusicError> {
+        self.send(Command::SeekBy(offset_secs))
     }
 
     fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
@@ -774,6 +849,11 @@ fn serve_commands<P, D>(
                 settings.balance = new_balance;
                 if let Some(player) = &player {
                     player.set_balance(settings.balance);
+                }
+            }
+            Command::SeekBy(offset_secs) => {
+                if let Some(player) = &player {
+                    player.seek_by(offset_secs);
                 }
             }
             Command::SetEqualizer(new_equalizer) => {
@@ -984,7 +1064,61 @@ mod tests {
         assert!(output.stop().is_ok());
         assert!(output.set_volume(0.4).is_ok());
         assert!(output.set_balance(-0.4).is_ok());
+        assert!(output.seek_by(-5).is_ok());
         assert!(output.set_equalizer(EqSnapshot::default()).is_ok());
+    }
+
+    #[test]
+    fn seek_target_moves_forward_and_backward() {
+        assert_eq!(
+            seek_target(Duration::from_secs(10), 5),
+            Duration::from_secs(15)
+        );
+        assert_eq!(
+            seek_target(Duration::from_secs(10), -5),
+            Duration::from_secs(5)
+        );
+    }
+
+    #[test]
+    fn seek_target_saturates_at_the_start() {
+        assert_eq!(seek_target(Duration::from_secs(3), -5), Duration::ZERO);
+    }
+
+    /// A [`SeekablePlayer`] that reports a fixed position and records the
+    /// absolute target each seek asks for, so a test can pin the composition
+    /// in [`seek_player`] without a `rodio::Player` or an output device.
+    #[derive(Default)]
+    struct RecordingSeekPlayer {
+        position: Duration,
+        targets: Mutex<Vec<Duration>>,
+    }
+
+    impl SeekablePlayer for RecordingSeekPlayer {
+        fn position(&self) -> Duration {
+            self.position
+        }
+
+        fn seek_to(&self, position: Duration) -> Result<(), SeekError> {
+            self.targets.lock().unwrap().push(position);
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn seek_player_seeks_relative_to_the_players_position() {
+        let player = RecordingSeekPlayer {
+            position: Duration::from_secs(10),
+            ..Default::default()
+        };
+
+        seek_player(&player, -5);
+        seek_player(&player, 5);
+
+        assert_eq!(
+            *player.targets.lock().unwrap(),
+            vec![Duration::from_secs(5), Duration::from_secs(15)]
+        );
     }
 
     #[test]
@@ -1119,8 +1253,12 @@ mod tests {
         }
 
         fn try_seek(&mut self, pos: Duration) -> Result<(), SeekError> {
-            let position = (pos.as_secs_f64() * 44_100.0 * 2.0) as usize;
-            self.position = position.min(self.samples.len());
+            // rodio seeks to a frame but leaves the next sample on the same
+            // channel as before the seek, so land on the target frame plus
+            // the current channel instead of a frame boundary.
+            let frame = (pos.as_secs_f64() * 44_100.0) as usize;
+            let channel = self.position % 2;
+            self.position = (frame * 2 + channel).min(self.samples.len());
             Ok(())
         }
     }
@@ -1165,23 +1303,23 @@ mod tests {
         });
         // An impulse followed by silence leaves the left channel's filter
         // ringing, so a seek that kept the filter state would replay the
-        // impulse differently from a freshly built source. Three samples leave
-        // the channel cursor on the right channel instead of back at zero, so
-        // the seek must reset it as well as the filter state.
+        // impulse differently from a freshly built source. Seeking from a
+        // frame boundary (two samples) must keep the channel cursor there,
+        // since rodio leaves the next sample on the same channel.
         let samples = vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
         let mut source = EqSource::new(SeekableSource::new(samples.clone()), Arc::clone(&settings));
-        let before: Vec<_> = source.by_ref().take(3).collect();
+        let before: Vec<_> = source.by_ref().take(2).collect();
         assert!(
             before.iter().any(|sample| *sample != 0.0),
             "the impulse should leave the filter ringing: {before:?}"
         );
-        assert_eq!(source.channel, 1, "the cursor should be mid-frame");
-
-        source.try_seek(Duration::ZERO).unwrap();
         assert_eq!(
             source.channel, 0,
-            "the seek should reset the channel cursor"
+            "the cursor should be at a frame boundary"
         );
+
+        source.try_seek(Duration::ZERO).unwrap();
+        assert_eq!(source.channel, 0, "the seek should keep the channel cursor");
         let after_seek: Vec<_> = source.collect();
         let fresh: Vec<_> = EqSource::new(SeekableSource::new(samples), settings).collect();
 
@@ -1192,6 +1330,42 @@ mod tests {
                 "sample {index} was {replayed}, expected {expected}"
             );
         }
+    }
+
+    #[test]
+    fn eq_source_seek_keeps_the_channel_cursor() {
+        let samples = vec![0.25, -0.5, 0.75, -1.0];
+        let mut source = EqSource::new(
+            SeekableSource::new(samples.clone()),
+            Arc::new(EqSettings::default()),
+        );
+        source.by_ref().take(3).for_each(drop);
+        assert_eq!(source.channel, 1, "the cursor should be mid-frame");
+
+        source.try_seek(Duration::ZERO).unwrap();
+
+        assert_eq!(source.channel, 1, "the seek must keep the channel cursor");
+        assert_eq!(
+            source.next(),
+            Some(samples[1]),
+            "the next sample must still be the right channel's"
+        );
+    }
+
+    #[test]
+    fn balance_source_seek_keeps_the_channel_cursor() {
+        let samples = vec![0.5, 0.25, 0.5, 0.25];
+        let balance = Arc::new(AtomicU32::new(1.0_f32.to_bits()));
+        let mut source = BalanceSource::new(SeekableSource::new(samples), balance);
+        source.by_ref().take(3).for_each(drop);
+        assert_eq!(source.channel, 1, "the cursor should be mid-frame");
+
+        source.try_seek(Duration::ZERO).unwrap();
+
+        assert_eq!(source.channel, 1, "the seek must keep the channel cursor");
+        // Hard right leaves the odd (right) channel at unity and silences the
+        // even one, so a reset cursor would turn this sample into zero.
+        assert_eq!(source.next(), Some(0.25));
     }
 
     #[test]
@@ -1413,6 +1587,7 @@ mod tests {
         output.stop().unwrap();
         output.set_volume(0.4).unwrap();
         output.set_balance(-0.4).unwrap();
+        output.seek_by(-5).unwrap();
         let equalizer = EqSnapshot {
             enabled: true,
             preamp_db: 3.0,
@@ -1429,6 +1604,7 @@ mod tests {
         assert!(matches!(receiver.try_recv(), Ok(Command::Stop)));
         assert!(matches!(receiver.try_recv(), Ok(Command::SetVolume(v)) if v == 0.4));
         assert!(matches!(receiver.try_recv(), Ok(Command::SetBalance(v)) if v == -0.4));
+        assert!(matches!(receiver.try_recv(), Ok(Command::SeekBy(v)) if v == -5));
         assert!(matches!(receiver.try_recv(), Ok(Command::SetEqualizer(v)) if v == equalizer));
     }
 
@@ -1465,6 +1641,10 @@ mod tests {
         );
         assert_eq!(
             output.set_balance(-0.4).unwrap_err().to_string(),
+            "the audio thread is gone"
+        );
+        assert_eq!(
+            output.seek_by(-5).unwrap_err().to_string(),
             "the audio thread is gone"
         );
         assert_eq!(
@@ -1745,6 +1925,7 @@ mod tests {
         stopped: Arc<AtomicBool>,
         volume: Arc<Mutex<f32>>,
         balance: Arc<Mutex<f32>>,
+        seeks: Arc<Mutex<Vec<i64>>>,
         equalizer: Arc<Mutex<EqSnapshot>>,
     }
 
@@ -1758,6 +1939,10 @@ mod tests {
 
         fn set_balance(&self, balance: f32) {
             *self.balance.lock().unwrap() = balance;
+        }
+
+        fn seek_by(&self, offset_secs: i64) {
+            self.seeks.lock().unwrap().push(offset_secs);
         }
 
         fn set_equalizer(&self, equalizer: EqSnapshot) {
@@ -1943,6 +2128,7 @@ mod tests {
                 sender.send(Command::Resume).unwrap();
                 sender.send(Command::SetVolume(0.6)).unwrap();
                 sender.send(Command::SetBalance(0.3)).unwrap();
+                sender.send(Command::SeekBy(-5)).unwrap();
                 sender.send(Command::Stop).unwrap();
                 sender.send(Command::Pause).unwrap();
             }
@@ -1960,9 +2146,49 @@ mod tests {
         assert_eq!(players[0].resumed.load(Ordering::SeqCst), 1);
         assert_eq!(*players[0].volume.lock().unwrap(), 0.6);
         assert_eq!(*players[0].balance.lock().unwrap(), 0.3);
+        assert_eq!(*players[0].seeks.lock().unwrap(), vec![-5]);
         assert!(
             players[0].stopped.load(Ordering::SeqCst),
             "Stop must stop the installed player"
+        );
+    }
+
+    // A seek reaches only the player a previous Play installed: with none
+    // installed yet it must not create one, and after Stop drops the player
+    // it must not reach the stopped one. The first SeekBy arrives before the
+    // Play; Stop and the second SeekBy are sent once the player is installed,
+    // so the recording player's empty seek list proves neither went through.
+    #[test]
+    fn a_seek_while_stopped_reaches_no_player() {
+        let (sender, receiver) = mpsc::channel();
+        let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
+        let recorded = Arc::clone(&players);
+        let command_sender = Arc::new(Mutex::new(Some(sender.clone())));
+        let create_player = move || {
+            let player = RecordingPlayer::default();
+            recorded.lock().unwrap().push(player.clone());
+            if let Some(sender) = command_sender.lock().unwrap().take() {
+                sender.send(Command::Stop).unwrap();
+                sender.send(Command::SeekBy(5)).unwrap();
+            }
+            player
+        };
+        let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+
+        sender.send(Command::SeekBy(-5)).unwrap();
+        sender.send(Command::Play("first".to_string())).unwrap();
+        drop(sender);
+        serve_commands(receiver, create_player, fetch);
+
+        let players = players.lock().unwrap();
+        assert_eq!(players.len(), 1, "only the Play may create a player");
+        assert!(
+            players[0].seeks.lock().unwrap().is_empty(),
+            "a seek with no installed player must not reach one"
+        );
+        assert!(
+            players[0].stopped.load(Ordering::SeqCst),
+            "Stop must drop the installed player"
         );
     }
 

@@ -1,9 +1,9 @@
 use super::*;
 use crate::audio::{AudioOutput, EqSnapshot};
 use crate::test_support::{
-    AudioCall, FailingAudio, PREVIEW_URL, RecordingAudio, StubTransport, assert_ids,
-    assert_preview_calls, assert_single_call, rest_session, sample_album, sample_artist,
-    sample_song, sign_in_session,
+    AudioCall, FailingAudio, FailingSeekAudio, PREVIEW_URL, RecordingAudio, StubTransport,
+    assert_ids, assert_preview_calls, assert_single_call, rest_session, sample_album,
+    sample_artist, sample_song, sign_in_session,
 };
 
 fn test_service() -> AppleMusicService {
@@ -161,6 +161,14 @@ impl AudioOutput for GatedAudio {
         Ok(())
     }
 
+    fn seek_by(&self, offset_secs: i64) -> Result<(), AppleMusicError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(AudioCall::SeekBy(offset_secs));
+        Ok(())
+    }
+
     fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
         self.calls
             .lock()
@@ -263,6 +271,14 @@ impl AudioOutput for RejectingAudio {
             .lock()
             .unwrap()
             .push(AudioCall::SetBalance(balance));
+        Ok(())
+    }
+
+    fn seek_by(&self, offset_secs: i64) -> Result<(), AppleMusicError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(AudioCall::SeekBy(offset_secs));
         Ok(())
     }
 
@@ -808,6 +824,34 @@ async fn set_output_balance_forwards_to_the_audio_backend() {
 
     assert_eq!(recording.calls(), vec![AudioCall::SetBalance(-0.4)]);
     assert_eq!(state.lock().await.balance(), 0.0);
+}
+
+// `seek_output` forwards a relative seek to the injected backend without
+// touching the shared state: the position belongs to the playing preview, not
+// to `AppState`.
+#[tokio::test]
+async fn seek_output_forwards_to_the_audio_backend() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+
+    service.seek_output(-5).unwrap();
+
+    assert_eq!(recording.calls(), vec![AudioCall::SeekBy(-5)]);
+    assert_eq!(*state.lock().await, AppState::default());
+}
+
+// A backend that cannot seek reports it through the seam, so the UI's seek
+// path can log the failure instead of silently claiming the preview moved.
+#[tokio::test]
+async fn seek_output_propagates_an_audio_backend_failure() {
+    let audio = Arc::new(FailingSeekAudio::default());
+    let (service, state) = service_with_audio(Arc::clone(&audio) as Arc<dyn AudioOutput>);
+
+    let error = service.seek_output(-5).unwrap_err();
+
+    assert_eq!(error.to_string(), "the audio device is gone");
+    assert_eq!(audio.attempts(), 1);
+    assert_eq!(*state.lock().await, AppState::default());
 }
 
 // `set_output_equalizer` forwards to the injected backend without touching the

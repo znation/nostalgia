@@ -25,10 +25,11 @@ pub(super) fn message_for(event: Event) -> Option<Message> {
 }
 
 /// The classic Winamp main-window bindings: Z previous, X play, C pause, V
-/// stop, B next, R repeat, S shuffle, and the arrow keys nudge the volume. A
-/// Control, Alt, or Logo chord is left to the OS and window manager, so those
-/// modifiers yield `None`; Shift is allowed, and the letter match ignores ASCII
-/// case, so Shift+Z steps back exactly like Z.
+/// stop, B next, R repeat, S shuffle, the up/down arrows nudge the volume, and
+/// the left/right arrows seek five seconds back or forward. A Control, Alt, or
+/// Logo chord is left to the OS and window manager, so those modifiers yield
+/// `None`; Shift is allowed, and the letter match ignores ASCII case, so
+/// Shift+Z steps back exactly like Z.
 fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
     if modifiers.control() || modifiers.alt() || modifiers.logo() {
         return None;
@@ -52,6 +53,8 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
         }
         Key::Named(key::Named::ArrowUp) => Some(Message::VolumeUp),
         Key::Named(key::Named::ArrowDown) => Some(Message::VolumeDown),
+        Key::Named(key::Named::ArrowLeft) => Some(Message::SeekBackward),
+        Key::Named(key::Named::ArrowRight) => Some(Message::SeekForward),
         _ => None,
     }
 }
@@ -113,6 +116,20 @@ mod tests {
             )),
             Some(Message::VolumeDown)
         ));
+        assert!(matches!(
+            message_for(key_pressed(
+                Key::Named(key::Named::ArrowLeft),
+                Modifiers::NONE
+            )),
+            Some(Message::SeekBackward)
+        ));
+        assert!(matches!(
+            message_for(key_pressed(
+                Key::Named(key::Named::ArrowRight),
+                Modifiers::NONE
+            )),
+            Some(Message::SeekForward)
+        ));
     }
 
     #[test]
@@ -139,6 +156,8 @@ mod tests {
                 Key::Character("s".into()),
                 Key::Named(key::Named::ArrowUp),
                 Key::Named(key::Named::ArrowDown),
+                Key::Named(key::Named::ArrowLeft),
+                Key::Named(key::Named::ArrowRight),
             ] {
                 assert!(
                     shortcut(&key, modifiers).is_none(),

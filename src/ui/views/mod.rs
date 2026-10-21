@@ -102,6 +102,10 @@ const VOLUME_MAX: f32 = 1.0;
 /// keyboard volume arms in `ui::mod` nudge by the slider's own step.
 pub(super) const VOLUME_STEP: f32 = 0.01;
 
+/// The left and right arrows' seek granularity: classic Winamp seeks five
+/// seconds back or forward per press.
+pub(super) const SEEK_STEP_SECS: i64 = 5;
+
 /// The balance slider's hard-left floor, the same lower bound
 /// `state::clamp_balance` clamps to. Named here so the slider spec is a
 /// testable seam; the spec test in the `tests` submodule ties it to the clamp

@@ -388,6 +388,8 @@ pub(crate) enum AudioCall {
     SetVolume(f32),
     /// `set_balance` was called with this balance.
     SetBalance(f32),
+    /// `seek_by` was called with this signed offset in seconds.
+    SeekBy(i64),
     /// `set_equalizer` was called with this curve.
     SetEqualizer(EqSnapshot),
 }
@@ -464,6 +466,14 @@ impl AudioOutput for RecordingAudio {
         Ok(())
     }
 
+    fn seek_by(&self, offset_secs: i64) -> Result<(), AppleMusicError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(AudioCall::SeekBy(offset_secs));
+        Ok(())
+    }
+
     fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
         self.calls
             .lock()
@@ -501,6 +511,61 @@ impl AudioOutput for FailingAudio {
 
     fn set_balance(&self, _balance: f32) -> Result<(), AppleMusicError> {
         Ok(())
+    }
+
+    fn seek_by(&self, _offset_secs: i64) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn set_equalizer(&self, _equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+}
+
+/// An [`AudioOutput`] whose `seek_by` fails, so a test can pin that the
+/// service propagates the backend's error and the UI logs it without
+/// scheduling work. `attempts` counts the rejected calls, letting a test prove
+/// the message reached the failing backend instead of skipping the seek.
+#[derive(Debug, Default)]
+pub(crate) struct FailingSeekAudio {
+    attempts: AtomicUsize,
+}
+
+impl FailingSeekAudio {
+    /// How many seek commands the backend rejected.
+    pub(crate) fn attempts(&self) -> usize {
+        self.attempts.load(Ordering::SeqCst)
+    }
+}
+
+impl AudioOutput for FailingSeekAudio {
+    fn play(&self, _url: &str) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn pause(&self) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn resume(&self) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn stop(&self) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn set_volume(&self, _volume: f32) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn set_balance(&self, _balance: f32) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn seek_by(&self, _offset_secs: i64) -> Result<(), AppleMusicError> {
+        self.attempts.fetch_add(1, Ordering::SeqCst);
+        Err(AppleMusicError::new("the audio device is gone"))
     }
 
     fn set_equalizer(&self, _equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
@@ -558,6 +623,10 @@ impl AudioOutput for FailingVolumeBalanceAudio {
         Err(AppleMusicError::new("the audio device is gone"))
     }
 
+    fn seek_by(&self, _offset_secs: i64) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
     fn set_equalizer(&self, _equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
         Ok(())
     }
@@ -601,6 +670,10 @@ impl AudioOutput for FailingEqualizerAudio {
     }
 
     fn set_balance(&self, _balance: f32) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn seek_by(&self, _offset_secs: i64) -> Result<(), AppleMusicError> {
         Ok(())
     }
 
@@ -655,6 +728,10 @@ impl AudioOutput for FailingTransportAudio {
     }
 
     fn set_balance(&self, _balance: f32) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn seek_by(&self, _offset_secs: i64) -> Result<(), AppleMusicError> {
         Ok(())
     }
 

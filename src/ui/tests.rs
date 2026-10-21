@@ -4,10 +4,10 @@ use super::*;
 use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB};
 use crate::sample_library::sample_library;
 use crate::test_support::{
-    AudioCall, FailingEqualizerAudio, FailingTransportAudio, FailingVolumeBalanceAudio,
-    PREVIEW_URL, RecordingAudio, StubTransport, assert_ids, assert_preview_calls, rock_preset,
-    sample_album, sample_artist, sample_playlist, sample_song, second_album_songs, sign_in_session,
-    stepping_songs,
+    AudioCall, FailingEqualizerAudio, FailingSeekAudio, FailingTransportAudio,
+    FailingVolumeBalanceAudio, PREVIEW_URL, RecordingAudio, StubTransport, assert_ids,
+    assert_preview_calls, rock_preset, sample_album, sample_artist, sample_playlist, sample_song,
+    second_album_songs, sign_in_session, stepping_songs,
 };
 
 /// A fresh player over its own shared state, so a test can inspect the
@@ -1487,6 +1487,45 @@ fn volume_messages_forward_to_the_audio_backend() {
             AudioCall::SetVolume(0.0),
         ]
     );
+}
+
+// The left and right arrow arms must reach the injected backend: a seek that
+// only changed UI state would leave the playing preview at its old position.
+// This drives both arms through `update` over a recording backend and pins
+// the signed five-second offsets they forwarded.
+#[test]
+fn seek_messages_drive_the_audio_backend() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+
+    assert_message_schedules_no_work(&mut player, Message::SeekBackward);
+    assert_message_schedules_no_work(&mut player, Message::SeekForward);
+
+    assert_eq!(
+        recording.calls(),
+        vec![
+            AudioCall::SeekBy(-views::SEEK_STEP_SECS),
+            AudioCall::SeekBy(views::SEEK_STEP_SECS),
+        ]
+    );
+    assert_eq!(*state.blocking_lock(), AppState::default());
+}
+
+// A rejection from the seek backend must only be logged: the seek arm still
+// schedules no work and leaves shared state alone. The fake counts its
+// rejected calls, proving the message reached the failing backend instead of
+// skipping the forward.
+#[test]
+fn a_seek_backend_failure_still_schedules_no_work() {
+    let audio = Arc::new(FailingSeekAudio::default());
+    let (mut player, state) =
+        player_with_audio(Arc::clone(&audio) as Arc<dyn crate::audio::AudioOutput>);
+
+    assert_message_schedules_no_work(&mut player, Message::SeekForward);
+
+    assert_eq!(audio.attempts(), 1);
+    assert_eq!(*state.blocking_lock(), AppState::default());
 }
 
 // The balance arm must reach the injected backend, not just write shared

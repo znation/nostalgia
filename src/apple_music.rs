@@ -217,6 +217,20 @@ impl AppleMusicService {
         self.audio.set_balance(balance)
     }
 
+    /// Forwards a relative seek to the audio backend, so the left and right
+    /// arrow keys move the playing preview without changing the UI's own
+    /// state. Positive offsets seek forward and negative offsets backward.
+    /// Synchronous, and touches no shared state: the UI owns the position and
+    /// [`crate::audio::AudioOutput::seek_by`] is a non-blocking channel send.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the audio backend cannot accept
+    /// the request.
+    pub(crate) fn seek_output(&self, offset_secs: i64) -> Result<(), AppleMusicError> {
+        self.audio.seek_by(offset_secs)
+    }
+
     /// Forwards `equalizer` to the audio backend, so a preview starts at the
     /// curve the equalizer panel shows. Synchronous, and touches no shared
     /// state: the UI already stored the clamped curve under its own lock, and

@@ -83,6 +83,9 @@ enum Message {
     // by `AppState::nudge_volume`.
     VolumeUp,
     VolumeDown,
+    // Arrow-key seek nudges: one `views::SEEK_STEP_SECS` back or forward.
+    SeekBackward,
+    SeekForward,
     ToggleEqualizer,
     EqPreampChange(f32),
     EqBandChange(usize, f32),
@@ -472,6 +475,18 @@ fn mutate_balance(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -
     Task::none()
 }
 
+/// Forwards a relative seek to the audio backend and returns no task. The
+/// left and right arrow arms use this so a key press moves the playing
+/// preview without touching shared state: the backend owns the position, and
+/// [`AppleMusicService::seek_output`] is a non-blocking channel send. A
+/// backend error is logged.
+fn seek_preview(player: &WinampPlayer, offset_secs: i64) -> Task<Message> {
+    if let Err(error) = player.apple_music_service.seek_output(offset_secs) {
+        eprintln!("seeking the preview failed: {error}");
+    }
+    Task::none()
+}
+
 /// Locks the shared playback state, applies `mutation` to it, forwards the
 /// resulting clamped curve to the audio backend, and returns no task. The
 /// equalizer arms — `ToggleEqualizer`, `EqPreampChange`, `EqBandChange`, and
@@ -563,6 +578,10 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::VolumeDown => {
             mutate_volume(player, |state| state.nudge_volume(-views::VOLUME_STEP))
         }
+        // The left and right arrows move the playing preview by Winamp's
+        // five-second step; a seek while stopped is a no-op in the backend.
+        Message::SeekBackward => seek_preview(player, -views::SEEK_STEP_SECS),
+        Message::SeekForward => seek_preview(player, views::SEEK_STEP_SECS),
         // The equalizer mutators all store clamped gains in shared state, so
         // the sliders can never write an out-of-range value; the clamp itself
         // lives in `equalizer::clamp_gain`, called by the `AppState` setters.
