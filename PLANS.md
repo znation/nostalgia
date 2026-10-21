@@ -66,6 +66,11 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ### Make Previous retrace the play history when Shuffle is on (planned 2026-10-20 by the plan role)
 
+**Needs replan 2026-10-20 by feature: rejected after 2 review rounds**
+1. The new `track_played_ignores_failed_and_superseded_completions` test does not actually test either guard it claims to pin. With history `["song-1", "song-2"]`, current `"song-3"`, and `current` passed to `previous`, recording `"song-3"` first produces `["song-1", "song-2", "song-3"]`; `previous(..…
+2. The newly added `PLANS-DONE.md` entry is stale and contradicts the implemented API. It describes `PlayHistory { entries, cursor }` with no `pending_jump`, and `previous(&mut self, songs: &[Song])` as ignoring `state.current_track`; the code has `pending_jump` and `previous(songs, current)`. The ent…
+3. `pending_jump` is cleared only by `record`, not when another track is committed as current. After history `[song-1, song-2, song-3]`, pressing Previous selects `song-2` and leaves `pending_jump = true`; if the user selects `song-4` before that jump reports completion, `play_track` sets `current_tra…
+
 **Goal.** With Shuffle on, pressing Previous returns to the track actually played before the current one, retracing the play order like classic Winamp, instead of stepping one row backward in the visible list. With Shuffle off, Previous keeps its sequential and Repeat-aware behavior. Today `step_track` in `src/ui/mod.rs` sends only a forward step through `transport::shuffled_track_id`; every backward step goes through `transport::previous_track_id`. The `step_track` doc comment and `previous_with_shuffle_still_steps_backward` in `src/ui/tests.rs` pin that Previous ignores Shuffle because no play history exists.
 
 **Approach.**
