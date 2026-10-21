@@ -1,5 +1,5 @@
 //! The nostalgia binary: it builds the shared `AppState`, wires it into the
-//! stub Apple Music service, and hands both to the iced application.
+//! Apple Music service, and hands both to the iced application.
 //!
 //! `unsafe` is forbidden crate-wide: the player is safe Rust, so an `unsafe`
 //! block added here is a mistake worth failing the build for rather than
@@ -78,7 +78,7 @@ use crate::state::AppState;
 fn main() -> iced::Result {
     let state = Arc::new(Mutex::new(AppState::default()));
 
-    // Initialize the (stub) Apple Music service. The same service instance is
+    // Initialize the Apple Music service. The same service instance is
     // handed to the UI, so the UI's clone shares the session the startup
     // sign-in stores.
     let service = apple_music::init_service(state.clone());

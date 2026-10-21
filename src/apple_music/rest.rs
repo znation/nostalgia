@@ -3,9 +3,9 @@
 //! and [`Song`] lists.
 //!
 //! The client is synchronous and network-isolated behind [`HttpTransport`], so
-//! its tests drive an in-memory stub instead of a live endpoint. It changes no
-//! app behavior on its own: the service that decides when to call it is the
-//! sibling wiring change.
+//! its tests drive an in-memory stub instead of a live endpoint. The service
+//! (`crate::apple_music`) decides when to call it, from the browse, search,
+//! and playlist queries, once a `MusicKit` session is stored.
 
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};

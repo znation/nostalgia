@@ -1,11 +1,11 @@
 //! The in-memory stand-in for a real Apple Music library.
 //!
-//! The Apple Music service (`crate::apple_music`) answers a browse query from
-//! this shared stub when no session is stored. The UI and its tests therefore
-//! agree on the same data. This is the
-//! stub behind the service seam: when a real Apple Music library arrives, this
-//! whole module is deleted and the service's browse methods get real
-//! implementations.
+//! The Apple Music service (`crate::apple_music`) answers a library query from
+//! this shared library when no `MusicKit` session is stored — signed out, or
+//! before the startup sign-in lands — and from the REST client otherwise. It
+//! also gives the UI and its tests one shared library to agree on, so a test
+//! needs no network. The module stays as the signed-out fallback rather than
+//! being replaced by the REST client.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;

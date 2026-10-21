@@ -1,9 +1,9 @@
 //! The seam to the Apple Music API.
 //!
-//! This is the narrow integration point a real Apple Music backend will
-//! replace. `AppleMusicService` answers a browse query from the signed-in
-//! user's Apple Music library through the REST client when a session is
-//! stored, and from the shared in-memory sample library
+//! This is the narrow integration point through which the rest of the app
+//! reaches Apple Music: `AppleMusicService` answers a browse query from the
+//! signed-in user's Apple Music library through the REST client when a session
+//! is stored, and from the shared in-memory sample library
 //! ([`crate::sample_library::sample_library`]) otherwise; it plays the
 //! selected track's preview through an injected [`crate::audio::AudioOutput`],
 //! committing the shared-state transition: `play_track` records the selected

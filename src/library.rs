@@ -4,8 +4,8 @@
 //! The types live outside `apple_music` because both the integration seam
 //! (which populates them) and the presentation layer (which renders them)
 //! depend on them; the service module alone is not their owner. Keeping them
-//! here, beside the shared `state` module, means the real Apple Music API can
-//! replace the stub without touching the model or the UI.
+//! here, beside the shared `state` module, lets the service answer from either
+//! the REST library or the sample stub without touching the model or the UI.
 
 use serde::{Deserialize, Serialize};
 
@@ -120,9 +120,11 @@ mod tests {
         json!({ "id": "song-1", "title": "Opening", "artist": "The Sample Band", "album_id": "album-1", "duration_ms": 210_000 })
     }
 
-    /// The real Apple Music API will hand these types to the app as JSON, so
-    /// the round-trip (out and back through `serde_json`) is the contract that
-    /// lets a live service replace the stub without touching the model or UI.
+    /// The REST client maps Apple Music JSON into `Artist`, `Album`, `Song`,
+    /// and `Playlist` through its own private `Resource` types (the
+    /// `into_artist`, `into_album`, `into_song`, and `into_playlist` methods),
+    /// so the round-trip (out and back through `serde_json`) pins this
+    /// model's serialized field names.
     #[test]
     fn artist_serializes_field_names_and_round_trips() {
         // Field names are serialized as-is (no renames): the wire contract a
