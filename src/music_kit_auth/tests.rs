@@ -1288,6 +1288,49 @@ fn a_hung_opener_is_killed_and_reported() {
     }
 }
 
+// If the reaper thread cannot be started, the child it was meant to wait on
+// would otherwise be dropped without a wait and stay a zombie, and the old
+// plain `thread::spawn` would panic the sign-in thread instead. The injected
+// fault is a failing spawner; the failure must be reported and the real child
+// must be killed and reaped synchronously.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_reaper_thread_spawn_failure_kills_the_opener_and_is_reported() {
+    let child = Command::new("sleep")
+        .arg("30")
+        .spawn()
+        .expect("spawn a long-running child");
+    let pid = child.id();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    reap_with_timeout_and_spawn(
+        child,
+        Duration::from_secs(30),
+        move |report| {
+            let _ = sender.send(report);
+        },
+        |_work| Err(io::Error::other("the OS refused a thread")),
+    );
+    let report = receiver
+        .recv_timeout(Duration::from_secs(5))
+        .expect("a failed reaper spawn must be reported");
+    assert!(
+        report.contains("reaper thread"),
+        "the report must name the reaper thread, got: {report}"
+    );
+    assert!(
+        report.contains("the OS refused a thread"),
+        "the report must carry the spawn cause, got: {report}"
+    );
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while std::path::Path::new(&format!("/proc/{pid}")).exists() {
+        assert!(
+            Instant::now() < deadline,
+            "child {pid} was still present five seconds after the reaper spawn failed"
+        );
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
 // `AUTH_TIMEOUT` is production behavior — how long `authorize` waits for
 // the browser callback — but `authorize` is its only reader and the
 // timeout tests above inject their own deadline, so a changed constant

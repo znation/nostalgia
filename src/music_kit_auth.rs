@@ -418,6 +418,11 @@ const OPENER_REAP_POLL_INTERVAL: Duration = Duration::from_millis(50);
 /// elapses, and that is reported too. The status is only reported, not turned
 /// into a flow failure: the opener has already run, and a browser that did open
 /// still delivers the callback.
+///
+/// The reaper thread is started through [`spawn_reaper`], whose fallible spawn
+/// keeps a thread-creation failure from panicking the sign-in thread; the child
+/// is then killed and reaped synchronously and the failure is reported, so a
+/// failed reaper cannot leak the opener as a zombie.
 fn reap_in_background(child: std::process::Child) {
     reap_with(child, |report| eprintln!("{report}"));
 }
@@ -441,40 +446,105 @@ fn reap_with(child: std::process::Child, report: impl FnOnce(String) + Send + 's
 /// left as a zombie (a killed child still needs a `wait` to be reaped) and no
 /// process is left running after the flow.
 fn reap_with_timeout(
-    mut child: std::process::Child,
+    child: std::process::Child,
     timeout: Duration,
     report: impl FnOnce(String) + Send + 'static,
 ) {
-    thread::spawn(move || {
-        let deadline = Instant::now() + timeout;
-        loop {
-            match child.try_wait() {
-                Ok(Some(status)) => {
-                    if !status.success() {
-                        report(opener_exit_report(&status));
-                    }
-                    return;
+    reap_with_timeout_and_spawn(child, timeout, report, spawn_reaper);
+}
+
+/// The name the browser-opener reaper thread gets, so a panic there is
+/// attributed to `nostalgia-opener-reaper` rather than `<unnamed>`.
+const REAPER_THREAD_NAME: &str = "nostalgia-opener-reaper";
+
+/// Starts the detached thread that waits on the opener, using the fallible
+/// [`thread::Builder::spawn`] so a thread-creation failure is returned to
+/// [`reap_with_timeout_and_spawn`] instead of panicking the sign-in thread.
+fn spawn_reaper(work: Box<dyn FnOnce() + Send>) -> io::Result<()> {
+    thread::Builder::new()
+        .name(REAPER_THREAD_NAME.to_string())
+        .spawn(work)
+        .map(|_| ())
+}
+
+/// [`reap_with_timeout`] with an injectable thread spawner, so a test can drive
+/// the thread-creation-failure branch without making the OS refuse a thread.
+///
+/// The child and the reporter are held in a shared slot until the reaper thread
+/// takes them. If the spawn fails, the slot still owns both: the child is
+/// killed and waited on so the failed reaper cannot leave the opener as a
+/// zombie, and then the reporter gets the failure line. The sign-in flow itself
+/// continues, because the opener has already been started and may still have
+/// delivered the page.
+fn reap_with_timeout_and_spawn(
+    child: std::process::Child,
+    timeout: Duration,
+    report: impl FnOnce(String) + Send + 'static,
+    spawn: impl FnOnce(Box<dyn FnOnce() + Send>) -> io::Result<()>,
+) {
+    let pending = std::sync::Arc::new(std::sync::Mutex::new(Some((child, report))));
+    let pending_for_thread = std::sync::Arc::clone(&pending);
+    let work = Box::new(move || {
+        let Some((mut child, report)) = pending_for_thread
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        else {
+            return;
+        };
+        reap_child(&mut child, timeout, report);
+    });
+    if let Err(error) = spawn(work) {
+        let Some((mut child, report)) = pending
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        else {
+            return;
+        };
+        let _ = child.kill();
+        let _ = child.wait();
+        report(format!(
+            "could not start the browser opener reaper thread: {error}; killed and reaped the opener"
+        ));
+    }
+}
+
+/// The reaper thread's body: polls `child` until it exits or `timeout` elapses,
+/// then reports a nonzero exit, a hang it killed and reaped, or a wait error.
+fn reap_child(
+    child: &mut std::process::Child,
+    timeout: Duration,
+    report: impl FnOnce(String) + Send + 'static,
+) {
+    let deadline = Instant::now() + timeout;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                if !status.success() {
+                    report(opener_exit_report(&status));
                 }
-                Ok(None) if Instant::now() < deadline => {
-                    thread::sleep(OPENER_REAP_POLL_INTERVAL);
-                }
-                Ok(None) => {
-                    let _ = child.kill();
-                    let _ = child.wait();
-                    report(format!(
-                        "the browser opener did not exit within {timeout:?}; killed it"
-                    ));
-                    return;
-                }
-                Err(error) => {
-                    report(format!(
-                        "could not reap the browser opener process: {error}"
-                    ));
-                    return;
-                }
+                return;
+            }
+            Ok(None) if Instant::now() < deadline => {
+                thread::sleep(OPENER_REAP_POLL_INTERVAL);
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                report(format!(
+                    "the browser opener did not exit within {timeout:?}; killed it"
+                ));
+                return;
+            }
+            Err(error) => {
+                report(format!(
+                    "could not reap the browser opener process: {error}"
+                ));
+                return;
             }
         }
-    });
+    }
 }
 
 /// The line logged when the browser opener exits without success. Names the
