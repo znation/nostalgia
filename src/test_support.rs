@@ -507,6 +507,61 @@ impl AudioOutput for FailingAudio {
     }
 }
 
+/// An [`AudioOutput`] whose volume and balance commands fail, so a UI test can
+/// pin that each update arm logs the backend's error and still commits its
+/// state mutation. The per-command counters let a test prove its arm reached
+/// the failing backend instead of skipping the forward, and that the other arm
+/// stayed untouched.
+#[derive(Debug, Default)]
+pub(crate) struct FailingVolumeBalanceAudio {
+    volume_attempts: AtomicUsize,
+    balance_attempts: AtomicUsize,
+}
+
+impl FailingVolumeBalanceAudio {
+    /// How many volume commands the backend rejected.
+    pub(crate) fn volume_attempts(&self) -> usize {
+        self.volume_attempts.load(Ordering::SeqCst)
+    }
+
+    /// How many balance commands the backend rejected.
+    pub(crate) fn balance_attempts(&self) -> usize {
+        self.balance_attempts.load(Ordering::SeqCst)
+    }
+}
+
+impl AudioOutput for FailingVolumeBalanceAudio {
+    fn play(&self, _url: &str) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn pause(&self) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn resume(&self) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn stop(&self) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn set_volume(&self, _volume: f32) -> Result<(), AppleMusicError> {
+        self.volume_attempts.fetch_add(1, Ordering::SeqCst);
+        Err(AppleMusicError::new("the audio device is gone"))
+    }
+
+    fn set_balance(&self, _balance: f32) -> Result<(), AppleMusicError> {
+        self.balance_attempts.fetch_add(1, Ordering::SeqCst);
+        Err(AppleMusicError::new("the audio device is gone"))
+    }
+
+    fn set_equalizer(&self, _equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+}
+
 /// An [`AudioOutput`] whose equalizer command fails, so a UI test can pin that
 /// the equalizer update arm logs the backend's error and still commits its
 /// state mutation. `attempts` counts the rejected calls, letting the test
