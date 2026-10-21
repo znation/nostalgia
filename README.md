@@ -14,8 +14,9 @@ Nostalgia is a (very close if not pixel-perfect) clone of the classic Winamp UI,
 <!-- tumwater:status:start -->
 Early skeleton (0.1.0): an iced (0.14) desktop clone of the Winamp 2.x UI, with a themed player
 (Now Playing LCD, transport, volume and balance, equalizer) and an artist → album → song browser
-with library search and flat All Songs and All Albums views. Apple Music browse/search and
-preview playback sit behind injectable seams and fall back to the sample library and silence.
+with library search and flat All Songs, All Albums, and Playlists views. Apple Music
+browse/search and preview playback sit behind injectable seams and fall back to the sample
+library and silence.
 Open work lives in PLANS.md, BUGS.md, and QUESTIONS.md.
 <!-- tumwater:status:end -->
 
@@ -67,13 +68,16 @@ Setting `APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a browser-based MusicKit 
 search queries then read your Apple Music library through the REST API, and fall back to the
 built-in sample library when it is unset. Playback plays the selected song's Apple Music preview
 through `rodio` when the library supplies one, and updates the UI state either way. Pause and Stop
-silence the preview through the audio backend, and Play resumes a paused
-preview or restarts a stopped one from the beginning. There are no CLI flags or config files yet.
+silence the preview through the audio backend, and Play resumes a paused preview or restarts a
+stopped one from the beginning. There are no CLI flags or config files yet.
 
 ## Development
 
-`make check` runs the whole landing gate in one command — `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, a `cargo doc` build that fails on any rustdoc warning, and the test suite — and is the fastest way to see whether a change is merge-ready. The individual stages are available separately (`make fmt`, `make lint`,
-`make docs`, `make test`); `make test-one TEST=<name>` runs only the tests whose
+`make check` runs the whole landing gate in one command — `cargo fmt --check`, `cargo clippy
+--all-targets -- -D warnings`, a `cargo doc` build that fails on any rustdoc warning, and the test
+suite — and is the fastest way to see whether a change is merge-ready. The individual stages are
+available separately (`make fmt`, `make lint`, `make docs`, `make test`); `make test-one
+TEST=<name>` runs only the tests whose
 names contain `<name>`, for a fast loop while iterating on one behavior;
 `make fix` applies formatting and clippy's machine-applicable fixes in place,
 and `make run` is the same as `cargo run`.
