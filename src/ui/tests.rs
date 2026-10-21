@@ -96,10 +96,10 @@ fn player_with_window_id() -> (WinampPlayer, Arc<Mutex<AppState>>) {
     (player, state)
 }
 
-/// Seeds `player`'s browse buffers with one each of the shared
-/// [`sample_artist`], [`sample_album`], and [`sample_song`] fixtures — the
+/// Seeds `player`'s browse buffers with the shared [`sample_artist`],
+/// [`sample_album`], [`sample_song`], and [`sample_playlist`] fixtures — the
 /// "loaded" browse shape. The failure-arm test and the two view-construction
-/// tests all build this same three-buffer setup before exercising their own
+/// tests all build this same six-list setup before exercising their own
 /// contract, so it lives here once.
 fn seed_browse_lists(player: &mut WinampPlayer) {
     player.artists.items = vec![sample_artist()];
@@ -124,9 +124,10 @@ fn assert_browse_lists_empty(player: &WinampPlayer) {
 }
 
 /// Asserts the player is showing `expected`. The tests pin the current
-/// view at each navigation step — `ArtistSelected`, `AlbumSelected`, and
-/// `Back` — and at startup, so the same view-equality check lives here
-/// once instead of spelling out a `matches!` at every site.
+/// view at each navigation step — `ArtistSelected`, `AlbumSelected`,
+/// `PlaylistSelected`, the flat-list `Show*` arms, and `Back` — and at
+/// startup, so the same view-equality check lives here once instead of
+/// spelling out a `matches!` at every site.
 fn assert_view(player: &WinampPlayer, expected: CurrentView) {
     assert_eq!(player.current_view, expected);
 }
@@ -273,11 +274,11 @@ fn await_or_timeout_fails_loudly_when_the_future_never_completes() {
 /// Drives the task a browse arm schedules, feeds the resulting `*Loaded`
 /// message back through the update loop, and asserts the list lands in
 /// the player's matching buffer in library order. The fetch tests
-/// — loading artists, albums by artist, songs from album, all songs, and all
-/// albums — all repeat
-/// this drive-then-feed-then-assert flow; only the buffer, the id key, and
-/// the expected ids differ, so they come in as parameters and the flow
-/// lives here once.
+/// — artists, an artist's albums, an album's songs, the flat lists, the
+/// playlists list, a playlist's songs, and a library search — all repeat this
+/// drive-then-feed-then-assert flow; only the buffer, the id key, and the
+/// expected ids differ, so they come in as parameters and the flow lives
+/// here once.
 ///
 /// The task's own output message is fed straight back, rather than a
 /// reconstructed copy: each fetch test used to pass a match-and-clone
@@ -2216,13 +2217,14 @@ fn previous_with_shuffle_still_steps_backward() {
 /// asserts the list lands in `buffer` unchanged and that the matching
 /// `loading` flag is cleared — a `*Loaded` reply reaches `BrowseList::store`,
 /// which clears the flag (see `views::browse::browse_placeholder`), so the reply must
-/// leave that list not-loading. The three
-/// `*_loaded_populates_list` tests — artists, albums, songs — each used
-/// to repeat the same update-then-compare flow, differing only in the
-/// fixture, the `*Loaded` message variant, the buffer it fills, and the
-/// loading flag it clears; the message constructor, the buffer, and the
-/// flag reader come in as parameters so the flow lives here once and each
-/// test only names its fixture and target.
+/// leave that list not-loading. The six store-a-reply tests — artists,
+/// albums, songs, all songs, all albums, and playlists — exercise the same
+/// update-then-compare flow, differing only in the fixture, the `*Loaded`
+/// message variant, the buffer it fills, and the loading flag it clears; this
+/// helper serves the first five, while `playlists_loaded_stores_the_list`
+/// repeats the flow directly. The message constructor, the buffer, and the
+/// flag reader come in as parameters so the shared flow lives here once and
+/// each test only names its fixture and target.
 fn assert_loaded_populates_list<T: Clone + PartialEq + std::fmt::Debug>(
     player: &mut WinampPlayer,
     items: Vec<T>,
@@ -2921,8 +2923,8 @@ fn view_constructs_over_the_apps_full_input_space() {
     // every browse view.
     construct_view_in_every_browse_view(&mut player);
 
-    // The loaded shape: artists, albums, and songs in the browse buffers,
-    // rendered for every now-playing resolution a session can reach.
+    // The loaded shape: every browse buffer populated, rendered for every
+    // now-playing resolution a session can reach.
     seed_browse_lists(&mut player);
 
     let now_playing_options = [None, Some("song-1"), Some("no-such-song")];

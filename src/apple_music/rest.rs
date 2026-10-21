@@ -99,7 +99,7 @@ pub trait HttpTransport: Send + Sync {
 /// Every request runs on one process-wide [`ureq::Agent`]: a fresh agent per
 /// request (`ureq::get`) would open a new TCP connection and TLS session each
 /// time, while the shared agent reuses the pooled connection across the
-/// artist → album → song browse requests. The shared agent carries
+/// library browse and search requests. The shared agent carries
 /// [`REQUEST_TIMEOUT`] as its global timeout, so a stalled server cannot block
 /// a request forever, and follows no redirects, so the `Music-User-Token`
 /// credential is only ever sent to the URL this client built (see
@@ -215,8 +215,8 @@ impl HttpTransport for UreqTransport {
     }
 }
 
-/// A library browse client: issues the three library queries over
-/// [`HttpTransport`] and maps each response onto the model.
+/// A library browse client: issues the library browse and search queries
+/// over [`HttpTransport`] and maps each response onto the model.
 pub struct RestLibrary {
     transport: Box<dyn HttpTransport>,
 }

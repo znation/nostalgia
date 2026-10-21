@@ -1,11 +1,12 @@
-//! The artist → album → song browse views: the scrollable list, its per-level
-//! row mappings, the search box, and the Back, All Songs, All Albums, and
-//! Retry buttons above it.
+//! The browse views — the artist → album → song drill-down, the flat All
+//! Songs and All Albums lists, and the Playlists list: the scrollable list,
+//! its per-level row mappings, the search box, and the Back, All Songs, All
+//! Albums, Playlists, and Retry buttons above it.
 //!
-//! Every builder is pure — it turns `&[Artist]` / `&[Album]` / `&[Song]` (or
-//! the rows they map to) into an `Element` and knows nothing about
-//! `WinampPlayer` or the update loop — so the browse UI is testable without an
-//! iced renderer.
+//! Every builder is pure — it turns `&[Artist]` / `&[Album]` / `&[Song]` /
+//! `&[Playlist]` (or the rows they map to) into an `Element` and knows nothing
+//! about `WinampPlayer` or the update loop — so the browse UI is testable
+//! without an iced renderer.
 
 use std::borrow::Cow;
 
@@ -87,7 +88,7 @@ pub(super) fn current_row_style(status: button::Status) -> button::Style {
 
 /// Builds a scrollable list where each item is a button showing a title
 /// followed by a secondary label, emitting the given message on press.
-/// Shared by the artists, albums, and songs views. The last tuple element
+/// Shared by every browse list view. The last tuple element
 /// marks the currently playing row: such a row gets a `▶` prefix and a
 /// highlighted background so the list reads as a playlist. Only `song_row`
 /// ever sets the flag to true.
@@ -102,8 +103,8 @@ pub(super) fn current_row_style(status: button::Status) -> button::Style {
 /// borrowed title avoids a `String` allocation per row per frame. The
 /// secondary label is a [`Cow`] because a song row's label is the track's
 /// formatted length, borrowed from the loaded list's label cache in the
-/// common case, while the artist and album rows keep their static hints
-/// borrowed. The playing row's `▶` marker is pushed as
+/// common case, while the artist, album, and playlist rows keep their static
+/// hints borrowed. The playing row's `▶` marker is pushed as
 /// its own static label beside the borrowed title rather than formatted into
 /// an owned one, so the marker adds no `String` allocation per frame either.
 fn scrollable_list<'a>(
@@ -374,9 +375,10 @@ pub fn view_all_songs<'a>(
 /// order given, each emitting [`Message::AlbumSelected`] with the album's
 /// index in the list and the list's `epoch`. It mirrors [`view_albums`] —
 /// album rows carry no current-track marker — but is its own view so its
-/// presses resolve against `all_albums` and Back returns to the flat list. It
-/// never shows the search wording, because the flat list is not a search's
-/// result. Built by [`album_list`] from the [`album_row`] mapping.
+/// presses resolve against `all_albums` and Back from the songs it opens
+/// returns to this list. It never shows the search wording, because the flat
+/// list is not a search's result. Built by [`album_list`] from the
+/// [`album_row`] mapping.
 pub fn view_all_albums<'a>(
     albums: &'a [Album],
     epoch: u64,
@@ -423,8 +425,8 @@ pub fn can_go_back(view: &CurrentView) -> bool {
 
 /// Whether the Artists view should offer its Retry button. Only the
 /// top-level artists fetch is unrecoverable by navigation, so Retry belongs
-/// to the Artists view and only while that fetch has failed; the Albums and
-/// Songs levels recover by navigating back into them. The update loop's
+/// to the Artists view and only while that fetch has failed; every other
+/// browse level recovers by navigating back into it. The update loop's
 /// `LoadArtists` arm clears the failure and re-issues the fetch.
 ///
 /// `#[must_use]`: a discarded result is a logic bug — the caller that decides
@@ -434,9 +436,11 @@ pub fn can_retry_artists(view: &CurrentView, error: Option<&str>) -> bool {
     matches!(view, CurrentView::Artists) && error.is_some()
 }
 
-/// The browse view's Back button, stepping the hierarchy one level up (Songs
-/// → Albums → Artists). Rendered only where [`can_go_back`] is true; the
-/// update loop turns the pressed message into the view change.
+/// The browse view's Back button, stepping the hierarchy one level up: Songs
+/// returns to the list it was opened from (Albums, All Albums, or Playlists),
+/// while a library-search result and every other level return to Artists.
+/// Rendered only where [`can_go_back`] is true; the update loop turns the
+/// pressed message into the view change.
 pub fn view_back_button() -> Element<'static, Message> {
     labeled_button("Back", Message::Back).into()
 }

@@ -395,11 +395,11 @@ fn play_log_line_escapes_control_and_format_characters() {
 }
 
 // "All favorite artists" is the service's content contract, not just a
-// non-empty list: every artist, in library order. The albums and songs
-// queries each pin their exact group in order, but the artists query only
-// asserted non-empty — so a regression that dropped an artist (e.g. a
-// `.take(1)`) or reversed the list would pass every existing test while
-// the browse view silently lost or reordered an artist. `assert_ids` is
+// non-empty list: every artist, in library order. The albums, songs, and
+// playlists queries each pin their exact group in order, but the artists
+// query only asserted non-empty — so a regression that dropped an artist
+// (e.g. a `.take(1)`) or reversed the list would pass every existing test
+// while the browse view silently lost or reordered an artist. `assert_ids` is
 // the same helper the other browse queries use.
 #[tokio::test]
 async fn get_favorite_artists_returns_all_artists_in_library_order() {

@@ -1,5 +1,5 @@
-//! The browse-list state machine: one level of the artist → album → song
-//! hierarchy's rows plus the state that guards them.
+//! The browse-list state machine: one level of the browse hierarchy's rows
+//! plus the state that guards them.
 //!
 //! The `WinampPlayer` holds one `BrowseList<T>` per level. The rows, the
 //! cached row labels, the epoch that makes an index-carrying selection message
@@ -15,8 +15,8 @@
 //! length is formatted once per load, every `*LoadFailed` arm calls `fail`, and
 //! the navigation arms, `LoadArtists`, the flat-list/Playlists buttons, and
 //! `SearchSubmitted` start their fetch through the event loop's `fetch_level`,
-//! which calls `clear` before `begin_fetch`. `select` resolves the three
-//! selection arms' presses.
+//! which calls `clear` before `begin_fetch`. `select` resolves all four
+//! selection arms' presses (track, artist, album, and playlist).
 
 use std::sync::{
     Arc,
@@ -103,7 +103,7 @@ impl<T> BrowseList<T> {
     /// list was not replaced after the row was rendered) and `index` must
     /// still name a row. Either failure means the press outlived its list and
     /// must be a no-op, so the epoch check and the bounds check live here once
-    /// instead of in each of the three selection arms.
+    /// instead of in each of the four selection arms.
     pub(super) fn select(&self, epoch: u64, index: usize) -> Option<&T> {
         if epoch != self.epoch {
             return None;

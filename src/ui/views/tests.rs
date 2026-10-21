@@ -401,8 +401,9 @@ fn browse_views_construct_over_an_empty_list() {
 
 /// Builds every browse view over `artists`, `albums`, `songs`, and
 /// `playlists`, each with the given `epoch`, `loading`, and no error: the
-/// Artists, Albums, Songs, and Playlists views, the Songs view once with no
-/// current track and once with `song-1` marked as playing. iced `Element`s
+/// Artists, Albums, All Albums, and Playlists views, and the Songs and All
+/// Songs views with no current track, with `song-1` marked as playing, and
+/// (for Songs) with `search_active` set. iced `Element`s
 /// expose no tree introspection, so the only observable contract is that each
 /// builder constructs without panicking; the two tests above call this over
 /// the loaded sample library and over the pre-load empty buffers.

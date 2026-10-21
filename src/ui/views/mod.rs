@@ -1,14 +1,15 @@
 //! Widget construction for the player's UI.
 //!
 //! Pure functions: each turns plain data — the current track and the loaded
-//! songs, the playback state, or `&[Artist]` / `&[Album]` / `&[Song]` — into
-//! an `Element` (a few label helpers return `&str` or `Cow<str>` instead) and
-//! knows nothing about the player's state or update loop. Keeping them free
-//! of the `WinampPlayer` struct means the view layer can be reworked (or
-//! tested) independently of how the app is booted.
+//! songs, the playback state, or `&[Artist]` / `&[Album]` / `&[Song]` /
+//! `&[Playlist]` — into an `Element` (a few label helpers return `&str` or
+//! `Cow<str>` instead) and knows nothing about the player's state or update
+//! loop. Keeping them free of the `WinampPlayer` struct means the view layer
+//! can be reworked (or tested) independently of how the app is booted.
 //!
 //! Each panel lives in its own submodule — `browse` (the artist → album →
-//! song lists and their rows), `title_bar`, `now_playing`, `transport`, and
+//! song drill-down, the flat lists, and Playlists, with their rows),
+//! `title_bar`, `now_playing`, `transport`, and
 //! `equalizer` — while the chrome helpers and slider specs the panels share
 //! ([`spacer`], [`labeled_button`], [`fixed_width_button`], and
 //! [`chrome_slider`]) live here.
@@ -59,11 +60,11 @@ fn spacer(width: f32) -> Space {
 
 /// A button showing a single text label that emits `message` on press.
 ///
-/// The browse Back, All Songs, All Albums, and Retry buttons and the equalizer panel's
-/// on/off button call this directly; the transport row's six buttons
-/// (Play/Pause, Stop, Previous, Next, Repeat, Shuffle) and the title bar's
-/// shade, minimize, and close buttons reach it through [`fixed_width_button`].
-/// They all build the same
+/// The browse Back, All Songs, All Albums, Playlists, and Retry buttons and the
+/// equalizer panel's on/off button call this directly; the transport row's six
+/// buttons (Play/Pause, Stop, Previous, Next, Repeat, Shuffle) and the title
+/// bar's shade, minimize, and close buttons reach it through
+/// [`fixed_width_button`]. They all build the same
 /// `Button::new(Text::new(..)).on_press(..)` widget, so that expression lives
 /// here once instead of being repeated at every call site. The label is
 /// `'static` — a literal, or a `&'static str` such as

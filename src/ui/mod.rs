@@ -727,10 +727,11 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 Message::SongsLoadFailed,
             )
         }
-        // The browse hierarchy is navigable both ways: ArtistSelected and
-        // AlbumSelected step down (Artists → Albums → Songs), Back steps up
-        // again. The Back button is only rendered below the artist list, so
-        // this arm mostly fires where a level exists to leave; the explicit
+        // The browse hierarchy is navigable both ways: ArtistSelected,
+        // AlbumSelected, and PlaylistSelected step down (Artists → Albums →
+        // Songs, or into a playlist's songs), Back steps up again. The Back
+        // button is only rendered below the artist list, so this arm mostly
+        // fires where a level exists to leave; the explicit
         // top-level arm keeps the no-op in the same place as the steps.
         Message::Back => {
             // A search result list sits under the artists list, not under the
@@ -1151,8 +1152,8 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
         column = column.push(views::view_back_button());
     }
     // A failed top-level artists fetch is a dead end: no navigation re-issues
-    // it, so the Artists view offers a Retry that re-runs `LoadArtists`. The
-    // Albums and Songs levels recover by navigating back into them, so their
+    // it, so the Artists view offers a Retry that re-runs `LoadArtists`.
+    // Every other browse level recovers by navigating back into it, so those
     // failures need no button.
     if views::can_retry_artists(&player.current_view, player.artists.error.as_deref()) {
         column = column.push(views::view_retry_button());

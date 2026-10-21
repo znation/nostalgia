@@ -364,9 +364,9 @@ where
 /// [`BrowseList::clear`] step before every browse request), issues the
 /// request's generation, and hands both to [`fetch_into`].
 ///
-/// The four browse fetches — the three navigation arms' artists, albums, and
-/// songs loads, plus the library search's songs load — all repeat the same
-/// clear-then-issue-then-fetch sequence. Issuing the request without clearing
+/// Every browse fetch — the artists load, the navigation arms' albums and
+/// songs loads, the flat-list and Playlists loads, and the library search's
+/// songs load — repeats the same clear-then-issue-then-fetch sequence. Issuing the request without clearing
 /// first would let the previous level's rows render, and be pressed, while the
 /// reply is in flight, so the ordering lives here once instead of at each
 /// arm. `list` and `service` are separate borrows of the player's fields, so a
@@ -423,9 +423,9 @@ mod tests {
     fn fetch_failure_report_names_the_fetch_and_includes_the_error() {
         // The browse error report must identify the failing query (the fetch
         // context plus the underlying error), not just say a fetch failed —
-        // otherwise a broken backend would log three identical lines for the
-        // artists, albums, and songs paths with no way to tell which query
-        // failed. The format is pinned here so the contract can't drift.
+        // otherwise a broken backend would log identical lines for several
+        // browse paths with no way to tell which query failed. The format is
+        // pinned here so the contract can't drift.
         let report = fetch_failure_report("loading albums for artist \"artist-1\"", &"boom");
         assert_eq!(
             report,

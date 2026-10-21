@@ -169,12 +169,13 @@ mod tests {
     }
 
     // The unknown-field tolerance is per-type, not global: the test above pins
-    // it for `Artist` only, so `Album`'s and `Song`'s serde "ignore an unknown
-    // field" arms are never exercised. Real Apple Music payloads carry more
-    // than the model's fields, so a `#[serde(deny_unknown_fields)]` added to
-    // either type would fail the whole parse while clearing every existing
-    // test (none deserialize these types with an extra field). Pin the same
-    // tolerance for both, as the missing-field tests below do per-type.
+    // it for `Artist` only, so `Album`'s, `Song`'s, and `Playlist`'s serde
+    // "ignore an unknown field" arms would otherwise go unexercised. Real
+    // Apple Music payloads carry more than the model's fields, so a
+    // `#[serde(deny_unknown_fields)]` added to any of them would fail the
+    // whole parse while clearing every existing test (none deserialize these
+    // types with an extra field). Pin the same tolerance for all three, as
+    // the missing-field tests below do per-type.
     #[test]
     fn album_deserialization_ignores_unknown_fields() {
         assert_unknown_fields_tolerated::<Album>(
@@ -223,11 +224,11 @@ mod tests {
     }
 
     // The missing-field contract holds for every model type, not just Artist:
-    // `Album` and `Song` have no test that omits a field, and their other
-    // tests all supply every field, so a regression that made one of their
-    // fields optional (e.g. a stray `#[serde(default)]` added to tolerate a
-    // payload variant) would clear them while silently rendering blank data.
-    // Each gets the same every-field probe as Artist.
+    // the other model types' tests all supply every field, so a regression
+    // that made one of their fields optional (e.g. a stray `#[serde(default)]`
+    // added to tolerate a payload variant) would clear them while silently
+    // rendering blank data. `Album`, `Song`, and `Playlist` each get the same
+    // every-field probe as Artist.
     #[test]
     fn album_deserialization_rejects_missing_required_fields() {
         assert_every_field_required::<Album>(album_payload());
