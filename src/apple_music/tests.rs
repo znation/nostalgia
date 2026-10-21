@@ -152,6 +152,14 @@ impl AudioOutput for GatedAudio {
             .push(AudioCall::SetVolume(volume));
         Ok(())
     }
+
+    fn set_balance(&self, balance: f32) -> Result<(), AppleMusicError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(AudioCall::SetBalance(balance));
+        Ok(())
+    }
 }
 
 /// The one backend command a [`RejectingAudio`] backend refuses.
@@ -240,6 +248,14 @@ impl AudioOutput for RejectingAudio {
             .unwrap()
             .push(AudioCall::SetVolume(volume));
         self.check(RejectedCommand::SetVolume)
+    }
+
+    fn set_balance(&self, balance: f32) -> Result<(), AppleMusicError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(AudioCall::SetBalance(balance));
+        Ok(())
     }
 }
 
@@ -651,6 +667,20 @@ async fn set_output_volume_forwards_to_the_audio_backend() {
     assert_eq!(state.lock().await.volume(), 0.5);
 }
 
+// `set_output_balance` forwards to the injected backend without touching the
+// shared state: the UI stores the clamped value itself, so this method is only
+// the seam to the output's stereo image.
+#[tokio::test]
+async fn set_output_balance_forwards_to_the_audio_backend() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+
+    service.set_output_balance(-0.4).unwrap();
+
+    assert_eq!(recording.calls(), vec![AudioCall::SetBalance(-0.4)]);
+    assert_eq!(state.lock().await.balance(), 0.0);
+}
+
 // A song the library supplied without a preview URL still commits the state
 // transition — the Now Playing bar must name it — but starts no audio. The
 // recording fake pins that no `Play` reaches the backend.
@@ -792,8 +822,9 @@ fn preview_url_problem_unwraps_a_disguised_internal_host() {
 
 // The guard must not reject a legitimate preview URL, so Apple's CDN host, a
 // plain public host, and a public address literal all still reach the backend.
-// `play_track` first forwards the state's volume (the default 0.5) so the
-// preview starts at the slider's value, then starts the play.
+// `play_track` first forwards the state's volume (the default 0.5) and
+// balance (the default center) so the preview starts at the sliders' values,
+// then starts the play.
 #[tokio::test]
 async fn play_track_accepts_a_public_https_preview_url() {
     for url in [
@@ -809,9 +840,36 @@ async fn play_track_accepts_a_public_https_preview_url() {
             .unwrap();
         assert_eq!(
             recording.calls(),
-            vec![AudioCall::SetVolume(0.5), AudioCall::Play(url.to_string())]
+            vec![
+                AudioCall::SetVolume(0.5),
+                AudioCall::SetBalance(0.0),
+                AudioCall::Play(url.to_string()),
+            ]
         );
     }
+}
+
+// The first preview must start at the balance already stored in shared state,
+// not at the backend's centered default, just as it starts at the stored
+// volume.
+#[tokio::test]
+async fn play_track_starts_the_preview_at_the_states_balance() {
+    let (service, state, recording) = recording_service();
+    state.lock().await.set_balance(-0.4);
+
+    service
+        .play_track("song-1", Some(PREVIEW_URL), || true)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        recording.calls(),
+        vec![
+            AudioCall::SetVolume(0.5),
+            AudioCall::SetBalance(-0.4),
+            AudioCall::Play(PREVIEW_URL.to_string()),
+        ]
+    );
 }
 
 // A backend that cannot start the preview reports it through the seam, so the
@@ -1147,6 +1205,7 @@ async fn resume_after_stop_reports_a_restart_failure_without_claiming_playback()
         audio.calls(),
         vec![
             AudioCall::SetVolume(0.5),
+            AudioCall::SetBalance(0.0),
             AudioCall::Play(PREVIEW_URL.to_string()),
             AudioCall::Stop,
             AudioCall::Play(PREVIEW_URL.to_string()),

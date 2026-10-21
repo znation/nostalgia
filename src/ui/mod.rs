@@ -408,13 +408,14 @@ fn step_track(player: &WinampPlayer, forward: bool) -> Task<Message> {
 
 /// Locks the shared playback state, applies `mutation` to it, and returns no
 /// task. The synchronous arms — `ToggleRepeat`, `ToggleShuffle`,
-/// `BalanceChange`, `ToggleEqualizer`, `EqPreampChange`, `EqBandChange`, and
+/// `ToggleEqualizer`, `EqPreampChange`, `EqBandChange`, and
 /// `EqPresetSelected` — all repeat the same shared-state update —
 /// `blocking_lock`, one mutation, then `Task::none()` — so the lock-and-noop
 /// shape lives here once and each arm only names its mutation. The transport
 /// arms and asynchronous work (fetches, plays) go through the service instead
-/// (see [`transport_into`] and [`fetch_level`]), and the volume arms use
-/// [`mutate_volume`] because they also forward the value to the backend.
+/// (see [`transport_into`] and [`fetch_level`]), and the volume and balance
+/// arms use [`mutate_volume`] and [`mutate_balance`] because they also forward
+/// their value to the backend.
 fn mutate_state(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> Task<Message> {
     let mut state = player.state.blocking_lock();
     mutation(&mut state);
@@ -436,6 +437,22 @@ fn mutate_volume(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) ->
     let volume = state.volume();
     if let Err(error) = player.apple_music_service.set_output_volume(volume) {
         eprintln!("forwarding volume to the audio backend failed: {error}");
+    }
+    Task::none()
+}
+
+/// Locks the shared playback state, applies `mutation` to it, forwards the
+/// resulting clamped balance to the audio backend, and returns no task. The
+/// `BalanceChange` arm uses this so a slider drag reaches the playing preview
+/// without restarting it; the state write and the backend forward both happen
+/// under the one lock, exactly as [`mutate_volume`] does. A backend error is
+/// logged; the state write has already committed.
+fn mutate_balance(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> Task<Message> {
+    let mut state = player.state.blocking_lock();
+    mutation(&mut state);
+    let balance = state.balance();
+    if let Err(error) = player.apple_music_service.set_output_balance(balance) {
+        eprintln!("forwarding balance to the audio backend failed: {error}");
     }
     Task::none()
 }
@@ -499,7 +516,9 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::ToggleRepeat => mutate_state(player, AppState::toggle_repeat),
         Message::ToggleShuffle => mutate_state(player, AppState::toggle_shuffle),
         Message::VolumeChange(volume) => mutate_volume(player, |state| state.set_volume(volume)),
-        Message::BalanceChange(balance) => mutate_state(player, |state| state.set_balance(balance)),
+        Message::BalanceChange(balance) => {
+            mutate_balance(player, |state| state.set_balance(balance))
+        }
         // The arrow keys nudge the slider's value by its own step, so the
         // keyboard and the drag share one granularity; `nudge_volume` clamps.
         Message::VolumeUp => mutate_volume(player, |state| state.nudge_volume(views::VOLUME_STEP)),

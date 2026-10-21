@@ -361,9 +361,9 @@ pub(crate) fn assert_single_call(stub: &StubTransport, expected_url: &str) {
 
 /// The commands a [`RecordingAudio`] recorded, in order, so a test can pin
 /// exactly what the service handed the audio backend. The derive drops `Eq`
-/// because [`AudioCall::SetVolume`] carries an `f32`, which is only
-/// `PartialEq`; the only uses compare whole `Vec<AudioCall>`s with
-/// `assert_eq!`.
+/// because [`AudioCall::SetVolume`] and [`AudioCall::SetBalance`] carry an
+/// `f32`, which is only `PartialEq`; the only uses compare whole
+/// `Vec<AudioCall>`s with `assert_eq!`.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum AudioCall {
     /// `play` was called with this URL.
@@ -376,16 +376,19 @@ pub(crate) enum AudioCall {
     Stop,
     /// `set_volume` was called with this gain.
     SetVolume(f32),
+    /// `set_balance` was called with this balance.
+    SetBalance(f32),
 }
 
-/// Asserts `calls` recorded the two [`AudioCall`]s that starting a preview
-/// always emits — the play-time volume set to the default `0.5`, then
-/// [`PREVIEW_URL`] — followed by `expected`, the calls under test. The
-/// `apple_music` service tests and the `ui` transport tests each used to spell
-/// out that prefix, so it lives here once.
+/// Asserts `calls` recorded the three [`AudioCall`]s that starting a preview
+/// always emits — the play-time volume set to the default `0.5`, the balance
+/// set to the default `0.0`, then [`PREVIEW_URL`] — followed by `expected`, the
+/// calls under test. The `apple_music` service tests and the `ui` transport
+/// tests each used to spell out that prefix, so it lives here once.
 pub(crate) fn assert_preview_calls(calls: &[AudioCall], expected: &[AudioCall]) {
     let mut wanted = vec![
         AudioCall::SetVolume(0.5),
+        AudioCall::SetBalance(0.0),
         AudioCall::Play(PREVIEW_URL.to_string()),
     ];
     wanted.extend_from_slice(expected);
@@ -438,6 +441,14 @@ impl AudioOutput for RecordingAudio {
             .push(AudioCall::SetVolume(volume));
         Ok(())
     }
+
+    fn set_balance(&self, balance: f32) -> Result<(), AppleMusicError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(AudioCall::SetBalance(balance));
+        Ok(())
+    }
 }
 
 /// An [`AudioOutput`] whose `play` fails, so a test can pin that the service
@@ -463,6 +474,10 @@ impl AudioOutput for FailingAudio {
     }
 
     fn set_volume(&self, _volume: f32) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn set_balance(&self, _balance: f32) -> Result<(), AppleMusicError> {
         Ok(())
     }
 }

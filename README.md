@@ -60,8 +60,8 @@ toggles always-on-top, its shade button (or a double-click on the bar) rolls the
 just that title bar and back, and its `–` and `✕` buttons minimize and close. With the window
 focused, the classic Winamp keys drive
 playback: Z and B step back and forward, X plays, C pauses, V stops, and the up/down arrows nudge
-the volume. The volume slider and the arrow keys set the audio backend's playback level, which is
-remembered for the next track. Setting `APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a
+the volume. The volume slider and the arrow keys set the audio backend's playback level, and the
+balance slider sets its stereo balance; both are remembered for the next track. Setting `APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a
 browser-based MusicKit sign-in: browse and search queries then read your Apple Music library through the REST
 API, and fall back to the built-in sample library when it is unset. Playback plays the selected
 song's Apple Music preview through `rodio` when the library supplies one, and updates the UI state

@@ -1232,6 +1232,36 @@ fn volume_messages_forward_to_the_audio_backend() {
     );
 }
 
+// The balance arm must reach the injected backend, not just write shared
+// state: a slider drag that only moved the `AppState` value would leave the
+// playing preview centered. This drives `BalanceChange` through `update` over
+// a recording backend and pins the clamped value it forwarded, including an
+// out-of-range value and a `NaN` that stores and forwards the center.
+#[test]
+fn balance_messages_forward_to_the_audio_backend() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+
+    assert_message_schedules_no_work(&mut player, Message::BalanceChange(-0.4));
+    assert_eq!(state.blocking_lock().balance(), -0.4);
+
+    assert_message_schedules_no_work(&mut player, Message::BalanceChange(1.5));
+    assert_eq!(state.blocking_lock().balance(), 1.0);
+
+    assert_message_schedules_no_work(&mut player, Message::BalanceChange(f32::NAN));
+    assert_eq!(state.blocking_lock().balance(), 0.0);
+
+    assert_eq!(
+        recording.calls(),
+        vec![
+            AudioCall::SetBalance(-0.4),
+            AudioCall::SetBalance(1.0),
+            AudioCall::SetBalance(0.0),
+        ]
+    );
+}
+
 // Startup wiring: `boot` hands iced a fresh player plus a batched task that
 // loads the artist list and resolves the window id, and `update`'s
 // `LoadArtists` arm runs that fetch into the player's `artists` buffer. A

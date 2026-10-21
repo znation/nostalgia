@@ -28,9 +28,12 @@ use std::io::Cursor;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::time::Duration;
 
+use rodio::source::SeekError;
+use rodio::{ChannelCount, Sample, SampleRate, Source};
 use ureq::unversioned::resolver::{DefaultResolver, ResolvedSocketAddrs, Resolver};
 use ureq::unversioned::transport::{DefaultConnector, NextTimeout};
 
@@ -116,6 +119,20 @@ pub trait AudioOutput: Send + Sync {
     /// Returns an [`AppleMusicError`] when the backend cannot accept the
     /// request (see [`AudioOutput::play`]).
     fn set_volume(&self, volume: f32) -> Result<(), AppleMusicError>;
+
+    /// Sets the stereo balance, where `-1.0` is hard left, `0.0` is centered,
+    /// and `1.0` is hard right.
+    ///
+    /// Applies to the current player, if one is loaded, and is remembered so
+    /// the next [`play`](Self::play) starts at the same balance. This is how
+    /// the balance slider reaches a preview, and how a preview starts at the
+    /// slider's value rather than centered.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the backend cannot accept the
+    /// request (see [`AudioOutput::play`]).
+    fn set_balance(&self, balance: f32) -> Result<(), AppleMusicError>;
 }
 
 /// An [`AudioOutput`] that produces no sound: it logs each command and reports
@@ -152,6 +169,11 @@ impl AudioOutput for SilentOutput {
         println!("Audio output is silent; volume set to {volume}");
         Ok(())
     }
+
+    fn set_balance(&self, balance: f32) -> Result<(), AppleMusicError> {
+        println!("Audio output is silent; balance set to {balance}");
+        Ok(())
+    }
 }
 
 /// A command sent from [`RodioOutput`] to its worker thread.
@@ -166,6 +188,8 @@ enum Command {
     Stop,
     /// Set the output gain (`1.0` is full volume).
     SetVolume(f32),
+    /// Set the stereo balance (`-1.0` hard left, `1.0` hard right).
+    SetBalance(f32),
 }
 
 /// The player handle [`serve_commands`] drives.
@@ -182,6 +206,8 @@ trait WorkerPlayer {
 
     /// Sets the player's output gain.
     fn set_volume(&self, volume: f32);
+    /// Sets the player's stereo balance.
+    fn set_balance(&self, balance: f32);
     /// Appends `preview` to the player's queue.
     fn append(&self, preview: Self::Preview);
     /// Pauses playback.
@@ -192,27 +218,121 @@ trait WorkerPlayer {
     fn stop(&self);
 }
 
-impl WorkerPlayer for rodio::Player {
+/// A [`Source`] adapter that applies a live stereo balance to its samples.
+///
+/// The balance is read from shared state on every sample, so a slider drag
+/// changes the current preview without rebuilding the source. A mono source
+/// is attenuated by `1.0 - balance.abs()`; for a multi-channel source the even
+/// channel indices stay at unity while the balance leans left, and the odd
+/// indices stay at unity while it leans right, so `-1.0` silences the right
+/// channel, `+1.0` the left, and `0.0` is unity. This does not use rodio's
+/// `ChannelVolume` or `Spatial`, which downmix the input to mono and would
+/// collapse the preview's stereo image.
+struct BalanceSource<S> {
+    inner: S,
+    balance: Arc<AtomicU32>,
+    /// The channel index of the next sample, advanced modulo the source's
+    /// channel count.
+    channel: usize,
+}
+
+impl<S> BalanceSource<S> {
+    fn new(inner: S, balance: Arc<AtomicU32>) -> Self {
+        Self {
+            inner,
+            balance,
+            channel: 0,
+        }
+    }
+}
+
+impl<S: Source> Iterator for BalanceSource<S> {
+    type Item = Sample;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let sample = self.inner.next()?;
+        let channels = self.inner.channels().get() as usize;
+        let balance = f32::from_bits(self.balance.load(Ordering::Relaxed));
+        let gain = if channels == 1 {
+            1.0 - balance.abs()
+        } else if self.channel.is_multiple_of(2) {
+            1.0 - balance.max(0.0)
+        } else {
+            1.0 + balance.min(0.0)
+        };
+        self.channel = (self.channel + 1) % channels;
+        Some(sample * gain)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+}
+
+impl<S: Source> Source for BalanceSource<S> {
+    fn current_span_len(&self) -> Option<usize> {
+        self.inner.current_span_len()
+    }
+
+    fn channels(&self) -> ChannelCount {
+        self.inner.channels()
+    }
+
+    fn sample_rate(&self) -> SampleRate {
+        self.inner.sample_rate()
+    }
+
+    fn total_duration(&self) -> Option<Duration> {
+        self.inner.total_duration()
+    }
+
+    fn try_seek(&mut self, pos: Duration) -> Result<(), SeekError> {
+        self.inner.try_seek(pos)
+    }
+}
+
+/// The production [`WorkerPlayer`]: a `rodio::Player` plus the balance shared
+/// with the [`BalanceSource`] wrapping each preview it appends.
+struct RodioPlayer {
+    player: rodio::Player,
+    balance: Arc<AtomicU32>,
+}
+
+impl RodioPlayer {
+    fn new(player: rodio::Player) -> Self {
+        Self {
+            player,
+            balance: Arc::new(AtomicU32::new(0.0_f32.to_bits())),
+        }
+    }
+}
+
+impl WorkerPlayer for RodioPlayer {
     type Preview = rodio::Decoder<Cursor<Vec<u8>>>;
 
     fn set_volume(&self, volume: f32) {
-        rodio::Player::set_volume(self, volume);
+        self.player.set_volume(volume);
+    }
+
+    fn set_balance(&self, balance: f32) {
+        self.balance.store(balance.to_bits(), Ordering::Relaxed);
     }
 
     fn append(&self, preview: Self::Preview) {
-        rodio::Player::append(self, preview);
+        self.player
+            .append(BalanceSource::new(preview, Arc::clone(&self.balance)));
     }
 
     fn pause(&self) {
-        rodio::Player::pause(self);
+        self.player.pause();
     }
 
     fn play(&self) {
-        rodio::Player::play(self);
+        self.player.play();
     }
 
     fn stop(&self) {
-        rodio::Player::stop(self);
+        self.player.stop();
     }
 }
 
@@ -290,6 +410,10 @@ impl AudioOutput for RodioOutput {
     fn set_volume(&self, volume: f32) -> Result<(), AppleMusicError> {
         self.send(Command::SetVolume(volume))
     }
+
+    fn set_balance(&self, balance: f32) -> Result<(), AppleMusicError> {
+        self.send(Command::SetBalance(balance))
+    }
 }
 
 /// Waits up to `timeout` for the worker to report whether the default device
@@ -338,7 +462,7 @@ fn run_worker(receiver: Receiver<Command>, ready: Sender<Result<(), AppleMusicEr
 
     serve_commands(
         receiver,
-        || rodio::Player::connect_new(device.mixer()),
+        || RodioPlayer::new(rodio::Player::connect_new(device.mixer())),
         |url| download_and_decode(preview_agent(), url),
     );
 }
@@ -380,6 +504,9 @@ fn serve_commands<P, D>(
     // set while stopped still applies to the next `Play`, and a new player
     // starts at it rather than rodio's full-volume default.
     let mut volume = 1.0_f32;
+    // The stereo balance the output should hold, remembered across players the
+    // same way as the volume (initial center).
+    let mut balance = 0.0_f32;
     // Commands that arrived while a download was in flight, handled in order
     // once it finishes. A later `Play` or `Stop` among them supersedes the
     // preview the download produced.
@@ -415,6 +542,7 @@ fn serve_commands<P, D>(
                     // full-volume default.
                     let next = create_player();
                     next.set_volume(volume);
+                    next.set_balance(balance);
                     next.append(preview);
                     player = Some(next);
                 }
@@ -449,6 +577,12 @@ fn serve_commands<P, D>(
                 volume = new_volume;
                 if let Some(player) = &player {
                     player.set_volume(volume);
+                }
+            }
+            Command::SetBalance(new_balance) => {
+                balance = new_balance;
+                if let Some(player) = &player {
+                    player.set_balance(balance);
                 }
             }
         }
@@ -590,6 +724,78 @@ mod tests {
         assert!(output.resume().is_ok());
         assert!(output.stop().is_ok());
         assert!(output.set_volume(0.4).is_ok());
+        assert!(output.set_balance(-0.4).is_ok());
+    }
+
+    #[test]
+    fn balance_source_centered_leaves_samples_unchanged() {
+        let channels = ChannelCount::new(2).unwrap();
+        let rate = SampleRate::new(44_100).unwrap();
+        let raw = rodio::buffer::SamplesBuffer::new(channels, rate, vec![0.5_f32, -0.25]);
+        let balance = Arc::new(AtomicU32::new(0.0_f32.to_bits()));
+        let mut source = BalanceSource::new(raw, balance);
+
+        assert_eq!(source.channels(), channels);
+        assert_eq!(source.sample_rate(), rate);
+        assert_eq!(source.current_span_len(), Some(2));
+        assert!(source.total_duration().is_some());
+        assert_eq!(source.by_ref().collect::<Vec<_>>(), vec![0.5, -0.25]);
+    }
+
+    #[test]
+    fn balance_source_hard_left_silences_the_right_channel() {
+        let raw = rodio::buffer::SamplesBuffer::new(
+            ChannelCount::new(2).unwrap(),
+            SampleRate::new(44_100).unwrap(),
+            vec![0.5_f32, 0.25],
+        );
+        let balance = Arc::new(AtomicU32::new((-1.0_f32).to_bits()));
+        let source = BalanceSource::new(raw, balance);
+
+        assert_eq!(source.collect::<Vec<_>>(), vec![0.5, 0.0]);
+    }
+
+    #[test]
+    fn balance_source_hard_right_silences_the_left_channel() {
+        let raw = rodio::buffer::SamplesBuffer::new(
+            ChannelCount::new(2).unwrap(),
+            SampleRate::new(44_100).unwrap(),
+            vec![0.5_f32, 0.25],
+        );
+        let balance = Arc::new(AtomicU32::new(1.0_f32.to_bits()));
+        let source = BalanceSource::new(raw, balance);
+
+        assert_eq!(source.collect::<Vec<_>>(), vec![0.0, 0.25]);
+    }
+
+    #[test]
+    fn balance_source_attenuates_a_mono_source() {
+        let raw = rodio::buffer::SamplesBuffer::new(
+            ChannelCount::new(1).unwrap(),
+            SampleRate::new(44_100).unwrap(),
+            vec![0.5_f32, -0.5],
+        );
+        let balance = Arc::new(AtomicU32::new(0.5_f32.to_bits()));
+        let source = BalanceSource::new(raw, balance);
+
+        assert_eq!(source.collect::<Vec<_>>(), vec![0.25, -0.25]);
+    }
+
+    #[test]
+    fn balance_source_reads_the_shared_balance_on_every_sample() {
+        let raw = rodio::buffer::SamplesBuffer::new(
+            ChannelCount::new(2).unwrap(),
+            SampleRate::new(44_100).unwrap(),
+            vec![1.0_f32; 4],
+        );
+        let balance = Arc::new(AtomicU32::new(0.0_f32.to_bits()));
+        let mut source = BalanceSource::new(raw, Arc::clone(&balance));
+
+        assert_eq!(source.next(), Some(1.0));
+        balance.store((-1.0_f32).to_bits(), Ordering::Relaxed);
+        assert_eq!(source.next(), Some(0.0));
+        assert_eq!(source.next(), Some(1.0));
+        assert_eq!(source.next(), Some(0.0));
     }
 
     #[test]
@@ -615,6 +821,7 @@ mod tests {
         assert!(output.resume().is_ok());
         assert!(output.stop().is_ok());
         assert!(output.set_volume(0.4).is_ok());
+        assert!(output.set_balance(-0.4).is_ok());
     }
 
     // `ureq` defaults every network timeout to `None`, so a preview server
@@ -727,6 +934,7 @@ mod tests {
         output.resume().unwrap();
         output.stop().unwrap();
         output.set_volume(0.4).unwrap();
+        output.set_balance(-0.4).unwrap();
 
         match receiver.try_recv() {
             Ok(Command::Play(url)) => assert_eq!(url, PREVIEW_URL),
@@ -736,6 +944,7 @@ mod tests {
         assert!(matches!(receiver.try_recv(), Ok(Command::Resume)));
         assert!(matches!(receiver.try_recv(), Ok(Command::Stop)));
         assert!(matches!(receiver.try_recv(), Ok(Command::SetVolume(v)) if v == 0.4));
+        assert!(matches!(receiver.try_recv(), Ok(Command::SetBalance(v)) if v == -0.4));
     }
 
     #[test]
@@ -767,6 +976,10 @@ mod tests {
         );
         assert_eq!(
             output.set_volume(0.4).unwrap_err().to_string(),
+            "the audio thread is gone"
+        );
+        assert_eq!(
+            output.set_balance(-0.4).unwrap_err().to_string(),
             "the audio thread is gone"
         );
     }
@@ -996,6 +1209,7 @@ mod tests {
         resumed: Arc<AtomicUsize>,
         stopped: Arc<AtomicBool>,
         volume: Arc<Mutex<f32>>,
+        balance: Arc<Mutex<f32>>,
     }
 
     impl WorkerPlayer for RecordingPlayer {
@@ -1003,6 +1217,10 @@ mod tests {
 
         fn set_volume(&self, volume: f32) {
             *self.volume.lock().unwrap() = volume;
+        }
+
+        fn set_balance(&self, balance: f32) {
+            *self.balance.lock().unwrap() = balance;
         }
 
         fn append(&self, _preview: ()) {
@@ -1159,15 +1377,15 @@ mod tests {
         assert_eq!(*players[1].volume.lock().unwrap(), 0.4);
     }
 
-    // Pause, Resume, SetVolume and Stop drive the player a previous Play
-    // installed; their `if let Some(player)` arms are the only way those
-    // commands reach the output. The commands are sent from inside the first
-    // `create_player` call, once that player is recorded, so they arrive in
-    // order after the Play installs it. The final Pause proves Stop dropped the
-    // player instead of leaving it for later commands: it must not reach the
-    // stopped player.
+    // Pause, Resume, SetVolume, SetBalance and Stop drive the player a
+    // previous Play installed; their `if let Some(player)` arms are the only
+    // way those commands reach the output. The commands are sent from inside
+    // the first `create_player` call, once that player is recorded, so they
+    // arrive in order after the Play installs it. The final Pause proves Stop
+    // dropped the player instead of leaving it for later commands: it must not
+    // reach the stopped player.
     #[test]
-    fn transport_and_volume_commands_drive_the_installed_player() {
+    fn transport_volume_and_balance_commands_drive_the_installed_player() {
         let (sender, receiver) = mpsc::channel();
         let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
         let recorded = Arc::clone(&players);
@@ -1179,6 +1397,7 @@ mod tests {
                 sender.send(Command::Pause).unwrap();
                 sender.send(Command::Resume).unwrap();
                 sender.send(Command::SetVolume(0.6)).unwrap();
+                sender.send(Command::SetBalance(0.3)).unwrap();
                 sender.send(Command::Stop).unwrap();
                 sender.send(Command::Pause).unwrap();
             }
@@ -1195,10 +1414,31 @@ mod tests {
         assert_eq!(players[0].paused.load(Ordering::SeqCst), 1);
         assert_eq!(players[0].resumed.load(Ordering::SeqCst), 1);
         assert_eq!(*players[0].volume.lock().unwrap(), 0.6);
+        assert_eq!(*players[0].balance.lock().unwrap(), 0.3);
         assert!(
             players[0].stopped.load(Ordering::SeqCst),
             "Stop must stop the installed player"
         );
+    }
+
+    // A balance set while stopped must carry to the player a later Play
+    // creates, just as the remembered volume does.
+    #[test]
+    fn a_new_preview_starts_at_the_remembered_balance() {
+        let (sender, receiver) = mpsc::channel();
+        let (players, create_player) =
+            recording_players(&sender, Command::Play("second".to_string()));
+        let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+
+        sender.send(Command::SetBalance(-0.4)).unwrap();
+        sender.send(Command::Play("first".to_string())).unwrap();
+        drop(sender);
+        serve_commands(receiver, create_player, fetch);
+
+        let players = players.lock().unwrap();
+        assert_eq!(players.len(), 2, "each successful Play installs a player");
+        assert_eq!(*players[0].balance.lock().unwrap(), -0.4);
+        assert_eq!(*players[1].balance.lock().unwrap(), -0.4);
     }
 
     // A Play's download runs on the worker, so commands issued meanwhile wait

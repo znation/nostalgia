@@ -188,6 +188,21 @@ impl AppleMusicService {
     pub(crate) fn set_output_volume(&self, volume: f32) -> Result<(), AppleMusicError> {
         self.audio.set_volume(volume)
     }
+
+    /// Forwards `balance` to the audio backend, so the balance slider reaches
+    /// the output's stereo image. Synchronous, and touches no shared state:
+    /// the UI already stored the clamped value under its own lock, and
+    /// [`crate::audio::AudioOutput::set_balance`] is a non-blocking channel
+    /// send, so an async transition here would let a slider drag's messages
+    /// race the state lock.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the audio backend cannot accept
+    /// the request.
+    pub(crate) fn set_output_balance(&self, balance: f32) -> Result<(), AppleMusicError> {
+        self.audio.set_balance(balance)
+    }
 }
 
 /// Transport stubs kept as the seam a real Apple Music implementation will
@@ -457,10 +472,10 @@ impl AppleMusicService {
     }
 
     /// Plays the given track by id, recording it as the current track and
-    /// marking it playing, then applies the state's current volume to the
-    /// injected [`crate::audio::AudioOutput`] and starts `preview_url` through
-    /// it, so the first play uses the slider's value rather than rodio's
-    /// full-volume default. A blank `track_id` — empty or only
+    /// marking it playing, then applies the state's current volume and balance
+    /// to the injected [`crate::audio::AudioOutput`] and starts `preview_url`
+    /// through it, so the first play uses the sliders' values rather than
+    /// rodio's full-volume and centered defaults. A blank `track_id` — empty or only
     /// whitespace — or one carrying a terminal control character is rejected
     /// with an [`AppleMusicError`] and leaves shared state untouched: a blank
     /// id can never name a track, and a control-character id must not reach
@@ -521,10 +536,11 @@ impl AppleMusicService {
         }
         state.current_track = Some(track_id.to_string());
         state.is_playing = true;
-        // The gain to start this preview at, read before the lock drops. A
-        // preview starts at the slider's value rather than rodio's
-        // full-volume default.
+        // The gain and balance to start this preview at, read before the lock
+        // drops. A preview starts at the sliders' values rather than rodio's
+        // full-volume and centered defaults.
         let volume = state.volume();
+        let balance = state.balance();
         drop(state);
 
         println!("{}", play_log_line(track_id));
@@ -537,6 +553,7 @@ impl AppleMusicService {
             if let Err(error) = self
                 .audio
                 .set_volume(volume)
+                .and_then(|()| self.audio.set_balance(balance))
                 .and_then(|()| self.audio.play(url))
             {
                 // The backend refused the preview, so shared state must not keep
