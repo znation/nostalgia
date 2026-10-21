@@ -468,6 +468,23 @@ fn song_list_summary_keeps_counting_minutes_past_an_hour() {
     assert_eq!(song_list_summary(&songs), "1 song - 61:05");
 }
 
+// The total is summed with `saturating_add`, so a payload carrying a duration
+// near the u64 ceiling pins the total at u64::MAX instead of wrapping back to
+// a small time (a plain `+` would wrap in release and panic in debug).
+#[test]
+fn song_list_summary_saturates_a_total_past_the_u64_ceiling() {
+    let songs = [summary_song(u64::MAX), summary_song(1)];
+    assert_eq!(song_list_summary(&songs), "2 songs - 307445734561825:51");
+}
+
+// The footer's time is whole seconds, so a sub-second total truncates rather
+// than rounding: a 999 ms list reads 0:00 and 1_999 ms reads 0:01.
+#[test]
+fn song_list_summary_truncates_a_sub_second_total() {
+    assert_eq!(song_list_summary(&[summary_song(999)]), "1 song - 0:00");
+    assert_eq!(song_list_summary(&[summary_song(1_999)]), "1 song - 0:01");
+}
+
 // The currently playing row is marked by a selection bar. iced's `Element`
 // API exposes no way to read a built `Button`'s style, and the row-style
 // closure only runs at render time, so building the marked row (above)
