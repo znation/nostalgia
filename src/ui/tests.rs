@@ -3202,3 +3202,15 @@ fn title_bar_constructs_for_both_always_on_top_states() {
     let _ = views::view_title_bar(false);
     let _ = views::view_title_bar(true);
 }
+
+// `TITLE_BAR_HEIGHT` is the height of the shade strip twice over:
+// `view_title_bar` sizes the rolled-up frame's only band with it, and
+// `resize_to_shade` shrinks the whole window to it. The shade tests above
+// never read the value — they pass a literal 24.0 only as a stale measurement
+// argument — so a zero or oversized height could leave the rolled-up window
+// blank or full-window while every test stayed green. Pin the user-visible
+// strip height.
+#[test]
+fn title_bar_height_pins_the_shade_strip() {
+    assert_eq!(views::TITLE_BAR_HEIGHT, 24.0);
+}
