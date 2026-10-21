@@ -4,7 +4,9 @@ use super::browse::{
     song_row,
 };
 use super::equalizer::eq_enabled_label;
-use super::now_playing::{KnownTrack, format_track_time, now_playing_artist, now_playing_label};
+use super::now_playing::{
+    KnownTrack, format_track_time, now_playing_artist, now_playing_label, now_playing_time,
+};
 use super::transport::{play_pause_label, repeat_label, shuffle_label, transport_buttons};
 use super::{
     BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, EQ_STEP, VOLUME_MAX, VOLUME_MIN, VOLUME_STEP,
@@ -145,8 +147,10 @@ fn retry_button_is_available_only_for_a_failed_artists_fetch() {
 
 /// Builds the id→track index the player maintains for the Now Playing
 /// bar, from `(id, artist, title)` triples — the shape `now_playing_label`
-/// and `now_playing_artist` resolve against. Durations are `0` here; the
-/// length formatting is pinned separately through `format_track_time`.
+/// and `now_playing_artist` resolve against. Durations are `0` here, so the
+/// cached time is the `--:--` placeholder; the length formatting is pinned
+/// separately through `format_track_time` and the time-resolution test sets a
+/// known label of its own.
 fn known_tracks(entries: &[(&str, &str, &str)]) -> HashMap<String, KnownTrack> {
     entries
         .iter()
@@ -156,7 +160,7 @@ fn known_tracks(entries: &[(&str, &str, &str)]) -> HashMap<String, KnownTrack> {
                 KnownTrack {
                     title: title.to_string(),
                     artist: artist.to_string(),
-                    duration_ms: 0,
+                    time: "--:--".to_string(),
                 },
             )
         })
@@ -226,6 +230,25 @@ fn now_playing_artist_borrows_the_artist() {
 
     let artist = now_playing_artist(&tracks, None);
     assert!(matches!(&artist, Cow::Borrowed(_)));
+}
+
+#[test]
+fn now_playing_time_resolves_known_track_to_cached_label() {
+    let mut tracks = known_tracks(&[("song-1", "The Sample Band", "Opening")]);
+    tracks.get_mut("song-1").expect("seed track").time = "3:30".to_string();
+
+    let time = now_playing_time(&tracks, Some("song-1"));
+    assert_eq!(time, "3:30");
+    assert!(matches!(&time, Cow::Borrowed(_)));
+    assert_eq!(time.as_ptr(), tracks["song-1"].time.as_ptr());
+
+    let missing = now_playing_time(&tracks, Some("no-such-song"));
+    assert_eq!(missing, "--:--");
+    assert!(matches!(&missing, Cow::Borrowed(_)));
+
+    let none = now_playing_time(&tracks, None);
+    assert_eq!(none, "--:--");
+    assert!(matches!(&none, Cow::Borrowed(_)));
 }
 
 #[test]
@@ -472,12 +495,8 @@ fn browse_placeholder_shows_the_fetch_error_instead_of_the_empty_wording() {
 
 #[test]
 fn now_playing_bar_and_browse_action_buttons_construct() {
-    let _bar = view_now_playing(
-        "Opening".into(),
-        "The Sample Band".into(),
-        "3:30".to_string(),
-    );
-    let _bar = view_now_playing("Opening".into(), "".into(), "3:30".to_string());
+    let _bar = view_now_playing("Opening".into(), "The Sample Band".into(), "3:30".into());
+    let _bar = view_now_playing("Opening".into(), "".into(), "3:30".into());
     let _back = view_back_button();
     let _retry = view_retry_button();
     let _all_songs = view_all_songs_button();

@@ -218,10 +218,10 @@ struct WinampPlayer {
     /// artists list instead of the album the search was issued from.
     search_active: bool,
     /// Each played song's id mapped to its [`views::KnownTrack`] (title,
-    /// artist, and duration), so the Now Playing bar can still name and time
-    /// the playing track after the user browses to a different album (whose
-    /// list replaces `songs.items`). The `TrackSelected` arm records a track's
-    /// title, artist, and duration once, when it is played, and
+    /// artist, and formatted length), so the Now Playing bar can still name and
+    /// time the playing track after the user browses to a different album
+    /// (whose list replaces `songs.items`). The `TrackSelected` arm records a
+    /// track's title, artist, and formatted length once, when it is played, and
     /// `now_playing_label` / `now_playing_artist` / `now_playing_time` resolve
     /// the per-frame bar with a single get instead
     /// of scanning a growing list on every frame. Recording on play — rather
@@ -316,16 +316,13 @@ impl WinampPlayer {
         views::now_playing_artist(&self.known_tracks, current_track)
     }
 
-    /// The Now Playing bar's length readout for `current_track`, formatted
-    /// from the duration recorded in [`Self::known_tracks`]; a track the index
-    /// does not know, or one the source gave no duration for, formats as
-    /// `--:--`. Unlike the borrowed label, this formats a fresh `String` every
-    /// frame, so `view` passes it straight to [`views::view_now_playing`].
-    fn now_playing_time(&self, current_track: Option<&str>) -> String {
-        let duration_ms = current_track
-            .and_then(|id| self.known_tracks.get(id))
-            .map_or(0, |track| track.duration_ms);
-        views::format_track_time(duration_ms)
+    /// The Now Playing bar's length readout for `current_track`, borrowed from
+    /// the label cached in [`Self::known_tracks`]; a track the index does not
+    /// know reads the static `--:--` placeholder. Like the label and artist,
+    /// the known case borrows from the index, so `view` renders the bar
+    /// without formatting or allocating a `String` per frame.
+    fn now_playing_time<'a>(&'a self, current_track: Option<&str>) -> Cow<'a, str> {
+        views::now_playing_time(&self.known_tracks, current_track)
     }
 }
 
@@ -543,21 +540,21 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             };
             let track_id = song.id.clone();
             let preview_url = song.preview_url.clone();
-            // Record the played track's title, artist, and duration before
-            // handing the id to the async play: the Now Playing bar resolves
-            // its label, artist, and time from `known_tracks`, and the entry
-            // must survive a later browse to a different album (which replaces
-            // `songs.items`). Recording once per play — rather than folding
-            // every song of every browsed album into the map — keeps the index
-            // proportional to songs actually played and takes the fold off the
-            // browse path.
+            // Record the played track's title, artist, and formatted length
+            // before handing the id to the async play: the Now Playing bar
+            // resolves its label, artist, and time from `known_tracks`, and the
+            // entry must survive a later browse to a different album (which
+            // replaces `songs.items`). Recording once per play — rather than
+            // folding every song of every browsed album into the map — keeps the
+            // index proportional to songs actually played and takes the fold off
+            // the browse path.
             player
                 .known_tracks
                 .entry(track_id.clone())
                 .or_insert_with(|| views::KnownTrack {
                     title: song.title.clone(),
                     artist: song.artist.clone(),
-                    duration_ms: song.duration_ms,
+                    time: views::format_track_time(song.duration_ms),
                 });
             // A newer selection must win even when an older play's backend
             // call finishes later: issue a generation and hand its guard to
@@ -926,10 +923,9 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // lock is held, from a borrowed `current_track` against the accumulated
     // `known_tracks` index (see [`WinampPlayer::now_playing_label`],
     // [`WinampPlayer::now_playing_artist`], and
-    // [`WinampPlayer::now_playing_time`]). The label and artist borrow from
-    // `known_tracks` (or the `"Nothing"`/`""` literals), so those paths
-    // allocate only in the unknown-id label fallback; the time readout formats
-    // a fresh `String` every frame, so it always allocates.
+    // [`WinampPlayer::now_playing_time`]). All three borrow from `known_tracks`
+    // (or the `"Nothing"`/`""`/`"--:--"` literals), so those paths allocate
+    // only in the unknown-id label fallback.
     let (
         now_playing,
         now_playing_artist,

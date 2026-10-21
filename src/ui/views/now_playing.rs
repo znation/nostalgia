@@ -12,9 +12,9 @@ use iced::{
 use crate::ui::{Message, bevel, theme};
 
 /// A track the Now Playing bar knows about: the title and artist it renders
-/// and the length it shows beside them. Recorded once when a track is played,
-/// so the bar keeps naming and timing the playing track after the user browses
-/// to a different album.
+/// and the formatted length it shows beside them. Recorded once when a track
+/// is played, so the bar keeps naming and timing the playing track after the
+/// user browses to a different album.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnownTrack {
     /// The track's display title.
@@ -22,9 +22,10 @@ pub struct KnownTrack {
     /// The performing artist's display name; `""` means the source supplied
     /// no artist, and the Now Playing bar falls back to the title alone.
     pub artist: String,
-    /// The track's length in milliseconds; `0` means the source supplied no
-    /// duration.
-    pub duration_ms: u64,
+    /// The track's formatted length ([`format_track_time`]), cached when the
+    /// track is recorded so a per-frame bar refresh borrows it instead of
+    /// formatting the same duration again.
+    pub time: String,
 }
 
 /// The Now Playing bar label: the title of `current_track` when `tracks`
@@ -65,6 +66,22 @@ pub fn now_playing_artist<'a>(
         .unwrap_or(Cow::Borrowed(""))
 }
 
+/// The Now Playing bar's length readout for `current_track`: the label cached
+/// in [`KnownTrack::time`] when the track was recorded, or `"--:--"` when the
+/// track is unknown or none is current. The known case borrows from `tracks`,
+/// so a per-frame bar refresh formats and allocates nothing; mirrors
+/// [`now_playing_label`] and [`now_playing_artist`]. Pure data → `Cow` so the
+/// resolution is testable without an iced renderer.
+pub fn now_playing_time<'a>(
+    tracks: &'a HashMap<String, KnownTrack>,
+    current_track: Option<&str>,
+) -> Cow<'a, str> {
+    current_track
+        .and_then(|id| tracks.get(id))
+        .map(|track| Cow::Borrowed(track.time.as_str()))
+        .unwrap_or(Cow::Borrowed("--:--"))
+}
+
 /// The Now Playing bar's length readout for `duration_ms`: `"--:--"` when the
 /// source supplied no duration (`0`), else zero-padded `m:ss` (so a track
 /// under a minute reads `0:45` and one over an hour keeps counting minutes
@@ -85,15 +102,14 @@ pub fn format_track_time(duration_ms: u64) -> String {
 /// title with a `" - "` separator only when it is non-empty, so an artist-less
 /// track still reads `Now Playing: <title>`. Takes the already resolved
 /// label, artist, and time string so this per-frame widget build does no song
-/// lookup or formatting itself. Both text values are [`Cow`]s: the borrowed
-/// cases keep the strings owned by the caller's index (no allocation), while
-/// the owned fallback is moved into the widget, so the built element never
-/// borrows a temporary. The time is an owned `String` the caller formatted
-/// this frame.
+/// lookup or formatting itself. All three text values are [`Cow`]s: the
+/// borrowed cases keep the strings owned by the caller's index (no
+/// allocation), while the owned fallback is moved into the widget, so the
+/// built element never borrows a temporary.
 pub fn view_now_playing<'a>(
     label: Cow<'a, str>,
     artist: Cow<'a, str>,
-    time: String,
+    time: Cow<'a, str>,
 ) -> Element<'a, Message> {
     let mut row = Row::new().push(Text::new("Now Playing: ").size(20));
     if !artist.is_empty() {

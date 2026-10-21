@@ -2076,7 +2076,7 @@ fn songs_loaded_does_not_populate_the_known_tracks_index() {
 }
 
 #[test]
-fn track_selected_records_the_played_tracks_title_and_duration() {
+fn track_selected_records_the_played_tracks_title_and_time() {
     let (mut player, _state) = test_player();
     let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
 
@@ -2084,7 +2084,7 @@ fn track_selected_records_the_played_tracks_title_and_duration() {
 
     let track = player.known_tracks.get("song-2").expect("song-2 recorded");
     assert_eq!(track.title, "Two");
-    assert_eq!(track.duration_ms, 125_000);
+    assert_eq!(track.time, "2:05");
 }
 
 // The recording above only covers a `TrackSelected` whose index still names
