@@ -71,6 +71,22 @@ fn player_stepping_from(current: Option<&str>) -> (WinampPlayer, Arc<Mutex<AppSt
     (player, state)
 }
 
+/// Feeds a committed play of `track_id` through `Message::TrackPlayed`, as the
+/// playback task would after a successful `TrackSelected`: the shared state
+/// names the track and is playing, and the completion carries the current play
+/// generation, so the arm records the track in the player's play history.
+fn record_a_play(player: &mut WinampPlayer, state: &Arc<Mutex<AppState>>, track_id: &str) {
+    {
+        let mut state = state.blocking_lock();
+        state.current_track = Some(track_id.to_string());
+        state.is_playing = true;
+    }
+    let generation = player
+        .plays_generation
+        .load(std::sync::atomic::Ordering::SeqCst);
+    let _ = update(player, Message::TrackPlayed { generation });
+}
+
 /// A fresh player showing the Albums view: it seeds the one
 /// [`sample_artist`] and drives the `ArtistSelected` press that artist's
 /// first row emits (index 0 of epoch 0), the step
@@ -2241,15 +2257,165 @@ fn next_with_shuffle_never_reselects_the_current_track() {
     ));
 }
 
-// Previous ignores Shuffle — the app keeps no play history to walk back — so
-// with the flag on it still steps one song backward, exactly as with it off.
+// With Shuffle on, Previous retraces the recorded play order: the history
+// here is song-1, song-3, song-2, so the first press must land on song-3
+// (index 2), not the sequential song-1 (index 0), and the second press —
+// after the jump's play commits — continues back to song-1.
 #[test]
-fn previous_with_shuffle_still_steps_backward() {
+fn previous_with_shuffle_retraces_recorded_plays() {
+    let (mut player, state) = player_stepping_from(None);
+    state.blocking_lock().shuffle = true;
+    record_a_play(&mut player, &state, "song-1");
+    record_a_play(&mut player, &state, "song-3");
+    record_a_play(&mut player, &state, "song-2");
+
+    let task = update(&mut player, Message::PreviousTrack);
+    assert_track_selected(task, 0, 2);
+
+    record_a_play(&mut player, &state, "song-3");
+    let task = update(&mut player, Message::PreviousTrack);
+    assert_track_selected(task, 0, 0);
+}
+
+// The jump's play has not committed yet, so `current` still names song-3;
+// two Previous presses must keep walking back from the pending target rather
+// than both resolving against the same current track.
+#[test]
+fn previous_with_shuffle_walks_back_before_the_jump_commits() {
+    let (mut player, state) = player_stepping_from(None);
+    state.blocking_lock().shuffle = true;
+    record_a_play(&mut player, &state, "song-1");
+    record_a_play(&mut player, &state, "song-2");
+    record_a_play(&mut player, &state, "song-3");
+
+    let first = update(&mut player, Message::PreviousTrack);
+    assert_track_selected(first, 0, 1);
+    let second = update(&mut player, Message::PreviousTrack);
+    assert_track_selected(second, 0, 0);
+}
+
+// With no recorded history there is nothing to retrace, so a shuffled
+// Previous falls back to the sequential row before the current song.
+#[test]
+fn previous_with_shuffle_falls_back_to_the_row_before_the_current_song() {
     let (mut player, state) = player_stepping_from(Some("song-2"));
     state.blocking_lock().shuffle = true;
 
     let task = update(&mut player, Message::PreviousTrack);
     assert_track_selected(task, 0, 0);
+}
+
+// A recorded track the visible list no longer shows is skipped: the history
+// is song-1, song-3, song-2, but song-3 was removed from the browsed songs, so
+// Previous lands on song-1 (index 0) rather than scheduling a hidden row.
+#[test]
+fn previous_with_shuffle_skips_history_entries_outside_the_visible_list() {
+    let (mut player, state) = player_stepping_from(None);
+    state.blocking_lock().shuffle = true;
+    record_a_play(&mut player, &state, "song-1");
+    record_a_play(&mut player, &state, "song-3");
+    record_a_play(&mut player, &state, "song-2");
+    player.songs.items.retain(|song| song.id != "song-3");
+
+    let task = update(&mut player, Message::PreviousTrack);
+    assert_track_selected(task, 0, 0);
+}
+
+// A history jump whose play fails must be retried, not left behind: the
+// backend rolls `is_playing` back but leaves the jump target in
+// `current_track`, so the failed completion names song-2 and `TrackPlayed`
+// marks the jump for retry. The next shuffled Previous must select song-2
+// again instead of walking past it to song-1.
+#[test]
+fn a_failed_history_jump_retries_the_target() {
+    let (mut player, state) = player_stepping_from(None);
+    state.blocking_lock().shuffle = true;
+    record_a_play(&mut player, &state, "song-1");
+    record_a_play(&mut player, &state, "song-2");
+    record_a_play(&mut player, &state, "song-3");
+
+    let jump = update(&mut player, Message::PreviousTrack);
+    assert_track_selected(jump, 0, 1);
+
+    {
+        let mut state = state.blocking_lock();
+        state.current_track = Some("song-2".to_string());
+        state.is_playing = false;
+    }
+    let generation = player
+        .plays_generation
+        .load(std::sync::atomic::Ordering::SeqCst);
+    let _ = update(&mut player, Message::TrackPlayed { generation });
+
+    let task = update(&mut player, Message::PreviousTrack);
+    assert_track_selected(task, 0, 1);
+}
+
+// A new committed play supersedes the pending jump; from song-4 the next
+// Previous steps from the last actually recorded track, song-3 (index 2),
+// rather than from the abandoned jump's target.
+#[test]
+fn previous_with_shuffle_resumes_from_the_last_recorded_play_after_a_new_track() {
+    let (mut player, state) = player_stepping_from(None);
+    state.blocking_lock().shuffle = true;
+    record_a_play(&mut player, &state, "song-1");
+    record_a_play(&mut player, &state, "song-2");
+    record_a_play(&mut player, &state, "song-3");
+
+    let jump = update(&mut player, Message::PreviousTrack);
+    assert_track_selected(jump, 0, 1);
+    record_a_play(&mut player, &state, "song-4");
+
+    let task = update(&mut player, Message::PreviousTrack);
+    assert_track_selected(task, 0, 2);
+}
+
+// A failed play reports a current track but is not playing, so `TrackPlayed`
+// must not record it. With history song-1, song-2 and the failed song-3 left
+// out, `previous(.., None)` returns song-2; a wrongly recorded song-3 would
+// return song-3 instead.
+#[test]
+fn track_played_ignores_a_failed_completion() {
+    let (mut player, state) = player_stepping_from(None);
+    record_a_play(&mut player, &state, "song-1");
+    record_a_play(&mut player, &state, "song-2");
+    {
+        let mut state = state.blocking_lock();
+        state.current_track = Some("song-3".to_string());
+        state.is_playing = false;
+    }
+
+    let _ = update(&mut player, Message::TrackPlayed { generation: 0 });
+
+    assert_eq!(
+        player.play_history.previous(&stepping_songs(), None),
+        Some("song-2".to_string())
+    );
+}
+
+// A completion from an older generation belongs to a superseded play and must
+// not record its track. The same song-2 assertion distinguishes the expected
+// history from one that wrongly recorded song-3.
+#[test]
+fn track_played_ignores_a_superseded_completion() {
+    let (mut player, state) = player_stepping_from(None);
+    record_a_play(&mut player, &state, "song-1");
+    record_a_play(&mut player, &state, "song-2");
+    player
+        .plays_generation
+        .store(1, std::sync::atomic::Ordering::SeqCst);
+    {
+        let mut state = state.blocking_lock();
+        state.current_track = Some("song-3".to_string());
+        state.is_playing = true;
+    }
+
+    let _ = update(&mut player, Message::TrackPlayed { generation: 0 });
+
+    assert_eq!(
+        player.play_history.previous(&stepping_songs(), None),
+        Some("song-2".to_string())
+    );
 }
 
 /// Feeds a `*Loaded` message built from `items` back through `update` and

@@ -250,6 +250,11 @@ struct WinampPlayer {
     /// selection's entry is still pending, and pruning to the older committed
     /// track would drop it.
     known_tracks: HashMap<String, views::KnownTrack>,
+    /// The tracks actually played, in play order, backing Previous while
+    /// Shuffle is on. A committed `TrackPlayed` records the track; a shuffled
+    /// Previous retraces it, and a list that no longer shows the previous
+    /// entry falls back to sequential stepping.
+    play_history: transport::PlayHistory,
     /// The playback-request counter. Each `TrackSelected` bumps it and
     /// carries its value into the async play as a guard: `play_track`
     /// evaluates the guard while holding the state lock and commits the
@@ -312,6 +317,7 @@ impl WinampPlayer {
             search_query: String::new(),
             search_active: false,
             known_tracks: HashMap::new(),
+            play_history: transport::PlayHistory::default(),
             plays_generation: Arc::new(AtomicU64::new(0)),
         }
     }
@@ -370,9 +376,12 @@ fn boot(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> (WinampPlaye
 
 /// The task the Next/Previous buttons schedule: step the current track
 /// through the list the current view shows — `all_songs` for the flat All
-/// Songs view, the browsed `songs` otherwise — in the given direction — with Shuffle on
-/// a forward step picks a random non-current song via
-/// `transport::shuffled_track_id`, otherwise `forward` selects the
+/// Songs view, the browsed `songs` otherwise — in the given direction — with
+/// Shuffle on a forward step picks a random non-current song via
+/// `transport::shuffled_track_id`, and a backward step first retraces the
+/// recorded play history via `PlayHistory::previous`, falling back to
+/// `transport::previous_track_id` when no recorded track is still visible;
+/// otherwise `forward` selects the
 /// `transport::next_track_id`/`previous_track_id` stepping function — and
 /// schedule the landed song as `TrackSelected`, or no task when there is
 /// nothing to step through. Both transport update arms used to repeat this
@@ -381,9 +390,8 @@ fn boot(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> (WinampPlaye
 /// Shuffle and Repeat flags are read under the same lock, so the
 /// random-vs-sequential and wrap-vs-stop-at-the-edge decisions (see
 /// `transport::shuffled_track_id` and `transport::next_track_id`) stay in
-/// `transport` too. Previous ignores Shuffle: the app keeps no play history,
-/// so there is no prior song to randomize back to.
-fn step_track(player: &WinampPlayer, forward: bool) -> Task<Message> {
+/// `transport` too.
+fn step_track(player: &mut WinampPlayer, forward: bool) -> Task<Message> {
     // The stepped song is computed under the state lock, borrowing the
     // current track directly. The earlier version cloned the `current_track`
     // `String` only to borrow it via `as_deref` — the same clone-to-borrow
@@ -407,6 +415,13 @@ fn step_track(player: &WinampPlayer, forward: bool) -> Task<Message> {
         )
     } else if forward {
         transport::next_track_id(items, state.current_track.as_deref(), state.repeat)
+    } else if state.shuffle {
+        player
+            .play_history
+            .previous(items, state.current_track.as_deref())
+            .or_else(|| {
+                transport::previous_track_id(items, state.current_track.as_deref(), state.repeat)
+            })
     } else {
         transport::previous_track_id(items, state.current_track.as_deref(), state.repeat)
     };
@@ -969,6 +984,17 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             // bounded rather than leaving the failed selection's entry.
             if generation == player.plays_generation.load(Ordering::SeqCst) {
                 let state = player.state.blocking_lock();
+                if state.is_playing
+                    && let Some(current) = state.current_track.as_deref()
+                {
+                    player.play_history.record(current);
+                } else {
+                    // A failed play leaves shared state naming the jump's
+                    // target (the backend leaves `current_track` set), so keep
+                    // the pending jump and mark it for retry: the next Previous
+                    // offers that same target rather than walking past it.
+                    player.play_history.retry_pending();
+                }
                 match state.current_track.as_deref() {
                     Some(current) => player.known_tracks.retain(|id, _| id == current),
                     None => player.known_tracks.clear(),
