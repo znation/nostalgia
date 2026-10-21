@@ -19,8 +19,7 @@ fn test_service() -> AppleMusicService {
 
 /// A fresh service plus a handle to the shared state it mutates, so a
 /// playback test can drive the service and then inspect the resulting
-/// `AppState`. The playback tests below all start with this same
-/// service-and-state pair, so it lives here once.
+/// `AppState`. The tests that need both share this setup.
 fn test_service_with_state() -> (AppleMusicService, Arc<Mutex<AppState>>) {
     let service = test_service();
     let state = service.state.clone();
@@ -40,10 +39,8 @@ async fn service_with_song_1_playing() -> (AppleMusicService, Arc<Mutex<AppState
 }
 
 /// Locks the shared playback state and asserts it holds `expected_track`
-/// with `expected_playing`. The playback tests below all end on that
-/// same pair — the recorded track id and the playing flag — so the
-/// lock-and-compare sequence lives here once and each test only names the
-/// state it drove to.
+/// with `expected_playing`. The lock-and-compare sequence lives here once, so
+/// each calling test only names the state it drove to.
 async fn assert_playback_state(
     state: &Arc<Mutex<AppState>>,
     expected_track: Option<&str>,
@@ -86,9 +83,9 @@ type RecordingService = (AppleMusicService, Arc<Mutex<AppState>>, Arc<RecordingA
 
 /// A fresh service over a recording backend, plus its shared state and the
 /// recording itself, so a transport test can drive the service and then assert
-/// the exact `AudioCall` sequence it sent. The four tests that start from a
-/// stopped transport build this same `Arc::new`/`Arc::clone` pair, so it lives
-/// here once.
+/// the exact `AudioCall` sequence it sent. The tests that drive a stopped
+/// transport through the recording backend build this same
+/// `Arc::new`/`Arc::clone` pair, so it lives here once.
 fn recording_service() -> RecordingService {
     let recording = Arc::new(RecordingAudio::default());
     let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
@@ -96,7 +93,7 @@ fn recording_service() -> RecordingService {
 }
 
 /// [`recording_service`] with `song-1`'s preview already playing, so the
-/// backend holds a loaded player for the five tests whose subject is a later
+/// backend holds a loaded player for the tests whose subject is a later
 /// transition. They build the same pair, so it lives here once.
 async fn recording_service_with_preview() -> RecordingService {
     let recording = Arc::new(RecordingAudio::default());
@@ -1595,8 +1592,9 @@ fn concurrent_toggles_serialize_on_the_transport_lock() {
     assert!(futures::executor::block_on(state.lock()).is_playing);
 }
 
-// `pause`'s test above pins its state change; its two sibling stubs,
-// `next_track` and `previous_track`, have no production caller at all.
+// The `pause` test (`pause_pauses_the_audio_backend`) pins its state change;
+// its two sibling stubs, `next_track` and `previous_track`, have no production
+// caller at all.
 // They are deliberately unimplemented no-ops — the transport buttons step
 // through `transport::next_track_id`/`previous_track_id` instead — so pin
 // the one contract they do carry: they report success and, unlike
