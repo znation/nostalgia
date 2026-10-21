@@ -61,4 +61,30 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 - Driving both seek messages through `update` records exactly one `AudioCall::SeekBy(-5)` and one `AudioCall::SeekBy(5)` and schedules no task.
 - The README documents the left/right five-second seek keys.
 
+### Make Previous retrace the play history when Shuffle is on (planned 2026-10-20 by the plan role)
+
+**Goal.** With Shuffle on, pressing Previous returns to the track actually played before the current one, retracing the play order like classic Winamp, instead of stepping one row backward in the visible list. With Shuffle off, Previous keeps its sequential and Repeat-aware behavior. Today `step_track` in `src/ui/mod.rs` sends only a forward step through `transport::shuffled_track_id`; every backward step goes through `transport::previous_track_id`. The `step_track` doc comment and `previous_with_shuffle_still_steps_backward` in `src/ui/tests.rs` pin that Previous ignores Shuffle because no play history exists.
+
+**Approach.**
+
+- `src/ui/transport.rs`: beside `shuffled_track_id`, add `pub(super) const HISTORY_LIMIT: usize = 100` and `pub struct PlayHistory { entries: Vec<String>, cursor: Option<usize> }` deriving `Debug` and `Default`. Add two methods:
+  - `pub fn record(&mut self, track_id: &str)`: when the cursor already names `track_id`, do nothing, so a history jump's completion or a re-press of the current row neither duplicates the entry nor moves the cursor; otherwise truncate entries after the cursor, push `track_id`, point the cursor at it, then drop the oldest entries while more than `HISTORY_LIMIT` remain, keeping the cursor on the same track.
+  - `pub fn previous(&mut self, songs: &[Song], current: Option<&str>) -> Option<String>`: start just before the cursor when the cursor names `current` (otherwise at the end of the entries), scan backward for the first entry whose id is in `songs`, point the cursor at it, and return its id; return `None` and leave the cursor unchanged when no earlier usable entry remains. Skipping entries absent from `songs` lets a browse to another album fall back instead of selecting a row the visible list does not contain.
+- `src/ui/mod.rs`: add `play_history: transport::PlayHistory` to `WinampPlayer` and initialize it with `Default::default()` in `WinampPlayer::new`. Change `step_track` to take `&mut WinampPlayer`: when `!forward && state.shuffle`, first try `player.play_history.previous(items, state.current_track.as_deref())`, use its id when present, and otherwise fall through to `transport::previous_track_id` as today; the forward Shuffle branch and both sequential branches stay as they are. In the `Message::TrackPlayed` arm, inside the existing current-generation guard, record `state.current_track` only when `state.is_playing` is true, so a failed play never enters the history; a history jump's completion records the target its cursor already names, which `record` treats as a no-op. Update the `step_track` doc comment to describe the history-backed Previous behavior instead of "Previous ignores Shuffle".
+- `src/ui/tests.rs`: replace `previous_with_shuffle_still_steps_backward` with tests for the new behavior, and drive `Message::TrackPlayed` to exercise the recording path. Cover a shuffled Previous that retraces two recorded plays, a shuffled Previous with no usable history that falls back to the sequential row, a history entry absent from the visible list being skipped, and a `TrackPlayed` with `is_playing` false recording nothing.
+- `src/ui/transport.rs` tests: cover recording order and the repeated-current no-op, walking backward on repeated `previous` calls, skipping ids absent from the supplied `songs`, returning `None` without moving at the start of history, dropping forward entries when a new track is recorded after a back step, and the `HISTORY_LIMIT` bound.
+- `README.md`: in the Usage paragraph, say that with Shuffle on Previous retraces the tracks played before the current one.
+- `docs/invariants.md` has no transport-stepping section (its headings cover the browse hierarchy, browse reply freshness, and the Now Playing label), so this plan leaves it unchanged.
+
+**Files touched.** `src/ui/transport.rs`, `src/ui/mod.rs`, `src/ui/tests.rs`, `README.md`.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- `PlayHistory::record` keeps chronological play order, treats a repeated current id as a no-op, drops forward entries after a back step when a new track is recorded, and keeps at most `HISTORY_LIMIT` entries.
+- `PlayHistory::previous` returns the nearest earlier entry present in `songs`, walks further back on repeated calls, skips entries from a list the player no longer shows, and returns `None` without moving when no earlier usable entry exists.
+- With Shuffle on, Previous selects the recorded previous track rather than the row before the current one; with no usable history it falls back to `previous_track_id`. With Shuffle off, Previous still follows `previous_track_id` and the shared Repeat flag.
+- A current-generation `TrackPlayed` with `is_playing` true records the committed track; one with `is_playing` false, or a superseded generation, records nothing.
+- The new tests named in the approach pass alongside the existing Next/Previous wiring tests, and the README documents the Shuffle-on Previous behavior.
+
 ## Done
