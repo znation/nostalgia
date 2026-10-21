@@ -316,6 +316,33 @@ impl RestLibrary {
         self.fetch(&url, session, |resource| resource.to_song(""))
     }
 
+    /// Every album in the signed-in user's library, in library order.
+    ///
+    /// The whole library is read through the same paginated collection
+    /// helper the artist and song queries use, so a library larger than one
+    /// page is read in full. A library album carries no artist id in this
+    /// collection response, so every mapped [`Album`] leaves `artist_id`
+    /// empty — the same shape [`RestLibrary::get_all_songs`] gives its songs'
+    /// `album_id`. Nothing that opens an all-albums row reads the artist id
+    /// (`get_songs_from_album` uses only the album id).
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the request fails, the response is
+    /// not valid JSON, or a resource carries a blank id or no name.
+    pub fn get_all_albums(&self, session: &MusicKitSession) -> Result<Vec<Album>, AppleMusicError> {
+        let url = format!("{API_BASE}/me/library/albums");
+        self.fetch(&url, session, |resource| {
+            let id = resource.required_id("album")?;
+            let title = resource.required_name("album")?;
+            Ok(Album {
+                id,
+                title,
+                artist_id: String::new(),
+            })
+        })
+    }
+
     /// Songs in the signed-in user's library matching `query`.
     ///
     /// Apple's library search returns its songs nested under

@@ -102,6 +102,9 @@ enum Message {
     // The Artists view's All Songs button: fetch the whole library flat and
     // show it under the All Songs view.
     ShowAllSongs,
+    // The Artists view's All Albums button: fetch every library album flat and
+    // show it under the All Albums view.
+    ShowAllAlbums,
     // The library search box: `SearchChanged` carries each keystroke into
     // `search_query`; `SearchSubmitted` carries the box's text when Enter is
     // pressed and replaces the songs list with the search results.
@@ -112,6 +115,7 @@ enum Message {
     AlbumsLoaded(Vec<Album>),
     SongsLoaded(Vec<Song>),
     AllSongsLoaded(Vec<Song>),
+    AllAlbumsLoaded(Vec<Album>),
     // A browse fetch that returned an error. The payload is the formatted
     // report (see `loading::fetch_failure_report`): it names the failed fetch
     // and carries the backend's cause, so the browse panel can show why the
@@ -120,6 +124,7 @@ enum Message {
     AlbumsLoadFailed(String),
     SongsLoadFailed(String),
     AllSongsLoadFailed(String),
+    AllAlbumsLoadFailed(String),
     // A browse reply stamped with the generation that produced it. The
     // mapper's `RequestGeneration::is_current` check runs on iced's executor
     // thread; `update` stores the reply later on the UI thread, and a
@@ -188,13 +193,21 @@ struct WinampPlayer {
     /// unshading can restore it. `None` until the measurement lands.
     unshaded_size: Option<iced::Size>,
     current_view: CurrentView,
-    /// The three browse levels. Each `BrowseList` owns its rows, epoch,
-    /// loading flag, error report, and request counter (see `browse`).
+    /// The browse levels. Each `BrowseList` owns its rows, epoch, loading
+    /// flag, error report, and request counter (see `browse`).
     artists: BrowseList<Artist>,
     albums: BrowseList<Album>,
     songs: BrowseList<Song>,
     /// The flat whole-library list behind the Artists view's All Songs button.
     all_songs: BrowseList<Song>,
+    /// The flat whole-library album list behind the Artists view's All Albums
+    /// button.
+    all_albums: BrowseList<Album>,
+    /// Which list the Songs view was opened from. `Album` returns to the
+    /// per-artist Albums view on Back; `AllAlbums` returns to the flat All
+    /// Albums view instead. Set by `AlbumSelected` from the view that rendered
+    /// the pressed row, so Back always steps to the level the row came from.
+    songs_origin: SongsOrigin,
     /// The library search box's text, as typed. `Message::SearchChanged`
     /// stores each keystroke here and the search box renders it back; a submit
     /// trims it into the fetch's query.
@@ -242,6 +255,17 @@ enum CurrentView {
     Albums,
     Songs,
     AllSongs,
+    AllAlbums,
+}
+
+/// Which browse list a Songs view was opened from, so `Back` can step to it.
+#[derive(Debug, PartialEq, Eq)]
+enum SongsOrigin {
+    /// The per-artist Albums view: Back returns to `CurrentView::Albums`.
+    Album,
+    /// The flat whole-library All Albums view: Back returns to
+    /// `CurrentView::AllAlbums`.
+    AllAlbums,
 }
 
 impl WinampPlayer {
@@ -264,6 +288,8 @@ impl WinampPlayer {
             albums: BrowseList::new(false),
             songs: BrowseList::new(false),
             all_songs: BrowseList::new(false),
+            all_albums: BrowseList::new(false),
+            songs_origin: SongsOrigin::Album,
             search_query: String::new(),
             search_active: false,
             known_tracks: HashMap::new(),
@@ -583,14 +609,25 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             )
         }
         Message::AlbumSelected { epoch, index } => {
-            // The album twin of the artist arm above; `albums.select`
-            // rejects the same stale-epoch and out-of-range presses.
-            let Some(album_id) = player
-                .albums
-                .select(epoch, index)
-                .map(|album| album.id.clone())
-            else {
+            // The album twin of the artist arm above. The Songs view can be
+            // opened from the per-artist Albums list or from the flat All
+            // Albums list, so resolve the press against the list that view
+            // rendered; `select` rejects the same stale-epoch and
+            // out-of-range presses either way. The origin is recorded from the
+            // same view, so Back later returns to the level the row came from.
+            let from_all_albums = player.current_view == CurrentView::AllAlbums;
+            let selected = if from_all_albums {
+                player.all_albums.select(epoch, index)
+            } else {
+                player.albums.select(epoch, index)
+            };
+            let Some(album_id) = selected.map(|album| album.id.clone()) else {
                 return Task::none();
+            };
+            player.songs_origin = if from_all_albums {
+                SongsOrigin::AllAlbums
+            } else {
+                SongsOrigin::Album
             };
             player.current_view = CurrentView::Songs;
             player.search_active = false;
@@ -621,9 +658,13 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 player.current_view = CurrentView::Artists;
             } else {
                 player.current_view = match &player.current_view {
-                    CurrentView::Songs => CurrentView::Albums,
+                    CurrentView::Songs => match player.songs_origin {
+                        SongsOrigin::Album => CurrentView::Albums,
+                        SongsOrigin::AllAlbums => CurrentView::AllAlbums,
+                    },
                     CurrentView::Albums => CurrentView::Artists,
                     CurrentView::AllSongs => CurrentView::Artists,
+                    CurrentView::AllAlbums => CurrentView::Artists,
                     CurrentView::Artists => CurrentView::Artists,
                 };
             }
@@ -644,6 +685,22 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 |service| async move { service.get_all_songs().await },
                 Message::AllSongsLoaded,
                 Message::AllSongsLoadFailed,
+            )
+        }
+        Message::ShowAllAlbums => {
+            // Like All Songs, the flat album list hangs off the artists list:
+            // leave an active search behind and let Back return to Artists.
+            player.search_active = false;
+            player.current_view = CurrentView::AllAlbums;
+            // Clear the previous flat list before the new fetch lands, so a
+            // press during the fetch cannot resolve against stale rows.
+            fetch_level(
+                &mut player.all_albums,
+                &player.apple_music_service,
+                "loading all library albums".to_string(),
+                |service| async move { service.get_all_albums().await },
+                Message::AllAlbumsLoaded,
+                Message::AllAlbumsLoadFailed,
             )
         }
         Message::SearchChanged(text) => {
@@ -711,6 +768,10 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 .store_with_labels(songs, |song| views::format_track_time(song.duration_ms));
             Task::none()
         }
+        Message::AllAlbumsLoaded(albums) => {
+            player.all_albums.store(albums);
+            Task::none()
+        }
         Message::ArtistsLoadFailed(report) => {
             player.artists.fail(report);
             Task::none()
@@ -725,6 +786,10 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         }
         Message::AllSongsLoadFailed(report) => {
             player.all_songs.fail(report);
+            Task::none()
+        }
+        Message::AllAlbumsLoadFailed(report) => {
+            player.all_albums.fail(report);
             Task::none()
         }
         // The executor-thread check in `fetch_into` already dropped replies a
@@ -746,6 +811,9 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                 }
                 Message::AllSongsLoaded(_) | Message::AllSongsLoadFailed(_) => {
                     player.all_songs.is_current(issued)
+                }
+                Message::AllAlbumsLoaded(_) | Message::AllAlbumsLoadFailed(_) => {
+                    player.all_albums.is_current(issued)
                 }
                 _ => true,
             };
@@ -936,6 +1004,14 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
                 state.current_track.as_deref(),
             )
         }
+        // The flat album list renders like the per-artist Albums view: album
+        // rows with no current-track marker.
+        CurrentView::AllAlbums => views::view_all_albums(
+            &player.all_albums.items,
+            player.all_albums.epoch,
+            player.all_albums.loading,
+            player.all_albums.error.as_deref(),
+        ),
     };
 
     let mut column = Column::new()
@@ -963,11 +1039,13 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     if views::can_retry_artists(&player.current_view, player.artists.error.as_deref()) {
         column = column.push(views::view_retry_button());
     }
-    // The All Songs button opens the flat whole-library list; it lives on the
-    // Artists view, beside Back/Retry, so the flat list is one press from the
-    // top of the hierarchy.
+    // The All Songs and All Albums buttons open the flat whole-library lists;
+    // they live on the Artists view, beside Back/Retry, so each flat list is
+    // one press from the top of the hierarchy.
     if matches!(player.current_view, CurrentView::Artists) {
-        column = column.push(views::view_all_songs_button());
+        column = column
+            .push(views::view_all_songs_button())
+            .push(views::view_all_albums_button());
     }
     // The search box sits on every browse screen, so a query can be typed
     // from any level of the hierarchy.

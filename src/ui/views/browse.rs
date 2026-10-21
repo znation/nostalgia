@@ -1,6 +1,6 @@
 //! The artist → album → song browse views: the scrollable list, its per-level
-//! row mappings, the search box, and the Back, All Songs, and Retry buttons
-//! above it.
+//! row mappings, the search box, and the Back, All Songs, All Albums, and
+//! Retry buttons above it.
 //!
 //! Every builder is pure — it turns `&[Artist]` / `&[Album]` / `&[Song]` (or
 //! the rows they map to) into an `Element` and knows nothing about
@@ -20,8 +20,8 @@ use crate::ui::{CurrentView, Message, style, theme};
 use super::{labeled_button, now_playing::format_track_time, spacer};
 
 /// The placeholder a browse view shows when its list has no rows: one wording
-/// per browse level, so an empty Artists, Albums, Songs, or All Songs panel
-/// names the list rather than showing a blank panel. Pure so the per-level
+/// per browse level, so an empty Artists, Albums, Songs, All Songs, or All
+/// Albums panel names the list rather than showing a blank panel. Pure so the per-level
 /// wording is testable without an iced renderer, like the button label helpers
 /// below.
 pub(super) fn empty_list_label(view: &CurrentView) -> &'static str {
@@ -30,6 +30,7 @@ pub(super) fn empty_list_label(view: &CurrentView) -> &'static str {
         CurrentView::Albums => "No albums",
         CurrentView::Songs => "No songs",
         CurrentView::AllSongs => "No songs",
+        CurrentView::AllAlbums => "No albums",
     }
 }
 
@@ -350,6 +351,31 @@ pub fn view_all_songs<'a>(
     )
 }
 
+/// The All Albums browse view: one row per album in the whole library, in the
+/// order given, each emitting [`Message::AlbumSelected`] with the album's
+/// index in the list and the list's `epoch`. It mirrors [`view_albums`] —
+/// album rows carry no current-track marker — but is its own view so its
+/// presses resolve against `all_albums` and Back returns to the flat list. It
+/// never shows the search wording, because the flat list is not a search's
+/// result. Built by [`browse_view`] from the [`album_row`] mapping.
+pub fn view_all_albums<'a>(
+    albums: &'a [Album],
+    epoch: u64,
+    loading: bool,
+    error: Option<&'a str>,
+) -> Element<'a, Message> {
+    browse_view(
+        CurrentView::AllAlbums,
+        albums
+            .iter()
+            .enumerate()
+            .map(|(index, album)| album_row(epoch, index, album)),
+        loading,
+        error,
+        false,
+    )
+}
+
 /// Whether the browse view has a level above it to return to. The Albums and
 /// Songs views do — the Back button is shown above their lists — while the
 /// top-level Artists list has nothing to go back to.
@@ -388,6 +414,14 @@ pub fn view_all_songs_button() -> Element<'static, Message> {
     labeled_button("All Songs", Message::ShowAllSongs).into()
 }
 
+/// The Artists view's All Albums button, opening the flat whole-library album
+/// list. Rendered only on the Artists view, beside the All Songs button; the
+/// update loop's `ShowAllAlbums` arm switches to `CurrentView::AllAlbums` and
+/// issues the fetch.
+pub fn view_all_albums_button() -> Element<'static, Message> {
+    labeled_button("All Albums", Message::ShowAllAlbums).into()
+}
+
 /// The Artists view's Retry button, re-running the top-level artists fetch
 /// after it failed. Rendered only where [`can_retry_artists`] is true; the
 /// update loop's `LoadArtists` arm clears the failure and re-issues the
@@ -416,9 +450,10 @@ pub fn view_search_box(query: &str) -> Element<'_, Message> {
 /// naming the list once means a new view is added here rather than to each
 /// loop's literal.
 #[cfg(test)]
-pub const BROWSE_VIEWS: [CurrentView; 4] = [
+pub const BROWSE_VIEWS: [CurrentView; 5] = [
     CurrentView::Artists,
     CurrentView::Albums,
     CurrentView::Songs,
     CurrentView::AllSongs,
+    CurrentView::AllAlbums,
 ];

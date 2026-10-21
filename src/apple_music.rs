@@ -640,6 +640,22 @@ impl AppleMusicService {
         .await
     }
 
+    /// Every album in the library: the signed-in user's whole Apple Music
+    /// library when a session is stored, and every sample-library album
+    /// otherwise.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the signed-in request fails; with
+    /// no session the sample-library lookup never fails.
+    pub async fn get_all_albums(&self) -> Result<Vec<Album>, AppleMusicError> {
+        self.browse(
+            |rest, session| rest.get_all_albums(session),
+            sample_all_albums,
+        )
+        .await
+    }
+
     /// Songs in the library matching `query`: every song whose title or artist
     /// contains `query` case-insensitively, in library order.
     ///
@@ -969,15 +985,16 @@ fn lookup<T: Clone>(index: &HashMap<String, Vec<T>>, id: &str) -> Vec<T> {
     index.get(id).cloned().unwrap_or_default()
 }
 
-/// Every sample-library song in library order: the ordered
-/// `artists` → `albums_by_artist` → `songs_by_album` walk, so
-/// [`sample_all_songs`] and [`sample_songs_matching`] share one order and
-/// cannot drift apart. The library indexes songs by album in a `HashMap`,
-/// whose iteration order is unspecified, so walking it directly would shuffle
-/// the results; this chain keeps them stable and in the same order the Songs
-/// view shows a browsed album. Pure, so the order is testable without a
-/// service.
-fn sample_songs_in_library_order() -> impl Iterator<Item = &'static Song> {
+/// Every sample-library album in library order: the ordered
+/// `artists` → `albums_by_artist` walk. Both the flat album list and
+/// [`sample_songs_in_library_order`] start from this walk, so the albums the
+/// All Albums view shows and the album order behind the flat song list cannot
+/// drift apart. The library indexes albums by artist in a `HashMap`, whose
+/// iteration order is unspecified, so walking it directly would shuffle the
+/// results; this chain keeps them stable and in the same order the Albums
+/// view shows a browsed artist's albums. Pure, so the order is testable
+/// without a service.
+fn sample_albums_in_library_order() -> impl Iterator<Item = &'static Album> {
     let library = sample_library();
     library.artists.iter().flat_map(|artist| {
         library
@@ -985,8 +1002,27 @@ fn sample_songs_in_library_order() -> impl Iterator<Item = &'static Song> {
             .get(&artist.id)
             .into_iter()
             .flatten()
-            .flat_map(|album| library.songs_by_album.get(&album.id).into_iter().flatten())
     })
+}
+
+/// Every sample-library album, in library order.
+fn sample_all_albums() -> Vec<Album> {
+    sample_albums_in_library_order().cloned().collect()
+}
+
+/// Every sample-library song in library order: the ordered
+/// `artists` → `albums_by_artist` → `songs_by_album` walk, so
+/// [`sample_all_songs`] and [`sample_songs_matching`] share one order and
+/// cannot drift apart. The album ordering comes from
+/// [`sample_albums_in_library_order`], the same walk the flat All Albums view
+/// uses. The library indexes songs by album in a `HashMap`, whose iteration
+/// order is unspecified, so walking it directly would shuffle the results;
+/// this chain keeps them stable and in the same order the Songs view shows a
+/// browsed album. Pure, so the order is testable without a service.
+fn sample_songs_in_library_order() -> impl Iterator<Item = &'static Song> {
+    let library = sample_library();
+    sample_albums_in_library_order()
+        .flat_map(|album| library.songs_by_album.get(&album.id).into_iter().flatten())
 }
 
 /// Every sample-library song, in library order.

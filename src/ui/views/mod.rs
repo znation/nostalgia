@@ -27,8 +27,9 @@ mod title_bar;
 mod transport;
 
 pub use browse::{
-    can_go_back, can_retry_artists, view_albums, view_all_songs, view_all_songs_button,
-    view_artists, view_back_button, view_retry_button, view_search_box, view_songs,
+    can_go_back, can_retry_artists, view_albums, view_all_albums, view_all_albums_button,
+    view_all_songs, view_all_songs_button, view_artists, view_back_button, view_retry_button,
+    view_search_box, view_songs,
 };
 pub use equalizer::view_equalizer;
 pub use now_playing::{
@@ -57,7 +58,7 @@ fn spacer(width: f32) -> Space {
 
 /// A button showing a single text label that emits `message` on press.
 ///
-/// The browse Back, All Songs, and Retry buttons and the equalizer panel's
+/// The browse Back, All Songs, All Albums, and Retry buttons and the equalizer panel's
 /// on/off button call this directly; the transport row's six buttons
 /// (Play/Pause, Stop, Previous, Next, Repeat, Shuffle) and the title bar's
 /// shade, minimize, and close buttons reach it through [`fixed_width_button`].

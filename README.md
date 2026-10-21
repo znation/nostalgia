@@ -14,8 +14,8 @@ Nostalgia is a (very close if not pixel-perfect) clone of the classic Winamp UI,
 <!-- tumwater:status:start -->
 Early skeleton (0.1.0): an iced (0.14) desktop clone of the Winamp 2.x UI, with a themed player
 (Now Playing LCD, transport, volume and balance, equalizer) and an artist → album → song browser
-with library search and a flat All Songs view. Apple Music browse/search and preview playback sit
-behind injectable seams and fall back to the sample library and silence.
+with library search and flat All Songs and All Albums views. Apple Music browse/search and
+preview playback sit behind injectable seams and fall back to the sample library and silence.
 Open work lives in PLANS.md, BUGS.md, and QUESTIONS.md.
 <!-- tumwater:status:end -->
 
@@ -49,9 +49,12 @@ Play/Pause/Stop/Previous/Next controls, Repeat and Shuffle toggles, volume and b
 an equalizer panel (an EQ on/off button, a preset pick list, a preamp slider, and ten band
 sliders), and a browse list whose song rows show each track's length. A `Search library` box above
 the browse list searches the library when you press Enter, replacing the list with the matching
-songs; Back leaves a search for the artists list. The Artists list also has an `All Songs` button
-that opens a flat list of every song in the library, whose rows play like any other song row; Back
-returns to the artists list, and Next/Previous step through the flat list while it is showing. The
+songs; Back leaves a search for the artists list. The Artists list also has `All Songs` and
+`All Albums` buttons: the first opens a flat list of every song in the library, whose rows play like
+any other song row, and the second opens a flat list of every album, whose rows open that album's
+songs. Back from either flat list returns to the artists list, Back from songs opened through All
+Albums returns to All Albums, and Next/Previous step through the flat song list while it is
+showing. The
 title bar's `A` button
 toggles always-on-top, its shade button (or a double-click on the bar) rolls the window up to
 just that title bar and back, and its `–` and `✕` buttons minimize and close. With the window

@@ -8,9 +8,9 @@ use super::now_playing::{KnownTrack, format_track_time, now_playing_artist, now_
 use super::transport::{play_pause_label, repeat_label, shuffle_label, transport_buttons};
 use super::{
     BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, EQ_STEP, VOLUME_MAX, VOLUME_MIN, VOLUME_STEP,
-    can_go_back, can_retry_artists, view_albums, view_all_songs, view_all_songs_button,
-    view_artists, view_back_button, view_equalizer, view_now_playing, view_retry_button,
-    view_search_box, view_songs, view_transport_controls,
+    can_go_back, can_retry_artists, view_albums, view_all_albums, view_all_albums_button,
+    view_all_songs, view_all_songs_button, view_artists, view_back_button, view_equalizer,
+    view_now_playing, view_retry_button, view_search_box, view_songs, view_transport_controls,
 };
 use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, clamp_gain};
 use crate::library::{Album, Artist, Song};
@@ -357,6 +357,7 @@ fn construct_every_browse_view(
     let _songs_searched = view_songs(songs, &[], epoch, loading, None, None, true);
     let _all_songs = view_all_songs(songs, &[], epoch, loading, None, None);
     let _all_songs_marked = view_all_songs(songs, &[], epoch, loading, None, Some("song-1"));
+    let _all_albums = view_all_albums(albums, epoch, loading, None);
 }
 
 // The currently playing row is marked by a selection bar. iced's `Element`
@@ -405,6 +406,7 @@ fn empty_list_label_names_the_empty_browse_level() {
     assert_eq!(empty_list_label(&CurrentView::Albums), "No albums");
     assert_eq!(empty_list_label(&CurrentView::Songs), "No songs");
     assert_eq!(empty_list_label(&CurrentView::AllSongs), "No songs");
+    assert_eq!(empty_list_label(&CurrentView::AllAlbums), "No albums");
 }
 
 // The placeholder distinguishes a list whose first reply has not landed
@@ -479,6 +481,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
     let _back = view_back_button();
     let _retry = view_retry_button();
     let _all_songs = view_all_songs_button();
+    let _all_albums = view_all_albums_button();
 }
 
 // The search box is an iced `TextInput`, whose placeholder and callbacks

@@ -561,6 +561,22 @@ async fn get_all_songs_returns_every_sample_song_in_library_order() {
     );
 }
 
+// The All Albums backend returns every sample-library album, flat and in
+// library order: the ordered artists -> albums walk, not the unordered
+// album index. A regression that dropped an album or shuffled the artists
+// would leave the flat album view incomplete even though every other browse
+// query still passed.
+#[tokio::test]
+async fn get_all_albums_returns_every_sample_album_in_library_order() {
+    let albums = test_service().get_all_albums().await.unwrap();
+
+    assert_ids(
+        &albums,
+        |album| album.id.as_str(),
+        &["album-1", "album-2", "album-3"],
+    );
+}
+
 // A blank search has nothing to match; returning the whole library (or an
 // empty list) would report the caller's empty input as an ordinary result.
 // The error names the offending query, whitespace included.
@@ -1506,6 +1522,30 @@ async fn get_all_songs_uses_the_rest_library_when_signed_in() {
         }]
     );
     assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/songs");
+}
+
+// The All Albums view routes through the REST client when a session is
+// stored, so a signed-in user sees the real library rather than the sample
+// one. The stub returns an album whose id is not a sample id, so the result
+// can only have come from the REST collection; the URL pins the endpoint.
+#[tokio::test]
+async fn get_all_albums_uses_the_rest_library_when_signed_in() {
+    let stub = StubTransport::returning(
+        r#"{"data":[{"id":"rest-album","attributes":{"name":"Remote Record"}}]}"#,
+    );
+    let service = signed_in_service(&stub);
+
+    let albums = service.get_all_albums().await.unwrap();
+
+    assert_eq!(
+        albums,
+        vec![Album {
+            id: "rest-album".to_string(),
+            title: "Remote Record".to_string(),
+            artist_id: String::new(),
+        }]
+    );
+    assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/albums");
 }
 
 #[tokio::test]
