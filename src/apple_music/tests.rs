@@ -667,24 +667,12 @@ async fn get_playlists_uses_the_rest_library_when_signed_in() {
 // REST collection; the URL pins the id-scoped endpoint.
 #[tokio::test]
 async fn get_songs_from_playlist_uses_the_rest_library_when_signed_in() {
-    let stub = StubTransport::returning(
-        r#"{"data":[{"id":"rest-song","attributes":{"name":"Remote Result","artistName":"Remote Band"}}]}"#,
-    );
+    let stub = StubTransport::returning(&rest_song_data());
     let service = signed_in_service(&stub);
 
     let songs = service.get_songs_from_playlist("playlist-9").await.unwrap();
 
-    assert_eq!(
-        songs,
-        vec![Song {
-            id: "rest-song".to_string(),
-            title: "Remote Result".to_string(),
-            artist: "Remote Band".to_string(),
-            album_id: String::new(),
-            duration_ms: 0,
-            preview_url: None,
-        }]
-    );
+    assert_eq!(songs, vec![rest_song()]);
     assert_single_call(
         &stub,
         "https://api.music.apple.com/v1/me/library/playlists/playlist-9/tracks",
@@ -1838,6 +1826,52 @@ fn a_failed_authentication_leaves_a_stored_session_unchanged() {
 // and never calls the transport. The stub records each request, so the URL
 // and both tokens are pinned alongside the mapped rows.
 
+// The non-sample song the signed-in browse tests carry: its id, title, and
+// artist feed both the expected `Song` and the stub envelopes, so a change to
+// the mapped values shows up in one place. The search, All Songs, and
+// playlist-tracks tests share it; the two outer envelope shapes are built by
+// [`rest_song_data`] and [`rest_search_song_data`].
+const REST_SONG_ID: &str = "rest-song";
+const REST_SONG_TITLE: &str = "Remote Result";
+const REST_SONG_ARTIST: &str = "Remote Band";
+
+/// The song the signed-in browse tests' song envelopes carry: a non-sample
+/// id with only the attributes those envelopes include, so a result can only
+/// have come from REST.
+fn rest_song() -> Song {
+    Song {
+        id: REST_SONG_ID.to_string(),
+        title: REST_SONG_TITLE.to_string(),
+        artist: REST_SONG_ARTIST.to_string(),
+        album_id: String::new(),
+        duration_ms: 0,
+        preview_url: None,
+    }
+}
+
+/// The JSON song object the signed-in browse envelopes carry, built from the
+/// same constants as [`rest_song`].
+fn rest_song_json() -> String {
+    format!(
+        r#"{{"id":"{}","attributes":{{"name":"{}","artistName":"{}"}}}}"#,
+        REST_SONG_ID, REST_SONG_TITLE, REST_SONG_ARTIST
+    )
+}
+
+/// A stub body for the collection endpoints, whose envelope is `{"data": [...]}`.
+fn rest_song_data() -> String {
+    format!(r#"{{"data":[{}]}}"#, rest_song_json())
+}
+
+/// A stub body for the search endpoint, which nests the data under
+/// `results.library-songs`.
+fn rest_search_song_data() -> String {
+    format!(
+        r#"{{"results":{{"library-songs":{{"data":[{}]}}}}}}"#,
+        rest_song_json()
+    )
+}
+
 /// A service over `transport` with a session stored, so its browse queries
 /// route through the REST client.
 fn signed_in_service(transport: &StubTransport) -> AppleMusicService {
@@ -1915,24 +1949,12 @@ async fn get_songs_from_album_uses_the_rest_library_when_signed_in() {
 // search endpoint, the term, and the documented page-size maximum.
 #[tokio::test]
 async fn search_songs_uses_the_rest_library_when_signed_in() {
-    let stub = StubTransport::returning(
-        r#"{"results":{"library-songs":{"data":[{"id":"rest-song","attributes":{"name":"Remote Result","artistName":"Remote Band"}}]}}}"#,
-    );
+    let stub = StubTransport::returning(&rest_search_song_data());
     let service = signed_in_service(&stub);
 
     let songs = service.search_songs("remote").await.unwrap();
 
-    assert_eq!(
-        songs,
-        vec![Song {
-            id: "rest-song".to_string(),
-            title: "Remote Result".to_string(),
-            artist: "Remote Band".to_string(),
-            album_id: String::new(),
-            duration_ms: 0,
-            preview_url: None,
-        }]
-    );
+    assert_eq!(songs, vec![rest_song()]);
     assert_single_call(
         &stub,
         "https://api.music.apple.com/v1/me/library/search?term=remote&types=library-songs&limit=25",
@@ -1945,24 +1967,12 @@ async fn search_songs_uses_the_rest_library_when_signed_in() {
 // have come from the REST collection; the URL pins the endpoint.
 #[tokio::test]
 async fn get_all_songs_uses_the_rest_library_when_signed_in() {
-    let stub = StubTransport::returning(
-        r#"{"data":[{"id":"rest-song","attributes":{"name":"Remote Result","artistName":"Remote Band"}}]}"#,
-    );
+    let stub = StubTransport::returning(&rest_song_data());
     let service = signed_in_service(&stub);
 
     let songs = service.get_all_songs().await.unwrap();
 
-    assert_eq!(
-        songs,
-        vec![Song {
-            id: "rest-song".to_string(),
-            title: "Remote Result".to_string(),
-            artist: "Remote Band".to_string(),
-            album_id: String::new(),
-            duration_ms: 0,
-            preview_url: None,
-        }]
-    );
+    assert_eq!(songs, vec![rest_song()]);
     assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/songs");
 }
 
