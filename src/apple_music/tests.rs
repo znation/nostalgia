@@ -606,25 +606,57 @@ async fn get_songs_from_playlist_rejects_a_control_character_id() {
         .await;
 }
 
-// Part 1's documented behaviour: playlists still answer from the sample
-// library while a session is stored. The REST sibling deliberately changes
-// this, so pin it until that change lands.
+// The Playlists view routes through the REST client when a session is stored,
+// so a signed-in user sees their real playlists rather than the sample ones.
+// The stub returns a playlist whose id is not a sample id, so the result can
+// only have come from the REST collection; the URL pins the endpoint.
 #[tokio::test]
-async fn get_playlists_returns_the_sample_playlists_with_a_session_stored() {
-    let service = signed_in_service(&StubTransport::returning(""));
-    let playlists = service.get_playlists().await.unwrap();
-    assert_ids(
-        &playlists,
-        |playlist| playlist.id.as_str(),
-        &["playlist-1", "playlist-2", "playlist-3"],
+async fn get_playlists_uses_the_rest_library_when_signed_in() {
+    let stub = StubTransport::returning(
+        r#"{"data":[{"id":"rest-playlist","attributes":{"name":"Remote Mix"}}]}"#,
     );
+    let service = signed_in_service(&stub);
+
+    let playlists = service.get_playlists().await.unwrap();
+
+    assert_eq!(
+        playlists,
+        vec![Playlist {
+            id: "rest-playlist".to_string(),
+            name: "Remote Mix".to_string(),
+        }]
+    );
+    assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/playlists");
 }
 
+// Opening a playlist routes through the REST client when a session is stored,
+// so a signed-in user browses the real playlist's tracks. The stub returns a
+// song whose id is not a sample id, so the result can only have come from the
+// REST collection; the URL pins the id-scoped endpoint.
 #[tokio::test]
-async fn get_songs_from_playlist_returns_its_sample_songs_with_a_session_stored() {
-    let service = signed_in_service(&StubTransport::returning(""));
-    let songs = service.get_songs_from_playlist("playlist-1").await.unwrap();
-    assert_ids(&songs, |song| song.id.as_str(), &["song-1", "song-4"]);
+async fn get_songs_from_playlist_uses_the_rest_library_when_signed_in() {
+    let stub = StubTransport::returning(
+        r#"{"data":[{"id":"rest-song","attributes":{"name":"Remote Result","artistName":"Remote Band"}}]}"#,
+    );
+    let service = signed_in_service(&stub);
+
+    let songs = service.get_songs_from_playlist("playlist-9").await.unwrap();
+
+    assert_eq!(
+        songs,
+        vec![Song {
+            id: "rest-song".to_string(),
+            title: "Remote Result".to_string(),
+            artist: "Remote Band".to_string(),
+            album_id: String::new(),
+            duration_ms: 0,
+            preview_url: None,
+        }]
+    );
+    assert_single_call(
+        &stub,
+        "https://api.music.apple.com/v1/me/library/playlists/playlist-9/tracks",
+    );
 }
 
 // The library search is the UI search box's backend: it answers with the
@@ -1510,8 +1542,8 @@ fn spawn_sign_in_thread_names_its_work_thread() {
 // The session seam: `new` starts with no session, `authenticate_with`
 // stores the session its flow returns, and a failed flow propagates the
 // error without disturbing an already-stored session. The real
-// `authenticate` wraps the browser flow and is covered by the manual check
-// in PLANS.md; these tests drive `authenticate_with` with a stub.
+// `authenticate` wraps the browser flow and is covered by a manual check;
+// these tests drive `authenticate_with` with a stub.
 
 #[test]
 fn a_new_service_has_no_session() {

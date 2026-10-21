@@ -2,7 +2,7 @@ use super::*;
 
 use crate::test_support::{
     PREVIEW_URL, StubTransport, assert_ids, assert_single_call, loopback_listener,
-    record_first_request, rest_session, sample_album, sample_artist, sample_song,
+    record_first_request, rest_session, sample_album, sample_artist, sample_playlist, sample_song,
     serve_one_response, serve_one_response_capturing_request,
 };
 
@@ -489,6 +489,128 @@ fn get_all_albums_rejects_a_nameless_album() {
 
     assert!(error.contains("without a name"), "{error}");
     assert!(error.contains("album-7"), "{error}");
+}
+
+#[test]
+fn get_all_playlists_maps_the_library_playlists_collection() {
+    let stub = StubTransport::returning(
+        r#"{"data":[{"id":"playlist-1","attributes":{"name":"Morning Drive"}}]}"#,
+    );
+    let library = library_over(&stub);
+
+    let playlists = library.get_all_playlists(&rest_session()).unwrap();
+
+    assert_eq!(playlists, vec![sample_playlist()]);
+    assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/playlists");
+}
+
+// A library larger than one page is read in full: the flat playlist list
+// follows the same-origin `next` link with the same pagination rules as the
+// other browse collections.
+#[test]
+fn get_all_playlists_follows_a_next_page() {
+    let stub = StubTransport::returning_bodies(&[
+        r#"{"data":[{"id":"playlist-1","attributes":{"name":"Morning Drive"}}],"next":"/v1/me/library/playlists?offset=100"}"#,
+        r#"{"data":[{"id":"playlist-2","attributes":{"name":"Focus"}}]}"#,
+    ]);
+    let library = library_over(&stub);
+
+    let playlists = library.get_all_playlists(&rest_session()).unwrap();
+
+    assert_ids(
+        &playlists,
+        |playlist| playlist.id.as_str(),
+        &["playlist-1", "playlist-2"],
+    );
+    let calls = stub.calls();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(
+        calls[1].0,
+        "https://api.music.apple.com/v1/me/library/playlists?offset=100"
+    );
+}
+
+#[test]
+fn get_all_playlists_reports_a_transport_error_bare() {
+    let stub = StubTransport::failing("network down");
+    let library = library_over(&stub);
+
+    let error = library
+        .get_all_playlists(&rest_session())
+        .unwrap_err()
+        .to_string();
+
+    assert_eq!(error, "network down");
+}
+
+#[test]
+fn get_all_playlists_rejects_a_nameless_playlist() {
+    let error = error_over(
+        r#"{"data":[{"id":"playlist-7","attributes":{}}]}"#,
+        |library| library.get_all_playlists(&rest_session()),
+    );
+
+    assert!(error.contains("without a name"), "{error}");
+    assert!(error.contains("playlist-7"), "{error}");
+}
+
+// A playlist's tracks are read from the id-scoped collection: the requested
+// URL pins the endpoint, and the mapped song pins the fields the model reads,
+// with the empty `album_id` a library playlist track carries.
+#[test]
+fn get_songs_from_playlist_maps_the_playlist_tracks_collection() {
+    let stub = StubTransport::returning(
+        r#"{"data":[{"id":"song-1","attributes":{"name":"Opening","artistName":"The Sample Band","durationInMillis":210000,"previews":[{"url":"https://example.test/preview.m4a"}]}}]}"#,
+    );
+    let library = library_over(&stub);
+
+    let songs = library
+        .get_songs_from_playlist(&rest_session(), "playlist-9")
+        .unwrap();
+
+    assert_eq!(
+        songs,
+        vec![Song {
+            id: "song-1".to_string(),
+            title: "Opening".to_string(),
+            artist: "The Sample Band".to_string(),
+            album_id: String::new(),
+            duration_ms: 210_000,
+            preview_url: Some(PREVIEW_URL.to_string()),
+        }]
+    );
+    assert_single_call(
+        &stub,
+        "https://api.music.apple.com/v1/me/library/playlists/playlist-9/tracks",
+    );
+}
+
+#[test]
+fn get_songs_from_playlist_percent_encodes_the_playlist_id() {
+    let stub = StubTransport::returning(r#"{"data":[]}"#);
+    let library = library_over(&stub);
+
+    library
+        .get_songs_from_playlist(&rest_session(), "a/b c?d#e")
+        .unwrap();
+
+    assert_single_call(
+        &stub,
+        "https://api.music.apple.com/v1/me/library/playlists/a%2Fb%20c%3Fd%23e/tracks",
+    );
+}
+
+#[test]
+fn get_songs_from_playlist_reports_a_transport_error_bare() {
+    let stub = StubTransport::failing("network down");
+    let library = library_over(&stub);
+
+    let error = library
+        .get_songs_from_playlist(&rest_session(), "playlist-9")
+        .unwrap_err()
+        .to_string();
+
+    assert_eq!(error, "network down");
 }
 
 #[test]

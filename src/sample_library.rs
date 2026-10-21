@@ -1,9 +1,8 @@
 //! The in-memory stand-in for a real Apple Music library.
 //!
 //! The Apple Music service (`crate::apple_music`) answers a browse query from
-//! this shared stub when no session is stored; the playlist queries still read
-//! it even with a session until their REST sibling lands (see the part-2
-//! plan). The UI and its tests therefore agree on the same data. This is the
+//! this shared stub when no session is stored. The UI and its tests therefore
+//! agree on the same data. This is the
 //! stub behind the service seam: when a real Apple Music library arrives, this
 //! whole module is deleted and the service's browse methods get real
 //! implementations.

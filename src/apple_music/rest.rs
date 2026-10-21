@@ -1,6 +1,6 @@
 //! The Apple Music REST browse client: turns a `MusicKit` session plus the
-//! Apple Music REST API into the model's [`Artist`], [`Album`], and [`Song`]
-//! lists.
+//! Apple Music REST API into the model's [`Artist`], [`Album`], [`Playlist`],
+//! and [`Song`] lists.
 //!
 //! The client is synchronous and network-isolated behind [`HttpTransport`], so
 //! its tests drive an in-memory stub instead of a live endpoint. It changes no
@@ -14,7 +14,7 @@ use serde::Deserialize;
 
 use super::AppleMusicError;
 use crate::http::agent_with_timeout;
-use crate::library::{Album, Artist, Song};
+use crate::library::{Album, Artist, Playlist, Song};
 use crate::music_kit_auth::MusicKitSession;
 
 /// The Apple Music REST API origin, without a version path. A collection's
@@ -322,6 +322,51 @@ impl RestLibrary {
     pub fn get_all_albums(&self, session: &MusicKitSession) -> Result<Vec<Album>, AppleMusicError> {
         let url = format!("{API_BASE}/me/library/albums");
         self.fetch(&url, session, |resource| resource.into_album(""))
+    }
+
+    /// Every playlist in the signed-in user's library, in library order.
+    ///
+    /// The whole library is read through the same paginated collection
+    /// helper the other browse queries use, so a library larger than one page
+    /// is read in full. The resource is mapped with
+    /// [`Resource::into_playlist`], which moves its id and name into the
+    /// model.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the request fails, the response is
+    /// not valid JSON, or a resource carries a blank id or no name.
+    pub fn get_all_playlists(
+        &self,
+        session: &MusicKitSession,
+    ) -> Result<Vec<Playlist>, AppleMusicError> {
+        let url = format!("{API_BASE}/me/library/playlists");
+        self.fetch(&url, session, Resource::into_playlist)
+    }
+
+    /// Songs in `playlist_id` in the signed-in user's library, in the
+    /// playlist's named order.
+    ///
+    /// The id is percent-encoded as one path segment, so an id carrying a
+    /// reserved character cannot split the path or start a query. A library
+    /// playlist track carries no album id, so every mapped [`Song`] leaves
+    /// `album_id` empty — the same shape [`RestLibrary::get_all_songs`] gives
+    /// its songs.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the request fails, the response is
+    /// not valid JSON, or a resource carries a blank id or no name.
+    pub fn get_songs_from_playlist(
+        &self,
+        session: &MusicKitSession,
+        playlist_id: &str,
+    ) -> Result<Vec<Song>, AppleMusicError> {
+        let url = format!(
+            "{API_BASE}/me/library/playlists/{}/tracks",
+            encode_path_segment(playlist_id)
+        );
+        self.fetch(&url, session, |resource| resource.into_song(""))
     }
 
     /// Songs in the signed-in user's library matching `query`.
@@ -723,6 +768,22 @@ impl Resource {
             title,
             artist_id: artist_id.to_string(),
         })
+    }
+
+    /// Maps this resource to a [`Playlist`], moving its id and name into the
+    /// model (see [`Self::into_artist`]).
+    ///
+    /// A playlist's id and name are required, like an artist's: a blank id
+    /// can name nothing and a nameless playlist would render as an empty row.
+    fn into_playlist(self) -> Result<Playlist, AppleMusicError> {
+        let Resource { id, attributes } = self;
+        let id = required_id(id, "playlist")?;
+        let name = required_name(
+            attributes.and_then(|attributes| attributes.name),
+            &id,
+            "playlist",
+        )?;
+        Ok(Playlist { id, name })
     }
 
     /// Maps this resource to a [`Song`] linked to `album_id`, moving its id,

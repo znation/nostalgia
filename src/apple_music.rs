@@ -641,24 +641,25 @@ impl AppleMusicService {
         .await
     }
 
-    /// Every playlist in the library. Until the REST sibling lands, this
-    /// answers from the sample library even when a session is stored; the
-    /// sibling "Back the playlists browse with the Apple Music REST
-    /// endpoints" rewires it through [`AppleMusicService::browse`].
+    /// Every playlist in the library: the signed-in user's whole Apple Music
+    /// library when a session is stored, and every sample-library playlist
+    /// otherwise.
     ///
     /// # Errors
     ///
-    /// This sample-library answer never fails; the signature already matches
-    /// the REST sibling's fallible one.
+    /// Returns an [`AppleMusicError`] when the signed-in request fails; with
+    /// no session the sample-library answer never fails.
     pub async fn get_playlists(&self) -> Result<Vec<Playlist>, AppleMusicError> {
-        Ok(sample_library().playlists.clone())
+        self.browse(
+            |rest, session| rest.get_all_playlists(session),
+            sample_all_playlists,
+        )
+        .await
     }
 
-    /// Songs in the given playlist, in the playlist's named order. Until the
-    /// REST sibling lands, this answers from the sample library even when a
-    /// session is stored (unknown playlists yield an empty list); the sibling
-    /// rewires it through [`AppleMusicService::browse`], keeping this
-    /// signature and id guard.
+    /// Songs in the given playlist, in the playlist's named order: the
+    /// signed-in user's Apple Music library when a session is stored, and the
+    /// sample library otherwise (unknown playlists yield an empty list).
     ///
     /// A blank `playlist_id` — empty or only whitespace — or one carrying a
     /// control character is rejected with an [`AppleMusicError`], the
@@ -668,14 +669,20 @@ impl AppleMusicService {
     /// # Errors
     ///
     /// Returns an [`AppleMusicError`] when `playlist_id` is blank (empty or
-    /// only whitespace) or carries a control character; the sample-library
-    /// lookup otherwise never fails.
+    /// only whitespace) or carries a control character, or when the
+    /// signed-in request fails; the sample-library lookup otherwise never
+    /// fails.
     pub async fn get_songs_from_playlist(
         &self,
         playlist_id: &str,
     ) -> Result<Vec<Song>, AppleMusicError> {
         ensure_id_is_valid(playlist_id, IdKind::Playlist)?;
-        Ok(lookup(&sample_library().songs_by_playlist, playlist_id))
+        let id = playlist_id.to_string();
+        self.browse(
+            move |rest, session| rest.get_songs_from_playlist(session, &id),
+            || lookup(&sample_library().songs_by_playlist, playlist_id),
+        )
+        .await
     }
 
     /// Every song in the library: the signed-in user's whole Apple Music
@@ -1064,6 +1071,11 @@ fn sample_albums_in_library_order() -> impl Iterator<Item = &'static Album> {
 /// Every sample-library album, in library order.
 fn sample_all_albums() -> Vec<Album> {
     sample_albums_in_library_order().cloned().collect()
+}
+
+/// Every sample-library playlist, in library order.
+fn sample_all_playlists() -> Vec<Playlist> {
+    sample_library().playlists.clone()
 }
 
 /// Every sample-library song in library order: the ordered
