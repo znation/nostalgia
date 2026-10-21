@@ -2869,6 +2869,70 @@ fn track_selected_records_the_played_tracks_title_and_time() {
     assert_eq!(track.time, "2:05");
 }
 
+// The marquee timer runs unconditionally; each tick advances the title window
+// by one character without scheduling any work, so the view can scroll an
+// overlong line while a fitting line ignores the offset.
+#[test]
+fn marquee_tick_advances_the_offset() {
+    let (mut player, _state) = test_player();
+
+    assert_message_schedules_no_work(&mut player, Message::MarqueeTick);
+    assert_eq!(player.marquee_offset, 1);
+    assert_message_schedules_no_work(&mut player, Message::MarqueeTick);
+    assert_eq!(player.marquee_offset, 2);
+}
+
+// A slow UI must not kill the timer: the futures channel holds
+// `buffer + senders` messages — two for its one sender — so after the receiver
+// lets two ticks queue, the next send finds it full. The sender must drop that
+// tick and keep running rather than stop forever. Sleeping through several
+// tick periods without polling first forces those full-channel sends; the
+// third tick read below can then only arrive if the thread survived them.
+#[test]
+fn marquee_ticks_keep_ticking_when_the_receiver_falls_behind() {
+    use futures::StreamExt;
+
+    let mut ticks = marquee_tick_stream();
+    // Queue both messages the channel can hold, then leave the sender several
+    // ticks to attempt more sends while the channel is full.
+    std::thread::sleep(MARQUEE_TICK * 6);
+
+    let first = futures::executor::block_on(await_or_timeout(
+        "first marquee tick",
+        TASK_TIMEOUT,
+        ticks.next(),
+    ));
+    assert!(matches!(first, Some(Message::MarqueeTick)));
+    let second = futures::executor::block_on(await_or_timeout(
+        "second marquee tick",
+        TASK_TIMEOUT,
+        ticks.next(),
+    ));
+    assert!(matches!(second, Some(Message::MarqueeTick)));
+    let third = futures::executor::block_on(await_or_timeout(
+        "marquee tick after a full channel",
+        TASK_TIMEOUT,
+        ticks.next(),
+    ));
+    assert!(
+        matches!(third, Some(Message::MarqueeTick)),
+        "the timer stopped after a full channel"
+    );
+}
+
+// A newly selected song must start its title at character zero rather than
+// inheriting the previous song's scroll position.
+#[test]
+fn track_selected_resets_the_marquee_offset() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    player.marquee_offset = 7;
+
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+
+    assert_eq!(player.marquee_offset, 0);
+}
+
 // The recording above only covers a `TrackSelected` whose index still names
 // a song in the loaded `songs`, so the arm's stale-press guards are never
 // entered. A stale click reaches them: the row was rendered from the album

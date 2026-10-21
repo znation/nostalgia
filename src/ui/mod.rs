@@ -15,6 +15,7 @@ use std::{
         Arc,
         atomic::{AtomicU64, Ordering},
     },
+    time::Duration,
 };
 use tokio::sync::Mutex;
 
@@ -41,6 +42,42 @@ use loading::{
     PLAY_TIMEOUT, RequestGeneration, fetch_level, play_failure_report, play_into, transport_into,
 };
 
+/// How often the Now Playing title window advances one character while an
+/// overlong line scrolls. The view ignores the offset whenever the line fits,
+/// so the timer runs unconditionally.
+const MARQUEE_TICK: Duration = Duration::from_millis(250);
+
+/// A subscription that emits [`Message::MarqueeTick`] once per
+/// [`MARQUEE_TICK`]. iced's timed subscription is gated behind `smol`/`tokio`
+/// backend features the app does not enable (its default thread-pool backend
+/// has no `time::every`), so this feeds the ticks from one std thread through
+/// the futures channel iced re-exports. Dropping the subscription drops the
+/// receiver, and the thread exits on its next send.
+fn marquee_ticks() -> iced::Subscription<Message> {
+    iced::Subscription::run(marquee_tick_stream)
+}
+
+/// The tick stream behind [`marquee_ticks`], split out so a test can poll it.
+/// The one-slot channel deliberately drops a tick when the UI has not polled
+/// the previous one yet; that keeps memory bounded without stopping the timer.
+/// Only a disconnected receiver — the subscription ended — ends the thread.
+fn marquee_tick_stream() -> impl iced::futures::Stream<Item = Message> {
+    use iced::futures::{StreamExt, channel::mpsc};
+
+    let (mut sender, receiver) = mpsc::channel(1);
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(MARQUEE_TICK);
+            if let Err(error) = sender.try_send(())
+                && error.is_disconnected()
+            {
+                break;
+            }
+        }
+    });
+    receiver.map(|()| Message::MarqueeTick)
+}
+
 /// Runs the UI, blocking until the window is closed.
 ///
 /// `service` is the [`AppleMusicService`] `main` built and ran the startup
@@ -60,7 +97,9 @@ pub fn init_ui(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> iced:
         .theme(|_: &WinampPlayer| theme::winamp_theme())
         .decorations(false)
         .resizable(false)
-        .subscription(|_player| keyboard::listen().filter_map(message_for))
+        .subscription(|_player| {
+            iced::Subscription::batch([keyboard::listen().filter_map(message_for), marquee_ticks()])
+        })
         .run()
 }
 
@@ -86,6 +125,10 @@ enum Message {
     // Arrow-key seek nudges: one `views::SEEK_STEP_SECS` back or forward.
     SeekBackward,
     SeekForward,
+    // The marquee timer's tick: advance the Now Playing title window by one
+    // character. The view ignores the offset while the line fits, so the timer
+    // needs no state to start or stop.
+    MarqueeTick,
     ToggleEqualizer,
     EqPreampChange(f32),
     EqBandChange(usize, f32),
@@ -259,6 +302,12 @@ struct WinampPlayer {
     /// Previous retraces it, and a list that no longer shows the previous
     /// entry falls back to sequential stepping.
     play_history: transport::PlayHistory,
+    /// How far an overlong Now Playing title has scrolled: the character
+    /// offset `views::view_now_playing` windows the combined artist/title by.
+    /// `Message::MarqueeTick` advances it, and a `TrackSelected` resets it so
+    /// a new song starts at the beginning of its title. The view ignores it
+    /// whenever the line fits the LCD's character budget.
+    marquee_offset: usize,
     /// The playback-request counter. Each `TrackSelected` bumps it and
     /// carries its value into the async play as a guard: `play_track`
     /// evaluates the guard while holding the state lock and commits the
@@ -322,6 +371,7 @@ impl WinampPlayer {
             search_active: false,
             known_tracks: HashMap::new(),
             play_history: transport::PlayHistory::default(),
+            marquee_offset: 0,
             plays_generation: Arc::new(AtomicU64::new(0)),
         }
     }
@@ -635,6 +685,12 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         }
         Message::NextTrack => step_track(player, true),
         Message::PreviousTrack => step_track(player, false),
+        // The marquee timer only advances the title window; the view uses the
+        // offset solely for an overlong line, so a fitting line stays still.
+        Message::MarqueeTick => {
+            player.marquee_offset = player.marquee_offset.wrapping_add(1);
+            Task::none()
+        }
         Message::TrackSelected { epoch, index } => {
             // The message carries the pressed row's index plus the epoch of
             // the list that rendered it. The Songs view draws from `songs`
@@ -656,6 +712,9 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             };
             let track_id = song.id.clone();
             let preview_url = song.preview_url.clone();
+            // A newly selected song starts its title at character zero; the
+            // previous song's scroll position must not carry over.
+            player.marquee_offset = 0;
             // Record the played track's title, artist, and formatted length
             // before handing the id to the async play: the Now Playing bar
             // resolves its label, artist, and time from `known_tracks`, and the
@@ -1222,6 +1281,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
             now_playing,
             now_playing_artist,
             now_playing_time,
+            player.marquee_offset,
         ))
         .push(views::view_transport_controls(
             is_playing, volume, balance, repeat, shuffle,

@@ -88,12 +88,17 @@ its internal id, whenever the id is in the known-track index:
 - An unknown id falls back to the raw id for the label and to the empty string for the artist.
 - No current track renders the label "Nothing" and an empty artist.
 - Stop keeps the interrupted track's title (the current track is not cleared by Stop).
+- A combined artist/title longer than `MARQUEE_WIDTH` characters is windowed by
+  `views::now_playing::marquee_text`, advanced one character per `Message::MarqueeTick`, and
+  reset to the start by `TrackSelected`; a line that fits is shown whole and borrowed.
 
 **Enforced by.** `views::now_playing_label` and `views::now_playing_artist` in
 `src/ui/views/now_playing.rs` (re-exported by `src/ui/views/mod.rs`), pure functions over the
 known-track index. `WinampPlayer::now_playing_label` and `WinampPlayer::now_playing_artist` in
 `src/ui/mod.rs` resolve against `known_tracks`, so the bar keeps naming a playing track after
-browsing to another album replaced the visible song list.
+browsing to another album replaced the visible song list. `views::now_playing::marquee_text`
+windows an overlong line, and `WinampPlayer::marquee_offset` carries the advance through
+`Message::MarqueeTick`.
 
 **Pinned by.**
 
@@ -106,8 +111,16 @@ browsing to another album replaced the visible song list.
 - `now_playing_artist_is_empty_with_no_current_track`
 - `now_playing_label_borrows_the_title_and_nothing_literal`
 - `now_playing_artist_borrows_the_artist`
+- `marquee_text_keeps_a_line_that_fits`
+- `marquee_text_windows_from_the_offset`
+- `marquee_text_wraps_through_the_gap_to_the_start`
+- `marquee_text_counts_characters_not_bytes`
+- `overlong_now_playing_line_renders_a_new_window_as_the_offset_advances`
   (all in `src/ui/views/tests.rs`)
 - `now_playing_label_keeps_the_track_name_after_browsing_to_another_album` (`src/ui/tests.rs`)
+- `marquee_tick_advances_the_offset`
+- `marquee_ticks_keep_ticking_when_the_receiver_falls_behind`
+- `track_selected_resets_the_marquee_offset` (`src/ui/tests.rs`)
 
 **History.** Reconstructed from "Now Playing bar shows the track id instead of the song title" in
 `BUGS-FIXED.md`.

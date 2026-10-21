@@ -5,7 +5,8 @@ use super::browse::{
 };
 use super::equalizer::eq_enabled_label;
 use super::now_playing::{
-    KnownTrack, format_track_time, now_playing_artist, now_playing_label, now_playing_time,
+    KnownTrack, MARQUEE_WIDTH, format_track_time, marquee_text, now_playing_artist,
+    now_playing_label, now_playing_row, now_playing_time,
 };
 use super::transport::{play_pause_label, repeat_label, shuffle_label, transport_buttons};
 use super::{
@@ -303,6 +304,100 @@ fn now_playing_time_resolves_known_track_to_cached_label() {
 #[test]
 fn format_track_time_shows_placeholders_when_the_source_supplied_no_duration() {
     assert_eq!(format_track_time(0), "--:--");
+}
+
+// The marquee window is a pure character window: a line that fits is left
+// alone so the common case renders borrowed and still, and an overlong line
+// starts at the requested offset, wraps through the gap, and counts
+// characters rather than bytes.
+#[test]
+fn marquee_text_keeps_a_line_that_fits() {
+    assert_eq!(marquee_text("Opening", 9, 28), "Opening");
+}
+
+#[test]
+fn marquee_text_windows_from_the_offset() {
+    let text = "The Sample Band - Opening";
+    assert_eq!(marquee_text(text, 0, 10), "The Sample");
+    assert_eq!(marquee_text(text, 2, 10), "e Sample B");
+}
+
+#[test]
+fn marquee_text_wraps_through_the_gap_to_the_start() {
+    assert_eq!(
+        marquee_text("The Sample Band - Opening", 25, 10),
+        "   The Sam"
+    );
+}
+
+#[test]
+fn marquee_text_counts_characters_not_bytes() {
+    assert_eq!(marquee_text("Café — Ok", 0, 5), "Café ");
+}
+
+// The row the Now Playing bar renders must use that window: an overlong line
+// shows a different LCD text as the offset advances, while a fitting line
+// still renders the separate borrowed artist and title at every offset.
+#[test]
+fn overlong_now_playing_line_renders_a_new_window_as_the_offset_advances() {
+    use iced::advanced::{
+        Layout,
+        layout::Limits,
+        widget::{Id, Tree, operation::Operation},
+    };
+    use iced::{Rectangle, Size};
+
+    #[derive(Default)]
+    struct CapturedText(Vec<String>);
+
+    impl Operation for CapturedText {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+
+        fn text(&mut self, _id: Option<&Id>, _bounds: Rectangle, text: &str) {
+            self.0.push(text.to_string());
+        }
+    }
+
+    fn captured_texts(label: &str, artist: &str, offset: usize) -> Vec<String> {
+        let mut element: iced::Element<'_, Message, iced::Theme, ()> = now_playing_row(
+            Cow::Borrowed(label),
+            Cow::Borrowed(artist),
+            Cow::Borrowed("3:30"),
+            offset,
+        )
+        .into();
+        let mut tree = Tree::new(element.as_widget());
+        let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
+        let node = element.as_widget_mut().layout(&mut tree, &(), &limits);
+        let mut captured = CapturedText::default();
+        element
+            .as_widget_mut()
+            .operate(&mut tree, Layout::new(&node), &(), &mut captured);
+        captured.0
+    }
+
+    let label = "A Title Much Longer Than The Display";
+    let artist = "The Sample Band";
+    let display = format!("{artist} - {label}");
+    let first_window = marquee_text(&display, 0, MARQUEE_WIDTH);
+    let second_window = marquee_text(&display, 1, MARQUEE_WIDTH);
+    assert_ne!(first_window, second_window);
+
+    let first = captured_texts(label, artist, 0);
+    let second = captured_texts(label, artist, 1);
+    assert!(first.iter().any(|text| text == &first_window), "{first:?}");
+    assert!(
+        second.iter().any(|text| text == &second_window),
+        "{second:?}"
+    );
+
+    let still_a = captured_texts("Opening", artist, 0);
+    let still_b = captured_texts("Opening", artist, 5);
+    assert_eq!(still_a, still_b);
+    assert!(still_a.iter().any(|text| text == artist));
+    assert!(still_a.iter().any(|text| text == "Opening"));
 }
 
 #[test]
@@ -629,8 +724,14 @@ fn browse_placeholder_shows_the_fetch_error_instead_of_the_empty_wording() {
 
 #[test]
 fn now_playing_bar_and_browse_action_buttons_construct() {
-    let _bar = view_now_playing("Opening".into(), "The Sample Band".into(), "3:30".into());
-    let _bar = view_now_playing("Opening".into(), "".into(), "3:30".into());
+    let _bar = view_now_playing("Opening".into(), "The Sample Band".into(), "3:30".into(), 0);
+    let _bar = view_now_playing("Opening".into(), "".into(), "3:30".into(), 4);
+    let _overlong = view_now_playing(
+        "A Title Much Longer Than The Display".into(),
+        "The Sample Band".into(),
+        "3:30".into(),
+        7,
+    );
     let _back = view_back_button();
     let _retry = view_retry_button();
     let _top = view_top_button();

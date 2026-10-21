@@ -11,6 +11,36 @@ use iced::{
 
 use crate::ui::{Message, bevel, theme};
 
+/// The LCD's character budget for the combined artist/title line: sized to
+/// keep an overlong line inside the roughly 550px-wide window beside the
+/// `"Now Playing: "` caption and the time readout. A line that fits renders
+/// still and borrowed; a longer one scrolls through [`marquee_text`].
+pub(super) const MARQUEE_WIDTH: usize = 28;
+
+/// The spaces between the end of a scrolling line and its next repeat.
+const MARQUEE_GAP: usize = 3;
+
+/// Returns the `width`-character window of `text` starting at
+/// `offset % cycle`, where `cycle` is the line plus [`MARQUEE_GAP`] trailing
+/// spaces. A line that fits `width` is returned unchanged, so the caller's
+/// common case stays still; an overlong line wraps through the gap back to
+/// its start, with a space for each position past the text's end. Counts
+/// characters, not bytes, so a non-ASCII title windows on character
+/// boundaries.
+pub(super) fn marquee_text(text: &str, offset: usize, width: usize) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    if chars.len() <= width {
+        return text.to_string();
+    }
+    let cycle = chars.len() + MARQUEE_GAP;
+    let start = offset % cycle;
+    (0..width)
+        .map(|position| {
+            let index = (start + position) % cycle;
+            chars.get(index).copied().unwrap_or(' ')
+        })
+        .collect()
+}
 /// A track the Now Playing bar knows about: the title and artist it renders
 /// and the formatted length it shows beside them. Recorded once when a track
 /// is played, so the bar keeps naming and timing the playing track after the
@@ -110,26 +140,69 @@ pub fn format_track_time(duration_ms: u64) -> String {
 /// with the track's length ([`format_track_time`]) laid at the right edge of
 /// the LCD well. The artist (from [`now_playing_artist`]) is pushed before the
 /// title with a `" - "` separator only when it is non-empty, so an artist-less
-/// track still reads `Now Playing: <title>`. Takes the already resolved
+/// track still reads `Now Playing: <title>`. A line within
+/// [`MARQUEE_WIDTH`] characters keeps that borrowed, still layout; a longer
+/// one is combined into one string and windowed by [`marquee_text`] at
+/// `marquee_offset`, scrolling one character per tick through the gap and
+/// back to its start. The character budget is an approximation of the LCD's
+/// pixel width beside the caption and the time. Takes the already resolved
 /// label, artist, and time string so this per-frame widget build does no song
 /// lookup or formatting itself. All three text values are [`Cow`]s: the
 /// borrowed cases keep the strings owned by the caller's index (no
 /// allocation), while the owned fallback is moved into the widget, so the
-/// built element never borrows a temporary.
+/// built element never borrows a temporary; the scrolling branch allocates
+/// only its window, as the fitting branch allocates nothing.
 pub fn view_now_playing<'a>(
     label: Cow<'a, str>,
     artist: Cow<'a, str>,
     time: Cow<'a, str>,
+    marquee_offset: usize,
 ) -> Element<'a, Message> {
+    bevel::lcd_well(now_playing_row(label, artist, time, marquee_offset))
+}
+
+/// Builds the LCD row before the bevel wraps it, generic over the theme and
+/// renderer so the tests can lay it out with iced's null renderer and read
+/// back the text it would draw.
+pub(super) fn now_playing_row<'a, Theme, Renderer>(
+    label: Cow<'a, str>,
+    artist: Cow<'a, str>,
+    time: Cow<'a, str>,
+    marquee_offset: usize,
+) -> Row<'a, Message, Theme, Renderer>
+where
+    Theme: iced::widget::text::Catalog + 'a,
+    Theme::Class<'a>: From<iced::widget::text::StyleFn<'a, Theme>>,
+    Renderer: iced::advanced::text::Renderer + 'a,
+{
+    let display_len = label.chars().count()
+        + if artist.is_empty() {
+            0
+        } else {
+            artist.chars().count() + 3
+        };
     let mut row = Row::new().push(Text::new("Now Playing: ").size(20));
-    if !artist.is_empty() {
-        row = row
-            .push(Text::new(artist).size(20).color(theme::LCD_GREEN))
-            .push(Text::new(" - ").size(20).color(theme::LCD_GREEN));
-    }
-    bevel::lcd_well(
-        row.push(Text::new(label).size(20).color(theme::LCD_GREEN))
+    if display_len <= MARQUEE_WIDTH {
+        if !artist.is_empty() {
+            row = row
+                .push(Text::new(artist).size(20).color(theme::LCD_GREEN))
+                .push(Text::new(" - ").size(20).color(theme::LCD_GREEN));
+        }
+        return row
+            .push(Text::new(label).size(20).color(theme::LCD_GREEN))
             .push(Space::new().width(Length::Fill))
-            .push(Text::new(time).size(20).color(theme::LCD_GREEN)),
+            .push(Text::new(time).size(20).color(theme::LCD_GREEN));
+    }
+    let display = if artist.is_empty() {
+        label.into_owned()
+    } else {
+        format!("{artist} - {label}")
+    };
+    row.push(
+        Text::new(marquee_text(&display, marquee_offset, MARQUEE_WIDTH))
+            .size(20)
+            .color(theme::LCD_GREEN),
     )
+    .push(Space::new().width(Length::Fill))
+    .push(Text::new(time).size(20).color(theme::LCD_GREEN))
 }
