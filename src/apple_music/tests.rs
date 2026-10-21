@@ -1,5 +1,13 @@
+use super::playback::play_log_line;
+use super::threads::{
+    REST_THREAD_NAME, SIGN_IN_THREAD_NAME, off_thread, off_thread_with, spawn_sign_in_thread,
+    start_sign_in_with, startup_token,
+};
+use super::validation::{IdKind, ensure_id_is_valid, is_numeric_host_form, preview_url_problem};
 use super::*;
 use crate::audio::{AudioOutput, EqSnapshot};
+use crate::library::{Album, Playlist, Song};
+use crate::sample_library::sample_library;
 use crate::test_support::{
     AudioCall, FailingAudio, FailingSeekAudio, PREVIEW_URL, RecordingAudio, StubTransport,
     assert_ids, assert_preview_calls, assert_single_call, rest_session, sample_album,
