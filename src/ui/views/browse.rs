@@ -239,21 +239,44 @@ pub(super) fn song_row<'a>(
     )
 }
 
-/// Builds a browse list from its rows: the shared body of [`view_artists`],
-/// [`view_albums`], [`view_songs`], and [`view_all_songs`]. `rows` yields each
-/// item's `(title, label, message, current-track)` tuple (see
-/// [`scrollable_list`]), and `view` (with `search_active`) selects the
-/// empty-list wording via [`browse_placeholder`]; a fetch failure wins.
-fn browse_view<'a>(
-    view: CurrentView,
-    rows: impl IntoIterator<Item = (&'a str, Cow<'a, str>, Message, bool)>,
-    loading: bool,
-    error: Option<&'a str>,
-    search_active: bool,
+/// Builds an album list: the shared body of [`view_albums`] and
+/// [`view_all_albums`], mapping each album to an [`album_row`] by its
+/// position in `albums` and carrying `epoch`. `placeholder` is the caller's
+/// [`browse_placeholder`] wording for an empty list.
+fn album_list<'a>(albums: &'a [Album], epoch: u64, placeholder: &'a str) -> Element<'a, Message> {
+    scrollable_list(
+        albums
+            .iter()
+            .enumerate()
+            .map(|(index, album)| album_row(epoch, index, album)),
+        placeholder,
+    )
+}
+
+/// Builds a song list: the shared body of [`view_songs`] and
+/// [`view_all_songs`], mapping each song to a [`song_row`] by its position in
+/// `songs` and pairing it with the cached length label at the same index (see
+/// [`song_row`]). `placeholder` is the caller's [`browse_placeholder`]
+/// wording for an empty list; it differs between the two callers because only
+/// a search reads as "no matches".
+fn song_list<'a>(
+    songs: &'a [Song],
+    labels: &'a [String],
+    epoch: u64,
+    current_track: Option<&str>,
+    placeholder: &'a str,
 ) -> Element<'a, Message> {
     scrollable_list(
-        rows,
-        browse_placeholder(&view, loading, error, search_active),
+        songs.iter().enumerate().map(|(index, song)| {
+            song_row(
+                epoch,
+                index,
+                song,
+                labels.get(index).map(String::as_str),
+                current_track,
+            )
+        }),
+        placeholder,
     )
 }
 
@@ -261,22 +284,19 @@ fn browse_view<'a>(
 /// emitting [`Message::ArtistSelected`] with the artist's index in the list
 /// and the list's `epoch`. `loading` and `error` select the placeholder
 /// wording (see [`browse_placeholder`]); a fetch failure wins. Built by
-/// [`browse_view`] from the [`artist_row`] mapping.
+/// [`scrollable_list`] from the [`artist_row`] mapping.
 pub fn view_artists<'a>(
     artists: &'a [Artist],
     epoch: u64,
     loading: bool,
     error: Option<&'a str>,
 ) -> Element<'a, Message> {
-    browse_view(
-        CurrentView::Artists,
+    scrollable_list(
         artists
             .iter()
             .enumerate()
             .map(|(index, artist)| artist_row(epoch, index, artist)),
-        loading,
-        error,
-        false,
+        browse_placeholder(&CurrentView::Artists, loading, error, false),
     )
 }
 
@@ -284,22 +304,17 @@ pub fn view_artists<'a>(
 /// emitting [`Message::AlbumSelected`] with the album's index in the list and
 /// the list's `epoch`. `loading` and `error` select the placeholder wording
 /// (see [`browse_placeholder`]); a fetch failure wins. Built by
-/// [`browse_view`] from the [`album_row`] mapping.
+/// [`album_list`] from the [`album_row`] mapping.
 pub fn view_albums<'a>(
     albums: &'a [Album],
     epoch: u64,
     loading: bool,
     error: Option<&'a str>,
 ) -> Element<'a, Message> {
-    browse_view(
-        CurrentView::Albums,
-        albums
-            .iter()
-            .enumerate()
-            .map(|(index, album)| album_row(epoch, index, album)),
-        loading,
-        error,
-        false,
+    album_list(
+        albums,
+        epoch,
+        browse_placeholder(&CurrentView::Albums, loading, error, false),
     )
 }
 
@@ -312,7 +327,7 @@ pub fn view_albums<'a>(
 /// `error`, and `search_active` select the placeholder wording (see
 /// [`browse_placeholder`]); a fetch failure wins, and a loaded-empty search
 /// reads as "no matches" rather than as an empty album. Built by
-/// [`browse_view`] from the [`song_row`] mapping.
+/// [`song_list`] from the [`song_row`] mapping.
 pub fn view_songs<'a>(
     songs: &'a [Song],
     labels: &'a [String],
@@ -322,20 +337,12 @@ pub fn view_songs<'a>(
     current_track: Option<&str>,
     search_active: bool,
 ) -> Element<'a, Message> {
-    browse_view(
-        CurrentView::Songs,
-        songs.iter().enumerate().map(|(index, song)| {
-            song_row(
-                epoch,
-                index,
-                song,
-                labels.get(index).map(String::as_str),
-                current_track,
-            )
-        }),
-        loading,
-        error,
-        search_active,
+    song_list(
+        songs,
+        labels,
+        epoch,
+        current_track,
+        browse_placeholder(&CurrentView::Songs, loading, error, search_active),
     )
 }
 
@@ -345,7 +352,7 @@ pub fn view_songs<'a>(
 /// `current_track` is marked as playing. `labels` is the same cached
 /// formatted-length slice [`view_songs`] takes. It mirrors [`view_songs`] but
 /// never shows the search wording, because the flat list is not a search's
-/// result. Built by [`browse_view`] from the [`song_row`] mapping.
+/// result. Built by [`song_list`] from the [`song_row`] mapping.
 pub fn view_all_songs<'a>(
     songs: &'a [Song],
     labels: &'a [String],
@@ -354,20 +361,12 @@ pub fn view_all_songs<'a>(
     error: Option<&'a str>,
     current_track: Option<&str>,
 ) -> Element<'a, Message> {
-    browse_view(
-        CurrentView::AllSongs,
-        songs.iter().enumerate().map(|(index, song)| {
-            song_row(
-                epoch,
-                index,
-                song,
-                labels.get(index).map(String::as_str),
-                current_track,
-            )
-        }),
-        loading,
-        error,
-        false,
+    song_list(
+        songs,
+        labels,
+        epoch,
+        current_track,
+        browse_placeholder(&CurrentView::AllSongs, loading, error, false),
     )
 }
 
@@ -377,22 +376,17 @@ pub fn view_all_songs<'a>(
 /// album rows carry no current-track marker — but is its own view so its
 /// presses resolve against `all_albums` and Back returns to the flat list. It
 /// never shows the search wording, because the flat list is not a search's
-/// result. Built by [`browse_view`] from the [`album_row`] mapping.
+/// result. Built by [`album_list`] from the [`album_row`] mapping.
 pub fn view_all_albums<'a>(
     albums: &'a [Album],
     epoch: u64,
     loading: bool,
     error: Option<&'a str>,
 ) -> Element<'a, Message> {
-    browse_view(
-        CurrentView::AllAlbums,
-        albums
-            .iter()
-            .enumerate()
-            .map(|(index, album)| album_row(epoch, index, album)),
-        loading,
-        error,
-        false,
+    album_list(
+        albums,
+        epoch,
+        browse_placeholder(&CurrentView::AllAlbums, loading, error, false),
     )
 }
 
@@ -400,22 +394,19 @@ pub fn view_all_albums<'a>(
 /// emitting [`Message::PlaylistSelected`] with the playlist's index in the
 /// list and the list's `epoch`. `loading` and `error` select the placeholder
 /// wording (see [`browse_placeholder`]); a fetch failure wins. Built by
-/// [`browse_view`] from the [`playlist_row`] mapping.
+/// [`scrollable_list`] from the [`playlist_row`] mapping.
 pub fn view_playlists<'a>(
     playlists: &'a [Playlist],
     epoch: u64,
     loading: bool,
     error: Option<&'a str>,
 ) -> Element<'a, Message> {
-    browse_view(
-        CurrentView::Playlists,
+    scrollable_list(
         playlists
             .iter()
             .enumerate()
             .map(|(index, playlist)| playlist_row(epoch, index, playlist)),
-        loading,
-        error,
-        false,
+        browse_placeholder(&CurrentView::Playlists, loading, error, false),
     )
 }
 
