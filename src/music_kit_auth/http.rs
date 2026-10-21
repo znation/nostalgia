@@ -165,6 +165,11 @@ fn read_or_none(
 /// Arms [`CONNECTION_WRITE_TIMEOUT`] first, so a client that stops reading
 /// cannot block `write_all` — and with it the sign-in flow — indefinitely. A
 /// small response to a live browser is unaffected.
+///
+/// Every response carries `Cache-Control: no-store`: the sign-in page embeds
+/// the owner-side developer token, so the browser must never write it to its
+/// disk cache, and the other responses share one policy rather than each
+/// opting in.
 pub(super) fn write_response(
     stream: &mut TcpStream,
     status: u16,
@@ -174,7 +179,7 @@ pub(super) fn write_response(
 ) -> io::Result<()> {
     stream.set_write_timeout(Some(CONNECTION_WRITE_TIMEOUT))?;
     let response = format!(
-        "HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n{body}",
         body.len()
     );
     stream.write_all(response.as_bytes())?;

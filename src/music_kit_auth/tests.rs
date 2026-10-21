@@ -514,6 +514,22 @@ fn authorize_serves_the_page_for_the_browsers_query_request() {
     assert!(page.contains(SAMPLE_DEVELOPER_TOKEN));
 }
 
+#[test]
+fn authorize_marks_the_sign_in_page_no_store() {
+    // The page carries the owner-side developer token in its HTML. A 200 GET
+    // response without an explicit caching policy may be written to the
+    // browser's disk cache, leaving that secret behind after the flow. Mark
+    // every response no-store so the token-bearing page is never cached.
+    let page = response_to_probe(|_port, state| {
+        format!("GET /?state={state} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+    });
+    assert!(page.starts_with("HTTP/1.1 200"));
+    assert!(
+        page.contains("\r\nCache-Control: no-store\r\n"),
+        "the token-bearing sign-in page must not be cacheable, got: {page}"
+    );
+}
+
 // A response larger than the socket send buffer, written to a client that stops
 // reading, blocks `write_all` with no timeout — holding the sign-in flow past
 // `AUTH_TIMEOUT`. `write_response` must arm a bounded write timeout first (a
