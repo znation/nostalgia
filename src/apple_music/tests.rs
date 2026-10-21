@@ -2029,7 +2029,7 @@ async fn off_thread_reports_a_thread_spawn_failure_as_a_seam_error() {
 }
 
 // `ip_is_internal` is the shared SSRF guard: `preview_url_problem` applies it
-// to an address literal a preview URL spells, and `audio::PublicAddressResolver`
+// to an address literal a preview URL spells, and `audio::preview::PublicAddressResolver`
 // applies it to every address a preview hostname resolves to. The URL-level
 // tests above only reach the branches their sample literals happen to hit, so
 // a dropped range check (broadcast, documentation, CGNAT, a v6 form) would be
