@@ -17,7 +17,8 @@ use crate::ui::{Message, bevel, theme};
 /// user browses to a different album.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnownTrack {
-    /// The track's display title.
+    /// The track's title, without the artist (the bar renders
+    /// [`Self::artist`] separately).
     pub title: String,
     /// The performing artist's display name; `""` means the source supplied
     /// no artist, and the Now Playing bar falls back to the title alone.

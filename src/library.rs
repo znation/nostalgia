@@ -47,11 +47,13 @@ pub struct Song {
     /// The song's stable identifier; the shared `AppState` records it as the
     /// current track when the song plays.
     pub id: String,
-    /// The display title the Songs view and the Now Playing bar render.
+    /// The track's title. The Songs view combines it with [`Self::artist`]
+    /// through [`Self::display_title`] for its rows, and the Now Playing bar
+    /// renders it beside the artist rather than on its own.
     pub title: String,
     /// The performing artist's display name; `""` means the source supplied
-    /// no artist. The Now Playing bar renders `<artist> - <title>` when it is
-    /// non-empty.
+    /// no artist. Browse song rows and the Now Playing bar render
+    /// `<artist> - <title>` when it is non-empty.
     pub artist: String,
     /// The [`Album::id`] of the album this song belongs to.
     pub album_id: String,
