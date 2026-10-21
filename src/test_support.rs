@@ -507,6 +507,53 @@ impl AudioOutput for FailingAudio {
     }
 }
 
+/// An [`AudioOutput`] whose equalizer command fails, so a UI test can pin that
+/// the equalizer update arm logs the backend's error and still commits its
+/// state mutation. `attempts` counts the rejected calls, letting the test
+/// prove the message reached the failing backend instead of skipping it.
+#[derive(Debug, Default)]
+pub(crate) struct FailingEqualizerAudio {
+    attempts: AtomicUsize,
+}
+
+impl FailingEqualizerAudio {
+    /// How many equalizer commands the backend rejected.
+    pub(crate) fn attempts(&self) -> usize {
+        self.attempts.load(Ordering::SeqCst)
+    }
+}
+
+impl AudioOutput for FailingEqualizerAudio {
+    fn play(&self, _url: &str) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn pause(&self) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn resume(&self) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn stop(&self) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn set_volume(&self, _volume: f32) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn set_balance(&self, _balance: f32) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn set_equalizer(&self, _equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
+        self.attempts.fetch_add(1, Ordering::SeqCst);
+        Err(AppleMusicError::new("the audio device is gone"))
+    }
+}
+
 /// An [`AudioOutput`] whose `play`, volume, and balance commands succeed but
 /// whose pause, resume, and stop commands fail, so a UI test can reach a
 /// loaded preview and then drive each transport arm through

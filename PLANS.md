@@ -31,25 +31,6 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Apply the equalizer curve to the audio output (Equalizer audio, part 2/2: planned 2026-10-20 by the plan role, requires part 1/2 landed)
-
-**Goal.** Toggling the equalizer, dragging the preamp or a band slider, or picking a preset changes the sound of the preview already playing, without restarting it. Part 1 applies the stored curve when a preview starts; the four equalizer update arms still call `mutate_state`, so a change made mid-track never reaches the audio backend.
-
-**Approach.**
-
-- `src/ui/mod.rs`: add `fn mutate_equalizer(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> Task<Message>` beside `mutate_volume` and `mutate_balance`: lock the state, apply the mutation, read `eq_enabled`, `eq_preamp()`, and `eq_bands()`, build an `EqSnapshot`, and call `player.apple_music_service.set_output_equalizer(snapshot)`, logging a backend error with the same `eprintln!` shape as the volume and balance helpers. Route `ToggleEqualizer`, `EqPreampChange`, `EqBandChange`, and `EqPresetSelected` through it instead of `mutate_state`. Because `EqSource` reads its shared `EqSettings` between samples, the running preview picks up the new curve without a new `Play`.
-- `src/ui/tests.rs`: add `equalizer_messages_forward_to_the_audio_backend`, driving `ToggleEqualizer`, `EqPreampChange(3.0)`, `EqBandChange(0, 4.0)`, and `EqPresetSelected(rock_preset())` through `update` over a `player_with_audio` built with a `RecordingAudio` fake and asserting the recorded `SetEqualizer` snapshots match the clamped `AppState` values; include an out-of-range and a `f32::NAN` gain in the band case, as the balance test does.
-- `README.md`: extend the equalizer sentence to say the sliders and presets change the playing preview live, beside the existing volume and balance sentences.
-
-**Files touched.** `src/ui/mod.rs`, `src/ui/tests.rs`, `README.md`.
-
-**Acceptance criteria.**
-
-- `make check` passes.
-- Each equalizer message records exactly one `SetEqualizer` call whose enabled flag, preamp, and ten band gains equal the clamped values now in `AppState`; no call restarts the preview.
-- A backend error from `set_output_equalizer` is logged and the state mutation still commits, as with volume and balance.
-- The README says equalizer changes apply to the playing preview.
-
 ### Seek the playing preview five seconds with the left and right arrow keys (planned 2026-10-20 by the plan role)
 
 **Goal.** Pressing Left seeks the playing preview back five seconds and pressing Right seeks it forward five seconds, matching classic Winamp's keyboard bindings. Today `shortcuts::shortcut` maps only ArrowUp/ArrowDown (to `Message::VolumeUp`/`VolumeDown`), `Message` has no seek variant, and `AudioOutput` exposes only play/pause/resume/stop/`set_volume`/`set_balance`. `rodio` 0.22's `Player` already provides `get_pos` and `try_seek`, but nothing in `src/audio.rs` calls them, so the left/right keys currently do nothing.

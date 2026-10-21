@@ -5,7 +5,7 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
-### Apply the equalizer curve to the audio output (Equalizer audio, part 1/2: planned 2026-10-20 by the plan role, done 2026-10-20)
+### Apply the equalizer curve to the audio output (Equalizer audio, parts 1/2 and 2/2: planned 2026-10-20 by the plan role, done 2026-10-20)
 
 **Goal.** A preview starts through the equalizer's ten band filters at the curve the panel currently shows. Today `AppState` stores `eq_enabled`, `eq_preamp`, and `eq_bands`, and the equalizer update arms only write them; `AudioOutput` has no equalizer method, so every preview plays flat. This part adds the filter chain and applies the stored curve when a preview starts; part 2 forwards changes made while a preview is already playing.
 
@@ -30,6 +30,22 @@ only grows: search it with grep, or read one entry by its line range. Never read
 - `EqSource` reports its inner source's channel count, sample rate, span, duration, and seek result, and follows a curve changed through its shared `EqSettings` between samples.
 - `RodioOutput::set_equalizer` sends `Command::SetEqualizer` with the same snapshot; `SilentOutput::set_equalizer` returns `Ok`; a closed worker reports "the audio thread is gone".
 - `AppleMusicService::set_output_equalizer` records one `AudioCall::SetEqualizer` and leaves `AppState` unchanged; `play_track` records `SetVolume`, `SetBalance`, `SetEqualizer` carrying the state's current curve, then `Play`.
+
+**Part 2/2 (done 2026-10-20).** Toggling the equalizer, dragging the preamp or a band slider, or picking a preset changes the sound of the preview already playing, without restarting it. Part 1 applies the stored curve when a preview starts; before this part the four equalizer update arms still called `mutate_state`, so a change made mid-track never reached the audio backend.
+
+- `src/ui/mod.rs`: added `fn mutate_equalizer(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> Task<Message>` beside `mutate_volume` and `mutate_balance`: it locks the state, applies the mutation, reads `eq_enabled`, `eq_preamp()`, and `eq_bands()`, builds an `EqSnapshot`, and calls `player.apple_music_service.set_output_equalizer(snapshot)`, logging a backend error with the same `eprintln!` shape as the volume and balance helpers. `ToggleEqualizer`, `EqPreampChange`, `EqBandChange`, and `EqPresetSelected` now route through it instead of `mutate_state`. Because `EqSource` reads its shared `EqSettings` between samples, the running preview picks up the new curve without a new `Play`.
+- `src/ui/tests.rs`: added `equalizer_messages_forward_to_the_audio_backend`, driving `ToggleEqualizer`, `EqPreampChange(3.0)`, `EqBandChange(0, 4.0)`, out-of-range and `f32::NAN` band gains, and `EqPresetSelected(rock_preset())` through `update` over a `player_with_audio` built with a `RecordingAudio` fake, asserting the recorded `SetEqualizer` snapshots match the clamped `AppState` values and that no arm schedules a task. Also added `an_equalizer_backend_failure_still_commits_the_state`, which drives `EqBandChange` over a `FailingEqualizerAudio` that rejects `set_equalizer`, asserting the clamped band still lands in `AppState` and the backend saw the attempt.
+- `src/test_support.rs`: added `FailingEqualizerAudio`, an `AudioOutput` whose `set_equalizer` records the attempt and returns an error, so the equalizer arm's backend-error branch is reachable from the UI suite.
+- `README.md`: extended the equalizer sentence to say the toggles, sliders, and presets change the playing preview's curve live.
+
+**Files touched.** `src/ui/mod.rs`, `src/ui/tests.rs`, `src/test_support.rs`, `README.md`.
+
+**Acceptance criteria.**
+
+- `make check` passes.
+- Each equalizer message records exactly one `SetEqualizer` call whose enabled flag, preamp, and ten band gains equal the clamped values now in `AppState`; no call restarts the preview.
+- A backend error from `set_output_equalizer` is logged and the state mutation still commits, as with volume and balance.
+- The README says equalizer changes apply to the playing preview.
 
 ### Add the R and S keyboard bindings for Repeat and Shuffle (planned 2026-10-20 by the plan role, done 2026-10-20)
 

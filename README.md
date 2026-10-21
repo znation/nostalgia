@@ -62,8 +62,8 @@ song list while it is showing. The title bar's `A` button toggles always-on-top,
 and B step back and forward, X plays, C pauses, V stops, R toggles Repeat and S toggles Shuffle,
 and the up/down arrows nudge the volume.
 The volume slider and the arrow keys set the audio backend's playback level, the balance slider
-sets its stereo balance, and the equalizer panel's curve is applied when a preview starts; the
-volume and balance are remembered for the next track.
+sets its stereo balance, and the equalizer panel's toggles, sliders, and presets change the
+playing preview's curve live; the volume and balance are remembered for the next track.
 Setting `APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a browser-based MusicKit sign-in: browse and
 search queries then read your Apple Music library through the REST API, and fall back to the
 built-in sample library when it is unset. Playback plays the selected song's Apple Music preview

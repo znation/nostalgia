@@ -32,6 +32,7 @@ use shortcuts::message_for;
 
 use crate::{
     apple_music::AppleMusicService,
+    audio::EqSnapshot,
     equalizer::Preset,
     library::{Album, Artist, Playlist, Song},
     state::AppState,
@@ -422,15 +423,14 @@ fn step_track(player: &WinampPlayer, forward: bool) -> Task<Message> {
 }
 
 /// Locks the shared playback state, applies `mutation` to it, and returns no
-/// task. The synchronous arms — `ToggleRepeat`, `ToggleShuffle`,
-/// `ToggleEqualizer`, `EqPreampChange`, `EqBandChange`, and
-/// `EqPresetSelected` — all repeat the same shared-state update —
-/// `blocking_lock`, one mutation, then `Task::none()` — so the lock-and-noop
-/// shape lives here once and each arm only names its mutation. The transport
-/// arms and asynchronous work (fetches, plays) go through the service instead
-/// (see [`transport_into`] and [`fetch_level`]), and the volume and balance
-/// arms use [`mutate_volume`] and [`mutate_balance`] because they also forward
-/// their value to the backend.
+/// task. The synchronous arms — `ToggleRepeat` and `ToggleShuffle` — repeat
+/// the same shared-state update — `blocking_lock`, one mutation, then
+/// `Task::none()` — so the lock-and-noop shape lives here once and each arm
+/// only names its mutation. The transport arms and asynchronous work (fetches,
+/// plays) go through the service instead (see [`transport_into`] and
+/// [`fetch_level`]), and the volume, balance, and equalizer arms use
+/// [`mutate_volume`], [`mutate_balance`], and [`mutate_equalizer`] because
+/// they also forward their value to the backend.
 fn mutate_state(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> Task<Message> {
     let mut state = player.state.blocking_lock();
     mutation(&mut state);
@@ -468,6 +468,29 @@ fn mutate_balance(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -
     let balance = state.balance();
     if let Err(error) = player.apple_music_service.set_output_balance(balance) {
         eprintln!("forwarding balance to the audio backend failed: {error}");
+    }
+    Task::none()
+}
+
+/// Locks the shared playback state, applies `mutation` to it, forwards the
+/// resulting clamped curve to the audio backend, and returns no task. The
+/// equalizer arms — `ToggleEqualizer`, `EqPreampChange`, `EqBandChange`, and
+/// `EqPresetSelected` — use this so a toggle, slider drag, or preset pick
+/// reaches the playing preview without restarting it; the running
+/// `EqSource` re-reads its shared curve between samples. The
+/// state write and the backend forward both happen under the one lock, exactly
+/// as [`mutate_volume`] and [`mutate_balance`] do. A backend error is logged;
+/// the state write has already committed.
+fn mutate_equalizer(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> Task<Message> {
+    let mut state = player.state.blocking_lock();
+    mutation(&mut state);
+    let equalizer = EqSnapshot {
+        enabled: state.eq_enabled,
+        preamp_db: state.eq_preamp(),
+        bands_db: state.eq_bands(),
+    };
+    if let Err(error) = player.apple_music_service.set_output_equalizer(equalizer) {
+        eprintln!("forwarding equalizer to the audio backend failed: {error}");
     }
     Task::none()
 }
@@ -543,13 +566,16 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         // The equalizer mutators all store clamped gains in shared state, so
         // the sliders can never write an out-of-range value; the clamp itself
         // lives in `equalizer::clamp_gain`, called by the `AppState` setters.
-        Message::ToggleEqualizer => mutate_state(player, AppState::toggle_equalizer),
-        Message::EqPreampChange(gain) => mutate_state(player, |state| state.set_eq_preamp(gain)),
+        // Each arm also forwards the stored curve to the playing preview.
+        Message::ToggleEqualizer => mutate_equalizer(player, AppState::toggle_equalizer),
+        Message::EqPreampChange(gain) => {
+            mutate_equalizer(player, |state| state.set_eq_preamp(gain))
+        }
         Message::EqBandChange(band, gain) => {
-            mutate_state(player, |state| state.set_eq_band(band, gain))
+            mutate_equalizer(player, |state| state.set_eq_band(band, gain))
         }
         Message::EqPresetSelected(preset) => {
-            mutate_state(player, |state| state.apply_eq_preset(preset))
+            mutate_equalizer(player, |state| state.apply_eq_preset(preset))
         }
         Message::NextTrack => step_track(player, true),
         Message::PreviousTrack => step_track(player, false),
