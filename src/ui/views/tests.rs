@@ -13,7 +13,7 @@ use super::{
     can_go_back, can_retry_artists, view_albums, view_all_albums, view_all_albums_button,
     view_all_songs, view_all_songs_button, view_artists, view_back_button, view_equalizer,
     view_now_playing, view_playlists, view_playlists_button, view_retry_button, view_search_box,
-    view_songs, view_transport_controls,
+    view_songs, view_top_button, view_transport_controls,
 };
 use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, clamp_gain};
 use crate::library::{Album, Artist, Playlist, Song};
@@ -610,6 +610,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
     let _bar = view_now_playing("Opening".into(), "".into(), "3:30".into());
     let _back = view_back_button();
     let _retry = view_retry_button();
+    let _top = view_top_button();
     let _all_songs = view_all_songs_button();
     let _all_albums = view_all_albums_button();
     let _playlists = view_playlists_button();

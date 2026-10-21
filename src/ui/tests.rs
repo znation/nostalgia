@@ -1,5 +1,5 @@
 use super::loading::fetch_into;
-use super::views::BROWSE_VIEWS;
+use super::views::{BROWSE_LIST_ID, BROWSE_VIEWS};
 use super::*;
 use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB};
 use crate::sample_library::sample_library;
@@ -222,19 +222,23 @@ async fn await_or_timeout<F: std::future::Future>(
 /// step — must run the task itself the way the iced runtime would. The
 /// playback, fetch, and (through `assert_track_selected`) stepping tests
 /// do exactly that, so the stream plumbing and the "exactly one `Output`"
-/// assertion live here once instead of at each call site. The wait is bounded
-/// by [`TASK_TIMEOUT`], so a task that hangs fails this test by name rather
-/// than stalling the suite.
+/// assertion live here once instead of at each call site. A batched task — a
+/// browse fetch plus its snap-to-top scroll operation — yields the widget
+/// effect before the fetch's output, so non-output actions are skipped. The
+/// wait is bounded by [`TASK_TIMEOUT`], so a task that hangs fails this test
+/// by name rather than stalling the suite.
 async fn drive_task(task: Task<Message>, what: &str, mut check: impl FnMut(Message)) {
     use futures::StreamExt;
 
     let mut stream = iced_runtime::task::into_stream(task).expect("task must schedule a stream");
-    let action = await_or_timeout(what, TASK_TIMEOUT, stream.next())
-        .await
-        .expect("task must yield a completion message");
-    match action {
-        iced_runtime::Action::Output(message) => check(message),
-        other => panic!("unexpected {what} task output: {other:?}"),
+    loop {
+        let action = await_or_timeout(what, TASK_TIMEOUT, stream.next())
+            .await
+            .unwrap_or_else(|| panic!("{what} task ended without a completion message"));
+        if let iced_runtime::Action::Output(message) = action {
+            check(message);
+            return;
+        }
     }
 }
 
@@ -252,6 +256,87 @@ async fn task_output(task: Task<Message>, what: &str) -> Message {
     let mut output: Option<Message> = None;
     drive_task(task, what, |message| output = Some(message)).await;
     output.expect("drive_task must pass the output to its callback")
+}
+
+/// Drives `task` until it runs an iced scroll operation and asserts that
+/// operation snaps the browse list to its first row. A batched browse fetch
+/// and its snap-to-top effect are separate stream actions, so the effect is
+/// applied to a capturing [`Scrollable`](iced::advanced::widget::operation::scrollable::Scrollable)
+/// under the browse list's id and under an unrelated id: only the first may
+/// see a snap, and it must be [`RelativeOffset::START`]. This distinguishes
+/// the real scroll task from any other follow-up work a navigation arm might
+/// schedule.
+async fn assert_task_snaps_browse_list_to_top(task: Task<Message>, what: &str) {
+    use futures::StreamExt;
+    use iced::advanced::widget::Id;
+    use iced::advanced::widget::operation::scrollable::{
+        AbsoluteOffset, RelativeOffset, Scrollable as ScrollableOperation,
+    };
+
+    #[derive(Default)]
+    struct Capture {
+        snapped: Option<RelativeOffset<Option<f32>>>,
+    }
+
+    impl ScrollableOperation for Capture {
+        fn snap_to(&mut self, offset: RelativeOffset<Option<f32>>) {
+            self.snapped = Some(offset);
+        }
+
+        fn scroll_to(&mut self, _offset: AbsoluteOffset<Option<f32>>) {}
+
+        fn scroll_by(
+            &mut self,
+            _offset: AbsoluteOffset,
+            _bounds: iced::Rectangle,
+            _content_bounds: iced::Rectangle,
+        ) {
+        }
+    }
+
+    fn snapped_by(
+        operation: &mut dyn iced::advanced::widget::Operation<()>,
+        id: &Id,
+    ) -> Option<RelativeOffset<Option<f32>>> {
+        let mut capture = Capture::default();
+        operation.scrollable(
+            Some(id),
+            iced::Rectangle::default(),
+            iced::Rectangle::default(),
+            iced::Vector::default(),
+            &mut capture,
+        );
+        capture.snapped
+    }
+
+    let mut stream = iced_runtime::task::into_stream(task)
+        .unwrap_or_else(|| panic!("{what} must schedule a task"));
+    loop {
+        let action = await_or_timeout(what, TASK_TIMEOUT, stream.next())
+            .await
+            .unwrap_or_else(|| panic!("{what} task ended without a snap-to-top operation"));
+        let iced_runtime::Action::Widget(mut operation) = action else {
+            continue;
+        };
+        let matching = snapped_by(&mut operation, &Id::new(BROWSE_LIST_ID));
+        let unrelated = snapped_by(&mut operation, &Id::new("not-the-browse-list"));
+        if let Some(offset) = matching {
+            assert_eq!(
+                offset,
+                RelativeOffset::START.into(),
+                "{what} must snap the browse list to its first row"
+            );
+            assert_eq!(
+                unrelated, None,
+                "{what} must target only the browse list id"
+            );
+            return;
+        }
+        assert_eq!(
+            unrelated, None,
+            "{what} must snap the browse list id, not another widget"
+        );
+    }
 }
 
 /// Unwraps the [`Message::BrowseReply`] stamp `fetch_into` puts on every
@@ -706,8 +791,84 @@ fn back_from_artists_is_a_noop() {
     let (mut player, _state) = test_player();
     assert_view(&player, CurrentView::Artists);
 
-    let _ = update(&mut player, Message::Back);
+    assert_message_schedules_no_work(&mut player, Message::Back);
+
     assert_view(&player, CurrentView::Artists);
+}
+
+#[tokio::test]
+async fn back_schedules_the_restored_list_to_the_top() {
+    let mut player = player_in_albums();
+
+    assert_task_snaps_browse_list_to_top(update(&mut player, Message::Back), "back").await;
+
+    assert_view(&player, CurrentView::Artists);
+}
+
+// The seven arms that open a fresh browse list must each batch the
+// snap-to-top scroll with their fetch; dropping one leaves that navigation
+// (or search) showing the previous list's scroll offset.
+#[tokio::test]
+async fn every_browse_navigation_batches_a_snap_to_top_task() {
+    let (mut player, _state) = test_player();
+    player.artists.items = vec![sample_artist()];
+    assert_task_snaps_browse_list_to_top(
+        update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 }),
+        "artist selection",
+    )
+    .await;
+
+    let (mut player, _state) = test_player();
+    player.albums.items = vec![sample_album()];
+    assert_task_snaps_browse_list_to_top(
+        update(&mut player, Message::AlbumSelected { epoch: 0, index: 0 }),
+        "album selection",
+    )
+    .await;
+
+    let (mut player, _state) = test_player();
+    player.playlists.items = vec![sample_playlist()];
+    assert_task_snaps_browse_list_to_top(
+        update(
+            &mut player,
+            Message::PlaylistSelected { epoch: 0, index: 0 },
+        ),
+        "playlist selection",
+    )
+    .await;
+
+    let (mut player, _state) = test_player();
+    assert_task_snaps_browse_list_to_top(update(&mut player, Message::ShowAllSongs), "all songs")
+        .await;
+
+    let (mut player, _state) = test_player();
+    assert_task_snaps_browse_list_to_top(update(&mut player, Message::ShowAllAlbums), "all albums")
+        .await;
+
+    let (mut player, _state) = test_player();
+    assert_task_snaps_browse_list_to_top(update(&mut player, Message::ShowPlaylists), "playlists")
+        .await;
+
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::SearchChanged("echo".to_string()));
+    assert_task_snaps_browse_list_to_top(update(&mut player, Message::SearchSubmitted), "search")
+        .await;
+}
+
+// The Top button only asks iced to snap the browse scrollable back to its
+// first row; it must leave the view and the shared playback state alone.
+#[test]
+fn scroll_browse_to_top_schedules_a_scroll_task() {
+    let (mut player, state) = test_player();
+
+    futures::executor::block_on(assert_task_snaps_browse_list_to_top(
+        update(&mut player, Message::ScrollBrowseToTop),
+        "top",
+    ));
+
+    assert_view(&player, CurrentView::Artists);
+    assert!(state.blocking_lock().current_track.is_none());
+    assert!(!state.blocking_lock().is_playing);
 }
 
 // The All Songs button fetches the whole library flat and shows it under its

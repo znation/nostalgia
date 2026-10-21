@@ -59,8 +59,10 @@ second opens a flat list of every album, whose rows open that album's songs, and
 flat list of every playlist, whose rows open that playlist's songs. Back from any of these lists
 returns to the artists list, Back from songs opened through All Albums returns to All Albums, Back
 from songs opened through Playlists returns to Playlists, and Next/Previous step through the flat
-song list while it is showing. The title bar's `A` button toggles always-on-top, its shade button
-(or a double-click on the bar) rolls the window up to just that title bar and back, and its `–` and
+song list while it is showing. A `Top` button above every browse list returns it to its first row,
+and opening a list starts it at the top. The title bar's `A` button toggles always-on-top, its
+shade button (or a double-click on the bar) rolls the window up to just that title bar and back,
+and its `–` and
 `✕` buttons minimize and close. With the window focused, the classic Winamp keys drive playback: Z
 and B step back and forward, X plays, C pauses, V stops, R toggles Repeat and S toggles Shuffle,
 and the up/down arrows nudge the volume while the left/right arrows seek five seconds back or

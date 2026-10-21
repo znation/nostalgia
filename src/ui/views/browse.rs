@@ -103,6 +103,11 @@ pub(super) fn row_prefix(position: usize, is_current: bool) -> String {
     }
 }
 
+/// The one browse [`Scrollable`]'s widget id: the update loop's snap-to-top
+/// operation targets it, so every view assembled by [`scrollable_list`] can be
+/// returned to its first row by [`Message::ScrollBrowseToTop`].
+pub const BROWSE_LIST_ID: &str = "nostalgia-browse-list";
+
 /// Builds a scrollable list where each item is a button showing its 1-based
 /// position, a title, and a secondary label, emitting the given message on
 /// press. Shared by every browse list view. The last tuple element marks the
@@ -157,6 +162,7 @@ fn scrollable_list<'a>(
     }
 
     Scrollable::new(column)
+        .id(BROWSE_LIST_ID)
         .width(Length::Fill)
         .height(Length::FillPortion(3))
         .style(|_theme, _status| style::playlist_scrollable_style())
@@ -540,6 +546,13 @@ pub fn can_retry_artists(view: &CurrentView, error: Option<&str>) -> bool {
 /// pressed message into the view change.
 pub fn view_back_button() -> Element<'static, Message> {
     labeled_button("Back", Message::Back).into()
+}
+
+/// The browse view's Top button, returning the current list to its first row.
+/// Rendered above every browse level; the update loop turns the pressed
+/// message into a snap-to-top operation on [`BROWSE_LIST_ID`].
+pub fn view_top_button() -> Element<'static, Message> {
+    labeled_button("Top", Message::ScrollBrowseToTop).into()
 }
 
 /// The Artists view's All Songs button, opening the flat whole-library list.

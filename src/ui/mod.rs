@@ -104,6 +104,10 @@ enum Message {
     AlbumSelected { epoch: u64, index: usize },
     PlaylistSelected { epoch: u64, index: usize },
     Back,
+    // The browse view's Top button: snap the current list back to its first
+    // row. The arm schedules an iced scroll operation on the browse list's
+    // stable widget id and changes no state.
+    ScrollBrowseToTop,
     // The Artists view's All Songs button: fetch the whole library flat and
     // show it under the All Songs view.
     ShowAllSongs,
@@ -554,6 +558,24 @@ fn resize_to_shade(player: &WinampPlayer, width: f32) -> Task<Message> {
     })
 }
 
+/// Snaps the browse list back to its first row. The list carries
+/// [`views::BROWSE_LIST_ID`] whichever level is showing, so one operation
+/// serves the Top button and every navigation that opens a fresh list.
+fn scroll_browse_to_top() -> Task<Message> {
+    iced::widget::operation::snap_to(
+        views::BROWSE_LIST_ID,
+        iced::widget::scrollable::RelativeOffset::START,
+    )
+}
+
+/// Runs a browse fetch and then snaps the list it fills to the top. Navigation
+/// replaces the visible list, so leaving the new level at the previous list's
+/// scroll offset would hide its first rows; batching the scroll with the fetch
+/// keeps the two one operation from the update arm.
+fn fetch_at_top(task: Task<Message>) -> Task<Message> {
+    Task::batch([task, scroll_browse_to_top()])
+}
+
 fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
     match message {
         Message::PlayPause => transport_into(
@@ -690,14 +712,14 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             // Drop the previous artist's albums before the new fetch lands:
             // otherwise the Albums view renders them, and a press during the
             // fetch resolves against the wrong artist's list.
-            fetch_level(
+            fetch_at_top(fetch_level(
                 &mut player.albums,
                 &player.apple_music_service,
                 format!("loading albums for artist {artist_id:?}"),
                 move |service| async move { service.get_albums_by_artist(&artist_id).await },
                 Message::AlbumsLoaded,
                 Message::AlbumsLoadFailed,
-            )
+            ))
         }
         Message::AlbumSelected { epoch, index } => {
             // The album twin of the artist arm above. The Songs view can be
@@ -725,14 +747,14 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             // The songs twin of the artist arm above: clear the previous
             // album's songs so they cannot be shown or pressed while the new
             // album's fetch is in flight.
-            fetch_level(
+            fetch_at_top(fetch_level(
                 &mut player.songs,
                 &player.apple_music_service,
                 format!("loading songs from album {album_id:?}"),
                 move |service| async move { service.get_songs_from_album(&album_id).await },
                 Message::SongsLoaded,
                 Message::SongsLoadFailed,
-            )
+            ))
         }
         Message::PlaylistSelected { epoch, index } => {
             // The playlist twin of the album arm above: resolve the press
@@ -752,14 +774,14 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             // Clear the previous list before the fetch lands, as the album arm
             // does, so a press during the fetch cannot resolve against stale
             // rows.
-            fetch_level(
+            fetch_at_top(fetch_level(
                 &mut player.songs,
                 &player.apple_music_service,
                 format!("loading songs from playlist {playlist_id:?}"),
                 move |service| async move { service.get_songs_from_playlist(&playlist_id).await },
                 Message::SongsLoaded,
                 Message::SongsLoadFailed,
-            )
+            ))
         }
         // The browse hierarchy is navigable both ways: ArtistSelected,
         // AlbumSelected, and PlaylistSelected step down (Artists → Albums →
@@ -768,6 +790,10 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         // fires where a level exists to leave; the explicit
         // top-level arm keeps the no-op in the same place as the steps.
         Message::Back => {
+            // Only stepping up replaces the visible list, so Back at the top
+            // level stays a true no-op (the invariant docs pin that) while a
+            // restored list starts at its first row.
+            let stepping_up = player.search_active || player.current_view != CurrentView::Artists;
             // A search result list sits under the artists list, not under the
             // album it was issued from: leaving it returns straight to
             // Artists, and the album list it would otherwise open is empty or
@@ -789,8 +815,13 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
                     CurrentView::Artists => CurrentView::Artists,
                 };
             }
-            Task::none()
+            if stepping_up {
+                scroll_browse_to_top()
+            } else {
+                Task::none()
+            }
         }
+        Message::ScrollBrowseToTop => scroll_browse_to_top(),
         Message::ShowAllSongs => {
             // The flat list hangs off the artists list, so an active search's
             // results are left behind and Back returns to Artists.
@@ -799,14 +830,14 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             // Clear the previous flat list before the new fetch lands, so a
             // press during the fetch cannot resolve against stale rows (the
             // same clear-before-fetch the navigation arms do).
-            fetch_level(
+            fetch_at_top(fetch_level(
                 &mut player.all_songs,
                 &player.apple_music_service,
                 "loading all library songs".to_string(),
                 |service| async move { service.get_all_songs().await },
                 Message::AllSongsLoaded,
                 Message::AllSongsLoadFailed,
-            )
+            ))
         }
         Message::ShowAllAlbums => {
             // Like All Songs, the flat album list hangs off the artists list:
@@ -815,14 +846,14 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             player.current_view = CurrentView::AllAlbums;
             // Clear the previous flat list before the new fetch lands, so a
             // press during the fetch cannot resolve against stale rows.
-            fetch_level(
+            fetch_at_top(fetch_level(
                 &mut player.all_albums,
                 &player.apple_music_service,
                 "loading all library albums".to_string(),
                 |service| async move { service.get_all_albums().await },
                 Message::AllAlbumsLoaded,
                 Message::AllAlbumsLoadFailed,
-            )
+            ))
         }
         Message::ShowPlaylists => {
             // Like the flat lists, Playlists hangs off the artists list: leave
@@ -831,14 +862,14 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             player.current_view = CurrentView::Playlists;
             // Clear the previous list before the fetch lands, so a press during
             // the fetch cannot resolve against stale rows.
-            fetch_level(
+            fetch_at_top(fetch_level(
                 &mut player.playlists,
                 &player.apple_music_service,
                 "loading library playlists".to_string(),
                 |service| async move { service.get_playlists().await },
                 Message::PlaylistsLoaded,
                 Message::PlaylistsLoadFailed,
-            )
+            ))
         }
         Message::SearchChanged(text) => {
             player.search_query = text;
@@ -858,14 +889,14 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             // The search results reuse the songs buffer, so the album's rows
             // are dropped and a press during the fetch cannot resolve against
             // them (the same clear-before-fetch the navigation arms do).
-            fetch_level(
+            fetch_at_top(fetch_level(
                 &mut player.songs,
                 &player.apple_music_service,
                 format!("searching the library for {query:?}"),
                 move |service| async move { service.search_songs(&query).await },
                 Message::SongsLoaded,
                 Message::SongsLoadFailed,
-            )
+            ))
         }
         Message::LoadArtists => {
             // `boot` schedules this for the initial load, and again once the
@@ -1203,6 +1234,9 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     if views::can_retry_artists(&player.current_view, player.artists.error.as_deref()) {
         column = column.push(views::view_retry_button());
     }
+    // The Top button sits above every browse level, beside Back/Retry, so the
+    // current list can always be returned to its first row.
+    column = column.push(views::view_top_button());
     // The All Songs, All Albums, and Playlists buttons open the flat lists;
     // they live on the Artists view, beside Back/Retry, so each list is one
     // press from the top of the hierarchy.
