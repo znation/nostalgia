@@ -72,6 +72,7 @@ that rendered it is still current: a press that outlived its list is a no-op.
 - `a_reply_superseded_between_the_mapper_and_update_is_not_stored`
 - `a_stale_songs_reply_superseded_before_update_is_not_stored`
 - `a_stale_albums_reply_superseded_before_update_is_not_stored`
+- `stale_flat_list_replies_superseded_before_update_are_not_stored`
 - `selection_messages_with_a_stale_epoch_or_index_do_nothing`
   (all in `src/ui/tests.rs`)
 

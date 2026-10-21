@@ -1307,6 +1307,99 @@ async fn a_stale_albums_reply_superseded_before_update_is_not_stored() {
     assert!(player.albums.loading);
 }
 
+// `BrowseReply` names every browse list in its own match arm, but only the
+// Artists, Songs, and Albums arms had their UI-thread re-check pinned. The
+// three flat lists behind the Artists view's buttons are fetched the same
+// way, and pressing Back then the button again issues a newer request before
+// the first reply is stored. Without each list's arm the stale reply would
+// fall through the `_ => true` catch-all and store the previous rows — or its
+// error — over the list the newer request cleared. Pin both reply kinds for
+// each flat list: a stale reply leaves the cleared list loading with no rows
+// and no error, and that list's own current generation still stores or
+// records its reply.
+#[test]
+fn stale_flat_list_replies_superseded_before_update_are_not_stored() {
+    let (mut player, _state) = test_player();
+
+    macro_rules! assert_list_rechecks_its_generation {
+        ($list:ident, $loaded:expr, $failed:expr) => {{
+            player.$list.clear();
+            let stale = player.$list.begin_fetch();
+            let current = player.$list.begin_fetch();
+
+            let _ = update(
+                &mut player,
+                Message::BrowseReply {
+                    issued: stale.issued(),
+                    reply: Box::new($loaded),
+                },
+            );
+            assert!(
+                player.$list.items.is_empty(),
+                concat!(stringify!($list), " stored a stale success reply")
+            );
+            assert!(player.$list.loading);
+            assert!(player.$list.error.is_none());
+
+            let _ = update(
+                &mut player,
+                Message::BrowseReply {
+                    issued: stale.issued(),
+                    reply: Box::new($failed("stale error".to_string())),
+                },
+            );
+            assert!(
+                player.$list.items.is_empty(),
+                concat!(stringify!($list), " stored a stale failure reply")
+            );
+            assert!(player.$list.loading);
+            assert!(player.$list.error.is_none());
+
+            let _ = update(
+                &mut player,
+                Message::BrowseReply {
+                    issued: current.issued(),
+                    reply: Box::new($loaded),
+                },
+            );
+            assert_eq!(
+                player.$list.items.len(),
+                1,
+                concat!(stringify!($list), " dropped its current success reply")
+            );
+            assert!(!player.$list.loading);
+            assert!(player.$list.error.is_none());
+
+            let _ = update(
+                &mut player,
+                Message::BrowseReply {
+                    issued: current.issued(),
+                    reply: Box::new($failed("current error".to_string())),
+                },
+            );
+            assert!(player.$list.items.is_empty());
+            assert!(!player.$list.loading);
+            assert_eq!(player.$list.error.as_deref(), Some("current error"));
+        }};
+    }
+
+    assert_list_rechecks_its_generation!(
+        all_songs,
+        Message::AllSongsLoaded(vec![sample_song()]),
+        Message::AllSongsLoadFailed
+    );
+    assert_list_rechecks_its_generation!(
+        all_albums,
+        Message::AllAlbumsLoaded(vec![sample_album()]),
+        Message::AllAlbumsLoadFailed
+    );
+    assert_list_rechecks_its_generation!(
+        playlists,
+        Message::PlaylistsLoaded(vec![sample_playlist()]),
+        Message::PlaylistsLoadFailed
+    );
+}
+
 // A play reply can complete out of order just like a browse reply: the user
 // clicks song-1, then song-2, and song-1's slower play lands last. The
 // playback counter's guard, evaluated inside `play_track` under the state
