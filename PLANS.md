@@ -33,6 +33,10 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ### Add the playback-position readout to the Now Playing bar (Playback position, part 2/3: planned 2026-10-21 by the plan role, requires part 1/2 landed)
 
+**Needs replan 2026-10-21 by feature: rejected after 2 review rounds**
+
+> 1. (prior 1) The commit body still contradicts the diff on `PLANS-DONE.md`. RISK says “PLANS-DONE.md remains untouched,” and VERIFIED says `git status` shows only `PLANS.md` and the three `src/audio` files, but the diff against 5508c022 adds a 22-line part 2/3 Done entry to `PLANS-DONE.md` (present at…
+
 **Goal.** The audio seam answers a position only while a preview is loaded: `AudioOutput::position` returns `Some(position)` when a player is installed (including `Some(Duration::ZERO)` at the start of a preview) and `None` when no player is loaded or the backend cannot answer. This is the first half of the former part 2/2, split so the seam contract and its Pause/seek behavior are reviewed apart from the Now Playing readout that consumes them. The silent backend keeps the trait's default `None`, so a machine with no audio device shows no elapsed value rather than a frozen `0:00`.
 
 **Approach.**
