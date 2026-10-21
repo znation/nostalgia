@@ -4,8 +4,8 @@
 use super::balance::BalanceSource;
 use super::equalizer::{EqSettings, EqSource};
 use super::player::{
-    Command, POSITION_QUERY_TIMEOUT, SeekablePlayer, WorkerPlayer, await_device_ready, seek_player,
-    seek_target, serve_commands,
+    Command, DEVICE_OPEN_TIMEOUT, POSITION_QUERY_TIMEOUT, SeekablePlayer, WorkerPlayer,
+    await_device_ready, seek_player, seek_target, serve_commands,
 };
 use super::preview::{
     PREVIEW_TIMEOUT, PublicAddressResolver, download_and_decode, preview_agent,
@@ -672,6 +672,21 @@ fn rodio_output_reports_none_when_the_position_reply_times_out() {
         "a missing position reply must time out instead of blocking"
     );
     worker.join().unwrap();
+}
+
+// Both bounds above are production behavior, but every test that exercises
+// them passes its own timeout or compares against the constant itself, so a
+// change to either would clear the suite while production applied the new
+// value. `DEVICE_OPEN_TIMEOUT` is the longest startup waits for the platform
+// audio daemon before falling back to silence: an unbounded or very long value
+// stalls the app at launch, and a near-zero one abandons a healthy open.
+// `POSITION_QUERY_TIMEOUT` is how long a position poll blocks its caller: a
+// long value freezes the UI thread each poll, and zero would abandon every
+// query. Pin the documented durations.
+#[test]
+fn audio_seam_bounds_are_the_documented_durations() {
+    assert_eq!(DEVICE_OPEN_TIMEOUT, Duration::from_secs(5));
+    assert_eq!(POSITION_QUERY_TIMEOUT, Duration::from_millis(100));
 }
 
 #[test]
