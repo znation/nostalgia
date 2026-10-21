@@ -422,8 +422,9 @@ fn percent_decode_decodes_form_escapes_and_leaves_bad_ones_literal() {
 // A missing `Host` (a hand-written or HTTP/1.0 request) must be refused
 // exactly like a foreign one, and the port must be stripped before the
 // comparison so a foreign host carrying a port is not mistaken for the
-// loopback address. The flow tests below only ever send a `Host`, so this
-// pins the `None` and port-bearing-foreign branches they never reach.
+// loopback address. The flow tests below cover a missing `Host` and a
+// port-bearing loopback `Host`, but never a foreign host carrying a port, so
+// this pins that branch directly.
 #[test]
 fn is_loopback_host_accepts_only_the_bound_loopback_address() {
     assert!(is_loopback_host(Some("127.0.0.1")));
@@ -534,7 +535,7 @@ fn authorize_marks_the_sign_in_page_no_store() {
 // reading, blocks `write_all` with no timeout — holding the sign-in flow past
 // `AUTH_TIMEOUT`. `write_response` must arm a bounded write timeout first (a
 // `None` timeout means "block forever"); the read path's deadline cap has its
-// own test above, and this pins the write side.
+// own tests below, and this pins the write side.
 #[test]
 fn write_response_arms_a_bounded_write_timeout() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind a loopback listener");

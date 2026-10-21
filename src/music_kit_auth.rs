@@ -266,7 +266,7 @@ pub fn open_in_browser(path: &str) -> io::Result<()> {
 /// opener reads as "`xdg-open`: No such file or directory" rather than a bare
 /// OS error.
 ///
-/// The opener exits as soon as it has handed the URL to the browser, but a
+/// The opener exits as soon as it has handed the page to the browser, but a
 /// [`std::process::Child`] dropped without a wait leaves a zombie for the rest
 /// of the app's life, one per sign-in. Waiting here would block the sign-in
 /// flow before it starts accepting callbacks, so [`reap_in_background`] waits
