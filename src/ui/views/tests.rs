@@ -1,7 +1,7 @@
 use super::super::{CurrentView, Message, style, theme};
 use super::browse::{
     BROWSE_VIEWS, album_row, artist_row, browse_placeholder, current_row_style, empty_list_label,
-    playlist_row, song_row,
+    playlist_row, song_list_summary, song_row,
 };
 use super::equalizer::eq_enabled_label;
 use super::now_playing::{
@@ -424,6 +424,40 @@ fn construct_every_browse_view(
     let _all_songs_marked = view_all_songs(songs, &[], epoch, loading, None, Some("song-1"));
     let _all_albums = view_all_albums(albums, epoch, loading, None);
     let _playlists = view_playlists(playlists, epoch, loading, None);
+}
+
+// The footer beneath a loaded song list must report the exact count and total
+// it was given, including a zero-duration entry as a song with no time, and
+// must keep counting minutes past an hour instead of formatting an hour field.
+fn summary_song(duration_ms: u64) -> Song {
+    let mut song = sample_song();
+    song.duration_ms = duration_ms;
+    song
+}
+
+#[test]
+fn song_list_summary_counts_songs_and_sums_durations() {
+    assert_eq!(song_list_summary(&[]), "0 songs - 0:00");
+    let songs = [summary_song(210_000), summary_song(45_000)];
+    assert_eq!(song_list_summary(&songs), "2 songs - 4:15");
+}
+
+#[test]
+fn song_list_summary_uses_the_singular_for_one_song() {
+    let songs = [summary_song(210_000)];
+    assert_eq!(song_list_summary(&songs), "1 song - 3:30");
+}
+
+#[test]
+fn song_list_summary_counts_unknown_durations_without_adding_time() {
+    let songs = [summary_song(210_000), summary_song(0)];
+    assert_eq!(song_list_summary(&songs), "2 songs - 3:30");
+}
+
+#[test]
+fn song_list_summary_keeps_counting_minutes_past_an_hour() {
+    let songs = [summary_song(3_665_000)];
+    assert_eq!(song_list_summary(&songs), "1 song - 61:05");
 }
 
 // The currently playing row is marked by a selection bar. iced's `Element`

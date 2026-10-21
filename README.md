@@ -49,7 +49,8 @@ Build and run with `cargo run`; the player opens an iced window showing the Now 
 playing track's artist and title, with its length at the right), the Play/Pause/Stop/Previous/Next
 controls, Repeat and Shuffle toggles, volume and balance sliders, an equalizer panel (an EQ on/off
 button, a preset pick list, a preamp slider, and ten band sliders), and a browse list whose song
-rows show each track's length. A `Search library` box above the browse list searches the library
+rows show each track's length, with each song list showing its song count and total playing time
+beneath the rows. A `Search library` box above the browse list searches the library
 when you press Enter, replacing the list with the matching songs; Back leaves a search for the
 artists list. The Artists list also has `All Songs`, `All Albums`, and `Playlists` buttons: the
 first opens a flat list of every song in the library, whose rows play like any other song row, the

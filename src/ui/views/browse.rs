@@ -254,12 +254,39 @@ fn album_list<'a>(albums: &'a [Album], epoch: u64, placeholder: &'a str) -> Elem
     )
 }
 
+/// The count-and-time footer beneath a loaded song list: `"<count> song(s) -
+/// <total>"`, with the singular `song` for a count of one and the total from
+/// [`format_list_time`]. Every entry counts, including one whose
+/// `duration_ms` is `0`; the durations are summed with `u64::saturating_add`
+/// so a large list cannot overflow the total. Pure so the wording and
+/// arithmetic are testable without an iced renderer.
+pub(super) fn song_list_summary(songs: &[Song]) -> String {
+    let total_ms = songs
+        .iter()
+        .fold(0u64, |total, song| total.saturating_add(song.duration_ms));
+    let noun = if songs.len() == 1 { "song" } else { "songs" };
+    format!("{} {} - {}", songs.len(), noun, format_list_time(total_ms))
+}
+
+/// Formats a song list's total playing time as zero-padded `m:ss`, with
+/// unbounded minutes, so a library past an hour reads as `61:05` rather than
+/// rolling over. Unlike [`format_track_time`], `0` is a valid total (every
+/// duration unknown) and formats as `"0:00"`, not the per-track `"--:--"`
+/// placeholder.
+fn format_list_time(total_ms: u64) -> String {
+    let total_seconds = total_ms / 1000;
+    format!("{}:{:02}", total_seconds / 60, total_seconds % 60)
+}
+
 /// Builds a song list: the shared body of [`view_songs`] and
 /// [`view_all_songs`], mapping each song to a [`song_row`] by its position in
 /// `songs` and pairing it with the cached length label at the same index (see
 /// [`song_row`]). `placeholder` is the caller's [`browse_placeholder`]
 /// wording for an empty list; it differs between the two callers because only
-/// a search reads as "no matches".
+/// a search reads as "no matches". A non-empty list also appends the
+/// count-and-time footer ([`song_list_summary`]) beneath its rows; an empty
+/// list returns only the scrollable so its loading, error, or empty
+/// placeholder stays alone.
 fn song_list<'a>(
     songs: &'a [Song],
     labels: &'a [String],
@@ -267,7 +294,7 @@ fn song_list<'a>(
     current_track: Option<&str>,
     placeholder: &'a str,
 ) -> Element<'a, Message> {
-    scrollable_list(
+    let list = scrollable_list(
         songs.iter().enumerate().map(|(index, song)| {
             song_row(
                 epoch,
@@ -278,7 +305,16 @@ fn song_list<'a>(
             )
         }),
         placeholder,
-    )
+    );
+    if songs.is_empty() {
+        return list;
+    }
+    Column::new()
+        .push(list)
+        .push(Text::new(song_list_summary(songs)).size(14))
+        .width(Length::Fill)
+        .height(Length::FillPortion(3))
+        .into()
 }
 
 /// The Artists browse view: one row per artist, in the order given, each
