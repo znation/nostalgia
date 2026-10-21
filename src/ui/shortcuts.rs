@@ -13,7 +13,8 @@ use super::Message;
 
 /// Maps a keyboard event to the classic Winamp transport shortcut, or `None`
 /// for every event that binds nothing: a key release, a modifier-only change,
-/// an unbound key, or a key pressed with a chord modifier. `init_ui` installs
+/// an unbound key, or a key pressed with a chord modifier. The bound keys
+/// include R for Repeat and S for Shuffle. `init_ui` installs
 /// this as the window subscription's mapper, so the key-to-message table
 /// lives here once and the subscription stays a plain `filter_map`.
 pub(super) fn message_for(event: Event) -> Option<Message> {
@@ -24,10 +25,10 @@ pub(super) fn message_for(event: Event) -> Option<Message> {
 }
 
 /// The classic Winamp main-window bindings: Z previous, X play, C pause, V
-/// stop, B next, and the arrow keys nudge the volume. A Control, Alt, or Logo
-/// chord is left to the OS and window manager, so those modifiers yield
-/// `None`; Shift is allowed, and the letter match ignores ASCII case, so
-/// Shift+Z steps back exactly like Z.
+/// stop, B next, R repeat, S shuffle, and the arrow keys nudge the volume. A
+/// Control, Alt, or Logo chord is left to the OS and window manager, so those
+/// modifiers yield `None`; Shift is allowed, and the letter match ignores ASCII
+/// case, so Shift+Z steps back exactly like Z.
 fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
     if modifiers.control() || modifiers.alt() || modifiers.logo() {
         return None;
@@ -42,6 +43,12 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
         Key::Character(character) if character.eq_ignore_ascii_case("v") => Some(Message::Stop),
         Key::Character(character) if character.eq_ignore_ascii_case("b") => {
             Some(Message::NextTrack)
+        }
+        Key::Character(character) if character.eq_ignore_ascii_case("r") => {
+            Some(Message::ToggleRepeat)
+        }
+        Key::Character(character) if character.eq_ignore_ascii_case("s") => {
+            Some(Message::ToggleShuffle)
         }
         Key::Named(key::Named::ArrowUp) => Some(Message::VolumeUp),
         Key::Named(key::Named::ArrowDown) => Some(Message::VolumeDown),
@@ -79,6 +86,8 @@ mod tests {
         assert!(matches!(map("c"), Some(Message::Pause)));
         assert!(matches!(map("v"), Some(Message::Stop)));
         assert!(matches!(map("b"), Some(Message::NextTrack)));
+        assert!(matches!(map("r"), Some(Message::ToggleRepeat)));
+        assert!(matches!(map("s"), Some(Message::ToggleShuffle)));
     }
 
     #[test]
@@ -126,6 +135,8 @@ mod tests {
             for key in [
                 Key::Character("z".into()),
                 Key::Character("x".into()),
+                Key::Character("r".into()),
+                Key::Character("s".into()),
                 Key::Named(key::Named::ArrowUp),
                 Key::Named(key::Named::ArrowDown),
             ] {

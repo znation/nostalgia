@@ -97,18 +97,18 @@ impl AppState {
         self.is_playing = !self.is_playing;
     }
 
-    /// Flip the Repeat flag in place. The UI's Repeat button is the only
-    /// toggle caller; keeping the flip here (rather than inlined at the call
-    /// site) puts the toggling semantics next to the field they mutate, like
-    /// `toggle_playing`.
+    /// Flip the Repeat flag in place. The UI's Repeat button and the
+    /// keyboard's R key call this (through `Message::ToggleRepeat`); keeping
+    /// the flip here (rather than inlined at the call site) puts the toggling
+    /// semantics next to the field they mutate, like `toggle_playing`.
     pub fn toggle_repeat(&mut self) {
         self.repeat = !self.repeat;
     }
 
-    /// Flip the Shuffle flag in place. The UI's Shuffle button is the only
-    /// toggle caller; keeping the flip here (rather than inlined at the call
-    /// site) puts the toggling semantics next to the field they mutate, like
-    /// `toggle_repeat`.
+    /// Flip the Shuffle flag in place. The UI's Shuffle button and the
+    /// keyboard's S key call this (through `Message::ToggleShuffle`); keeping
+    /// the flip here (rather than inlined at the call site) puts the toggling
+    /// semantics next to the field they mutate, like `toggle_repeat`.
     pub fn toggle_shuffle(&mut self) {
         self.shuffle = !self.shuffle;
     }
