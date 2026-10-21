@@ -770,7 +770,7 @@ fn ensure_id_is_valid(id: &str, kind: IdKind) -> Result<(), AppleMusicError> {
 /// `None` is [`AppleMusicService::play_track`]'s documented "the track has no
 /// playable asset" case, so it passes and the state transition is still
 /// committed without audio. A blank `Some` (empty or only whitespace) is a
-/// caller bug: [`crate::apple_music::rest`]'s `Resource::preview_url` already
+/// caller bug: [`crate::apple_music::rest`]'s `Resource::into_song` already
 /// maps a blank preview to `None`, and handing a blank string on to the audio
 /// backend would surface as a transport error that does not name the actual
 /// defect. A non-blank URL is then held to the host rule of

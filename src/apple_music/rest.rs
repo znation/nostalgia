@@ -239,11 +239,7 @@ impl RestLibrary {
         session: &MusicKitSession,
     ) -> Result<Vec<Artist>, AppleMusicError> {
         let url = format!("{API_BASE}/me/library/artists");
-        self.fetch(&url, session, |resource| {
-            let id = resource.required_id("artist")?;
-            let name = resource.required_name("artist")?;
-            Ok(Artist { id, name })
-        })
+        self.fetch(&url, session, Resource::into_artist)
     }
 
     /// Albums by `artist_id` in the signed-in user's library.
@@ -266,15 +262,7 @@ impl RestLibrary {
             "{API_BASE}/me/library/artists/{}/albums",
             encode_path_segment(artist_id)
         );
-        self.fetch(&url, session, |resource| {
-            let id = resource.required_id("album")?;
-            let title = resource.required_name("album")?;
-            Ok(Album {
-                id,
-                title,
-                artist_id: artist_id.to_string(),
-            })
-        })
+        self.fetch(&url, session, |resource| resource.into_album(artist_id))
     }
 
     /// Songs on `album_id` in the signed-in user's library.
@@ -297,7 +285,7 @@ impl RestLibrary {
             "{API_BASE}/me/library/albums/{}/tracks",
             encode_path_segment(album_id)
         );
-        self.fetch(&url, session, |resource| resource.to_song(album_id))
+        self.fetch(&url, session, |resource| resource.into_song(album_id))
     }
 
     /// Every song in the signed-in user's library, in library order.
@@ -313,7 +301,7 @@ impl RestLibrary {
     /// not valid JSON, or a resource carries a blank id or no name.
     pub fn get_all_songs(&self, session: &MusicKitSession) -> Result<Vec<Song>, AppleMusicError> {
         let url = format!("{API_BASE}/me/library/songs");
-        self.fetch(&url, session, |resource| resource.to_song(""))
+        self.fetch(&url, session, |resource| resource.into_song(""))
     }
 
     /// Every album in the signed-in user's library, in library order.
@@ -323,8 +311,9 @@ impl RestLibrary {
     /// page is read in full. A library album carries no artist id in this
     /// collection response, so every mapped [`Album`] leaves `artist_id`
     /// empty — the same shape [`RestLibrary::get_all_songs`] gives its songs'
-    /// `album_id`. Nothing that opens an all-albums row reads the artist id
-    /// (`get_songs_from_album` uses only the album id).
+    /// `album_id`. The resource is mapped with [`Resource::into_album`], which
+    /// moves its id and title into the model. Nothing that opens an all-albums
+    /// row reads the artist id (`get_songs_from_album` uses only the album id).
     ///
     /// # Errors
     ///
@@ -332,15 +321,7 @@ impl RestLibrary {
     /// not valid JSON, or a resource carries a blank id or no name.
     pub fn get_all_albums(&self, session: &MusicKitSession) -> Result<Vec<Album>, AppleMusicError> {
         let url = format!("{API_BASE}/me/library/albums");
-        self.fetch(&url, session, |resource| {
-            let id = resource.required_id("album")?;
-            let title = resource.required_name("album")?;
-            Ok(Album {
-                id,
-                title,
-                artist_id: String::new(),
-            })
-        })
+        self.fetch(&url, session, |resource| resource.into_album(""))
     }
 
     /// Songs in the signed-in user's library matching `query`.
@@ -366,7 +347,7 @@ impl RestLibrary {
             encode_path_segment(query)
         );
         self.fetch_parsed(&url, session, parse_search_envelope, |resource| {
-            resource.to_song("")
+            resource.into_song("")
         })
     }
 
@@ -707,101 +688,117 @@ struct Preview {
 }
 
 impl Resource {
-    /// The resource's non-blank id, or an [`AppleMusicError`] naming `kind`.
+    /// Maps this resource to an [`Artist`], moving its id and name into the
+    /// model instead of cloning them out of the parsed response.
     ///
-    /// The id names the resource: the model links rows together by it, and the
-    /// seam later uses it to browse or play. A blank id (empty or only
-    /// whitespace) can name nothing, so the response is rejected rather than
-    /// mapped to a row the UI would render but that errors when pressed — the
-    /// same reason [`Self::required_name`] rejects a blank name.
-    fn required_id(&self, kind: &str) -> Result<String, AppleMusicError> {
-        if self.id.trim().is_empty() {
-            return Err(AppleMusicError::new(format!(
-                "response carried {kind} with a blank id (got {:?})",
-                self.id
-            )));
-        }
-        Ok(self.id.clone())
+    /// The id and name are required (see [`required_id`] and
+    /// [`required_name`]): a blank id can name nothing, and a nameless
+    /// resource would render as an empty row.
+    fn into_artist(self) -> Result<Artist, AppleMusicError> {
+        let Resource { id, attributes } = self;
+        let id = required_id(id, "artist")?;
+        let name = required_name(
+            attributes.and_then(|attributes| attributes.name),
+            &id,
+            "artist",
+        )?;
+        Ok(Artist { id, name })
     }
 
-    /// The resource's length in milliseconds, or `0` when the API omitted
-    /// `attributes.durationInMillis`. `0` is [`Song::duration_ms`]'s "source
-    /// supplied no duration" sentinel.
-    fn duration_ms(&self) -> u64 {
-        self.attributes
-            .as_ref()
-            .and_then(|attributes| attributes.duration_in_millis)
-            .unwrap_or(0)
-    }
-
-    /// The resource's performing-artist display name, or `""` when the API
-    /// omitted `attributes.artistName` or supplied only whitespace. `""` is
-    /// [`Song::artist`]'s "source supplied no artist" sentinel, so the Now
-    /// Playing bar falls back to the title alone.
-    fn artist_name(&self) -> String {
-        self.attributes
-            .as_ref()
-            .and_then(|attributes| attributes.artist_name.as_deref())
-            .filter(|name| !name.trim().is_empty())
-            .unwrap_or_default()
-            .to_string()
-    }
-
-    /// The first non-blank URL in `attributes.previews`, or `None` when
-    /// `previews` is absent, empty, or carries only blank URLs.
+    /// Maps this resource to an [`Album`] linked to `artist_id`, moving its id
+    /// and title into the model (see [`Self::into_artist`]).
     ///
-    /// A blank URL (empty or only whitespace) can play nothing, so it is
-    /// skipped in favour of a later preview; the URL is compared trimmed but
-    /// returned exactly as the resource carried it.
-    fn preview_url(&self) -> Option<String> {
-        self.attributes
-            .as_ref()
-            .and_then(|attributes| attributes.previews.as_ref())
-            .and_then(|previews| {
-                previews.iter().find_map(|preview| {
-                    preview
-                        .url
-                        .as_deref()
-                        .filter(|url| !url.trim().is_empty())
-                        .map(str::to_string)
-                })
-            })
-    }
-
-    /// Maps this resource to a [`Song`] linked to `album_id`.
-    ///
-    /// A search result carries no album id, so its caller passes `""`. The id
-    /// and title are required (see [`Self::required_id`] and
-    /// [`Self::required_name`]); the artist, duration, and preview URL fall
-    /// back to their "source supplied none" sentinels.
-    fn to_song(&self, album_id: &str) -> Result<Song, AppleMusicError> {
-        Ok(Song {
-            id: self.required_id("song")?,
-            title: self.required_name("song")?,
-            artist: self.artist_name(),
-            album_id: album_id.to_string(),
-            duration_ms: self.duration_ms(),
-            preview_url: self.preview_url(),
+    /// The query already scopes the results to `artist_id`, so every mapped
+    /// album carries it. Its id and name are required, like an artist's.
+    fn into_album(self, artist_id: &str) -> Result<Album, AppleMusicError> {
+        let Resource { id, attributes } = self;
+        let id = required_id(id, "album")?;
+        let title = required_name(
+            attributes.and_then(|attributes| attributes.name),
+            &id,
+            "album",
+        )?;
+        Ok(Album {
+            id,
+            title,
+            artist_id: artist_id.to_string(),
         })
     }
 
-    /// The resource's non-blank name, or an [`AppleMusicError`] naming `kind`
-    /// and this resource's id.
+    /// Maps this resource to a [`Song`] linked to `album_id`, moving its id,
+    /// title, artist, and preview URL into the model instead of cloning them.
     ///
-    /// A resource whose `attributes.name` is absent or only whitespace is
-    /// rejected rather than mapped to a blank row the UI would render empty.
-    fn required_name(&self, kind: &str) -> Result<String, AppleMusicError> {
-        match self
-            .attributes
-            .as_ref()
-            .and_then(|attributes| attributes.name.as_deref())
-        {
-            Some(name) if !name.trim().is_empty() => Ok(name.to_string()),
-            _ => Err(AppleMusicError::new(format!(
-                "response carried {kind} {:?} without a name",
-                self.id
-            ))),
-        }
+    /// A search result carries no album id, so its caller passes `""`. The id
+    /// and title are required (see [`required_id`] and [`required_name`]); the
+    /// artist, duration, and preview URL fall back to their "source supplied
+    /// none" sentinels. The whole-library path maps up to [`MAX_PAGES`] pages
+    /// of songs, so consuming the parsed resource avoids re-allocating every
+    /// string it already owns.
+    fn into_song(self, album_id: &str) -> Result<Song, AppleMusicError> {
+        let Resource { id, attributes } = self;
+        let id = required_id(id, "song")?;
+        let (title, artist, duration_ms, previews) = match attributes {
+            Some(attributes) => (
+                attributes.name,
+                attributes.artist_name,
+                attributes.duration_in_millis,
+                attributes.previews,
+            ),
+            None => (None, None, None, None),
+        };
+        let title = required_name(title, &id, "song")?;
+        // `""` is `Song::artist`'s "source supplied no artist" sentinel, so a
+        // missing or whitespace-only name falls back to the title alone.
+        let artist = artist
+            .filter(|name| !name.trim().is_empty())
+            .unwrap_or_default();
+        // A blank URL (empty or only whitespace) can play nothing, so skip it
+        // in favour of a later preview; a non-blank URL is returned exactly as
+        // the resource carried it.
+        let preview_url = previews.and_then(|previews| {
+            previews
+                .into_iter()
+                .find_map(|preview| preview.url.filter(|url| !url.trim().is_empty()))
+        });
+        Ok(Song {
+            id,
+            title,
+            artist,
+            album_id: album_id.to_string(),
+            duration_ms: duration_ms.unwrap_or(0),
+            preview_url,
+        })
+    }
+}
+
+/// The non-blank id `id`, or an [`AppleMusicError`] naming `kind`.
+///
+/// The id names the resource: the model links rows together by it, and the
+/// seam later uses it to browse or play. A blank id (empty or only whitespace)
+/// can name nothing, so the response is rejected rather than mapped to a row
+/// the UI would render but that errors when pressed — the same reason
+/// [`required_name`] rejects a blank name.
+fn required_id(id: String, kind: &str) -> Result<String, AppleMusicError> {
+    if id.trim().is_empty() {
+        return Err(AppleMusicError::new(format!(
+            "response carried {kind} with a blank id (got {id:?})"
+        )));
+    }
+    Ok(id)
+}
+
+/// The non-blank name `name`, or an [`AppleMusicError`] naming `kind` and the
+/// resource's `id`.
+///
+/// A resource whose `attributes.name` is absent or only whitespace is rejected
+/// rather than mapped to a blank row the UI would render empty. `id` is only
+/// used in the report, so it can be the already-validated id.
+fn required_name(name: Option<String>, id: &str, kind: &str) -> Result<String, AppleMusicError> {
+    match name {
+        Some(name) if !name.trim().is_empty() => Ok(name),
+        _ => Err(AppleMusicError::new(format!(
+            "response carried {kind} {id:?} without a name"
+        ))),
     }
 }
 

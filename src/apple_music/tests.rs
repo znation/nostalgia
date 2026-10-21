@@ -666,7 +666,7 @@ async fn play_track_without_a_preview_url_commits_state_without_audio() {
 
 // A `Some` preview URL that is blank can play nothing, so the seam rejects it
 // before committing state — the same guard a blank track id gets. The REST
-// layer never produces one (`Resource::preview_url` maps a blank preview to
+// layer never produces one (`Resource::into_song` maps a blank preview to
 // `None`), so this pins the public seam's contract for a caller that hands it
 // one directly. Both an empty and a whitespace-only URL are blank, and the
 // error quotes the value with `{url:?}` so the whitespace case is visible.

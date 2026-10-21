@@ -33,7 +33,7 @@ only grows: search it with grep, or read one entry by its line range. Never read
 **Approach.**
 
 - `src/apple_music/rest.rs`:
-  - Add `pub fn get_all_albums(&self, session: &MusicKitSession) -> Result<Vec<Album>, AppleMusicError>` requesting `{API_BASE}/me/library/albums` through `self.fetch`. Map each resource with `required_id("album")` and `required_name("album")`, and set `artist_id: String::new()`; document why the artist id is empty, as `get_all_songs` documents its empty `album_id`.
+  - Add `pub fn get_all_albums(&self, session: &MusicKitSession) -> Result<Vec<Album>, AppleMusicError>` requesting `{API_BASE}/me/library/albums` through `self.fetch`. Map each resource with `Resource::into_album("")` (the same consuming mapping `get_albums_by_artist` uses, which validates the album's id and name and leaves `artist_id` empty); document why the artist id is empty, as `get_all_songs` documents its empty `album_id`.
 - `src/apple_music.rs`:
   - Add `pub async fn get_all_albums(&self) -> Result<Vec<Album>, AppleMusicError>` through the existing `browse` helper: `self.browse(|rest, session| rest.get_all_albums(session), sample_all_albums)`.
   - Add a private `fn sample_albums_in_library_order() -> impl Iterator<Item = &'static Album>` walking `sample_library().artists` then `albums_by_artist`, and make `sample_songs_in_library_order` start from that same album walk so the two orders cannot drift. Add `fn sample_all_albums() -> Vec<Album>` from the album walk.
@@ -72,7 +72,7 @@ only grows: search it with grep, or read one entry by its line range. Never read
 **Approach.**
 
 - `src/apple_music/rest.rs`:
-  - Add `pub fn get_all_songs(&self, session: &MusicKitSession) -> Result<Vec<Song>, AppleMusicError>`. Build `{API_BASE}/me/library/songs` and call `self.fetch` — the same paginated collection helper `get_favorite_artists` and `get_albums_by_artist` use, so a library larger than one page is read in full under one `REQUEST_TIMEOUT`. Map each `Resource` exactly as `search_library` does (`required_id("song")`, `required_name("song")`, `artist_name()`, `duration_ms()`, `preview_url()`) with `album_id: String::new()`, because a library-songs resource carries no album id and nothing that plays a song reads it.
+  - Add `pub fn get_all_songs(&self, session: &MusicKitSession) -> Result<Vec<Song>, AppleMusicError>`. Build `{API_BASE}/me/library/songs` and call `self.fetch` — the same paginated collection helper `get_favorite_artists` and `get_albums_by_artist` use, so a library larger than one page is read in full under one `REQUEST_TIMEOUT`. Map each `Resource` exactly as `search_library` does (`Resource::into_song("")`, which moves the id, title, artist, and preview URL out of the parsed resource and validates its id and name) with `album_id: String::new()`, because a library-songs resource carries no album id and nothing that plays a song reads it.
 - `src/apple_music.rs`:
   - Add `pub async fn get_all_songs(&self) -> Result<Vec<Song>, AppleMusicError>` answering through the existing `browse` helper: `self.browse(move |rest, session| rest.get_all_songs(session), sample_all_songs)`.
   - Extract the ordered library walk `sample_songs_matching` already spells out into a private `fn sample_songs_in_library_order() -> impl Iterator<Item = &'static Song>` (artists → `albums_by_artist` → `songs_by_album`, in library order), so the new `fn sample_all_songs() -> Vec<Song>` (`sample_songs_in_library_order().cloned().collect()`) and `sample_songs_matching` (the same walk, filtered) cannot drift apart.

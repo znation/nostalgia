@@ -207,7 +207,7 @@ fn songs_from_album_skips_a_blank_preview_url_for_the_next() {
 
 #[test]
 fn songs_from_album_keeps_a_padded_preview_url_verbatim() {
-    // `Resource::preview_url` compares each candidate trimmed, so a padded
+    // `Resource::into_song` compares each candidate trimmed, so a padded
     // URL counts as non-blank and is selected rather than skipped, but it is
     // returned exactly as the resource carried it. This is the reachable twin
     // of the whitespace-only skip above: whitespace-only is skipped, padded is
