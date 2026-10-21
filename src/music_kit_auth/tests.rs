@@ -1174,6 +1174,20 @@ fn authorize_serves_the_callback_after_a_stalled_connection_is_dropped() {
     assert_eq!(session.user_token, SAMPLE_USER_TOKEN);
 }
 
+/// Waits up to five seconds for `pid` to leave `/proc`, which only happens
+/// once the child has been reaped. Panics naming `context` when it remains.
+#[cfg(target_os = "linux")]
+fn assert_child_is_reaped(pid: u32, context: &str) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while std::path::Path::new(&format!("/proc/{pid}")).exists() {
+        assert!(
+            Instant::now() < deadline,
+            "child {pid} was still present five seconds after {context}"
+        );
+        thread::sleep(Duration::from_millis(10));
+    }
+}
+
 // The browser opener is a short-lived launcher. Dropping its `Child` without
 // waiting leaves a zombie for the rest of the app's life, one per sign-in;
 // `reap_in_background` waits on a detached thread so the child is reaped
@@ -1189,14 +1203,7 @@ fn reap_in_background_reaps_the_child() {
         .expect("spawn a short-lived child");
     let pid = child.id();
     reap_in_background(child);
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while std::path::Path::new(&format!("/proc/{pid}")).exists() {
-        assert!(
-            Instant::now() < deadline,
-            "child {pid} was still present five seconds after reap_in_background"
-        );
-        thread::sleep(Duration::from_millis(10));
-    }
+    assert_child_is_reaped(pid, "reap_in_background");
 }
 
 /// Spawns a shell that exits with `exit_code`, reaps it through `reap_with`,
@@ -1278,14 +1285,7 @@ fn a_hung_opener_is_killed_and_reported() {
         report.contains("did not exit"),
         "the report must name the hang, got: {report}"
     );
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while std::path::Path::new(&format!("/proc/{pid}")).exists() {
-        assert!(
-            Instant::now() < deadline,
-            "child {pid} was still present five seconds after the reap timeout"
-        );
-        thread::sleep(Duration::from_millis(10));
-    }
+    assert_child_is_reaped(pid, "the reap timeout");
 }
 
 // If the reaper thread cannot be started, the child it was meant to wait on
@@ -1321,14 +1321,7 @@ fn a_reaper_thread_spawn_failure_kills_the_opener_and_is_reported() {
         report.contains("the OS refused a thread"),
         "the report must carry the spawn cause, got: {report}"
     );
-    let deadline = Instant::now() + Duration::from_secs(5);
-    while std::path::Path::new(&format!("/proc/{pid}")).exists() {
-        assert!(
-            Instant::now() < deadline,
-            "child {pid} was still present five seconds after the reaper spawn failed"
-        );
-        thread::sleep(Duration::from_millis(10));
-    }
+    assert_child_is_reaped(pid, "the reaper spawn failed");
 }
 
 // `AUTH_TIMEOUT` is production behavior — how long `authorize` waits for
