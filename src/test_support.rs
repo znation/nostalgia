@@ -33,10 +33,10 @@ pub(crate) const PREVIEW_URL: &str = "https://example.test/preview.m4a";
 
 /// The three songs on `album-1` that the Previous/Next stepping tests step
 /// through, shared by the `ui::transport` and `ui` test suites. Both suites
-/// pin the same stepping behavior over the same three-song album and used to
-/// build this list independently — a rename or reorder in one fixture would
-/// silently diverge from the other — so it lives here once, next to the other
-/// shared fixtures, and is compiled only for tests.
+/// pin the same stepping behavior over the same three-song album; building
+/// this list independently in each suite would let a rename or reorder in one
+/// fixture silently diverge from the other, so it lives here once, next to the
+/// other shared fixtures, and is compiled only for tests.
 pub(crate) fn stepping_songs() -> Vec<Song> {
     vec![
         Song {
@@ -68,10 +68,10 @@ pub(crate) fn stepping_songs() -> Vec<Song> {
 
 /// The one-song album the single-song stepping tests step through, shared by
 /// the two `ui::transport` tests that pin the single-song edge cases (Next and
-/// Previous on a one-element list). Both used to build this same list
-/// independently — a rename in one fixture would silently diverge from the
-/// other — so it lives here once, next to [`stepping_songs`], and is compiled
-/// only for tests.
+/// Previous on a one-element list). Both need this same list; building it
+/// independently in each suite would let a rename in one fixture silently
+/// diverge from the other, so it lives here once, next to [`stepping_songs`],
+/// and is compiled only for tests.
 pub(crate) fn single_song_album() -> Vec<Song> {
     vec![Song {
         id: "song-1".to_string(),
@@ -87,12 +87,12 @@ pub(crate) fn single_song_album() -> Vec<Song> {
 /// album-2's "song-4" / "B-side".
 /// `songs_loaded_replaces_the_previous_albums_songs` and
 /// `now_playing_label_keeps_the_track_name_after_browsing_to_another_album`
-/// first built this same list inline, and it now also backs
+/// need this list, as do
 /// `album_selected_clears_the_previous_albums_songs`,
 /// `selection_messages_with_a_stale_epoch_or_index_do_nothing`,
 /// `track_selected_stale_press_leaves_known_tracks_untouched`, and the three
-/// bar tests through `play_song_1_then_browse_to_album_2` — a retitle or id
-/// change in one copy would silently diverge from the others — so it lives
+/// bar tests through `play_song_1_then_browse_to_album_2`; a retitle or id
+/// change in one copy would silently diverge from the others, so it lives
 /// here once, next to [`single_song_album`], and is compiled only for tests.
 pub(crate) fn second_album_songs() -> Vec<Song> {
     vec![Song {
@@ -107,9 +107,9 @@ pub(crate) fn second_album_songs() -> Vec<Song> {
 
 /// A single representative artist, album, and song, shared by the `library`,
 /// `apple_music` (including its `rest` client), `ui::views`, and `ui` test
-/// suites. Each suite used to build these same objects independently — a
-/// retitle or id change in one fixture would silently diverge from the
-/// others — so they live here once, next to [`stepping_songs`], and each test
+/// suites. Each suite needs these same objects; building them independently
+/// would let a retitle or id change in one fixture silently diverge from the
+/// others, so they live here once, next to [`stepping_songs`], and each test
 /// only names which one it wants. The browse-mapping tests reuse these,
 /// setting the artist or album id from the query where the browse supplies
 /// one.
@@ -173,11 +173,11 @@ pub(crate) fn rest_session() -> MusicKitSession {
 }
 
 /// The classic "Rock" preset from [`PRESETS`], shared by the `equalizer`,
-/// `state`, and `ui` test suites. Each suite used to look it up inline with
-/// the same `.find(|preset| preset.name == "Rock").expect(...)` — a rename in
-/// the table would then fail in five places, each repeating the panic
-/// message — so the lookup lives here once and each test only names the curve
-/// it wants.
+/// `state`, and `ui` test suites. Each suite needs the same
+/// `.find(|preset| preset.name == "Rock").expect(...)` lookup; without this
+/// helper a rename in the table would fail at each call site, each repeating
+/// the panic message, so the lookup lives here once and each test only names
+/// the curve it wants.
 pub(crate) fn rock_preset() -> Preset {
     *PRESETS
         .iter()
@@ -279,9 +279,9 @@ pub(crate) fn assert_ids<T>(items: &[T], id: impl Fn(&T) -> &str, expected: &[&s
 /// handed and answers with its canned result. Cloning it shares the recording
 /// and the queued responses, so a test keeps a handle after the service or
 /// [`RestLibrary`](crate::apple_music::rest::RestLibrary) boxes the clone.
-/// Both suites used to define this stub independently, so the recording
-/// contract lived in two places; it lives here once and is compiled only for
-/// tests.
+/// Both suites need this stub; defining it independently would put the
+/// recording contract in two places, so it lives here once and is compiled
+/// only for tests.
 #[derive(Clone)]
 pub(crate) struct StubTransport {
     /// The response repeated once [`Self::queue`] is exhausted.
@@ -364,7 +364,7 @@ impl HttpTransport for StubTransport {
 
 /// Asserts the stub saw exactly one request, to `expected_url` with the
 /// [`rest_session`] the browse tests store. The `apple_music` service tests
-/// and the `apple_music::rest` client tests each used to carry this same
+/// and the `apple_music::rest` client tests both need this same
 /// len-and-two-fields check, so it lives here once.
 pub(crate) fn assert_single_call(stub: &StubTransport, expected_url: &str) {
     let calls = stub.calls();
@@ -402,8 +402,8 @@ pub(crate) enum AudioCall {
 /// always emits — the play-time volume set to the default `0.5`, the balance
 /// set to the default `0.0`, the default flat/disabled equalizer, then
 /// [`PREVIEW_URL`] — followed by `expected`, the calls under test. The
-/// `apple_music` service tests and the `ui` transport tests each used to spell
-/// out that prefix, so it lives here once.
+/// `apple_music` service tests and the `ui` transport tests both need that
+/// prefix, so it lives here once.
 pub(crate) fn assert_preview_calls(calls: &[AudioCall], expected: &[AudioCall]) {
     let mut wanted = vec![
         AudioCall::SetVolume(0.5),

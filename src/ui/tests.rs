@@ -382,9 +382,9 @@ fn await_or_timeout_fails_loudly_when_the_future_never_completes() {
 /// here once.
 ///
 /// The task's own output message is fed straight back, rather than a
-/// reconstructed copy: each fetch test used to pass a match-and-clone
-/// closure naming its `*Loaded` variant plus that variant's constructor,
-/// and this helper now takes neither — the task's message serves as both.
+/// reconstructed copy: the fetch tests pass no match-and-clone closure naming
+/// their `*Loaded` variant plus that variant's constructor, and this helper
+/// takes neither — the task's message serves as both.
 /// Feeding the message unchanged also proves the arm's task yields the
 /// `*Loaded` variant whose buffer is asserted — a wrong variant would leave
 /// the expected buffer empty.
@@ -2094,7 +2094,7 @@ fn assert_message_schedules_no_work(player: &mut WinampPlayer, message: Message)
 /// Drives `message` through `update` and asserts the arm schedules follow-up
 /// work. The arms that must run a task once their guard passes — a title-bar
 /// window action with a resolved window id, the shade and always-on-top
-/// toggles, and a recorded shade measurement — each used to repeat the same
+/// toggles, and a recorded shade measurement — each need the same
 /// `into_stream(update(..)).is_some()` probe, so it lives here once and each
 /// call site names only the message it drives.
 fn assert_message_schedules_work(player: &mut WinampPlayer, message: Message) {

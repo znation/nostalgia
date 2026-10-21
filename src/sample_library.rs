@@ -195,7 +195,7 @@ mod tests {
     /// Asserts that `items` yield exactly the expected `(id, label)` pairs, in
     /// order. The content-contract tests each pin one browse list's (id, label)
     /// pairs — the top-level artists and every album- and song-group in the
-    /// indexed library — and all used to repeat the same map-to-pairs-then-
+    /// indexed library — and would otherwise repeat the same map-to-pairs-then-
     /// compare chain, so it lives here once and each test only names its items
     /// and expected pairs.
     fn assert_id_label_pairs<T>(
@@ -355,8 +355,8 @@ mod tests {
     /// Every song in `library`, in library order: all of `album-1`'s songs,
     /// then `album-2`'s, then `album-3`'s. The two content tests below walk the
     /// whole library in this order to pin one song field at a time, and both
-    /// used to repeat the same album-id list and `flat_map` chain; it lives here
-    /// once so adding or reordering an album touches one place.
+    /// would otherwise repeat the same album-id list and `flat_map` chain; it
+    /// lives here once so adding or reordering an album touches one place.
     fn songs_in_library_order(library: &SampleLibrary) -> impl Iterator<Item = &Song> {
         ["album-1", "album-2", "album-3"]
             .iter()

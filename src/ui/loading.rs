@@ -508,11 +508,10 @@ mod tests {
     // `FETCH_TIMEOUT` and `PLAY_TIMEOUT` are production behavior — how long a
     // hung backend may run before the UI gives up (reporting the fetch as
     // failed, or leaving the current track unchanged) — and every fetch and play
-    // in `ui` passes one of them. Nothing read them: the report tests above
-    // used to pass their own `Duration::from_secs(30)`, so a change to either
-    // constant (a zero bound would abandon every fetch and play instantly)
-    // would clear the whole suite while production applied the new bound.
-    // Pin the documented 30 seconds for both.
+    // in `ui` passes one of them. The report tests above pin their wording
+    // through these constants; this test states the documented bound itself, so
+    // a change to either value (a zero bound would abandon every fetch and play
+    // instantly) fails here rather than only through a report string.
     #[test]
     fn fetch_and_play_timeouts_are_the_documented_thirty_seconds() {
         assert_eq!(FETCH_TIMEOUT, Duration::from_secs(30));

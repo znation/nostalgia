@@ -320,8 +320,7 @@ struct WinampPlayer {
 
 /// Which browse screen is showing. Payload-free: the albums and songs the
 /// view renders come from the loaded `albums`/`songs` lists, so carrying
-/// the selected ids here (as earlier versions did) only duplicated
-/// state that nothing read.
+/// the selected ids here would only duplicate state that nothing reads.
 #[derive(Debug, PartialEq, Eq)]
 enum CurrentView {
     Artists,
@@ -437,20 +436,18 @@ fn boot(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> (WinampPlaye
 /// otherwise `forward` selects the
 /// `transport::next_track_id`/`previous_track_id` stepping function — and
 /// schedule the landed song as `TrackSelected`, or no task when there is
-/// nothing to step through. Both transport update arms used to repeat this
-/// lock-then-dispatch block; `forward` selects the direction so the stepping
-/// arithmetic stays in `transport` and the wiring lives here once. The shared
+/// nothing to step through. `forward` selects the direction so the stepping
+/// arithmetic stays in `transport`, and the lock-then-dispatch wiring lives
+/// here once for both transport arms. The shared
 /// Shuffle and Repeat flags are read under the same lock, so the
 /// random-vs-sequential and wrap-vs-stop-at-the-edge decisions (see
 /// `transport::shuffled_track_id` and `transport::next_track_id`) stay in
 /// `transport` too.
 fn step_track(player: &mut WinampPlayer, forward: bool) -> Task<Message> {
     // The stepped song is computed under the state lock, borrowing the
-    // current track directly. The earlier version cloned the `current_track`
-    // `String` only to borrow it via `as_deref` — the same clone-to-borrow
-    // the per-frame now-playing path used to do — so the lock now covers the
-    // pure stepping scan (fast, and the transport functions never lock
-    // anything themselves).
+    // current track directly rather than cloning it to satisfy `as_deref`.
+    // The lock covers the pure stepping scan, which is fast, and the
+    // transport functions never lock anything themselves.
     let state = player.state.blocking_lock();
     // Step the list the current view draws from, so the scheduled
     // `TrackSelected` index and epoch match the list the arm resolves

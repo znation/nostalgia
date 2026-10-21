@@ -276,7 +276,7 @@ mod tests {
     #[test]
     fn display_title_joins_the_artist_and_title() {
         // The sample song carries both fields, so the row text reads like the
-        // mockup's playlist rows rather than the bare title it used to show.
+        // mockup's playlist rows rather than a bare title.
         assert_eq!(sample_song().display_title(), "The Sample Band - Opening");
         assert!(matches!(
             sample_song().display_title(),
