@@ -120,6 +120,7 @@ pub(crate) fn sample_artist() -> Artist {
     }
 }
 
+/// The representative album fixture; [`sample_song`] belongs to it.
 pub(crate) fn sample_album() -> Album {
     Album {
         id: "album-1".to_string(),
@@ -128,6 +129,7 @@ pub(crate) fn sample_album() -> Album {
     }
 }
 
+/// The representative playlist fixture.
 pub(crate) fn sample_playlist() -> Playlist {
     Playlist {
         id: "playlist-1".to_string(),
@@ -135,6 +137,8 @@ pub(crate) fn sample_playlist() -> Playlist {
     }
 }
 
+/// The representative song fixture; it belongs to [`sample_album`] by
+/// [`sample_artist`].
 pub(crate) fn sample_song() -> Song {
     Song {
         id: "song-1".to_string(),

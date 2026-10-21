@@ -42,11 +42,15 @@ const MIN_READ_TIMEOUT: Duration = Duration::from_millis(1);
 /// raw query string (if the target carried one), the `Host` header value (if
 /// any), and the body bytes.
 pub(super) struct HttpRequest {
+    /// The request method as sent (for example, `GET`).
     pub(super) method: String,
+    /// The request target with its query string stripped.
     pub(super) path: String,
     /// Everything after the first `?` in the request target, undecoded.
     pub(super) query: Option<String>,
+    /// The `Host` header's value, if the request carried one.
     pub(super) host: Option<String>,
+    /// The request body bytes; empty when the request declared no body.
     pub(super) body: Vec<u8>,
 }
 

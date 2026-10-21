@@ -94,6 +94,9 @@ pub(super) trait WorkerPlayer {
     fn stop(&self);
 }
 
+/// Returns `position` moved by `offset_secs`: backward for a negative offset
+/// (saturating at zero) and forward for a positive one (saturating at
+/// [`Duration::MAX`]).
 pub(super) fn seek_target(position: Duration, offset_secs: i64) -> Duration {
     let offset = Duration::from_secs(offset_secs.unsigned_abs());
     if offset_secs < 0 {

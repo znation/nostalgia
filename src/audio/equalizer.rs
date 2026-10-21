@@ -101,6 +101,8 @@ pub(super) struct EqSource<S> {
 }
 
 impl<S: Source> EqSource<S> {
+    /// Wraps `inner` with the curve in `settings`, building one [`BandFilter`]
+    /// per output channel and applying the current curve.
     pub(super) fn new(inner: S, settings: Arc<EqSettings>) -> Self {
         let channels = inner.channels().get() as usize;
         let sample_rate = inner.sample_rate().get();

@@ -26,6 +26,7 @@ pub(super) struct BalanceSource<S> {
 }
 
 impl<S> BalanceSource<S> {
+    /// Wraps `inner`, applying the live stereo balance stored in `balance`.
     pub(super) fn new(inner: S, balance: Arc<AtomicU32>) -> Self {
         Self {
             inner,
