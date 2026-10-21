@@ -1,5 +1,5 @@
 use super::*;
-use crate::audio::AudioOutput;
+use crate::audio::{AudioOutput, EqSnapshot};
 use crate::test_support::{
     AudioCall, FailingAudio, PREVIEW_URL, RecordingAudio, StubTransport, assert_ids,
     assert_preview_calls, assert_single_call, rest_session, sample_album, sample_artist,
@@ -160,6 +160,14 @@ impl AudioOutput for GatedAudio {
             .push(AudioCall::SetBalance(balance));
         Ok(())
     }
+
+    fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(AudioCall::SetEqualizer(equalizer));
+        Ok(())
+    }
 }
 
 /// The one backend command a [`RejectingAudio`] backend refuses.
@@ -255,6 +263,14 @@ impl AudioOutput for RejectingAudio {
             .lock()
             .unwrap()
             .push(AudioCall::SetBalance(balance));
+        Ok(())
+    }
+
+    fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(AudioCall::SetEqualizer(equalizer));
         Ok(())
     }
 }
@@ -794,6 +810,28 @@ async fn set_output_balance_forwards_to_the_audio_backend() {
     assert_eq!(state.lock().await.balance(), 0.0);
 }
 
+// `set_output_equalizer` forwards to the injected backend without touching the
+// shared state: the UI stores the clamped curve itself, so this method is only
+// the seam to the output's equalizer.
+#[tokio::test]
+async fn set_output_equalizer_forwards_to_the_audio_backend() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+    let snapshot = EqSnapshot {
+        enabled: true,
+        preamp_db: 3.0,
+        bands_db: [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0],
+    };
+
+    service.set_output_equalizer(snapshot).unwrap();
+
+    assert_eq!(recording.calls(), vec![AudioCall::SetEqualizer(snapshot)]);
+    let state = state.lock().await;
+    assert!(!state.eq_enabled);
+    assert_eq!(state.eq_preamp(), 0.0);
+    assert_eq!(state.eq_bands(), [0.0; crate::equalizer::BAND_COUNT]);
+}
+
 // A song the library supplied without a preview URL still commits the state
 // transition — the Now Playing bar must name it — but starts no audio. The
 // recording fake pins that no `Play` reaches the backend.
@@ -956,6 +994,7 @@ async fn play_track_accepts_a_public_https_preview_url() {
             vec![
                 AudioCall::SetVolume(0.5),
                 AudioCall::SetBalance(0.0),
+                AudioCall::SetEqualizer(EqSnapshot::default()),
                 AudioCall::Play(url.to_string()),
             ]
         );
@@ -980,6 +1019,42 @@ async fn play_track_starts_the_preview_at_the_states_balance() {
         vec![
             AudioCall::SetVolume(0.5),
             AudioCall::SetBalance(-0.4),
+            AudioCall::SetEqualizer(EqSnapshot::default()),
+            AudioCall::Play(PREVIEW_URL.to_string()),
+        ]
+    );
+}
+
+// The first preview must start at the equalizer curve already stored in
+// shared state, not at the backend's flat default, just as it starts at the
+// stored volume and balance. Pin the whole snapshot `play_track` forwards.
+#[tokio::test]
+async fn play_track_starts_the_preview_at_the_states_equalizer() {
+    let (service, state, recording) = recording_service();
+    {
+        let mut state = state.lock().await;
+        state.toggle_equalizer();
+        state.set_eq_preamp(3.0);
+        state.set_eq_band(0, 4.0);
+    }
+
+    service
+        .play_track("song-1", Some(PREVIEW_URL), || true)
+        .await
+        .unwrap();
+
+    let mut bands_db = [0.0; crate::equalizer::BAND_COUNT];
+    bands_db[0] = 4.0;
+    assert_eq!(
+        recording.calls(),
+        vec![
+            AudioCall::SetVolume(0.5),
+            AudioCall::SetBalance(0.0),
+            AudioCall::SetEqualizer(EqSnapshot {
+                enabled: true,
+                preamp_db: 3.0,
+                bands_db,
+            }),
             AudioCall::Play(PREVIEW_URL.to_string()),
         ]
     );
@@ -1290,7 +1365,45 @@ async fn resume_after_stop_restarts_the_preview() {
 
     assert_preview_calls(
         &recording.calls(),
-        &[AudioCall::Stop, AudioCall::Play(PREVIEW_URL.to_string())],
+        &[
+            AudioCall::Stop,
+            AudioCall::SetEqualizer(EqSnapshot::default()),
+            AudioCall::Play(PREVIEW_URL.to_string()),
+        ],
+    );
+    assert_playback_state(&state, Some("song-1"), true).await;
+}
+
+// A restart after Stop builds a fresh player from the backend's remembered
+// curve, so it must forward the curve the panel shows now even when that
+// changed while the transport was stopped.
+#[tokio::test]
+async fn resume_after_stop_restarts_at_the_states_current_equalizer() {
+    let (service, state, recording) = recording_service_with_preview().await;
+    service.stop().await.unwrap();
+    {
+        let mut state = state.lock().await;
+        state.toggle_equalizer();
+        state.set_eq_preamp(3.0);
+        state.set_eq_band(4, 5.0);
+    }
+    let mut bands_db = [0.0; crate::equalizer::BAND_COUNT];
+    bands_db[4] = 5.0;
+    let equalizer = EqSnapshot {
+        enabled: true,
+        preamp_db: 3.0,
+        bands_db,
+    };
+
+    service.resume().await.unwrap();
+
+    assert_preview_calls(
+        &recording.calls(),
+        &[
+            AudioCall::Stop,
+            AudioCall::SetEqualizer(equalizer),
+            AudioCall::Play(PREVIEW_URL.to_string()),
+        ],
     );
     assert_playback_state(&state, Some("song-1"), true).await;
 }
@@ -1319,9 +1432,12 @@ async fn resume_after_stop_reports_a_restart_failure_without_claiming_playback()
         vec![
             AudioCall::SetVolume(0.5),
             AudioCall::SetBalance(0.0),
+            AudioCall::SetEqualizer(EqSnapshot::default()),
             AudioCall::Play(PREVIEW_URL.to_string()),
             AudioCall::Stop,
+            AudioCall::SetEqualizer(EqSnapshot::default()),
             AudioCall::Play(PREVIEW_URL.to_string()),
+            AudioCall::SetEqualizer(EqSnapshot::default()),
             AudioCall::Play(PREVIEW_URL.to_string()),
         ]
     );

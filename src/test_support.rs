@@ -20,7 +20,7 @@ use std::time::{Duration, Instant};
 
 use crate::apple_music::AppleMusicError;
 use crate::apple_music::rest::HttpTransport;
-use crate::audio::AudioOutput;
+use crate::audio::{AudioOutput, EqSnapshot};
 use crate::equalizer::{PRESETS, Preset};
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::music_kit_auth::MusicKitSession;
@@ -370,9 +370,9 @@ pub(crate) fn assert_single_call(stub: &StubTransport, expected_url: &str) {
 
 /// The commands a [`RecordingAudio`] recorded, in order, so a test can pin
 /// exactly what the service handed the audio backend. The derive drops `Eq`
-/// because [`AudioCall::SetVolume`] and [`AudioCall::SetBalance`] carry an
-/// `f32`, which is only `PartialEq`; the only uses compare whole
-/// `Vec<AudioCall>`s with `assert_eq!`.
+/// because [`AudioCall::SetVolume`], [`AudioCall::SetBalance`], and
+/// [`AudioCall::SetEqualizer`] carry an `f32`, which is only `PartialEq`; the
+/// only uses compare whole `Vec<AudioCall>`s with `assert_eq!`.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum AudioCall {
     /// `play` was called with this URL.
@@ -387,17 +387,21 @@ pub(crate) enum AudioCall {
     SetVolume(f32),
     /// `set_balance` was called with this balance.
     SetBalance(f32),
+    /// `set_equalizer` was called with this curve.
+    SetEqualizer(EqSnapshot),
 }
 
-/// Asserts `calls` recorded the three [`AudioCall`]s that starting a preview
+/// Asserts `calls` recorded the four [`AudioCall`]s that starting a preview
 /// always emits — the play-time volume set to the default `0.5`, the balance
-/// set to the default `0.0`, then [`PREVIEW_URL`] — followed by `expected`, the
-/// calls under test. The `apple_music` service tests and the `ui` transport
-/// tests each used to spell out that prefix, so it lives here once.
+/// set to the default `0.0`, the default flat/disabled equalizer, then
+/// [`PREVIEW_URL`] — followed by `expected`, the calls under test. The
+/// `apple_music` service tests and the `ui` transport tests each used to spell
+/// out that prefix, so it lives here once.
 pub(crate) fn assert_preview_calls(calls: &[AudioCall], expected: &[AudioCall]) {
     let mut wanted = vec![
         AudioCall::SetVolume(0.5),
         AudioCall::SetBalance(0.0),
+        AudioCall::SetEqualizer(EqSnapshot::default()),
         AudioCall::Play(PREVIEW_URL.to_string()),
     ];
     wanted.extend_from_slice(expected);
@@ -458,6 +462,14 @@ impl AudioOutput for RecordingAudio {
             .push(AudioCall::SetBalance(balance));
         Ok(())
     }
+
+    fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(AudioCall::SetEqualizer(equalizer));
+        Ok(())
+    }
 }
 
 /// An [`AudioOutput`] whose `play` fails, so a test can pin that the service
@@ -487,6 +499,10 @@ impl AudioOutput for FailingAudio {
     }
 
     fn set_balance(&self, _balance: f32) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn set_equalizer(&self, _equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
         Ok(())
     }
 }
@@ -536,6 +552,10 @@ impl AudioOutput for FailingTransportAudio {
     }
 
     fn set_balance(&self, _balance: f32) -> Result<(), AppleMusicError> {
+        Ok(())
+    }
+
+    fn set_equalizer(&self, _equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
         Ok(())
     }
 }

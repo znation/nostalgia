@@ -154,13 +154,26 @@ impl AppleMusicService {
     /// The shared body of [`resume`](Self::resume) and the resume half of
     /// [`toggle_play_pause`](Self::toggle_play_pause), run with the transport
     /// lock already held. Resumes a paused player; when the backend has
-    /// nothing loaded but a preview URL is remembered, replays it (a stop
-    /// discards the player, so Play after Stop restarts rather than resumes);
-    /// when neither is true, leaves the flag alone.
+    /// nothing loaded but a preview URL is remembered, replays it at the
+    /// current equalizer curve (a stop discards the player, so Play after Stop
+    /// restarts rather than resumes); when neither is true, leaves the flag
+    /// alone.
     async fn resume_locked(&self, transport: &mut TransportState) -> Result<(), AppleMusicError> {
         if transport.loaded {
             self.audio.resume()?;
         } else if let Some(url) = transport.last_url.clone() {
+            // The restart builds a fresh player from the backend's remembered
+            // curve, so forward the panel's current curve first rather than
+            // replaying at whatever was set when the previous preview began.
+            let equalizer = {
+                let state = self.state.lock().await;
+                audio::EqSnapshot {
+                    enabled: state.eq_enabled,
+                    preamp_db: state.eq_preamp(),
+                    bands_db: state.eq_bands(),
+                }
+            };
+            self.set_output_equalizer(equalizer)?;
             self.audio.play(&url)?;
             transport.loaded = true;
         } else {
@@ -202,6 +215,24 @@ impl AppleMusicService {
     /// the request.
     pub(crate) fn set_output_balance(&self, balance: f32) -> Result<(), AppleMusicError> {
         self.audio.set_balance(balance)
+    }
+
+    /// Forwards `equalizer` to the audio backend, so a preview starts at the
+    /// curve the equalizer panel shows. Synchronous, and touches no shared
+    /// state: the UI already stored the clamped curve under its own lock, and
+    /// [`crate::audio::AudioOutput::set_equalizer`] is a non-blocking channel
+    /// send, so an async transition here would let a slider drag's messages
+    /// race the state lock.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the audio backend cannot accept
+    /// the request.
+    pub(crate) fn set_output_equalizer(
+        &self,
+        equalizer: audio::EqSnapshot,
+    ) -> Result<(), AppleMusicError> {
+        self.audio.set_equalizer(equalizer)
     }
 }
 
@@ -536,11 +567,16 @@ impl AppleMusicService {
         }
         state.current_track = Some(track_id.to_string());
         state.is_playing = true;
-        // The gain and balance to start this preview at, read before the lock
-        // drops. A preview starts at the sliders' values rather than rodio's
-        // full-volume and centered defaults.
+        // The gain, balance, and equalizer curve to start this preview at,
+        // read before the lock drops. A preview starts at the sliders' values
+        // and the panel's curve rather than rodio's defaults.
         let volume = state.volume();
         let balance = state.balance();
+        let equalizer = audio::EqSnapshot {
+            enabled: state.eq_enabled,
+            preamp_db: state.eq_preamp(),
+            bands_db: state.eq_bands(),
+        };
         drop(state);
 
         println!("{}", play_log_line(track_id));
@@ -554,6 +590,7 @@ impl AppleMusicService {
                 .audio
                 .set_volume(volume)
                 .and_then(|()| self.audio.set_balance(balance))
+                .and_then(|()| self.set_output_equalizer(equalizer))
                 .and_then(|()| self.audio.play(url))
             {
                 // The backend refused the preview, so shared state must not keep

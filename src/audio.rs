@@ -28,7 +28,7 @@ use std::io::Cursor;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::OnceLock;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::time::Duration;
 
@@ -38,6 +38,7 @@ use ureq::unversioned::resolver::{DefaultResolver, ResolvedSocketAddrs, Resolver
 use ureq::unversioned::transport::{DefaultConnector, NextTimeout};
 
 use crate::apple_music::ip_is_internal;
+use crate::equalizer::{BAND_COUNT, BandFilter};
 use crate::http::config_builder_with_timeout;
 use crate::music_error::AppleMusicError;
 
@@ -61,6 +62,78 @@ const PREVIEW_TIMEOUT: Duration = Duration::from_secs(30);
 /// stand in. Five seconds is far longer than a healthy open takes and short
 /// enough that a wedged one is reported instead of hanging.
 const DEVICE_OPEN_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// The equalizer curve the output should apply to a preview.
+///
+/// This is a plain copyable snapshot of `AppState`'s equalizer fields so the
+/// audio seam can carry a curve across its worker channel without depending
+/// on the state module.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct EqSnapshot {
+    /// Whether the equalizer is switched on.
+    pub enabled: bool,
+    /// The preamp gain in decibels.
+    pub preamp_db: f32,
+    /// The ten band gains in decibels, low frequency to high.
+    pub bands_db: [f32; BAND_COUNT],
+}
+
+/// The live equalizer curve shared between a [`RodioPlayer`] and the
+/// [`EqSource`]s wrapping its previews.
+///
+/// The fields are atomics so the worker can store a new curve while the audio
+/// thread is reading the current one. `version` changes on every store; a
+/// source rebuilds its coefficients only when it sees a new version.
+struct EqSettings {
+    enabled: AtomicBool,
+    preamp_db: AtomicU32,
+    bands_db: [AtomicU32; BAND_COUNT],
+    version: AtomicU64,
+}
+
+impl Default for EqSettings {
+    fn default() -> Self {
+        Self {
+            enabled: AtomicBool::new(false),
+            preamp_db: AtomicU32::new(0.0_f32.to_bits()),
+            bands_db: std::array::from_fn(|_| AtomicU32::new(0.0_f32.to_bits())),
+            version: AtomicU64::new(0),
+        }
+    }
+}
+
+impl EqSettings {
+    /// Stores `snapshot` and bumps the version so a running source rebuilds
+    /// its coefficients before filtering the next sample.
+    fn store(&self, snapshot: EqSnapshot) {
+        self.enabled.store(snapshot.enabled, Ordering::Relaxed);
+        self.preamp_db
+            .store(snapshot.preamp_db.to_bits(), Ordering::Relaxed);
+        for (slot, gain) in self.bands_db.iter().zip(snapshot.bands_db) {
+            slot.store(gain.to_bits(), Ordering::Relaxed);
+        }
+        self.version.fetch_add(1, Ordering::Release);
+    }
+
+    /// Reads the current curve. The caller pairs this with [`Self::version`]
+    /// to know whether it is new.
+    fn snapshot(&self) -> EqSnapshot {
+        EqSnapshot {
+            enabled: self.enabled.load(Ordering::Relaxed),
+            preamp_db: f32::from_bits(self.preamp_db.load(Ordering::Relaxed)),
+            bands_db: std::array::from_fn(|index| {
+                f32::from_bits(self.bands_db[index].load(Ordering::Relaxed))
+            }),
+        }
+    }
+
+    /// The current curve's version, loaded with the acquire half of the
+    /// store's release, so the fields read after a changed version are the
+    /// ones that version wrote.
+    fn version(&self) -> u64 {
+        self.version.load(Ordering::Acquire)
+    }
+}
 
 /// The audio-output seam: a backend that can play, pause, and stop a track
 /// and set its output gain.
@@ -133,6 +206,18 @@ pub trait AudioOutput: Send + Sync {
     /// Returns an [`AppleMusicError`] when the backend cannot accept the
     /// request (see [`AudioOutput::play`]).
     fn set_balance(&self, balance: f32) -> Result<(), AppleMusicError>;
+
+    /// Sets the equalizer curve applied to the output.
+    ///
+    /// Applies to the current player, if one is loaded, and is remembered so
+    /// the next [`play`](Self::play) starts at the same curve. A disabled
+    /// snapshot passes samples through unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the backend cannot accept the
+    /// request (see [`AudioOutput::play`]).
+    fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError>;
 }
 
 /// An [`AudioOutput`] that produces no sound: it logs each command and reports
@@ -174,6 +259,11 @@ impl AudioOutput for SilentOutput {
         println!("Audio output is silent; balance set to {balance}");
         Ok(())
     }
+
+    fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
+        println!("Audio output is silent; equalizer set to {equalizer:?}");
+        Ok(())
+    }
 }
 
 /// A command sent from [`RodioOutput`] to its worker thread.
@@ -190,6 +280,8 @@ enum Command {
     SetVolume(f32),
     /// Set the stereo balance (`-1.0` hard left, `1.0` hard right).
     SetBalance(f32),
+    /// Set the equalizer curve applied to the output.
+    SetEqualizer(EqSnapshot),
 }
 
 /// The player handle [`serve_commands`] drives.
@@ -208,6 +300,8 @@ trait WorkerPlayer {
     fn set_volume(&self, volume: f32);
     /// Sets the player's stereo balance.
     fn set_balance(&self, balance: f32);
+    /// Sets the player's equalizer curve.
+    fn set_equalizer(&self, equalizer: EqSnapshot);
     /// Appends `preview` to the player's queue.
     fn append(&self, preview: Self::Preview);
     /// Pauses playback.
@@ -291,11 +385,108 @@ impl<S: Source> Source for BalanceSource<S> {
     }
 }
 
-/// The production [`WorkerPlayer`]: a `rodio::Player` plus the balance shared
-/// with the [`BalanceSource`] wrapping each preview it appends.
+/// A [`Source`] adapter that applies a live equalizer curve to its samples.
+///
+/// Each channel gets its own [`BandFilter`], so stereo channels keep separate
+/// filter state. The curve is read from shared [`EqSettings`] on every
+/// sample; when its version changes the filters are rebuilt, so a slider move
+/// changes the preview already playing without restarting it. This sits
+/// inside the [`BalanceSource`] wrapper, so equalization runs before the
+/// stereo balance.
+struct EqSource<S> {
+    inner: S,
+    settings: Arc<EqSettings>,
+    /// The settings version the current coefficients were built from.
+    last_version: u64,
+    filters: Vec<BandFilter>,
+    /// The channel index of the next sample, advanced modulo the source's
+    /// channel count.
+    channel: usize,
+}
+
+impl<S: Source> EqSource<S> {
+    fn new(inner: S, settings: Arc<EqSettings>) -> Self {
+        let channels = inner.channels().get() as usize;
+        let sample_rate = inner.sample_rate().get();
+        let last_version = settings.version();
+        let mut source = Self {
+            inner,
+            last_version,
+            settings,
+            filters: (0..channels)
+                .map(|_| BandFilter::new(sample_rate))
+                .collect(),
+            channel: 0,
+        };
+        source.rebuild_filters();
+        source
+    }
+
+    /// Rebuilds every channel filter from the current curve, clearing their
+    /// state.
+    fn rebuild_filters(&mut self) {
+        let snapshot = self.settings.snapshot();
+        for filter in &mut self.filters {
+            filter.set_curve(snapshot.enabled, snapshot.preamp_db, &snapshot.bands_db);
+        }
+    }
+}
+
+impl<S: Source> Iterator for EqSource<S> {
+    type Item = Sample;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let sample = self.inner.next()?;
+        let version = self.settings.version();
+        if version != self.last_version {
+            self.last_version = version;
+            self.rebuild_filters();
+        }
+        let channels = self.inner.channels().get() as usize;
+        let filtered = self
+            .filters
+            .get_mut(self.channel)
+            .map_or(sample, |filter| filter.process(sample));
+        self.channel = (self.channel + 1) % channels;
+        Some(filtered)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+}
+
+impl<S: Source> Source for EqSource<S> {
+    fn current_span_len(&self) -> Option<usize> {
+        self.inner.current_span_len()
+    }
+
+    fn channels(&self) -> ChannelCount {
+        self.inner.channels()
+    }
+
+    fn sample_rate(&self) -> SampleRate {
+        self.inner.sample_rate()
+    }
+
+    fn total_duration(&self) -> Option<Duration> {
+        self.inner.total_duration()
+    }
+
+    fn try_seek(&mut self, pos: Duration) -> Result<(), SeekError> {
+        self.inner.try_seek(pos)?;
+        self.channel = 0;
+        self.rebuild_filters();
+        Ok(())
+    }
+}
+
+/// The production [`WorkerPlayer`]: a `rodio::Player` plus the balance and
+/// equalizer shared with the source adapters wrapping each preview it appends.
 struct RodioPlayer {
     player: rodio::Player,
     balance: Arc<AtomicU32>,
+    equalizer: Arc<EqSettings>,
 }
 
 impl RodioPlayer {
@@ -303,6 +494,7 @@ impl RodioPlayer {
         Self {
             player,
             balance: Arc::new(AtomicU32::new(0.0_f32.to_bits())),
+            equalizer: Arc::new(EqSettings::default()),
         }
     }
 }
@@ -318,9 +510,14 @@ impl WorkerPlayer for RodioPlayer {
         self.balance.store(balance.to_bits(), Ordering::Relaxed);
     }
 
+    fn set_equalizer(&self, equalizer: EqSnapshot) {
+        self.equalizer.store(equalizer);
+    }
+
     fn append(&self, preview: Self::Preview) {
+        let equalized = EqSource::new(preview, Arc::clone(&self.equalizer));
         self.player
-            .append(BalanceSource::new(preview, Arc::clone(&self.balance)));
+            .append(BalanceSource::new(equalized, Arc::clone(&self.balance)));
     }
 
     fn pause(&self) {
@@ -413,6 +610,10 @@ impl AudioOutput for RodioOutput {
 
     fn set_balance(&self, balance: f32) -> Result<(), AppleMusicError> {
         self.send(Command::SetBalance(balance))
+    }
+
+    fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
+        self.send(Command::SetEqualizer(equalizer))
     }
 }
 
@@ -507,6 +708,9 @@ fn serve_commands<P, D>(
     // The stereo balance the output should hold, remembered across players the
     // same way as the volume (initial center).
     let mut balance = 0.0_f32;
+    // The equalizer curve the output should hold, remembered across players
+    // the same way as the volume and balance (initial flat and disabled).
+    let mut equalizer = EqSnapshot::default();
     // Commands that arrived while a download was in flight, handled in order
     // once it finishes. A later `Play` or `Stop` among them supersedes the
     // preview the download produced.
@@ -543,6 +747,7 @@ fn serve_commands<P, D>(
                     let next = create_player();
                     next.set_volume(volume);
                     next.set_balance(balance);
+                    next.set_equalizer(equalizer);
                     next.append(preview);
                     player = Some(next);
                 }
@@ -583,6 +788,12 @@ fn serve_commands<P, D>(
                 balance = new_balance;
                 if let Some(player) = &player {
                     player.set_balance(balance);
+                }
+            }
+            Command::SetEqualizer(new_equalizer) => {
+                equalizer = new_equalizer;
+                if let Some(player) = &player {
+                    player.set_equalizer(equalizer);
                 }
             }
         }
@@ -725,6 +936,7 @@ mod tests {
         assert!(output.stop().is_ok());
         assert!(output.set_volume(0.4).is_ok());
         assert!(output.set_balance(-0.4).is_ok());
+        assert!(output.set_equalizer(EqSnapshot::default()).is_ok());
     }
 
     #[test]
@@ -798,6 +1010,223 @@ mod tests {
         assert_eq!(source.next(), Some(0.0));
     }
 
+    fn stereo_source(samples: Vec<f32>) -> rodio::buffer::SamplesBuffer {
+        rodio::buffer::SamplesBuffer::new(
+            ChannelCount::new(2).unwrap(),
+            SampleRate::new(44_100).unwrap(),
+            samples,
+        )
+    }
+
+    /// A stereo source whose `try_seek` rewinds cleanly from any sample
+    /// offset. `SamplesBuffer` subtracts the current channel from the target
+    /// position, so seeking it to zero after an odd number of samples would
+    /// underflow; this source lets a test leave the channel cursor mid-frame.
+    struct SeekableSource {
+        samples: Vec<f32>,
+        position: usize,
+    }
+
+    impl SeekableSource {
+        fn new(samples: Vec<f32>) -> Self {
+            Self {
+                samples,
+                position: 0,
+            }
+        }
+    }
+
+    impl Iterator for SeekableSource {
+        type Item = Sample;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            let sample = *self.samples.get(self.position)?;
+            self.position += 1;
+            Some(sample)
+        }
+
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            let remaining = self.samples.len() - self.position;
+            (remaining, Some(remaining))
+        }
+    }
+
+    impl Source for SeekableSource {
+        fn current_span_len(&self) -> Option<usize> {
+            Some(self.samples.len())
+        }
+
+        fn channels(&self) -> ChannelCount {
+            ChannelCount::new(2).unwrap()
+        }
+
+        fn sample_rate(&self) -> SampleRate {
+            SampleRate::new(44_100).unwrap()
+        }
+
+        fn total_duration(&self) -> Option<Duration> {
+            Some(Duration::from_secs_f64(
+                self.samples.len() as f64 / (2.0 * 44_100.0),
+            ))
+        }
+
+        fn try_seek(&mut self, pos: Duration) -> Result<(), SeekError> {
+            let position = (pos.as_secs_f64() * 44_100.0 * 2.0) as usize;
+            self.position = position.min(self.samples.len());
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn eq_source_disabled_passes_samples_through() {
+        let raw = stereo_source(vec![0.5, -0.25, 0.75, -0.5]);
+        let mut source = EqSource::new(raw, Arc::new(EqSettings::default()));
+
+        assert_eq!(source.channels(), ChannelCount::new(2).unwrap());
+        assert_eq!(source.sample_rate(), SampleRate::new(44_100).unwrap());
+        assert_eq!(source.current_span_len(), Some(4));
+        assert!(source.total_duration().is_some());
+        assert_eq!(
+            source.by_ref().collect::<Vec<_>>(),
+            vec![0.5, -0.25, 0.75, -0.5]
+        );
+    }
+
+    #[test]
+    fn eq_source_reports_inner_seek_result() {
+        let raw = stereo_source(vec![0.5, -0.25]);
+        let mut source = EqSource::new(raw, Arc::new(EqSettings::default()));
+        let mut unwrapped = stereo_source(vec![0.5, -0.25]);
+        let expected = unwrapped.try_seek(Duration::from_secs(1));
+
+        assert_eq!(
+            source.try_seek(Duration::from_secs(1)).is_ok(),
+            expected.is_ok()
+        );
+    }
+
+    #[test]
+    fn eq_source_seek_clears_filter_state() {
+        let mut bands = [0.0; crate::equalizer::BAND_COUNT];
+        bands[4] = 12.0;
+        let settings = Arc::new(EqSettings::default());
+        settings.store(EqSnapshot {
+            enabled: true,
+            preamp_db: 0.0,
+            bands_db: bands,
+        });
+        // An impulse followed by silence leaves the left channel's filter
+        // ringing, so a seek that kept the filter state would replay the
+        // impulse differently from a freshly built source. Three samples leave
+        // the channel cursor on the right channel instead of back at zero, so
+        // the seek must reset it as well as the filter state.
+        let samples = vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+        let mut source = EqSource::new(SeekableSource::new(samples.clone()), Arc::clone(&settings));
+        let before: Vec<_> = source.by_ref().take(3).collect();
+        assert!(
+            before.iter().any(|sample| *sample != 0.0),
+            "the impulse should leave the filter ringing: {before:?}"
+        );
+        assert_eq!(source.channel, 1, "the cursor should be mid-frame");
+
+        source.try_seek(Duration::ZERO).unwrap();
+        assert_eq!(
+            source.channel, 0,
+            "the seek should reset the channel cursor"
+        );
+        let after_seek: Vec<_> = source.collect();
+        let fresh: Vec<_> = EqSource::new(SeekableSource::new(samples), settings).collect();
+
+        assert_eq!(after_seek.len(), fresh.len());
+        for (index, (replayed, expected)) in after_seek.iter().zip(&fresh).enumerate() {
+            assert!(
+                (replayed - expected).abs() < 1e-6,
+                "sample {index} was {replayed}, expected {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn eq_source_enabled_flat_curve_passes_samples_through() {
+        let settings = Arc::new(EqSettings::default());
+        settings.store(EqSnapshot {
+            enabled: true,
+            preamp_db: 0.0,
+            bands_db: [0.0; crate::equalizer::BAND_COUNT],
+        });
+        let raw = stereo_source(vec![0.5, -0.25, 0.75, -0.5]);
+        let mut source = EqSource::new(raw, settings);
+
+        for (output, input) in source.by_ref().zip([0.5, -0.25, 0.75, -0.5]) {
+            assert!(
+                (output - input).abs() < 1e-6,
+                "flat curve changed {input} to {output}"
+            );
+        }
+    }
+
+    #[test]
+    fn eq_source_preamp_scales_by_the_decibel_gain() {
+        let settings = Arc::new(EqSettings::default());
+        settings.store(EqSnapshot {
+            enabled: true,
+            preamp_db: 6.020_6,
+            bands_db: [0.0; crate::equalizer::BAND_COUNT],
+        });
+        let raw = stereo_source(vec![0.25, -0.25]);
+        let mut source = EqSource::new(raw, settings);
+
+        assert!((source.next().unwrap() - 0.5).abs() < 1e-4);
+        assert!((source.next().unwrap() + 0.5).abs() < 1e-4);
+    }
+
+    #[test]
+    fn eq_source_filters_each_channel_with_its_own_state() {
+        let mut bands = [0.0; crate::equalizer::BAND_COUNT];
+        bands[4] = 12.0;
+        let settings = Arc::new(EqSettings::default());
+        settings.store(EqSnapshot {
+            enabled: true,
+            preamp_db: 0.0,
+            bands_db: bands,
+        });
+        // An impulse in the left channel followed by silence. A filter shared
+        // between channels would ring into the right channel's samples; one
+        // filter per channel keeps the right channel exactly silent.
+        let raw = stereo_source(vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]);
+        let samples: Vec<_> = EqSource::new(raw, settings).collect();
+
+        assert!(
+            samples[0] != 0.0,
+            "the left impulse should drive its filter"
+        );
+        assert!(
+            samples
+                .iter()
+                .skip(1)
+                .step_by(2)
+                .all(|sample| *sample == 0.0),
+            "the right channel must not see the left filter's state: {samples:?}"
+        );
+    }
+
+    #[test]
+    fn eq_source_follows_the_curve_changed_while_playing() {
+        let settings = Arc::new(EqSettings::default());
+        let raw = stereo_source(vec![1.0; 4]);
+        let mut source = EqSource::new(raw, Arc::clone(&settings));
+
+        assert_eq!(source.next(), Some(1.0));
+        assert_eq!(source.next(), Some(1.0));
+        settings.store(EqSnapshot {
+            enabled: true,
+            preamp_db: 6.020_6,
+            bands_db: [0.0; crate::equalizer::BAND_COUNT],
+        });
+        assert!((source.next().unwrap() - 2.0).abs() < 1e-4);
+        assert!((source.next().unwrap() - 2.0).abs() < 1e-4);
+    }
+
     #[test]
     fn audio_with_fallback_returns_the_opened_output() {
         let recording = Arc::new(RecordingAudio::default());
@@ -822,6 +1251,7 @@ mod tests {
         assert!(output.stop().is_ok());
         assert!(output.set_volume(0.4).is_ok());
         assert!(output.set_balance(-0.4).is_ok());
+        assert!(output.set_equalizer(EqSnapshot::default()).is_ok());
     }
 
     // `ureq` defaults every network timeout to `None`, so a preview server
@@ -935,6 +1365,12 @@ mod tests {
         output.stop().unwrap();
         output.set_volume(0.4).unwrap();
         output.set_balance(-0.4).unwrap();
+        let equalizer = EqSnapshot {
+            enabled: true,
+            preamp_db: 3.0,
+            bands_db: [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0],
+        };
+        output.set_equalizer(equalizer).unwrap();
 
         match receiver.try_recv() {
             Ok(Command::Play(url)) => assert_eq!(url, PREVIEW_URL),
@@ -945,6 +1381,7 @@ mod tests {
         assert!(matches!(receiver.try_recv(), Ok(Command::Stop)));
         assert!(matches!(receiver.try_recv(), Ok(Command::SetVolume(v)) if v == 0.4));
         assert!(matches!(receiver.try_recv(), Ok(Command::SetBalance(v)) if v == -0.4));
+        assert!(matches!(receiver.try_recv(), Ok(Command::SetEqualizer(v)) if v == equalizer));
     }
 
     #[test]
@@ -980,6 +1417,13 @@ mod tests {
         );
         assert_eq!(
             output.set_balance(-0.4).unwrap_err().to_string(),
+            "the audio thread is gone"
+        );
+        assert_eq!(
+            output
+                .set_equalizer(EqSnapshot::default())
+                .unwrap_err()
+                .to_string(),
             "the audio thread is gone"
         );
     }
@@ -1253,6 +1697,7 @@ mod tests {
         stopped: Arc<AtomicBool>,
         volume: Arc<Mutex<f32>>,
         balance: Arc<Mutex<f32>>,
+        equalizer: Arc<Mutex<EqSnapshot>>,
     }
 
     impl WorkerPlayer for RecordingPlayer {
@@ -1265,6 +1710,10 @@ mod tests {
 
         fn set_balance(&self, balance: f32) {
             *self.balance.lock().unwrap() = balance;
+        }
+
+        fn set_equalizer(&self, equalizer: EqSnapshot) {
+            *self.equalizer.lock().unwrap() = equalizer;
         }
 
         fn append(&self, _preview: ()) {
@@ -1487,6 +1936,59 @@ mod tests {
         assert_eq!(players.len(), 2, "each successful Play installs a player");
         assert_eq!(*players[0].balance.lock().unwrap(), -0.4);
         assert_eq!(*players[1].balance.lock().unwrap(), -0.4);
+    }
+
+    // An equalizer curve set while stopped must carry to the player a later
+    // Play creates, just as the remembered volume and balance do.
+    #[test]
+    fn a_new_preview_starts_at_the_remembered_equalizer() {
+        let (sender, receiver) = mpsc::channel();
+        let (players, create_player) =
+            recording_players(&sender, Command::Play("second".to_string()));
+        let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+        let equalizer = EqSnapshot {
+            enabled: true,
+            preamp_db: 3.0,
+            bands_db: [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0],
+        };
+
+        sender.send(Command::SetEqualizer(equalizer)).unwrap();
+        sender.send(Command::Play("first".to_string())).unwrap();
+        drop(sender);
+        serve_commands(receiver, create_player, fetch);
+
+        let players = players.lock().unwrap();
+        assert_eq!(players.len(), 2, "each successful Play installs a player");
+        assert_eq!(*players[0].equalizer.lock().unwrap(), equalizer);
+        assert_eq!(*players[1].equalizer.lock().unwrap(), equalizer);
+    }
+
+    // An equalizer curve set during playback must reach the player the current
+    // Play installed, not just the players later Plays create. The command is
+    // queued from the player factory, so it is handled after the Play installs
+    // its player.
+    #[test]
+    fn an_equalizer_set_while_playing_updates_the_installed_player() {
+        let (sender, receiver) = mpsc::channel();
+        let equalizer = EqSnapshot {
+            enabled: true,
+            preamp_db: -2.0,
+            bands_db: [0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -3.0],
+        };
+        let (players, create_player) = recording_players(&sender, Command::SetEqualizer(equalizer));
+        let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+
+        sender.send(Command::Play("first".to_string())).unwrap();
+        drop(sender);
+        serve_commands(receiver, create_player, fetch);
+
+        let players = players.lock().unwrap();
+        assert_eq!(players.len(), 1, "the Play must install one player");
+        assert_eq!(
+            *players[0].equalizer.lock().unwrap(),
+            equalizer,
+            "SetEqualizer must update the player already installed"
+        );
     }
 
     // A Play's download runs on the worker, so commands issued meanwhile wait
