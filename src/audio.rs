@@ -668,6 +668,30 @@ fn run_worker(receiver: Receiver<Command>, ready: Sender<Result<(), AppleMusicEr
     );
 }
 
+/// The gain, stereo balance, and equalizer curve a player starts at. The
+/// worker keeps one copy across players, so a setting changed while stopped
+/// still applies to the next `Play`, and a new player starts at it rather than
+/// the backend's defaults.
+#[derive(Debug, Clone, Copy)]
+struct PlaybackSettings {
+    /// The output gain, where `1.0` is full volume.
+    volume: f32,
+    /// The stereo balance, where `-1.0` is hard left and `1.0` is hard right.
+    balance: f32,
+    /// The equalizer curve.
+    equalizer: EqSnapshot,
+}
+
+impl Default for PlaybackSettings {
+    fn default() -> Self {
+        Self {
+            volume: 1.0,
+            balance: 0.0,
+            equalizer: EqSnapshot::default(),
+        }
+    }
+}
+
 /// Serves [`Command`]s until the sender closes, driving players created by
 /// `create_player` and previews decoded by `fetch`.
 ///
@@ -687,7 +711,7 @@ fn run_worker(receiver: Receiver<Command>, ready: Sender<Result<(), AppleMusicEr
 /// state.
 ///
 /// A download runs on this thread, so any command the caller issues meanwhile
-/// waits in the channel. Once a download finishes, this loop drains those
+/// waits in the channel. Once a download finishes, [`handle_play`] drains those
 /// commands before installing the preview: if a later `Play` or a `Stop` is
 /// among them, the just-downloaded selection is already superseded, and
 /// installing it would play the old audio under the newer committed track's
@@ -701,16 +725,7 @@ fn serve_commands<P, D>(
     P: WorkerPlayer<Preview = D>,
 {
     let mut player: Option<P> = None;
-    // The gain the output should hold. Remembered across players so a volume
-    // set while stopped still applies to the next `Play`, and a new player
-    // starts at it rather than rodio's full-volume default.
-    let mut volume = 1.0_f32;
-    // The stereo balance the output should hold, remembered across players the
-    // same way as the volume (initial center).
-    let mut balance = 0.0_f32;
-    // The equalizer curve the output should hold, remembered across players
-    // the same way as the volume and balance (initial flat and disabled).
-    let mut equalizer = EqSnapshot::default();
+    let mut settings = PlaybackSettings::default();
     // Commands that arrived while a download was in flight, handled in order
     // once it finishes. A later `Play` or `Stop` among them supersedes the
     // preview the download produced.
@@ -724,44 +739,15 @@ fn serve_commands<P, D>(
             },
         };
         match command {
-            Command::Play(url) => match fetch(&url) {
-                Ok(preview) => {
-                    // Collect every command that arrived while the download
-                    // ran. If one supersedes this selection, drop the preview
-                    // and let the queued command be handled below; the UI has
-                    // already committed the newer state, so playing this one
-                    // would be the wrong audio under the right title.
-                    while let Ok(command) = receiver.try_recv() {
-                        queued.push_back(command);
-                    }
-                    if queued
-                        .iter()
-                        .any(|command| matches!(command, Command::Play(_) | Command::Stop))
-                    {
-                        continue;
-                    }
-                    // A fresh player per track replaces the previous one, so a
-                    // new selection does not queue behind the old track. It
-                    // starts at the remembered gain rather than rodio's
-                    // full-volume default.
-                    let next = create_player();
-                    next.set_volume(volume);
-                    next.set_balance(balance);
-                    next.set_equalizer(equalizer);
-                    next.append(preview);
-                    player = Some(next);
-                }
-                Err(error) => {
-                    // Stop and drop the previous player (as `Command::Stop`
-                    // does) so a failed new selection is not misreported by
-                    // the old preview still playing.
-                    if let Some(player) = &player {
-                        player.stop();
-                    }
-                    player = None;
-                    eprintln!("audio playback failed for {url:?}: {error}");
-                }
-            },
+            Command::Play(url) => handle_play(
+                &url,
+                &receiver,
+                &mut queued,
+                &mut player,
+                settings,
+                &create_player,
+                &fetch,
+            ),
             Command::Pause => {
                 if let Some(player) = &player {
                     player.pause();
@@ -779,25 +765,87 @@ fn serve_commands<P, D>(
                 player = None;
             }
             Command::SetVolume(new_volume) => {
-                volume = new_volume;
+                settings.volume = new_volume;
                 if let Some(player) = &player {
-                    player.set_volume(volume);
+                    player.set_volume(settings.volume);
                 }
             }
             Command::SetBalance(new_balance) => {
-                balance = new_balance;
+                settings.balance = new_balance;
                 if let Some(player) = &player {
-                    player.set_balance(balance);
+                    player.set_balance(settings.balance);
                 }
             }
             Command::SetEqualizer(new_equalizer) => {
-                equalizer = new_equalizer;
+                settings.equalizer = new_equalizer;
                 if let Some(player) = &player {
-                    player.set_equalizer(equalizer);
+                    player.set_equalizer(settings.equalizer);
                 }
             }
         }
     }
+}
+
+/// Handles one [`Command::Play`]: fetch `url`, then install a player for the
+/// decoded preview unless a command that arrived during the download
+/// superseded the selection.
+///
+/// The receiver is drained into `queued` first, so the outer loop handles
+/// those commands in order; a later `Play` or `Stop` among them means the UI
+/// has already committed a newer state, so the just-downloaded preview is
+/// dropped rather than played under the newer track's name. A failed fetch
+/// stops and drops the previous player (as `Command::Stop` does), so the old
+/// preview is not left audible under the new track's name.
+fn handle_play<P, D>(
+    url: &str,
+    receiver: &Receiver<Command>,
+    queued: &mut VecDeque<Command>,
+    player: &mut Option<P>,
+    settings: PlaybackSettings,
+    create_player: &impl Fn() -> P,
+    fetch: &impl Fn(&str) -> Result<D, AppleMusicError>,
+) where
+    P: WorkerPlayer<Preview = D>,
+{
+    let preview = match fetch(url) {
+        Ok(preview) => preview,
+        Err(error) => {
+            // Stop and drop the previous player (as `Command::Stop` does) so a
+            // failed new selection is not misreported by the old preview still
+            // playing.
+            if let Some(player) = player.as_ref() {
+                player.stop();
+            }
+            *player = None;
+            eprintln!("audio playback failed for {url:?}: {error}");
+            return;
+        }
+    };
+
+    // Collect every command that arrived while the download ran. If one
+    // supersedes this selection, drop the preview and let the queued command
+    // be handled by the outer loop; the UI has already committed the newer
+    // state, so playing this one would be the wrong audio under the right
+    // title.
+    while let Ok(command) = receiver.try_recv() {
+        queued.push_back(command);
+    }
+    if queued
+        .iter()
+        .any(|command| matches!(command, Command::Play(_) | Command::Stop))
+    {
+        return;
+    }
+
+    // A fresh player per track replaces the previous one, so a new selection
+    // does not queue behind the old track. It starts at the remembered gain
+    // rather than rodio's full-volume default.
+    let next = create_player();
+    next.set_volume(settings.volume);
+    next.set_balance(settings.balance);
+    next.set_equalizer(settings.equalizer);
+    next.append(preview);
+    *player = Some(next);
 }
 
 /// The process-wide [`ureq::Agent`] the audio worker downloads previews
