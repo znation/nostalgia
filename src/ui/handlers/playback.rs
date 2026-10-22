@@ -1,12 +1,13 @@
 //! The playback message handlers: the transport buttons and keys, the track
-//! stepping, the play request and its completion, and the Now Playing
-//! marquee tick.
+//! stepping, the play request and its completion, the Now Playing marquee
+//! tick, and the elapsed-position poll.
 //!
 //! The transport calls go through the service's async seam (`transport_into`)
 //! and the play request through `play_into`, so the shared playback state is
 //! written by the service rather than by the UI thread.
 
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use iced::Task;
 
@@ -20,6 +21,7 @@ use crate::ui::{CurrentView, Message, WinampPlayer};
 
 /// The Play/Pause button: toggles the preview between playing and paused.
 pub(in crate::ui) fn play_pause(player: &mut WinampPlayer) -> Task<Message> {
+    begin_position_transition(player);
     transport_into(
         &player.apple_music_service,
         "toggle play/pause",
@@ -30,6 +32,7 @@ pub(in crate::ui) fn play_pause(player: &mut WinampPlayer) -> Task<Message> {
 /// The keyboard's X key: an explicit play rather than the button's toggle.
 /// X resumes (or restarts) the preview.
 pub(in crate::ui) fn play(player: &mut WinampPlayer) -> Task<Message> {
+    begin_position_transition(player);
     transport_into(&player.apple_music_service, "play", |service| async move {
         service.resume().await
     })
@@ -38,14 +41,19 @@ pub(in crate::ui) fn play(player: &mut WinampPlayer) -> Task<Message> {
 /// The keyboard's C key: an explicit pause rather than the button's toggle.
 /// C pauses the preview.
 pub(in crate::ui) fn pause(player: &mut WinampPlayer) -> Task<Message> {
+    begin_position_transition(player);
     transport_into(&player.apple_music_service, "pause", |service| async move {
         service.pause().await
     })
 }
 
 /// Stop discards the preview and clears the playing flag; the service
-/// remembers the last preview URL so Play can restart it.
+/// remembers the last preview URL so Play can restart it. The elapsed readout
+/// clears immediately, and any poll in flight is invalidated so it cannot
+/// bring the old position back.
 pub(in crate::ui) fn stop(player: &mut WinampPlayer) -> Task<Message> {
+    reset_position_readout(player);
+    begin_position_transition(player);
     transport_into(&player.apple_music_service, "stop", |service| async move {
         service.stop().await
     })
@@ -168,6 +176,12 @@ pub(in crate::ui) fn track_selected(
             artist: song.artist.clone(),
             time: views::format_track_time(song.duration_ms),
         });
+    // A new selection starts with no elapsed position. Bumping the epoch
+    // drops a poll reply issued for the previous track.
+    reset_position_readout(player);
+    // The play below replaces the loaded preview, so the poll waits for its
+    // completion before it queries the backend.
+    begin_position_transition(player);
     // A newer selection must win even when an older play's backend
     // call finishes later: issue a generation and hand its guard to
     // `play_track`, which evaluates it under the state lock so the
@@ -189,7 +203,9 @@ pub(in crate::ui) fn track_selected(
     )
 }
 
-/// The play completion: only the current track's entry is ever read (see
+/// The play completion: it ends the transition the selection began, so the
+/// position poll may query the backend again. Only the current track's entry
+/// is ever read (see
 /// `WinampPlayer::known_tracks`), so the latest play's completion drops
 /// every other entry the selections above accumulated. A completion whose
 /// play a newer selection superseded is skipped: its `current_track` names
@@ -199,6 +215,7 @@ pub(in crate::ui) fn track_selected(
 /// `current_track` is safe — and when nothing committed, clearing the map
 /// keeps it bounded rather than leaving the failed selection's entry.
 pub(in crate::ui) fn track_played(player: &mut WinampPlayer, generation: u64) -> Task<Message> {
+    end_position_transition(player);
     if generation == player.plays_generation.load(Ordering::SeqCst) {
         let state = player.state.blocking_lock();
         if state.is_playing
@@ -231,10 +248,73 @@ pub(in crate::ui) fn marquee_tick(player: &mut WinampPlayer) -> Task<Message> {
 /// A Play/Pause/Stop transition finished (or failed; the failure was
 /// logged). It carries no payload — the service already wrote shared state —
 /// and exists so iced re-renders the Now Playing bar after the asynchronous
-/// transition, exactly as `TrackPlayed` re-renders after a play. The handler
-/// is a no-op.
-pub(in crate::ui) fn transport_settled(_player: &mut WinampPlayer) -> Task<Message> {
+/// transition, exactly as `TrackPlayed` re-renders after a play. It also ends
+/// the transition the transport arm began, so the position poll may query the
+/// backend again.
+pub(in crate::ui) fn transport_settled(player: &mut WinampPlayer) -> Task<Message> {
+    end_position_transition(player);
     Task::none()
+}
+
+/// The position poll's tick: schedule a query of the loaded preview's
+/// position. The query runs in a task, so the UI thread never blocks on the
+/// audio backend, and the reply carries the epoch the query was issued under,
+/// so a transition that lands first invalidates it. While a transport
+/// transition is still reaching the backend, no query is issued: the backend
+/// would still report the previous preview, and the epoch no longer
+/// identifies it.
+pub(in crate::ui) fn position_tick(player: &mut WinampPlayer) -> Task<Message> {
+    if player.pending_position_transitions > 0 {
+        return Task::none();
+    }
+    let epoch = player.position_epoch;
+    let service = player.apple_music_service.clone();
+    Task::perform(
+        async move { service.playback_position() },
+        move |position| Message::PlaybackPosition { epoch, position },
+    )
+}
+
+/// The position query's reply: store the reported position, or clear the
+/// readout when the backend reports no position. A reply stamped with an
+/// older epoch is dropped, so a poll in flight across a Stop or a new
+/// selection cannot restore the previous track's elapsed value. A reply that
+/// lands while a transport transition is still in flight is dropped too: the
+/// backend may still be holding the previous player.
+pub(in crate::ui) fn playback_position(
+    player: &mut WinampPlayer,
+    epoch: u64,
+    position: Option<Duration>,
+) -> Task<Message> {
+    if player.pending_position_transitions == 0 && epoch == player.position_epoch {
+        player.playback_position = position;
+    }
+    Task::none()
+}
+
+/// Clears the Now Playing elapsed readout and invalidates any position query
+/// already in flight, so a reply issued before the track changed cannot
+/// restore the previous elapsed value. Stop and a new selection call this; a
+/// Pause deliberately does not, so the paused player's frozen position stays
+/// on the bar. The caller pairs it with [`begin_position_transition`], so the
+/// poll also waits until the backend has stopped or replaced the player.
+fn reset_position_readout(player: &mut WinampPlayer) {
+    player.position_epoch = player.position_epoch.wrapping_add(1);
+    player.playback_position = None;
+}
+
+/// Marks a backend transport transition as in flight, so the position poll
+/// waits for it instead of querying a backend that still holds the previous
+/// player. Every handler that schedules a transport call begins one, and the
+/// completion that reports that transition ends it: the pairing keeps the
+/// count above zero for exactly as long as some transition is outstanding.
+fn begin_position_transition(player: &mut WinampPlayer) {
+    player.pending_position_transitions = player.pending_position_transitions.saturating_add(1);
+}
+
+/// Ends the transition [`begin_position_transition`] began.
+fn end_position_transition(player: &mut WinampPlayer) {
+    player.pending_position_transitions = player.pending_position_transitions.saturating_sub(1);
 }
 
 /// Locks the shared playback state, applies `mutation` to it, and returns no

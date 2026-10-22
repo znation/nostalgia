@@ -44,6 +44,12 @@ use crate::{
 /// fit the LCD's character budget (see [`subscriptions`]).
 const MARQUEE_TICK: Duration = Duration::from_millis(250);
 
+/// How often the Now Playing bar polls the audio backend for the loaded
+/// preview's position, refreshing the elapsed/total readout. The audio backend
+/// owns playback, so this bounds only how often the UI asks; it does not
+/// affect the audio itself.
+const POSITION_POLL_INTERVAL: Duration = Duration::from_secs(1);
+
 /// A subscription that emits [`Message::MarqueeTick`] once per
 /// [`MARQUEE_TICK`]. iced's timed subscription is gated behind `smol`/`tokio`
 /// backend features the app does not enable (its default thread-pool backend
@@ -140,6 +146,36 @@ fn subscriptions(marquee_needed: bool) -> Vec<iced::Subscription<Message>> {
     subscriptions
 }
 
+/// A subscription that emits [`Message::PositionTick`] once per
+/// [`POSITION_POLL_INTERVAL`], using the same std-thread tick source as
+/// [`marquee_ticks`] because iced's timed subscription is not enabled. Each
+/// tick's `update` arm schedules the actual position query as a task, so the
+/// UI thread never blocks on the audio backend.
+fn position_ticks() -> iced::Subscription<Message> {
+    iced::Subscription::run(position_tick_stream)
+}
+
+/// The tick stream behind [`position_ticks`], split out so a test can poll it.
+/// Like [`marquee_tick_stream`], the one-slot channel drops a tick when the UI
+/// has not polled the previous one yet, and only a disconnected receiver ends
+/// the thread.
+fn position_tick_stream() -> impl iced::futures::Stream<Item = Message> {
+    use iced::futures::{StreamExt, channel::mpsc};
+
+    let (mut sender, receiver) = mpsc::channel(1);
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(POSITION_POLL_INTERVAL);
+            if let Err(error) = sender.try_send(())
+                && error.is_disconnected()
+            {
+                break;
+            }
+        }
+    });
+    receiver.map(|()| Message::PositionTick)
+}
+
 /// Runs the UI, blocking until the window is closed.
 ///
 /// `service` is the [`AppleMusicService`] `main` built and ran the startup
@@ -159,7 +195,11 @@ pub fn init_ui(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> iced:
         .theme(|_: &WinampPlayer| theme::winamp_theme())
         .decorations(false)
         .resizable(false)
-        .subscription(|player| iced::Subscription::batch(subscriptions(player.needs_marquee())))
+        .subscription(|player| {
+            let mut all = subscriptions(player.needs_marquee());
+            all.push(position_ticks());
+            iced::Subscription::batch(all)
+        })
         .run()
 }
 
@@ -190,6 +230,17 @@ enum Message {
     // LCD's character budget (see [`subscriptions`]), so a tick always
     // scrolls the bar.
     MarqueeTick,
+    // The position poll's tick: schedule a query of the loaded preview's
+    // position. Keeping the query in a task, rather than in `update`, means a
+    // slow backend cannot stall the UI thread.
+    PositionTick,
+    // The position query's reply, stamped with the `position_epoch` that issued
+    // it. A reply from before a Stop or a new selection is dropped so it
+    // cannot restore the previous track's elapsed value.
+    PlaybackPosition {
+        epoch: u64,
+        position: Option<Duration>,
+    },
     ToggleEqualizer,
     EqPreampChange(f32),
     EqBandChange(usize, f32),
@@ -203,10 +254,22 @@ enum Message {
     // when the row is actually pressed. The epoch guards the case where the
     // list is replaced between rendering and the press: a stale index would
     // otherwise resolve against the new list and select the wrong entry.
-    TrackSelected { epoch: u64, index: usize },
-    ArtistSelected { epoch: u64, index: usize },
-    AlbumSelected { epoch: u64, index: usize },
-    PlaylistSelected { epoch: u64, index: usize },
+    TrackSelected {
+        epoch: u64,
+        index: usize,
+    },
+    ArtistSelected {
+        epoch: u64,
+        index: usize,
+    },
+    AlbumSelected {
+        epoch: u64,
+        index: usize,
+    },
+    PlaylistSelected {
+        epoch: u64,
+        index: usize,
+    },
     Back,
     // The browse view's Top button: snap the current list back to its first
     // row. The arm schedules an iced scroll operation on the browse list's
@@ -253,7 +316,10 @@ enum Message {
     // request superseded is dropped instead of overwriting the newer list (or
     // its error). Only `loading::fetch_into` constructs this, and only with
     // the `*Loaded`/`*LoadFailed` message above.
-    BrowseReply { issued: u64, reply: Box<Message> },
+    BrowseReply {
+        issued: u64,
+        reply: Box<Message>,
+    },
     // A browse reply that a newer request for the same list has superseded.
     // `fetch_into` emits this instead of the `*Loaded` message so the stale
     // reply never reaches `BrowseList::store`; the handler it routes to is a
@@ -263,7 +329,9 @@ enum Message {
     // the arm can tell whether a newer selection has superseded it. Only the
     // latest completion may prune the title index; a superseded one must not
     // drop a still-pending selection's title.
-    TrackPlayed { generation: u64 },
+    TrackPlayed {
+        generation: u64,
+    },
     // A Play/Pause/Stop transition finished (or failed; the failure was
     // logged). It carries no payload — the service already wrote shared
     // state — and exists so iced re-renders the Now Playing bar after the
@@ -370,6 +438,27 @@ struct WinampPlayer {
     /// a new song starts at the beginning of its title. The view ignores it
     /// whenever the line fits the LCD's character budget.
     marquee_offset: usize,
+    /// The loaded preview's last reported playback position, or `None` when no
+    /// preview is loaded or the backend cannot answer. `Message::PlaybackPosition`
+    /// stores it; the Now Playing bar reads it to show `elapsed/total`. Pause
+    /// leaves it alone, so the bar keeps showing the paused player's frozen
+    /// position.
+    playback_position: Option<Duration>,
+    /// The playback transition counter. A position query carries its value;
+    /// `reset_position_readout` bumps it on a Stop or a new selection, so a
+    /// reply that was already in flight is dropped rather than restoring the
+    /// previous track's elapsed value.
+    position_epoch: u64,
+    /// Backend transport transitions whose call has not yet completed. Every
+    /// handler that schedules one — Play, Pause, Play/Play-Pause, Stop, and a
+    /// selected track's play — increments it before scheduling its async
+    /// work, and the completion that reports that same transition
+    /// (`TransportSettled` for the transports, `TrackPlayed` for the play)
+    /// decrements it. The position poll waits for the count to reach zero, so
+    /// it cannot query a backend that still holds the previous player, and a
+    /// completion belonging to some other transition cannot close that window
+    /// early.
+    pending_position_transitions: u64,
     /// The playback-request counter. Each `TrackSelected` bumps it and
     /// carries its value into the async play as a guard: `play_track`
     /// evaluates the guard while holding the state lock and commits the
@@ -433,6 +522,9 @@ impl WinampPlayer {
             known_tracks: HashMap::new(),
             play_history: transport::PlayHistory::default(),
             marquee_offset: 0,
+            playback_position: None,
+            position_epoch: 0,
+            pending_position_transitions: 0,
             plays_generation: Arc::new(AtomicU64::new(0)),
         }
     }
@@ -455,13 +547,15 @@ impl WinampPlayer {
         views::now_playing_artist(&self.known_tracks, current_track)
     }
 
-    /// The Now Playing bar's length readout for `current_track`, borrowed from
-    /// the label cached in [`Self::known_tracks`]; a track the index does not
-    /// know reads the static `--:--` placeholder. Like the label and artist,
-    /// the known case borrows from the index, so `view` renders the bar
-    /// without formatting or allocating a `String` per frame.
+    /// The Now Playing bar's length readout for `current_track`: the elapsed
+    /// and total time when [`Self::playback_position`] is known, otherwise the
+    /// total borrowed from the label cached in [`Self::known_tracks`]; a track
+    /// the index does not know reads the static `--:--` placeholder. Like the
+    /// label and artist, the plain known case borrows from the index, so
+    /// `view` renders the bar without formatting or allocating a `String` per
+    /// frame; the combined elapsed/total case allocates.
     fn now_playing_time<'a>(&'a self, current_track: Option<&str>) -> Cow<'a, str> {
-        views::now_playing_time(&self.known_tracks, current_track)
+        views::now_playing_time(&self.known_tracks, current_track, self.playback_position)
     }
 
     /// Whether the Now Playing line is too long for the LCD's character
@@ -532,6 +626,16 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::NextTrack => handlers::playback::step_track(player, true),
         Message::PreviousTrack => handlers::playback::step_track(player, false),
         Message::MarqueeTick => handlers::playback::marquee_tick(player),
+        // The position poll asks the backend in a task, as the service's
+        // position query bounds its own wait; `update` stays non-blocking. The
+        // reply carries the epoch it was issued under, so a transition that
+        // lands first invalidates it. While a transport transition is still
+        // reaching the backend, no query is issued: the backend would still
+        // report the previous preview, and the epoch no longer identifies it.
+        Message::PositionTick => handlers::playback::position_tick(player),
+        Message::PlaybackPosition { epoch, position } => {
+            handlers::playback::playback_position(player, epoch, position)
+        }
         Message::TrackSelected { epoch, index } => {
             handlers::playback::track_selected(player, epoch, index)
         }
@@ -606,9 +710,10 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // lock is held, from a borrowed `current_track` against the accumulated
     // `known_tracks` index (see [`WinampPlayer::now_playing_label`],
     // [`WinampPlayer::now_playing_artist`], and
-    // [`WinampPlayer::now_playing_time`]). All three borrow from `known_tracks`
-    // (or the `"Nothing"`/`""`/`"--:--"` literals), so those paths allocate
-    // only in the unknown-id label fallback.
+    // [`WinampPlayer::now_playing_time`]). The label and artist borrow from
+    // `known_tracks` (or the `"Nothing"`/`""` literals); the time readout
+    // borrows the cached total unless a loaded preview position is known, in
+    // which case it allocates the combined `elapsed/total` string.
     let (
         now_playing,
         now_playing_artist,

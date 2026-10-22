@@ -46,7 +46,8 @@ The player on its own: [docs/screenshots/player.png](docs/screenshots/player.png
 
 Build and run with `cargo run`; the player opens an iced window showing the Now Playing bar (the
 playing track's artist and title, scrolled across the display when the line is longer than it,
-with its length at the right), the Play/Pause/Stop/Previous/Next
+with its length at the right — elapsed/total while a loaded preview reports its position, and the
+plain length otherwise), the Play/Pause/Stop/Previous/Next
 controls, Repeat and Shuffle toggles, volume and balance sliders, an equalizer panel (an EQ on/off
 button, a preset pick list, a preamp slider, and ten band sliders), and a browse list whose song
 rows read `artist - title` (or the title alone when the source supplies no artist) and show each

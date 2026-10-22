@@ -879,16 +879,18 @@ async fn set_output_equalizer_forwards_to_the_audio_backend() {
 }
 
 // A song the library supplied without a preview URL still commits the state
-// transition — the Now Playing bar must name it — but starts no audio. The
-// recording fake pins that no `Play` reaches the backend.
+// transition — the Now Playing bar must name it — but starts no new audio. It
+// stops the previous preview, so the old track neither keeps sounding nor
+// keeps answering the position query under the new track's name. The recording
+// fake pins the exact sequence: the earlier preview, then `Stop`.
 #[tokio::test]
-async fn play_track_without_a_preview_url_commits_state_without_audio() {
-    let (service, state, recording) = recording_service();
+async fn play_track_without_a_preview_url_stops_the_previous_preview() {
+    let (service, state, recording) = recording_service_with_preview().await;
 
-    service.play_track("song-1", None, || true).await.unwrap();
+    service.play_track("song-2", None, || true).await.unwrap();
 
-    assert!(recording.calls().is_empty());
-    assert_playback_state(&state, Some("song-1"), true).await;
+    assert_preview_calls(&recording.calls(), &[AudioCall::Stop]);
+    assert_playback_state(&state, Some("song-2"), true).await;
 }
 
 // A `Some` preview URL that is blank can play nothing, so the seam rejects it
@@ -1231,7 +1233,7 @@ async fn pause_pauses_the_audio_backend() {
     service.play_track("song-1", None, || true).await.unwrap();
     service.pause().await.unwrap();
 
-    assert_eq!(recording.calls(), vec![AudioCall::Pause]);
+    assert_eq!(recording.calls(), vec![AudioCall::Stop, AudioCall::Pause]);
     assert_playback_state(&state, Some("song-1"), false).await;
 }
 

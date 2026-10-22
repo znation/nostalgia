@@ -3219,6 +3219,13 @@ fn play_song_1_then_browse_to_album_2() -> (WinampPlayer, Option<String>) {
     let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
     let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
     state.blocking_lock().current_track = Some("song-1".to_string());
+    // Complete the play the selection started, as the playback task does once
+    // its backend call returns; this also lets the position poll resume after
+    // the selection's reset.
+    let generation = player
+        .plays_generation
+        .load(std::sync::atomic::Ordering::SeqCst);
+    let _ = update(&mut player, Message::TrackPlayed { generation });
     let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
     let current_track = state.blocking_lock().current_track.clone();
     (player, current_track)
@@ -3251,6 +3258,237 @@ fn now_playing_time_shows_the_played_tracks_duration_after_browsing_to_another_a
     assert_eq!(player.now_playing_time(None), "--:--");
     assert_eq!(player.now_playing_time(current_track.as_deref()), "3:30");
     assert_eq!(player.now_playing_time(Some("no-such-song")), "--:--");
+}
+
+// The bar shows the elapsed position ahead of the total while the backend
+// reports one, and falls back to the plain total as soon as it does not.
+#[test]
+fn now_playing_time_shows_elapsed_over_total_while_a_position_is_known() {
+    let (mut player, current_track) = play_song_1_then_browse_to_album_2();
+
+    player.playback_position = Some(Duration::from_secs(45));
+    assert_eq!(
+        player.now_playing_time(current_track.as_deref()),
+        "0:45/3:30"
+    );
+}
+
+// Pause stops the backend clock but keeps the loaded player, so the stored
+// elapsed readout must survive the arm and continue to render. Part 2/3's
+// `a_pause_keeps_the_loaded_player_reporting_its_position` pins the backend
+// side; this pins that the UI does not clear the value on Pause.
+#[test]
+fn pause_keeps_the_stored_elapsed_readout() {
+    let (mut player, current_track) = play_song_1_then_browse_to_album_2();
+    player.playback_position = Some(Duration::from_secs(45));
+
+    let _ = update(&mut player, Message::Pause);
+
+    assert_eq!(player.playback_position, Some(Duration::from_secs(45)));
+    assert_eq!(
+        player.now_playing_time(current_track.as_deref()),
+        "0:45/3:30"
+    );
+}
+
+// A seek moves the backend, and the next poll's reply carries the new
+// position, which the bar shows. `seek_messages_drive_the_audio_backend`
+// pins the backend call itself.
+#[test]
+fn a_position_reply_after_a_seek_updates_the_readout() {
+    let (mut player, current_track) = play_song_1_then_browse_to_album_2();
+    player.playback_position = Some(Duration::from_secs(45));
+
+    let _ = update(&mut player, Message::SeekForward);
+    let epoch = player.position_epoch;
+    let _ = update(
+        &mut player,
+        Message::PlaybackPosition {
+            epoch,
+            position: Some(Duration::from_secs(50)),
+        },
+    );
+
+    assert_eq!(
+        player.now_playing_time(current_track.as_deref()),
+        "0:50/3:30"
+    );
+}
+
+#[test]
+fn track_selected_clears_the_elapsed_readout() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    player.playback_position = Some(Duration::from_secs(45));
+
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+
+    assert_eq!(player.playback_position, None);
+    assert_eq!(player.now_playing_time(Some("song-1")), "3:30");
+}
+
+#[test]
+fn stop_clears_the_elapsed_readout() {
+    let (mut player, current_track) = play_song_1_then_browse_to_album_2();
+    player.playback_position = Some(Duration::from_secs(45));
+
+    let _ = update(&mut player, Message::Stop);
+
+    assert_eq!(player.playback_position, None);
+    assert_eq!(player.now_playing_time(current_track.as_deref()), "3:30");
+}
+
+// A Stop resets the readout before the backend stop is scheduled, so a poll
+// must wait for that transition to complete. Otherwise it could query the old
+// player under the new epoch and restore the elapsed value the Stop cleared.
+#[test]
+fn position_poll_waits_for_a_stop_to_reach_the_backend() {
+    let (mut player, current_track) = play_song_1_then_browse_to_album_2();
+    player.playback_position = Some(Duration::from_secs(45));
+
+    let _ = update(&mut player, Message::Stop);
+    assert_message_schedules_no_work(&mut player, Message::PositionTick);
+
+    let epoch = player.position_epoch;
+    let _ = update(
+        &mut player,
+        Message::PlaybackPosition {
+            epoch,
+            position: Some(Duration::from_secs(45)),
+        },
+    );
+    assert_eq!(player.playback_position, None);
+
+    let _ = update(&mut player, Message::TransportSettled);
+    assert_message_schedules_work(&mut player, Message::PositionTick);
+    assert_eq!(player.now_playing_time(current_track.as_deref()), "3:30");
+}
+
+// A new selection has the same window: the play task has not yet stopped the
+// previous preview when `TrackSelected` clears the readout. The matching
+// `TrackPlayed` completion reopens the poll only after the play reached the
+// backend.
+#[test]
+fn position_poll_waits_for_a_selected_tracks_play_to_settle() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    player.playback_position = Some(Duration::from_secs(45));
+
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+    assert_eq!(player.playback_position, None);
+    assert_message_schedules_no_work(&mut player, Message::PositionTick);
+
+    let epoch = player.position_epoch;
+    let _ = update(
+        &mut player,
+        Message::PlaybackPosition {
+            epoch,
+            position: Some(Duration::from_secs(45)),
+        },
+    );
+    assert_eq!(player.playback_position, None);
+
+    let generation = player
+        .plays_generation
+        .load(std::sync::atomic::Ordering::SeqCst);
+    let _ = update(&mut player, Message::TrackPlayed { generation });
+    assert_message_schedules_work(&mut player, Message::PositionTick);
+}
+
+// Every transport completion reports one transition, so the count only
+// reaches zero once every transition has reached the backend. A Pause that
+// settles while a Stop is still in flight must therefore keep the poll
+// waiting: the backend still holds the preview the Stop has not discarded.
+#[test]
+fn an_unrelated_transport_completion_keeps_the_poll_waiting() {
+    let (mut player, _current_track) = play_song_1_then_browse_to_album_2();
+
+    let _ = update(&mut player, Message::Stop);
+    let _ = update(&mut player, Message::Pause);
+    assert_message_schedules_no_work(&mut player, Message::PositionTick);
+
+    // The pause's completion lands first; the stop is still outstanding.
+    let _ = update(&mut player, Message::TransportSettled);
+    assert_message_schedules_no_work(&mut player, Message::PositionTick);
+
+    // Now the stop's completion lands and the poll may query again.
+    let _ = update(&mut player, Message::TransportSettled);
+    assert_message_schedules_work(&mut player, Message::PositionTick);
+}
+
+// A reply stores its position at the current epoch, while a reply stamped with
+// the epoch from before a Stop is dropped: a poll already in flight must not
+// bring the previous track's elapsed value back. The Stop's completion lands
+// first, so no transport transition is outstanding and the epoch check is the
+// only guard that can drop the reply — a reply at the current epoch is stored,
+// which shows the drop above came from the epoch and not from a pending
+// transition.
+#[test]
+fn position_replies_store_and_stale_ones_are_dropped() {
+    let (mut player, current_track) = play_song_1_then_browse_to_album_2();
+    let current_epoch = player.position_epoch;
+
+    let _ = update(
+        &mut player,
+        Message::PlaybackPosition {
+            epoch: current_epoch,
+            position: Some(Duration::from_secs(45)),
+        },
+    );
+    assert_eq!(player.playback_position, Some(Duration::from_secs(45)));
+
+    let _ = update(&mut player, Message::Stop);
+    // The stop reaches the backend, so the poll is no longer waiting on a
+    // transition.
+    let _ = update(&mut player, Message::TransportSettled);
+    assert_eq!(player.pending_position_transitions, 0);
+
+    let _ = update(
+        &mut player,
+        Message::PlaybackPosition {
+            epoch: current_epoch,
+            position: Some(Duration::from_secs(20)),
+        },
+    );
+
+    assert_eq!(player.playback_position, None);
+    assert_eq!(player.now_playing_time(current_track.as_deref()), "3:30");
+
+    // A reply stamped with the epoch the Stop left behind is stored, so the
+    // stale reply above was dropped by the epoch check alone.
+    let stopped_epoch = player.position_epoch;
+    let _ = update(
+        &mut player,
+        Message::PlaybackPosition {
+            epoch: stopped_epoch,
+            position: Some(Duration::from_secs(10)),
+        },
+    );
+    assert_eq!(player.playback_position, Some(Duration::from_secs(10)));
+}
+
+#[test]
+fn position_tick_schedules_a_query() {
+    let (mut player, _state) = test_player();
+    assert_message_schedules_work(&mut player, Message::PositionTick);
+}
+
+// The subscription itself must emit the message its `update` arm expects: a
+// stream that never ticks (or yields a different message) would leave the
+// readout frozen even though `PositionTick` schedules the query correctly.
+// Reading two ticks also pins that the timer keeps running after the first.
+#[test]
+fn position_tick_stream_emits_position_ticks() {
+    use futures::StreamExt;
+
+    let mut ticks = position_tick_stream();
+    for what in ["first position tick", "second position tick"] {
+        let tick = futures::executor::block_on(await_or_timeout(what, TASK_TIMEOUT, ticks.next()));
+        assert!(
+            matches!(tick, Some(Message::PositionTick)),
+            "{what} did not yield PositionTick: {tick:?}"
+        );
+    }
 }
 
 // The Now Playing bar renders the played track's artist before its title

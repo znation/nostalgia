@@ -5,8 +5,9 @@ use super::browse::{
 };
 use super::equalizer::eq_enabled_label;
 use super::now_playing::{
-    KnownTrack, MARQUEE_WIDTH, display_len, format_track_time, marquee_text, needs_marquee,
-    now_playing_artist, now_playing_label, now_playing_row, now_playing_time,
+    KnownTrack, MARQUEE_WIDTH, display_len, format_position_time, format_track_time, marquee_text,
+    needs_marquee, now_playing_artist, now_playing_label, now_playing_progress, now_playing_row,
+    now_playing_time,
 };
 use super::transport::{play_pause_label, repeat_label, shuffle_label, transport_buttons};
 use super::{
@@ -29,6 +30,7 @@ use iced::advanced::{
 use iced::{Length, Rectangle, Size};
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::time::Duration;
 
 // Each row maps one library entry to the (title, secondary label, press
 // message, current-track flag) tuple that `scrollable_list` renders as a
@@ -292,18 +294,58 @@ fn now_playing_time_resolves_known_track_to_cached_label() {
     let mut tracks = known_tracks(&[("song-1", "The Sample Band", "Opening")]);
     tracks.get_mut("song-1").expect("seed track").time = "3:30".to_string();
 
-    let time = now_playing_time(&tracks, Some("song-1"));
+    let time = now_playing_time(&tracks, Some("song-1"), None);
     assert_eq!(time, "3:30");
     assert!(matches!(&time, Cow::Borrowed(_)));
     assert_eq!(time.as_ptr(), tracks["song-1"].time.as_ptr());
 
-    let missing = now_playing_time(&tracks, Some("no-such-song"));
+    let missing = now_playing_time(&tracks, Some("no-such-song"), None);
     assert_eq!(missing, "--:--");
     assert!(matches!(&missing, Cow::Borrowed(_)));
 
-    let none = now_playing_time(&tracks, None);
+    let none = now_playing_time(&tracks, None, None);
     assert_eq!(none, "--:--");
     assert!(matches!(&none, Cow::Borrowed(_)));
+}
+
+// A known current track plus a backend-reported position renders the elapsed
+// time before the cached total; the combined form is owned because it joins
+// two formatted strings.
+#[test]
+fn now_playing_time_shows_elapsed_over_total_when_a_position_is_known() {
+    let mut tracks = known_tracks(&[("song-1", "The Sample Band", "Opening")]);
+    tracks.get_mut("song-1").expect("seed track").time = "3:30".to_string();
+
+    let time = now_playing_time(&tracks, Some("song-1"), Some(Duration::from_secs(192)));
+    assert_eq!(time, "3:12/3:30");
+    assert!(matches!(&time, Cow::Owned(_)));
+
+    // An unknown id and no current track ignore the position and keep the
+    // placeholder, as they do without one.
+    assert_eq!(
+        now_playing_time(
+            &tracks,
+            Some("no-such-song"),
+            Some(Duration::from_secs(192))
+        ),
+        "--:--"
+    );
+    assert_eq!(
+        now_playing_time(&tracks, None, Some(Duration::from_secs(192))),
+        "--:--"
+    );
+}
+
+#[test]
+fn format_position_time_formats_elapsed_and_zero() {
+    assert_eq!(format_position_time(0), "0:00");
+    assert_eq!(format_position_time(192_000), "3:12");
+    assert_eq!(format_position_time(65_000), "1:05");
+}
+
+#[test]
+fn now_playing_progress_joins_elapsed_and_total() {
+    assert_eq!(now_playing_progress(192_000, "12:38"), "3:12/12:38");
 }
 
 #[test]

@@ -90,6 +90,16 @@ its internal id, whenever the id is in the known-track index:
 - An unknown id falls back to the raw id for the label and to the empty string for the artist.
 - No current track renders the label "Nothing" and an empty artist.
 - Stop keeps the interrupted track's title (the current track is not cleared by Stop).
+- The time readout shows `<elapsed>/<total>` (for example `0:45/3:30`) while the backend reports
+  a position for the current known track, the cached total alone when it does not (no preview
+  loaded, a failed start, or a backend that cannot answer), and `--:--` when no current track is
+  known. Pause keeps the stored value, so the paused player's frozen position stays on the bar;
+  Stop and a new selection clear it immediately. A position reply issued before a Stop or a new
+  selection is dropped rather than restoring the previous elapsed value, and the poll stays
+  suspended while any backend transport transition is in flight, so it cannot read the previous
+  player under the new epoch. A selection whose song has no preview stops the previous preview,
+  so the backend reports no position for the new track and the readout falls back to the cached
+  total.
 - A combined artist/title longer than `MARQUEE_WIDTH` characters is windowed by
   `views::now_playing::marquee_text`, advanced one character per `Message::MarqueeTick`, and
   reset to the start by `TrackSelected`; a line that fits is shown whole and borrowed.
@@ -101,7 +111,18 @@ its internal id, whenever the id is in the known-track index:
 `src/ui/views/now_playing.rs` (re-exported by `src/ui/views/mod.rs`), pure functions over the
 known-track index. `WinampPlayer::now_playing_label` and `WinampPlayer::now_playing_artist` in
 `src/ui/mod.rs` resolve against `known_tracks`, so the bar keeps naming a playing track after
-browsing to another album replaced the visible song list. `views::now_playing::marquee_text`
+browsing to another album replaced the visible song list. `views::now_playing::now_playing_time`
+(through `now_playing_progress` and `format_position_time`) combines the position with the cached
+total; the `playback_position` field on `WinampPlayer` stores the reply the
+`PlaybackPosition` handler received, which is stamped with `position_epoch`, and
+`reset_position_readout` bumps that epoch and clears the value
+on Stop and on a new selection. `pending_position_transitions` counts the backend transport
+transitions that are still in flight: every handler in `src/ui/handlers/playback.rs` that
+schedules one begins a transition, and the completion that reports that same transition ends it;
+while the count is nonzero the `PositionTick` handler issues no query and the
+`PlaybackPosition` handler stores no reply. `AppleMusicService::play_track`
+stops the backend's previous preview when a selection has no preview URL.
+`views::now_playing::marquee_text`
 windows an overlong line, and `WinampPlayer::marquee_offset` carries the advance through
 `Message::MarqueeTick`. `views::now_playing::display_len` and `views::now_playing::needs_marquee`
 measure the line, and `ui::subscriptions` subscribes `marquee_ticks` only while that measure
@@ -124,6 +145,10 @@ rather than the panic unwinding the event loop.
 - `now_playing_artist_is_empty_with_no_current_track`
 - `now_playing_label_borrows_the_title_and_nothing_literal`
 - `now_playing_artist_borrows_the_artist`
+- `now_playing_time_resolves_known_track_to_cached_label`
+- `now_playing_time_shows_elapsed_over_total_when_a_position_is_known`
+- `format_position_time_formats_elapsed_and_zero`
+- `now_playing_progress_joins_elapsed_and_total`
 - `marquee_text_keeps_a_line_that_fits`
 - `marquee_text_windows_from_the_offset`
 - `marquee_text_wraps_through_the_gap_to_the_start`
@@ -133,6 +158,21 @@ rather than the panic unwinding the event loop.
 - `overlong_now_playing_line_renders_a_new_window_as_the_offset_advances`
   (all in `src/ui/views/tests.rs`)
 - `now_playing_label_keeps_the_track_name_after_browsing_to_another_album` (`src/ui/tests.rs`)
+- `now_playing_time_shows_elapsed_over_total_while_a_position_is_known`
+- `pause_keeps_the_stored_elapsed_readout`
+- `a_position_reply_after_a_seek_updates_the_readout`
+- `track_selected_clears_the_elapsed_readout`
+- `stop_clears_the_elapsed_readout`
+- `position_replies_store_and_stale_ones_are_dropped`
+- `position_poll_waits_for_a_stop_to_reach_the_backend`
+- `position_poll_waits_for_a_selected_tracks_play_to_settle`
+- `an_unrelated_transport_completion_keeps_the_poll_waiting`
+- `position_tick_schedules_a_query`
+- `position_tick_stream_emits_position_ticks` (`src/ui/tests.rs`)
+- `play_track_without_a_preview_url_stops_the_previous_preview` (`src/apple_music/tests.rs`)
+- `position_query_reports_none_when_nothing_is_loaded`
+- `a_seek_is_reflected_by_the_next_position_query`
+- `a_pause_keeps_the_loaded_player_reporting_its_position` (`src/audio/tests.rs`)
 - `marquee_tick_advances_the_offset`
 - `marquee_ticks_keep_ticking_when_the_receiver_falls_behind`
 - `the_marquee_timer_runs_only_while_the_line_needs_to_scroll`

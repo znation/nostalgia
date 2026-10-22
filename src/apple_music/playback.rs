@@ -173,17 +173,13 @@ impl AppleMusicService {
         self.audio.seek_by(offset_secs)
     }
 
-    /// Reports the loaded preview's playback position, or `None` when the
-    /// audio backend cannot answer.
+    /// Reports the loaded preview's playback position, or `None` when no
+    /// preview is loaded or the audio backend cannot answer.
     ///
     /// Synchronous and touches no shared state. The backend bounds the wait
     /// (see [`crate::audio::AudioOutput::position`]), so callers on the UI
     /// thread should still run it as a task rather than blocking `update`.
-    ///
-    /// It has no production caller until the Now Playing readout consumes it,
-    /// so `dead_code` is allowed here; the service suite tests it through the
-    /// injected backend.
-    #[allow(dead_code)]
+    /// The Now Playing readout polls it once per second.
     pub(crate) fn playback_position(&self) -> Option<Duration> {
         self.audio.position()
     }
@@ -247,7 +243,9 @@ impl AppleMusicService {
     /// [`play_log_line`]), so even a non-control Unicode format character the
     /// guard does not reject cannot reach the terminal raw. A `None`
     /// `preview_url` is a track with no playable asset: the state transition
-    /// is committed but no audio starts. A `preview_url` that is `Some` but
+    /// is committed, any previously loaded preview is stopped so it neither
+    /// sounds nor keeps reporting its position under the new track, and no new
+    /// audio starts. A `preview_url` that is `Some` but
     /// blank is a caller bug — no asset has a blank URL — and is rejected the
     /// same way a blank id is, before shared state is touched. A non-blank
     /// `preview_url` must be an `https` URL whose host is not an internal
@@ -280,7 +278,7 @@ impl AppleMusicService {
     /// Returns an [`AppleMusicError`] when `track_id` is blank (empty or only
     /// whitespace), carries a control character, when `preview_url` is present
     /// but blank or is not an `https` URL with an acceptable host, or the audio
-    /// backend cannot start the preview.
+    /// backend cannot start the preview or stop the previous one.
     pub async fn play_track(
         &self,
         track_id: &str,
@@ -315,32 +313,36 @@ impl AppleMusicService {
         println!("{}", play_log_line(track_id));
 
         // Remember the URL so a later Play can restart this preview after a
-        // Stop, and record whether the backend now holds it.
+        // Stop, and record whether the backend now holds it. A selection with
+        // no preview stops the previous player: otherwise the old preview
+        // would keep sounding and its position clock would keep reporting
+        // under the new track's name.
         transport.last_url = preview_url.map(str::to_string);
         transport.loaded = false;
-        if let Some(url) = preview_url {
-            if let Err(error) = self
+        let started = match preview_url {
+            Some(url) => self
                 .audio
                 .set_volume(volume)
                 .and_then(|()| self.audio.set_balance(balance))
                 .and_then(|()| self.set_output_equalizer(equalizer))
-                .and_then(|()| self.audio.play(url))
-            {
-                // The backend refused the preview, so shared state must not keep
-                // claiming playback. Roll the flag back only when no newer play
-                // has replaced this one: a newer play owns the state now, and
-                // clearing it here would make that track look stopped.
-                // `current_track` is left in place, as `stop` leaves it, so the
-                // bar still names the track the user selected.
-                let mut state = self.state.lock().await;
-                if is_current() {
-                    state.is_playing = false;
-                }
-                transport.last_url = None;
-                return Err(error);
+                .and_then(|()| self.audio.play(url)),
+            None => self.audio.stop(),
+        };
+        if let Err(error) = started {
+            // The backend refused the preview, so shared state must not keep
+            // claiming playback. Roll the flag back only when no newer play
+            // has replaced this one: a newer play owns the state now, and
+            // clearing it here would make that track look stopped.
+            // `current_track` is left in place, as `stop` leaves it, so the
+            // bar still names the track the user selected.
+            let mut state = self.state.lock().await;
+            if is_current() {
+                state.is_playing = false;
             }
-            transport.loaded = true;
+            transport.last_url = None;
+            return Err(error);
         }
+        transport.loaded = preview_url.is_some();
         Ok(())
     }
 }

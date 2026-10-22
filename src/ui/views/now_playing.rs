@@ -3,6 +3,7 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::time::Duration;
 
 use iced::{
     Element, Length,
@@ -125,20 +126,47 @@ pub fn now_playing_artist<'a>(
         .unwrap_or(Cow::Borrowed(""))
 }
 
-/// The Now Playing bar's length readout for `current_track`: the label cached
-/// in [`KnownTrack::time`] when the track was recorded, or `"--:--"` when the
-/// track is unknown or none is current. The known case borrows from `tracks`,
-/// so a per-frame bar refresh formats and allocates nothing; mirrors
-/// [`now_playing_label`] and [`now_playing_artist`]. Pure data → `Cow` so the
-/// resolution is testable without an iced renderer.
+/// The Now Playing bar's length readout for `current_track`: the elapsed time
+/// followed by the label cached in [`KnownTrack::time`] when the audio backend
+/// reports a position for a known track (`"0:45/3:30"`), that cached label
+/// alone when it does not, or `"--:--"` when the track is unknown or none is
+/// current. The plain known case borrows from `tracks`, so a per-frame bar
+/// refresh formats and allocates nothing there; the combined elapsed/total
+/// case allocates its `String`. Mirrors [`now_playing_label`] and
+/// [`now_playing_artist`]. Pure data → `Cow` so the resolution is testable
+/// without an iced renderer.
 pub fn now_playing_time<'a>(
     tracks: &'a HashMap<String, KnownTrack>,
     current_track: Option<&str>,
+    position: Option<Duration>,
 ) -> Cow<'a, str> {
-    current_track
-        .and_then(|id| tracks.get(id))
-        .map(|track| Cow::Borrowed(track.time.as_str()))
-        .unwrap_or(Cow::Borrowed("--:--"))
+    let Some(track) = current_track.and_then(|id| tracks.get(id)) else {
+        return Cow::Borrowed("--:--");
+    };
+    match position {
+        Some(position) => Cow::Owned(now_playing_progress(duration_millis(position), &track.time)),
+        None => Cow::Borrowed(track.time.as_str()),
+    }
+}
+
+/// `duration` in milliseconds, saturating at [`u64::MAX`] rather than wrapping
+/// for a position that large (which no real preview reaches).
+fn duration_millis(duration: Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+}
+
+/// Formats an elapsed playback position in milliseconds as the
+/// [`format_minutes_seconds`] `m:ss` form, so `0` reads `"0:00"` and `192_000`
+/// reads `"3:12"`.
+pub fn format_position_time(position_ms: u64) -> String {
+    format_minutes_seconds(position_ms)
+}
+
+/// Joins an elapsed playback position with the track's formatted total as
+/// `"<elapsed>/<total>"`, so a 192-second position and a `"12:38"` total read
+/// `"3:12/12:38"`.
+pub fn now_playing_progress(position_ms: u64, total: &str) -> String {
+    format!("{}/{}", format_position_time(position_ms), total)
 }
 
 /// Formats `duration_ms` as zero-padded `m:ss`, with unbounded minutes so an
