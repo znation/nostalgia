@@ -2868,9 +2868,10 @@ fn track_selected_records_the_played_tracks_title_and_time() {
     assert_eq!(track.time, "2:05");
 }
 
-// The marquee timer runs unconditionally; each tick advances the title window
-// by one character without scheduling any work, so the view can scroll an
-// overlong line while a fitting line ignores the offset.
+// The marquee timer advances the title window by one character without
+// scheduling any work. The timer itself runs only while the line is too long
+// to fit the LCD (see `the_marquee_timer_runs_only_while_the_line_needs_to_scroll`),
+// so every tick scrolls the bar.
 #[test]
 fn marquee_tick_advances_the_offset() {
     let (mut player, _state) = test_player();
@@ -2879,6 +2880,53 @@ fn marquee_tick_advances_the_offset() {
     assert_eq!(player.marquee_offset, 1);
     assert_message_schedules_no_work(&mut player, Message::MarqueeTick);
     assert_eq!(player.marquee_offset, 2);
+}
+
+// Every message makes iced rebuild the whole screen, browse list included, so
+// the marquee timer must not run for a line that fits the LCD whole: it would
+// rebuild the UI four times a second to redraw a bar that cannot change. The
+// keyboard listener always runs, so the subscription set is the listener alone
+// until the line needs to scroll.
+#[test]
+fn the_marquee_timer_runs_only_while_the_line_needs_to_scroll() {
+    assert_eq!(subscriptions(false).len(), 1);
+    assert_eq!(subscriptions(true).len(), 2);
+}
+
+// The timer is subscribed from the player's own view of the bar: the same
+// label and artist the view renders, measured the same way. A line that fits
+// leaves the timer unsubscribed; a line past the LCD's character budget needs
+// it.
+#[test]
+fn the_player_knows_when_the_now_playing_line_needs_the_marquee() {
+    let (mut player, state) = test_player();
+
+    // Nothing is current: the bar reads "Nothing", which fits.
+    assert!(!player.needs_marquee());
+
+    // A known track with a short title fits too.
+    player.known_tracks.insert(
+        "song-1".to_string(),
+        views::KnownTrack {
+            title: "One".to_string(),
+            artist: "The Sample Band".to_string(),
+            time: "3:30".to_string(),
+        },
+    );
+    state.blocking_lock().current_track = Some("song-1".to_string());
+    assert!(!player.needs_marquee());
+
+    // A title that pushes the line past the LCD's budget needs the marquee.
+    player.known_tracks.insert(
+        "song-2".to_string(),
+        views::KnownTrack {
+            title: "A Title Too Long For The LCD".to_string(),
+            artist: "The Sample Band".to_string(),
+            time: "3:30".to_string(),
+        },
+    );
+    state.blocking_lock().current_track = Some("song-2".to_string());
+    assert!(player.needs_marquee());
 }
 
 // A slow UI must not kill the timer: the futures channel holds

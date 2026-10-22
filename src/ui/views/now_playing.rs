@@ -20,6 +20,34 @@ pub(super) const MARQUEE_WIDTH: usize = 28;
 /// The spaces between the end of a scrolling line and its next repeat.
 const MARQUEE_GAP: usize = 3;
 
+/// The number of characters the Now Playing line occupies: the label's
+/// characters, plus the artist's and the three characters of the `" - "`
+/// separator that joins them.
+///
+/// The bar shows the line whole while it fits [`MARQUEE_WIDTH`] and windows it
+/// when it does not, so this is the one measure both the view and the marquee
+/// timer read — the timer runs only while the line is too long, and the view
+/// windows exactly the lines the timer scrolls.
+pub(super) fn display_len(label: &str, artist: &str) -> usize {
+    label.chars().count()
+        + if artist.is_empty() {
+            0
+        } else {
+            artist.chars().count() + 3
+        }
+}
+
+/// Whether the Now Playing line is too long for the LCD's character budget
+/// and so has to scroll: the combined artist and title exceed
+/// [`MARQUEE_WIDTH`] characters.
+///
+/// The marquee timer runs only while this holds. A line that fits is shown
+/// whole, so ticking for it would advance an offset the view ignores — and
+/// every tick makes iced rebuild the whole screen, browse list included.
+pub fn needs_marquee(label: &str, artist: &str) -> bool {
+    display_len(label, artist) > MARQUEE_WIDTH
+}
+
 /// Returns the `width`-character window of `text` starting at
 /// `offset % cycle`, where `cycle` is the line plus [`MARQUEE_GAP`] trailing
 /// spaces. A line that fits `width` is returned unchanged, so the caller's
@@ -188,14 +216,9 @@ where
     Theme::Class<'a>: From<iced::widget::text::StyleFn<'a, Theme>>,
     Renderer: iced::advanced::text::Renderer + 'a,
 {
-    let display_len = label.chars().count()
-        + if artist.is_empty() {
-            0
-        } else {
-            artist.chars().count() + 3
-        };
+    let line_len = display_len(&label, &artist);
     let mut row = Row::new().push(Text::new("Now Playing: ").size(20));
-    if display_len <= MARQUEE_WIDTH {
+    if line_len <= MARQUEE_WIDTH {
         if !artist.is_empty() {
             row = row.push(lcd_text(artist)).push(lcd_text(" - "));
         }

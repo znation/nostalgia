@@ -40,8 +40,8 @@ use crate::{
 };
 
 /// How often the Now Playing title window advances one character while an
-/// overlong line scrolls. The view ignores the offset whenever the line fits,
-/// so the timer runs unconditionally.
+/// overlong line scrolls. The timer runs only while the line is too long to
+/// fit the LCD's character budget (see [`subscriptions`]).
 const MARQUEE_TICK: Duration = Duration::from_millis(250);
 
 /// A subscription that emits [`Message::MarqueeTick`] once per
@@ -121,6 +121,25 @@ fn marquee_thread_failure_report(error: &io::Error) -> String {
     )
 }
 
+/// The subscriptions the UI runs: the keyboard listener, plus the marquee
+/// timer while the Now Playing line is too long to fit the LCD's character
+/// budget.
+///
+/// The timer exists to advance the Now Playing title window, and the view
+/// ignores that window while the line fits — so ticking for a fitting line
+/// would advance nothing. Every message makes iced rebuild the whole screen
+/// (the browse list's rows included), so an always-on timer would rebuild the
+/// UI four times a second to redraw a bar that cannot change. The timer is
+/// therefore subscribed only while the line needs to scroll, and dropped again
+/// once it fits.
+fn subscriptions(marquee_needed: bool) -> Vec<iced::Subscription<Message>> {
+    let mut subscriptions = vec![keyboard::listen().filter_map(message_for)];
+    if marquee_needed {
+        subscriptions.push(marquee_ticks());
+    }
+    subscriptions
+}
+
 /// Runs the UI, blocking until the window is closed.
 ///
 /// `service` is the [`AppleMusicService`] `main` built and ran the startup
@@ -140,9 +159,7 @@ pub fn init_ui(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> iced:
         .theme(|_: &WinampPlayer| theme::winamp_theme())
         .decorations(false)
         .resizable(false)
-        .subscription(|_player| {
-            iced::Subscription::batch([keyboard::listen().filter_map(message_for), marquee_ticks()])
-        })
+        .subscription(|player| iced::Subscription::batch(subscriptions(player.needs_marquee())))
         .run()
 }
 
@@ -169,8 +186,9 @@ enum Message {
     SeekBackward,
     SeekForward,
     // The marquee timer's tick: advance the Now Playing title window by one
-    // character. The view ignores the offset while the line fits, so the timer
-    // needs no state to start or stop.
+    // character. The timer runs only while the line is too long to fit the
+    // LCD's character budget (see [`subscriptions`]), so a tick always
+    // scrolls the bar.
     MarqueeTick,
     ToggleEqualizer,
     EqPreampChange(f32),
@@ -444,6 +462,22 @@ impl WinampPlayer {
     /// without formatting or allocating a `String` per frame.
     fn now_playing_time<'a>(&'a self, current_track: Option<&str>) -> Cow<'a, str> {
         views::now_playing_time(&self.known_tracks, current_track)
+    }
+
+    /// Whether the Now Playing line is too long for the LCD's character
+    /// budget and so has to scroll: the combined artist and title exceed
+    /// `views::MARQUEE_WIDTH` characters.
+    ///
+    /// The marquee timer is subscribed only while this holds (see
+    /// [`subscriptions`]), so the bar is not rebuilt four times a second for a
+    /// line that fits whole. The label and artist are resolved exactly as
+    /// `view` resolves them, so the timer scrolls precisely the lines the bar
+    /// windows.
+    fn needs_marquee(&self) -> bool {
+        let state = self.state.blocking_lock();
+        let label = self.now_playing_label(state.current_track.as_deref());
+        let artist = self.now_playing_artist(state.current_track.as_deref());
+        views::needs_marquee(&label, &artist)
     }
 }
 

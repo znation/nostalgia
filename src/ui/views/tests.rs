@@ -5,8 +5,8 @@ use super::browse::{
 };
 use super::equalizer::eq_enabled_label;
 use super::now_playing::{
-    KnownTrack, MARQUEE_WIDTH, format_track_time, marquee_text, now_playing_artist,
-    now_playing_label, now_playing_row, now_playing_time,
+    KnownTrack, MARQUEE_WIDTH, display_len, format_track_time, marquee_text, needs_marquee,
+    now_playing_artist, now_playing_label, now_playing_row, now_playing_time,
 };
 use super::transport::{play_pause_label, repeat_label, shuffle_label, transport_buttons};
 use super::{
@@ -380,6 +380,37 @@ fn captured_now_playing_texts(label: &str, artist: &str, offset: usize) -> Vec<S
         .as_widget_mut()
         .operate(&mut tree, Layout::new(&node), &(), &mut captured);
     captured.0
+}
+
+// The bar's own measure of the line: the label's characters plus the
+// artist's and the `" - "` separator between them. The view windows the line
+// when the measure exceeds the LCD's budget, and the marquee timer runs only
+// while it does — so a measure that disagreed with the view's would leave the
+// timer scrolling a line the bar shows whole, or idle while the bar windows
+// one.
+#[test]
+fn display_len_counts_the_label_the_artist_and_the_separator() {
+    assert_eq!(display_len("Opening", ""), 7);
+    assert_eq!(display_len("Opening", "The Sample Band"), 25);
+    // The separator is three characters, and a non-ASCII artist counts
+    // characters rather than bytes.
+    assert_eq!(display_len("Café", "Ångström"), 4 + 8 + 3);
+}
+
+// The line needs the marquee only when it does not fit the LCD's character
+// budget: a fitting line is shown whole, so the timer would have nothing to
+// scroll.
+#[test]
+fn needs_marquee_only_for_a_line_too_long_for_the_lcd() {
+    // A label alone fills the budget exactly and still fits.
+    assert!(!needs_marquee(&"x".repeat(MARQUEE_WIDTH), ""));
+    assert!(needs_marquee(&"x".repeat(MARQUEE_WIDTH + 1), ""));
+    // With an artist, the artist and the `" - "` separator count towards the
+    // budget: "The Sample Band" is 15 characters, so a 10-character label
+    // fits and an 11-character one does not.
+    let artist = "The Sample Band";
+    assert!(!needs_marquee(&"x".repeat(10), artist));
+    assert!(needs_marquee(&"x".repeat(11), artist));
 }
 
 // The row the Now Playing bar renders must use that window: an overlong line

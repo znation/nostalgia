@@ -93,6 +93,9 @@ its internal id, whenever the id is in the known-track index:
 - A combined artist/title longer than `MARQUEE_WIDTH` characters is windowed by
   `views::now_playing::marquee_text`, advanced one character per `Message::MarqueeTick`, and
   reset to the start by `TrackSelected`; a line that fits is shown whole and borrowed.
+- The marquee timer is subscribed only while the line needs to scroll: `WinampPlayer::needs_marquee`
+  measures the same label and artist the bar renders, so a line that fits leaves the timer out
+  (every message makes iced rebuild the whole screen, browse list included).
 
 **Enforced by.** `views::now_playing_label` and `views::now_playing_artist` in
 `src/ui/views/now_playing.rs` (re-exported by `src/ui/views/mod.rs`), pure functions over the
@@ -100,7 +103,9 @@ known-track index. `WinampPlayer::now_playing_label` and `WinampPlayer::now_play
 `src/ui/mod.rs` resolve against `known_tracks`, so the bar keeps naming a playing track after
 browsing to another album replaced the visible song list. `views::now_playing::marquee_text`
 windows an overlong line, and `WinampPlayer::marquee_offset` carries the advance through
-`Message::MarqueeTick`.
+`Message::MarqueeTick`. `views::now_playing::display_len` and `views::now_playing::needs_marquee`
+measure the line, and `ui::subscriptions` subscribes `marquee_ticks` only while that measure
+exceeds `MARQUEE_WIDTH`.
 
 The scrolling timer itself starts through `spawn_marquee_thread` in `src/ui/mod.rs`, the fallible
 `std::thread::Builder::spawn` every other worker in the app uses. `std::thread::spawn` panics when
@@ -123,11 +128,15 @@ rather than the panic unwinding the event loop.
 - `marquee_text_windows_from_the_offset`
 - `marquee_text_wraps_through_the_gap_to_the_start`
 - `marquee_text_counts_characters_not_bytes`
+- `display_len_counts_the_label_the_artist_and_the_separator`
+- `needs_marquee_only_for_a_line_too_long_for_the_lcd`
 - `overlong_now_playing_line_renders_a_new_window_as_the_offset_advances`
   (all in `src/ui/views/tests.rs`)
 - `now_playing_label_keeps_the_track_name_after_browsing_to_another_album` (`src/ui/tests.rs`)
 - `marquee_tick_advances_the_offset`
 - `marquee_ticks_keep_ticking_when_the_receiver_falls_behind`
+- `the_marquee_timer_runs_only_while_the_line_needs_to_scroll`
+- `the_player_knows_when_the_now_playing_line_needs_the_marquee`
 - `track_selected_resets_the_marquee_offset` (`src/ui/tests.rs`)
 - `a_refused_marquee_thread_ends_the_tick_stream_instead_of_panicking`
 - `a_refused_marquee_thread_reports_the_cause_and_the_loss`
