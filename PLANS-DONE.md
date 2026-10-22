@@ -5,6 +5,26 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
+### Split the `update` loop into one handler module per concern (landed 2026-10-22; no plan-role entry — rescued manually from a polluted main)
+
+**Goal.** `src/ui/mod.rs` had grown to 1319 lines, with `update` holding every message's behaviour inline and eight helpers shared across arms. Each concern's behaviour now lives in its own module under `src/ui/handlers/` — `playback` (the transport buttons and keys, the track stepping, the play request and its completion, the marquee tick), `mixer` (the volume, the balance, the seek, and the equalizer), `browse` (the hierarchy, the library search, and the fetch results), and `window` (the resolved window id and the title bar's actions) — and `update` is a dispatch table that routes each `Message` variant to its handler and carries no behaviour of its own.
+
+**Approach.**
+
+- `src/ui/mod.rs`: declare `mod handlers;`, drop the imports the moved code took with it (`EqSnapshot`, the `loading::{...}` items, `Ordering`), delete the inline arms and the helpers they shared (`step_track`, `mutate_state`, `mutate_volume`, `mutate_balance`, `seek_preview`, `mutate_equalizer`, `scroll_browse_to_top`, `fetch_at_top`, `with_window_id`, `resize_to_shade`), and rewrite `update` as one delegation per variant.
+- `src/ui/handlers/`: one module per concern, each holding its handlers, its shared helpers, and the rationale the inline comments carried, so a change to one concern never reaches into another's code.
+- `src/ui/tests.rs`: take `RequestGeneration` and `play_into` from `loading` directly, since `update` no longer re-exports them.
+- `docs/invariants.md`: the Browse hierarchy and Browse reply freshness sections now name the handlers in `src/ui/handlers/browse.rs` rather than arms in `src/ui/mod.rs`.
+
+**Files touched.** `src/ui/mod.rs`, `src/ui/handlers/mod.rs`, `src/ui/handlers/playback.rs`, `src/ui/handlers/mixer.rs`, `src/ui/handlers/browse.rs`, `src/ui/handlers/window.rs`, `src/ui/tests.rs`, `docs/invariants.md`.
+
+**Acceptance criteria.**
+
+- `make check` passes: formatting, clippy with `-D warnings`, rustdoc, and the test suite.
+- Every `Message` variant has exactly one dispatch row, and no row holds behaviour.
+- The moved logic has one definition: no helper or arm body survives in `src/ui/mod.rs`.
+- The existing UI tests pass unchanged apart from the two `loading` imports `src/ui/tests.rs` now takes directly.
+
 ### Add the playback-position readout to the Now Playing bar (Playback position, part 2/3: planned 2026-10-21 by the plan role, requires part 1/2 landed, done 2026-10-21)
 
 **Goal.** The audio seam answers a position only while a preview is loaded: `AudioOutput::position` returns `Some(position)` when a player is installed (including `Some(Duration::ZERO)` at the start of a preview) and `None` when no player is loaded or the backend cannot answer. This is the first half of the former part 2/2, split so the seam contract and its Pause/seek behavior are reviewed apart from the Now Playing readout that consumes them. The silent backend keeps the trait's default `None`, so a machine with no audio device shows no elapsed value rather than a frozen `0:00`.

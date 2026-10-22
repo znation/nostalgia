@@ -131,23 +131,3 @@ This is the second half of the former part 2/2 and consumes part 2/3's authorita
 - The implementation changes only the ten listed files plus the `PLANS.md`/`PLANS-DONE.md` move, and the commit body names them consistently with `git diff --stat`.
 
 ## Done
-
-### Split the `update` loop into one handler module per concern (landed 2026-10-22; no plan-role entry — rescued manually from a polluted main)
-
-**Goal.** `src/ui/mod.rs` had grown to 1319 lines, with `update` holding every message's behaviour inline and eight helpers shared across arms. Each concern's behaviour now lives in its own module under `src/ui/handlers/` — `playback` (the transport buttons and keys, the track stepping, the play request and its completion, the marquee tick), `mixer` (the volume, the balance, the seek, and the equalizer), `browse` (the hierarchy, the library search, and the fetch results), and `window` (the resolved window id and the title bar's actions) — and `update` is a dispatch table that routes each `Message` variant to its handler and carries no behaviour of its own.
-
-**Approach.**
-
-- `src/ui/mod.rs`: declare `mod handlers;`, drop the imports the moved code took with it (`EqSnapshot`, the `loading::{...}` items, `Ordering`), delete the inline arms and the helpers they shared (`step_track`, `mutate_state`, `mutate_volume`, `mutate_balance`, `seek_preview`, `mutate_equalizer`, `scroll_browse_to_top`, `fetch_at_top`, `with_window_id`, `resize_to_shade`), and rewrite `update` as one delegation per variant.
-- `src/ui/handlers/`: one module per concern, each holding its handlers, its shared helpers, and the rationale the inline comments carried, so a change to one concern never reaches into another's code.
-- `src/ui/tests.rs`: take `RequestGeneration` and `play_into` from `loading` directly, since `update` no longer re-exports them.
-- `docs/invariants.md`: the Browse hierarchy and Browse reply freshness sections now name the handlers in `src/ui/handlers/browse.rs` rather than arms in `src/ui/mod.rs`.
-
-**Files touched.** `src/ui/mod.rs`, `src/ui/handlers/mod.rs`, `src/ui/handlers/playback.rs`, `src/ui/handlers/mixer.rs`, `src/ui/handlers/browse.rs`, `src/ui/handlers/window.rs`, `src/ui/tests.rs`, `docs/invariants.md`.
-
-**Acceptance criteria.**
-
-- `make check` passes: formatting, clippy with `-D warnings`, rustdoc, and the test suite.
-- Every `Message` variant has exactly one dispatch row, and no row holds behaviour.
-- The moved logic has one definition: no helper or arm body survives in `src/ui/mod.rs`.
-- The existing UI tests pass unchanged apart from the two `loading` imports `src/ui/tests.rs` now takes directly.
