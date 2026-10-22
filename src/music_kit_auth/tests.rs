@@ -1362,6 +1362,29 @@ fn a_reaper_thread_spawn_failure_kills_the_opener_and_is_reported() {
     assert_child_is_reaped(pid, "the reaper spawn failed");
 }
 
+// The reaper runs on a named thread, so a panic in it is attributed to
+// `nostalgia-opener-reaper` rather than `<unnamed>`. Pin the name on the
+// production spawner, since the failure test above injects its own spawner
+// and would not notice a rename. The name is spelled out here rather than
+// read back from `REAPER_THREAD_NAME`, so a rename of the constant fails
+// this test instead of renaming the thread and its assertion together.
+#[test]
+fn spawn_reaper_names_its_work_thread() {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    spawn_reaper(Box::new(move || {
+        let _ = sender.send(std::thread::current().name().map(str::to_string));
+    }))
+    .expect("start the reaper thread");
+
+    assert_eq!(
+        receiver
+            .recv()
+            .expect("the reaper reports its name")
+            .as_deref(),
+        Some("nostalgia-opener-reaper")
+    );
+}
+
 // `AUTH_TIMEOUT` is production behavior — how long `authorize` waits for
 // the browser callback — but `authorize` is its only reader and the
 // timeout tests above inject their own deadline, so a changed constant
