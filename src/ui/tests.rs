@@ -2919,6 +2919,66 @@ fn marquee_ticks_keep_ticking_when_the_receiver_falls_behind() {
     );
 }
 
+// A refused timer thread must not take the player down: `std::thread::spawn`
+// panics when the OS refuses a thread, and iced builds the subscription's
+// stream on its main thread while it updates the subscriptions, so that panic
+// would unwind the event loop and kill the app over a cosmetic timer. The
+// fallible spawn reports the refusal and ends the tick stream instead, so the
+// app keeps running with a Now Playing title that no longer scrolls.
+#[test]
+fn a_refused_marquee_thread_ends_the_tick_stream_instead_of_panicking() {
+    use futures::StreamExt;
+
+    let mut ticks = marquee_tick_stream_with(|_work| {
+        Err(std::io::Error::other("the OS refused another thread"))
+    });
+
+    let next = futures::executor::block_on(await_or_timeout(
+        "the marquee stream after a refused thread",
+        TASK_TIMEOUT,
+        ticks.next(),
+    ));
+    assert!(
+        next.is_none(),
+        "a refused marquee thread must end the tick stream, not tick or panic"
+    );
+}
+
+// The refusal is reported, not swallowed: the report names the cause and
+// says what the user loses, so a Now Playing title that never scrolls is
+// diagnosable instead of mysterious.
+#[test]
+fn a_refused_marquee_thread_reports_the_cause_and_the_loss() {
+    let report = marquee_thread_failure_report(&std::io::Error::other("no threads left"));
+
+    assert!(
+        report.contains("no threads left"),
+        "the report must name the cause, got: {report}"
+    );
+    assert!(
+        report.contains("will not scroll"),
+        "the report must say what the user loses, got: {report}"
+    );
+}
+
+// The timer thread carries a name, like the audio and REST workers, so a
+// panic in it is attributable. The name is spelled out here rather than read
+// from the production constant, so renaming the constant fails this test.
+#[test]
+fn the_marquee_thread_is_named_nostalgia_marquee() {
+    let (sender, receiver) = std::sync::mpsc::channel();
+
+    spawn_marquee_thread(Box::new(move || {
+        let _ = sender.send(std::thread::current().name().map(str::to_string));
+    }))
+    .expect("the marquee thread starts");
+
+    let name = receiver
+        .recv_timeout(TASK_TIMEOUT)
+        .expect("the marquee thread reports its name");
+    assert_eq!(name.as_deref(), Some("nostalgia-marquee"));
+}
+
 // A newly selected song must start its title at character zero rather than
 // inheriting the previous song's scroll position.
 #[test]

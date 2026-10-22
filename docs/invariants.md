@@ -102,6 +102,12 @@ browsing to another album replaced the visible song list. `views::now_playing::m
 windows an overlong line, and `WinampPlayer::marquee_offset` carries the advance through
 `Message::MarqueeTick`.
 
+The scrolling timer itself starts through `spawn_marquee_thread` in `src/ui/mod.rs`, the fallible
+`std::thread::Builder::spawn` every other worker in the app uses. `std::thread::spawn` panics when
+the OS refuses a thread, and iced builds the subscription's stream on its main thread while it
+updates the subscriptions, so a refused timer thread is reported and the title stops scrolling
+rather than the panic unwinding the event loop.
+
 **Pinned by.**
 
 - `now_playing_label_resolves_known_track_to_title`
@@ -123,6 +129,9 @@ windows an overlong line, and `WinampPlayer::marquee_offset` carries the advance
 - `marquee_tick_advances_the_offset`
 - `marquee_ticks_keep_ticking_when_the_receiver_falls_behind`
 - `track_selected_resets_the_marquee_offset` (`src/ui/tests.rs`)
+- `a_refused_marquee_thread_ends_the_tick_stream_instead_of_panicking`
+- `a_refused_marquee_thread_reports_the_cause_and_the_loss`
+- `the_marquee_thread_is_named_nostalgia_marquee` (all in `src/ui/tests.rs`)
 
 **History.** Reconstructed from "Now Playing bar shows the track id instead of the song title" in
 `BUGS-FIXED.md`.
