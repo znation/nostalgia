@@ -5,6 +5,105 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### A stalled connection is served for its whole budget before the next one, so repeated stalls starve the sign-in callback (found by security 2026-10-22) — fixed 2026-10-22 by the bugfix role
+
+Symptom: the loopback sign-in server serves accepted connections one at a
+time, and a connection that never finishes its request is held for the whole
+per-connection budget (`CONNECTION_READ_TIMEOUT`, five seconds in production)
+before the next connection is accepted. One stalled connection therefore delays
+the browser's callback by five seconds; the existing test
+`authorize_serves_the_callback_after_a_stalled_connection_is_dropped`
+(`src/music_kit_auth/tests.rs`) pins that a single stall is dropped and the
+callback that follows is served. The repeated case is not bounded, because the
+cost of each hostile connection is *serialized* behind the previous one: N
+stalled connections cost N × the budget of the flow's own deadline. With the
+production constants (`CONNECTION_READ_TIMEOUT` = 5 s, `AUTH_TIMEOUT` = 300 s)
+sixty stalled connections consume the whole five-minute sign-in window, the
+browser's `POST /token` callback is never served, and the flow fails with
+"timed out waiting for the Apple Music sign-in callback after 300s" — the
+owner cannot sign in while the stalls are held open.
+
+Source: any local process that can open TCP connections to the sign-in port.
+The port is ephemeral but enumerable from `/proc/net/tcp`, which every local
+user can read, and the attacker never has to present the `state` nonce: the
+stall happens before any request is routed.
+
+Sink: the single-threaded accept loop in `authorize_with_bounds`
+(`src/music_kit_auth.rs`). It calls `listener.accept()` and then serves that
+connection inline through `serve_connection`, which blocks in
+`read_http_request` until the connection's deadline expires
+(`arm_read_timeout` arms `CONNECTION_READ_TIMEOUT`). Only then is the next
+connection accepted, so the browser's callback waits in the kernel's accept
+backlog behind every hostile connection queued before it.
+
+Path: `authorize_with_bounds` -> `listener.accept()` -> `serve_connection` ->
+`read_http_request` -> `read_or_none` -> `arm_read_timeout` (the five-second
+per-connection budget) -> the stalled connection is dropped -> the next
+`accept()` happens only then -> the browser's `POST /token` is served last.
+
+Missing check: the per-connection budget bounds one connection, not the queue
+behind it. There is no aggregate bound on the time hostile connections may
+consume and no parallelism, so the budget multiplies by the number of
+stalls.
+
+How to reproduce:
+- Code path: `src/music_kit_auth.rs`, `authorize_with_bounds` serves each
+  accepted connection inline (`serve_connection(&mut stream, ...)`), so the
+  next `accept()` happens only after the current connection's deadline.
+- Measured (temporary test, since removed): ten connections that each sent
+  `POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\n` and then stalled, followed by
+  the real callback, with a 100 ms per-connection budget and a 600 ms flow
+  deadline. The flow returned `Err("timed out waiting for the Apple Music
+  sign-in callback after 600ms")` after 607 ms, and the callback connection
+  read an empty response — the callback was never served. The same run with a
+  single stalled connection serves the callback (the existing test's case).
+- Manual: run with `APPLE_MUSIC_DEVELOPER_TOKEN` set, find the sign-in port
+  (`ss -ltnp`), open sixty connections that send nothing, then complete the
+  sign-in in the browser. The browser's callback waits behind the queued
+  connections and the flow times out.
+
+Suspected cause: the accept loop is single-threaded by design ("Connections
+are served one at a time, so each is bounded by `CONNECTION_READ_TIMEOUT` from
+the moment it is accepted"), and the module doc draws from that
+single-connection bound the conclusion that a local client "cannot starve the
+browser's callback until the flow gives up". The bound holds for one
+connection; the queue behind it is unbounded, so repeated stalls do starve the
+callback. Fixing it means changing how the accept loop dispatches work —
+serving accepted connections concurrently, or multiplexing the pending ones —
+and the obvious form of that change (a thread per connection) hands the
+attacker control of the thread count, so the choice between the options needs
+a maintainer rather than a one-line guard.
+
+Fix: the sign-in server now reads the connections it has accepted together instead of one after
+another. `authorize_with_bounds` keeps the accepted connections in a pending list, and each pass
+polls every one of them without blocking: `http::RequestReader` owns a non-blocking socket and
+parses the request from the bytes received so far, so a connection that never finishes its request
+no longer holds the accept loop while it waits. Each connection is still dropped when its own
+budget (`CONNECTION_READ_TIMEOUT`) is spent from the moment it was accepted, the flow's deadline
+stays the outer bound, and the pending list is capped (`MAX_PENDING_CONNECTIONS`) so a flood of
+connections cannot grow the server's share of the process's file descriptors without bound — the
+oldest pending connection makes way for the newest when the cap is reached. One pass takes on at
+most `MAX_ACCEPTS_PER_PASS` connections, so a callback queued behind N connections is served
+within `ceil((N + 1) / MAX_ACCEPTS_PER_PASS) + 1` poll intervals (`ACCEPT_POLL_INTERVAL`, 25 ms).
+The
+incremental parse keeps the `MAX_REQUEST_BYTES` cap, the `Content-Length` overflow guard, and the
+malformed-request refusals.
+
+Verification: `make check` green, including the new
+`music_kit_auth::tests::authorize_serves_the_callback_after_repeated_stalled_connections`, which
+holds ten stalled connections open and then sends the browser's callback. Before the fix it failed
+with "timed out waiting for the Apple Music sign-in callback after 600ms" — the callback was never
+served — and after the fix the callback is served in milliseconds. The new bounds are pinned too:
+`a_stalled_connection_is_dropped_when_its_budget_is_spent` (the stalled connection is closed when
+its own budget is spent, not when the flow gives up),
+`the_pending_list_is_capped_and_the_oldest_connection_makes_way` (the pending list never grows
+past `MAX_PENDING_CONNECTIONS`, and the oldest connection makes way for the newest) and
+`one_pass_takes_on_a_bounded_number_of_connections` (one pass takes on at most
+`MAX_ACCEPTS_PER_PASS` connections). Each of the three fails when the behavior it names is
+removed from the server.
+
+**Validation gap:** unclear-invariant — the existing test covered only a single stalled connection, which the sequential server already handled, so the guarantee the code was meant to keep (the callback is served however many connections are held open) had to be reconstructed before the repeated case could be pinned (closest fit).
+
 ### The preview-URL resolver guard is bypassed when an HTTP(S) proxy is configured (found by security 2026-10-09, fixed 2026-10-09)
 
 Symptom: the 2026-10-09 fix added `PublicAddressResolver` (`src/audio.rs`) so a

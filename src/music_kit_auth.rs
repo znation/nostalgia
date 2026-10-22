@@ -36,13 +36,14 @@
 //! keeps waiting for the real callback; only a well-formed callback carrying an
 //! invalid user token ends the flow with an error, while a callback with the
 //! wrong `state` is answered and ignored so a local client cannot abort the
-//! sign-in by forging one. Connections are served one at a time, so each is
-//! bounded by [`CONNECTION_READ_TIMEOUT`] from the moment it is accepted — a
-//! local client that opens a connection and dribbles a partial request can
-//! hold the accept loop for that budget, not for the whole [`AUTH_TIMEOUT`],
-//! so it cannot starve the browser's callback until the flow gives up. Each
-//! response write carries its own bounded timeout, so a client that stops
-//! reading cannot hold the connection there either.
+//! sign-in by forging one. The connections the server has accepted are read
+//! together, not one after another: a local client that opens a connection and
+//! dribbles a partial request is bounded by [`CONNECTION_READ_TIMEOUT`] from
+//! the moment it is accepted — it is dropped when that budget is spent — but
+//! it never holds the accept loop while it waits, so the browser's callback is
+//! served as soon as the accept loop has worked through the connections queued
+//! ahead of it. Each response write carries its own bounded timeout, so a
+//! client that stops reading cannot hold the connection there either.
 
 use std::collections::hash_map::RandomState;
 use std::env;
@@ -61,7 +62,7 @@ use crate::music_error::AppleMusicError;
 mod http;
 mod page;
 
-use http::{CONNECTION_READ_TIMEOUT, read_http_request, write_response};
+use http::{CONNECTION_READ_TIMEOUT, HttpRequest, RequestReader, write_response};
 use page::{SUCCESS_PAGE, render_auth_page, render_bootstrap_page};
 
 /// How long [`authorize`] waits for the browser callback before giving up:
@@ -70,6 +71,24 @@ const AUTH_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// How long the non-blocking accept loop sleeps between polls.
 const ACCEPT_POLL_INTERVAL: Duration = Duration::from_millis(25);
+
+/// How many accepted connections the server reads at once.
+///
+/// The connections are read one after another but never *waited* for, so this
+/// only bounds the server's share of the process's file descriptors; the
+/// oldest pending connection makes way for the newest when the bound is
+/// reached.
+const MAX_PENDING_CONNECTIONS: usize = 64;
+
+/// How many connections one pass of the accept loop takes on.
+///
+/// The bound keeps a flood of connections from filling the pending list in one
+/// pass, and it bounds the wait of a connection that is queued behind others:
+/// a callback queued behind N connections is taken on within
+/// `ceil((N + 1) / MAX_ACCEPTS_PER_PASS)` passes and served in the pass after
+/// that, so a callback queued behind eight other connections waits one pass
+/// per eight queued connections.
+const MAX_ACCEPTS_PER_PASS: usize = 8;
 
 /// An authenticated `MusicKit` session: the owner-side developer token and the
 /// user token the sign-in flow obtained.
@@ -202,6 +221,7 @@ fn authorize_with_bounds(
     })?;
 
     let deadline = Instant::now() + timeout;
+    let mut pending: Vec<PendingConnection> = Vec::new();
     loop {
         if Instant::now() >= deadline {
             // Name the bound that expired, as the fetch and play timeout
@@ -211,32 +231,126 @@ fn authorize_with_bounds(
                 "timed out waiting for the Apple Music sign-in callback after {timeout:?}"
             )));
         }
-        match listener.accept() {
-            Ok((mut stream, _address)) => {
-                // Connections are served sequentially, so cap the whole
-                // connection, not just each read: a client that opens one and
-                // dribbles a partial request would otherwise hold the accept
-                // loop until the flow deadline and starve the browser's
-                // callback. A legitimate request arrives in milliseconds, so
-                // this budget is generous. `min` keeps the flow deadline the
-                // outer bound.
-                let connection_deadline = deadline.min(Instant::now() + connection_budget);
-                match serve_connection(&mut stream, developer_token, &nonce, connection_deadline) {
-                    Connection::Authorized(session) => return Ok(session),
-                    Connection::Continue => {}
-                    Connection::Rejected(error) => return Err(error),
-                }
+        // Serve the connections whose request has arrived. Every pending
+        // connection is read in its own turn and none of them is waited for,
+        // so a client that opens a connection and never finishes its request
+        // cannot hold the browser's callback behind it.
+        match serve_pending(&mut pending, developer_token, &nonce) {
+            Connection::Continue => {}
+            Connection::Authorized(session) => return Ok(session),
+            Connection::Rejected(error) => return Err(error),
+        }
+        // Take on the connections that are waiting, then wait for the next
+        // pass.
+        accept_pending(&listener, &mut pending, deadline, connection_budget)
+            .map_err(|error| AppleMusicError::new(format!("the sign-in server failed: {error}")))?;
+        thread::sleep(ACCEPT_POLL_INTERVAL);
+    }
+}
+
+/// A connection the server has accepted but whose request has not arrived yet.
+struct PendingConnection {
+    /// The reader that accumulates the connection's request.
+    reader: RequestReader,
+    /// When this connection's budget is spent: the flow's deadline, or the
+    /// moment it was accepted plus the per-connection budget, whichever comes
+    /// first.
+    deadline: Instant,
+}
+
+/// Serves the pending connections whose request has arrived.
+///
+/// Each connection is read without waiting: one that has not sent a whole
+/// request yet stays pending and is read again on the next pass, one that has
+/// is served at once, and one that closed or sent a request that can never be
+/// served is dropped. A connection whose budget is spent is dropped too, so a
+/// stalled client cannot hold the flow.
+///
+/// Returns [`Connection::Authorized`] when the browser's callback completed
+/// the flow and [`Connection::Rejected`] when a well-formed callback was
+/// rejected; otherwise the flow continues.
+fn serve_pending(
+    pending: &mut Vec<PendingConnection>,
+    developer_token: &str,
+    nonce: &str,
+) -> Connection {
+    let mut index = 0;
+    while index < pending.len() {
+        if Instant::now() >= pending[index].deadline {
+            // The connection's budget is spent: drop it, so a stalled client
+            // cannot hold the flow.
+            pending.remove(index);
+            continue;
+        }
+        let outcome = match pending[index].reader.poll() {
+            Ok(Some(request)) => {
+                let outcome = route_request(
+                    pending[index].reader.stream(),
+                    &request,
+                    developer_token,
+                    nonce,
+                );
+                pending.remove(index);
+                outcome
             }
-            Err(ref error) if error.kind() == io::ErrorKind::WouldBlock => {
-                thread::sleep(ACCEPT_POLL_INTERVAL);
+            // The request is not whole yet: keep the connection and read it
+            // again on the next pass.
+            Ok(None) => {
+                index += 1;
+                continue;
             }
-            Err(error) => {
-                return Err(AppleMusicError::new(format!(
-                    "the sign-in server failed: {error}"
-                )));
+            // A connection that closed or sent a request that can never be
+            // served is dropped; the flow keeps waiting for the real callback.
+            Err(_) => {
+                pending.remove(index);
+                continue;
             }
+        };
+        match outcome {
+            Connection::Continue => {}
+            Connection::Authorized(session) => return Connection::Authorized(session),
+            Connection::Rejected(error) => return Connection::Rejected(error),
         }
     }
+    Connection::Continue
+}
+
+/// Takes on the connections that are waiting to be served.
+///
+/// The listener is non-blocking, so this never waits: a connection that has
+/// not arrived yet is left in the kernel's queue for the next pass. Each
+/// accepted connection is bounded by the per-connection budget from the moment
+/// it is accepted, with the flow's deadline as the outer bound.
+fn accept_pending(
+    listener: &TcpListener,
+    pending: &mut Vec<PendingConnection>,
+    deadline: Instant,
+    connection_budget: Duration,
+) -> io::Result<()> {
+    for _ in 0..MAX_ACCEPTS_PER_PASS {
+        let (stream, _address) = match listener.accept() {
+            Ok(accepted) => accepted,
+            Err(ref error) if error.kind() == io::ErrorKind::WouldBlock => return Ok(()),
+            Err(error) => return Err(error),
+        };
+        let reader = match RequestReader::new(stream) {
+            Ok(reader) => reader,
+            // A connection the server cannot read is dropped; the flow keeps
+            // waiting for the real callback.
+            Err(_) => continue,
+        };
+        // The oldest pending connection makes way for the newest, so the
+        // server reads a bounded number of connections at once.
+        if pending.len() >= MAX_PENDING_CONNECTIONS {
+            pending.remove(0);
+        }
+        let connection_deadline = deadline.min(Instant::now() + connection_budget);
+        pending.push(PendingConnection {
+            reader,
+            deadline: connection_deadline,
+        });
+    }
+    Ok(())
 }
 
 /// Opens `path` in the system's default browser.
@@ -558,7 +672,7 @@ fn opener_exit_report(status: &std::process::ExitStatus) -> String {
     format!("the browser opener exited with {status}; the sign-in page may not have opened")
 }
 
-/// What serving one connection decided for the overall flow.
+/// What serving the connections decided for the overall flow.
 enum Connection {
     /// The callback completed and produced a session.
     Authorized(MusicKitSession),
@@ -568,27 +682,17 @@ enum Connection {
     Rejected(AppleMusicError),
 }
 
-/// Serves one accepted connection, turning transport-level failures into
-/// [`Connection::Continue`] so a bad connection never aborts the sign-in.
-fn serve_connection(
+/// Routes one parsed request, turning transport-level failures into
+/// [`Connection::Continue`] so a bad request never aborts the sign-in.
+///
+/// The request has already been read; this decides what it asks for and
+/// answers it.
+fn route_request(
     stream: &mut TcpStream,
+    request: &HttpRequest,
     developer_token: &str,
     nonce: &str,
-    deadline: Instant,
 ) -> Connection {
-    // The accepted socket is blocking on the platforms this runs on, but be
-    // explicit: the reader relies on a blocking read with a timeout.
-    if stream.set_nonblocking(false).is_err() {
-        return Connection::Continue;
-    }
-
-    let request = match read_http_request(stream, deadline) {
-        Ok(Some(request)) => request,
-        // A connection that closed early, stalled, or declared an oversized
-        // request is not the callback; keep waiting for the real one.
-        Ok(None) | Err(_) => return Connection::Continue,
-    };
-
     // Browsers set `Host` from the URL and forbid scripts from overriding it,
     // so requiring the loopback address stops a DNS-rebinding page (which
     // reaches this socket under its own hostname) from reading the sign-in

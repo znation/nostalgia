@@ -855,7 +855,7 @@ fn authorize_survives_an_oversized_content_length() {
     .expect("an oversized Content-Length does not abort the flow");
 }
 
-/// A connected loopback pair: the server side handed to `read_http_request`
+/// A connected loopback pair: the server side handed to the request reader
 /// and the client side used to send raw bytes.
 fn connected_pair() -> (TcpStream, TcpStream) {
     let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind a loopback listener");
@@ -865,30 +865,28 @@ fn connected_pair() -> (TcpStream, TcpStream) {
     (server, client)
 }
 
-// `read_http_request` promises a hostile client cannot make the server
+// The request reader promises a hostile client cannot make the server
 // allocate without bound. The flow test above covers a `Content-Length` that
 // overflows `usize`; these cover the large-but-parseable declared body and
 // the never-terminated header, which the `MAX_REQUEST_BYTES` guards reject.
 #[test]
-fn read_http_request_refuses_a_declared_body_past_the_cap() {
-    let (mut server, mut client) = connected_pair();
-    // Send the full declared body: a server that refused only after reading it
-    // would return the request instead of `None`.
+fn parse_http_request_refuses_a_declared_body_past_the_cap() {
+    // The whole declared body is present: a server that refused only after
+    // reading it would return the request instead of refusing it.
     let raw = format!(
         "POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: {}\r\n\r\n{}",
         http::MAX_REQUEST_BYTES + 1,
         "x".repeat(http::MAX_REQUEST_BYTES + 1)
     );
-    let writer = std::thread::spawn(move || {
-        let _ = client.write_all(raw.as_bytes());
-    });
 
-    let request = read_http_request(&mut server, Instant::now() + Duration::from_secs(5))
-        .expect("a large declared body is not an I/O error");
-    assert!(request.is_none(), "a body past the cap must be refused");
-
-    drop(server);
-    let _ = writer.join();
+    let error = http::parse_http_request(raw.as_bytes())
+        .err()
+        .expect("a body past the cap must be refused");
+    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    assert_eq!(
+        error.to_string(),
+        "the declared body is larger than the cap"
+    );
 }
 
 // The cap's accept side: a request whose headers and body together fill
@@ -900,9 +898,7 @@ fn read_http_request_refuses_a_declared_body_past_the_cap() {
 // tested. Build the request so its total length is exactly the cap and assert
 // the declared body comes back whole.
 #[test]
-fn read_http_request_accepts_a_request_filling_the_cap_exactly() {
-    let (mut server, mut client) = connected_pair();
-
+fn parse_http_request_accepts_a_request_filling_the_cap_exactly() {
     // Solve for the body length that makes header + body exactly the cap. The
     // header embeds the length, and its digit count is the only thing that
     // changes as the length changes, so a few iterations converge.
@@ -920,11 +916,7 @@ fn read_http_request_accepts_a_request_filling_the_cap_exactly() {
     );
 
     let raw = format!("{}{}", header(body_len), "x".repeat(body_len));
-    let writer = std::thread::spawn(move || {
-        let _ = client.write_all(raw.as_bytes());
-    });
-
-    let request = read_http_request(&mut server, Instant::now() + Duration::from_secs(5))
+    let request = http::parse_http_request(raw.as_bytes())
         .expect("an exact-cap request is not an I/O error")
         .expect("a request filling the cap exactly is accepted");
     assert_eq!(request.method, "POST");
@@ -934,57 +926,40 @@ fn read_http_request_accepts_a_request_filling_the_cap_exactly() {
         vec![b'x'; body_len],
         "the exact-cap body must be read whole"
     );
-
-    drop(server);
-    let _ = writer.join();
 }
 
 #[test]
-fn read_http_request_refuses_headers_past_the_cap() {
-    let (mut server, mut client) = connected_pair();
-    // A header line longer than the cap, with no `\r\n\r\n` terminator, and a
-    // client that stays connected: the server must give up as soon as it has
-    // buffered the cap instead of waiting out the deadline.
+fn parse_http_request_refuses_headers_past_the_cap() {
+    // A header line longer than the cap, with no `\r\n\r\n` terminator: the
+    // server must give up as soon as it has buffered the cap instead of
+    // waiting out the deadline.
     let raw = format!(
         "GET / HTTP/1.1\r\nX-Fill: {}\r\n",
         "x".repeat(http::MAX_REQUEST_BYTES)
     );
-    let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
-    let writer = std::thread::spawn(move || {
-        let _ = client.write_all(raw.as_bytes());
-        let _ = release_rx.recv();
-    });
 
-    let started = Instant::now();
-    let request = read_http_request(&mut server, Instant::now() + Duration::from_secs(5))
-        .expect("oversized headers are not an I/O error");
-    let elapsed = started.elapsed();
-    assert!(request.is_none(), "headers past the cap must be refused");
-    assert!(
-        elapsed < Duration::from_secs(1),
-        "the header cap must be refused without waiting out the deadline (took {elapsed:?})"
+    let error = http::parse_http_request(raw.as_bytes())
+        .err()
+        .expect("headers past the cap must be refused");
+    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    assert_eq!(
+        error.to_string(),
+        "the request headers are larger than the cap"
     );
-
-    drop(server);
-    let _ = release_tx.send(());
-    let _ = writer.join();
 }
 
-// A parse failure is `io::ErrorKind::InvalidData`, which `serve_connection`
-// treats like a closed connection: the malformed request is ignored and the
-// flow keeps waiting. Each test names the branch that produced it, so a parse
-// change that silently accepts a hostile line is caught.
+// A parse failure is an `io::ErrorKind::InvalidData` error, which the sign-in
+// server treats like a closed connection: the malformed request is ignored and
+// the flow keeps waiting. Each test names the branch that produced it, so a
+// parse change that silently accepts a hostile line is caught.
 
-/// Writes `raw` to a fresh connection and asserts `read_http_request` rejects
-/// it as a malformed request: an `io::ErrorKind::InvalidData` parse error whose
-/// message is `expected`. The three malformed-request tests below differ only
-/// in the bytes and the message, so the write-read-assert scaffold lives here
-/// once and each test names the branch it pins.
+/// Asserts that `raw` is refused as a malformed request: an
+/// `io::ErrorKind::InvalidData` error whose message is `expected`. The three
+/// malformed-request tests below differ only in the bytes and the message, so
+/// the assert scaffold lives here once and each test names the branch it
+/// pins.
 fn assert_request_parse_error(raw: &[u8], expected: &str) {
-    let (mut server, mut client) = connected_pair();
-    client.write_all(raw).expect("write the malformed request");
-
-    let error = read_http_request(&mut server, Instant::now() + Duration::from_secs(5))
+    let error = http::parse_http_request(raw)
         .err()
         .expect("the malformed request is a parse error");
     assert_eq!(error.kind(), io::ErrorKind::InvalidData);
@@ -992,7 +967,7 @@ fn assert_request_parse_error(raw: &[u8], expected: &str) {
 }
 
 #[test]
-fn read_http_request_rejects_non_utf8_headers() {
+fn parse_http_request_rejects_non_utf8_headers() {
     assert_request_parse_error(
         b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nX-Bad: \xff\xfe\r\n\r\n",
         "request headers are not UTF-8",
@@ -1000,12 +975,12 @@ fn read_http_request_rejects_non_utf8_headers() {
 }
 
 #[test]
-fn read_http_request_rejects_a_request_line_without_a_method() {
+fn parse_http_request_rejects_a_request_line_without_a_method() {
     assert_request_parse_error(b"\r\n\r\n", "missing method");
 }
 
 #[test]
-fn read_http_request_rejects_a_request_line_without_a_target() {
+fn parse_http_request_rejects_a_request_line_without_a_target() {
     assert_request_parse_error(b"GET\r\n\r\n", "missing target");
 }
 
@@ -1015,15 +990,11 @@ fn read_http_request_rejects_a_request_line_without_a_target() {
 // Pin that: propagating the parse error instead would reject the request, and
 // reading to the deadline would hang it, so either regression fails here.
 #[test]
-fn read_http_request_treats_a_malformed_content_length_as_no_body() {
-    let (mut server, mut client) = connected_pair();
-    client
-        .write_all(
-            b"POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: not-a-number\r\n\r\nbody",
-        )
-        .expect("write a request with a malformed Content-Length");
+fn parse_http_request_treats_a_malformed_content_length_as_no_body() {
+    let raw =
+        b"POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: not-a-number\r\n\r\nbody";
 
-    let request = read_http_request(&mut server, Instant::now() + Duration::from_secs(5))
+    let request = http::parse_http_request(raw)
         .expect("a malformed Content-Length is not an I/O error")
         .expect("a malformed Content-Length is treated as no body, not refused");
     assert_eq!(request.method, "POST");
@@ -1035,6 +1006,30 @@ fn read_http_request_treats_a_malformed_content_length_as_no_body() {
     );
 }
 
+// A request that has not arrived whole is *incomplete*, not refused: the
+// reader reports it as such so the sign-in server can keep the connection and
+// read the rest of it later. This is what lets one stalled client sit in the
+// server's pending list without holding the browser's callback behind it, so
+// the branch is pinned here: an error or a served request here would drop the
+// connection instead of waiting for the rest of it.
+#[test]
+fn the_reader_reports_a_partial_request_as_incomplete() {
+    let (server, mut client) = connected_pair();
+    let mut reader = http::RequestReader::new(server).expect("wrap the server side");
+
+    client
+        .write_all(b"POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\n")
+        .expect("write a partial request");
+
+    assert!(
+        reader
+            .poll()
+            .expect("a partial request is not an I/O error")
+            .is_none(),
+        "a request that has not arrived whole must be reported as incomplete"
+    );
+}
+
 // A request whose headers declare a `Content-Length` but whose body closes
 // before that many bytes arrive must be ignored, not returned with the bytes
 // that did arrive. `authorize_survives_a_connection_that_closes_early` pins
@@ -1043,40 +1038,37 @@ fn read_http_request_treats_a_malformed_content_length_as_no_body() {
 // hangs up reaches. Returning the partial request would hand the callback
 // parser a truncated body it would read as the fields the attacker did send.
 #[test]
-fn read_http_request_refuses_a_body_that_closes_before_its_declared_length() {
-    let (mut server, mut client) = connected_pair();
+fn the_reader_drops_a_body_that_closes_before_its_declared_length() {
+    let (server, mut client) = connected_pair();
     // Declare 100 body bytes, send five, then close the write half so the
-    // server's body-loop read sees EOF while it still wants 95 more. Without
-    // the shutdown the server would instead wait out the deadline, making the
-    // test slow and the branch it pins less clear.
+    // reader sees EOF while it still wants 95 more.
     client
         .write_all(b"POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 100\r\n\r\nshort")
         .expect("write a truncated body");
     client
         .shutdown(std::net::Shutdown::Write)
         .expect("close the write half");
+    let mut reader = http::RequestReader::new(server).expect("wrap the server side");
 
-    let request = read_http_request(&mut server, Instant::now() + Duration::from_secs(5))
-        .expect("a truncated body is not an I/O error");
-
-    assert!(
-        request.is_none(),
-        "a body that closes before its declared length must be refused, not returned partially"
-    );
+    let error = reader
+        .poll()
+        .err()
+        .expect("a body that closes before its declared length must be refused");
+    assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
+    assert_eq!(error.to_string(), "the peer closed the connection");
 }
 
 // A declared body larger than one 1024-byte read chunk arrives over several
-// socket reads, so the body loop's `limit = room.min(chunk.len())` and its
-// extend run more than once. The small callback body usually arrives in the
-// same read as the headers, so it never enters this loop at all; a real
-// MusicKit user token is a multi-kilobyte JWT, so the server must reassemble
-// the body byte-for-byte instead of truncating or misaligning it at a chunk
-// boundary.
+// socket reads, so the reader's buffer runs more than once. The small
+// callback body usually arrives in the same read as the headers, so it never
+// enters this loop at all; a real MusicKit user token is a multi-kilobyte
+// JWT, so the server must reassemble the body byte-for-byte instead of
+// truncating or misaligning it at a chunk boundary.
 #[test]
-fn read_http_request_reads_a_body_across_multiple_reads() {
-    let (mut server, mut client) = connected_pair();
+fn the_reader_reads_a_body_across_multiple_reads() {
+    let (server, mut client) = connected_pair();
     // 4000 bytes is more than one read can deliver even after the header read
-    // already buffered part of the body, so the loop runs at least twice.
+    // already buffered part of the body, so the reader runs at least twice.
     let body: String = (0..4000)
         .map(|i| char::from(b'a' + (i % 26) as u8))
         .collect();
@@ -1085,14 +1077,23 @@ fn read_http_request_reads_a_body_across_multiple_reads() {
         body.len(),
         body
     );
-    client.write_all(raw.as_bytes()).expect("write the request");
-    client
-        .shutdown(std::net::Shutdown::Write)
-        .expect("close the write half so the body loop sees a complete body");
+    let writer = std::thread::spawn(move || {
+        let _ = client.write_all(raw.as_bytes());
+        let _ = client.shutdown(std::net::Shutdown::Write);
+    });
+    let mut reader = http::RequestReader::new(server).expect("wrap the server side");
 
-    let request = read_http_request(&mut server, Instant::now() + Duration::from_secs(5))
-        .expect("a multi-chunk body is not an I/O error")
-        .expect("a complete multi-chunk body is accepted");
+    // The reader never blocks, so it is polled until the whole request has
+    // arrived.
+    let request = loop {
+        match reader
+            .poll()
+            .expect("a multi-chunk body is not an I/O error")
+        {
+            Some(request) => break request,
+            None => thread::sleep(Duration::from_millis(1)),
+        }
+    };
 
     assert_eq!(request.method, "POST");
     assert_eq!(request.path, "/token");
@@ -1101,31 +1102,7 @@ fn read_http_request_reads_a_body_across_multiple_reads() {
         body.as_bytes(),
         "the body must be reassembled byte-for-byte across reads"
     );
-}
-
-// The flow's deadline is the outer bound on the whole sign-in, so a
-// connection accepted just as it expires must not be served. `read_http_request`
-// is documented to treat an already-arrived `deadline` as an unusable request
-// and return `Ok(None)` without blocking; `arm_read_timeout` is what refuses to
-// arm a read once the deadline has passed (a zero timeout would mean "block
-// forever"). Every other test passes a future deadline, so this branch is
-// otherwise unentered. The client here has a complete request ready, so if the
-// deadline check were dropped the read would succeed and return `Some`;
-// asserting `None` pins the check rather than relying on timing.
-#[test]
-fn read_http_request_gives_up_when_the_deadline_has_already_arrived() {
-    let (mut server, mut client) = connected_pair();
-    client
-        .write_all(b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
-        .expect("write a complete request");
-
-    let request = read_http_request(&mut server, Instant::now() - Duration::from_secs(1))
-        .expect("an expired deadline is not an I/O error");
-
-    assert!(
-        request.is_none(),
-        "an expired deadline must give up instead of serving the buffered request"
-    );
+    let _ = writer.join();
 }
 
 #[test]
@@ -1177,20 +1154,21 @@ fn authorize_deadline_bounds_a_stalled_connection() {
 #[test]
 fn authorize_serves_the_callback_after_a_stalled_connection_is_dropped() {
     // A local client can reach the loopback port without the nonce and open a
-    // connection that never completes its request. Connections are served one
-    // at a time, so that stalled connection must not hold the accept loop for
-    // the whole flow: the per-connection budget drops it, and the real browser
-    // callback on a later connection is then served. Before the budget, the
-    // stalled connection held the loop past the flow deadline and the callback
-    // was starved, so this test failed with a timeout.
+    // connection that never completes its request. The accepted connections
+    // are read together, so that stalled connection does not hold the accept
+    // loop for the whole flow: the per-connection budget drops it, and the
+    // real browser callback on a later connection is then served. Before the
+    // budget, the stalled connection held the loop past the flow deadline and
+    // the callback was starved, so this test failed with a timeout.
     let (opener, handles) = background(|port, state| {
         let mut stalled = TcpStream::connect(("127.0.0.1", port)).expect("connect the stall");
         // A header that never completes: no `\r\n\r\n`.
         stalled
             .write_all(b"POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\n")
             .expect("write a partial request");
-        // Let the server accept and block on the stalled connection before the
-        // callback arrives, so the test exercises the sequential accept loop.
+        // Let the server accept the stalled connection before the callback
+        // arrives, so the test exercises the accept loop with a stalled
+        // connection pending.
         thread::sleep(Duration::from_millis(50));
         let response = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
         assert!(
@@ -1210,6 +1188,193 @@ fn authorize_serves_the_callback_after_a_stalled_connection_is_dropped() {
     join_all(&handles);
 
     assert_eq!(session.user_token, SAMPLE_USER_TOKEN);
+}
+
+#[test]
+fn a_stalled_connection_is_dropped_when_its_budget_is_spent() {
+    // Each connection is bounded by the per-connection budget from the moment
+    // it is accepted, so a client that opens a connection and never finishes
+    // its request is dropped when that budget is spent — long before the
+    // flow's own deadline. The elapsed time is what pins the budget: without
+    // the deadline check the connection is held until the flow gives up, and
+    // the stalled client then sees it close at the flow's deadline instead.
+    const BUDGET: Duration = Duration::from_millis(100);
+    const FLOW: Duration = Duration::from_millis(600);
+    let (opener, handles) = background(|port, _state| {
+        let mut stalled = TcpStream::connect(("127.0.0.1", port)).expect("connect the stall");
+        stalled
+            .write_all(b"POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\n")
+            .expect("write a partial request");
+        // The read ends when the server drops the connection, which it does
+        // when the connection's budget is spent.
+        let started = Instant::now();
+        let mut sink = [0u8; 64];
+        let read = stalled.read(&mut sink);
+        let elapsed = started.elapsed();
+        assert!(
+            matches!(read, Ok(0) | Err(_)),
+            "the stalled connection should be closed, read {read:?}"
+        );
+        assert!(
+            elapsed >= BUDGET / 2,
+            "the stalled connection was dropped after {elapsed:?}, before its {BUDGET:?} budget was spent"
+        );
+        assert!(
+            elapsed < FLOW - Duration::from_millis(150),
+            "the stalled connection was held for {elapsed:?}, past its {BUDGET:?} budget"
+        );
+    });
+
+    let error = authorize_with_bounds(SAMPLE_DEVELOPER_TOKEN, &opener, FLOW, BUDGET)
+        .expect_err("no callback arrives");
+    join_all(&handles);
+
+    assert!(error.to_string().contains("timed out"));
+}
+
+#[test]
+fn authorize_serves_the_callback_after_repeated_stalled_connections() {
+    // One stalled connection is bounded by the per-connection budget, but the
+    // cost of each stall used to be *serialized* behind the previous one:
+    // connections were served one at a time, so ten stalled connections cost
+    // ten budgets and the browser's callback, queued behind them, was never
+    // served. The pending connections are read together now, so the callback
+    // is served as soon as it arrives however many stalls are held open.
+    const STALLS: usize = 10;
+    let (opener, handles) = background(|port, state| {
+        let mut stalled = Vec::new();
+        for _ in 0..STALLS {
+            let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect the stall");
+            // A header that never completes: no `\r\n\r\n`.
+            stream
+                .write_all(b"POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\n")
+                .expect("write a partial request");
+            stalled.push(stream);
+        }
+        // Let the server accept the stalled connections before the callback
+        // arrives, so the callback is queued behind them.
+        thread::sleep(Duration::from_millis(50));
+        let response = request(port, &token_request(&state, SAMPLE_USER_TOKEN));
+        assert!(
+            response.starts_with("HTTP/1.1 200"),
+            "the callback should be served after the stalls, got: {response}"
+        );
+        drop(stalled);
+    });
+
+    let started = Instant::now();
+    let session = authorize_with_bounds(
+        SAMPLE_DEVELOPER_TOKEN,
+        &opener,
+        Duration::from_millis(600),
+        Duration::from_millis(100),
+    )
+    .expect("repeated stalled connections do not starve the callback");
+    let elapsed = started.elapsed();
+    join_all(&handles);
+
+    assert_eq!(session.user_token, SAMPLE_USER_TOKEN);
+    // Ten stalls at a hundred milliseconds each are a second of serialized
+    // waiting, past the six-hundred-millisecond flow deadline.
+    assert!(
+        elapsed < Duration::from_millis(500),
+        "the flow waited {elapsed:?} for the callback behind the stalls"
+    );
+}
+
+// The server reads a bounded number of connections at once, so a flood of
+// connections cannot grow the server's share of the process's file descriptors
+// without bound. The cap is behavior, not a comment: the pending list never
+// grows past `MAX_PENDING_CONNECTIONS`, and the oldest pending connection
+// makes way for the newest, so a flood cannot push the browser's callback out
+// of the list either.
+#[test]
+fn the_pending_list_is_capped_and_the_oldest_connection_makes_way() {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind the listener");
+    let port = listener
+        .local_addr()
+        .expect("the listener has an address")
+        .port();
+    listener.set_nonblocking(true).expect("poll the listener");
+    // One client more than the pending list can hold.
+    let mut clients = Vec::new();
+    for _ in 0..=MAX_PENDING_CONNECTIONS {
+        clients.push(TcpStream::connect(("127.0.0.1", port)).expect("connect a client"));
+    }
+    // The client's ephemeral port tells the connections apart.
+    let ports: Vec<u16> = clients
+        .iter()
+        .map(|client| {
+            client
+                .local_addr()
+                .expect("the client has an address")
+                .port()
+        })
+        .collect();
+
+    let mut pending = Vec::new();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    // Take on every client; each pass takes on at most `MAX_ACCEPTS_PER_PASS`.
+    while pending.len() < MAX_PENDING_CONNECTIONS {
+        accept_pending(&listener, &mut pending, deadline, Duration::from_secs(5))
+            .expect("accept the waiting connections");
+    }
+    // One more pass takes on the last client, which evicts the oldest.
+    accept_pending(&listener, &mut pending, deadline, Duration::from_secs(5))
+        .expect("accept the last connection");
+
+    assert_eq!(
+        pending.len(),
+        MAX_PENDING_CONNECTIONS,
+        "the pending list must not grow past its cap"
+    );
+    // The oldest connection made way for the newest: the first pending
+    // connection is the second client, not the first.
+    let oldest_kept = pending[0]
+        .reader
+        .stream()
+        .peer_addr()
+        .expect("the pending connection has a peer")
+        .port();
+    assert_eq!(
+        oldest_kept, ports[1],
+        "the oldest pending connection must make way for the newest"
+    );
+}
+
+// One pass of the accept loop takes on a bounded number of connections, so a
+// flood cannot fill the pending list in one pass: the browser's callback is
+// read on a later pass.
+#[test]
+fn one_pass_takes_on_a_bounded_number_of_connections() {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind the listener");
+    let port = listener
+        .local_addr()
+        .expect("the listener has an address")
+        .port();
+    listener.set_nonblocking(true).expect("poll the listener");
+    let mut clients = Vec::new();
+    for _ in 0..2 * MAX_ACCEPTS_PER_PASS {
+        clients.push(TcpStream::connect(("127.0.0.1", port)).expect("connect a client"));
+    }
+
+    let mut pending = Vec::new();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    accept_pending(&listener, &mut pending, deadline, Duration::from_secs(5))
+        .expect("accept the waiting connections");
+
+    assert_eq!(
+        pending.len(),
+        MAX_ACCEPTS_PER_PASS,
+        "one pass must take on at most {MAX_ACCEPTS_PER_PASS} connections"
+    );
+    accept_pending(&listener, &mut pending, deadline, Duration::from_secs(5))
+        .expect("accept the waiting connections");
+    assert_eq!(
+        pending.len(),
+        2 * MAX_ACCEPTS_PER_PASS,
+        "the next pass must take on the connections the first one left"
+    );
 }
 
 /// Waits up to five seconds for `pid` to leave `/proc`, which only happens

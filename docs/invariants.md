@@ -135,3 +135,44 @@ rather than the panic unwinding the event loop.
 
 **History.** Reconstructed from "Now Playing bar shows the track id instead of the song title" in
 `BUGS-FIXED.md`.
+
+## Sign-in server
+
+**Guarantee.** The loopback sign-in server never waits for one connection to finish before it reads
+the next. A local client that opens a connection and never finishes its request does not hold the
+browser's `POST /token` callback behind it:
+
+- The accepted connections are read together — each one is polled without blocking — so one
+  connection's cost is not serialized behind the previous one's.
+- A connection is dropped when its own budget (`CONNECTION_READ_TIMEOUT`, five seconds) is spent
+  from the moment it was accepted; the flow's deadline (`AUTH_TIMEOUT`) is the outer bound.
+- The pending connections are capped (`MAX_PENDING_CONNECTIONS`), so a flood of connections cannot
+  grow the server's share of the process's file descriptors without bound; the oldest pending
+  connection makes way for the newest, so a flood cannot push the browser's callback out of the
+  list either.
+- One pass of the accept loop takes on at most `MAX_ACCEPTS_PER_PASS` connections, and a connection
+  taken on in a pass is served in the next one, so a callback that is queued behind N connections is
+  served within `ceil((N + 1) / MAX_ACCEPTS_PER_PASS) + 1` poll intervals (`ACCEPT_POLL_INTERVAL`,
+  25 ms) — one poll interval for every eight connections queued ahead of it. The flow's deadline
+  remains the outer bound.
+
+**Enforced by.** `authorize_with_bounds` in `src/music_kit_auth.rs` keeps the accepted connections
+in a `Vec<PendingConnection>`. Every pass calls `serve_pending`, which polls each pending
+connection through `http::RequestReader::poll` and serves the ones whose request has arrived, and
+then `accept_pending`, which takes on the connections that are waiting. `http::RequestReader` owns a
+non-blocking socket and parses the request from the bytes received so far, so polling a silent peer
+reports "nothing yet" instead of waiting for it; `serve_pending` drops a connection whose budget is
+spent.
+
+**Pinned by.**
+
+- `authorize_serves_the_callback_after_repeated_stalled_connections`
+- `authorize_serves_the_callback_after_a_stalled_connection_is_dropped`
+- `a_stalled_connection_is_dropped_when_its_budget_is_spent`
+- `the_pending_list_is_capped_and_the_oldest_connection_makes_way`
+- `one_pass_takes_on_a_bounded_number_of_connections`
+- `the_reader_reports_a_partial_request_as_incomplete`
+  (all in `src/music_kit_auth/tests.rs`)
+
+**History.** Reconstructed from "A stalled connection is served for its whole budget before the next
+one, so repeated stalls starve the sign-in callback" in `BUGS-FIXED.md`.
