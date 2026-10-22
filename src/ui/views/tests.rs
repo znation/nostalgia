@@ -21,7 +21,12 @@ use crate::library::{Album, Artist, Playlist, Song};
 use crate::sample_library::sample_library;
 use crate::state::{clamp_balance, clamp_volume};
 use crate::test_support::{sample_album, sample_artist, sample_playlist, sample_song};
-use iced::Length;
+use iced::advanced::{
+    Layout,
+    layout::Limits,
+    widget::{Id, Tree, operation::Operation},
+};
+use iced::{Length, Rectangle, Size};
 use std::borrow::Cow;
 use std::collections::HashMap;
 
@@ -335,49 +340,53 @@ fn marquee_text_counts_characters_not_bytes() {
     assert_eq!(marquee_text("Café — Ok", 0, 5), "Café ");
 }
 
+// The text fragments a built Now Playing row would draw, collected through a
+// widget operation.
+//
+// `iced`'s `Element` API gives no way to read the text a row carries, so the
+// row is laid out with the null renderer and every `text` operation it
+// performs is recorded.
+#[derive(Default)]
+struct CapturedText(Vec<String>);
+
+impl Operation for CapturedText {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+        operate(self);
+    }
+
+    fn text(&mut self, _id: Option<&Id>, _bounds: Rectangle, text: &str) {
+        self.0.push(text.to_string());
+    }
+}
+
+/// Lays out the Now Playing row for `label` and `artist` at `marquee_offset`
+/// and returns the text fragments it would draw.
+///
+/// The length readout is fixed at `"3:30"`, which the row draws at the right
+/// edge of the LCD well.
+fn captured_now_playing_texts(label: &str, artist: &str, offset: usize) -> Vec<String> {
+    let mut element: iced::Element<'_, Message, iced::Theme, ()> = now_playing_row(
+        Cow::Borrowed(label),
+        Cow::Borrowed(artist),
+        Cow::Borrowed("3:30"),
+        offset,
+    )
+    .into();
+    let mut tree = Tree::new(element.as_widget());
+    let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
+    let node = element.as_widget_mut().layout(&mut tree, &(), &limits);
+    let mut captured = CapturedText::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &(), &mut captured);
+    captured.0
+}
+
 // The row the Now Playing bar renders must use that window: an overlong line
 // shows a different LCD text as the offset advances, while a fitting line
 // still renders the separate borrowed artist and title at every offset.
 #[test]
 fn overlong_now_playing_line_renders_a_new_window_as_the_offset_advances() {
-    use iced::advanced::{
-        Layout,
-        layout::Limits,
-        widget::{Id, Tree, operation::Operation},
-    };
-    use iced::{Rectangle, Size};
-
-    #[derive(Default)]
-    struct CapturedText(Vec<String>);
-
-    impl Operation for CapturedText {
-        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
-            operate(self);
-        }
-
-        fn text(&mut self, _id: Option<&Id>, _bounds: Rectangle, text: &str) {
-            self.0.push(text.to_string());
-        }
-    }
-
-    fn captured_texts(label: &str, artist: &str, offset: usize) -> Vec<String> {
-        let mut element: iced::Element<'_, Message, iced::Theme, ()> = now_playing_row(
-            Cow::Borrowed(label),
-            Cow::Borrowed(artist),
-            Cow::Borrowed("3:30"),
-            offset,
-        )
-        .into();
-        let mut tree = Tree::new(element.as_widget());
-        let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
-        let node = element.as_widget_mut().layout(&mut tree, &(), &limits);
-        let mut captured = CapturedText::default();
-        element
-            .as_widget_mut()
-            .operate(&mut tree, Layout::new(&node), &(), &mut captured);
-        captured.0
-    }
-
     let label = "A Title Much Longer Than The Display";
     let artist = "The Sample Band";
     let display = format!("{artist} - {label}");
@@ -385,19 +394,68 @@ fn overlong_now_playing_line_renders_a_new_window_as_the_offset_advances() {
     let second_window = marquee_text(&display, 1, MARQUEE_WIDTH);
     assert_ne!(first_window, second_window);
 
-    let first = captured_texts(label, artist, 0);
-    let second = captured_texts(label, artist, 1);
+    let first = captured_now_playing_texts(label, artist, 0);
+    let second = captured_now_playing_texts(label, artist, 1);
     assert!(first.iter().any(|text| text == &first_window), "{first:?}");
     assert!(
         second.iter().any(|text| text == &second_window),
         "{second:?}"
     );
 
-    let still_a = captured_texts("Opening", artist, 0);
-    let still_b = captured_texts("Opening", artist, 5);
+    let still_a = captured_now_playing_texts("Opening", artist, 0);
+    let still_b = captured_now_playing_texts("Opening", artist, 5);
     assert_eq!(still_a, still_b);
     assert!(still_a.iter().any(|text| text == artist));
     assert!(still_a.iter().any(|text| text == "Opening"));
+}
+
+// A track the library supplied without an artist must read as `Now Playing:
+// <title>`: the row pushes the artist and its " - " separator only when the
+// artist is non-empty, so an artist-less track shows no dangling separator.
+// The app's empty state takes the same path — `now_playing_artist` answers ""
+// for an unknown or an absent track (both pinned above), so the bar reads
+// "Now Playing: Nothing" before anything is played. Nothing pinned the row's
+// half of that contract: the test above always passed an artist, and the
+// empty-artist row was only constructed by the smoke test, never read back.
+#[test]
+fn now_playing_row_omits_the_artist_separator_when_the_track_has_no_artist() {
+    let texts = captured_now_playing_texts("Opening", "", 0);
+
+    assert!(
+        texts.iter().any(|text| text == "Opening"),
+        "the title must be drawn: {texts:?}"
+    );
+    assert!(
+        !texts.iter().any(|text| text == " - "),
+        "a track without an artist must not draw the separator: {texts:?}"
+    );
+    assert!(
+        texts.iter().any(|text| text == "3:30"),
+        "the length readout must be drawn: {texts:?}"
+    );
+}
+
+// The same artist-less track with a title too long for the LCD scrolls the
+// title alone: the window is taken over the title, not over a " - <title>"
+// string, so the scrolling line never starts with the separator the empty
+// artist dropped. A regression that composed the window from the
+// artist-prefixed string would show the separator and lose the title's first
+// character instead.
+#[test]
+fn an_overlong_title_without_an_artist_scrolls_the_title_alone() {
+    let label = "A Title Much Longer Than The Display";
+    let window = marquee_text(label, 0, MARQUEE_WIDTH);
+
+    let texts = captured_now_playing_texts(label, "", 0);
+
+    assert!(
+        texts.iter().any(|text| text == &window),
+        "the window must be taken over the title alone: {texts:?}"
+    );
+    assert!(
+        !texts.iter().any(|text| text == " - "),
+        "a track without an artist must not draw the separator: {texts:?}"
+    );
 }
 
 #[test]
