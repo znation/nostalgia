@@ -493,260 +493,156 @@ impl AudioOutput for RecordingAudio {
     }
 }
 
-/// An [`AudioOutput`] whose `play` fails, so a test can pin that the service
-/// propagates the backend's error.
-#[derive(Debug, Default)]
-pub(crate) struct FailingAudio;
+/// The commands an [`AudioOutput`] fake refuses, so a test can name the
+/// backend failure it drives.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum FailingCommand {
+    /// `play`.
+    Play,
+    /// `pause`, `resume`, and `stop`. The three transport commands share one
+    /// counter, because a test that drives them wants one total.
+    Transport,
+    /// `set_volume`.
+    Volume,
+    /// `set_balance`.
+    Balance,
+    /// `seek_by`.
+    Seek,
+    /// `set_equalizer`.
+    Equalizer,
+}
+
+/// An [`AudioOutput`] that refuses the commands a test names and accepts the
+/// rest, so a test can pin that the service propagates the backend's error.
+///
+/// The `apple_music` and `ui` suites each need a backend that fails one
+/// command — a play, a seek, the volume and balance forwards, the equalizer
+/// forward, and the transport commands — and each of those fakes implemented
+/// every [`AudioOutput`] method to accept the commands it did not fail.
+/// One fake serves all of them here: a constructor names the commands it
+/// refuses, and the per-command counters let a test prove its arm reached the
+/// failing backend instead of skipping the forward, and that the other arm
+/// stayed untouched.
+#[derive(Debug)]
+pub(crate) struct FailingAudio {
+    /// The commands this fake refuses; every other command succeeds.
+    failing: Vec<FailingCommand>,
+    play_attempts: AtomicUsize,
+    transport_attempts: AtomicUsize,
+    volume_attempts: AtomicUsize,
+    balance_attempts: AtomicUsize,
+    seek_attempts: AtomicUsize,
+    equalizer_attempts: AtomicUsize,
+}
+
+impl FailingAudio {
+    /// A fake whose `play` fails, so a test can pin that the service
+    /// propagates the backend's error.
+    pub(crate) fn failing_play() -> Self {
+        Self::refusing(&[FailingCommand::Play])
+    }
+
+    /// A fake whose `seek_by` fails, so a test can pin that the service
+    /// propagates the backend's error and the UI logs it without scheduling
+    /// work.
+    pub(crate) fn failing_seek() -> Self {
+        Self::refusing(&[FailingCommand::Seek])
+    }
+
+    /// A fake whose volume and balance commands fail, so a UI test can pin
+    /// that each update arm logs the backend's error and still commits its
+    /// state mutation.
+    pub(crate) fn failing_volume_and_balance() -> Self {
+        Self::refusing(&[FailingCommand::Volume, FailingCommand::Balance])
+    }
+
+    /// A fake whose equalizer command fails, so a UI test can pin that the
+    /// equalizer update arm logs the backend's error and still commits its
+    /// state mutation.
+    pub(crate) fn failing_equalizer() -> Self {
+        Self::refusing(&[FailingCommand::Equalizer])
+    }
+
+    /// A fake whose pause, resume, and stop commands fail, so a UI test can
+    /// reach a loaded preview and then drive each transport arm through
+    /// `loading::transport_into`'s error branch.
+    pub(crate) fn failing_transport() -> Self {
+        Self::refusing(&[FailingCommand::Transport])
+    }
+
+    /// A fake that refuses exactly the commands in `commands`.
+    fn refusing(commands: &[FailingCommand]) -> Self {
+        Self {
+            failing: commands.to_vec(),
+            play_attempts: AtomicUsize::new(0),
+            transport_attempts: AtomicUsize::new(0),
+            volume_attempts: AtomicUsize::new(0),
+            balance_attempts: AtomicUsize::new(0),
+            seek_attempts: AtomicUsize::new(0),
+            equalizer_attempts: AtomicUsize::new(0),
+        }
+    }
+
+    /// How many times the backend refused `command`. Only refusals are
+    /// counted, so a command this fake accepts always reads zero.
+    pub(crate) fn attempts(&self, command: FailingCommand) -> usize {
+        self.counter(command).load(Ordering::SeqCst)
+    }
+
+    /// The counter that records the refusals of `command`.
+    fn counter(&self, command: FailingCommand) -> &AtomicUsize {
+        match command {
+            FailingCommand::Play => &self.play_attempts,
+            FailingCommand::Transport => &self.transport_attempts,
+            FailingCommand::Volume => &self.volume_attempts,
+            FailingCommand::Balance => &self.balance_attempts,
+            FailingCommand::Seek => &self.seek_attempts,
+            FailingCommand::Equalizer => &self.equalizer_attempts,
+        }
+    }
+
+    /// Refuses `command` when this fake fails it, counting the refusal; the
+    /// commands it does not fail succeed.
+    fn attempt(&self, command: FailingCommand) -> Result<(), AppleMusicError> {
+        if !self.failing.contains(&command) {
+            return Ok(());
+        }
+        self.counter(command).fetch_add(1, Ordering::SeqCst);
+        Err(AppleMusicError::new("the audio device is gone"))
+    }
+}
 
 impl AudioOutput for FailingAudio {
     fn play(&self, _url: &str) -> Result<(), AppleMusicError> {
-        Err(AppleMusicError::new("the audio device is gone"))
+        self.attempt(FailingCommand::Play)
     }
 
     fn pause(&self) -> Result<(), AppleMusicError> {
-        Ok(())
+        self.attempt(FailingCommand::Transport)
     }
 
     fn resume(&self) -> Result<(), AppleMusicError> {
-        Ok(())
+        self.attempt(FailingCommand::Transport)
     }
 
     fn stop(&self) -> Result<(), AppleMusicError> {
-        Ok(())
+        self.attempt(FailingCommand::Transport)
     }
 
     fn set_volume(&self, _volume: f32) -> Result<(), AppleMusicError> {
-        Ok(())
+        self.attempt(FailingCommand::Volume)
     }
 
     fn set_balance(&self, _balance: f32) -> Result<(), AppleMusicError> {
-        Ok(())
+        self.attempt(FailingCommand::Balance)
     }
 
     fn seek_by(&self, _offset_secs: i64) -> Result<(), AppleMusicError> {
-        Ok(())
+        self.attempt(FailingCommand::Seek)
     }
 
     fn set_equalizer(&self, _equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-}
-
-/// An [`AudioOutput`] whose `seek_by` fails, so a test can pin that the
-/// service propagates the backend's error and the UI logs it without
-/// scheduling work. `attempts` counts the rejected calls, letting a test prove
-/// the message reached the failing backend instead of skipping the seek.
-#[derive(Debug, Default)]
-pub(crate) struct FailingSeekAudio {
-    attempts: AtomicUsize,
-}
-
-impl FailingSeekAudio {
-    /// How many seek commands the backend rejected.
-    pub(crate) fn attempts(&self) -> usize {
-        self.attempts.load(Ordering::SeqCst)
-    }
-}
-
-impl AudioOutput for FailingSeekAudio {
-    fn play(&self, _url: &str) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn pause(&self) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn resume(&self) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn stop(&self) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn set_volume(&self, _volume: f32) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn set_balance(&self, _balance: f32) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn seek_by(&self, _offset_secs: i64) -> Result<(), AppleMusicError> {
-        self.attempts.fetch_add(1, Ordering::SeqCst);
-        Err(AppleMusicError::new("the audio device is gone"))
-    }
-
-    fn set_equalizer(&self, _equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-}
-
-/// An [`AudioOutput`] whose volume and balance commands fail, so a UI test can
-/// pin that each update arm logs the backend's error and still commits its
-/// state mutation. The per-command counters let a test prove its arm reached
-/// the failing backend instead of skipping the forward, and that the other arm
-/// stayed untouched.
-#[derive(Debug, Default)]
-pub(crate) struct FailingVolumeBalanceAudio {
-    volume_attempts: AtomicUsize,
-    balance_attempts: AtomicUsize,
-}
-
-impl FailingVolumeBalanceAudio {
-    /// How many volume commands the backend rejected.
-    pub(crate) fn volume_attempts(&self) -> usize {
-        self.volume_attempts.load(Ordering::SeqCst)
-    }
-
-    /// How many balance commands the backend rejected.
-    pub(crate) fn balance_attempts(&self) -> usize {
-        self.balance_attempts.load(Ordering::SeqCst)
-    }
-}
-
-impl AudioOutput for FailingVolumeBalanceAudio {
-    fn play(&self, _url: &str) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn pause(&self) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn resume(&self) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn stop(&self) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn set_volume(&self, _volume: f32) -> Result<(), AppleMusicError> {
-        self.volume_attempts.fetch_add(1, Ordering::SeqCst);
-        Err(AppleMusicError::new("the audio device is gone"))
-    }
-
-    fn set_balance(&self, _balance: f32) -> Result<(), AppleMusicError> {
-        self.balance_attempts.fetch_add(1, Ordering::SeqCst);
-        Err(AppleMusicError::new("the audio device is gone"))
-    }
-
-    fn seek_by(&self, _offset_secs: i64) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn set_equalizer(&self, _equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-}
-
-/// An [`AudioOutput`] whose equalizer command fails, so a UI test can pin that
-/// the equalizer update arm logs the backend's error and still commits its
-/// state mutation. `attempts` counts the rejected calls, letting the test
-/// prove the message reached the failing backend instead of skipping it.
-#[derive(Debug, Default)]
-pub(crate) struct FailingEqualizerAudio {
-    attempts: AtomicUsize,
-}
-
-impl FailingEqualizerAudio {
-    /// How many equalizer commands the backend rejected.
-    pub(crate) fn attempts(&self) -> usize {
-        self.attempts.load(Ordering::SeqCst)
-    }
-}
-
-impl AudioOutput for FailingEqualizerAudio {
-    fn play(&self, _url: &str) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn pause(&self) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn resume(&self) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn stop(&self) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn set_volume(&self, _volume: f32) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn set_balance(&self, _balance: f32) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn seek_by(&self, _offset_secs: i64) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn set_equalizer(&self, _equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
-        self.attempts.fetch_add(1, Ordering::SeqCst);
-        Err(AppleMusicError::new("the audio device is gone"))
-    }
-}
-
-/// An [`AudioOutput`] whose `play`, volume, and balance commands succeed but
-/// whose pause, resume, and stop commands fail, so a UI test can reach a
-/// loaded preview and then drive each transport arm through
-/// `loading::transport_into`'s error branch. `attempts` counts the rejected
-/// calls, letting a test prove the arm actually reached the failing backend
-/// instead of skipping it.
-#[derive(Debug, Default)]
-pub(crate) struct FailingTransportAudio {
-    attempts: AtomicUsize,
-}
-
-impl FailingTransportAudio {
-    /// How many pause/resume/stop commands the backend rejected.
-    pub(crate) fn attempts(&self) -> usize {
-        self.attempts.load(Ordering::SeqCst)
-    }
-
-    fn reject(&self) -> Result<(), AppleMusicError> {
-        self.attempts.fetch_add(1, Ordering::SeqCst);
-        Err(AppleMusicError::new("the audio device is gone"))
-    }
-}
-
-impl AudioOutput for FailingTransportAudio {
-    fn play(&self, _url: &str) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn pause(&self) -> Result<(), AppleMusicError> {
-        self.reject()
-    }
-
-    fn resume(&self) -> Result<(), AppleMusicError> {
-        self.reject()
-    }
-
-    fn stop(&self) -> Result<(), AppleMusicError> {
-        self.reject()
-    }
-
-    fn set_volume(&self, _volume: f32) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn set_balance(&self, _balance: f32) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn seek_by(&self, _offset_secs: i64) -> Result<(), AppleMusicError> {
-        Ok(())
-    }
-
-    fn set_equalizer(&self, _equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
-        Ok(())
+        self.attempt(FailingCommand::Equalizer)
     }
 }
 

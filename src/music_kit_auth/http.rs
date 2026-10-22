@@ -174,6 +174,19 @@ fn read_or_none(
 /// the owner-side developer token, so the browser must never write it to its
 /// disk cache, and the other responses share one policy rather than each
 /// opting in.
+///
+/// Every response also carries `Referrer-Policy: no-referrer`. The sign-in
+/// page is served at a URL that carries the per-flow `state` nonce — the only
+/// secret that gates the developer token the page embeds — and the page loads
+/// Apple's `MusicKit` script from a third-party origin, so the browser is
+/// about to send a request to that origin with a `Referer`. Whether the
+/// nonce-bearing URL travels with it is the *browser's* policy to decide
+/// unless the server decides it: a browser configured with `unsafe-url`, or
+/// one old enough to default to `no-referrer-when-downgrade` (which sends the
+/// full URL on an `http` to `https` request), hands the nonce to that third
+/// party, and a holder of the nonce can fetch the page and read the
+/// developer token. The server sets the policy itself so the nonce stays
+/// owner-side whatever the browser would have done.
 pub(super) fn write_response(
     stream: &mut TcpStream,
     status: u16,
@@ -183,7 +196,7 @@ pub(super) fn write_response(
 ) -> io::Result<()> {
     stream.set_write_timeout(Some(CONNECTION_WRITE_TIMEOUT))?;
     let response = format!(
-        "HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n{body}",
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\n\r\n{body}",
         body.len()
     );
     stream.write_all(response.as_bytes())?;

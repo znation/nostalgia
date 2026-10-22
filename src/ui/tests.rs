@@ -1,13 +1,12 @@
-use super::loading::fetch_into;
+use super::loading::{RequestGeneration, fetch_into, play_into};
 use super::views::{BROWSE_LIST_ID, BROWSE_VIEWS};
 use super::*;
 use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB};
 use crate::sample_library::sample_library;
 use crate::test_support::{
-    AudioCall, FailingEqualizerAudio, FailingSeekAudio, FailingTransportAudio,
-    FailingVolumeBalanceAudio, PREVIEW_URL, RecordingAudio, StubTransport, assert_ids,
-    assert_preview_calls, rock_preset, sample_album, sample_artist, sample_playlist, sample_song,
-    second_album_songs, sign_in_session, stepping_songs,
+    AudioCall, FailingAudio, FailingCommand, PREVIEW_URL, RecordingAudio, StubTransport,
+    assert_ids, assert_preview_calls, rock_preset, sample_album, sample_artist, sample_playlist,
+    sample_song, second_album_songs, sign_in_session, stepping_songs,
 };
 
 /// A fresh player over its own shared state, so a test can inspect the
@@ -563,7 +562,7 @@ async fn transport_messages_drive_the_audio_backend() {
 // it, which a settled-and-unchanged assertion alone could not tell apart.
 #[tokio::test]
 async fn rejected_transport_commands_still_settle_and_keep_playing_state() {
-    let audio = Arc::new(FailingTransportAudio::default());
+    let audio = Arc::new(FailingAudio::failing_transport());
     let (mut player, state) =
         player_with_audio(Arc::clone(&audio) as Arc<dyn crate::audio::AudioOutput>);
     player
@@ -586,7 +585,7 @@ async fn rejected_transport_commands_still_settle_and_keep_playing_state() {
         );
     }
 
-    assert_eq!(audio.attempts(), 4);
+    assert_eq!(audio.attempts(FailingCommand::Transport), 4);
 }
 
 #[test]
@@ -1695,13 +1694,13 @@ fn seek_messages_drive_the_audio_backend() {
 // skipping the forward.
 #[test]
 fn a_seek_backend_failure_still_schedules_no_work() {
-    let audio = Arc::new(FailingSeekAudio::default());
+    let audio = Arc::new(FailingAudio::failing_seek());
     let (mut player, state) =
         player_with_audio(Arc::clone(&audio) as Arc<dyn crate::audio::AudioOutput>);
 
     assert_message_schedules_no_work(&mut player, Message::SeekForward);
 
-    assert_eq!(audio.attempts(), 1);
+    assert_eq!(audio.attempts(FailingCommand::Seek), 1);
     assert_eq!(*state.blocking_lock(), AppState::default());
 }
 
@@ -1741,15 +1740,15 @@ fn balance_messages_forward_to_the_audio_backend() {
 // the message reached the failing backend rather than skipping the forward.
 #[test]
 fn a_volume_backend_failure_still_commits_the_state() {
-    let audio = Arc::new(FailingVolumeBalanceAudio::default());
+    let audio = Arc::new(FailingAudio::failing_volume_and_balance());
     let (mut player, state) =
         player_with_audio(Arc::clone(&audio) as Arc<dyn crate::audio::AudioOutput>);
 
     assert_message_schedules_no_work(&mut player, Message::VolumeChange(0.3));
 
     assert_eq!(state.blocking_lock().volume(), 0.3);
-    assert_eq!(audio.volume_attempts(), 1);
-    assert_eq!(audio.balance_attempts(), 0);
+    assert_eq!(audio.attempts(FailingCommand::Volume), 1);
+    assert_eq!(audio.attempts(FailingCommand::Balance), 0);
 }
 
 // The balance arm has the same commit-then-forward contract as volume and the
@@ -1757,15 +1756,15 @@ fn a_volume_backend_failure_still_commits_the_state() {
 // in shared state and only logs the failure.
 #[test]
 fn a_balance_backend_failure_still_commits_the_state() {
-    let audio = Arc::new(FailingVolumeBalanceAudio::default());
+    let audio = Arc::new(FailingAudio::failing_volume_and_balance());
     let (mut player, state) =
         player_with_audio(Arc::clone(&audio) as Arc<dyn crate::audio::AudioOutput>);
 
     assert_message_schedules_no_work(&mut player, Message::BalanceChange(-0.4));
 
     assert_eq!(state.blocking_lock().balance(), -0.4);
-    assert_eq!(audio.balance_attempts(), 1);
-    assert_eq!(audio.volume_attempts(), 0);
+    assert_eq!(audio.attempts(FailingCommand::Balance), 1);
+    assert_eq!(audio.attempts(FailingCommand::Volume), 0);
 }
 
 // The equalizer arms must reach the injected backend, not just write shared
@@ -1836,14 +1835,14 @@ fn equalizer_messages_forward_to_the_audio_backend() {
 // backend rather than skipping the forward.
 #[test]
 fn an_equalizer_backend_failure_still_commits_the_state() {
-    let audio = Arc::new(FailingEqualizerAudio::default());
+    let audio = Arc::new(FailingAudio::failing_equalizer());
     let (mut player, state) =
         player_with_audio(Arc::clone(&audio) as Arc<dyn crate::audio::AudioOutput>);
 
     assert_message_schedules_no_work(&mut player, Message::EqBandChange(0, 4.0));
 
     assert_eq!(state.blocking_lock().eq_bands()[0], 4.0);
-    assert_eq!(audio.attempts(), 1);
+    assert_eq!(audio.attempts(FailingCommand::Equalizer), 1);
 }
 
 // Startup wiring: `boot` hands iced a fresh player plus a batched task that

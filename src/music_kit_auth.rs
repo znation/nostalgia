@@ -23,7 +23,11 @@
 //! arguments are world-readable on Unix, so a URL carrying the nonce would leak
 //! it to every local user. A local client that can reach the loopback port but
 //! does not know the nonce therefore cannot read the developer token the page
-//! embeds. Every request is read into a buffer capped at
+//! embeds. The nonce stays owner-side in the browser too: the page is served
+//! at a URL that carries it and loads Apple's `MusicKit` script from a
+//! third-party origin, so every response sets `Referrer-Policy: no-referrer`
+//! and the browser cannot be talked into sending that URL — and with it the
+//! nonce — to the third party. Every request is read into a buffer capped at
 //! `MAX_REQUEST_BYTES` (defined in the `http` submodule): the cap is checked
 //! while reading headers *and* before the declared body is read, so a hostile
 //! client cannot make the server allocate without bound or panic it with an

@@ -1,0 +1,124 @@
+//! The window message handlers: the app window's resolved id and the custom
+//! title bar's actions — drag, minimize, close, shade, and always-on-top.
+//!
+//! Every action acts on the resolved window id and is a no-op until it
+//! exists; `with_window_id` holds that guard once, so each handler names only
+//! the `iced::window` call it schedules.
+
+use iced::Task;
+
+use crate::ui::views;
+use crate::ui::{Message, WinampPlayer};
+
+/// The app window's id, resolved once at boot by `iced::window::latest()`:
+/// store it, so the title bar's window actions can act on the window. Until
+/// it lands (or if the query fails) those actions are no-ops (see
+/// `with_window_id`).
+pub(in crate::ui) fn window_id_resolved(
+    player: &mut WinampPlayer,
+    id: Option<iced::window::Id>,
+) -> Task<Message> {
+    player.window_id = id;
+    Task::none()
+}
+
+/// The title bar's drag region: drag the window with the pointer.
+pub(in crate::ui) fn window_dragged(player: &mut WinampPlayer) -> Task<Message> {
+    with_window_id(player, iced::window::drag)
+}
+
+/// The title bar's minimize button.
+pub(in crate::ui) fn minimize_window(player: &mut WinampPlayer) -> Task<Message> {
+    with_window_id(player, |id| iced::window::minimize(id, true))
+}
+
+/// The title bar's close button.
+pub(in crate::ui) fn close_window(player: &mut WinampPlayer) -> Task<Message> {
+    with_window_id(player, iced::window::close)
+}
+
+/// The title bar's shade toggle: double-clicking the drag region rolls the
+/// window up into shade mode, or restores it. Shading measures the window
+/// only until the pre-shade size is known; after that it rolls straight up to
+/// the strip. Unshading resizes back to the captured size. `with_window_id`
+/// keeps both no-ops before the window id resolves, exactly like the other
+/// title-bar actions; the flag still flips so the view switches to the
+/// title-bar-only tree even where the resize is ignored.
+pub(in crate::ui) fn toggle_window_shade(player: &mut WinampPlayer) -> Task<Message> {
+    if player.shaded {
+        player.shaded = false;
+        match player.unshaded_size {
+            Some(size) => with_window_id(player, |id| iced::window::resize(id, size)),
+            None => Task::none(),
+        }
+    } else {
+        player.shaded = true;
+        match player.unshaded_size {
+            // The size to restore is already known, so roll straight up;
+            // re-measuring could read the strip a prior shade left.
+            Some(size) => resize_to_shade(player, size.width),
+            // First shade: measure so the size can be restored.
+            None => with_window_id(player, |id| {
+                iced::window::size(id).map(Message::WindowShadeMeasured)
+            }),
+        }
+    }
+}
+
+/// The window's inner size, captured just before the first shade: store it
+/// and roll the window up to the strip. A measurement only belongs to a shade
+/// still waiting for its first capture: one that lands after an unshade would
+/// clamp the restored window and record the strip as the size to restore.
+pub(in crate::ui) fn window_shade_measured(
+    player: &mut WinampPlayer,
+    size: iced::Size,
+) -> Task<Message> {
+    if !player.shaded || player.unshaded_size.is_some() {
+        return Task::none();
+    }
+    player.unshaded_size = Some(size);
+    resize_to_shade(player, size.width)
+}
+
+/// The title bar's clutter toggle: flip the flag and schedule the window-level
+/// change. `with_window_id` makes the level call a no-op before the window id
+/// resolves, exactly like the other title-bar actions, while the flag still
+/// flips so the view redraws the toggle.
+pub(in crate::ui) fn toggle_always_on_top(player: &mut WinampPlayer) -> Task<Message> {
+    player.always_on_top = !player.always_on_top;
+    let level = if player.always_on_top {
+        iced::window::Level::AlwaysOnTop
+    } else {
+        iced::window::Level::Normal
+    };
+    with_window_id(player, move |id| iced::window::set_level(id, level))
+}
+
+/// Runs `action` with the resolved window id, or returns no task when it has
+/// not resolved yet. The title bar's window actions — drag, minimize, close,
+/// the shade size query and resize, and the always-on-top level — all guard on
+/// [`WinampPlayer::window_id`] the same way: a `None` (before boot's
+/// `iced::window::latest()` query resolves, or if it fails) makes the action a
+/// no-op. The guard lives here once, so each handler names only the
+/// `iced::window` call it schedules.
+fn with_window_id(
+    player: &WinampPlayer,
+    action: impl FnOnce(iced::window::Id) -> Task<Message>,
+) -> Task<Message> {
+    match player.window_id {
+        Some(id) => action(id),
+        None => Task::none(),
+    }
+}
+
+/// Rolls the window up to the shade strip at `width`: the title-bar height,
+/// keeping the window's current width so the rolled-up window matches the one
+/// it replaces. Both shade paths — rolling straight up with a known size, and
+/// the first shade once its measurement lands — resize this way, so the
+/// expression lives here once. A no-op before the window id resolves, via
+/// [`with_window_id`], like the other title-bar actions.
+fn resize_to_shade(player: &WinampPlayer, width: f32) -> Task<Message> {
+    with_window_id(player, |id| {
+        iced::window::resize(id, iced::Size::new(width, views::TITLE_BAR_HEIGHT))
+    })
+}

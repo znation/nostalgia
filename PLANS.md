@@ -27,7 +27,46 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 > `sample_library()` otherwise — playlist queries included — and `play_track`
 > plays the selected preview through the audio seam. Risk: the Winamp chrome
 > arrived piecemeal, so later changes still need one consistent vocabulary.
-> Recommend the plan loop keep scheduling the open equalizer and seek plans.
+> The equalizer-audio and seek plans this note pointed at have since landed
+> (both 2026-10-20); the 2026-10-22 note below carries the current queue.
+
+> **Steward drift note (2026-10-22 by the steward role): the built Now
+> Playing bar and browse rows do not match the brief's mockups, and the two
+> queued plans settle that difference in opposite directions — the
+> playback-position plan adds a readout the mockup shows nowhere, while the
+> album-row plan matches the mockup's `<artist> - <title>` rows but leaves the
+> running time it draws out of scope.**
+>
+> The brief promises a "very close if not pixel-perfect" Winamp, and the plan
+> role has been citing `docs/screenshots/` as the spec — the landed plans for
+> the scrolling title, the artist-prefixed rows, the `TOP` button and the list
+> counts each name a mockup feature. The main window's mockup
+> (`docs/screenshots/player.png`) draws the classic LCD: a vertical `O C I D V`
+> strip at the left, a large elapsed-time readout (`00:53`) over a green
+> visualizer, a song-title box reading `<ARTIST> - <TITLE> (<length>)`, and a
+> `256 KBPS 44 KHZ` / `MONO STEREO` status row. The build renders one row
+> instead: `now_playing_row` (`src/ui/views/now_playing.rs`) pushes a
+> `Now Playing: ` caption, the artist and title, a fill, and the track length
+> at the right edge of the LCD well, and `view` (`src/ui/mod.rs`) stacks that
+> bar above the transport row — no elapsed-time readout, no `O C I D V` strip,
+> no status row.
+>
+> The first entry under `## Planned`, "Add the playback-position readout to
+> the Now Playing bar (Playback position, part 3/3)", widens that right-edge
+> slot to `<elapsed>/<total>`, a value the mockup shows nowhere: its title
+> line carries the length in parentheses and the elapsed time in the big left
+> readout. Recommend the plan role schedule that elapsed-time display and
+> settle where part 3/3's readout belongs before the queue drains.
+>
+> The browse rows drift the same way: `docs/screenshots/library.png` draws
+> each artist row with its album count at the right (`2 albums`) and each
+> album row with its running time (`12:38`), while the build shows the
+> `View Albums` and `View Songs` hints (`src/ui/views/browse.rs`) and the
+> total count beneath the rows. The queued album-row plan, "Show each album
+> row's artist beside its title", puts album running times out of scope
+> because an album query does not supply its songs' durations, so the
+> mockup's per-album time would need a songs fetch per row — a decision for
+> the plan role, not a detail to drop.
 
 ## Planned
 
@@ -41,13 +80,14 @@ This is the second half of the former part 2/2 and consumes part 2/3's authorita
 
 - `src/apple_music/playback.rs`: update `playback_position`'s doc to say it reports the loaded preview's position and `None` when no preview is loaded or the backend cannot answer, and remove its `#[allow(dead_code)]` now that the UI calls it.
 - `src/ui/views/now_playing.rs`: add `pub fn format_position_time(position_ms: u64) -> String`, calling the existing `format_minutes_seconds` (which already yields `"0:00"` for zero and keeps minutes unbounded). Add `pub fn now_playing_progress(position_ms: u64, total: &str) -> String` returning `format!("{}/{}", format_position_time(position_ms), total)`. Change `now_playing_time` to take `position: Option<Duration>`: when `current_track` is in `tracks` and `position` is `Some`, return `Cow::Owned(now_playing_progress(...))` with the duration converted saturating to milliseconds; otherwise keep today's borrowed `KnownTrack::time` or `"--:--"` fallback. Update its doc comment to say the combined case allocates.
-- `src/ui/mod.rs`: add `playback_position: Option<Duration>` and `position_epoch: u64` to `WinampPlayer`, initialized `None`/`0` in `new`, and define `POSITION_POLL_INTERVAL` (`Duration::from_secs(1)`) with a doc note that it bounds the readout refresh, not the audio. Add `Message::PositionTick` and `Message::PlaybackPosition { epoch: u64, position: Option<Duration> }`. In `init_ui`, batch `iced::time::every(POSITION_POLL_INTERVAL).map(|_| Message::PositionTick)` with the existing `keyboard::listen().filter_map(message_for)` (for example with `iced::Subscription::batch`). The `PositionTick` arm captures `player.position_epoch`, clones the service, and returns `Task::perform(async move { service.playback_position() }, move |position| Message::PlaybackPosition { epoch, position })`; the `PlaybackPosition` arm stores `position` (including `None`) only when `epoch == player.position_epoch`, dropping a reply issued before a transition. Add `fn reset_position_readout(player: &mut WinampPlayer)` that bumps `position_epoch` and sets `playback_position = None`; call it after the song resolves in `TrackSelected` and at the start of the `Stop` arm (which becomes a block returning the existing `transport_into`). Pause leaves the field alone, so the next poll keeps showing the paused player's frozen position. `WinampPlayer::now_playing_time` keeps its signature but passes `self.playback_position` to `views::now_playing_time`; the `view` call site is unchanged, though its comment that all three readouts always borrow must note the combined elapsed case allocates.
+- `src/ui/mod.rs`: add `playback_position: Option<Duration>` and `position_epoch: u64` to `WinampPlayer`, initialized `None`/`0` in `new`, and define `POSITION_POLL_INTERVAL` (`Duration::from_secs(1)`) with a doc note that it bounds the readout refresh, not the audio. Add `Message::PositionTick` and `Message::PlaybackPosition { epoch: u64, position: Option<Duration> }`, and route both from the `update` dispatch table to the two handlers added in `src/ui/handlers/playback.rs` below. In `init_ui`, batch `iced::time::every(POSITION_POLL_INTERVAL).map(|_| Message::PositionTick)` with the existing `keyboard::listen().filter_map(message_for)` (for example with `iced::Subscription::batch`). Pause leaves the field alone, so the next poll keeps showing the paused player's frozen position. `WinampPlayer::now_playing_time` keeps its signature but passes `self.playback_position` to `views::now_playing_time`; the `view` call site is unchanged, though its comment that all three readouts always borrow must note the combined elapsed case allocates.
+- `src/ui/handlers/playback.rs`: the two handlers the table routes to — `position_tick` and `playback_position` — plus the readout reset. `position_tick` captures `player.position_epoch`, clones the service, and returns `Task::perform(async move { service.playback_position() }, move |position| Message::PlaybackPosition { epoch, position })`; `playback_position` stores `position` (including `None`) only when `epoch == player.position_epoch`, dropping a reply issued before a transition. Add `fn reset_position_readout(player: &mut WinampPlayer)` that bumps `position_epoch` and sets `playback_position = None`; call it after the song resolves in `track_selected` and at the start of `stop` (which becomes a block returning the existing `transport_into` call).
 - `src/ui/views/tests.rs`: update the `now_playing_time_resolves_known_track_to_cached_label` call sites to pass `None` as the position; extend it (or add `now_playing_time_shows_elapsed_over_total_when_a_position_is_known`) so `now_playing_time(&tracks, Some("song-1"), Some(Duration::from_secs(192)))` reads `"3:12/3:30"` and is `Cow::Owned`; add `format_position_time_formats_elapsed_and_zero` (`0`→`"0:00"`, `192_000`→`"3:12"`, `65_000`→`"1:05"`) and `now_playing_progress_joins_elapsed_and_total` (`(192_000, "12:38")`→`"3:12/12:38"`).
 - `src/ui/tests.rs`: keep `now_playing_time_shows_the_played_tracks_duration_after_browsing_to_another_album` asserting the plain total (its calls now use the unchanged `WinampPlayer::now_playing_time` signature); add `now_playing_time_shows_elapsed_over_total_while_a_position_is_known` (reuse `play_song_1_then_browse_to_album_2`, set `player.playback_position = Some(Duration::from_secs(45))`, assert `"0:45/3:30"`), `pause_keeps_the_stored_elapsed_readout` (set a known position, drive `Message::Pause`, then assert the field still holds that position and the bar still reads `"0:45/3:30"`; together with part 2/3's `a_pause_keeps_the_loaded_player_reporting_its_position` this pins that pause freezes rather than clears), `a_position_reply_after_a_seek_updates_the_readout` (set `Some(45)`, drive `Message::SeekForward`, feed `Message::PlaybackPosition` with `Some(50)`, assert `"0:50/3:30"`; the existing `seek_messages_drive_the_audio_backend` pins the backend call), `track_selected_clears_the_elapsed_readout`, `stop_clears_the_elapsed_readout`, `position_replies_store_and_stale_ones_are_dropped` (store a reply at the current epoch, then drive a reply stamped with the pre-`Stop` epoch and assert it does not overwrite), and `position_tick_schedules_a_query` (`assert_message_schedules_work`).
 - `README.md`: extend only the Usage sentence that describes the Now Playing bar's artist and title so it says the length reads as elapsed/total while a preview is loaded and as the plain length otherwise. Do not edit the `<!-- tumwater:status:start -->` block or add archive narrative anywhere; that block is state-only (see `762af8c`), and the README diff must be confined to the Usage paragraph.
-- `docs/invariants.md`: in the Now Playing label section, add the time-readout guarantee (elapsed/total only while a loaded preview position is known, the cached total otherwise, `--:--` with no current track), its enforcement by `views::now_playing_time`/`now_playing_progress` and the `PlaybackPosition` arm, and cite the new tests plus part 2/3's audio-seam `position_query_reports_none_when_nothing_is_loaded`, `a_seek_is_reflected_by_the_next_position_query`, and `a_pause_keeps_the_loaded_player_reporting_its_position`.
+- `docs/invariants.md`: in the Now Playing label section, add the time-readout guarantee (elapsed/total only while a loaded preview position is known, the cached total otherwise, `--:--` with no current track), its enforcement by `views::now_playing_time`/`now_playing_progress` and the `PlaybackPosition` handler, and cite the new tests plus part 2/3's audio-seam `position_query_reports_none_when_nothing_is_loaded`, `a_seek_is_reflected_by_the_next_position_query`, and `a_pause_keeps_the_loaded_player_reporting_its_position`.
 
-**Files touched.** `src/apple_music/playback.rs`, `src/ui/views/now_playing.rs`, `src/ui/views/tests.rs`, `src/ui/mod.rs`, `src/ui/tests.rs`, `README.md`, `docs/invariants.md`.
+**Files touched.** `src/apple_music/playback.rs`, `src/ui/views/now_playing.rs`, `src/ui/views/tests.rs`, `src/ui/mod.rs`, `src/ui/handlers/playback.rs`, `src/ui/tests.rs`, `README.md`, `docs/invariants.md`.
 
 **Acceptance criteria.**
 
@@ -58,7 +98,7 @@ This is the second half of the former part 2/2 and consumes part 2/3's authorita
 - A `PlaybackPosition` reply stamped with an older `position_epoch` is dropped, so a poll in flight across a Stop or selection cannot restore the previous elapsed value.
 - The poll runs once per `POSITION_POLL_INTERVAL` in an iced task, not in `update`.
 - The README diff is confined to the Usage sentence; the status block is byte-for-byte unchanged.
-- The change touches only the seven listed files plus this `PLANS.md` edit.
+- The change touches only the eight listed files plus this `PLANS.md` edit.
 
 ### Show each album row's artist beside its title (planned 2026-10-21 by the plan role)
 
@@ -91,3 +131,23 @@ This is the second half of the former part 2/2 and consumes part 2/3's authorita
 - The implementation changes only the ten listed files plus the `PLANS.md`/`PLANS-DONE.md` move, and the commit body names them consistently with `git diff --stat`.
 
 ## Done
+
+### Split the `update` loop into one handler module per concern (landed 2026-10-22; no plan-role entry — rescued manually from a polluted main)
+
+**Goal.** `src/ui/mod.rs` had grown to 1319 lines, with `update` holding every message's behaviour inline and eight helpers shared across arms. Each concern's behaviour now lives in its own module under `src/ui/handlers/` — `playback` (the transport buttons and keys, the track stepping, the play request and its completion, the marquee tick), `mixer` (the volume, the balance, the seek, and the equalizer), `browse` (the hierarchy, the library search, and the fetch results), and `window` (the resolved window id and the title bar's actions) — and `update` is a dispatch table that routes each `Message` variant to its handler and carries no behaviour of its own.
+
+**Approach.**
+
+- `src/ui/mod.rs`: declare `mod handlers;`, drop the imports the moved code took with it (`EqSnapshot`, the `loading::{...}` items, `Ordering`), delete the inline arms and the helpers they shared (`step_track`, `mutate_state`, `mutate_volume`, `mutate_balance`, `seek_preview`, `mutate_equalizer`, `scroll_browse_to_top`, `fetch_at_top`, `with_window_id`, `resize_to_shade`), and rewrite `update` as one delegation per variant.
+- `src/ui/handlers/`: one module per concern, each holding its handlers, its shared helpers, and the rationale the inline comments carried, so a change to one concern never reaches into another's code.
+- `src/ui/tests.rs`: take `RequestGeneration` and `play_into` from `loading` directly, since `update` no longer re-exports them.
+- `docs/invariants.md`: the Browse hierarchy and Browse reply freshness sections now name the handlers in `src/ui/handlers/browse.rs` rather than arms in `src/ui/mod.rs`.
+
+**Files touched.** `src/ui/mod.rs`, `src/ui/handlers/mod.rs`, `src/ui/handlers/playback.rs`, `src/ui/handlers/mixer.rs`, `src/ui/handlers/browse.rs`, `src/ui/handlers/window.rs`, `src/ui/tests.rs`, `docs/invariants.md`.
+
+**Acceptance criteria.**
+
+- `make check` passes: formatting, clippy with `-D warnings`, rustdoc, and the test suite.
+- Every `Message` variant has exactly one dispatch row, and no row holds behaviour.
+- The moved logic has one definition: no helper or arm body survives in `src/ui/mod.rs`.
+- The existing UI tests pass unchanged apart from the two `loading` imports `src/ui/tests.rs` now takes directly.

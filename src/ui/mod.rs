@@ -4,23 +4,23 @@
 //! transport controls, equalizer panel), the Previous/Next stepping arithmetic
 //! in `transport`, the library-fetch/error-reporting adapter in `loading`, the
 //! per-level browse state machine in `browse`, and the classic key bindings in
-//! `shortcuts`; this module wires those to the shared `AppState` and the
-//! `AppleMusicService` seam. Its unit tests live in the `tests` submodule.
+//! `shortcuts`; `update` is a dispatch table over the per-concern message
+//! handlers in `handlers`, and this module wires those to the shared
+//! `AppState` and the `AppleMusicService` seam. Its unit tests live in the
+//! `tests` submodule.
 
 use iced::{Element, Task, keyboard, widget::Column};
 use std::{
     borrow::Cow,
     collections::HashMap,
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
+    sync::{Arc, atomic::AtomicU64},
     time::Duration,
 };
 use tokio::sync::Mutex;
 
 mod bevel;
 mod browse;
+mod handlers;
 mod loading;
 mod shortcuts;
 mod style;
@@ -33,13 +33,9 @@ use shortcuts::message_for;
 
 use crate::{
     apple_music::AppleMusicService,
-    audio::EqSnapshot,
     equalizer::Preset,
     library::{Album, Artist, Playlist, Song},
     state::AppState,
-};
-use loading::{
-    PLAY_TIMEOUT, RequestGeneration, fetch_level, play_failure_report, play_into, transport_into,
 };
 
 /// How often the Now Playing title window advances one character while an
@@ -195,7 +191,8 @@ enum Message {
     BrowseReply { issued: u64, reply: Box<Message> },
     // A browse reply that a newer request for the same list has superseded.
     // `fetch_into` emits this instead of the `*Loaded` message so the stale
-    // reply never reaches `BrowseList::store`; the arm below is a no-op.
+    // reply never reaches `BrowseList::store`; the handler it routes to is a
+    // no-op.
     Ignored,
     // The play's completion carries the generation its selection issued, so
     // the arm can tell whether a newer selection has superseded it. Only the
@@ -426,735 +423,87 @@ fn boot(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> (WinampPlaye
     )
 }
 
-/// The task the Next/Previous buttons schedule: step the current track
-/// through the list the current view shows — `all_songs` for the flat All
-/// Songs view, the browsed `songs` otherwise — in the given direction — with
-/// Shuffle on a forward step picks a random non-current song via
-/// `transport::shuffled_track_id`, and a backward step first retraces the
-/// recorded play history via `PlayHistory::previous`, falling back to
-/// `transport::previous_track_id` when no recorded track is still visible;
-/// otherwise `forward` selects the
-/// `transport::next_track_id`/`previous_track_id` stepping function — and
-/// schedule the landed song as `TrackSelected`, or no task when there is
-/// nothing to step through. `forward` selects the direction so the stepping
-/// arithmetic stays in `transport`, and the lock-then-dispatch wiring lives
-/// here once for both transport arms. The shared
-/// Shuffle and Repeat flags are read under the same lock, so the
-/// random-vs-sequential and wrap-vs-stop-at-the-edge decisions (see
-/// `transport::shuffled_track_id` and `transport::next_track_id`) stay in
-/// `transport` too.
-fn step_track(player: &mut WinampPlayer, forward: bool) -> Task<Message> {
-    // The stepped song is computed under the state lock, borrowing the
-    // current track directly rather than cloning it to satisfy `as_deref`.
-    // The lock covers the pure stepping scan, which is fast, and the
-    // transport functions never lock anything themselves.
-    let state = player.state.blocking_lock();
-    // Step the list the current view draws from, so the scheduled
-    // `TrackSelected` index and epoch match the list the arm resolves
-    // against: the flat All Songs view's `all_songs`, otherwise `songs`.
-    let (items, epoch) = if player.current_view == CurrentView::AllSongs {
-        (&player.all_songs.items, player.all_songs.epoch)
-    } else {
-        (&player.songs.items, player.songs.epoch)
-    };
-    let stepped = if forward && state.shuffle {
-        transport::shuffled_track_id(
-            items,
-            state.current_track.as_deref(),
-            transport::shuffle_roll(),
-        )
-    } else if forward {
-        transport::next_track_id(items, state.current_track.as_deref(), state.repeat)
-    } else if state.shuffle {
-        player
-            .play_history
-            .previous(items, state.current_track.as_deref())
-            .or_else(|| {
-                transport::previous_track_id(items, state.current_track.as_deref(), state.repeat)
-            })
-    } else {
-        transport::previous_track_id(items, state.current_track.as_deref(), state.repeat)
-    };
-    match stepped {
-        // `transport` answers with the stepped song's id, but the selection
-        // message carries the song's index and the epoch of the list that
-        // rendered the row (see `TrackSelected`), so resolve the id to its
-        // position in this same buffer. This scan runs once per button press,
-        // not per view refresh, and the stepped id always names a song in
-        // this buffer.
-        Some(track_id) => match items.iter().position(|song| song.id == track_id) {
-            Some(index) => Task::done(Message::TrackSelected { epoch, index }),
-            None => Task::none(),
-        },
-        None => Task::none(),
-    }
-}
-
-/// Locks the shared playback state, applies `mutation` to it, and returns no
-/// task. The synchronous arms — `ToggleRepeat` and `ToggleShuffle` — repeat
-/// the same shared-state update — `blocking_lock`, one mutation, then
-/// `Task::none()` — so the lock-and-noop shape lives here once and each arm
-/// only names its mutation. The transport arms and asynchronous work (fetches,
-/// plays) go through the service instead (see [`transport_into`] and
-/// [`fetch_level`]), and the volume, balance, and equalizer arms use
-/// [`mutate_volume`], [`mutate_balance`], and [`mutate_equalizer`] because
-/// they also forward their value to the backend.
-fn mutate_state(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> Task<Message> {
-    let mut state = player.state.blocking_lock();
-    mutation(&mut state);
-    Task::none()
-}
-
-/// Locks the shared playback state, applies `mutation` to it, forwards the
-/// resulting clamped volume to the audio backend, and returns no task. The
-/// volume arms — `VolumeChange`, `VolumeUp`, and `VolumeDown` — all repeat the
-/// same two-step update: `blocking_lock`, one mutation, read back the clamped
-/// `state.volume()`, then hand it to
-/// [`AppleMusicService::set_output_volume`]. The state write and the backend
-/// forward both happen under the one lock, and the forward is a non-blocking
-/// channel send, so a slider drag stays responsive and its messages stay
-/// ordered. A backend error is logged; the state write has already committed.
-fn mutate_volume(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> Task<Message> {
-    let mut state = player.state.blocking_lock();
-    mutation(&mut state);
-    let volume = state.volume();
-    if let Err(error) = player.apple_music_service.set_output_volume(volume) {
-        eprintln!("forwarding volume to the audio backend failed: {error}");
-    }
-    Task::none()
-}
-
-/// Locks the shared playback state, applies `mutation` to it, forwards the
-/// resulting clamped balance to the audio backend, and returns no task. The
-/// `BalanceChange` arm uses this so a slider drag reaches the playing preview
-/// without restarting it; the state write and the backend forward both happen
-/// under the one lock, exactly as [`mutate_volume`] does. A backend error is
-/// logged; the state write has already committed.
-fn mutate_balance(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> Task<Message> {
-    let mut state = player.state.blocking_lock();
-    mutation(&mut state);
-    let balance = state.balance();
-    if let Err(error) = player.apple_music_service.set_output_balance(balance) {
-        eprintln!("forwarding balance to the audio backend failed: {error}");
-    }
-    Task::none()
-}
-
-/// Forwards a relative seek to the audio backend and returns no task. The
-/// left and right arrow arms use this so a key press moves the playing
-/// preview without touching shared state: the backend owns the position, and
-/// [`AppleMusicService::seek_output`] is a non-blocking channel send. A
-/// backend error is logged.
-fn seek_preview(player: &WinampPlayer, offset_secs: i64) -> Task<Message> {
-    if let Err(error) = player.apple_music_service.seek_output(offset_secs) {
-        eprintln!("seeking the preview failed: {error}");
-    }
-    Task::none()
-}
-
-/// Locks the shared playback state, applies `mutation` to it, forwards the
-/// resulting clamped curve to the audio backend, and returns no task. The
-/// equalizer arms — `ToggleEqualizer`, `EqPreampChange`, `EqBandChange`, and
-/// `EqPresetSelected` — use this so a toggle, slider drag, or preset pick
-/// reaches the playing preview without restarting it; the running
-/// `EqSource` re-reads its shared curve between samples. The
-/// state write and the backend forward both happen under the one lock, exactly
-/// as [`mutate_volume`] and [`mutate_balance`] do. A backend error is logged;
-/// the state write has already committed.
-fn mutate_equalizer(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> Task<Message> {
-    let mut state = player.state.blocking_lock();
-    mutation(&mut state);
-    let equalizer = EqSnapshot {
-        enabled: state.eq_enabled,
-        preamp_db: state.eq_preamp(),
-        bands_db: state.eq_bands(),
-    };
-    if let Err(error) = player.apple_music_service.set_output_equalizer(equalizer) {
-        eprintln!("forwarding equalizer to the audio backend failed: {error}");
-    }
-    Task::none()
-}
-
-/// Runs `action` with the resolved window id, or returns no task when it has
-/// not resolved yet. The title bar's window actions — drag, minimize, close,
-/// the shade size query and resize, and the always-on-top level — all guard on
-/// `WinampPlayer::window_id` the same way: a `None` (before boot's
-/// `iced::window::latest()` query resolves, or if it fails) makes the action a
-/// no-op. The guard lives here once, so each arm names only the
-/// `iced::window` call it schedules.
-fn with_window_id(
-    player: &WinampPlayer,
-    action: impl FnOnce(iced::window::Id) -> Task<Message>,
-) -> Task<Message> {
-    match player.window_id {
-        Some(id) => action(id),
-        None => Task::none(),
-    }
-}
-
-/// Rolls the window up to the shade strip at `width`: the title-bar height,
-/// keeping the window's current width so the rolled-up window matches the one
-/// it replaces. Both shade paths — rolling straight up with a known size, and
-/// the first shade once its measurement lands — resize this way, so the
-/// expression lives here once. A no-op before the window id resolves, via
-/// [`with_window_id`], like the other title-bar actions.
-fn resize_to_shade(player: &WinampPlayer, width: f32) -> Task<Message> {
-    with_window_id(player, |id| {
-        iced::window::resize(id, iced::Size::new(width, views::TITLE_BAR_HEIGHT))
-    })
-}
-
-/// Snaps the browse list back to its first row. The list carries
-/// [`views::BROWSE_LIST_ID`] whichever level is showing, so one operation
-/// serves the Top button and every navigation that opens a fresh list.
-fn scroll_browse_to_top() -> Task<Message> {
-    iced::widget::operation::snap_to(
-        views::BROWSE_LIST_ID,
-        iced::widget::scrollable::RelativeOffset::START,
-    )
-}
-
-/// Runs a browse fetch and then snaps the list it fills to the top. Navigation
-/// replaces the visible list, so leaving the new level at the previous list's
-/// scroll offset would hide its first rows; batching the scroll with the fetch
-/// keeps the two one operation from the update arm.
-fn fetch_at_top(task: Task<Message>) -> Task<Message> {
-    Task::batch([task, scroll_browse_to_top()])
-}
-
+/// Routes each [`Message`] to the handler that owns its behaviour: the
+/// transport buttons and keys, the track stepping, and the play request and
+/// its completion in `handlers::playback`; the volume, balance, seek, and
+/// equalizer in `handlers::mixer`; the browse hierarchy, the library search,
+/// and the fetch results in `handlers::browse`; and the custom title bar's
+/// window actions in `handlers::window`. The table carries no behaviour of its
+/// own, so a change to one concern stays in that concern's module.
 fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
     match message {
-        Message::PlayPause => transport_into(
-            &player.apple_music_service,
-            "toggle play/pause",
-            |service| async move { service.toggle_play_pause().await },
-        ),
-        // The keyboard's X and C keys: explicit, idempotent play/pause rather
-        // than the button's toggle. X resumes (or restarts) the preview; C
-        // pauses it.
-        Message::Play => {
-            transport_into(&player.apple_music_service, "play", |service| async move {
-                service.resume().await
-            })
-        }
-        Message::Pause => {
-            transport_into(&player.apple_music_service, "pause", |service| async move {
-                service.pause().await
-            })
-        }
-        // Stop discards the preview and clears the playing flag; the service
-        // remembers the last preview URL so Play can restart it.
-        Message::Stop => {
-            transport_into(&player.apple_music_service, "stop", |service| async move {
-                service.stop().await
-            })
-        }
-        Message::ToggleRepeat => mutate_state(player, AppState::toggle_repeat),
-        Message::ToggleShuffle => mutate_state(player, AppState::toggle_shuffle),
-        Message::VolumeChange(volume) => mutate_volume(player, |state| state.set_volume(volume)),
-        Message::BalanceChange(balance) => {
-            mutate_balance(player, |state| state.set_balance(balance))
-        }
-        // The arrow keys nudge the slider's value by its own step, so the
-        // keyboard and the drag share one granularity; `nudge_volume` clamps.
-        Message::VolumeUp => mutate_volume(player, |state| state.nudge_volume(views::VOLUME_STEP)),
-        Message::VolumeDown => {
-            mutate_volume(player, |state| state.nudge_volume(-views::VOLUME_STEP))
-        }
-        // The left and right arrows move the playing preview by Winamp's
-        // five-second step; a seek while stopped is a no-op in the backend.
-        Message::SeekBackward => seek_preview(player, -views::SEEK_STEP_SECS),
-        Message::SeekForward => seek_preview(player, views::SEEK_STEP_SECS),
-        // The equalizer mutators all store clamped gains in shared state, so
-        // the sliders can never write an out-of-range value; the clamp itself
-        // lives in `equalizer::clamp_gain`, called by the `AppState` setters.
-        // Each arm also forwards the stored curve to the playing preview.
-        Message::ToggleEqualizer => mutate_equalizer(player, AppState::toggle_equalizer),
-        Message::EqPreampChange(gain) => {
-            mutate_equalizer(player, |state| state.set_eq_preamp(gain))
-        }
-        Message::EqBandChange(band, gain) => {
-            mutate_equalizer(player, |state| state.set_eq_band(band, gain))
-        }
-        Message::EqPresetSelected(preset) => {
-            mutate_equalizer(player, |state| state.apply_eq_preset(preset))
-        }
-        Message::NextTrack => step_track(player, true),
-        Message::PreviousTrack => step_track(player, false),
-        // The marquee timer only advances the title window; the view uses the
-        // offset solely for an overlong line, so a fitting line stays still.
-        Message::MarqueeTick => {
-            player.marquee_offset = player.marquee_offset.wrapping_add(1);
-            Task::none()
-        }
+        Message::PlayPause => handlers::playback::play_pause(player),
+        Message::Play => handlers::playback::play(player),
+        Message::Pause => handlers::playback::pause(player),
+        Message::Stop => handlers::playback::stop(player),
+        Message::ToggleRepeat => handlers::playback::toggle_repeat(player),
+        Message::ToggleShuffle => handlers::playback::toggle_shuffle(player),
+        Message::VolumeChange(volume) => handlers::mixer::volume_change(player, volume),
+        Message::BalanceChange(balance) => handlers::mixer::balance_change(player, balance),
+        Message::VolumeUp => handlers::mixer::volume_up(player),
+        Message::VolumeDown => handlers::mixer::volume_down(player),
+        Message::SeekBackward => handlers::mixer::seek_backward(player),
+        Message::SeekForward => handlers::mixer::seek_forward(player),
+        Message::ToggleEqualizer => handlers::mixer::toggle_equalizer(player),
+        Message::EqPreampChange(gain) => handlers::mixer::eq_preamp_change(player, gain),
+        Message::EqBandChange(band, gain) => handlers::mixer::eq_band_change(player, band, gain),
+        Message::EqPresetSelected(preset) => handlers::mixer::eq_preset_selected(player, preset),
+        Message::NextTrack => handlers::playback::step_track(player, true),
+        Message::PreviousTrack => handlers::playback::step_track(player, false),
+        Message::MarqueeTick => handlers::playback::marquee_tick(player),
         Message::TrackSelected { epoch, index } => {
-            // The message carries the pressed row's index plus the epoch of
-            // the list that rendered it. The Songs view draws from `songs`
-            // and the flat All Songs view draws from `all_songs`, so resolve
-            // the press against the list the current view shows; resolving
-            // it against the other list would no-op or play the wrong song.
-            // A mismatched epoch means the list was replaced after the row
-            // was rendered, so the index names a different song now — ignore
-            // the stale press. An out-of-range index likewise names no track
-            // and is a no-op rather than a bogus play. `select` applies both
-            // checks.
-            let selected = if player.current_view == CurrentView::AllSongs {
-                player.all_songs.select(epoch, index)
-            } else {
-                player.songs.select(epoch, index)
-            };
-            let Some(song) = selected else {
-                return Task::none();
-            };
-            let track_id = song.id.clone();
-            let preview_url = song.preview_url.clone();
-            // A newly selected song starts its title at character zero; the
-            // previous song's scroll position must not carry over.
-            player.marquee_offset = 0;
-            // Record the played track's title, artist, and formatted length
-            // before handing the id to the async play: the Now Playing bar
-            // resolves its label, artist, and time from `known_tracks`, and the
-            // entry must survive a later browse to a different list (which
-            // replaces the visible song buffer). Recording once per play —
-            // rather than folding every song of every loaded list into the map —
-            // keeps the index proportional to songs actually played and takes
-            // the fold off the browse path.
-            player
-                .known_tracks
-                .entry(track_id.clone())
-                .or_insert_with(|| views::KnownTrack {
-                    title: song.title.clone(),
-                    artist: song.artist.clone(),
-                    time: views::format_track_time(song.duration_ms),
-                });
-            // A newer selection must win even when an older play's backend
-            // call finishes later: issue a generation and hand its guard to
-            // `play_track`, which evaluates it under the state lock so the
-            // older play cannot overwrite the newer track. The browse path
-            // uses the same [`RequestGeneration`] for the same reason.
-            let generation = RequestGeneration::issue(&player.plays_generation);
-            let id_for_report = track_id.clone();
-            play_into(
-                &player.apple_music_service,
-                track_id,
-                generation,
-                PLAY_TIMEOUT,
-                move |service, id, generation| async move {
-                    service
-                        .play_track(&id, preview_url.as_deref(), || generation.is_current())
-                        .await
-                },
-                move |err| eprintln!("{}", play_failure_report(&id_for_report, err)),
-            )
+            handlers::playback::track_selected(player, epoch, index)
         }
         Message::ArtistSelected { epoch, index } => {
-            // As with `TrackSelected`: the row message carries the artist's
-            // index and its list's epoch. A mismatched epoch is a stale press
-            // from a replaced list; an out-of-range index has no artist to
-            // browse. `artists.select` rejects both.
-            let Some(artist_id) = player
-                .artists
-                .select(epoch, index)
-                .map(|artist| artist.id.clone())
-            else {
-                return Task::none();
-            };
-            player.current_view = CurrentView::Albums;
-            // Entering a browse level leaves any active search: the songs list
-            // the search filled is about to be replaced, so Back must not
-            // treat it as a searched list any more.
-            player.search_active = false;
-            // Drop the previous artist's albums before the new fetch lands:
-            // otherwise the Albums view renders them, and a press during the
-            // fetch resolves against the wrong artist's list.
-            fetch_at_top(fetch_level(
-                &mut player.albums,
-                &player.apple_music_service,
-                format!("loading albums for artist {artist_id:?}"),
-                move |service| async move { service.get_albums_by_artist(&artist_id).await },
-                Message::AlbumsLoaded,
-                Message::AlbumsLoadFailed,
-            ))
+            handlers::browse::artist_selected(player, epoch, index)
         }
         Message::AlbumSelected { epoch, index } => {
-            // The album twin of the artist arm above. The Songs view can be
-            // opened from the per-artist Albums list or from the flat All
-            // Albums list, so resolve the press against the list that view
-            // rendered; `select` rejects the same stale-epoch and
-            // out-of-range presses either way. The origin is recorded from the
-            // same view, so Back later returns to the level the row came from.
-            let from_all_albums = player.current_view == CurrentView::AllAlbums;
-            let selected = if from_all_albums {
-                player.all_albums.select(epoch, index)
-            } else {
-                player.albums.select(epoch, index)
-            };
-            let Some(album_id) = selected.map(|album| album.id.clone()) else {
-                return Task::none();
-            };
-            player.songs_origin = if from_all_albums {
-                SongsOrigin::AllAlbums
-            } else {
-                SongsOrigin::Album
-            };
-            player.current_view = CurrentView::Songs;
-            player.search_active = false;
-            // The songs twin of the artist arm above: clear the previous
-            // album's songs so they cannot be shown or pressed while the new
-            // album's fetch is in flight.
-            fetch_at_top(fetch_level(
-                &mut player.songs,
-                &player.apple_music_service,
-                format!("loading songs from album {album_id:?}"),
-                move |service| async move { service.get_songs_from_album(&album_id).await },
-                Message::SongsLoaded,
-                Message::SongsLoadFailed,
-            ))
+            handlers::browse::album_selected(player, epoch, index)
         }
         Message::PlaylistSelected { epoch, index } => {
-            // The playlist twin of the album arm above: resolve the press
-            // against the Playlists list that rendered it, rejecting a stale
-            // epoch or out-of-range index, then load the playlist's songs into
-            // the shared songs buffer and record the origin for Back.
-            let Some(playlist_id) = player
-                .playlists
-                .select(epoch, index)
-                .map(|playlist| playlist.id.clone())
-            else {
-                return Task::none();
-            };
-            player.songs_origin = SongsOrigin::Playlist;
-            player.current_view = CurrentView::Songs;
-            player.search_active = false;
-            // Clear the previous list before the fetch lands, as the album arm
-            // does, so a press during the fetch cannot resolve against stale
-            // rows.
-            fetch_at_top(fetch_level(
-                &mut player.songs,
-                &player.apple_music_service,
-                format!("loading songs from playlist {playlist_id:?}"),
-                move |service| async move { service.get_songs_from_playlist(&playlist_id).await },
-                Message::SongsLoaded,
-                Message::SongsLoadFailed,
-            ))
+            handlers::browse::playlist_selected(player, epoch, index)
         }
-        // The browse hierarchy is navigable both ways: ArtistSelected,
-        // AlbumSelected, and PlaylistSelected step down (Artists → Albums →
-        // Songs, or into a playlist's songs), Back steps up again. The Back
-        // button is only rendered below the artist list, so this arm mostly
-        // fires where a level exists to leave; the explicit
-        // top-level arm keeps the no-op in the same place as the steps.
-        Message::Back => {
-            // Only stepping up replaces the visible list, so Back at the top
-            // level stays a true no-op (the invariant docs pin that) while a
-            // restored list starts at its first row.
-            let stepping_up = player.search_active || player.current_view != CurrentView::Artists;
-            // A search result list sits under the artists list, not under the
-            // album it was issued from: leaving it returns straight to
-            // Artists, and the album list it would otherwise open is empty or
-            // stale. A normal browse steps up one level.
-            if player.search_active {
-                player.search_active = false;
-                player.current_view = CurrentView::Artists;
-            } else {
-                player.current_view = match &player.current_view {
-                    CurrentView::Songs => match player.songs_origin {
-                        SongsOrigin::Album => CurrentView::Albums,
-                        SongsOrigin::AllAlbums => CurrentView::AllAlbums,
-                        SongsOrigin::Playlist => CurrentView::Playlists,
-                    },
-                    CurrentView::Albums => CurrentView::Artists,
-                    CurrentView::AllSongs => CurrentView::Artists,
-                    CurrentView::AllAlbums => CurrentView::Artists,
-                    CurrentView::Playlists => CurrentView::Artists,
-                    CurrentView::Artists => CurrentView::Artists,
-                };
-            }
-            if stepping_up {
-                scroll_browse_to_top()
-            } else {
-                Task::none()
-            }
-        }
-        Message::ScrollBrowseToTop => scroll_browse_to_top(),
-        Message::ShowAllSongs => {
-            // The flat list hangs off the artists list, so an active search's
-            // results are left behind and Back returns to Artists.
-            player.search_active = false;
-            player.current_view = CurrentView::AllSongs;
-            // Clear the previous flat list before the new fetch lands, so a
-            // press during the fetch cannot resolve against stale rows (the
-            // same clear-before-fetch the navigation arms do).
-            fetch_at_top(fetch_level(
-                &mut player.all_songs,
-                &player.apple_music_service,
-                "loading all library songs".to_string(),
-                |service| async move { service.get_all_songs().await },
-                Message::AllSongsLoaded,
-                Message::AllSongsLoadFailed,
-            ))
-        }
-        Message::ShowAllAlbums => {
-            // Like All Songs, the flat album list hangs off the artists list:
-            // leave an active search behind and let Back return to Artists.
-            player.search_active = false;
-            player.current_view = CurrentView::AllAlbums;
-            // Clear the previous flat list before the new fetch lands, so a
-            // press during the fetch cannot resolve against stale rows.
-            fetch_at_top(fetch_level(
-                &mut player.all_albums,
-                &player.apple_music_service,
-                "loading all library albums".to_string(),
-                |service| async move { service.get_all_albums().await },
-                Message::AllAlbumsLoaded,
-                Message::AllAlbumsLoadFailed,
-            ))
-        }
-        Message::ShowPlaylists => {
-            // Like the flat lists, Playlists hangs off the artists list: leave
-            // an active search behind and let Back return to Artists.
-            player.search_active = false;
-            player.current_view = CurrentView::Playlists;
-            // Clear the previous list before the fetch lands, so a press during
-            // the fetch cannot resolve against stale rows.
-            fetch_at_top(fetch_level(
-                &mut player.playlists,
-                &player.apple_music_service,
-                "loading library playlists".to_string(),
-                |service| async move { service.get_playlists().await },
-                Message::PlaylistsLoaded,
-                Message::PlaylistsLoadFailed,
-            ))
-        }
-        Message::SearchChanged(text) => {
-            player.search_query = text;
-            Task::none()
-        }
-        Message::SearchSubmitted => {
-            // A blank query has nothing to match: `search_songs` rejects it,
-            // and issuing the fetch would only turn the empty box into an
-            // error report. Leave the current list and view alone.
-            let query = player.search_query.trim().to_string();
-            if query.is_empty() {
-                return Task::none();
-            }
-            player.search_query = query.clone();
-            player.search_active = true;
-            player.current_view = CurrentView::Songs;
-            // The search results reuse the songs buffer, so the previous list's
-            // rows are dropped and a press during the fetch cannot resolve
-            // against them (the same clear-before-fetch the navigation arms do).
-            fetch_at_top(fetch_level(
-                &mut player.songs,
-                &player.apple_music_service,
-                format!("searching the library for {query:?}"),
-                move |service| async move { service.search_songs(&query).await },
-                Message::SongsLoaded,
-                Message::SongsLoadFailed,
-            ))
-        }
-        Message::LoadArtists => {
-            // `boot` schedules this for the initial load, and again once the
-            // startup sign-in stores a session; it is also the Retry button's
-            // arm: clearing first drops any earlier failure report and shows
-            // "Loading…" while the re-fetch is in flight, exactly as the
-            // navigation arms clear their level before re-fetching.
-            fetch_level(
-                &mut player.artists,
-                &player.apple_music_service,
-                "loading favorite artists".to_string(),
-                |service| async move { service.get_favorite_artists().await },
-                Message::ArtistsLoaded,
-                Message::ArtistsLoadFailed,
-            )
-        }
-        Message::ArtistsLoaded(artists) => {
-            player.artists.store(artists);
-            Task::none()
-        }
-        Message::AlbumsLoaded(albums) => {
-            player.albums.store(albums);
-            Task::none()
-        }
-        Message::SongsLoaded(songs) => {
-            // Cache each row's display title and formatted length once, when
-            // the list loads, so a view refresh borrows them instead of
-            // re-joining every artist and title and formatting every row's
-            // duration again (see `BrowseList::store_with_row_text`).
-            player.songs.store_with_row_text(
-                songs,
-                |song| song.display_title().into_owned(),
-                |song| views::format_track_time(song.duration_ms),
-            );
-            Task::none()
-        }
-        Message::AllSongsLoaded(songs) => {
-            player.all_songs.store_with_row_text(
-                songs,
-                |song| song.display_title().into_owned(),
-                |song| views::format_track_time(song.duration_ms),
-            );
-            Task::none()
-        }
-        Message::AllAlbumsLoaded(albums) => {
-            player.all_albums.store(albums);
-            Task::none()
-        }
+        Message::Back => handlers::browse::back(player),
+        Message::ScrollBrowseToTop => handlers::browse::scroll_browse_to_top(),
+        Message::ShowAllSongs => handlers::browse::show_all_songs(player),
+        Message::ShowAllAlbums => handlers::browse::show_all_albums(player),
+        Message::ShowPlaylists => handlers::browse::show_playlists(player),
+        Message::SearchChanged(text) => handlers::browse::search_changed(player, text),
+        Message::SearchSubmitted => handlers::browse::search_submitted(player),
+        Message::LoadArtists => handlers::browse::load_artists(player),
+        Message::ArtistsLoaded(artists) => handlers::browse::artists_loaded(player, artists),
+        Message::AlbumsLoaded(albums) => handlers::browse::albums_loaded(player, albums),
+        Message::SongsLoaded(songs) => handlers::browse::songs_loaded(player, songs),
+        Message::AllSongsLoaded(songs) => handlers::browse::all_songs_loaded(player, songs),
+        Message::AllAlbumsLoaded(albums) => handlers::browse::all_albums_loaded(player, albums),
         Message::PlaylistsLoaded(playlists) => {
-            player.playlists.store(playlists);
-            Task::none()
+            handlers::browse::playlists_loaded(player, playlists)
         }
-        Message::ArtistsLoadFailed(report) => {
-            player.artists.fail(report);
-            Task::none()
-        }
-        Message::AlbumsLoadFailed(report) => {
-            player.albums.fail(report);
-            Task::none()
-        }
-        Message::SongsLoadFailed(report) => {
-            player.songs.fail(report);
-            Task::none()
-        }
+        Message::ArtistsLoadFailed(report) => handlers::browse::artists_load_failed(player, report),
+        Message::AlbumsLoadFailed(report) => handlers::browse::albums_load_failed(player, report),
+        Message::SongsLoadFailed(report) => handlers::browse::songs_load_failed(player, report),
         Message::AllSongsLoadFailed(report) => {
-            player.all_songs.fail(report);
-            Task::none()
+            handlers::browse::all_songs_load_failed(player, report)
         }
         Message::AllAlbumsLoadFailed(report) => {
-            player.all_albums.fail(report);
-            Task::none()
+            handlers::browse::all_albums_load_failed(player, report)
         }
         Message::PlaylistsLoadFailed(report) => {
-            player.playlists.fail(report);
-            Task::none()
+            handlers::browse::playlists_load_failed(player, report)
         }
-        // The executor-thread check in `fetch_into` already dropped replies a
-        // newer request had superseded when they were mapped. This re-checks
-        // the stamp on the UI thread, where the store happens, closing the
-        // window between that check and this arm: a navigation there issues a
-        // newer request, and the stale reply must not repopulate the list (or
-        // record its error) over it.
         Message::BrowseReply { issued, reply } => {
-            let current = match reply.as_ref() {
-                Message::ArtistsLoaded(_) | Message::ArtistsLoadFailed(_) => {
-                    player.artists.is_current(issued)
-                }
-                Message::AlbumsLoaded(_) | Message::AlbumsLoadFailed(_) => {
-                    player.albums.is_current(issued)
-                }
-                Message::SongsLoaded(_) | Message::SongsLoadFailed(_) => {
-                    player.songs.is_current(issued)
-                }
-                Message::AllSongsLoaded(_) | Message::AllSongsLoadFailed(_) => {
-                    player.all_songs.is_current(issued)
-                }
-                Message::AllAlbumsLoaded(_) | Message::AllAlbumsLoadFailed(_) => {
-                    player.all_albums.is_current(issued)
-                }
-                Message::PlaylistsLoaded(_) | Message::PlaylistsLoadFailed(_) => {
-                    player.playlists.is_current(issued)
-                }
-                _ => true,
-            };
-            if current {
-                update(player, *reply)
-            } else {
-                Task::none()
-            }
+            handlers::browse::browse_reply(player, issued, reply)
         }
-        Message::TrackPlayed { generation } => {
-            // Only the current track's entry is ever read (see
-            // [`WinampPlayer::known_tracks`]), so the latest play's completion drops
-            // every other entry the selections above accumulated. A completion
-            // whose play a newer selection superseded is skipped: its
-            // `current_track` names the older committed track, but the newer
-            // selection's entry is still pending, and pruning to the older
-            // track would delete it. When this completion is the latest, no
-            // newer selection is pending, so reducing to `current_track` is
-            // safe — and when nothing committed, clearing the map keeps it
-            // bounded rather than leaving the failed selection's entry.
-            if generation == player.plays_generation.load(Ordering::SeqCst) {
-                let state = player.state.blocking_lock();
-                if state.is_playing
-                    && let Some(current) = state.current_track.as_deref()
-                {
-                    player.play_history.record(current);
-                } else {
-                    // A failed play leaves shared state naming the jump's
-                    // target (the backend leaves `current_track` set), so keep
-                    // the pending jump and mark it for retry: the next Previous
-                    // offers that same target rather than walking past it.
-                    player.play_history.retry_pending();
-                }
-                match state.current_track.as_deref() {
-                    Some(current) => player.known_tracks.retain(|id, _| id == current),
-                    None => player.known_tracks.clear(),
-                }
-            }
-            Task::none()
-        }
-        Message::WindowIdResolved(id) => {
-            player.window_id = id;
-            Task::none()
-        }
-        // The custom title bar's window actions — drag, minimize, close, shade,
-        // and always-on-top — all act on the resolved window id and are no-ops
-        // until it exists; `with_window_id` holds that guard, so each arm names
-        // only the `iced::window` call it schedules.
-        Message::WindowDragged => with_window_id(player, iced::window::drag),
-        Message::MinimizeWindow => with_window_id(player, |id| iced::window::minimize(id, true)),
-        Message::CloseWindow => with_window_id(player, iced::window::close),
-        // Shading measures the window only until the pre-shade size is
-        // known; after that it rolls straight up to the strip. Unshading
-        // resizes back to the captured size. `with_window_id` keeps both
-        // no-ops before the window id resolves, exactly like the other
-        // title-bar actions; the flag still flips so the view switches to
-        // the title-bar-only tree even where the resize is ignored.
-        Message::ToggleWindowShade => {
-            if player.shaded {
-                player.shaded = false;
-                match player.unshaded_size {
-                    Some(size) => with_window_id(player, |id| iced::window::resize(id, size)),
-                    None => Task::none(),
-                }
-            } else {
-                player.shaded = true;
-                match player.unshaded_size {
-                    // The size to restore is already known, so roll straight
-                    // up; re-measuring could read the strip a prior shade left.
-                    Some(size) => resize_to_shade(player, size.width),
-                    // First shade: measure so the size can be restored.
-                    None => with_window_id(player, |id| {
-                        iced::window::size(id).map(Message::WindowShadeMeasured)
-                    }),
-                }
-            }
-        }
-        Message::WindowShadeMeasured(size) => {
-            // A measurement only belongs to a shade still waiting for its
-            // first capture: one that lands after an unshade would clamp the
-            // restored window and record the strip as the size to restore.
-            if !player.shaded || player.unshaded_size.is_some() {
-                return Task::none();
-            }
-            player.unshaded_size = Some(size);
-            resize_to_shade(player, size.width)
-        }
-        // The clutter toggle flips the flag and schedules the window-level
-        // change. `with_window_id` makes the level call a no-op before the
-        // window id resolves, exactly like the other title-bar actions, while
-        // the flag still flips so the view redraws the toggle.
-        Message::ToggleAlwaysOnTop => {
-            player.always_on_top = !player.always_on_top;
-            let level = if player.always_on_top {
-                iced::window::Level::AlwaysOnTop
-            } else {
-                iced::window::Level::Normal
-            };
-            with_window_id(player, move |id| iced::window::set_level(id, level))
-        }
-        Message::Ignored => Task::none(),
-        Message::TransportSettled => Task::none(),
+        Message::TrackPlayed { generation } => handlers::playback::track_played(player, generation),
+        Message::WindowIdResolved(id) => handlers::window::window_id_resolved(player, id),
+        Message::WindowDragged => handlers::window::window_dragged(player),
+        Message::MinimizeWindow => handlers::window::minimize_window(player),
+        Message::CloseWindow => handlers::window::close_window(player),
+        Message::ToggleWindowShade => handlers::window::toggle_window_shade(player),
+        Message::WindowShadeMeasured(size) => handlers::window::window_shade_measured(player, size),
+        Message::ToggleAlwaysOnTop => handlers::window::toggle_always_on_top(player),
+        Message::Ignored => handlers::browse::ignored(player),
+        Message::TransportSettled => handlers::playback::transport_settled(player),
     }
 }
 

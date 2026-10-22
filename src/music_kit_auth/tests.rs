@@ -531,6 +531,27 @@ fn authorize_marks_the_sign_in_page_no_store() {
     );
 }
 
+#[test]
+fn authorize_marks_the_sign_in_page_no_referrer() {
+    // The page is served at a URL that carries the per-flow `state` nonce, and
+    // the page loads Apple's MusicKit script from a third-party origin — so the
+    // browser is about to send that third party a request whose `Referer` may
+    // carry the nonce. Whether it does is the browser's policy to decide
+    // unless the server decides it: a browser configured with `unsafe-url`, or
+    // one old enough to default to `no-referrer-when-downgrade` (which sends
+    // the full URL on an http -> https request), would hand the nonce over,
+    // and a holder of the nonce can fetch the page and read the developer
+    // token. The server must set the policy itself.
+    let page = response_to_probe(|_port, state| {
+        format!("GET /?state={state} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+    });
+    assert!(page.starts_with("HTTP/1.1 200"));
+    assert!(
+        page.contains("\r\nReferrer-Policy: no-referrer\r\n"),
+        "the sign-in page must not let the browser's referrer policy leak the nonce, got: {page}"
+    );
+}
+
 // A response larger than the socket send buffer, written to a client that stops
 // reading, blocks `write_all` with no timeout — holding the sign-in flow past
 // `AUTH_TIMEOUT`. `write_response` must arm a bounded write timeout first (a

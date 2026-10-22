@@ -9,7 +9,7 @@ use crate::audio::{AudioOutput, EqSnapshot};
 use crate::library::{Album, Playlist, Song};
 use crate::sample_library::sample_library;
 use crate::test_support::{
-    AudioCall, FailingAudio, FailingSeekAudio, PREVIEW_URL, RecordingAudio, StubTransport,
+    AudioCall, FailingAudio, FailingCommand, PREVIEW_URL, RecordingAudio, StubTransport,
     assert_ids, assert_preview_calls, assert_single_call, rest_session, sample_album,
     sample_artist, sample_song, sign_in_session,
 };
@@ -838,13 +838,13 @@ async fn seek_output_forwards_to_the_audio_backend() {
 // path can log the failure instead of silently claiming the preview moved.
 #[tokio::test]
 async fn seek_output_propagates_an_audio_backend_failure() {
-    let audio = Arc::new(FailingSeekAudio::default());
+    let audio = Arc::new(FailingAudio::failing_seek());
     let (service, state) = service_with_audio(Arc::clone(&audio) as Arc<dyn AudioOutput>);
 
     let error = service.seek_output(-5).unwrap_err();
 
     assert_eq!(error.to_string(), "the audio device is gone");
-    assert_eq!(audio.attempts(), 1);
+    assert_eq!(audio.attempts(FailingCommand::Seek), 1);
     assert_eq!(*state.lock().await, AppState::default());
 }
 
@@ -1160,7 +1160,7 @@ async fn play_track_starts_the_preview_at_the_states_equalizer() {
 // back.
 #[tokio::test]
 async fn play_track_propagates_an_audio_backend_failure() {
-    let (service, state) = service_with_audio(Arc::new(FailingAudio));
+    let (service, state) = service_with_audio(Arc::new(FailingAudio::failing_play()));
 
     let error = service
         .play_track("song-1", Some(PREVIEW_URL), || true)
@@ -1179,7 +1179,7 @@ async fn play_track_propagates_an_audio_backend_failure() {
 // land — and the rollback then leaves the flag set.
 #[tokio::test]
 async fn play_track_rollback_leaves_a_newer_plays_flag_alone() {
-    let (service, state) = service_with_audio(Arc::new(FailingAudio));
+    let (service, state) = service_with_audio(Arc::new(FailingAudio::failing_play()));
 
     // First call (the commit guard) reports current; the second (the rollback
     // guard) reports superseded.

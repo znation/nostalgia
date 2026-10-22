@@ -21,7 +21,8 @@ exactly one level up, and Back never falls through to the wrong level:
 
 Artists itself has no level above it, so Back there is a no-op (and the Back button is not shown).
 
-**Enforced by.** The `Message::Back` arm in `src/ui/mod.rs` checks `search_active` first, then
+**Enforced by.** The `Message::Back` handler — `browse::back` in `src/ui/handlers/browse.rs`,
+routed from the `update` dispatch table in `src/ui/mod.rs` — checks `search_active` first, then
 matches on `current_view` and `songs_origin` to pick the one level up. `views::can_go_back` in
 `src/ui/views/browse.rs` (re-exported by `src/ui/views/mod.rs`) decides whether the Back button is
 shown; it returns false only for `CurrentView::Artists`.
@@ -57,8 +58,9 @@ that rendered it is still current: a press that outlived its list is a no-op.
   to a message; a superseded result maps to `Message::Ignored` instead of a `*Loaded`/`*LoadFailed`
   message (see `loading::fetch_into`).
 - `BrowseList::is_current` re-checks the same request counter at the store on the UI thread, in
-  the `Message::BrowseReply` arm of `update` in `src/ui/mod.rs`, closing the window where a
-  navigation issues a newer request between the executor check and the store.
+  the `Message::BrowseReply` handler (`browse::browse_reply` in `src/ui/handlers/browse.rs`),
+  closing the window where a navigation issues a newer request between the executor check and
+  the store.
 - `BrowseList::select` rejects a selection whose epoch no longer matches the list's epoch (the
   list was replaced after the row rendered) or whose index no longer names a row.
   `store`/`store_with_row_text` bump the epoch on replacement; `clear` deliberately leaves it alone,
