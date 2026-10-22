@@ -1,7 +1,6 @@
 use super::playback::play_log_line;
 use super::threads::{
-    REST_THREAD_NAME, SIGN_IN_THREAD_NAME, off_thread, off_thread_with, spawn_sign_in_thread,
-    start_sign_in_with, startup_token,
+    off_thread, off_thread_with, spawn_sign_in_thread, start_sign_in_with, startup_token,
 };
 use super::validation::{IdKind, ensure_id_is_valid, is_numeric_host_form, preview_url_problem};
 use super::*;
@@ -1734,7 +1733,9 @@ fn start_sign_in_reports_a_thread_spawn_failure_as_a_seam_error() {
 // The startup sign-in runs on a named thread, so a panic in the blocking
 // sign-in is attributed to `nostalgia-signin` rather than `<unnamed>`. Pin the
 // name on the production spawner, since the failure test above injects its own
-// spawner and would not notice a rename.
+// spawner and would not notice a rename. The name is spelled out here rather
+// than read back from `SIGN_IN_THREAD_NAME`, so a rename of the constant fails
+// this test instead of renaming the thread and its assertion together.
 #[test]
 fn spawn_sign_in_thread_names_its_work_thread() {
     let (sender, receiver) = std::sync::mpsc::channel();
@@ -1745,7 +1746,7 @@ fn spawn_sign_in_thread_names_its_work_thread() {
 
     assert_eq!(
         receiver.recv().unwrap().as_deref(),
-        Some(SIGN_IN_THREAD_NAME)
+        Some("nostalgia-signin")
     );
 }
 
@@ -2067,7 +2068,9 @@ async fn off_thread_reports_an_error_when_its_work_thread_panics() {
 // there is attributed to `nostalgia-rest` rather than `<unnamed>`. Pin the
 // name: a regression back to a bare `std::thread::spawn` would leave the panic
 // test above green (it checks only the error) while the log lost the
-// attribution.
+// attribution. The name is spelled out here rather than read back from
+// `REST_THREAD_NAME`, so a rename of the constant fails this test instead of
+// renaming the thread and its assertion together.
 #[tokio::test]
 async fn off_thread_names_its_work_thread() {
     let name =
@@ -2075,7 +2078,7 @@ async fn off_thread_names_its_work_thread() {
             .await
             .unwrap();
 
-    assert_eq!(name.as_deref(), Some(REST_THREAD_NAME));
+    assert_eq!(name.as_deref(), Some("nostalgia-rest"));
 }
 
 // `std::thread::spawn` panics when the OS refuses a thread, which would abort

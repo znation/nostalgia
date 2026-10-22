@@ -5,6 +5,11 @@ use crate::music_kit_auth::{MusicKitSession, authorize, open_in_browser};
 
 /// The name the startup sign-in thread gets, so a panic in the blocking
 /// sign-in is attributed to `nostalgia-signin` rather than `<unnamed>`.
+///
+/// The name is the guarantee, not this constant: the test that pins the
+/// thread's name asserts the literal `nostalgia-signin`, so renaming the
+/// constant fails that test instead of silently renaming the thread and
+/// leaving the name the docs promise out of date.
 pub(super) const SIGN_IN_THREAD_NAME: &str = "nostalgia-signin";
 
 /// Starts the blocking sign-in for `developer_token` on `service` in the
@@ -86,6 +91,11 @@ pub(super) fn browser_sign_in(developer_token: &str) -> Result<MusicKitSession, 
 /// Naming the thread (like the audio worker's `nostalgia-audio`) means a panic
 /// there is attributed to `nostalgia-rest` in its message rather than to
 /// `<unnamed>`, so a crashed request is traceable to this seam.
+///
+/// The name is the guarantee, not this constant: the test that pins the
+/// thread's name asserts the literal `nostalgia-rest`, so renaming the
+/// constant fails that test instead of silently renaming the thread and
+/// leaving the name the docs promise out of date.
 pub(super) const REST_THREAD_NAME: &str = "nostalgia-rest";
 
 /// Runs `work` on a `std::thread` and awaits its result, so a blocking HTTP
