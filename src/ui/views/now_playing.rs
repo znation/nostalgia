@@ -1,5 +1,6 @@
-//! The Now Playing bar: the current track's resolved artist, title, and
-//! length on the LCD well, plus the pure helpers that resolve and format them.
+//! The Now Playing bar: the current track's resolved elapsed time, artist,
+//! title, and length on the LCD well, plus the pure helpers that resolve and
+//! format them.
 
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -15,12 +16,17 @@ use crate::ui::{Message, bevel, theme};
 
 /// The LCD's character budget for the combined artist/title line: sized to
 /// keep an overlong line inside the roughly 550px-wide window beside the
-/// `"Now Playing: "` caption and the time readout. A line that fits renders
-/// still and borrowed; a longer one scrolls through [`marquee_text`].
-pub(super) const MARQUEE_WIDTH: usize = 28;
+/// large elapsed readout, the `"Now Playing: "` caption, and the total at
+/// the right edge. A line that fits renders still and borrowed; a longer one
+/// scrolls through [`marquee_text`].
+pub(super) const MARQUEE_WIDTH: usize = 22;
 
 /// The spaces between the end of a scrolling line and its next repeat.
 const MARQUEE_GAP: usize = 3;
+
+/// The LCD's large elapsed-readout size in pixels, matching the mockup's big
+/// left-hand time readout.
+const LCD_ELAPSED_SIZE: f32 = 34.0;
 
 /// The number of characters the Now Playing line occupies: the label's
 /// characters, plus the artist's and the three characters of the `" - "`
@@ -118,8 +124,8 @@ pub fn now_playing_label<'a>(
 /// renderer.
 /// Looks up the [`KnownTrack`] for `current_track` in `tracks`, returning
 /// `None` when no track is current or the id is unknown. Shared by
-/// [`now_playing_label`], [`now_playing_artist`], and [`now_playing_time`] so
-/// the three stay in sync on the lookup.
+/// [`now_playing_label`], [`now_playing_artist`], [`now_playing_elapsed`], and
+/// [`now_playing_time`] so the four stay in sync on the lookup.
 pub(super) fn known_track_for<'a>(
     tracks: &'a HashMap<String, KnownTrack>,
     current_track: Option<&str>,
@@ -136,26 +142,43 @@ pub fn now_playing_artist<'a>(
         .unwrap_or(Cow::Borrowed(""))
 }
 
-/// The Now Playing bar's length readout for `current_track`: the elapsed time
-/// followed by the label cached in [`KnownTrack::time`] when the audio backend
-/// reports a position for a known track (`"0:45/3:30"`), that cached label
-/// alone when it does not, or `"--:--"` when the track is unknown or none is
-/// current. The plain known case borrows from `tracks`, so a per-frame bar
-/// refresh formats and allocates nothing there; the combined elapsed/total
-/// case allocates its `String`. Mirrors [`now_playing_label`] and
-/// [`now_playing_artist`]. Pure data → `Cow` so the resolution is testable
+/// The Now Playing bar's right-edge length readout for `current_track`: the
+/// plain total cached in [`KnownTrack::time`], or `"--:--"` when the track is
+/// unknown or none is current. A reported playback position never changes
+/// this readout; it drives [`now_playing_elapsed`] instead. The known case
+/// borrows from `tracks`, so a per-frame bar refresh formats and allocates
+/// nothing. Mirrors [`now_playing_label`], [`now_playing_artist`], and
+/// [`now_playing_elapsed`]. Pure data → `Cow` so the resolution is testable
 /// without an iced renderer.
 pub fn now_playing_time<'a>(
     tracks: &'a HashMap<String, KnownTrack>,
     current_track: Option<&str>,
+) -> Cow<'a, str> {
+    known_track_for(tracks, current_track)
+        .map(|track| Cow::Borrowed(track.time.as_str()))
+        .unwrap_or(Cow::Borrowed("--:--"))
+}
+
+/// The Now Playing bar's large elapsed readout for `current_track`: the
+/// backend-reported position formatted as zero-padded `MM:SS` when there is
+/// one (`"00:53"`), `"00:00"` when the track is known but no position is
+/// reported (no preview loaded, a failed start, or a backend that cannot
+/// answer), or `"--:--"` when the track is unknown or none is current.
+/// Mirrors [`now_playing_label`], [`now_playing_artist`], and
+/// [`now_playing_time`]. The placeholder cases borrow static strings, while a
+/// reported position allocates its formatted `String`. Pure data → `Cow` so
+/// the resolution is testable without an iced renderer.
+pub fn now_playing_elapsed<'a>(
+    tracks: &'a HashMap<String, KnownTrack>,
+    current_track: Option<&str>,
     position: Option<Duration>,
 ) -> Cow<'a, str> {
-    let Some(track) = known_track_for(tracks, current_track) else {
+    if known_track_for(tracks, current_track).is_none() {
         return Cow::Borrowed("--:--");
-    };
+    }
     match position {
-        Some(position) => Cow::Owned(now_playing_progress(duration_millis(position), &track.time)),
-        None => Cow::Borrowed(track.time.as_str()),
+        Some(position) => Cow::Owned(format_lcd_elapsed(duration_millis(position))),
+        None => Cow::Borrowed("00:00"),
     }
 }
 
@@ -165,18 +188,13 @@ fn duration_millis(duration: Duration) -> u64 {
     u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
 
-/// Formats an elapsed playback position in milliseconds as the
-/// [`format_minutes_seconds`] `m:ss` form, so `0` reads `"0:00"` and `192_000`
-/// reads `"3:12"`.
-pub fn format_position_time(position_ms: u64) -> String {
-    format_minutes_seconds(position_ms)
-}
-
-/// Joins an elapsed playback position with the track's formatted total as
-/// `"<elapsed>/<total>"`, so a 192-second position and a `"12:38"` total read
-/// `"3:12/12:38"`.
-pub fn now_playing_progress(position_ms: u64, total: &str) -> String {
-    format!("{}/{}", format_position_time(position_ms), total)
+/// Formats an elapsed playback position in milliseconds as the LCD's
+/// zero-padded `MM:SS` form, so `0` reads `"00:00"`, `53_000` reads `"00:53"`,
+/// and `192_000` reads `"03:12"`. Minutes are unbounded, so an hour or more
+/// reads `"60:00"`/`"61:05"` rather than rolling over.
+pub fn format_lcd_elapsed(position_ms: u64) -> String {
+    let total_seconds = position_ms / 1000;
+    format!("{:02}:{:02}", total_seconds / 60, total_seconds % 60)
 }
 
 /// Formats `duration_ms` as zero-padded `m:ss`, with unbounded minutes so an
@@ -201,30 +219,53 @@ pub fn format_track_time(duration_ms: u64) -> String {
     format_minutes_seconds(duration_ms)
 }
 
-/// The Now Playing bar: the "Now Playing:" caption followed by the current
-/// track's resolved artist and title (or "Nothing" when nothing is current),
-/// with the track's length ([`format_track_time`]) laid at the right edge of
-/// the LCD well. The artist (from [`now_playing_artist`]) is pushed before the
-/// title with a `" - "` separator only when it is non-empty, so an artist-less
-/// track still reads `Now Playing: <title>`. A line within
-/// [`MARQUEE_WIDTH`] characters keeps that borrowed, still layout; a longer
-/// one is combined into one string and windowed by [`marquee_text`] at
-/// `marquee_offset`, scrolling one character per tick through the gap and
-/// back to its start. The character budget is an approximation of the LCD's
-/// pixel width beside the caption and the time. Takes the already resolved
-/// label, artist, and time string so this per-frame widget build does no song
-/// lookup or formatting itself. All three text values are [`Cow`]s: the
+/// The Now Playing bar: the large elapsed readout at the left, then the
+/// "Now Playing:" caption followed by the current track's resolved artist and
+/// title (or "Nothing" when nothing is current), with the track's plain total
+/// length ([`format_track_time`]) laid at the right edge of the LCD well. The
+/// artist (from [`now_playing_artist`]) is pushed before the title with a
+/// `" - "` separator only when it is non-empty, so an artist-less track still
+/// reads `Now Playing: <title>`. A line within [`MARQUEE_WIDTH`] characters
+/// keeps that borrowed, still layout; a longer one is combined into one string
+/// and windowed by [`marquee_text`] at `marquee_offset`, scrolling one
+/// character per tick through the gap and back to its start. The character
+/// budget is an approximation of the LCD's pixel width beside the elapsed
+/// readout, the caption, and the total. Takes the already resolved elapsed,
+/// label, artist, and time strings so this per-frame widget build does no song
+/// lookup or formatting itself. All four text values are [`Cow`]s: the
 /// borrowed cases keep the strings owned by the caller's index (no
-/// allocation), while the owned fallback is moved into the widget, so the
+/// allocation), while the owned fallbacks are moved into the widget, so the
 /// built element never borrows a temporary; the scrolling branch allocates
 /// only its window, as the fitting branch allocates nothing.
 pub fn view_now_playing<'a>(
+    elapsed: Cow<'a, str>,
     label: Cow<'a, str>,
     artist: Cow<'a, str>,
     time: Cow<'a, str>,
     marquee_offset: usize,
 ) -> Element<'a, Message> {
-    bevel::lcd_well(now_playing_row(label, artist, time, marquee_offset))
+    bevel::lcd_well(now_playing_row(
+        elapsed,
+        label,
+        artist,
+        time,
+        marquee_offset,
+    ))
+}
+
+/// The LCD's large elapsed-readout text style: [`LCD_ELAPSED_SIZE`]px in
+/// [`theme::LCD_GREEN`], matching the colour of the line beside it.
+fn lcd_elapsed_text<'a, Theme, Renderer>(
+    fragment: impl iced::widget::text::IntoFragment<'a>,
+) -> Text<'a, Theme, Renderer>
+where
+    Theme: iced::widget::text::Catalog + 'a,
+    Theme::Class<'a>: From<iced::widget::text::StyleFn<'a, Theme>>,
+    Renderer: iced::advanced::text::Renderer,
+{
+    Text::new(fragment)
+        .size(LCD_ELAPSED_SIZE)
+        .color(theme::LCD_GREEN)
 }
 
 /// The LCD's text style: 20px in [`theme::LCD_GREEN`], shared by every green
@@ -244,6 +285,7 @@ where
 /// renderer so the tests can lay it out with iced's null renderer and read
 /// back the text it would draw.
 pub(super) fn now_playing_row<'a, Theme, Renderer>(
+    elapsed: Cow<'a, str>,
     label: Cow<'a, str>,
     artist: Cow<'a, str>,
     time: Cow<'a, str>,
@@ -255,7 +297,10 @@ where
     Renderer: iced::advanced::text::Renderer + 'a,
 {
     let line_len = display_len(&label, &artist);
-    let mut row = Row::new().push(Text::new("Now Playing: ").size(20));
+    let mut row = Row::new()
+        .push(lcd_elapsed_text(elapsed))
+        .push(Space::new().width(Length::Fixed(12.0)))
+        .push(Text::new("Now Playing: ").size(20));
     if line_len <= MARQUEE_WIDTH {
         if !artist.is_empty() {
             row = row.push(lcd_text(artist)).push(lcd_text(" - "));

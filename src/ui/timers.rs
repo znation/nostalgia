@@ -20,7 +20,7 @@ use super::{Message, shortcuts::message_for, ticks};
 pub(super) const MARQUEE_TICK: Duration = Duration::from_millis(250);
 
 /// How often the Now Playing bar polls the audio backend for the loaded
-/// preview's position, refreshing the elapsed/total readout. The audio backend
+/// preview's position, refreshing the large elapsed readout. The audio backend
 /// owns playback, so this bounds only how often the UI asks; it does not
 /// affect the audio itself.
 pub(super) const POSITION_POLL_INTERVAL: Duration = Duration::from_secs(1);

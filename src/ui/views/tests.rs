@@ -5,8 +5,8 @@ use super::browse::{
 };
 use super::equalizer::eq_enabled_label;
 use super::now_playing::{
-    KnownTrack, MARQUEE_WIDTH, display_len, format_position_time, format_track_time, marquee_text,
-    needs_marquee, now_playing_artist, now_playing_label, now_playing_progress, now_playing_row,
+    KnownTrack, MARQUEE_WIDTH, display_len, format_lcd_elapsed, format_track_time, marquee_text,
+    needs_marquee, now_playing_artist, now_playing_elapsed, now_playing_label, now_playing_row,
     now_playing_time,
 };
 use super::transport::{play_pause_label, repeat_label, shuffle_label, transport_buttons};
@@ -311,58 +311,66 @@ fn now_playing_time_resolves_known_track_to_cached_label() {
     let mut tracks = known_tracks(&[("song-1", "The Sample Band", "Opening")]);
     tracks.get_mut("song-1").expect("seed track").time = "3:30".to_string();
 
-    let time = now_playing_time(&tracks, Some("song-1"), None);
+    let time = now_playing_time(&tracks, Some("song-1"));
     assert_eq!(time, "3:30");
     assert!(matches!(&time, Cow::Borrowed(_)));
     assert_eq!(time.as_ptr(), tracks["song-1"].time.as_ptr());
 
-    let missing = now_playing_time(&tracks, Some("no-such-song"), None);
+    let missing = now_playing_time(&tracks, Some("no-such-song"));
     assert_eq!(missing, "--:--");
     assert!(matches!(&missing, Cow::Borrowed(_)));
 
-    let none = now_playing_time(&tracks, None, None);
+    let none = now_playing_time(&tracks, None);
     assert_eq!(none, "--:--");
     assert!(matches!(&none, Cow::Borrowed(_)));
 }
 
-// A known current track plus a backend-reported position renders the elapsed
-// time before the cached total; the combined form is owned because it joins
-// two formatted strings.
+// The right edge always shows the plain cached total; the backend-reported
+// position belongs to the separate left-hand elapsed readout, never to this
+// string.
 #[test]
-fn now_playing_time_shows_elapsed_over_total_when_a_position_is_known() {
+fn now_playing_time_returns_the_plain_total_even_with_a_position() {
     let mut tracks = known_tracks(&[("song-1", "The Sample Band", "Opening")]);
     tracks.get_mut("song-1").expect("seed track").time = "3:30".to_string();
 
-    let time = now_playing_time(&tracks, Some("song-1"), Some(Duration::from_secs(192)));
-    assert_eq!(time, "3:12/3:30");
-    assert!(matches!(&time, Cow::Owned(_)));
-
-    // An unknown id and no current track ignore the position and keep the
-    // placeholder, as they do without one.
+    assert_eq!(now_playing_time(&tracks, Some("song-1")), "3:30");
     assert_eq!(
-        now_playing_time(
-            &tracks,
-            Some("no-such-song"),
-            Some(Duration::from_secs(192))
-        ),
-        "--:--"
+        now_playing_elapsed(&tracks, Some("song-1"), Some(Duration::from_secs(192))),
+        "03:12"
     );
-    assert_eq!(
-        now_playing_time(&tracks, None, Some(Duration::from_secs(192))),
-        "--:--"
-    );
+    assert_eq!(now_playing_time(&tracks, Some("song-1")), "3:30");
 }
 
 #[test]
-fn format_position_time_formats_elapsed_and_zero() {
-    assert_eq!(format_position_time(0), "0:00");
-    assert_eq!(format_position_time(192_000), "3:12");
-    assert_eq!(format_position_time(65_000), "1:05");
+fn now_playing_elapsed_reads_placeholder_zero_or_position() {
+    let mut tracks = known_tracks(&[("song-1", "The Sample Band", "Opening")]);
+    tracks.get_mut("song-1").expect("seed track").time = "3:30".to_string();
+
+    let unknown = now_playing_elapsed(&tracks, Some("no-such-song"), Some(Duration::from_secs(53)));
+    assert_eq!(unknown, "--:--");
+    assert!(matches!(&unknown, Cow::Borrowed(_)));
+
+    let none = now_playing_elapsed(&tracks, None, Some(Duration::from_secs(53)));
+    assert_eq!(none, "--:--");
+    assert!(matches!(&none, Cow::Borrowed(_)));
+
+    let zero = now_playing_elapsed(&tracks, Some("song-1"), None);
+    assert_eq!(zero, "00:00");
+    assert!(matches!(&zero, Cow::Borrowed(_)));
+
+    let position = now_playing_elapsed(&tracks, Some("song-1"), Some(Duration::from_secs(53)));
+    assert_eq!(position, "00:53");
+    assert!(matches!(&position, Cow::Owned(_)));
 }
 
 #[test]
-fn now_playing_progress_joins_elapsed_and_total() {
-    assert_eq!(now_playing_progress(192_000, "12:38"), "3:12/12:38");
+fn format_lcd_elapsed_pads_minutes_and_seconds() {
+    assert_eq!(format_lcd_elapsed(0), "00:00");
+    assert_eq!(format_lcd_elapsed(53_000), "00:53");
+    assert_eq!(format_lcd_elapsed(192_000), "03:12");
+    // Minutes stay unbounded, so an hour reads as 60:00 rather than rolling
+    // over.
+    assert_eq!(format_lcd_elapsed(3_600_000), "60:00");
 }
 
 #[test]
@@ -418,13 +426,20 @@ impl Operation for CapturedText {
     }
 }
 
-/// Lays out the Now Playing row for `label` and `artist` at `marquee_offset`
-/// and returns the text fragments it would draw.
+/// Lays out the Now Playing row for `elapsed`, `label`, and `artist` at
+/// `marquee_offset` and returns the text fragments it would draw.
 ///
-/// The length readout is fixed at `"3:30"`, which the row draws at the right
-/// edge of the LCD well.
-fn captured_now_playing_texts(label: &str, artist: &str, offset: usize) -> Vec<String> {
+/// The total readout is fixed at `"3:30"`, which the row draws at the right
+/// edge of the LCD well. The first fragment is asserted to be `elapsed`: the
+/// large elapsed readout leads the row.
+fn captured_now_playing_texts(
+    elapsed: &str,
+    label: &str,
+    artist: &str,
+    offset: usize,
+) -> Vec<String> {
     let mut element: iced::Element<'_, Message, iced::Theme, ()> = now_playing_row(
+        Cow::Borrowed(elapsed),
         Cow::Borrowed(label),
         Cow::Borrowed(artist),
         Cow::Borrowed("3:30"),
@@ -438,6 +453,12 @@ fn captured_now_playing_texts(label: &str, artist: &str, offset: usize) -> Vec<S
     element
         .as_widget_mut()
         .operate(&mut tree, Layout::new(&node), &(), &mut captured);
+    assert_eq!(
+        captured.0.first().map(String::as_str),
+        Some(elapsed),
+        "the elapsed readout must lead the row: {:?}",
+        captured.0
+    );
     captured.0
 }
 
@@ -465,11 +486,11 @@ fn needs_marquee_only_for_a_line_too_long_for_the_lcd() {
     assert!(!needs_marquee(&"x".repeat(MARQUEE_WIDTH), ""));
     assert!(needs_marquee(&"x".repeat(MARQUEE_WIDTH + 1), ""));
     // With an artist, the artist and the `" - "` separator count towards the
-    // budget: "The Sample Band" is 15 characters, so a 10-character label
-    // fits and an 11-character one does not.
+    // budget: "The Sample Band" is 15 characters, so a 4-character label fits
+    // the 22-character budget and a 5-character one does not.
     let artist = "The Sample Band";
-    assert!(!needs_marquee(&"x".repeat(10), artist));
-    assert!(needs_marquee(&"x".repeat(11), artist));
+    assert!(!needs_marquee(&"x".repeat(4), artist));
+    assert!(needs_marquee(&"x".repeat(5), artist));
 }
 
 // The row the Now Playing bar renders must use that window: an overlong line
@@ -484,18 +505,22 @@ fn overlong_now_playing_line_renders_a_new_window_as_the_offset_advances() {
     let second_window = marquee_text(&display, 1, MARQUEE_WIDTH);
     assert_ne!(first_window, second_window);
 
-    let first = captured_now_playing_texts(label, artist, 0);
-    let second = captured_now_playing_texts(label, artist, 1);
+    let first = captured_now_playing_texts("00:53", label, artist, 0);
+    let second = captured_now_playing_texts("00:53", label, artist, 1);
     assert!(first.iter().any(|text| text == &first_window), "{first:?}");
     assert!(
         second.iter().any(|text| text == &second_window),
         "{second:?}"
     );
 
-    let still_a = captured_now_playing_texts("Opening", artist, 0);
-    let still_b = captured_now_playing_texts("Opening", artist, 5);
+    // A line that fits still renders the separate artist and title at every
+    // offset: "Band" (4) plus the 3-character separator plus "Opening" (7)
+    // is 14 characters, within the 22-character budget.
+    let still_artist = "Band";
+    let still_a = captured_now_playing_texts("00:00", "Opening", still_artist, 0);
+    let still_b = captured_now_playing_texts("00:00", "Opening", still_artist, 5);
     assert_eq!(still_a, still_b);
-    assert!(still_a.iter().any(|text| text == artist));
+    assert!(still_a.iter().any(|text| text == still_artist));
     assert!(still_a.iter().any(|text| text == "Opening"));
 }
 
@@ -509,7 +534,7 @@ fn overlong_now_playing_line_renders_a_new_window_as_the_offset_advances() {
 // empty-artist row was only constructed by the smoke test, never read back.
 #[test]
 fn now_playing_row_omits_the_artist_separator_when_the_track_has_no_artist() {
-    let texts = captured_now_playing_texts("Opening", "", 0);
+    let texts = captured_now_playing_texts("00:00", "Opening", "", 0);
 
     assert!(
         texts.iter().any(|text| text == "Opening"),
@@ -536,7 +561,7 @@ fn an_overlong_title_without_an_artist_scrolls_the_title_alone() {
     let label = "A Title Much Longer Than The Display";
     let window = marquee_text(label, 0, MARQUEE_WIDTH);
 
-    let texts = captured_now_playing_texts(label, "", 0);
+    let texts = captured_now_playing_texts("00:00", label, "", 0);
 
     assert!(
         texts.iter().any(|text| text == &window),
@@ -872,9 +897,22 @@ fn browse_placeholder_shows_the_fetch_error_instead_of_the_empty_wording() {
 
 #[test]
 fn now_playing_bar_and_browse_action_buttons_construct() {
-    let _bar = view_now_playing("Opening".into(), "The Sample Band".into(), "3:30".into(), 0);
-    let _bar = view_now_playing("Opening".into(), "".into(), "3:30".into(), 4);
+    let _bar = view_now_playing(
+        "00:00".into(),
+        "Opening".into(),
+        "The Sample Band".into(),
+        "3:30".into(),
+        0,
+    );
+    let _bar = view_now_playing(
+        "00:53".into(),
+        "Opening".into(),
+        "".into(),
+        "3:30".into(),
+        4,
+    );
     let _overlong = view_now_playing(
+        "03:12".into(),
         "A Title Much Longer Than The Display".into(),
         "The Sample Band".into(),
         "3:30".into(),

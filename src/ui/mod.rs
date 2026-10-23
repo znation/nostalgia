@@ -305,9 +305,9 @@ struct WinampPlayer {
     marquee_offset: usize,
     /// The loaded preview's last reported playback position, or `None` when no
     /// preview is loaded or the backend cannot answer. `Message::PlaybackPosition`
-    /// stores it; the Now Playing bar reads it to show `elapsed/total`. Pause
-    /// leaves it alone, so the bar keeps showing the paused player's frozen
-    /// position.
+    /// stores it; the Now Playing bar reads it for the large elapsed readout.
+    /// Pause leaves it alone, so the bar keeps showing the paused player's
+    /// frozen position.
     playback_position: Option<Duration>,
     /// The playback transition counter. A position query carries its value;
     /// `reset_position_readout` bumps it on a Stop or a new selection, so a
@@ -412,15 +412,25 @@ impl WinampPlayer {
         views::now_playing_artist(&self.known_tracks, current_track)
     }
 
-    /// The Now Playing bar's length readout for `current_track`: the elapsed
-    /// and total time when [`Self::playback_position`] is known, otherwise the
-    /// total borrowed from the label cached in [`Self::known_tracks`]; a track
-    /// the index does not know reads the static `--:--` placeholder. Like the
-    /// label and artist, the plain known case borrows from the index, so
-    /// `view` renders the bar without formatting or allocating a `String` per
-    /// frame; the combined elapsed/total case allocates.
+    /// The Now Playing bar's right-edge length readout for `current_track`: the
+    /// plain total borrowed from the label cached in [`Self::known_tracks`], or
+    /// the static `--:--` placeholder for a track the index does not know. A
+    /// reported playback position never changes it; the big elapsed readout
+    /// comes from [`Self::now_playing_elapsed`] instead. Like the label and
+    /// artist, the known case borrows from the index, so `view` renders the bar
+    /// without formatting or allocating a `String` per frame.
     fn now_playing_time<'a>(&'a self, current_track: Option<&str>) -> Cow<'a, str> {
-        views::now_playing_time(&self.known_tracks, current_track, self.playback_position)
+        views::now_playing_time(&self.known_tracks, current_track)
+    }
+
+    /// The Now Playing bar's large left-hand elapsed readout for
+    /// `current_track`: the position [`Self::playback_position`] reports as
+    /// zero-padded `MM:SS`, `00:00` for a known track the backend reports no
+    /// position for, or the static `--:--` placeholder when the track is
+    /// unknown or none is current. The placeholder cases borrow, so a per-frame
+    /// refresh allocates only while a position is actually reported.
+    fn now_playing_elapsed<'a>(&'a self, current_track: Option<&str>) -> Cow<'a, str> {
+        views::now_playing_elapsed(&self.known_tracks, current_track, self.playback_position)
     }
 
     /// Whether the Now Playing line is too long for the LCD's character
@@ -571,17 +581,18 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
         return views::view_title_bar(player.always_on_top);
     }
 
-    // The now-playing title, artist, and time are resolved while the state
-    // lock is held, from a borrowed `current_track` against the accumulated
-    // `known_tracks` index (see [`WinampPlayer::now_playing_label`],
-    // [`WinampPlayer::now_playing_artist`], and
-    // [`WinampPlayer::now_playing_time`]). The label and artist borrow from
-    // `known_tracks` (or the `"Nothing"`/`""` literals); the time readout
-    // borrows the cached total unless a loaded preview position is known, in
-    // which case it allocates the combined `elapsed/total` string.
+    // The now-playing title, artist, elapsed time, and total are resolved while
+    // the state lock is held, from a borrowed `current_track` against the
+    // accumulated `known_tracks` index (see [`WinampPlayer::now_playing_label`],
+    // [`WinampPlayer::now_playing_artist`], [`WinampPlayer::now_playing_elapsed`],
+    // and [`WinampPlayer::now_playing_time`]). The label, artist, and elapsed
+    // placeholder borrow from `known_tracks` (or the `"Nothing"`/`""`/
+    // `"00:00"`/`"--:--"` literals); the total borrows the cached length, while
+    // a reported elapsed position allocates its formatted `MM:SS` string.
     let (
         now_playing,
         now_playing_artist,
+        now_playing_elapsed,
         now_playing_time,
         is_playing,
         volume,
@@ -597,6 +608,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
         (
             player.now_playing_label(state.current_track.as_deref()),
             player.now_playing_artist(state.current_track.as_deref()),
+            player.now_playing_elapsed(state.current_track.as_deref()),
             player.now_playing_time(state.current_track.as_deref()),
             state.is_playing,
             state.volume(),
@@ -674,6 +686,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     let mut column = Column::new()
         .push(views::view_title_bar(player.always_on_top))
         .push(views::view_now_playing(
+            now_playing_elapsed,
             now_playing,
             now_playing_artist,
             now_playing_time,

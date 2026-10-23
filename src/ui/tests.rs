@@ -3263,17 +3263,23 @@ fn now_playing_time_shows_the_played_tracks_duration_after_browsing_to_another_a
     assert_eq!(player.now_playing_time(Some("no-such-song")), "--:--");
 }
 
-// The bar shows the elapsed position ahead of the total while the backend
-// reports one, and falls back to the plain total as soon as it does not.
+// The bar's large left readout follows the backend's reported position while
+// it is known and reads 00:00 before one is reported, while the right edge
+// keeps showing the plain cached total.
 #[test]
-fn now_playing_time_shows_elapsed_over_total_while_a_position_is_known() {
+fn now_playing_elapsed_shows_the_position_while_it_is_known() {
     let (mut player, current_track) = play_song_1_then_browse_to_album_2();
 
+    assert_eq!(
+        player.now_playing_elapsed(current_track.as_deref()),
+        "00:00"
+    );
     player.playback_position = Some(Duration::from_secs(45));
     assert_eq!(
-        player.now_playing_time(current_track.as_deref()),
-        "0:45/3:30"
+        player.now_playing_elapsed(current_track.as_deref()),
+        "00:45"
     );
+    assert_eq!(player.now_playing_time(current_track.as_deref()), "3:30");
 }
 
 // Pause stops the backend clock but keeps the loaded player, so the stored
@@ -3289,9 +3295,10 @@ fn pause_keeps_the_stored_elapsed_readout() {
 
     assert_eq!(player.playback_position, Some(Duration::from_secs(45)));
     assert_eq!(
-        player.now_playing_time(current_track.as_deref()),
-        "0:45/3:30"
+        player.now_playing_elapsed(current_track.as_deref()),
+        "00:45"
     );
+    assert_eq!(player.now_playing_time(current_track.as_deref()), "3:30");
 }
 
 // A seek moves the backend, and the next poll's reply carries the new
@@ -3313,8 +3320,8 @@ fn a_position_reply_after_a_seek_updates_the_readout() {
     );
 
     assert_eq!(
-        player.now_playing_time(current_track.as_deref()),
-        "0:50/3:30"
+        player.now_playing_elapsed(current_track.as_deref()),
+        "00:50"
     );
 }
 
@@ -3327,6 +3334,7 @@ fn track_selected_clears_the_elapsed_readout() {
     let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
 
     assert_eq!(player.playback_position, None);
+    assert_eq!(player.now_playing_elapsed(Some("song-1")), "00:00");
     assert_eq!(player.now_playing_time(Some("song-1")), "3:30");
 }
 
@@ -3338,6 +3346,10 @@ fn stop_clears_the_elapsed_readout() {
     let _ = update(&mut player, Message::Stop);
 
     assert_eq!(player.playback_position, None);
+    assert_eq!(
+        player.now_playing_elapsed(current_track.as_deref()),
+        "00:00"
+    );
     assert_eq!(player.now_playing_time(current_track.as_deref()), "3:30");
 }
 
@@ -3364,6 +3376,10 @@ fn position_poll_waits_for_a_stop_to_reach_the_backend() {
 
     let _ = update(&mut player, Message::TransportSettled);
     assert_message_schedules_work(&mut player, Message::PositionTick);
+    assert_eq!(
+        player.now_playing_elapsed(current_track.as_deref()),
+        "00:00"
+    );
     assert_eq!(player.now_playing_time(current_track.as_deref()), "3:30");
 }
 
@@ -3455,6 +3471,10 @@ fn position_replies_store_and_stale_ones_are_dropped() {
     );
 
     assert_eq!(player.playback_position, None);
+    assert_eq!(
+        player.now_playing_elapsed(current_track.as_deref()),
+        "00:00"
+    );
     assert_eq!(player.now_playing_time(current_track.as_deref()), "3:30");
 
     // A reply stamped with the epoch the Stop left behind is stored, so the
