@@ -39,35 +39,52 @@ pub(in crate::ui) use view::view;
 
 use timers::subscriptions;
 
+use crate::settings::{FileStore, Settings};
 use crate::{apple_music::AppleMusicService, state::AppState};
 
 /// Runs the UI, blocking until the window is closed.
 ///
 /// `service` is the [`AppleMusicService`] `main` built and ran the startup
 /// sign-in on; the UI stores a clone, so the session that sign-in stores is the
-/// session the UI later reads. `main` must call this from a plain (non-async)
-/// context: iced drives its event loop synchronously on the calling thread, and
-/// `update`/`view` use `blocking_lock` on the shared state, which panics inside
-/// a runtime.
+/// session the UI later reads. `store` and `saved` are the settings file's
+/// writer and the snapshot `main` already restored into `state`; the player
+/// keeps both so `update` can save every later change. `main` must call this
+/// from a plain (non-async) context: iced drives its event loop synchronously
+/// on the calling thread, and `update`/`view` use `blocking_lock` on the shared
+/// state, which panics inside a runtime.
 ///
 /// # Errors
 ///
 /// Returns the error iced reports when the application fails to start, such
 /// as a window that cannot be created.
-pub fn init_ui(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> iced::Result {
-    iced::application(move || boot(state.clone(), service.clone()), update, view)
-        .title("nostalgia")
-        .theme(|_: &WinampPlayer| theme::winamp_theme())
-        .decorations(false)
-        .resizable(false)
-        .subscription(|player| {
-            iced::Subscription::batch(subscriptions(
-                player.needs_marquee(),
-                player.needs_position_poll(),
-                player.needs_spectrum_poll(),
-            ))
-        })
-        .run()
+pub fn init_ui(
+    state: Arc<Mutex<AppState>>,
+    service: AppleMusicService,
+    store: FileStore,
+    saved: Settings,
+) -> iced::Result {
+    iced::application(
+        move || {
+            let (mut player, task) = boot(state.clone(), service.clone());
+            player.settings_store = Some(Box::new(store.clone()));
+            player.saved_settings = saved.clone();
+            (player, task)
+        },
+        update,
+        view,
+    )
+    .title("nostalgia")
+    .theme(|_: &WinampPlayer| theme::winamp_theme())
+    .decorations(false)
+    .resizable(false)
+    .subscription(|player| {
+        iced::Subscription::batch(subscriptions(
+            player.needs_marquee(),
+            player.needs_position_poll(),
+            player.needs_spectrum_poll(),
+        ))
+    })
+    .run()
 }
 
 fn boot(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> (WinampPlayer, Task<Message>) {
@@ -105,7 +122,7 @@ fn boot(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> (WinampPlaye
 /// actions in `handlers::window`. The table carries no behavior of its own,
 /// so a change to one concern stays in that concern's module.
 fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
-    match message {
+    let task = match message {
         Message::PlayPause => handlers::playback::play_pause(player),
         Message::Play => handlers::playback::play(player),
         Message::Pause => handlers::playback::pause(player),
@@ -218,7 +235,12 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::ToggleAlwaysOnTop => handlers::window::toggle_always_on_top(player),
         Message::Ignored => handlers::browse::fetch::ignored(player),
         Message::TransportSettled => handlers::playback::transport_settled(player),
-    }
+    };
+    // Every message goes through this one save point, so a settings change is
+    // persisted without a save call in each handler. The snapshot comparison
+    // inside the helper keeps timer and poll messages from writing.
+    player.persist_settings_if_changed();
+    task
 }
 #[cfg(test)]
 mod tests;

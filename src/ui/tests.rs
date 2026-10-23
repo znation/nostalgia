@@ -7,6 +7,7 @@ use crate::audio::{PlaybackFormat, Spectrum};
 use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB};
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::sample_library::sample_library;
+use crate::settings::{Settings, SettingsWriter};
 use crate::state::TransportMode;
 use crate::test_support::{
     AudioCall, FailingAudio, FailingCommand, PREVIEW_URL, RecordingAudio, StubTransport,
@@ -224,6 +225,67 @@ fn assert_message_clamps(message: Message, read: impl Fn(&AppState) -> f32, expe
     let (mut player, state) = test_player();
     let _ = update(&mut player, message);
     assert_eq!(read(&state.blocking_lock()), expected);
+}
+
+/// An in-memory [`SettingsWriter`] that records every saved snapshot, so the
+/// update loop's save-on-change behavior is asserted without disk I/O. Cloning
+/// the store shares the recording, letting a test keep a handle after attaching
+/// a boxed clone to the player.
+#[derive(Clone, Default)]
+struct MemorySettingsStore {
+    saved: Arc<std::sync::Mutex<Vec<Settings>>>,
+}
+
+impl MemorySettingsStore {
+    /// The snapshots saved so far, in save order.
+    fn snapshots(&self) -> Vec<Settings> {
+        self.saved.lock().unwrap().clone()
+    }
+}
+
+impl SettingsWriter for MemorySettingsStore {
+    fn save(&self, settings: &Settings) {
+        self.saved.lock().unwrap().push(settings.clone());
+    }
+}
+
+#[test]
+fn a_changed_setting_is_saved_once_and_unchanged_updates_are_not() {
+    let (mut player, state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+
+    let _ = update(&mut player, Message::VolumeChange(0.8));
+    let expected = Settings::from_state(&state.blocking_lock());
+    assert_eq!(store.snapshots(), vec![expected]);
+    assert_eq!(state.blocking_lock().volume(), 0.8);
+
+    let _ = update(&mut player, Message::Ignored);
+    assert_eq!(store.snapshots().len(), 1);
+}
+
+#[test]
+fn repeat_and_equalizer_changes_reach_the_saved_snapshot() {
+    let (mut player, state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+
+    let _ = update(&mut player, Message::ToggleRepeat);
+    assert_eq!(store.snapshots().len(), 1);
+    assert_eq!(
+        store.snapshots()[0],
+        Settings::from_state(&state.blocking_lock())
+    );
+
+    let _ = update(&mut player, Message::EqPresetSelected(rock_preset()));
+    let current = {
+        let state = state.blocking_lock();
+        assert!(state.repeat);
+        assert_eq!(state.eq_preset(), Some(rock_preset()));
+        Settings::from_state(&state)
+    };
+    assert_eq!(store.snapshots().len(), 2);
+    assert_eq!(store.snapshots()[1], current);
 }
 
 /// The longest a driven `Task` is allowed to take before its test fails.

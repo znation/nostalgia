@@ -68,6 +68,7 @@ pub mod library;
 pub mod music_error;
 pub mod music_kit_auth;
 pub mod sample_library;
+pub mod settings;
 pub mod state;
 #[cfg(test)]
 mod test_support;
@@ -77,7 +78,16 @@ pub mod ui;
 use crate::state::AppState;
 
 fn main() -> iced::Result {
-    let state = Arc::new(Mutex::new(AppState::default()));
+    // Resolve the persisted mixer and equalizer snapshot once, before the
+    // first view, and hand both the store and the restored snapshot to the
+    // UI so its update loop can save later changes.
+    let store = settings::FileStore::from_environment();
+    let mut initial_state = AppState::default();
+    if let Some(saved) = store.load() {
+        saved.apply_to(&mut initial_state);
+    }
+    let saved = settings::Settings::from_state(&initial_state);
+    let state = Arc::new(Mutex::new(initial_state));
 
     // Initialize the Apple Music service. The same service instance is
     // handed to the UI, so the UI's clone shares the session the startup
@@ -87,5 +97,5 @@ fn main() -> iced::Result {
     println!("Winamp-style Apple Music Player started!");
 
     // Run the UI; blocks until the window is closed.
-    ui::init_ui(state, service)
+    ui::init_ui(state, service, store, saved)
 }

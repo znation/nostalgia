@@ -12,6 +12,7 @@ use tokio::sync::Mutex;
 use crate::apple_music::AppleMusicService;
 use crate::audio::{PlaybackFormat, Spectrum};
 use crate::library::{Album, Artist, Playlist, Song};
+use crate::settings::{Settings, SettingsWriter};
 use crate::state::AppState;
 
 use super::browse::BrowseList;
@@ -165,6 +166,14 @@ pub(in crate::ui) struct WinampPlayer {
     /// overwrite the newer one, so the Now Playing bar names the wrong
     /// track.
     pub(in crate::ui) plays_generation: Arc<AtomicU64>,
+    /// The settings file writer, attached by `init_ui` from the store `main`
+    /// resolved. `None` in tests and before boot attaches it, which makes
+    /// [`Self::persist_settings_if_changed`] a no-op.
+    pub(in crate::ui) settings_store: Option<Box<dyn SettingsWriter>>,
+    /// The mixer and equalizer snapshot last loaded or saved. `update` compares
+    /// the state's current snapshot against it after every message, so only a
+    /// message that actually changed one of those values writes the file.
+    pub(in crate::ui) saved_settings: Settings,
 }
 
 /// Which browse screen is showing. Payload-free: the albums and songs the
@@ -230,7 +239,33 @@ impl WinampPlayer {
             position_epoch: 0,
             pending_position_transitions: 0,
             plays_generation: Arc::new(AtomicU64::new(0)),
+            settings_store: None,
+            saved_settings: Settings::default(),
         }
+    }
+
+    /// Save the mixer and equalizer values when the current state differs from
+    /// the last saved snapshot. `update` calls this once after every message,
+    /// so a changed volume, balance, toggle, or equalizer value is written
+    /// without a save call in each handler; an unchanged snapshot writes
+    /// nothing, which keeps timer and backend poll messages from touching the
+    /// file. With no store attached (tests, and before `init_ui` attaches the
+    /// production one) this returns before taking the state lock.
+    pub(in crate::ui) fn persist_settings_if_changed(&mut self) {
+        if self.settings_store.is_none() {
+            return;
+        }
+        let snapshot = {
+            let state = self.state.blocking_lock();
+            Settings::from_state(&state)
+        };
+        if snapshot == self.saved_settings {
+            return;
+        }
+        if let Some(store) = self.settings_store.as_deref() {
+            store.save(&snapshot);
+        }
+        self.saved_settings = snapshot;
     }
 
     /// The Now Playing bar's label for `current_track`, resolved against the
