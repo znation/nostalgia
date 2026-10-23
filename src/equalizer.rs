@@ -504,6 +504,33 @@ mod tests {
         }
     }
 
+    // Changing the curve while audio plays must clear the filters' internal
+    // state, not just rebuild their coefficients: otherwise the old curve's
+    // ringing carries into the new one. Drive an impulse through a boosted
+    // band, then switch to a flat curve and prove the next output matches a
+    // freshly built flat filter instead of continuing the old ringing.
+    #[test]
+    fn band_filter_set_curve_clears_the_previous_curves_ringing() {
+        let mut filter = BandFilter::new(44_100);
+        filter.set_curve(true, 0.0, &gain_curve(4, 12.0));
+
+        let _ = filter.process(1.0);
+        assert_ne!(
+            filter.process(0.0),
+            0.0,
+            "the boosted band must leave ringing state to clear"
+        );
+
+        filter.set_curve(true, 0.0, &[0.0; BAND_COUNT]);
+        let mut fresh = BandFilter::new(44_100);
+        fresh.set_curve(true, 0.0, &[0.0; BAND_COUNT]);
+        assert_eq!(
+            filter.process(0.0),
+            fresh.process(0.0),
+            "a changed curve must start from silence, not the old curve's ring"
+        );
+    }
+
     // The band sliders are useless if the filters ignore their gain, and a
     // sign error would make a boost cut. Drive a 1 kHz sine through the 1 kHz
     // band with +12 dB and -12 dB and compare the settled RMS with the input's.
