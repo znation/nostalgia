@@ -128,8 +128,9 @@ windows an overlong line, and `WinampPlayer::marquee_offset` carries the advance
 measure the line, and `ui::subscriptions` subscribes `marquee_ticks` only while that measure
 exceeds `MARQUEE_WIDTH`.
 
-The scrolling timer itself starts through `spawn_marquee_thread` in `src/ui/mod.rs`, the fallible
-`std::thread::Builder::spawn` every other worker in the app uses. `std::thread::spawn` panics when
+The scrolling timer itself starts through `spawn_marquee_thread` in `src/ui/mod.rs`, which delegates
+to `crate::threads::spawn_named`, the fallible `std::thread::Builder::spawn` every worker in the app
+uses. `std::thread::spawn` panics when
 the OS refuses a thread, and iced builds the subscription's stream on its main thread while it
 updates the subscriptions, so a refused timer thread is reported and the title stops scrolling
 rather than the panic unwinding the event loop.

@@ -101,15 +101,12 @@ fn marquee_tick_stream_with(
 }
 
 /// The production spawner for the marquee timer thread: the named
-/// [`MARQUEE_THREAD_NAME`] thread. `std::thread::Builder::spawn` is the
-/// fallible form `std::thread::spawn` wraps with a panic, and it is the same
-/// form the audio worker, the REST worker, the sign-in thread, and the
-/// timeout timer already use.
+/// [`MARQUEE_THREAD_NAME`] thread, started through
+/// [`crate::threads::spawn_named`]. That shared spawner uses the fallible
+/// `std::thread::Builder::spawn` form, as do the audio worker, the REST
+/// worker, the sign-in thread, and the timeout timer.
 fn spawn_marquee_thread(work: Box<dyn FnOnce() + Send>) -> io::Result<()> {
-    std::thread::Builder::new()
-        .name(MARQUEE_THREAD_NAME.to_string())
-        .spawn(work)
-        .map(|_handle| ())
+    crate::threads::spawn_named(MARQUEE_THREAD_NAME, work)
 }
 
 /// The name the marquee timer thread gets, so a panic in it is attributed to
@@ -198,15 +195,12 @@ fn position_tick_stream_with(
 }
 
 /// The production spawner for the position poll thread: the named
-/// [`POSITION_THREAD_NAME`] thread. `std::thread::Builder::spawn` is the
-/// fallible form `std::thread::spawn` wraps with a panic, and it is the same
-/// form the audio worker, the REST worker, the sign-in thread, the timeout
-/// timer, and the marquee timer already use.
+/// [`POSITION_THREAD_NAME`] thread, started through
+/// [`crate::threads::spawn_named`]. That shared spawner uses the fallible
+/// `std::thread::Builder::spawn` form, as do the audio worker, the REST
+/// worker, the sign-in thread, the timeout timer, and the marquee timer.
 fn spawn_position_thread(work: Box<dyn FnOnce() + Send>) -> io::Result<()> {
-    std::thread::Builder::new()
-        .name(POSITION_THREAD_NAME.to_string())
-        .spawn(work)
-        .map(|_handle| ())
+    crate::threads::spawn_named(POSITION_THREAD_NAME, work)
 }
 
 /// The name [`spawn_position_thread`] gives the position poll thread, so a

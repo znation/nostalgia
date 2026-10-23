@@ -593,14 +593,12 @@ fn reap_with_timeout(
 /// attributed to `nostalgia-opener-reaper` rather than `<unnamed>`.
 const REAPER_THREAD_NAME: &str = "nostalgia-opener-reaper";
 
-/// Starts the detached thread that waits on the opener, using the fallible
+/// Starts the detached thread that waits on the opener through
+/// [`crate::threads::spawn_named`], which uses the fallible
 /// [`thread::Builder::spawn`] so a thread-creation failure is returned to
 /// [`reap_with_timeout_and_spawn`] instead of panicking the sign-in thread.
 fn spawn_reaper(work: Box<dyn FnOnce() + Send>) -> io::Result<()> {
-    thread::Builder::new()
-        .name(REAPER_THREAD_NAME.to_string())
-        .spawn(work)
-        .map(|_| ())
+    crate::threads::spawn_named(REAPER_THREAD_NAME, work)
 }
 
 /// [`reap_with_timeout`] with an injectable thread spawner, so a test can drive

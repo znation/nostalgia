@@ -224,24 +224,22 @@ const TIMER_THREAD_NAME: &str = "nostalgia-timer";
 /// Starts the detached thread that fires `fired` only when `finished` has not
 /// reported within `timeout`, and returns whether the thread started.
 ///
-/// `std::thread::Builder::spawn` is the fallible form `std::thread::spawn`
-/// wraps with a panic; a thread-creation failure (thread exhaustion, say) is
-/// returned to [`with_timeout_with`] instead of aborting the app. The thread
-/// waits on `finished` with `recv_timeout`, so it exits as soon as the future
-/// completes instead of sleeping the full `timeout`.
+/// `crate::threads::spawn_named` starts the thread with the fallible
+/// `std::thread::Builder::spawn` form; a thread-creation failure (thread
+/// exhaustion, say) is returned to [`with_timeout_with`] instead of aborting
+/// the app. The thread waits on `finished` with `recv_timeout`, so it exits as
+/// soon as the future completes instead of sleeping the full `timeout`.
 fn spawn_timer(
     timeout: Duration,
     finished: std::sync::mpsc::Receiver<()>,
     fired: tokio::sync::oneshot::Sender<()>,
 ) -> bool {
-    std::thread::Builder::new()
-        .name(TIMER_THREAD_NAME.to_string())
-        .spawn(move || {
-            if finished.recv_timeout(timeout).is_err() {
-                let _ = fired.send(());
-            }
-        })
-        .is_ok()
+    crate::threads::spawn_named(TIMER_THREAD_NAME, move || {
+        if finished.recv_timeout(timeout).is_err() {
+            let _ = fired.send(());
+        }
+    })
+    .is_ok()
 }
 
 /// [`with_timeout`] with an injectable timer spawner, so a test can drive the

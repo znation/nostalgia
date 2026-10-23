@@ -221,12 +221,12 @@ impl RodioOutput {
     pub fn new() -> Result<Self, AppleMusicError> {
         let (commands, receiver) = mpsc::channel();
         let (ready_sender, ready_receiver) = mpsc::channel();
-        std::thread::Builder::new()
-            .name("nostalgia-audio".to_string())
-            .spawn(move || run_worker(receiver, ready_sender))
-            .map_err(|error| {
-                AppleMusicError::new(format!("spawning the audio thread failed: {error}"))
-            })?;
+        crate::threads::spawn_named("nostalgia-audio", move || {
+            run_worker(receiver, ready_sender)
+        })
+        .map_err(|error| {
+            AppleMusicError::new(format!("spawning the audio thread failed: {error}"))
+        })?;
 
         // Dropping `commands` on the error path closes the worker's channel, so
         // a worker still blocked in `open_default_sink` exits as soon as that

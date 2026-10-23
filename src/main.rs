@@ -71,6 +71,7 @@ pub mod sample_library;
 pub mod state;
 #[cfg(test)]
 mod test_support;
+pub mod threads;
 pub mod ui;
 
 use crate::state::AppState;

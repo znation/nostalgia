@@ -41,17 +41,12 @@ pub(super) fn start_sign_in_with(
 }
 
 /// [`start_sign_in`]'s production spawner: the named [`SIGN_IN_THREAD_NAME`]
-/// thread. Maps a thread-creation failure to an [`AppleMusicError`] naming the
-/// cause; `std::thread::Builder::spawn` is the fallible form
-/// `std::thread::spawn` wraps with a panic.
+/// thread, started through [`crate::threads::spawn_named`]. Maps a
+/// thread-creation failure to an [`AppleMusicError`] naming the cause.
 pub(super) fn spawn_sign_in_thread(work: Box<dyn FnOnce() + Send>) -> Result<(), AppleMusicError> {
-    std::thread::Builder::new()
-        .name(SIGN_IN_THREAD_NAME.to_string())
-        .spawn(work)
-        .map(|_handle| ())
-        .map_err(|error| {
-            AppleMusicError::new(format!("spawning the sign-in thread failed: {error}"))
-        })
+    crate::threads::spawn_named(SIGN_IN_THREAD_NAME, work).map_err(|error| {
+        AppleMusicError::new(format!("spawning the sign-in thread failed: {error}"))
+    })
 }
 
 /// Classifies the `APPLE_MUSIC_DEVELOPER_TOKEN` read: the token to sign in
@@ -115,20 +110,15 @@ pub(super) async fn off_thread<T: Send + 'static>(
     off_thread_with(work, spawn_rest_thread).await
 }
 
-/// Spawns `work` on the named REST thread, mapping a thread-creation failure
-/// to an [`AppleMusicError`] naming the cause. `std::thread::Builder::spawn` is
-/// the fallible form `std::thread::spawn` wraps with a panic; the audio
-/// worker's device thread uses the same form for the same reason.
+/// Spawns `work` on the named REST thread, started through
+/// [`crate::threads::spawn_named`], mapping a thread-creation failure to an
+/// [`AppleMusicError`] naming the cause.
 fn spawn_rest_thread(work: Box<dyn FnOnce() + Send>) -> Result<(), AppleMusicError> {
-    std::thread::Builder::new()
-        .name(REST_THREAD_NAME.to_string())
-        .spawn(work)
-        .map(|_handle| ())
-        .map_err(|error| {
-            AppleMusicError::new(format!(
-                "spawning the library request thread failed: {error}"
-            ))
-        })
+    crate::threads::spawn_named(REST_THREAD_NAME, work).map_err(|error| {
+        AppleMusicError::new(format!(
+            "spawning the library request thread failed: {error}"
+        ))
+    })
 }
 
 /// [`off_thread`] with an injectable spawner, so a test can drive the
