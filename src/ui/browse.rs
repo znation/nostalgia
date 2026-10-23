@@ -181,8 +181,9 @@ impl<T> BrowseList<T> {
     /// that compare equal (the sort is stable).
     ///
     /// The cached row titles and labels are rebuilt by the same permutation
-    /// whenever they are populated, so a reordered song list still shows each
-    /// track's own title and length. The epoch is bumped like
+    /// (see [`Self::reorder_rows`]) whenever they are populated, so a
+    /// reordered song list still shows each track's own title and length. The
+    /// epoch is bumped like
     /// [`Self::replace_rows`] because the indices a rendered row emits now name
     /// different entries; `loading`, `error`, and the request generation are
     /// left alone, and a list with fewer than two rows or one still loading is
@@ -213,22 +214,7 @@ impl<T> BrowseList<T> {
             Some(positions) => order.iter().map(|&index| positions[index]).collect(),
             None => order.clone(),
         });
-        self.items = order
-            .iter()
-            .map(|&index| self.items[index].clone())
-            .collect();
-        if !self.titles.is_empty() {
-            self.titles = order
-                .iter()
-                .map(|&index| self.titles[index].clone())
-                .collect();
-        }
-        if !self.labels.is_empty() {
-            self.labels = order
-                .iter()
-                .map(|&index| self.labels[index].clone())
-                .collect();
-        }
+        self.reorder_rows(&order);
         self.epoch = self.epoch.wrapping_add(1);
     }
 
@@ -253,23 +239,36 @@ impl<T> BrowseList<T> {
         for (current, &library) in positions.iter().enumerate() {
             inverse[library] = current;
         }
-        self.items = inverse
+        self.reorder_rows(&inverse);
+        self.epoch = self.epoch.wrapping_add(1);
+    }
+
+    /// Reorders `items`, and the cached `titles` and `labels` when they are
+    /// populated, by the permutation `order`: entry `i` of each buffer takes
+    /// the value that was at `order[i]`. Reordering all three together keeps
+    /// each row's cached title and label beside it. [`Self::sort_rows_by`] and
+    /// [`Self::restore_library_order`] both go through this, so neither can
+    /// forget one of the caches.
+    fn reorder_rows(&mut self, order: &[usize])
+    where
+        T: Clone,
+    {
+        self.items = order
             .iter()
             .map(|&index| self.items[index].clone())
             .collect();
         if !self.titles.is_empty() {
-            self.titles = inverse
+            self.titles = order
                 .iter()
                 .map(|&index| self.titles[index].clone())
                 .collect();
         }
         if !self.labels.is_empty() {
-            self.labels = inverse
+            self.labels = order
                 .iter()
                 .map(|&index| self.labels[index].clone())
                 .collect();
         }
-        self.epoch = self.epoch.wrapping_add(1);
     }
 
     /// Empties the rows and marks the list loading before a new fetch for this
