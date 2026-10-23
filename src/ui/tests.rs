@@ -5924,3 +5924,139 @@ fn root_view_draws_the_glyph_for_the_shared_transport_mode() {
         "Stop after Pause must draw the stopped glyph again"
     );
 }
+
+// The root `view` chooses the browse list to draw from `current_view`, passing
+// each level its own buffer, cached row text, and current-track id. The
+// per-level view tests feed each builder directly, and every root-view test
+// above lays out the default Artists level, so an arm wired to the wrong
+// buffer — or dropping the song caches or the playing marker — would still
+// pass them. Give every buffer distinct row text, labels, and total time, then
+// lay out the whole root once per level and read what it actually drew.
+#[test]
+fn root_view_draws_the_current_browse_levels_own_rows() {
+    let (mut player, state) = test_player();
+
+    let mut artist = sample_artist();
+    artist.name = "Artist Level Row".to_string();
+    let mut album = sample_album();
+    album.title = "Album Level Row".to_string();
+    let mut all_album = sample_album();
+    all_album.title = "All Albums Level Row".to_string();
+    let mut song = sample_song();
+    song.title = "Songs Item Title".to_string();
+    song.duration_ms = 210_000;
+    let mut all_song = sample_song();
+    all_song.title = "All Songs Item Title".to_string();
+    all_song.duration_ms = 95_000;
+    let mut playlist = sample_playlist();
+    playlist.name = "Playlist Level Row".to_string();
+
+    player.artists.items = vec![artist];
+    player.albums.items = vec![album];
+    player.songs.items = vec![song.clone()];
+    player.songs.titles = vec!["Songs Cached Row".to_string()];
+    player.songs.labels = vec!["9:01".to_string()];
+    player.all_songs.items = vec![all_song];
+    player.all_songs.titles = vec!["All Songs Cached Row".to_string()];
+    player.all_songs.labels = vec!["9:02".to_string()];
+    player.all_albums.items = vec![all_album];
+    player.playlists.items = vec![playlist];
+    // Both song lists hold the playing track, so each arm must pass the
+    // current id through to mark its own row.
+    state.blocking_lock().current_track = Some("song-1".to_string());
+
+    // The expected primary row text, the footer and cached label unique to a
+    // song list, and whether this level marks the playing row.
+    let cases = [
+        (
+            CurrentView::Artists,
+            "Artist Level Row",
+            "1 artist",
+            "",
+            false,
+        ),
+        (
+            CurrentView::Albums,
+            "The Sample Band - Album Level Row",
+            "1 album",
+            "",
+            false,
+        ),
+        (
+            CurrentView::Songs,
+            "Songs Cached Row",
+            "1 song - 3:30",
+            "9:01",
+            true,
+        ),
+        (
+            CurrentView::AllSongs,
+            "All Songs Cached Row",
+            "1 song - 1:35",
+            "9:02",
+            true,
+        ),
+        (
+            CurrentView::AllAlbums,
+            "The Sample Band - All Albums Level Row",
+            "1 album",
+            "",
+            false,
+        ),
+        (
+            CurrentView::Playlists,
+            "Playlist Level Row",
+            "1 playlist",
+            "",
+            false,
+        ),
+    ];
+    let row_texts = [
+        "Artist Level Row",
+        "The Sample Band - Album Level Row",
+        "Songs Cached Row",
+        "All Songs Cached Row",
+        "The Sample Band - All Albums Level Row",
+        "Playlist Level Row",
+    ];
+
+    for (view, row, footer, label, marked) in cases {
+        let level = format!("{view:?}");
+        player.current_view = view;
+        let capture = captured_root_view_text_bounds(&player);
+        let texts: Vec<&str> = capture.texts().collect();
+
+        assert!(
+            texts.contains(&row),
+            "{level} must draw its own row text {row:?}: {:?}",
+            capture.fragments()
+        );
+        assert!(
+            texts.contains(&footer),
+            "{level} must draw its own footer {footer:?}: {:?}",
+            capture.fragments()
+        );
+        if !label.is_empty() {
+            assert!(
+                texts.contains(&label),
+                "{level} must pass its cached row label {label:?}: {:?}",
+                capture.fragments()
+            );
+        }
+        for other in row_texts {
+            if other != row {
+                assert!(
+                    !texts.contains(&other),
+                    "{level} also drew another level's row {other:?}: {:?}",
+                    capture.fragments()
+                );
+            }
+        }
+        assert_eq!(
+            texts.iter().any(|text| text.starts_with('▶')),
+            marked,
+            "{level} marked the playing row: {:?}",
+            capture.fragments()
+        );
+    }
+}
