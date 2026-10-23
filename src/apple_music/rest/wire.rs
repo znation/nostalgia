@@ -211,8 +211,12 @@ impl Resource {
     /// Maps this resource to an [`Album`] linked to `artist_id`, moving its id
     /// and title into the model (see [`Self::into_artist`]).
     ///
-    /// The query already scopes the results to `artist_id`, so every mapped
-    /// album carries it. Its id and name are required, like an artist's.
+    /// The per-artist album query scopes its results to `artist_id`, so it
+    /// passes the id it queried; the all-albums collection carries no artist
+    /// id, so that caller passes `""` (see
+    /// [`RestLibrary::get_all_albums`](super::RestLibrary::get_all_albums)).
+    /// Either way the mapped album carries the argument as its `artist_id`.
+    /// Its id and name are required, like an artist's.
     pub(super) fn into_album(self, artist_id: &str) -> Result<Album, AppleMusicError> {
         let Resource { id, attributes } = self;
         let id = required_id(id, "album")?;
@@ -282,11 +286,15 @@ impl Resource {
     /// Maps this resource to a [`Song`] linked to `album_id`, moving its id,
     /// title, artist, and preview URL into the model instead of cloning them.
     ///
-    /// A search result carries no album id, so its caller passes `""`. The id
-    /// and title are required (see [`required_id`] and [`required_name`]); the
-    /// artist, duration, and preview URL fall back to their "source supplied
-    /// none" sentinels. The whole-library path maps up to
-    /// [`MAX_PAGES`](super::MAX_PAGES) pages
+    /// The all-songs, playlist-track, and search collections carry no album
+    /// id, so those callers pass `""`; only an album's tracks pass a real id
+    /// (see [`RestLibrary::get_all_songs`](super::RestLibrary::get_all_songs),
+    /// [`RestLibrary::get_songs_from_playlist`](super::RestLibrary::get_songs_from_playlist),
+    /// and [`RestLibrary::search_library`](super::RestLibrary::search_library)).
+    /// The id and title are required (see
+    /// [`required_id`] and [`required_name`]); the artist, duration, and
+    /// preview URL fall back to their "source supplied none" sentinels. The
+    /// whole-library path maps up to [`MAX_PAGES`](super::MAX_PAGES) pages
     /// of songs, so consuming the parsed resource avoids re-allocating every
     /// string it already owns.
     pub(super) fn into_song(self, album_id: &str) -> Result<Song, AppleMusicError> {

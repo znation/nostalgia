@@ -45,6 +45,7 @@ shown; it returns false only for `CurrentView::Artists`.
 - `back_from_all_albums_returns_to_the_artists_list`
 - `back_from_playlists_returns_to_the_artists_list`
 - `playlist_selected_in_playlists_loads_its_songs_and_back_returns_to_playlists`
+- `album_selected_in_all_albums_loads_its_songs_and_back_returns_to_all_albums`
 - `back_leaves_an_active_search_for_the_artists_list`
   (all in `src/ui/tests.rs`)
 - `back_button_is_available_only_below_the_artist_list` (`src/ui/views/tests.rs`)
