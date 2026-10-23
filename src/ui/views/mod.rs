@@ -106,7 +106,7 @@ fn spacer(width: f32) -> Space {
 /// `Button::new(Text::new(..)).on_press(..)` widget, so that expression lives
 /// here once instead of being repeated at every call site. The label is
 /// `'static` — a literal, or a `&'static str` such as
-/// [`play_pause_label`](transport::play_pause_label) returns — so the
+/// [`play_pause_glyph`](transport::play_pause_glyph) returns — so the
 /// resulting button is `'static` like the view builders that
 /// push it.
 fn labeled_button(label: &'static str, message: Message) -> Button<'static, Message> {

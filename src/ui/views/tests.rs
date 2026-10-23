@@ -19,10 +19,13 @@ use super::now_playing::{
     transport_glyph, transport_glyph_color, visualizer_bar_heights,
 };
 use super::shade::{
-    SHADE_STRIP_HEIGHT, SHADE_VOLUME_ID, SHADE_VOLUME_WIDTH, SHADED_HEIGHT, play_pause_glyph,
-    shade_controls, shade_volume_spec, view_shade_strip,
+    SHADE_STRIP_HEIGHT, SHADE_VOLUME_ID, SHADE_VOLUME_WIDTH, SHADED_HEIGHT, shade_controls,
+    shade_volume_spec, view_shade_strip,
 };
-use super::transport::{play_pause_label, repeat_label, shuffle_label, transport_buttons};
+use super::transport::{
+    play_pause_glyph, play_pause_word, repeat_label, shuffle_label, transport_buttons,
+    transport_glyphs,
+};
 use super::{
     BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, EQ_STEP, VOLUME_MAX, VOLUME_MIN, VOLUME_STEP,
     can_go_back, can_retry_artists, format_track_time, seek_bar_value, view_albums,
@@ -1638,9 +1641,11 @@ fn now_playing_label_borrows_the_title_and_nothing_literal() {
 }
 
 #[test]
-fn play_pause_label_mirrors_playing_state() {
-    assert_eq!(play_pause_label(true), "Pause");
-    assert_eq!(play_pause_label(false), "Play");
+fn play_pause_glyph_and_word_mirror_playing_state() {
+    assert_eq!(play_pause_glyph(true), "II");
+    assert_eq!(play_pause_glyph(false), "▶");
+    assert_eq!(play_pause_word(true), "Pause");
+    assert_eq!(play_pause_word(false), "Play");
 }
 
 #[test]
@@ -1999,12 +2004,10 @@ fn transport_buttons_keep_a_fixed_width_across_label_changes() {
 // The label-reflow test above pins only that every transport button is
 // fixed-width and that its width is independent of the play, repeat, and
 // shuffle state; a zeroed, widened, or otherwise wrong width literal would
-// clear it while the label clipped or the row moved. Pin the face widths
-// measured from the running window when the transport row was fixed (see
-// "Transport buttons resize to their label text" in BUGS-FIXED.md), in row
-// order: Play/Pause 65, Stop 54, Previous 84, Next 54, Repeat 104, Shuffle
-// 112. Each is the width of that button's widest label, so a deliberate
-// label or width change must update this pin.
+// clear it while the glyph clipped or the row moved. Pin the face widths in
+// row order: Previous 34, Play/Pause 30, Stop 30, Next 34, Repeat 104,
+// Shuffle 112. Each is the width of that button's widest face, so a
+// deliberate glyph or width change must update this pin.
 #[test]
 fn transport_buttons_keep_their_measured_face_widths() {
     let widths: Vec<Length> = transport_buttons(false, false, false)
@@ -2014,13 +2017,42 @@ fn transport_buttons_keep_their_measured_face_widths() {
     assert_eq!(
         widths,
         [
-            Length::Fixed(65.0),
-            Length::Fixed(54.0),
-            Length::Fixed(84.0),
-            Length::Fixed(54.0),
+            Length::Fixed(34.0),
+            Length::Fixed(30.0),
+            Length::Fixed(30.0),
+            Length::Fixed(34.0),
             Length::Fixed(104.0),
             Length::Fixed(112.0),
         ]
+    );
+}
+
+// The four glyph buttons share the shade strip's spec, in the mockup's order:
+// Previous, Play/Pause, Stop, Next. Pin each glyph, tooltip word, width, and
+// message so a swapped face or reordered pair fails here.
+#[test]
+fn transport_glyphs_match_the_mockup_order_and_widths() {
+    let stopped = transport_glyphs(false);
+    let glyphs: Vec<&str> = stopped.iter().map(|(glyph, _, _, _)| *glyph).collect();
+    assert_eq!(glyphs, ["◀◀", "▶", "■", "▶▶"]);
+    let words: Vec<&str> = stopped.iter().map(|(_, word, _, _)| *word).collect();
+    assert_eq!(words, ["Previous", "Play", "Stop", "Next"]);
+    let widths: Vec<f32> = stopped.iter().map(|(_, _, width, _)| *width).collect();
+    assert_eq!(widths, [34.0, 30.0, 30.0, 34.0]);
+    assert!(matches!(stopped[0].3, Message::PreviousTrack));
+    assert!(matches!(stopped[1].3, Message::PlayPause));
+    assert!(matches!(stopped[2].3, Message::Stop));
+    assert!(matches!(stopped[3].3, Message::NextTrack));
+
+    let playing = transport_glyphs(true);
+    let playing_glyphs: Vec<&str> = playing.iter().map(|(glyph, _, _, _)| *glyph).collect();
+    assert_eq!(playing_glyphs, ["◀◀", "II", "■", "▶▶"]);
+    let playing_words: Vec<&str> = playing.iter().map(|(_, word, _, _)| *word).collect();
+    assert_eq!(playing_words, ["Previous", "Pause", "Stop", "Next"]);
+    let playing_widths: Vec<f32> = playing.iter().map(|(_, _, width, _)| *width).collect();
+    assert_eq!(
+        playing_widths, widths,
+        "the glyph swap must not resize a button"
     );
 }
 
@@ -2331,12 +2363,38 @@ fn response_curve_row_keeps_its_height_and_draws_one_segment_per_column() {
 }
 
 // The shade strip's Play/Pause face is the compact twin of the transport
-// row's label: it switches with playback so the rolled-up window still shows
+// row's glyph: it switches with playback so the rolled-up window still shows
 // what pressing it will do.
 #[test]
 fn shade_play_pause_glyph_switches_with_playback_state() {
     assert_eq!(play_pause_glyph(false), "▶");
     assert_eq!(play_pause_glyph(true), "II");
+}
+
+// The main row and the shade strip must share one spec: same glyphs in the
+// same order, same fixed widths, same messages. Pin the shade projection
+// against `transport_glyphs` in both playback states.
+#[test]
+fn main_transport_and_shade_strip_share_glyphs_order_and_widths() {
+    for is_playing in [false, true] {
+        let full = transport_glyphs(is_playing);
+        let shade = shade_controls(is_playing);
+        let full_spec: Vec<(&str, f32)> = full
+            .iter()
+            .map(|(glyph, _, width, _)| (*glyph, *width))
+            .collect();
+        let shade_spec: Vec<(&str, f32)> = shade
+            .iter()
+            .map(|(glyph, width, _)| (*glyph, *width))
+            .collect();
+        assert_eq!(full_spec, shade_spec);
+        for ((_, _, _, full_message), (_, _, shade_message)) in full.iter().zip(shade.iter()) {
+            assert_eq!(
+                std::mem::discriminant(full_message),
+                std::mem::discriminant(shade_message)
+            );
+        }
+    }
 }
 
 // The four compact buttons must emit the same messages as their full

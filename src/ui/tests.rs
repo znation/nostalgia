@@ -6041,25 +6041,28 @@ fn shaded_root_view_is_the_title_bar_plus_the_strip() {
     assert_eq!(capture.size().height, views::SHADED_HEIGHT);
 }
 
-// The strip is shade-mode-only: its Previous glyph appears in the rolled-up
-// tree and nowhere in the normal-mode tree, whose transport row uses the
-// word labels instead.
+// The strip is shade-mode-only. Both modes now draw a Previous glyph — the
+// full transport row has one too — so pin where it lands: in normal mode it
+// sits below the rolled-up band, and in shade mode it sits inside the strip
+// between the title bar and `SHADED_HEIGHT`.
 #[test]
 fn shade_strip_draws_only_while_shaded() {
     let (mut player, _state) = test_player();
 
     let normal = captured_root_view_text_bounds(&player);
+    let normal_previous = normal.find("◀◀");
     assert!(
-        !normal.texts().any(|text| text == "◀◀"),
-        "normal mode built a shade strip: {:?}",
+        normal_previous.y >= views::SHADED_HEIGHT,
+        "normal mode's Previous glyph belongs to the full transport row, not the strip: {:?}",
         normal.fragments()
     );
 
     player.shaded = true;
     let shaded = captured_root_view_text_bounds(&player);
+    let shaded_previous = shaded.find("◀◀");
     assert!(
-        shaded.texts().any(|text| text == "◀◀"),
-        "shade mode is missing the strip: {:?}",
+        shaded_previous.y >= views::TITLE_BAR_HEIGHT && shaded_previous.y < views::SHADED_HEIGHT,
+        "shade mode's Previous glyph must sit inside the strip: {:?}",
         shaded.fragments()
     );
 }
@@ -6090,36 +6093,60 @@ fn browse_nav_buttons_place_sort_beside_top() {
     );
 }
 
-// The transport row is rebuilt every frame and the Play/Pause label changes
-// with playback. Before the fixed-width fix a text-sized Play button widened
-// to Pause and moved every control after it; this lays out the whole root
-// `view` in both states and asserts the Stop and Repeat labels keep the same
-// absolute x, which only holds while the row's faces stay fixed.
+// The transport row is rebuilt every frame and the Play/Pause glyph changes
+// with playback. A text-sized Play button once widened to Pause and moved
+// every control after it; this lays out the whole root `view` in both states
+// and asserts the Repeat and Shuffle toggles keep the same absolute x, which
+// only holds while the glyph row's faces stay fixed.
 #[test]
-fn transport_row_does_not_reflow_when_the_play_label_changes() {
+fn transport_row_does_not_reflow_when_the_play_glyph_changes() {
     let (player, state) = test_player();
 
     state.blocking_lock().is_playing = false;
     let stopped = captured_root_view_text_bounds(&player);
-    let stopped_stop = stopped.find("Stop");
     let stopped_repeat = stopped.find("Repeat: Off");
+    let stopped_shuffle = stopped.find("Shuffle: Off");
 
     state.blocking_lock().is_playing = true;
     let playing = captured_root_view_text_bounds(&player);
-    let playing_stop = playing.find("Stop");
     let playing_repeat = playing.find("Repeat: Off");
+    let playing_shuffle = playing.find("Shuffle: Off");
 
-    assert_eq!(
-        stopped_stop.x,
-        playing_stop.x,
-        "the Stop button must not move when Play becomes Pause: {:?}",
-        playing.fragments()
-    );
     assert_eq!(
         stopped_repeat.x,
         playing_repeat.x,
         "the Repeat button must not move when Play becomes Pause: {:?}",
         playing.fragments()
+    );
+    assert_eq!(
+        stopped_shuffle.x,
+        playing_shuffle.x,
+        "the Shuffle button must not move when Play becomes Pause: {:?}",
+        playing.fragments()
+    );
+}
+
+// The main transport row is built in `src/ui/views/transport.rs`, but only the
+// root `view` shows whether it reaches the window. Lay out the whole root and
+// find the Previous and Next glyphs: they must share one row with Previous
+// left of Next, matching the mockup's compact button order.
+#[test]
+fn root_view_draws_the_transport_glyph_row() {
+    let (player, _state) = test_player();
+    let capture = captured_root_view_text_bounds(&player);
+    let previous = capture.find("◀◀");
+    let next = capture.find("▶▶");
+
+    assert_eq!(
+        previous.y,
+        next.y,
+        "Previous and Next must share the transport row: {:?}",
+        capture.fragments()
+    );
+    assert!(
+        next.x >= previous.x + previous.width,
+        "Next must render to the right of Previous: {:?}",
+        capture.fragments()
     );
 }
 
@@ -6131,12 +6158,16 @@ fn transport_row_does_not_reflow_when_the_play_label_changes() {
 #[test]
 fn root_view_draws_the_glyph_for_the_shared_transport_mode() {
     let (player, state) = test_player();
+    // The LCD's glyph is drawn before the transport row's, so the first
+    // fragment carrying one of these three glyphs is the LCD's.
     let shown_glyphs = |player: &WinampPlayer| {
         let capture = captured_root_view_text_bounds(player);
-        ["▶", "II", "■"]
-            .into_iter()
-            .filter(|glyph| capture.texts().any(|text| text == *glyph))
-            .collect::<Vec<_>>()
+        capture
+            .fragments()
+            .iter()
+            .find(|(text, _)| ["▶", "II", "■"].contains(&text.as_str()))
+            .map(|(text, _)| vec![text.clone()])
+            .unwrap_or_default()
     };
 
     state.blocking_lock().stop();
@@ -6363,7 +6394,7 @@ fn root_view_draws_the_current_browse_levels_own_rows() {
             }
         }
         assert_eq!(
-            texts.iter().any(|text| text.starts_with('▶')),
+            texts.iter().any(|text| text.starts_with("▶ ")),
             marked,
             "{level} marked the playing row: {:?}",
             capture.fragments()

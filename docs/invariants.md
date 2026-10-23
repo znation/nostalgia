@@ -219,9 +219,12 @@ or placeholder as the row's secondary text.
 
 - The browse navigation row lays Sort beside Top, not stacked below it: both share the same
   `y`, and Sort starts at or after Top's right edge.
-- The transport row's faces keep their absolute positions when the Play/Pause label changes:
-  the Play button's Play and Pause faces are pinned to one fixed width. The Repeat: Off/On and
-  Shuffle: Off/On faces are pinned the same way, so their label swaps cannot reflow the row.
+- The transport row draws, in order, Previous, Play/Pause, Stop, and Next as the compact glyphs
+  `◀◀`, `▶`/`II`, `■`, and `▶▶`, each with a word hover tooltip (`Previous`, `Play`/`Pause`,
+  `Stop`, `Next`). The four glyph buttons are pinned to fixed widths 34, 30, 30, and 34 px, so
+  the Play/Pause glyph swap cannot reflow the row. Repeat and Shuffle remain the `Repeat:
+  Off/On` and `Shuffle: Off/On` text toggles, pinned to 104 and 112 px, so their label swaps
+  cannot reflow it either. The shade strip builds its four buttons from the same glyph spec.
 - The equalizer band row puts the vertical preamp slider leftmost, then the `+12 DB` / `0 DB` /
   `-12 DB` scale, then the ten band sliders. The scale reads top to bottom beside the rail's top,
   middle, and bottom, and the preamp label shares the band labels' text row. The response curve
@@ -232,9 +235,11 @@ or placeholder as the row's secondary text.
   has failed, and the All Songs, All Albums, and Playlists buttons only on Artists.
 
 **Enforced by.** `views::view_browse_nav_buttons` in `src/ui/views/browse.rs` pushes the Top
-and Sort buttons into one `Row`. `views::view_transport_controls` and
-`views::transport::transport_buttons` in `src/ui/views/transport.rs` build the transport row
-from `fixed_width_button`s. `views::equalizer::preamp_column`,
+and Sort buttons into one `Row`. `views::view_transport_controls`,
+`views::transport::transport_buttons`, and `views::transport::transport_glyphs` in
+`src/ui/views/transport.rs` build the glyph row from `fixed_width_button`s and
+`iced::widget::Tooltip`s; `views::shade::shade_controls` projects the same glyph spec for the
+shade strip. `views::equalizer::preamp_column`,
 `views::equalizer::db_scale_column`, and `views::view_equalizer` in
 `src/ui/views/equalizer.rs` build the equalizer band row and align the curve with it. The
 browse and transport layout tests lay out the whole root `view` through the test-only
@@ -245,12 +250,16 @@ level's buffer, caches, and current-track id, and gates its Back, Retry, and fla
 drawn text fragment's absolute bounds with iced's headless tiny-skia renderer.
 
 **Pinned by.** `browse_nav_buttons_place_sort_beside_top`,
-`transport_row_does_not_reflow_when_the_play_label_changes`,
+`transport_row_does_not_reflow_when_the_play_glyph_changes`,
+`root_view_draws_the_transport_glyph_row`,
 `root_view_offers_back_retry_and_flat_list_buttons_only_where_they_belong`, and
 `root_view_draws_the_current_browse_levels_own_rows` (`src/ui/tests.rs`), plus
-`transport_buttons_keep_a_fixed_width_across_label_changes` and
+`transport_glyphs_match_the_mockup_order_and_widths`,
+`transport_buttons_keep_a_fixed_width_across_label_changes`,
+`transport_buttons_keep_their_measured_face_widths`,
+`main_transport_and_shade_strip_share_glyphs_order_and_widths`, and
 `equalizer_preamp_and_db_scale_sit_left_of_the_band_sliders` (`src/ui/views/tests.rs`) for the
-Repeat and Shuffle faces and the equalizer band row.
+glyph row, the Repeat and Shuffle faces, and the equalizer band row.
 
 **History.** Reconstructed from "Sort renders below Top instead of beside it, contradicting the
 documented layout" and "Transport buttons resize to their label text, so pressing Play/Pause
@@ -628,15 +637,17 @@ rather than the panic unwinding the event loop.
 - The strip shows Previous, Play/Pause, Stop, Next, the current time readout, and a volume
   slider. Its four buttons emit the same messages as their full transport-row twins
   (`Message::PreviousTrack`, `Message::PlayPause`, `Message::Stop`, `Message::NextTrack`), each
-  pinned to a fixed width so the glyph swap cannot reflow the strip. The Play/Pause glyph is
-  `"▶"` while stopped and `"II"` while playing. A fill spacer pushes the slider to the right
-  edge, after the left-aligned buttons and time readout.
+  pinned to a fixed width so the glyph swap cannot reflow the strip. The strip builds them from
+  the full row's `transport_glyphs` spec, so both rows share the same glyphs, order, widths, and
+  messages; the Play/Pause glyph is `"▶"` while stopped and `"II"` while playing. A fill spacer
+  pushes the slider to the right edge, after the left-aligned buttons and time readout.
 - The time readout is the same `WinampPlayer::now_playing_elapsed` string the Now Playing bar
   draws, so the elapsed/remaining choice carries into shade mode. The volume slider writes
   `Message::VolumeChange` and reads the shared volume.
 
 **Enforced by.** `views::shade::view_shade_strip` builds the strip and
-`views::shade::shade_controls`/`views::shade::play_pause_glyph` define its buttons;
+`views::shade::shade_controls` projects `views::transport::transport_glyphs` (including
+`views::transport::play_pause_glyph`) into its buttons;
 `views::shade::shade_volume_spec` fixes the slider's shared range and `Message::VolumeChange`;
 `views::shade::SHADE_STRIP_HEIGHT` and `views::shade::SHADED_HEIGHT` own the heights; the shaded
 branch of `ui::view::view` stacks the bar and strip; and `handlers::window::resize_to_shade` resizes to
@@ -645,6 +656,7 @@ re-exported by `src/ui/views/mod.rs`.
 
 **Pinned by.** `shade_play_pause_glyph_switches_with_playback_state`,
 `shade_controls_map_to_transport_messages_and_keep_fixed_widths`,
+`main_transport_and_shade_strip_share_glyphs_order_and_widths`,
 `shade_height_pins_the_rolled_up_window`,
 `shade_volume_slider_spec_matches_the_shared_volume_range_and_message`,
 `shade_strip_draws_the_time_readout_and_puts_the_volume_slider_at_the_right_edge`, and

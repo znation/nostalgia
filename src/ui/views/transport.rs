@@ -1,8 +1,11 @@
 //! The transport row's widgets: the Play/Pause, Stop, Previous, Next, Repeat,
 //! and Shuffle buttons, the volume slider, and the balance slider, plus the
-//! pure button-label helpers they use.
+//! pure glyph, word, and button-label helpers they use.
 
-use iced::{Element, widget::Row};
+use iced::{
+    Element,
+    widget::{Row, Text, Tooltip, tooltip},
+};
 
 use crate::ui::{Message, theme};
 
@@ -11,15 +14,22 @@ use super::{
     fixed_width_button, spacer,
 };
 
-/// The Play/Pause button's label: "Pause" while playing, "Play" when
-/// stopped. Pure so the label logic is testable without an iced `Element`.
-pub(super) fn play_pause_label(is_playing: bool) -> &'static str {
+/// The Play/Pause button's glyph: `"II"` while playing, `"▶"` otherwise.
+/// Pure so the glyph logic is testable without an iced `Element`, and shared
+/// with the shade strip so the two transport rows cannot drift.
+pub(super) fn play_pause_glyph(is_playing: bool) -> &'static str {
+    if is_playing { "II" } else { "▶" }
+}
+
+/// The Play/Pause button's word: `"Pause"` while playing, `"Play"`
+/// otherwise. It labels the glyph's hover tooltip.
+pub(super) fn play_pause_word(is_playing: bool) -> &'static str {
     if is_playing { "Pause" } else { "Play" }
 }
 
 /// The Repeat button's label: "Repeat: On" while Repeat is on, "Repeat:
 /// Off" when it is off. Pure so the label logic is testable without an
-/// iced `Element`, like [`play_pause_label`].
+/// iced `Element`, like [`play_pause_glyph`].
 pub(super) fn repeat_label(repeat: bool) -> &'static str {
     if repeat { "Repeat: On" } else { "Repeat: Off" }
 }
@@ -35,43 +45,67 @@ pub(super) fn shuffle_label(shuffle: bool) -> &'static str {
     }
 }
 
-/// The transport row's six chrome buttons, in row order: Play/Pause, Stop,
-/// Previous, Next, Repeat, and Shuffle. `is_playing`, `repeat`, and `shuffle`
-/// resolve the three labels that change with state; the other three are static
-/// literals.
+/// The four transport glyph buttons' shared spec, in row order: Previous,
+/// Play/Pause, Stop, and Next. Each tuple is `(glyph, tooltip word, fixed
+/// width, message)`.
 ///
-/// Each button is pinned to the fixed face width of its widest label, so a
-/// label swap — Play for Pause, Repeat: Off for Repeat: On, or Shuffle: Off
-/// for Shuffle: On — cannot resize the button and reflow every widget after it
-/// in the row. Returned as `Element`s so the width each button requests is
-/// observable in a test.
+/// The main row and the shade strip both build from this one list, so their
+/// glyphs, order, widths, and messages cannot drift apart. `is_playing`
+/// chooses the Play/Pause glyph and word.
+pub(super) fn transport_glyphs(
+    is_playing: bool,
+) -> [(&'static str, &'static str, f32, Message); 4] {
+    [
+        ("◀◀", "Previous", 34.0, Message::PreviousTrack),
+        (
+            play_pause_glyph(is_playing),
+            play_pause_word(is_playing),
+            30.0,
+            Message::PlayPause,
+        ),
+        ("■", "Stop", 30.0, Message::Stop),
+        ("▶▶", "Next", 34.0, Message::NextTrack),
+    ]
+}
+
+/// The transport row's six chrome buttons, in row order: Previous,
+/// Play/Pause, Stop, Next, Repeat, and Shuffle. `is_playing`, `repeat`, and
+/// `shuffle` resolve the labels that change with state; the other labels and
+/// tooltips are static literals.
+///
+/// The four glyph buttons come from [`transport_glyphs`], each wrapped in a
+/// hover tooltip carrying its word. Every button is pinned to a fixed width,
+/// so the Play/Pause glyph swap or either toggle's label swap cannot resize
+/// it and reflow every widget after it in the row. Returned as `Element`s so
+/// the width each button requests is observable in a test.
 pub(super) fn transport_buttons(
     is_playing: bool,
     repeat: bool,
     shuffle: bool,
 ) -> [Element<'static, Message>; 6] {
-    // The widths, in pixels, of each button's widest label: Play/Pause must
-    // fit "Pause", Repeat must fit "Repeat: Off", and Shuffle must fit
-    // "Shuffle: Off". They are the face widths measured from the running
-    // window (see the qa reproduction), so at rest each button keeps the
-    // width its label already had.
-    const PLAY_PAUSE_WIDTH: f32 = 65.0;
-    const STOP_WIDTH: f32 = 54.0;
-    const PREVIOUS_WIDTH: f32 = 84.0;
-    const NEXT_WIDTH: f32 = 54.0;
+    // The widths, in pixels, of the two text toggles' widest labels: Repeat
+    // must fit "Repeat: Off" and Shuffle must fit "Shuffle: Off". They are
+    // the face widths measured from the running window (see the qa
+    // reproduction), so at rest each button keeps the width its label
+    // already had. The glyph widths live in `transport_glyphs`.
     const REPEAT_WIDTH: f32 = 104.0;
     const SHUFFLE_WIDTH: f32 = 112.0;
 
+    let [previous, play_pause, stop, next] =
+        transport_glyphs(is_playing).map(|(glyph, word, width, message)| {
+            let button = fixed_width_button(glyph, width, message);
+            Element::from(Tooltip::new(
+                button,
+                Text::new(word).size(12),
+                tooltip::Position::Top,
+            ))
+        });
+
     [
-        fixed_width_button(
-            play_pause_label(is_playing),
-            PLAY_PAUSE_WIDTH,
-            Message::PlayPause,
-        )
-        .into(),
-        fixed_width_button("Stop", STOP_WIDTH, Message::Stop).into(),
-        fixed_width_button("Previous", PREVIOUS_WIDTH, Message::PreviousTrack).into(),
-        fixed_width_button("Next", NEXT_WIDTH, Message::NextTrack).into(),
+        previous,
+        play_pause,
+        stop,
+        next,
         fixed_width_button(repeat_label(repeat), REPEAT_WIDTH, Message::ToggleRepeat).into(),
         fixed_width_button(
             shuffle_label(shuffle),
@@ -82,14 +116,13 @@ pub(super) fn transport_buttons(
     ]
 }
 
-/// The transport row: the Play/Pause, Stop, Previous, Next, Repeat, and
+/// The transport row: the Previous, Play/Pause, Stop, Next, Repeat, and
 /// Shuffle buttons, the volume slider, and the balance slider. `volume` and
 /// `balance` are the sliders' current values; dragging them emits
 /// `Message::VolumeChange` and `Message::BalanceChange` respectively.
 /// `repeat` is the shared Repeat flag and `shuffle` the shared Shuffle flag,
-/// each shown on its button and toggled by pressing it. The Stop label is
-/// static — Stop is always pressable, even when already stopped, as in Winamp
-/// — so no `play_pause_label`-style helper is needed.
+/// each shown on its button and toggled by pressing it. The four glyph
+/// buttons carry word tooltips; Repeat and Shuffle stay text toggles.
 pub fn view_transport_controls(
     is_playing: bool,
     volume: f32,

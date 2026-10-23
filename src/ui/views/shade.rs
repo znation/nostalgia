@@ -20,7 +20,7 @@ use crate::ui::{Message, bevel, style, theme};
 
 use super::{
     VOLUME_MAX, VOLUME_MIN, VOLUME_STEP, chrome_slider, fixed_width_button, spacer,
-    title_bar::TITLE_BAR_HEIGHT,
+    title_bar::TITLE_BAR_HEIGHT, transport::transport_glyphs,
 };
 
 /// The compact strip's height in px, below the title bar in shade mode.
@@ -41,27 +41,15 @@ pub(super) const SHADE_VOLUME_ID: &str = "shade-volume";
 /// readout and four buttons room in the rolled-up row.
 pub(super) const SHADE_VOLUME_WIDTH: f32 = 80.0;
 
-/// The compact Play/Pause button's glyph: `"II"` while playing, `"▶"`
-/// otherwise. The shade-mode twin of [`transport::play_pause_label`].
-///
-/// [`transport::play_pause_label`]: super::transport::play_pause_label
-pub(super) fn play_pause_glyph(is_playing: bool) -> &'static str {
-    if is_playing { "II" } else { "▶" }
-}
-
 /// The strip's four chrome buttons, in row order: Previous, Play/Pause, Stop,
-/// and Next. Each carries a fixed width, so swapping the Play/Pause glyph
-/// cannot resize it and reflow the controls after it.
+/// and Next. It drops the tooltip words from [`transport_glyphs`] so the strip
+/// and the full transport row share one glyph, order, width, and message spec
+/// and cannot drift apart.
 ///
 /// Returned as plain `(label, width, message)` tuples rather than widgets, so
 /// the labels, messages, and widths are testable without an iced renderer.
 pub(super) fn shade_controls(is_playing: bool) -> [(&'static str, f32, Message); 4] {
-    [
-        ("◀◀", 34.0, Message::PreviousTrack),
-        (play_pause_glyph(is_playing), 30.0, Message::PlayPause),
-        ("■", 30.0, Message::Stop),
-        ("▶▶", 34.0, Message::NextTrack),
-    ]
+    transport_glyphs(is_playing).map(|(glyph, _word, width, message)| (glyph, width, message))
 }
 
 /// The shade-mode strip: the four compact transport buttons, the current
