@@ -9,7 +9,10 @@ cites the `BUGS-FIXED.md` entry it was reconstructed from.
 gap names, read this file for the matching subsystem section — it already states the guarantee,
 the enforcing code, and the tests that pin it. When a fix's gap is `unclear-invariant`, or a
 change alters a guarantee that has a section here, update that section in the same commit, or add
-a new section when none fits. `BUGS.md`'s header points here for the tag.
+a new section when none fits. `BUGS.md`'s header points here for the tag. For a UI geometry or
+label-reflow bug, lay the real tree out through the test-only `src/ui/layout_capture.rs` harness,
+which returns each drawn text fragment's absolute bounds and the root size; do not reconstruct a
+per-test capture operation.
 
 ## Browse hierarchy
 
@@ -131,6 +134,33 @@ child is open), and `views::view_browse_nav_buttons` in `src/ui/views/browse.rs`
 - `back_from_all_albums_songs_restores_a_sorted_flat_list_to_library_order`
 - `back_from_a_playlists_songs_restores_a_sorted_list_to_library_order`
   (all in `src/ui/tests.rs`)
+
+## UI layout
+
+**Guarantee.** The root `view`'s layout keeps these geometry guarantees:
+
+- The browse navigation row lays Sort beside Top, not stacked below it: both share the same
+  `y`, and Sort starts at or after Top's right edge.
+- The transport row's faces keep their absolute positions when the Play/Pause label changes:
+  the Play button's Play and Pause faces are pinned to one fixed width. The Repeat: Off/On and
+  Shuffle: Off/On faces are pinned the same way, so their label swaps cannot reflow the row.
+
+**Enforced by.** `views::view_browse_nav_buttons` in `src/ui/views/browse.rs` pushes the Top
+and Sort buttons into one `Row`. `views::view_transport_controls` and
+`views::transport::transport_buttons` in `src/ui/views/transport.rs` build the transport row
+from `fixed_width_button`s. Both layout tests lay out the whole root `view` through the test-only
+`src/ui/layout_capture.rs` harness, which records each drawn text fragment's absolute bounds
+with iced's headless tiny-skia renderer.
+
+**Pinned by.** `browse_nav_buttons_place_sort_beside_top` and
+`transport_row_does_not_reflow_when_the_play_label_changes` (`src/ui/tests.rs`), plus
+`transport_buttons_keep_a_fixed_width_across_label_changes` (`src/ui/views/tests.rs`) for the
+Repeat and Shuffle faces.
+
+**History.** Reconstructed from "Sort renders below Top instead of beside it, contradicting the
+documented layout" and "Transport buttons resize to their label text, so pressing Play/Pause
+reflows the whole control row" in `BUGS-FIXED.md`. Both carried a `real-run-needed` validation
+gap; the shared harness closes it.
 
 ## Now Playing label
 

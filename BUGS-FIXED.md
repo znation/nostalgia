@@ -34,10 +34,10 @@ Suspected cause: `view_equalizer` in `src/ui/views/equalizer.rs` pushes each ban
 zero spacing and no label width, so the labels touch wherever the text is wider than the
 slider column.
 
-**Validation gap:** real-run-needed — the suite had no layout assertion for the equalizer
-labels, so qa confirmed the collision only from the captured window; the regression test now lays
-the band row out with iced's headless tiny-skia renderer and asserts a gap between every pair of
-neighbouring labels.
+**Validation gap:** none — at fix time the suite had no layout assertion for the equalizer
+labels, so qa confirmed the collision only from the captured window; the shared
+`src/ui/layout_capture.rs` harness now lays the band row out with iced's headless tiny-skia
+renderer and asserts a gap between every pair of neighbouring labels.
 
 ### Sort renders below Top instead of beside it, contradicting the documented layout (found by qa 2026-10-23) — fixed 2026-10-23 by the bugfix role
 
@@ -70,7 +70,7 @@ Suspected cause: the root `Column` in `src/ui/mod.rs` gets the two buttons as tw
 `.push()` calls, and a `Column` stacks its children. Wrapping `view_top_button()` and
 `view_sort_button()` in one `Row` before pushing it would render them beside each other.
 
-**Validation gap:** real-run-needed — the existing suite had no layout assertion, so qa could confirm the divergence only by running the app and measuring the captured window; the new `browse_nav_buttons_place_sort_beside_top` now pins their laid-out bounds offline.
+**Validation gap:** none — at fix time the existing suite had no layout assertion, so qa could confirm the divergence only by running the app and measuring the captured window; the shared `src/ui/layout_capture.rs` harness now lays the root `view` out offline and `browse_nav_buttons_place_sort_beside_top` pins their laid-out bounds.
 
 ### Sorted browse lists stay sorted after Back, contradicting the one-shot guarantee (found by the bugfix role 2026-10-23) — fixed 2026-10-23 by the bugfix role
 
@@ -549,9 +549,11 @@ moves nothing after it. The regression test
 transport button requests a fixed width and that the widths are equal across
 play and repeat states.
 
-**Validation gap:** real-run-needed — the reflow was only observable by running
-the GUI and diffing screenshots; no offline test measured a label-driven button
-width until this regression test.
+**Validation gap:** none — at fix time the reflow was only observable by running
+the GUI and diffing screenshots; the shared `src/ui/layout_capture.rs` harness now
+lays the root `view` out in both playback states and
+`transport_row_does_not_reflow_when_the_play_label_changes` asserts the Stop and Repeat labels
+keep their absolute x.
 
 ### Main's test target stopped compiling after perf changed `TrackSelected` to a struct variant (found 2026-10-06, fixed 2026-10-06)
 

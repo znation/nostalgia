@@ -32,6 +32,7 @@ use crate::library::{Album, Artist, Playlist, Song};
 use crate::sample_library::sample_library;
 use crate::state::{clamp_balance, clamp_volume};
 use crate::test_support::{sample_album, sample_artist, sample_playlist, sample_song};
+use crate::ui::layout_capture;
 use iced::advanced::{
     Layout,
     layout::Limits,
@@ -498,27 +499,6 @@ fn marquee_text_counts_characters_not_bytes() {
     assert_eq!(marquee_text("Café — Ok", 0, 5), "Café ");
 }
 
-// The text fragments a built Now Playing row would draw, collected through a
-// widget operation, with each fragment's laid-out bounds in the same order.
-//
-// `iced`'s `Element` API gives no way to read the text a row carries, so the
-// row is laid out with the null renderer and every `text` operation it
-// performs is recorded. The bounds are absolute coordinates, so a test can
-// check where a fragment sits, not just that it was drawn.
-#[derive(Default)]
-struct CapturedText(Vec<String>, Vec<Rectangle>);
-
-impl Operation for CapturedText {
-    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
-        operate(self);
-    }
-
-    fn text(&mut self, _id: Option<&Id>, bounds: Rectangle, text: &str) {
-        self.0.push(text.to_string());
-        self.1.push(bounds);
-    }
-}
-
 /// The bounds of every container a built widget draws, collected through a
 /// widget operation. The visualizer's bars are borderless containers with no
 /// text, so counting their containers is how a test pins the bar count.
@@ -555,35 +535,29 @@ fn captured_now_playing_texts(
         offset,
     )
     .into();
-    let mut tree = Tree::new(element.as_widget());
-    let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
-    let node = element.as_widget_mut().layout(&mut tree, &(), &limits);
-    let mut captured = CapturedText::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &(), &mut captured);
+    let capture = layout_capture::capture_text(&mut element, &());
     assert_eq!(
-        captured.0.first().map(String::as_str),
+        capture.texts().next(),
         Some(elapsed),
         "the elapsed readout must lead the row: {:?}",
-        captured.0
+        capture.fragments()
     );
-    captured.0
+    capture
+        .fragments()
+        .iter()
+        .map(|(text, _)| text.clone())
+        .collect()
 }
 
 /// Lays out the decorative indicator strip and returns the text fragments it
 /// would draw and the width the column occupies.
 fn captured_indicator_texts() -> (Vec<String>, f32) {
     let mut element: iced::Element<'_, Message, iced::Theme, ()> = lcd_indicator_strip().into();
-    let mut tree = Tree::new(element.as_widget());
-    let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
-    let node = element.as_widget_mut().layout(&mut tree, &(), &limits);
-    let width = node.bounds().width;
-    let mut captured = CapturedText::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &(), &mut captured);
-    (captured.0, width)
+    let capture = layout_capture::capture_text(&mut element, &());
+    (
+        capture.texts().map(str::to_string).collect(),
+        capture.size().width,
+    )
 }
 
 // The LCD's left edge draws the five classic indicator letters in the
@@ -616,31 +590,13 @@ fn now_playing_content_draws_the_indicator_strip_beside_the_title() {
         None,
     )
     .into();
-    let mut tree = Tree::new(element.as_widget());
-    let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
-    let node = element.as_widget_mut().layout(&mut tree, &(), &limits);
-    let mut captured = CapturedText::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &(), &mut captured);
+    let capture = layout_capture::capture_text(&mut element, &());
 
     assert_eq!(
-        captured
-            .0
-            .iter()
-            .take(5)
-            .map(String::as_str)
-            .collect::<Vec<_>>(),
+        capture.texts().take(5).collect::<Vec<_>>(),
         vec!["O", "A", "I", "D", "V"]
     );
-    let find = |text: &str| -> Rectangle {
-        let index = captured
-            .0
-            .iter()
-            .position(|drawn| drawn == text)
-            .unwrap_or_else(|| panic!("missing {text}: {:?}", captured.0));
-        captured.1[index]
-    };
+    let find = |text: &str| capture.find(text);
     let elapsed = find("00:53");
     let title = find("Opening");
     let total = find("3:30");
@@ -654,9 +610,9 @@ fn now_playing_content_draws_the_indicator_strip_beside_the_title() {
     }
 
     assert!(
-        (total.x + total.width - node.bounds().width).abs() < 0.5,
+        (total.x + total.width - capture.size().width).abs() < 0.5,
         "the total must stay at the right edge: {total:?} in {:?}",
-        node.bounds()
+        capture.size()
     );
 }
 
@@ -767,15 +723,11 @@ fn format_playback_status_formats_khz_and_channel_mode() {
 fn captured_status_row(format: Option<PlaybackFormat>) -> (Vec<String>, f32) {
     let mut element: iced::Element<'_, Message, iced::Theme, ()> =
         now_playing_status_row(format).into();
-    let mut tree = Tree::new(element.as_widget());
-    let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
-    let node = element.as_widget_mut().layout(&mut tree, &(), &limits);
-    let height = node.bounds().height;
-    let mut captured = CapturedText::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &(), &mut captured);
-    (captured.0, height)
+    let capture = layout_capture::capture_text(&mut element, &());
+    (
+        capture.texts().map(str::to_string).collect(),
+        capture.size().height,
+    )
 }
 
 // The status row draws the formatted format when the backend reports one, and
@@ -843,19 +795,22 @@ fn captured_content_with_spectrum(
         spectrum,
     )
     .into();
+    let capture = layout_capture::capture_text(&mut element, &());
+    let height = capture.size().height;
+    let texts = capture.texts().map(str::to_string).collect();
+    let bounds = capture
+        .fragments()
+        .iter()
+        .map(|(_, bounds)| *bounds)
+        .collect();
     let mut tree = Tree::new(element.as_widget());
     let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
     let node = element.as_widget_mut().layout(&mut tree, &(), &limits);
-    let height = node.bounds().height;
-    let mut captured = CapturedText::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &(), &mut captured);
     let mut containers = CapturedContainers::default();
     element
         .as_widget_mut()
         .operate(&mut tree, Layout::new(&node), &(), &mut containers);
-    (captured.0, captured.1, height, containers.0)
+    (texts, bounds, height, containers.0)
 }
 
 // The visualizer row keeps its fixed height whether a preview reports a
@@ -1590,49 +1545,13 @@ fn equalizer_slider_spec_matches_the_gain_clamp_and_steps_whole_decibels() {
 // visible gap between every pair of neighbouring labels.
 #[test]
 fn equalizer_band_labels_leave_a_gap_between_frequencies() {
-    use iced::advanced::renderer::Headless;
-    use iced::{Font, Pixels};
-
-    #[derive(Default)]
-    struct CapturedText(Vec<(String, Rectangle)>);
-    impl Operation for CapturedText {
-        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
-            operate(self);
-        }
-        fn text(&mut self, _id: Option<&Id>, bounds: Rectangle, text: &str) {
-            self.0.push((text.to_string(), bounds));
-        }
-    }
-
-    let renderer = futures::executor::block_on(<iced::Renderer as Headless>::new(
-        Font::default(),
-        Pixels(16.0),
-        Some("tiny-skia"),
-    ))
-    .expect("the headless tiny-skia renderer");
     let bands = [0.0; BAND_COUNT];
     let mut element = view_equalizer(false, 0.0, &bands, None);
-    let mut tree = Tree::new(element.as_widget());
-    let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, &renderer, &limits);
-    let mut captured = CapturedText::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &renderer, &mut captured);
+    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
 
     let bounds: Vec<(&str, Rectangle)> = BAND_FREQUENCIES
         .iter()
-        .map(|frequency| {
-            let bounds = captured
-                .0
-                .iter()
-                .find(|(text, _)| text == frequency)
-                .map(|(_, bounds)| *bounds)
-                .unwrap_or_else(|| panic!("missing {frequency} label: {:?}", captured.0));
-            (*frequency, bounds)
-        })
+        .map(|frequency| (*frequency, capture.find(frequency)))
         .collect();
     for pair in bounds.windows(2) {
         let (left_label, left) = pair[0];
@@ -1640,7 +1559,7 @@ fn equalizer_band_labels_leave_a_gap_between_frequencies() {
         assert!(
             left.x + left.width + 1.0 <= right.x,
             "{left_label} and {right_label} labels touch: {:?}",
-            captured.0
+            capture.fragments()
         );
     }
 }
@@ -1695,15 +1614,7 @@ fn shade_height_pins_the_rolled_up_window() {
 // rolled-up window to an empty band.
 #[test]
 fn view_shade_strip_keeps_its_fixed_height_for_both_playback_states() {
-    use iced::advanced::renderer::Headless;
-    use iced::{Font, Pixels};
-
-    let renderer = futures::executor::block_on(<iced::Renderer as Headless>::new(
-        Font::default(),
-        Pixels(16.0),
-        Some("tiny-skia"),
-    ))
-    .expect("the headless tiny-skia renderer");
+    let renderer = layout_capture::headless_renderer();
 
     for is_playing in [false, true] {
         let mut element = view_shade_strip(is_playing, 0.5, Cow::Borrowed("00:53"));
@@ -1725,20 +1636,13 @@ fn view_shade_strip_keeps_its_fixed_height_for_both_playback_states() {
 /// [`SHADE_VOLUME_ID`], so a test can see the time readout and the volume
 /// slider's place in the real laid-out row.
 fn captured_shade_strip(elapsed: &str) -> (Vec<String>, Option<Rectangle>, Size) {
-    use iced::advanced::renderer::Headless;
-    use iced::{Font, Pixels};
-
     #[derive(Default)]
-    struct Captured {
-        texts: Vec<String>,
+    struct CapturedContainer {
         slider: Option<Rectangle>,
     }
-    impl Operation for Captured {
+    impl Operation for CapturedContainer {
         fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
             operate(self);
-        }
-        fn text(&mut self, _id: Option<&Id>, _bounds: Rectangle, text: &str) {
-            self.texts.push(text.to_string());
         }
         fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
             if id == Some(&Id::new(SHADE_VOLUME_ID)) {
@@ -1747,24 +1651,21 @@ fn captured_shade_strip(elapsed: &str) -> (Vec<String>, Option<Rectangle>, Size)
         }
     }
 
-    let renderer = futures::executor::block_on(<iced::Renderer as Headless>::new(
-        Font::default(),
-        Pixels(16.0),
-        Some("tiny-skia"),
-    ))
-    .expect("the headless tiny-skia renderer");
+    let renderer = layout_capture::headless_renderer();
     let mut element = view_shade_strip(false, 0.5, Cow::Borrowed(elapsed));
+    let capture = layout_capture::capture_text(&mut element, &renderer);
+    let texts = capture.texts().map(str::to_string).collect();
+
     let mut tree = Tree::new(element.as_widget());
     let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
     let node = element
         .as_widget_mut()
         .layout(&mut tree, &renderer, &limits);
-    let size = node.size();
-    let mut captured = Captured::default();
+    let mut captured = CapturedContainer::default();
     element
         .as_widget_mut()
         .operate(&mut tree, Layout::new(&node), &renderer, &mut captured);
-    (captured.texts, captured.slider, size)
+    (texts, captured.slider, capture.size())
 }
 
 // The strip's two non-button controls must actually reach the laid-out row:

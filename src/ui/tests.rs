@@ -5412,44 +5412,10 @@ fn shade_target_size_is_the_title_bar_plus_the_strip() {
 
 /// Lays the root `view` out with the headless tiny-skia renderer and returns
 /// every text fragment's absolute bounds plus the resolved root size.
-fn captured_root_view_text_bounds(
-    player: &WinampPlayer,
-) -> (Vec<(String, iced::Rectangle)>, iced::Size) {
-    use iced::advanced::widget::{Id, Tree, operation::Operation};
-    use iced::advanced::{Layout, layout::Limits, renderer::Headless};
-    use iced::{Font, Pixels, Rectangle};
-
-    #[derive(Debug, Default)]
-    struct CapturedTextBounds(Vec<(String, Rectangle)>);
-
-    impl Operation for CapturedTextBounds {
-        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
-            operate(self);
-        }
-
-        fn text(&mut self, _id: Option<&Id>, bounds: Rectangle, text: &str) {
-            self.0.push((text.to_string(), bounds));
-        }
-    }
-
+fn captured_root_view_text_bounds(player: &WinampPlayer) -> layout_capture::TextCapture {
+    let renderer = layout_capture::headless_renderer();
     let mut element = view(player);
-    let renderer = futures::executor::block_on(<iced::Renderer as Headless>::new(
-        Font::default(),
-        Pixels(16.0),
-        Some("tiny-skia"),
-    ))
-    .expect("the headless tiny-skia renderer");
-    let mut tree = Tree::new(element.as_widget());
-    let limits = Limits::new(iced::Size::ZERO, iced::Size::new(1000.0, 1000.0));
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, &renderer, &limits);
-    let size = node.size();
-    let mut captured = CapturedTextBounds::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &renderer, &mut captured);
-    (captured.0, size)
+    layout_capture::capture_text(&mut element, &renderer)
 }
 
 // In shade mode the root view is the title bar over the compact strip, so the
@@ -5461,8 +5427,8 @@ fn shaded_root_view_is_the_title_bar_plus_the_strip() {
     let (mut player, _state) = test_player();
     player.shaded = true;
 
-    let (_texts, size) = captured_root_view_text_bounds(&player);
-    assert_eq!(size.height, views::SHADED_HEIGHT);
+    let capture = captured_root_view_text_bounds(&player);
+    assert_eq!(capture.size().height, views::SHADED_HEIGHT);
 }
 
 // The strip is shade-mode-only: its Previous glyph appears in the rolled-up
@@ -5472,17 +5438,19 @@ fn shaded_root_view_is_the_title_bar_plus_the_strip() {
 fn shade_strip_draws_only_while_shaded() {
     let (mut player, _state) = test_player();
 
-    let (normal_texts, _size) = captured_root_view_text_bounds(&player);
+    let normal = captured_root_view_text_bounds(&player);
     assert!(
-        !normal_texts.iter().any(|(text, _)| text == "◀◀"),
-        "normal mode built a shade strip: {normal_texts:?}"
+        !normal.texts().any(|text| text == "◀◀"),
+        "normal mode built a shade strip: {:?}",
+        normal.fragments()
     );
 
     player.shaded = true;
-    let (shaded_texts, _size) = captured_root_view_text_bounds(&player);
+    let shaded = captured_root_view_text_bounds(&player);
     assert!(
-        shaded_texts.iter().any(|(text, _)| text == "◀◀"),
-        "shade mode is missing the strip: {shaded_texts:?}"
+        shaded.texts().any(|text| text == "◀◀"),
+        "shade mode is missing the strip: {:?}",
+        shaded.fragments()
     );
 }
 
@@ -5494,58 +5462,53 @@ fn shade_strip_draws_only_while_shaded() {
 // pushing the two buttons itself.
 #[test]
 fn browse_nav_buttons_place_sort_beside_top() {
-    use iced::advanced::widget::{Id, Tree, operation::Operation};
-    use iced::advanced::{Layout, layout::Limits, renderer::Headless};
-    use iced::{Font, Pixels, Rectangle, Size};
-
-    #[derive(Debug, Default)]
-    struct CapturedTextBounds(Vec<(String, Rectangle)>);
-
-    impl Operation for CapturedTextBounds {
-        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
-            operate(self);
-        }
-
-        fn text(&mut self, _id: Option<&Id>, bounds: Rectangle, text: &str) {
-            self.0.push((text.to_string(), bounds));
-        }
-    }
-
     let (player, _state) = test_player();
-    let mut element = view(&player);
-    // tiny-skia draws in software, so this lays out the real root view
-    // without a window or GPU; naming the backend keeps the fallback renderer
-    // from trying wgpu first.
-    let renderer = futures::executor::block_on(<iced::Renderer as Headless>::new(
-        Font::default(),
-        Pixels(16.0),
-        Some("tiny-skia"),
-    ))
-    .expect("the headless tiny-skia renderer");
-    let mut tree = Tree::new(element.as_widget());
-    let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, &renderer, &limits);
-    let mut captured = CapturedTextBounds::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &renderer, &mut captured);
+    let capture = captured_root_view_text_bounds(&player);
+    let top = capture.find("Top");
+    let sort = capture.find("Sort");
 
-    let find = |label: &str| {
-        captured
-            .0
-            .iter()
-            .find(|(text, _)| text == label)
-            .map(|(_, bounds)| *bounds)
-            .unwrap_or_else(|| panic!("no {label} button was drawn: {:?}", captured.0))
-    };
-    let top = find("Top");
-    let sort = find("Sort");
-
-    assert_eq!(top.y, sort.y, "Sort must share Top's row: {captured:?}");
+    assert_eq!(
+        top.y,
+        sort.y,
+        "Sort must share Top's row: {:?}",
+        capture.fragments()
+    );
     assert!(
         sort.x >= top.x + top.width,
-        "Sort must render to the right of Top: {captured:?}"
+        "Sort must render to the right of Top: {:?}",
+        capture.fragments()
+    );
+}
+
+// The transport row is rebuilt every frame and the Play/Pause label changes
+// with playback. Before the fixed-width fix a text-sized Play button widened
+// to Pause and moved every control after it; this lays out the whole root
+// `view` in both states and asserts the Stop and Repeat labels keep the same
+// absolute x, which only holds while the row's faces stay fixed.
+#[test]
+fn transport_row_does_not_reflow_when_the_play_label_changes() {
+    let (player, state) = test_player();
+
+    state.blocking_lock().is_playing = false;
+    let stopped = captured_root_view_text_bounds(&player);
+    let stopped_stop = stopped.find("Stop");
+    let stopped_repeat = stopped.find("Repeat: Off");
+
+    state.blocking_lock().is_playing = true;
+    let playing = captured_root_view_text_bounds(&player);
+    let playing_stop = playing.find("Stop");
+    let playing_repeat = playing.find("Repeat: Off");
+
+    assert_eq!(
+        stopped_stop.x,
+        playing_stop.x,
+        "the Stop button must not move when Play becomes Pause: {:?}",
+        playing.fragments()
+    );
+    assert_eq!(
+        stopped_repeat.x,
+        playing_repeat.x,
+        "the Repeat button must not move when Play becomes Pause: {:?}",
+        playing.fragments()
     );
 }

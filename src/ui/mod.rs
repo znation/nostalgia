@@ -19,6 +19,8 @@ use tokio::sync::Mutex;
 mod bevel;
 mod browse;
 mod handlers;
+#[cfg(test)]
+pub(crate) mod layout_capture;
 mod loading;
 mod message;
 mod player;
