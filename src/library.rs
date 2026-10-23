@@ -74,11 +74,19 @@ impl Song {
     /// unchanged. The title is borrowed in the artist-less case so a view
     /// refresh of a large library does not allocate for it.
     pub fn display_title(&self) -> Cow<'_, str> {
-        if self.artist.is_empty() {
-            Cow::Borrowed(&self.title)
-        } else {
-            Cow::Owned(format!("{} - {}", self.artist, self.title))
-        }
+        display_title_for(&self.artist, &self.title)
+    }
+}
+
+/// Joins an artist and title into the browse row's display text: the title alone
+/// when the artist is empty, else `<artist> - <title>`. Shared by
+/// [`Song::display_title`] and the Now Playing marquee so the two stay in
+/// sync.
+pub fn display_title_for<'a>(artist: &'a str, title: &'a str) -> Cow<'a, str> {
+    if artist.is_empty() {
+        Cow::Borrowed(title)
+    } else {
+        Cow::Owned(format!("{} - {}", artist, title))
     }
 }
 

@@ -10,6 +10,7 @@ use iced::{
     widget::{Row, Space, Text},
 };
 
+use crate::library::display_title_for;
 use crate::ui::{Message, bevel, theme};
 
 /// The LCD's character budget for the combined artist/title line: sized to
@@ -252,11 +253,7 @@ where
         }
         row = row.push(lcd_text(label));
     } else {
-        let display = if artist.is_empty() {
-            label.into_owned()
-        } else {
-            format!("{artist} - {label}")
-        };
+        let display = display_title_for(&artist, &label).into_owned();
         row = row.push(lcd_text(marquee_text(
             &display,
             marquee_offset,
