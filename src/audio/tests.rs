@@ -192,6 +192,32 @@ fn balance_source_hard_right_silences_the_left_channel() {
 }
 
 #[test]
+fn balance_source_partial_right_attenuates_the_left_channel() {
+    let raw = rodio::buffer::SamplesBuffer::new(
+        ChannelCount::new(2).unwrap(),
+        SampleRate::new(44_100).unwrap(),
+        vec![0.5_f32, 0.25],
+    );
+    let balance = Arc::new(AtomicU32::new(0.5_f32.to_bits()));
+    let source = BalanceSource::new(raw, balance);
+
+    assert_eq!(source.collect::<Vec<_>>(), vec![0.25, 0.25]);
+}
+
+#[test]
+fn balance_source_partial_left_attenuates_the_right_channel() {
+    let raw = rodio::buffer::SamplesBuffer::new(
+        ChannelCount::new(2).unwrap(),
+        SampleRate::new(44_100).unwrap(),
+        vec![0.5_f32, 0.25],
+    );
+    let balance = Arc::new(AtomicU32::new((-0.5_f32).to_bits()));
+    let source = BalanceSource::new(raw, balance);
+
+    assert_eq!(source.collect::<Vec<_>>(), vec![0.5, 0.125]);
+}
+
+#[test]
 fn balance_source_attenuates_a_mono_source() {
     let raw = rodio::buffer::SamplesBuffer::new(
         ChannelCount::new(1).unwrap(),
