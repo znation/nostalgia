@@ -214,6 +214,29 @@ fn bootstrap_page_is_private_and_carries_the_sign_in_url() {
     );
 }
 
+// Dropping a bootstrap page whose directory holds a leftover file (for
+// example one left behind by an interrupted atomic write) must still remove
+// the whole directory, not fail on `remove_dir` because it is non-empty.
+#[test]
+fn bootstrap_page_drop_removes_directory_with_leftover_files() {
+    let url = "http://127.0.0.1:4321/?state=deadbeefdeadbeef";
+    let page = BootstrapPage::write(url).expect("write the bootstrap page");
+    let path = page.path_string();
+    let directory = std::path::Path::new(&path)
+        .parent()
+        .expect("the bootstrap page has a directory")
+        .to_path_buf();
+    // Simulate a leftover temp file from an interrupted write.
+    std::fs::write(directory.join(".sign-in-leftover.tmp"), b"partial").expect("plant leftover");
+
+    drop(page);
+    assert!(
+        !directory.exists(),
+        "dropping the bootstrap page removes a directory containing leftover files, got: {}",
+        directory.display()
+    );
+}
+
 // A failed page write must not leak the private directory the guard created:
 // the guard owns the directory from the moment `create_private_dir` succeeds,
 // so a write error (a full disk, say) drops it and removes the directory

@@ -467,7 +467,9 @@ impl Drop for BootstrapPage {
     /// already finished, so there is nothing left to retry or report.
     fn drop(&mut self) {
         let _ = fs::remove_file(&self.file);
-        let _ = fs::remove_dir(&self.directory);
+        // Remove the whole directory tree so a leftover temp file from an
+        // interrupted write cannot keep the directory from being cleaned up.
+        let _ = fs::remove_dir_all(&self.directory);
     }
 }
 
@@ -492,12 +494,28 @@ fn create_private_dir(directory: &Path) -> io::Result<()> {
 #[cfg(unix)]
 fn write_private_file(file: &Path, contents: &str) -> io::Result<()> {
     use std::os::unix::fs::OpenOptionsExt;
-    let mut handle = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .open(file)?;
-    handle.write_all(contents.as_bytes())
+    // Write to a sibling temp file first, then hard-link it into place: a
+    // crash during the write leaves the temp file behind (along with its
+    // directory) instead of a truncated page, and `hard_link` fails with
+    // `AlreadyExists` when `file` already exists, preserving the refusal of
+    // a pre-planted path or symlink.
+    let temp = file.with_file_name(format!(".sign-in-{}.tmp", random_nonce()));
+    let result = (|| {
+        let mut handle = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&temp)?;
+        handle.write_all(contents.as_bytes())?;
+        handle.sync_all()?;
+        fs::hard_link(&temp, file)?;
+        let _ = fs::remove_file(&temp);
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temp);
+    }
+    result
 }
 
 /// Writes `contents` to `file`, refusing to overwrite an existing path. The
