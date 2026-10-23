@@ -54,22 +54,21 @@ mode alone (`44 KHZ  STEREO`) when it cannot compute the bitrate, and the row st
 otherwise. A loaded preview also drives a small green ten-bar spectrum visualizer beneath the
 title, updating about four times a second while playback runs; Pause freezes the bars at their
 last levels, Stop and a new selection clear them, and the strip stays blank (with its height)
-when no preview reports a spectrum. Beneath the LCD, a chrome slider spans the loaded preview's own length and tracks its
-playback position; dragging moves only the thumb, and releasing seeks to that position. The seek
-slider is blank (but keeps its height) until the backend reports both a playback position and a
-preview length, such as on the silent fallback; its scale is the preview's length, not the catalog
-track's length shown at the LCD's right edge. Clicking the large elapsed readout switches it to
-the track's remaining time
-(`-02:37`) and back; the choice stays until clicked again. The bar sits above the Play/Pause/Stop/Previous/Next
+when no preview reports a spectrum. Beneath the LCD, a chrome slider spans the loaded preview's
+own length and tracks its playback position; dragging moves only the thumb, and releasing seeks
+to that position. The seek slider is blank (but keeps its height) until the backend reports
+both a playback position and a preview length, such as on the silent fallback; its scale is
+the preview's length, not the catalog track's length shown at the LCD's right edge. Clicking
+the large elapsed readout switches it to the track's remaining time (`-02:37`) and back; the
+choice stays until clicked again. The bar sits above the Play/Pause/Stop/Previous/Next
 controls, Repeat and Shuffle toggles, volume and balance sliders, an equalizer panel (an EQ on/off
 button, a preset pick list, a preamp slider, a response curve above ten band sliders), and a
-browse list whose song
-rows read `artist - title` (or the title alone when the source supplies no artist) and show each
-track's length, and whose album rows read `artist - title` (or the title alone when the source
-supplies no artist), with each song list showing its song count and total playing time
-beneath the rows and artist, album, and playlist lists showing their item count beneath theirs.
-Each equalizer band slider's groove is tinted by that band's own gain, from green at `-12 dB`
-through yellow at `0 dB` to red at `+12 dB`.
+browse list whose song rows read `artist - title` (or the title alone when the source supplies
+no artist) and show each track's length, and whose album rows read `artist - title` (or the
+title alone when the source supplies no artist), with each song list showing its song count
+and total playing time beneath the rows and artist, album, and playlist lists showing their
+item count beneath theirs. Each equalizer band slider's groove is tinted by that band's own
+gain, from green at `-12 dB` through yellow at `0 dB` to red at `+12 dB`.
 Every browse list numbers its rows from 1 like a Winamp playlist, with the playing song marked by
 `▶` before its number. A `Search library` box above the browse list searches the library when you
 press Enter, replacing the list with the matching songs; Back leaves a search for the artists
@@ -85,21 +84,21 @@ alphabetically by its rows' rendered text, ignoring case; the reorder is one-sho
 the list restores the library's order. The title bar's `A` button toggles always-on-top, its
 shade button (or a double-click on the bar) rolls the window up to the title bar plus a compact
 transport strip with Previous, Play/Pause, Stop, Next, the current time readout, and a volume
-slider, and back. Its `–` and
-`✕` buttons minimize and close. With the window focused, the classic Winamp keys drive playback: Z
+slider, and back. Its `–` and `✕` buttons minimize and close. With the window focused, the
+classic Winamp keys drive playback: Z
 and B step back and forward, X plays, C pauses, V stops, R toggles Repeat and S toggles Shuffle,
 and the up/down arrows nudge the volume while the left/right arrows seek five seconds back or
 forward. With Shuffle on, Previous retraces the tracks actually played before the current one
-instead of stepping one row backward in the list.
-The volume slider and the up/down arrows set the audio backend's playback level, the balance slider
-sets its stereo balance, and the equalizer panel's toggles, sliders, and presets change the
-playing preview's curve live; the volume and balance are remembered for the next track.
-Setting `APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a browser-based MusicKit sign-in: browse and
-search queries then read your Apple Music library through the REST API, and fall back to the
-built-in sample library when it is unset. Playback plays the selected song's Apple Music preview
-through `rodio` when the library supplies one, and updates the UI state either way. Pause and Stop
-silence the preview through the audio backend, and Play resumes a paused preview or restarts a
-stopped one from the beginning. There are no CLI flags or config files yet.
+instead of stepping one row backward in the list. The volume slider and the up/down arrows set
+the audio backend's playback level, the balance slider sets its stereo balance, and the
+equalizer panel's toggles, sliders, and presets change the playing preview's curve live; the
+volume and balance are remembered for the next track. Setting `APPLE_MUSIC_DEVELOPER_TOKEN` at
+launch starts a browser-based MusicKit sign-in: browse and search queries then read your Apple
+Music library through the REST API, and fall back to the built-in sample library when it is
+unset. Playback plays the selected song's Apple Music preview through `rodio` when the library
+supplies one, and updates the UI state either way. Pause and Stop silence the preview through
+the audio backend, and Play resumes a paused preview or restarts a stopped one from the
+beginning. There are no CLI flags or config files yet.
 
 ## Development
 
