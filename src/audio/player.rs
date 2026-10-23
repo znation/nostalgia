@@ -587,6 +587,16 @@ impl Default for PlaybackSettings {
     }
 }
 
+/// Runs `act` against the installed player, if one exists.
+///
+/// Commands that only change the live player are no-ops before the first
+/// preview has loaded, since no player has been created yet.
+fn with_player<P>(player: &Option<P>, act: impl FnOnce(&P)) {
+    if let Some(player) = player {
+        act(player);
+    }
+}
+
 /// Serves [`Command`]s until the sender closes, driving players created by
 /// `create_player` and previews decoded by `fetch`.
 ///
@@ -643,43 +653,25 @@ pub(super) fn serve_commands<P, D>(
                 &create_player,
                 &fetch,
             ),
-            Command::Pause => {
-                if let Some(player) = &player {
-                    player.pause();
-                }
-            }
-            Command::Resume => {
-                if let Some(player) = &player {
-                    player.play();
-                }
-            }
+            Command::Pause => with_player(&player, WorkerPlayer::pause),
+            Command::Resume => with_player(&player, WorkerPlayer::play),
             Command::Stop => {
-                if let Some(player) = &player {
-                    player.stop();
-                }
+                with_player(&player, WorkerPlayer::stop);
                 player = None;
             }
             Command::SetVolume(new_volume) => {
                 settings.volume = new_volume;
-                if let Some(player) = &player {
-                    player.set_volume(settings.volume);
-                }
+                with_player(&player, |player| player.set_volume(settings.volume));
             }
             Command::SetBalance(new_balance) => {
                 settings.balance = new_balance;
-                if let Some(player) = &player {
-                    player.set_balance(settings.balance);
-                }
+                with_player(&player, |player| player.set_balance(settings.balance));
             }
             Command::SeekBy(offset_secs) => {
-                if let Some(player) = &player {
-                    player.seek_by(offset_secs);
-                }
+                with_player(&player, |player| player.seek_by(offset_secs));
             }
             Command::SeekTo(position) => {
-                if let Some(player) = &player {
-                    player.seek_to(position);
-                }
+                with_player(&player, |player| player.seek_to(position));
             }
             Command::Position(reply) => {
                 let _ = reply.send(player.as_ref().map(WorkerPlayer::position));
@@ -698,9 +690,7 @@ pub(super) fn serve_commands<P, D>(
             }
             Command::SetEqualizer(new_equalizer) => {
                 settings.equalizer = new_equalizer;
-                if let Some(player) = &player {
-                    player.set_equalizer(settings.equalizer);
-                }
+                with_player(&player, |player| player.set_equalizer(settings.equalizer));
             }
         }
     }

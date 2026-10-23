@@ -221,10 +221,9 @@ pub(super) fn reap_child_with(
     let deadline = Instant::now() + timeout;
     loop {
         match try_wait(child) {
+            Ok(Some(status)) if status.success() => return,
             Ok(Some(status)) => {
-                if !status.success() {
-                    report(opener_exit_report(&status));
-                }
+                report(opener_exit_report(&status));
                 return;
             }
             Ok(None) if Instant::now() < deadline => {

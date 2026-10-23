@@ -737,10 +737,13 @@ pub(crate) fn record_first_request(
         loop {
             match listener.accept() {
                 Ok((mut stream, _)) => return Some(read_some_request(&mut stream)),
+                Err(ref error)
+                    if error.kind() == std::io::ErrorKind::WouldBlock
+                        && Instant::now() >= deadline =>
+                {
+                    return None;
+                }
                 Err(ref error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                    if Instant::now() >= deadline {
-                        return None;
-                    }
                     std::thread::sleep(Duration::from_millis(10));
                 }
                 Err(error) => panic!("foreign listener failed: {error}"),

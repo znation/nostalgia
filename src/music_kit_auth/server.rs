@@ -271,28 +271,26 @@ fn handle_token(
         return Connection::Continue;
     }
 
-    match user_token {
-        Some(token) => match jwt_shape_problem(&token) {
-            None => {
-                let _ = write_response(stream, 200, "OK", "text/html; charset=utf-8", SUCCESS_PAGE);
-                Connection::Authorized(MusicKitSession {
-                    developer_token: developer_token.to_string(),
-                    user_token: token,
-                })
-            }
-            // Name the defect rather than a generic "invalid user token",
-            // mirroring `validate_developer_token`: a broken callback is then
-            // diagnosable from the logged error. The phrase is fixed (see
-            // `jwt_shape_problem`), so the token itself stays out of the log.
-            Some(problem) => reject_token(
-                stream,
-                &format!(
-                    "the sign-in callback's user token must be a three-segment base64url JWT, but {problem}"
-                ),
-            ),
-        },
-        None => reject_token(stream, "the sign-in callback did not carry a user token"),
-    }
+    let Some(token) = user_token else {
+        return reject_token(stream, "the sign-in callback did not carry a user token");
+    };
+    let Some(problem) = jwt_shape_problem(&token) else {
+        let _ = write_response(stream, 200, "OK", "text/html; charset=utf-8", SUCCESS_PAGE);
+        return Connection::Authorized(MusicKitSession {
+            developer_token: developer_token.to_string(),
+            user_token: token,
+        });
+    };
+    // Name the defect rather than a generic "invalid user token", mirroring
+    // `validate_developer_token`: a broken callback is then diagnosable from
+    // the logged error. The phrase is fixed (see `jwt_shape_problem`), so the
+    // token itself stays out of the log.
+    reject_token(
+        stream,
+        &format!(
+            "the sign-in callback's user token must be a three-segment base64url JWT, but {problem}"
+        ),
+    )
 }
 
 /// Answers an invalid `POST /token` callback with a `400` and ends the flow
@@ -327,27 +325,22 @@ pub(super) fn percent_decode(input: &str) -> String {
     let mut decoded = Vec::with_capacity(bytes.len());
     let mut index = 0;
     while index < bytes.len() {
-        match bytes[index] {
-            b'+' => {
-                decoded.push(b' ');
-                index += 1;
-            }
-            b'%' if index + 2 < bytes.len() => {
-                if let (Some(high), Some(low)) =
-                    (hex_value(bytes[index + 1]), hex_value(bytes[index + 2]))
-                {
-                    decoded.push(high * 16 + low);
-                    index += 3;
-                } else {
-                    decoded.push(bytes[index]);
-                    index += 1;
-                }
-            }
-            byte => {
-                decoded.push(byte);
-                index += 1;
-            }
+        if bytes[index] == b'+' {
+            decoded.push(b' ');
+            index += 1;
+            continue;
         }
+        if bytes[index] == b'%'
+            && index + 2 < bytes.len()
+            && let (Some(high), Some(low)) =
+                (hex_value(bytes[index + 1]), hex_value(bytes[index + 2]))
+        {
+            decoded.push(high * 16 + low);
+            index += 3;
+            continue;
+        }
+        decoded.push(bytes[index]);
+        index += 1;
     }
     String::from_utf8_lossy(&decoded).into_owned()
 }
