@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use crate::audio::PlaybackFormat;
 
-/// The LCD's character budget for the combined artist/title line: sized to
+/// The LCD's character budget for the number-prefixed artist/title line: sized to
 /// keep an overlong line inside the roughly 550px-wide window beside the
 /// large elapsed readout, the `"Now Playing: "` caption, and the total at
 /// the right edge. A line that fits renders still and borrowed; a longer one

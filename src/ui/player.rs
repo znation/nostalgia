@@ -91,7 +91,8 @@ pub(in crate::ui) struct WinampPlayer {
     /// entry falls back to sequential stepping.
     pub(in crate::ui) play_history: transport::PlayHistory,
     /// How far an overlong Now Playing title has scrolled: the character
-    /// offset `views::view_now_playing` windows the combined artist/title by.
+    /// offset `views::view_now_playing` windows the combined number, artist,
+    /// and title line by.
     /// `Message::MarqueeTick` advances it, and a `TrackSelected` resets it so
     /// a new song starts at the beginning of its title. The view ignores it
     /// whenever the line fits the LCD's character budget.

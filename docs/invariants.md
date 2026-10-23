@@ -420,11 +420,11 @@ its internal id, whenever the id is in the known-track index:
   elapsed mode for a known track) rather than falling back to a reported position. The strip stays
   blank and keeps its fixed height until the backend reports both a position and a positive preview
   length.
-- A combined artist/title longer than `MARQUEE_WIDTH` characters is windowed by
+- A number-prefixed artist/title line longer than `MARQUEE_WIDTH` characters is windowed by
   `views::now_playing::marquee_text`, advanced one character per `Message::MarqueeTick`, and
   reset to the start by `TrackSelected`; a line that fits is shown whole and borrowed.
 - The marquee timer is subscribed only while the line needs to scroll: `WinampPlayer::needs_marquee`
-  measures the same label and artist the bar renders, so a line that fits leaves the timer out
+  measures the same number, label, and artist the bar renders, so a line that fits leaves the timer out
   (every message makes iced rebuild the whole screen, browse list included).
 - The position poll is subscribed only while there is a position to refresh:
   `WinampPlayer::needs_position_poll` includes it while playback is running, the backend still holds
