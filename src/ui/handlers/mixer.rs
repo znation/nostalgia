@@ -29,6 +29,21 @@ pub(in crate::ui) fn volume_down(player: &mut WinampPlayer) -> Task<Message> {
     mutate_volume(player, |state| state.nudge_volume(-views::VOLUME_STEP))
 }
 
+/// A wheel roll over the player panels: nudges the slider by one step in the
+/// roll's vertical direction through the same up/down handlers as the arrow
+/// keys. A zero or non-finite direction is a no-op, so a horizontal-only roll
+/// leaves both the volume and the backend untouched; the `>`/`<` comparison
+/// sends NaN down the no-op path.
+pub(in crate::ui) fn volume_wheel(player: &mut WinampPlayer, direction: f32) -> Task<Message> {
+    if direction > 0.0 {
+        volume_up(player)
+    } else if direction < 0.0 {
+        volume_down(player)
+    } else {
+        Task::none()
+    }
+}
+
 /// The balance slider's drag: sets the stereo balance.
 pub(in crate::ui) fn balance_change(player: &mut WinampPlayer, balance: f32) -> Task<Message> {
     mutate_balance(player, |state| state.set_balance(balance))

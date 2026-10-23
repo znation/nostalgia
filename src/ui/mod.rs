@@ -133,6 +133,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::BalanceChange(balance) => handlers::mixer::balance_change(player, balance),
         Message::VolumeUp => handlers::mixer::volume_up(player),
         Message::VolumeDown => handlers::mixer::volume_down(player),
+        Message::VolumeWheel(direction) => handlers::mixer::volume_wheel(player, direction),
         Message::SeekBackward => handlers::mixer::seek_backward(player),
         Message::SeekForward => handlers::mixer::seek_forward(player),
         Message::ToggleEqualizer => handlers::mixer::toggle_equalizer(player),

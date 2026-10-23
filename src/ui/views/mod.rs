@@ -18,6 +18,7 @@
 
 use iced::{
     Color, Element, Length,
+    mouse::ScrollDelta,
     widget::{Button, Slider, Space, Text},
 };
 
@@ -140,6 +141,29 @@ const VOLUME_MAX: f32 = 1.0;
 /// keyboard volume handlers in `handlers::mixer` nudge by the slider's own
 /// step.
 pub(super) const VOLUME_STEP: f32 = 0.01;
+
+/// Maps a wheel roll over the player panels to the volume direction it asks
+/// for: `1.0` raises, `-1.0` lowers, and `0.0` is a no-op for a horizontal-only
+/// roll.
+///
+/// iced passes winit's wheel deltas, whose positive `y` is the direction that
+/// scrolls up. Only the sign matters, so one event becomes one slider step
+/// regardless of whether the backend reports lines or pixels — just like one
+/// arrow press. The browse list sits outside the area that publishes this, so
+/// its own `Scrollable` keeps the wheel there.
+pub(super) fn volume_wheel_message(delta: ScrollDelta) -> Message {
+    let y = match delta {
+        ScrollDelta::Lines { y, .. } | ScrollDelta::Pixels { y, .. } => y,
+    };
+    let direction = if y > 0.0 {
+        1.0
+    } else if y < 0.0 {
+        -1.0
+    } else {
+        0.0
+    };
+    Message::VolumeWheel(direction)
+}
 
 /// The left and right arrows' seek granularity: classic Winamp seeks five
 /// seconds back or forward per press.

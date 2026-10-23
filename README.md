@@ -108,7 +108,9 @@ forward. With Shuffle on, Previous retraces the tracks actually played before th
 instead of stepping one row backward in the list. While a song list is showing, Next, Previous
 (including a shuffled retrace), and the preview-end advance scroll that list so the landed row
 stays in view. The volume slider and the up/down arrows set
-the audio backend's playback level, the balance slider sets its stereo balance, and the
+the audio backend's playback level, and rolling the mouse wheel over the player panels nudges
+the volume by one slider step in the roll's vertical direction; over the browse list the wheel
+keeps scrolling the list instead. The balance slider sets its stereo balance, and the
 equalizer panel's toggles, sliders, and presets change the playing preview's curve live; the
 volume and balance are remembered for the next track. Setting `APPLE_MUSIC_DEVELOPER_TOKEN` at
 launch starts a browser-based MusicKit sign-in: browse and search queries then read your Apple

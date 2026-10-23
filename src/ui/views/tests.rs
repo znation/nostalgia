@@ -33,7 +33,7 @@ use super::{
     view_all_albums, view_all_albums_button, view_all_songs, view_all_songs_button, view_artists,
     view_back_button, view_browse_nav_buttons, view_equalizer, view_now_playing, view_playlists,
     view_playlists_button, view_retry_button, view_search_box, view_seek_bar, view_songs,
-    view_title_band, view_title_bar, view_transport_controls,
+    view_title_band, view_title_bar, view_transport_controls, volume_wheel_message,
 };
 use crate::audio::{PlaybackFormat, Spectrum};
 use crate::equalizer::{
@@ -2154,6 +2154,52 @@ fn volume_slider_spec_matches_the_state_clamp_and_pins_its_granularity() {
     // One-percent drag granularity, pinned so the step cannot silently
     // coarsen while the endpoints stay put.
     assert_eq!(VOLUME_STEP, 0.01);
+}
+
+/// Asserts the vertical direction a wheel mapping produces, without needing
+/// `Message` to implement equality.
+fn assert_wheel_direction(message: Message, expected: f32) {
+    match message {
+        Message::VolumeWheel(direction) => assert_eq!(direction, expected),
+        other => panic!("expected a volume wheel message, got {other:?}"),
+    }
+}
+
+// Both wheel delta kinds carry their vertical direction through as a sign:
+// positive scrolls up (raise), negative scrolls down (lower), and the
+// magnitude is not a step count. Line and pixel deltas map alike.
+#[test]
+fn volume_wheel_message_maps_a_vertical_roll_to_a_direction() {
+    assert_wheel_direction(
+        volume_wheel_message(iced::mouse::ScrollDelta::Lines { x: 0.0, y: 3.0 }),
+        1.0,
+    );
+    assert_wheel_direction(
+        volume_wheel_message(iced::mouse::ScrollDelta::Lines { x: 0.0, y: -2.0 }),
+        -1.0,
+    );
+    assert_wheel_direction(
+        volume_wheel_message(iced::mouse::ScrollDelta::Pixels { x: 0.0, y: 120.0 }),
+        1.0,
+    );
+    assert_wheel_direction(
+        volume_wheel_message(iced::mouse::ScrollDelta::Pixels { x: 0.0, y: -45.0 }),
+        -1.0,
+    );
+}
+
+// A horizontal-only roll has no vertical delta, so it maps to the no-op
+// direction rather than borrowing the horizontal sign.
+#[test]
+fn volume_wheel_message_zeroes_a_horizontal_only_roll() {
+    assert_wheel_direction(
+        volume_wheel_message(iced::mouse::ScrollDelta::Lines { x: 4.0, y: 0.0 }),
+        0.0,
+    );
+    assert_wheel_direction(
+        volume_wheel_message(iced::mouse::ScrollDelta::Pixels { x: 30.0, y: 0.0 }),
+        0.0,
+    );
 }
 
 // The balance twin of the volume spec: the balance slider's range must

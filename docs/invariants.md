@@ -394,6 +394,28 @@ in `src/ui/views/mod.rs` (the transport row and shade strip pass their fills the
 **History.** The fill is presentation-only: slider ranges, steps, messages, thumb geometry, and
 playback behavior are unchanged.
 
+## Volume wheel
+
+**Guarantee.** A wheel roll over the player panels (the title bar, Now Playing bar, seek strip,
+transport row, equalizer title band, and equalizer panel, plus the title bar and shade strip in
+shade mode) moves the volume by exactly one `views::VOLUME_STEP` in the roll's vertical
+direction: a positive `y` raises it through `handlers::mixer::volume_up`, a negative `y` lowers it
+through `handlers::mixer::volume_down`, and both go through `AppState::nudge_volume` and the same
+audio-backend forward as the arrow keys, so the clamp and the step cannot drift from them. Only
+the sign of the delta matters, so one line or pixel event is one step. The browse list is outside
+that area, so its `Scrollable` keeps the wheel and the volume is unchanged; a horizontal-only
+roll or a zero direction changes no volume and schedules no work.
+
+**Enforced by.** `views::volume_wheel_message` in `src/ui/views/mod.rs` (the sign mapping),
+`Message::VolumeWheel` in `src/ui/message.rs`, `handlers::mixer::volume_wheel` in
+`src/ui/handlers/mixer.rs` (the zero/NaN no-op), and the two `MouseArea::on_scroll` wrappers in
+`src/ui/view.rs` (the normal and shaded trees).
+
+**Pinned by.** `volume_wheel_message_maps_a_vertical_roll_to_a_direction` and
+`volume_wheel_message_zeroes_a_horizontal_only_roll` in `src/ui/views/tests.rs`, plus
+`volume_wheel_nudges_by_one_slider_step_and_ignores_zero` and `volume_wheel_clamps_at_the_ends`
+in `src/ui/tests.rs`.
+
 ## Now Playing label
 
 **Guarantee.** The Now Playing bar shows the current track's human-readable title and artist, not

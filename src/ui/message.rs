@@ -28,6 +28,11 @@ pub(in crate::ui) enum Message {
     // by `AppState::nudge_volume`.
     VolumeUp,
     VolumeDown,
+    // The mouse wheel's vertical direction over the player panels: positive
+    // raises the volume, negative lowers it, and zero is a no-op. The browse
+    // list is deliberately outside the area that publishes it, so its own
+    // scrollable keeps the wheel.
+    VolumeWheel(f32),
     // Arrow-key seek nudges: one `views::SEEK_STEP_SECS` back or forward.
     SeekBackward,
     SeekForward,

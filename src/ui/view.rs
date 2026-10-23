@@ -2,7 +2,10 @@
 //! transport row, equalizer panel, and browse level stacked into the tree
 //! `init_ui` hands to iced. Widget construction itself lives in `views`.
 
-use iced::{Element, widget::Column};
+use iced::{
+    Element,
+    widget::{Column, MouseArea},
+};
 
 use super::message::Message;
 use super::player::{CurrentView, WinampPlayer};
@@ -29,8 +32,14 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
             )
         };
         return Column::new()
-            .push(views::view_title_bar(player.always_on_top))
-            .push(views::view_shade_strip(is_playing, volume, elapsed))
+            .push(
+                MouseArea::new(
+                    Column::new()
+                        .push(views::view_title_bar(player.always_on_top))
+                        .push(views::view_shade_strip(is_playing, volume, elapsed)),
+                )
+                .on_scroll(views::volume_wheel_message),
+            )
             .into();
     }
 
@@ -146,7 +155,13 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
         ),
     };
 
-    let mut column = Column::new()
+    // The player panels are one `MouseArea` so a wheel roll over any of them
+    // nudges the volume; its content still sees each event first, so the
+    // title-bar drag, LCD click, sliders, and buttons keep their behavior.
+    // The library band and everything below stay outside the area, leaving
+    // the browse list's own `Scrollable` to take the wheel without touching
+    // the volume.
+    let player_panels = Column::new()
         .push(views::view_title_bar(player.always_on_top))
         .push(views::view_now_playing(
             now_playing_elapsed,
@@ -170,7 +185,10 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
         .push(views::view_title_band("NOSTALGIA EQUALIZER"))
         .push(views::view_equalizer(
             eq_enabled, eq_preamp, &eq_bands, eq_preset,
-        ))
+        ));
+
+    let mut column = Column::new()
+        .push(MouseArea::new(player_panels).on_scroll(views::volume_wheel_message))
         .push(views::view_title_band("NOSTALGIA LIBRARY"));
     // The Back button sits above the list it navigates and exists only where
     // the hierarchy has a level above to return to (see `views::can_go_back`).
