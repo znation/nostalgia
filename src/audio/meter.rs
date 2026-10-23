@@ -1,8 +1,8 @@
 //! The preview spectrum meter: a mono ring of the samples the worker pulls,
 //! a pure ten-band Goertzel analysis, and the source adapter that feeds it.
 //!
-//! The LCD's visualizer (part 2) draws the band amplitudes this module
-//! reports. The meter is observational only: [`MeterSource`] hands every
+//! The LCD's visualizer draws the band amplitudes this module reports. The
+//! meter is observational only: [`MeterSource`] hands every
 //! sample to its inner source unchanged, so the equalizer, balance, and
 //! output hear exactly what they would without it.
 
