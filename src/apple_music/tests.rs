@@ -2443,6 +2443,39 @@ async fn get_all_albums_uses_the_rest_library_when_signed_in() {
     );
 }
 
+// The songs are grouped by the exact `(album title, artist display name)`
+// pair, and an album no song names keeps the `0` the row renders as `--:--`.
+// Two albums sharing a title but not an artist must not pick up each other's
+// running time, and the unmatched one must not fail or borrow the total: the
+// map miss is the placeholder path, not an error.
+#[tokio::test]
+async fn get_all_albums_leaves_an_album_without_matching_songs_at_zero_duration() {
+    let stub = StubTransport::returning_bodies(&[
+        r#"{"data":[
+            {"id":"album-one","attributes":{"name":"Shared Title","artistName":"Artist One"}},
+            {"id":"album-two","attributes":{"name":"Shared Title","artistName":"Artist Two"}}
+        ]}"#,
+        r#"{"data":[
+            {"id":"song-1","attributes":{"name":"Only Track","artistName":"Artist One","albumName":"Shared Title","durationInMillis":210000}}
+        ]}"#,
+    ]);
+    let service = signed_in_service(&stub);
+
+    let albums = service.get_all_albums().await.unwrap();
+
+    assert_eq!(albums.len(), 2);
+    assert_eq!(albums[0].id, "album-one");
+    assert_eq!(
+        albums[0].duration_ms, 210_000,
+        "an album whose title and artist both match a song takes its total"
+    );
+    assert_eq!(albums[1].id, "album-two");
+    assert_eq!(
+        albums[1].duration_ms, 0,
+        "a same-title album by another artist has no matching songs and keeps the placeholder duration"
+    );
+}
+
 // The signed-in all-albums load reads the songs collection after the album
 // list so it can total each album's running time. A failure there must fail
 // the whole load (the Retry path) instead of quietly leaving every duration

@@ -208,6 +208,7 @@ or placeholder as the row's secondary text.
   (in `src/apple_music/rest/tests.rs`)
 - `get_albums_by_artist_uses_the_rest_library_when_signed_in`
 - `get_all_albums_uses_the_rest_library_when_signed_in`
+- `get_all_albums_leaves_an_album_without_matching_songs_at_zero_duration`
 - `get_all_albums_fails_when_the_album_durations_request_fails`
   (all in `src/apple_music/tests.rs`)
 
