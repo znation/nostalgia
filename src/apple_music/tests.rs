@@ -895,6 +895,43 @@ async fn play_track_without_a_preview_url_stops_the_previous_preview() {
     assert_playback_state(&state, Some("song-2"), true).await;
 }
 
+// A `None` preview replaces the previous one by stopping the backend, and a
+// backend that rejects that stop must surface the error rather than claim the
+// new selection is playing: the old preview may still be sounding, so the
+// service clears the playing flag and forgets the remembered URL so a later
+// Play cannot restart it under the new track's name. `current_track` stays
+// committed as the rollback leaves it for a rejected `Some` preview, so the
+// bar still names the track the user picked.
+#[tokio::test]
+async fn play_track_without_a_preview_url_reports_a_stop_failure_without_claiming_playback() {
+    let audio = Arc::new(RejectingAudio::new(RejectedCommand::Stop));
+    let (service, state) =
+        service_with_preview_playing(Arc::clone(&audio) as Arc<dyn AudioOutput>).await;
+
+    let error = service
+        .play_track("song-2", None, || true)
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.to_string(), "the audio device is gone");
+    assert_playback_state(&state, Some("song-2"), false).await;
+
+    // The URL was forgotten before the stop, so Play cannot resurrect the
+    // preview the failed stop left sounding.
+    service.resume().await.unwrap();
+    assert_eq!(
+        audio.calls(),
+        vec![
+            AudioCall::SetVolume(0.5),
+            AudioCall::SetBalance(0.0),
+            AudioCall::SetEqualizer(EqSnapshot::default()),
+            AudioCall::Play(PREVIEW_URL.to_string()),
+            AudioCall::Stop,
+        ]
+    );
+    assert_playback_state(&state, Some("song-2"), false).await;
+}
+
 // A `Some` preview URL that is blank can play nothing, so the seam rejects it
 // before committing state — the same guard a blank track id gets. The REST
 // layer never produces one (`Resource::into_song` maps a blank preview to
