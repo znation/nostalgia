@@ -10,7 +10,8 @@
 //! Each panel lives in its own submodule — `browse` (the artist → album →
 //! song drill-down, the flat lists, and Playlists, with their rows and list
 //! scaffolding in `browse::rows`), `title_bar`, `shade` (the rolled-up
-//! transport strip), `now_playing`, `seek_bar`, `transport`, and `equalizer`
+//! transport strip), `now_playing` (the LCD widgets, with its pure label, time,
+//! and marquee resolution in `now_playing::text`), `seek_bar`, `transport`, and `equalizer`
 //! — while the chrome helpers, slider specs, and track-length formatting the
 //! panels share ([`spacer`], [`labeled_button`], [`fixed_width_button`],
 //! [`chrome_slider`], and [`format_track_time`]) live here.

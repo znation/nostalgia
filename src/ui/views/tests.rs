@@ -8,13 +8,13 @@ use super::equalizer::{
     RESPONSE_CURVE_COLUMNS, RESPONSE_CURVE_HEIGHT, RESPONSE_CURVE_LINE_HEIGHT, eq_enabled_label,
     response_curve_offsets, response_curve_row,
 };
+use super::now_playing::text::{format_lcd_elapsed, format_lcd_remaining};
 use super::now_playing::{
     KnownTrack, MARQUEE_WIDTH, TimeDisplay, display_len, elapsed_readout_clickable,
-    elapsed_readout_color, format_lcd_elapsed, format_lcd_remaining, format_playback_status,
-    lcd_indicator_strip, marquee_text, needs_marquee, now_playing_artist, now_playing_content,
-    now_playing_elapsed, now_playing_label, now_playing_row, now_playing_status_row,
-    now_playing_time, now_playing_visualizer_row, transport_glyph, transport_glyph_color,
-    visualizer_bar_heights,
+    elapsed_readout_color, format_playback_status, lcd_indicator_strip, marquee_text,
+    needs_marquee, now_playing_artist, now_playing_content, now_playing_elapsed, now_playing_label,
+    now_playing_row, now_playing_status_row, now_playing_time, now_playing_visualizer_row,
+    transport_glyph, transport_glyph_color, visualizer_bar_heights,
 };
 use super::shade::{
     SHADE_STRIP_HEIGHT, SHADE_VOLUME_ID, SHADE_VOLUME_WIDTH, SHADED_HEIGHT, play_pause_glyph,
