@@ -62,23 +62,23 @@ last levels, Stop and a new selection clear them, and the strip stays blank (wit
 when no preview reports a spectrum. Beneath the LCD, a chrome slider spans the loaded preview's
 own length and tracks its playback position; dragging moves the thumb and previews that
 position in the large elapsed readout (counting down from it when the readout shows remaining
-time), and releasing seeks to it. The seek slider is blank (but keeps its height) until the backend reports
-both a playback position and a preview length, such as on the silent fallback; its scale is
-the preview's length, not the catalog track's length shown at the LCD's right edge. Clicking
-the large elapsed readout while playing or paused switches it to the track's remaining time
-(`-02:37`) and back; the choice stays until clicked again. The bar sits above the Play/Pause/Stop/Previous/Next
-controls, Repeat and Shuffle toggles, volume and balance sliders, an equalizer panel (an EQ on/off
-button, a preset pick list, a response curve above a vertical preamp slider, a `+12 dB` / `0 dB` /
-`-12 dB` scale, and ten band sliders), and a
-browse list whose song rows read `artist - title` (or the title alone when the source supplies
-no artist) and show each track's length, whose album rows read `artist - title` (or the
-title alone when the source supplies no artist) and show the album's total running time at the
-right (`10:30`, or `--:--` when the source supplied none), and whose artist rows show their album
-count at the right (`2 albums`, `1 album`, and no count for an artist with none), with each song list
-showing its song count
-and total playing time beneath the rows and artist, album, and playlist lists showing their
-item count beneath theirs. Each equalizer band slider's groove is tinted by that band's own
-gain, from green at `-12 dB` through yellow at `0 dB` to red at `+12 dB`.
+time), and releasing seeks to it. The seek slider is blank (but keeps its height) until the
+backend reports both a playback position and a preview length, such as on the silent fallback;
+its scale is the preview's length, not the catalog track's length shown at the LCD's right edge.
+Clicking the large elapsed readout while playing or paused switches it to the track's remaining
+time (`-02:37`) and back; the choice stays until clicked again. The bar sits above the
+Play/Pause/Stop/Previous/Next controls, Repeat and Shuffle toggles, volume and balance sliders,
+an equalizer panel (an EQ on/off button, a preset pick list, a response curve above ten band
+sliders, with a vertical preamp slider and a `+12 dB` / `0 dB` / `-12 dB` scale to their left),
+and a browse list whose song rows read `artist - title` (or the title alone when the source
+supplies no artist) and show each track's length at the right, whose album rows read
+`artist - title` (or the title alone when the source supplies no artist) and show the album's
+total running time at the right (`10:30`, or `--:--` when the source supplied none), and whose
+artist rows show their album count at the right (`2 albums`, `1 album`, and no count for an
+artist with none), with each song list showing its song count and total playing time beneath
+the rows and artist, album, and playlist lists showing their item count beneath theirs. Each
+equalizer band slider's groove is tinted by that band's own gain, from green at `-12 dB` through
+yellow at `0 dB` to red at `+12 dB`.
 Every browse list numbers its rows from 1 like a Winamp playlist, with the playing song marked by
 `▶` before its number. A `Search library` box above the browse list searches the library when you
 press Enter, replacing the list with the matching songs; Back leaves a search for the artists
