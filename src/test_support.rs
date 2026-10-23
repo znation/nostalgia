@@ -429,6 +429,18 @@ pub(crate) fn recording_spectrum() -> Spectrum {
     Spectrum { bands }
 }
 
+/// Appends `call` to a fake backend's recorded calls and reports success. The
+/// recording [`AudioOutput`] fakes in this module and the `apple_music` tests
+/// all share this lock-and-push body, so a change to how a command is logged
+/// happens once.
+pub(crate) fn record_call(
+    calls: &Mutex<Vec<AudioCall>>,
+    call: AudioCall,
+) -> Result<(), AppleMusicError> {
+    calls.lock().unwrap().push(call);
+    Ok(())
+}
+
 /// A recording [`AudioOutput`] so a test observes the commands issued to the
 /// backend without touching an audio device. The `apple_music`, `ui`, and
 /// `audio` suites all need one, so the fake lives here once.
@@ -444,6 +456,12 @@ impl RecordingAudio {
         self.calls.lock().unwrap().clone()
     }
 
+    /// Appends `call` to the recorded calls and reports success, the body every
+    /// accepted [`AudioOutput`] command shares.
+    fn record(&self, call: AudioCall) -> Result<(), AppleMusicError> {
+        record_call(&self.calls, call)
+    }
+
     /// Sets the finished state [`AudioOutput::is_finished`] reports, so a test
     /// can drive both values of a preview's completion without a real player.
     pub(crate) fn set_finished(&self, finished: bool) {
@@ -453,55 +471,35 @@ impl RecordingAudio {
 
 impl AudioOutput for RecordingAudio {
     fn play(&self, url: &str) -> Result<(), AppleMusicError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(AudioCall::Play(url.to_string()));
-        Ok(())
+        self.record(AudioCall::Play(url.to_string()))
     }
 
     fn pause(&self) -> Result<(), AppleMusicError> {
-        self.calls.lock().unwrap().push(AudioCall::Pause);
-        Ok(())
+        self.record(AudioCall::Pause)
     }
 
     fn resume(&self) -> Result<(), AppleMusicError> {
-        self.calls.lock().unwrap().push(AudioCall::Resume);
-        Ok(())
+        self.record(AudioCall::Resume)
     }
 
     fn stop(&self) -> Result<(), AppleMusicError> {
-        self.calls.lock().unwrap().push(AudioCall::Stop);
-        Ok(())
+        self.record(AudioCall::Stop)
     }
 
     fn set_volume(&self, volume: f32) -> Result<(), AppleMusicError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(AudioCall::SetVolume(volume));
-        Ok(())
+        self.record(AudioCall::SetVolume(volume))
     }
 
     fn set_balance(&self, balance: f32) -> Result<(), AppleMusicError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(AudioCall::SetBalance(balance));
-        Ok(())
+        self.record(AudioCall::SetBalance(balance))
     }
 
     fn seek_by(&self, offset_secs: i64) -> Result<(), AppleMusicError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(AudioCall::SeekBy(offset_secs));
-        Ok(())
+        self.record(AudioCall::SeekBy(offset_secs))
     }
 
     fn seek_to(&self, position: Duration) -> Result<(), AppleMusicError> {
-        self.calls.lock().unwrap().push(AudioCall::SeekTo(position));
-        Ok(())
+        self.record(AudioCall::SeekTo(position))
     }
 
     /// Reports a fixed stub position; the recording fake models no real
@@ -539,11 +537,7 @@ impl AudioOutput for RecordingAudio {
     }
 
     fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(AudioCall::SetEqualizer(equalizer));
-        Ok(())
+        self.record(AudioCall::SetEqualizer(equalizer))
     }
 }
 

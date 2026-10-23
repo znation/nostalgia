@@ -10,7 +10,7 @@ use crate::sample_library::sample_library;
 use crate::state::TransportMode;
 use crate::test_support::{
     AudioCall, FailingAudio, FailingCommand, PREVIEW_URL, RecordingAudio, StubTransport,
-    assert_ids, assert_preview_calls, assert_single_call, rest_session, sample_album,
+    assert_ids, assert_preview_calls, assert_single_call, record_call, rest_session, sample_album,
     sample_artist, sample_song, sign_in_session,
 };
 use std::time::Duration;
@@ -137,65 +137,42 @@ impl GatedAudio {
 
 impl AudioOutput for GatedAudio {
     fn play(&self, url: &str) -> Result<(), AppleMusicError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(AudioCall::Play(url.to_string()));
-        Ok(())
+        record_call(&self.calls, AudioCall::Play(url.to_string()))
     }
 
     fn pause(&self) -> Result<(), AppleMusicError> {
-        self.calls.lock().unwrap().push(AudioCall::Pause);
+        record_call(&self.calls, AudioCall::Pause)?;
         let _ = self.entered.send(());
         let _ = self.release.lock().unwrap().recv();
         Ok(())
     }
 
     fn resume(&self) -> Result<(), AppleMusicError> {
-        self.calls.lock().unwrap().push(AudioCall::Resume);
-        Ok(())
+        record_call(&self.calls, AudioCall::Resume)
     }
 
     fn stop(&self) -> Result<(), AppleMusicError> {
-        self.calls.lock().unwrap().push(AudioCall::Stop);
-        Ok(())
+        record_call(&self.calls, AudioCall::Stop)
     }
 
     fn set_volume(&self, volume: f32) -> Result<(), AppleMusicError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(AudioCall::SetVolume(volume));
-        Ok(())
+        record_call(&self.calls, AudioCall::SetVolume(volume))
     }
 
     fn set_balance(&self, balance: f32) -> Result<(), AppleMusicError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(AudioCall::SetBalance(balance));
-        Ok(())
+        record_call(&self.calls, AudioCall::SetBalance(balance))
     }
 
     fn seek_by(&self, offset_secs: i64) -> Result<(), AppleMusicError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(AudioCall::SeekBy(offset_secs));
-        Ok(())
+        record_call(&self.calls, AudioCall::SeekBy(offset_secs))
     }
 
     fn seek_to(&self, position: Duration) -> Result<(), AppleMusicError> {
-        self.calls.lock().unwrap().push(AudioCall::SeekTo(position));
-        Ok(())
+        record_call(&self.calls, AudioCall::SeekTo(position))
     }
 
     fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(AudioCall::SetEqualizer(equalizer));
-        Ok(())
+        record_call(&self.calls, AudioCall::SetEqualizer(equalizer))
     }
 }
 
@@ -261,10 +238,7 @@ impl RejectingAudio {
 
 impl AudioOutput for RejectingAudio {
     fn play(&self, url: &str) -> Result<(), AppleMusicError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(AudioCall::Play(url.to_string()));
+        record_call(&self.calls, AudioCall::Play(url.to_string()))?;
         if self.rejected == RejectedCommand::PlayAfterFirst {
             let mut plays = self.plays.lock().unwrap();
             *plays += 1;
@@ -276,54 +250,40 @@ impl AudioOutput for RejectingAudio {
     }
 
     fn pause(&self) -> Result<(), AppleMusicError> {
-        self.calls.lock().unwrap().push(AudioCall::Pause);
+        record_call(&self.calls, AudioCall::Pause)?;
         self.check(RejectedCommand::Pause)
     }
 
     fn resume(&self) -> Result<(), AppleMusicError> {
-        self.calls.lock().unwrap().push(AudioCall::Resume);
+        record_call(&self.calls, AudioCall::Resume)?;
         self.check(RejectedCommand::Resume)
     }
 
     fn stop(&self) -> Result<(), AppleMusicError> {
-        self.calls.lock().unwrap().push(AudioCall::Stop);
+        record_call(&self.calls, AudioCall::Stop)?;
         self.check(RejectedCommand::Stop)
     }
 
     fn set_volume(&self, volume: f32) -> Result<(), AppleMusicError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(AudioCall::SetVolume(volume));
+        record_call(&self.calls, AudioCall::SetVolume(volume))?;
         self.check(RejectedCommand::SetVolume)
     }
 
     fn set_balance(&self, balance: f32) -> Result<(), AppleMusicError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(AudioCall::SetBalance(balance));
+        record_call(&self.calls, AudioCall::SetBalance(balance))?;
         self.check(RejectedCommand::SetBalance)
     }
 
     fn seek_by(&self, offset_secs: i64) -> Result<(), AppleMusicError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(AudioCall::SeekBy(offset_secs));
-        Ok(())
+        record_call(&self.calls, AudioCall::SeekBy(offset_secs))
     }
 
     fn seek_to(&self, position: Duration) -> Result<(), AppleMusicError> {
-        self.calls.lock().unwrap().push(AudioCall::SeekTo(position));
-        Ok(())
+        record_call(&self.calls, AudioCall::SeekTo(position))
     }
 
     fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(AudioCall::SetEqualizer(equalizer));
+        record_call(&self.calls, AudioCall::SetEqualizer(equalizer))?;
         if self.rejected == RejectedCommand::SetEqualizerAfterFirst {
             let mut equalizers = self.equalizers.lock().unwrap();
             *equalizers += 1;
