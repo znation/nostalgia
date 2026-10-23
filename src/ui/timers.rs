@@ -21,10 +21,10 @@ use super::{Message, shortcuts::message_for, ticks};
 pub(super) const MARQUEE_TICK: Duration = Duration::from_millis(250);
 
 /// How often the Now Playing bar polls the audio backend for the loaded
-/// preview's position, format, and length, refreshing the large elapsed
-/// readout, the LCD status row, and the seek bar. The audio backend owns
-/// playback, so this bounds only how often the UI asks; it does not affect the
-/// audio itself.
+/// preview's position, format, length, and finished state, refreshing the
+/// large elapsed readout, the LCD status row, and the seek bar, and advancing
+/// when the preview reaches its end. The audio backend owns playback, so this
+/// bounds only how often the UI asks; it does not affect the audio itself.
 pub(super) const POSITION_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 /// How often the Now Playing LCD polls the audio backend for the loaded
@@ -139,7 +139,8 @@ pub(super) fn subscriptions(
 /// [`POSITION_POLL_INTERVAL`], using the same std-thread tick source as
 /// [`marquee_ticks`] because iced's timed subscription is not enabled. Each
 /// tick's `update` arm schedules the actual backend queries — position, format,
-/// and length — as tasks, so the UI thread never blocks on the audio backend.
+/// length, and finished state — as tasks, so the UI thread never blocks on the
+/// audio backend.
 pub(super) fn position_ticks() -> iced::Subscription<Message> {
     iced::Subscription::run(position_tick_stream)
 }

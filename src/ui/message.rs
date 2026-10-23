@@ -37,8 +37,9 @@ pub(in crate::ui) enum Message {
     // scrolls the bar.
     MarqueeTick,
     // The position poll's tick: schedule queries of the loaded preview's
-    // position, format, and length. Keeping the queries in tasks, rather than
-    // in `update`, means a slow backend cannot stall the UI thread.
+    // position, format, length, and finished state. Keeping the queries in
+    // tasks, rather than in `update`, means a slow backend cannot stall the UI
+    // thread.
     PositionTick,
     // The position query's reply, stamped with the `position_epoch` that issued
     // it. A reply from before a Stop or a new selection is dropped so it
@@ -72,6 +73,14 @@ pub(in crate::ui) enum Message {
     PlaybackDuration {
         epoch: u64,
         duration: Option<Duration>,
+    },
+    // The finished-state query's reply, stamped with the `position_epoch` that
+    // issued it. `true` means the loaded preview reached its end while playing,
+    // so the handler advances the transport as Next would; a reply from before
+    // a Stop or a new selection is dropped.
+    PlaybackFinished {
+        epoch: u64,
+        finished: bool,
     },
     // The seek bar's drag: the slider's value in seconds. It only stores the
     // in-progress drag, so dragging never reaches the backend.

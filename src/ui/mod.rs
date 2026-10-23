@@ -137,6 +137,9 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::PlaybackDuration { epoch, duration } => {
             handlers::playback::playback_duration(player, epoch, duration)
         }
+        Message::PlaybackFinished { epoch, finished } => {
+            handlers::playback::playback_finished(player, epoch, finished)
+        }
         Message::SpectrumTick => handlers::playback::spectrum_tick(player),
         Message::Spectrum { epoch, spectrum } => {
             handlers::playback::spectrum(player, epoch, spectrum)

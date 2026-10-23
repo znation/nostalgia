@@ -634,7 +634,15 @@ backend queries. On the UI side, `views::now_playing::visualizer_bar_heights` an
 while a preview is loaded. A paused but unended preview, a stopped player, the silent fallback, a
 closed worker, and an unanswered query all report not finished, so the UI can never advance off a
 state that is not a completed preview. Reading the state changes no output and issues no audio
-command. The UI consumer arrives in part 2/2; this half changes no UI behavior.
+command. The UI polls the finished state on the existing one-second position poll: a finished
+preview while playing advances to the song Next would select from the showing list — sequential
+when Shuffle and Repeat are off, the first song when Repeat is on and the last is current, and a
+non-current song when Shuffle is on. With Shuffle off, Repeat wraps a one-song list back to
+itself, so it repeats that song rather than stopping; Shuffle with no other song still takes the
+Stop path. A finished preview on the last song with Repeat off takes
+the Stop path, so playback becomes stopped, the song stays queued for Play, and the elapsed
+readout, status row, visualizer, and seek bar clear together. Pause, Stop, a stale epoch, a
+pending transition, and a not-finished reply never advance.
 
 **Enforced by.** `audio::AudioOutput::is_finished` in `src/audio.rs` defaults to false, and
 `audio::player::RodioPlayer::is_finished` in `src/audio/player.rs` answers true only once the
@@ -642,6 +650,10 @@ player holds a preview's format and `rodio::Player::empty` reports the queued so
 `RodioOutput::is_finished` bounds the worker's `Command::Finished` reply like the other backend
 queries, mapping a missing reply to false. `AppleMusicService::preview_finished` in
 `src/apple_music/playback.rs` forwards the backend's answer without touching shared state.
+`handlers::playback::position_tick` schedules the finished query, `Message::PlaybackFinished`
+carries its reply, and `handlers::playback::playback_finished` advances the transport;
+`handlers::playback::forward_track_id` (shared with `handlers::playback::step_track`) applies the
+same list/Shuffle/Repeat rules as Next, and the no-next-song case reuses `handlers::playback::stop`.
 
 **Pinned by.**
 
@@ -655,5 +667,11 @@ queries, mapping a missing reply to false. `AppleMusicService::preview_finished`
 - `rodio_output_reports_a_closed_worker_for_every_command` (`src/audio/tests.rs`)
 - `stop_removes_the_player_so_a_finished_query_reports_none` (`src/audio/tests.rs`)
 - `preview_finished_forwards_the_audio_output_state` (`src/apple_music/tests.rs`)
-
-**Part 2/2** consumes the signal to advance the transport; it is not implemented here.
+- `position_tick_queries_preview_finished` (`src/ui/tests.rs`)
+- `preview_end_advances_to_the_next_song` (`src/ui/tests.rs`)
+- `preview_end_wraps_to_the_first_song_with_repeat_on` (`src/ui/tests.rs`)
+- `preview_end_repeats_a_single_song_with_repeat_on` (`src/ui/tests.rs`)
+- `preview_end_at_the_last_song_stops_when_repeat_is_off` (`src/ui/tests.rs`)
+- `preview_end_with_shuffle_on_picks_the_other_song` (`src/ui/tests.rs`)
+- `preview_end_while_paused_or_stopped_does_not_advance` (`src/ui/tests.rs`)
+- `preview_end_with_a_stale_epoch_or_pending_transition_is_dropped` (`src/ui/tests.rs`)

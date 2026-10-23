@@ -102,6 +102,9 @@ unset. Playback plays the selected song's Apple Music preview through `rodio` wh
 supplies one, and updates the UI state either way. Pause and Stop silence the preview through
 the audio backend; a pause with no loaded preview stops the transport instead, since there is
 nothing to pause. Play resumes a paused preview or restarts a stopped one from the beginning.
+When a preview reaches its end, the player advances to the next song of the
+showing list (Shuffle picks another, Repeat wraps), and with Repeat off on the
+last song it stops and keeps that song queued for Play.
 There are no CLI flags or config files yet.
 
 ## Development

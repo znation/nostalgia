@@ -268,10 +268,8 @@ impl AppleMusicService {
     /// Synchronous and touches no shared state: it forwards the backend's own
     /// finished state (see [`crate::audio::AudioOutput::is_finished`]). The
     /// backend bounds the wait, so callers on the UI thread should run it as a
-    /// task rather than blocking `update`. Part 2/2's position poll consumes
-    /// it to advance the transport, so no production caller exists yet and
-    /// `dead_code` is allowed on exactly this seam.
-    #[allow(dead_code)]
+    /// task rather than blocking `update`. The position poll consumes it to
+    /// advance the transport when a preview reaches its end.
     pub(crate) fn preview_finished(&self) -> bool {
         self.audio.is_finished()
     }

@@ -77,6 +77,40 @@ fn player_stepping_from(current: Option<&str>) -> (WinampPlayer, Arc<Mutex<AppSt
     (player, state)
 }
 
+/// A player over `recording`, showing the stepping album with `current`
+/// playing — the precondition the preview-end tests drive a finished reply
+/// from. The songs carry no preview URL, so a committed play stops the
+/// previous backend rather than starting a preview, keeping these tests off
+/// the network.
+fn player_playing_stepping_song(
+    recording: &Arc<RecordingAudio>,
+    current: &str,
+) -> (WinampPlayer, Arc<Mutex<AppState>>) {
+    let (mut player, state) =
+        player_with_audio(Arc::clone(recording) as Arc<dyn crate::audio::AudioOutput>);
+    player.songs.items = stepping_songs();
+    {
+        let mut state = state.blocking_lock();
+        state.current_track = Some(current.to_string());
+        state.play();
+    }
+    (player, state)
+}
+
+/// Drives a finished reply at the player's current epoch and returns the
+/// message the handler schedules, as iced would deliver it.
+fn drive_playback_finished(player: &mut WinampPlayer) -> Message {
+    let epoch = player.position_epoch;
+    let task = update(
+        player,
+        Message::PlaybackFinished {
+            epoch,
+            finished: true,
+        },
+    );
+    futures::executor::block_on(task_output(task, "preview end"))
+}
+
 /// Feeds a committed play of `track_id` through `Message::TrackPlayed`, as the
 /// playback task would after a successful `TrackSelected`: the shared state
 /// names the track and is playing, and the completion carries the current play
@@ -4901,6 +4935,233 @@ fn position_tick_queries_position_and_duration() {
                 if *reply_epoch == epoch && *duration == Duration::from_secs(30)
         )),
         "the tick must query the duration: {replies:?}"
+    );
+}
+
+// The tick must also ask the backend whether the preview has reached its end,
+// so the transport can advance off the existing one-second poll instead of a
+// new timer. Drive the batched task's stream to its end and check the finished
+// reply carries the tick's epoch and the backend's state.
+#[test]
+fn position_tick_queries_preview_finished() {
+    use futures::StreamExt;
+
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, _state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    for finished in [true, false] {
+        recording.set_finished(finished);
+        let epoch = player.position_epoch;
+        let mut stream =
+            iced_runtime::task::into_stream(update(&mut player, Message::PositionTick))
+                .expect("the position tick must schedule a task");
+        let mut replies = Vec::new();
+        while let Some(action) = futures::executor::block_on(await_or_timeout(
+            "position tick",
+            TASK_TIMEOUT,
+            stream.next(),
+        )) {
+            if let iced_runtime::Action::Output(message) = action {
+                replies.push(message);
+            }
+        }
+
+        assert!(
+            replies.iter().any(|message| matches!(
+                message,
+                Message::PlaybackFinished { epoch: reply_epoch, finished: reply_finished }
+                    if *reply_epoch == epoch && *reply_finished == finished
+            )),
+            "the tick must query the finished state {finished}: {replies:?}"
+        );
+    }
+}
+
+// A preview that ends while playing must step forward exactly as Next would:
+// from song-1, the showing list's next song is song-2. The scheduled selection
+// resolves against the same list, and its play commits the new current track.
+#[test]
+fn preview_end_advances_to_the_next_song() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) = player_playing_stepping_song(&recording, "song-1");
+
+    let selected = drive_playback_finished(&mut player);
+    assert!(matches!(
+        selected,
+        Message::TrackSelected { epoch: 0, index: 1 }
+    ));
+    let task = update(&mut player, selected);
+    futures::executor::block_on(drive_task(task, "preview end play", |_| {}));
+
+    let state = state.blocking_lock();
+    assert_eq!(state.current_track.as_deref(), Some("song-2"));
+    assert!(state.is_playing);
+}
+
+// Repeat wraps a natural end at the last song back to the first, just as the
+// Next button does.
+#[test]
+fn preview_end_wraps_to_the_first_song_with_repeat_on() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) = player_playing_stepping_song(&recording, "song-3");
+    state.blocking_lock().repeat = true;
+
+    let selected = drive_playback_finished(&mut player);
+    assert!(matches!(
+        selected,
+        Message::TrackSelected { epoch: 0, index: 0 }
+    ));
+    let task = update(&mut player, selected);
+    futures::executor::block_on(drive_task(task, "preview end play", |_| {}));
+
+    assert_eq!(
+        state.blocking_lock().current_track.as_deref(),
+        Some("song-1")
+    );
+}
+
+// Repeat wraps a one-song list back to itself: the pick equals the current
+// song, which is still a step that replays it rather than the Repeat-off Stop
+// path. The three-song fixture above never exercises this equal-id pick.
+#[test]
+fn preview_end_repeats_a_single_song_with_repeat_on() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) = player_playing_stepping_song(&recording, "song-1");
+    player.songs.items.truncate(1);
+    state.blocking_lock().repeat = true;
+
+    let selected = drive_playback_finished(&mut player);
+    assert!(matches!(
+        selected,
+        Message::TrackSelected { epoch: 0, index: 0 }
+    ));
+    let task = update(&mut player, selected);
+    futures::executor::block_on(drive_task(task, "preview end play", |_| {}));
+
+    let state = state.blocking_lock();
+    assert_eq!(state.current_track.as_deref(), Some("song-1"));
+    assert!(state.is_playing);
+}
+
+// With Repeat off, a natural end at the last song takes the Stop path: the
+// transport becomes stopped, the song stays queued for Play, and the readout,
+// status row, visualizer, and seek bar clear together.
+#[test]
+fn preview_end_at_the_last_song_stops_when_repeat_is_off() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) = player_playing_stepping_song(&recording, "song-3");
+    player.playback_position = Some(Duration::from_secs(95));
+    player.playback_format = Some(PlaybackFormat {
+        sample_rate_hz: 44_100,
+        channels: 2,
+        bitrate_kbps: Some(256),
+    });
+    player.playback_duration = Some(Duration::from_secs(30));
+    player.spectrum = Some(recording_spectrum());
+    player.seek_preview = Some(Duration::from_secs(5));
+
+    let settled = drive_playback_finished(&mut player);
+    assert!(matches!(settled, Message::TransportSettled));
+
+    assert_eq!(recording.calls(), vec![AudioCall::Stop]);
+    let state = state.blocking_lock();
+    assert!(!state.is_playing);
+    assert_eq!(state.current_track.as_deref(), Some("song-3"));
+    assert_eq!(player.playback_position, None);
+    assert_eq!(player.playback_format, None);
+    assert_eq!(player.playback_duration, None);
+    assert_eq!(player.spectrum, None);
+    assert_eq!(player.seek_preview, None);
+}
+
+// Shuffle picks a non-current song on a natural end, as it does for Next. A
+// two-song list makes the pick deterministic: song-1 is current, so the only
+// candidate is song-2.
+#[test]
+fn preview_end_with_shuffle_on_picks_the_other_song() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) = player_playing_stepping_song(&recording, "song-1");
+    player.songs.items.truncate(2);
+    state.blocking_lock().shuffle = true;
+
+    let selected = drive_playback_finished(&mut player);
+    assert!(matches!(
+        selected,
+        Message::TrackSelected { epoch: 0, index: 1 }
+    ));
+    let task = update(&mut player, selected);
+    futures::executor::block_on(drive_task(task, "preview end play", |_| {}));
+
+    assert_eq!(
+        state.blocking_lock().current_track.as_deref(),
+        Some("song-2")
+    );
+}
+
+// Pause and Stop never advance: the finished signal may still arrive from a
+// poll issued before the transport changed, and a paused or stopped player has
+// nothing to step past.
+#[test]
+fn preview_end_while_paused_or_stopped_does_not_advance() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) = player_playing_stepping_song(&recording, "song-1");
+
+    state.blocking_lock().pause();
+    let epoch = player.position_epoch;
+    assert_message_schedules_no_work(
+        &mut player,
+        Message::PlaybackFinished {
+            epoch,
+            finished: true,
+        },
+    );
+
+    state.blocking_lock().stop();
+    let epoch = player.position_epoch;
+    assert_message_schedules_no_work(
+        &mut player,
+        Message::PlaybackFinished {
+            epoch,
+            finished: true,
+        },
+    );
+}
+
+// A finished reply in flight across a transport change must not advance: a
+// stale epoch is dropped, and a reply that lands while a transition is still
+// reaching the backend is dropped too, so it cannot step from the previous
+// track's list. A not-finished reply is likewise a no-op.
+#[test]
+fn preview_end_with_a_stale_epoch_or_pending_transition_is_dropped() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, _state) = player_playing_stepping_song(&recording, "song-1");
+
+    let stale = player.position_epoch.wrapping_add(1);
+    assert_message_schedules_no_work(
+        &mut player,
+        Message::PlaybackFinished {
+            epoch: stale,
+            finished: true,
+        },
+    );
+
+    let epoch = player.position_epoch;
+    player.pending_position_transitions = 1;
+    assert_message_schedules_no_work(
+        &mut player,
+        Message::PlaybackFinished {
+            epoch,
+            finished: true,
+        },
+    );
+
+    player.pending_position_transitions = 0;
+    assert_message_schedules_no_work(
+        &mut player,
+        Message::PlaybackFinished {
+            epoch,
+            finished: false,
+        },
     );
 }
 

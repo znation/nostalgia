@@ -1,6 +1,7 @@
 //! The playback message handlers: the transport buttons and keys, the track
 //! stepping, the play request and its completion, the Now Playing marquee
-//! tick, and the backend poll for the position, format, and preview length.
+//! tick, and the backend poll for the position, format, preview length, and
+//! finished state.
 //!
 //! The transport calls go through the service's async seam (`transport_into`)
 //! and the play request through `play_into`, so the shared playback state is
@@ -11,6 +12,7 @@ use std::time::Duration;
 
 use iced::Task;
 
+use crate::library::Song;
 use crate::state::{AppState, TransportMode};
 use crate::ui::loading::{
     PLAY_TIMEOUT, RequestGeneration, play_failure_report, play_into, transport_into,
@@ -80,6 +82,41 @@ pub(in crate::ui) fn toggle_time_display(player: &mut WinampPlayer) -> Task<Mess
     Task::none()
 }
 
+/// The song list the current view draws from, with the epoch that rendered it:
+/// the flat All Songs view's `all_songs`, otherwise the browsed `songs`. The
+/// preview-end advance resolves its chosen id against this same buffer, so the
+/// scheduled `TrackSelected` index and epoch match the list the view drew.
+/// `step_track` selects the same list inline, because its backward branch also
+/// borrows `play_history` mutably and a slice borrowed through this helper
+/// would hold the whole player.
+fn showing_songs(player: &WinampPlayer) -> (&[Song], u64) {
+    if player.current_view == CurrentView::AllSongs {
+        (&player.all_songs.items, player.all_songs.epoch)
+    } else {
+        (&player.songs.items, player.songs.epoch)
+    }
+}
+
+/// The id a forward step selects from `items`: with `shuffle` on, a random
+/// non-current song via `transport::shuffled_track_id`; otherwise the
+/// `transport::next_track_id` successor, which wraps at the end only when
+/// `repeat` is on. Next and the preview-end advance share this choice, so a
+/// preview that runs out steps exactly where the Next button would. Pure, and
+/// taking the list and flags rather than a player keeps it from locking state
+/// while a caller already holds that lock.
+fn forward_track_id(
+    items: &[Song],
+    current: Option<&str>,
+    shuffle: bool,
+    repeat: bool,
+) -> Option<String> {
+    if shuffle {
+        transport::shuffled_track_id(items, current, transport::shuffle_roll())
+    } else {
+        transport::next_track_id(items, current, repeat)
+    }
+}
+
 /// The task the Next/Previous buttons schedule: step the current track
 /// through the list the current view shows — `all_songs` for the flat All
 /// Songs view, the browsed `songs` otherwise — in the given direction — with
@@ -111,14 +148,13 @@ pub(in crate::ui) fn step_track(player: &mut WinampPlayer, forward: bool) -> Tas
     } else {
         (&player.songs.items, player.songs.epoch)
     };
-    let stepped = if forward && state.shuffle {
-        transport::shuffled_track_id(
+    let stepped = if forward {
+        forward_track_id(
             items,
             state.current_track.as_deref(),
-            transport::shuffle_roll(),
+            state.shuffle,
+            state.repeat,
         )
-    } else if forward {
-        transport::next_track_id(items, state.current_track.as_deref(), state.repeat)
     } else if state.shuffle {
         player
             .play_history
@@ -269,14 +305,14 @@ pub(in crate::ui) fn transport_settled(player: &mut WinampPlayer) -> Task<Messag
 }
 
 /// The position poll's tick: schedule a query of the loaded preview's
-/// position, of its sample rate and channel mode, and of its own length. It
-/// also advances the paused readout's blink phase, reusing this one-second
-/// poll rather than adding a timer. All three queries run in tasks, so the UI
-/// thread never blocks on the audio backend, and each reply carries the epoch
-/// the query was issued under, so a transition that lands first invalidates
-/// it. While a transport transition is still reaching the backend, none is
-/// issued: the backend would still report the previous preview, and the epoch
-/// no longer identifies it.
+/// position, of its sample rate and channel mode, of its own length, and of
+/// whether it has reached its end. It also advances the paused readout's blink
+/// phase, reusing this one-second poll rather than adding a timer. All four
+/// queries run in tasks, so the UI thread never blocks on the audio backend,
+/// and each reply carries the epoch the query was issued under, so a
+/// transition that lands first invalidates it. While a transport transition is
+/// still reaching the backend, none is issued: the backend would still report
+/// the previous preview, and the epoch no longer identifies it.
 pub(in crate::ui) fn position_tick(player: &mut WinampPlayer) -> Task<Message> {
     if player.pending_position_transitions > 0 {
         return Task::none();
@@ -303,7 +339,12 @@ pub(in crate::ui) fn position_tick(player: &mut WinampPlayer) -> Task<Message> {
         async move { duration_service.playback_duration() },
         move |duration| Message::PlaybackDuration { epoch, duration },
     );
-    Task::batch([position, format, duration])
+    let finished_service = player.apple_music_service.clone();
+    let finished = Task::perform(
+        async move { finished_service.preview_finished() },
+        move |finished| Message::PlaybackFinished { epoch, finished },
+    );
+    Task::batch([position, format, duration, finished])
 }
 
 /// The position query's reply: store the reported position, or clear the
@@ -355,6 +396,57 @@ pub(in crate::ui) fn playback_duration(
         player.playback_duration = duration;
     }
     Task::none()
+}
+
+/// The finished-state query's reply: a loaded preview that reached its end
+/// while playing advances exactly as the Next button would. The showing list
+/// and the Shuffle/Repeat flags are read under one lock, [`forward_track_id`]
+/// picks the song, and its id resolves back to an index in that same list, so
+/// the scheduled `TrackSelected` names the row the view drew. When there is no
+/// next song — Repeat off at the last one, where `transport::next_track_id`
+/// re-lands on the current song, or a Shuffle list with no other song than the
+/// current one — or the picked id is no longer in the list, it takes the
+/// existing [`stop`] path, so playback becomes stopped and the elapsed
+/// readout, status row, visualizer, and seek bar clear together while
+/// `current_track` keeps naming the song for Play. With Repeat on and Shuffle
+/// off, a wrap back to the same song is a step: even a one-song list repeats.
+/// A reply that is not finished, is stale, arrives while a transition is in
+/// flight, or lands while paused or stopped is dropped: Pause and Stop never
+/// advance. A natural end is a forward step, not a Previous, so it records
+/// nothing in `PlayHistory`.
+pub(in crate::ui) fn playback_finished(
+    player: &mut WinampPlayer,
+    epoch: u64,
+    finished: bool,
+) -> Task<Message> {
+    if !finished || player.pending_position_transitions > 0 || epoch != player.position_epoch {
+        return Task::none();
+    }
+    let (stepped, list_epoch) = {
+        let state = player.state.blocking_lock();
+        if !state.is_playing {
+            return Task::none();
+        }
+        let (items, list_epoch) = showing_songs(player);
+        let current = state.current_track.as_deref();
+        let picked = forward_track_id(items, current, state.shuffle, state.repeat);
+        // A pick that is still the current song is a step only when Repeat
+        // wraps a one-song list back to itself. With Repeat off, Next
+        // re-lands on the last song at the end; with Shuffle on, a list with
+        // no other song can only pick itself. Both stop rather than replay.
+        let same_song_steps = state.repeat && !state.shuffle;
+        let index = picked
+            .filter(|track_id| same_song_steps || Some(track_id.as_str()) != current)
+            .and_then(|track_id| items.iter().position(|song| song.id == track_id));
+        (index, list_epoch)
+    };
+    match stepped {
+        Some(index) => Task::done(Message::TrackSelected {
+            epoch: list_epoch,
+            index,
+        }),
+        None => stop(player),
+    }
 }
 
 /// The spectrum poll's tick: schedule a query of the loaded preview's live
