@@ -37,9 +37,9 @@ pub(super) const DEVICE_OPEN_TIMEOUT: Duration = Duration::from_secs(5);
 /// [`super::preview::PREVIEW_TIMEOUT`], far longer than a UI poll should
 /// block, so this bound is short: a query that misses it reports `None`
 /// rather than stalling the caller, and the next poll asks again. It bounds
-/// both queued backend queries — the position and the format — because the
-/// same download sits in front of either one.
-pub(super) const POSITION_QUERY_TIMEOUT: Duration = Duration::from_millis(100);
+/// all three queued backend queries — the position, the format, and the
+/// preview's length — because the same download sits in front of any of them.
+pub(super) const WORKER_QUERY_TIMEOUT: Duration = Duration::from_millis(100);
 
 /// A command sent from [`RodioOutput`] to its worker thread.
 pub(super) enum Command {
@@ -385,7 +385,7 @@ impl AudioOutput for RodioOutput {
         if self.send(Command::Position(reply)).is_err() {
             return None;
         }
-        replies.recv_timeout(POSITION_QUERY_TIMEOUT).ok().flatten()
+        replies.recv_timeout(WORKER_QUERY_TIMEOUT).ok().flatten()
     }
 
     fn duration(&self) -> Option<Duration> {
@@ -393,7 +393,7 @@ impl AudioOutput for RodioOutput {
         if self.send(Command::Duration(reply)).is_err() {
             return None;
         }
-        replies.recv_timeout(POSITION_QUERY_TIMEOUT).ok().flatten()
+        replies.recv_timeout(WORKER_QUERY_TIMEOUT).ok().flatten()
     }
 
     fn playback_format(&self) -> Option<PlaybackFormat> {
@@ -401,7 +401,7 @@ impl AudioOutput for RodioOutput {
         if self.send(Command::PlaybackFormat(reply)).is_err() {
             return None;
         }
-        replies.recv_timeout(POSITION_QUERY_TIMEOUT).ok().flatten()
+        replies.recv_timeout(WORKER_QUERY_TIMEOUT).ok().flatten()
     }
 
     fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {

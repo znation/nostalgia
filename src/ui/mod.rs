@@ -97,9 +97,9 @@ enum Message {
     // LCD's character budget (see [`subscriptions`]), so a tick always
     // scrolls the bar.
     MarqueeTick,
-    // The position poll's tick: schedule a query of the loaded preview's
-    // position. Keeping the query in a task, rather than in `update`, means a
-    // slow backend cannot stall the UI thread.
+    // The position poll's tick: schedule queries of the loaded preview's
+    // position, format, and length. Keeping the queries in tasks, rather than
+    // in `update`, means a slow backend cannot stall the UI thread.
     PositionTick,
     // The position query's reply, stamped with the `position_epoch` that issued
     // it. A reply from before a Stop or a new selection is dropped so it
@@ -362,10 +362,10 @@ struct WinampPlayer {
     /// changes no playback state, and the mode survives Pause, Stop,
     /// Next/Previous, and a new selection until clicked again.
     time_display: views::TimeDisplay,
-    /// The playback transition counter. A position query carries its value;
+    /// The playback transition counter. Each backend query carries its value;
     /// `reset_position_readout` bumps it on a Stop or a new selection, so a
     /// reply that was already in flight is dropped rather than restoring the
-    /// previous track's elapsed value.
+    /// previous track's values.
     position_epoch: u64,
     /// Backend transport transitions whose call has not yet completed. Every
     /// handler that schedules one — Play, Pause, Play/Play-Pause, Stop, and a
@@ -577,9 +577,9 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::NextTrack => handlers::playback::step_track(player, true),
         Message::PreviousTrack => handlers::playback::step_track(player, false),
         Message::MarqueeTick => handlers::playback::marquee_tick(player),
-        // The position poll asks the backend in a task, as the service's
-        // position query bounds its own wait; `update` stays non-blocking. The
-        // reply carries the epoch it was issued under, so a transition that
+        // The position poll asks the backend in tasks, as the service's
+        // backend queries bound their own wait; `update` stays non-blocking.
+        // Each reply carries the epoch it was issued under, so a transition that
         // lands first invalidates it. While a transport transition is still
         // reaching the backend, no query is issued: the backend would still
         // report the previous preview, and the epoch no longer identifies it.

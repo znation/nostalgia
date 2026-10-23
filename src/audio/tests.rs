@@ -4,7 +4,7 @@
 use super::balance::BalanceSource;
 use super::equalizer::{EqSettings, EqSource};
 use super::player::{
-    Command, DEVICE_OPEN_TIMEOUT, POSITION_QUERY_TIMEOUT, SeekablePlayer, WorkerPlayer,
+    Command, DEVICE_OPEN_TIMEOUT, SeekablePlayer, WORKER_QUERY_TIMEOUT, WorkerPlayer,
     await_device_ready, clamp_seek, duration_for_source, format_for_source, preview_bitrate_kbps,
     seek_player, seek_target, serve_commands,
 };
@@ -992,7 +992,7 @@ fn rodio_output_reports_none_when_the_position_reply_times_out() {
         Ok(Command::Position(reply)) => {
             // Keep the reply channel alive well past the seam's bound, as a
             // worker busy installing a preview would.
-            std::thread::sleep(POSITION_QUERY_TIMEOUT * 10);
+            std::thread::sleep(WORKER_QUERY_TIMEOUT * 10);
             drop(reply);
         }
         _ => panic!("position did not send Command::Position"),
@@ -1001,7 +1001,7 @@ fn rodio_output_reports_none_when_the_position_reply_times_out() {
     let started = Instant::now();
     assert_eq!(output.position(), None);
     assert!(
-        started.elapsed() < POSITION_QUERY_TIMEOUT * 5,
+        started.elapsed() < WORKER_QUERY_TIMEOUT * 5,
         "a missing position reply must time out instead of blocking"
     );
     worker.join().unwrap();
@@ -1036,7 +1036,7 @@ fn rodio_output_reports_none_when_the_duration_reply_times_out() {
     };
     let worker = std::thread::spawn(move || match receiver.recv() {
         Ok(Command::Duration(reply)) => {
-            std::thread::sleep(POSITION_QUERY_TIMEOUT * 10);
+            std::thread::sleep(WORKER_QUERY_TIMEOUT * 10);
             drop(reply);
         }
         _ => panic!("duration did not send Command::Duration"),
@@ -1045,7 +1045,7 @@ fn rodio_output_reports_none_when_the_duration_reply_times_out() {
     let started = Instant::now();
     assert_eq!(output.duration(), None);
     assert!(
-        started.elapsed() < POSITION_QUERY_TIMEOUT * 5,
+        started.elapsed() < WORKER_QUERY_TIMEOUT * 5,
         "a missing duration reply must time out instead of blocking"
     );
     worker.join().unwrap();
@@ -1057,13 +1057,14 @@ fn rodio_output_reports_none_when_the_duration_reply_times_out() {
 // value. `DEVICE_OPEN_TIMEOUT` is the longest startup waits for the platform
 // audio daemon before falling back to silence: an unbounded or very long value
 // stalls the app at launch, and a near-zero one abandons a healthy open.
-// `POSITION_QUERY_TIMEOUT` is how long a position poll blocks its caller: a
-// long value freezes the UI thread each poll, and zero would abandon every
-// query. Pin the documented durations.
+// `WORKER_QUERY_TIMEOUT` is how long a worker query — the position, the
+// format, or the preview's length — blocks its caller: a long value freezes
+// the UI thread each poll, and zero would abandon every query. Pin the
+// documented durations.
 #[test]
 fn audio_seam_bounds_are_the_documented_durations() {
     assert_eq!(DEVICE_OPEN_TIMEOUT, Duration::from_secs(5));
-    assert_eq!(POSITION_QUERY_TIMEOUT, Duration::from_millis(100));
+    assert_eq!(WORKER_QUERY_TIMEOUT, Duration::from_millis(100));
 }
 
 #[test]

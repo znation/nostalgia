@@ -20,9 +20,10 @@ use super::{Message, shortcuts::message_for, ticks};
 pub(super) const MARQUEE_TICK: Duration = Duration::from_millis(250);
 
 /// How often the Now Playing bar polls the audio backend for the loaded
-/// preview's position, refreshing the large elapsed readout. The audio backend
-/// owns playback, so this bounds only how often the UI asks; it does not
-/// affect the audio itself.
+/// preview's position, format, and length, refreshing the large elapsed
+/// readout, the LCD status row, and the seek bar. The audio backend owns
+/// playback, so this bounds only how often the UI asks; it does not affect the
+/// audio itself.
 pub(super) const POSITION_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
 /// A subscription that emits [`Message::MarqueeTick`] once per
@@ -98,7 +99,7 @@ pub(super) fn marquee_thread_failure_report(error: &io::Error) -> String {
 /// therefore subscribed only while the line needs to scroll, and dropped again
 /// once it fits.
 ///
-/// The position poll has the same shape: each tick and its reply rebuild the
+/// The position poll has the same shape: each tick and its replies rebuild the
 /// same whole screen, and a stopped player's readout is already the `00:00`
 /// Stop cleared it to, so there is nothing to refresh. It is subscribed while
 /// playback is running or the backend still holds a preview (a paused player's
@@ -121,8 +122,8 @@ pub(super) fn subscriptions(
 /// A subscription that emits [`Message::PositionTick`] once per
 /// [`POSITION_POLL_INTERVAL`], using the same std-thread tick source as
 /// [`marquee_ticks`] because iced's timed subscription is not enabled. Each
-/// tick's `update` arm schedules the actual position query as a task, so the
-/// UI thread never blocks on the audio backend.
+/// tick's `update` arm schedules the actual backend queries — position, format,
+/// and length — as tasks, so the UI thread never blocks on the audio backend.
 pub(super) fn position_ticks() -> iced::Subscription<Message> {
     iced::Subscription::run(position_tick_stream)
 }
