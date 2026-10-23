@@ -225,12 +225,7 @@ impl Resource {
             None => (None, None),
         };
         let title = required_name(title, &id, "album")?;
-        // `""` is `Album::artist`'s "source supplied no artist" sentinel, so a
-        // missing or whitespace-only name maps to the empty sentinel, exactly as
-        // `Resource::into_song` does.
-        let artist = artist_name
-            .filter(|name| !name.trim().is_empty())
-            .unwrap_or_default();
+        let artist = artist_or_empty(artist_name);
         Ok(Album {
             id,
             title,
@@ -253,13 +248,7 @@ impl Resource {
         let album_name = attributes
             .album_name
             .filter(|name| !name.trim().is_empty())?;
-        // `""` is `Album::artist`'s "source supplied no artist" sentinel, so a
-        // missing or whitespace-only name maps to the empty sentinel, exactly
-        // as `Resource::into_album` does.
-        let artist = attributes
-            .artist_name
-            .filter(|name| !name.trim().is_empty())
-            .unwrap_or_default();
+        let artist = artist_or_empty(attributes.artist_name);
         Some((
             album_name,
             artist,
@@ -310,11 +299,7 @@ impl Resource {
             None => (None, None, None, None),
         };
         let title = required_name(title, &id, "song")?;
-        // `""` is `Song::artist`'s "source supplied no artist" sentinel, so a
-        // missing or whitespace-only name falls back to the title alone.
-        let artist = artist
-            .filter(|name| !name.trim().is_empty())
-            .unwrap_or_default();
+        let artist = artist_or_empty(artist);
         // A blank URL (empty or only whitespace) can play nothing, so skip it
         // in favor of a later preview; a non-blank URL is returned exactly as
         // the resource carried it.
@@ -332,6 +317,16 @@ impl Resource {
             preview_url,
         })
     }
+}
+
+/// The artist display name an optional `artistName` carries, mapping an absent
+/// or whitespace-only name to `""` — [`Album::artist`]'s and [`Song::artist`]'s
+/// "source supplied no artist" sentinel. Shared by [`Resource::into_album`],
+/// [`Resource::into_album_duration`], and [`Resource::into_song`] so all three
+/// drop a useless name the same way.
+fn artist_or_empty(name: Option<String>) -> String {
+    name.filter(|name| !name.trim().is_empty())
+        .unwrap_or_default()
 }
 
 /// The non-blank id `id`, or an [`AppleMusicError`] naming `kind`.
