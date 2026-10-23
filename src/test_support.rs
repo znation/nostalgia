@@ -498,6 +498,7 @@ impl AudioOutput for RecordingAudio {
         Some(PlaybackFormat {
             sample_rate_hz: 44_100,
             channels: 2,
+            bitrate_kbps: Some(256),
         })
     }
 

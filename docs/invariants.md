@@ -155,13 +155,14 @@ its internal id, whenever the id is in the known-track index:
   position is past the total; a known track whose source supplied no length (`duration_ms == 0`)
   and any unknown or absent track read `--:--` at the left. The right edge keeps the plain total in
   both modes.
-- The LCD's small status row shows the loaded preview's sample rate and channel mode
-  (`44 KHZ  STEREO`, or `MONO` for one channel) only while the backend reports a format for a
-  loaded preview. The values come from the backend's own decoded source; the row is blank and
-  keeps its fixed height when no preview is loaded or the backend cannot answer. Pause keeps the
-  reported format; Stop and a new selection clear it. A format reply issued before a Stop or a
-  new selection, or landing while a transport transition is in flight, is dropped. Bitrate is not
-  shown: the preview download discards the body length, so it cannot be computed.
+- The LCD's small status row shows the loaded preview's average bitrate, sample rate, and channel
+  mode (`256 KBPS  44 KHZ  STEREO`, or `MONO` for one channel) only while the backend reports a
+  format for a loaded preview. The bitrate is derived from the downloaded body's length and the
+  decoded source's own duration and is omitted, leaving `44 KHZ  STEREO`, when either is unknown;
+  the sample rate and channel values come from the backend's own decoded source. The row is blank
+  and keeps its fixed height when no preview is loaded or the backend cannot answer. Pause keeps
+  the reported format; Stop and a new selection clear it. A format reply issued before a Stop or a
+  new selection, or landing while a transport transition is in flight, is dropped.
 - The LCD's left edge always draws the five classic indicator letters `O`, `A`, `I`, `D`, `V`,
   in that order, at a fixed width, in every playback state including the empty `--:--` bar. The
   strip is decorative: it emits no message and changes nothing.
@@ -213,8 +214,11 @@ the `MouseArea` wrapping the readout in `now_playing_row`) flips it without touc
 state. `views::now_playing::display_len` and `views::now_playing::needs_marquee`
 measure the line, and `ui::timers::subscriptions` subscribes `marquee_ticks` only while that measure
 exceeds `MARQUEE_WIDTH`, and `position_ticks` only while `WinampPlayer::needs_position_poll` reports
-a preview whose position can still change. `audio::PlaybackFormat` carries the preview's sample rate and channel
-count, `audio::player::format_for_source` reads them from the decoded `rodio` source, and
+a preview whose position can still change. `audio::PlaybackFormat` carries the preview's sample rate,
+channel count, and average bitrate; `audio::preview::DecodedPreview` hands the download's encoded
+byte count to `audio::player::format_for_source`, which reads the rate and channels from the
+decoded `rodio` source and computes the bitrate through `audio::player::preview_bitrate_kbps` from
+the source's own total duration, and
 `views::now_playing::format_playback_status`/`views::now_playing::now_playing_status_row` render
 them in the LCD's status row built by `views::view_now_playing`. The `PlaybackFormat` handler in
 `src/ui/handlers/playback.rs` stores the reply beside the position under the same epoch and
@@ -290,6 +294,7 @@ rather than the panic unwinding the event loop.
 - `a_seek_is_reflected_by_the_next_position_query`
 - `a_pause_keeps_the_loaded_player_reporting_its_position`
 - `format_for_source_reads_sample_rate_and_channels`
+- `preview_bitrate_kbps_computes_encoded_bits_over_the_preview_length`
 - `playback_format_query_returns_the_loaded_players_format`
 - `playback_format_query_reports_none_when_nothing_is_loaded`
 - `rodio_output_asks_the_worker_for_its_format`

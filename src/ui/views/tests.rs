@@ -698,15 +698,25 @@ fn overlong_now_playing_line_renders_a_new_window_as_the_offset_advances() {
     assert!(still_a.iter().any(|text| text == "Opening"));
 }
 
-// The status row's text names the sample rate in whole kilohertz and the
-// channel mode: 44.1 kHz truncates to 44, 48 kHz reads 48, and one channel is
-// mono while any other count is stereo.
+// The status row's text names the encoded bitrate, the sample rate in whole
+// kilohertz, and the channel mode: 44.1 kHz truncates to 44, 48 kHz reads 48,
+// one channel is mono while any other count is stereo, and an unknown bitrate
+// is omitted.
 #[test]
 fn format_playback_status_formats_khz_and_channel_mode() {
     assert_eq!(
         format_playback_status(PlaybackFormat {
             sample_rate_hz: 44_100,
             channels: 2,
+            bitrate_kbps: Some(256),
+        }),
+        "256 KBPS  44 KHZ  STEREO"
+    );
+    assert_eq!(
+        format_playback_status(PlaybackFormat {
+            sample_rate_hz: 44_100,
+            channels: 2,
+            bitrate_kbps: None,
         }),
         "44 KHZ  STEREO"
     );
@@ -714,6 +724,7 @@ fn format_playback_status_formats_khz_and_channel_mode() {
         format_playback_status(PlaybackFormat {
             sample_rate_hz: 44_100,
             channels: 1,
+            bitrate_kbps: None,
         }),
         "44 KHZ  MONO"
     );
@@ -721,8 +732,9 @@ fn format_playback_status_formats_khz_and_channel_mode() {
         format_playback_status(PlaybackFormat {
             sample_rate_hz: 48_000,
             channels: 2,
+            bitrate_kbps: Some(192),
         }),
-        "48 KHZ  STEREO"
+        "192 KBPS  48 KHZ  STEREO"
     );
 }
 
@@ -750,8 +762,9 @@ fn now_playing_status_row_draws_the_format_or_nothing() {
     let (texts, height) = captured_status_row(Some(PlaybackFormat {
         sample_rate_hz: 44_100,
         channels: 2,
+        bitrate_kbps: Some(256),
     }));
-    assert_eq!(texts, vec!["44 KHZ  STEREO".to_string()]);
+    assert_eq!(texts, vec!["256 KBPS  44 KHZ  STEREO".to_string()]);
 
     let (blank, blank_height) = captured_status_row(None);
     assert!(
@@ -1181,6 +1194,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         Some(PlaybackFormat {
             sample_rate_hz: 44_100,
             channels: 2,
+            bitrate_kbps: Some(256),
         }),
     );
     let _overlong = view_now_playing(

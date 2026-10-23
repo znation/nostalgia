@@ -895,6 +895,7 @@ async fn playback_format_forwards_the_audio_output_format() {
         Some(crate::audio::PlaybackFormat {
             sample_rate_hz: 44_100,
             channels: 2,
+            bitrate_kbps: Some(256),
         })
     );
 }

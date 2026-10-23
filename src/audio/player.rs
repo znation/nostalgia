@@ -2,7 +2,6 @@
 //! player the worker drives.
 
 use std::collections::VecDeque;
-use std::io::Cursor;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -14,7 +13,7 @@ use crate::music_error::AppleMusicError;
 
 use super::balance::BalanceSource;
 use super::equalizer::{EqSettings, EqSnapshot, EqSource};
-use super::preview::{download_and_decode, preview_agent};
+use super::preview::{DecodedPreview, download_and_decode, preview_agent};
 use super::{AudioOutput, PlaybackFormat};
 
 /// The longest [`RodioOutput::new`] waits for the worker to report whether the
@@ -118,12 +117,34 @@ pub(super) trait WorkerPlayer {
 }
 
 /// Reads `source`'s sample rate and channel count into a [`PlaybackFormat`],
-/// the format the Now Playing LCD's status row shows.
-pub(super) fn format_for_source(source: &impl rodio::Source) -> PlaybackFormat {
+/// the format the Now Playing LCD's status row shows, and computes its average
+/// bitrate from `encoded_bytes` and the source's own length when it reports
+/// one.
+pub(super) fn format_for_source(source: &impl rodio::Source, encoded_bytes: u64) -> PlaybackFormat {
     PlaybackFormat {
         sample_rate_hz: source.sample_rate().get(),
         channels: source.channels().get(),
+        bitrate_kbps: source
+            .total_duration()
+            .and_then(|duration| preview_bitrate_kbps(encoded_bytes, duration)),
     }
+}
+
+/// Computes the average encoded bitrate in kilobits per second for an
+/// `encoded_bytes`-byte body spanning `duration`.
+///
+/// One bit per millisecond is one kilobit per second, so the byte count is
+/// multiplied by eight and divided by the duration in milliseconds, rounded to
+/// the nearest kilobit. Returns `None` when the duration is zero (nothing to
+/// divide by) or the result does not fit a `u32`.
+pub(super) fn preview_bitrate_kbps(encoded_bytes: u64, duration: Duration) -> Option<u32> {
+    let millis = duration.as_millis();
+    if millis == 0 {
+        return None;
+    }
+    let bits = u128::from(encoded_bytes) * 8;
+    let kbps = (bits + millis / 2) / millis;
+    u32::try_from(kbps).ok()
 }
 
 /// Returns `position` moved by `offset_secs`: backward for a negative offset
@@ -206,7 +227,7 @@ impl RodioPlayer {
 }
 
 impl WorkerPlayer for RodioPlayer {
-    type Preview = rodio::Decoder<Cursor<Vec<u8>>>;
+    type Preview = DecodedPreview;
 
     fn set_volume(&self, volume: f32) {
         self.player.set_volume(volume);
@@ -245,10 +266,16 @@ impl WorkerPlayer for RodioPlayer {
 
     fn append(&self, preview: Self::Preview) {
         // Read the format and length from the decoded source before moving it
-        // into the adapter chain; a fresh player per track sets each cell once.
-        let _ = self.format.set(format_for_source(&preview));
-        let _ = self.duration.set(duration_for_source(&preview));
-        let equalized = EqSource::new(preview, Arc::clone(&self.equalizer));
+        // into the adapter chain; the encoded length comes from the download
+        // so the format can report the bitrate. A fresh player per track sets
+        // each cell once.
+        let DecodedPreview {
+            source,
+            encoded_bytes,
+        } = preview;
+        let _ = self.format.set(format_for_source(&source, encoded_bytes));
+        let _ = self.duration.set(duration_for_source(&source));
+        let equalized = EqSource::new(source, Arc::clone(&self.equalizer));
         self.player
             .append(BalanceSource::new(equalized, Arc::clone(&self.balance)));
     }

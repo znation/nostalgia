@@ -99,6 +99,16 @@ impl Resolver for PublicAddressResolver {
     }
 }
 
+/// A downloaded preview and the length of the encoded body it was decoded
+/// from, which is what the LCD's bitrate readout divides by the source's
+/// duration.
+pub(super) struct DecodedPreview {
+    /// The decoded audio source.
+    pub source: rodio::Decoder<Cursor<Vec<u8>>>,
+    /// The number of bytes downloaded, before decoding.
+    pub encoded_bytes: u64,
+}
+
 /// Downloads `url` through `agent` and decodes it as an `MP4`/`AAC` preview.
 ///
 /// The Apple Music preview is an `M4A` (AAC in an `MP4` container), so the
@@ -114,10 +124,13 @@ impl Resolver for PublicAddressResolver {
 /// timeout), the response is not a success status, the body cannot be read or
 /// is larger than [`MAX_PREVIEW_BYTES`] on the wire or after decoding, or the
 /// bytes do not decode.
+///
+/// The returned [`DecodedPreview`] carries the encoded body's length, so the
+/// player can compute the preview's average bitrate.
 pub(super) fn download_and_decode(
     agent: &ureq::Agent,
     url: &str,
-) -> Result<rodio::Decoder<Cursor<Vec<u8>>>, AppleMusicError> {
+) -> Result<DecodedPreview, AppleMusicError> {
     let mut response = agent.get(url).call().map_err(|error| {
         AppleMusicError::new(format!("downloading the preview failed: {error}"))
     })?;
@@ -136,12 +149,17 @@ pub(super) fn download_and_decode(
         .take(MAX_PREVIEW_BYTES + 1)
         .read_to_end(&mut bytes)
         .map_err(|error| AppleMusicError::new(format!("reading the preview failed: {error}")))?;
-    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_PREVIEW_BYTES {
+    let encoded_bytes = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
+    if encoded_bytes > MAX_PREVIEW_BYTES {
         return Err(AppleMusicError::new(format!(
             "the downloaded preview is larger than the {} MiB cap",
             MAX_PREVIEW_BYTES / (1024 * 1024)
         )));
     }
-    rodio::Decoder::new_mp4(Cursor::new(bytes))
-        .map_err(|error| AppleMusicError::new(format!("decoding the preview failed: {error}")))
+    let source = rodio::Decoder::new_mp4(Cursor::new(bytes))
+        .map_err(|error| AppleMusicError::new(format!("decoding the preview failed: {error}")))?;
+    Ok(DecodedPreview {
+        source,
+        encoded_bytes,
+    })
 }

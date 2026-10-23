@@ -300,19 +300,24 @@ pub fn format_track_time(duration_ms: u64) -> String {
 }
 
 /// Formats a loaded preview's [`PlaybackFormat`] as the LCD's status row,
-/// `"{khz} KHZ  {mode}"` (for example `44 KHZ  STEREO`). The rate is
-/// truncated to whole kilohertz (`44_100` reads `44`, `48_000` reads `48`),
-/// and previews are mono or stereo, so one channel reads `MONO` and any other
-/// count reads `STEREO`. Bitrate is deliberately absent: the preview
-/// download discards the body length, so it cannot be computed here. Pure so
-/// the formatting is testable without an iced renderer.
+/// `"{kbps} KBPS  {khz} KHZ  {mode}"` (for example
+/// `256 KBPS  44 KHZ  STEREO`). The rate is truncated to whole kilohertz
+/// (`44_100` reads `44`, `48_000` reads `48`), and previews are mono or
+/// stereo, so one channel reads `MONO` and any other count reads `STEREO`.
+/// The bitrate prefix is omitted when the backend could not compute it, so
+/// the row falls back to `44 KHZ  STEREO`. Pure so the formatting is testable
+/// without an iced renderer.
 pub fn format_playback_status(format: PlaybackFormat) -> String {
     let mode = if format.channels == 1 {
         "MONO"
     } else {
         "STEREO"
     };
-    format!("{} KHZ  {mode}", format.sample_rate_hz / 1000)
+    let rate = format!("{} KHZ  {mode}", format.sample_rate_hz / 1000);
+    match format.bitrate_kbps {
+        Some(kbps) => format!("{kbps} KBPS  {rate}"),
+        None => rate,
+    }
 }
 
 /// The Now Playing bar: a small decorative `O A I D V` strip down the LCD's
@@ -435,10 +440,10 @@ where
     Text::new(fragment).size(20).color(theme::LCD_GREEN)
 }
 
-/// Builds the LCD's status row: the loaded preview's sample rate and channel
-/// mode, right-aligned in a small green text beneath the title line. With no
-/// reported format it draws no text but keeps the row's fixed height, so the
-/// bar does not jump when a preview loads. Generic over the theme and
+/// Builds the LCD's status row: the loaded preview's bitrate, sample rate, and
+/// channel mode, right-aligned in a small green text beneath the title line.
+/// With no reported format it draws no text but keeps the row's fixed height,
+/// so the bar does not jump when a preview loads. Generic over the theme and
 /// renderer so the tests can lay it out with iced's null renderer and read
 /// back the text it would draw.
 pub(super) fn now_playing_status_row<'a, Theme, Renderer>(

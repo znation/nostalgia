@@ -5,8 +5,8 @@ use super::balance::BalanceSource;
 use super::equalizer::{EqSettings, EqSource};
 use super::player::{
     Command, DEVICE_OPEN_TIMEOUT, POSITION_QUERY_TIMEOUT, SeekablePlayer, WorkerPlayer,
-    await_device_ready, clamp_seek, duration_for_source, format_for_source, seek_player,
-    seek_target, serve_commands,
+    await_device_ready, clamp_seek, duration_for_source, format_for_source, preview_bitrate_kbps,
+    seek_player, seek_target, serve_commands,
 };
 use super::preview::{
     MAX_PREVIEW_BYTES, PREVIEW_TIMEOUT, PublicAddressResolver, download_and_decode, preview_agent,
@@ -78,7 +78,9 @@ fn silent_output_reports_no_playback_format() {
 }
 
 // The status row's values come from the decoded source itself: a mono and a
-// stereo preview must report their own channel counts and sample rates.
+// stereo preview must report their own channel counts and sample rates, and a
+// source whose length is known also reports the bitrate computed from the
+// encoded byte count.
 #[test]
 fn format_for_source_reads_sample_rate_and_channels() {
     let mono = rodio::buffer::SamplesBuffer::new(
@@ -87,10 +89,11 @@ fn format_for_source_reads_sample_rate_and_channels() {
         vec![0.0_f32; 4],
     );
     assert_eq!(
-        format_for_source(&mono),
+        format_for_source(&mono, 0),
         PlaybackFormat {
             sample_rate_hz: 44_100,
             channels: 1,
+            bitrate_kbps: None,
         }
     );
 
@@ -100,12 +103,36 @@ fn format_for_source_reads_sample_rate_and_channels() {
         vec![0.0_f32; 4],
     );
     assert_eq!(
-        format_for_source(&stereo),
+        format_for_source(&stereo, 0),
         PlaybackFormat {
             sample_rate_hz: 48_000,
             channels: 2,
+            bitrate_kbps: None,
         }
     );
+
+    // Two hertz, two channels, and 120 samples last 30 seconds; 960,000
+    // encoded bytes over that span is 256 kbit/s.
+    let known_length = rodio::buffer::SamplesBuffer::new(
+        ChannelCount::new(2).unwrap(),
+        SampleRate::new(2).unwrap(),
+        vec![0.0_f32; 120],
+    );
+    assert_eq!(
+        format_for_source(&known_length, 960_000).bitrate_kbps,
+        Some(256)
+    );
+}
+
+// 960,000 bytes is 7,680,000 bits; over 30 seconds that is 256 kbit/s, while
+// a zero-length preview has no span to divide by.
+#[test]
+fn preview_bitrate_kbps_computes_encoded_bits_over_the_preview_length() {
+    assert_eq!(
+        preview_bitrate_kbps(960_000, Duration::from_secs(30)),
+        Some(256)
+    );
+    assert_eq!(preview_bitrate_kbps(960_000, Duration::ZERO), None);
 }
 
 // The silent fallback has no preview length to report, so the seek bar stays
@@ -939,6 +966,7 @@ fn rodio_output_asks_the_worker_for_its_format() {
     let format = PlaybackFormat {
         sample_rate_hz: 44_100,
         channels: 2,
+        bitrate_kbps: Some(256),
     };
     let worker = std::thread::spawn(move || match receiver.recv() {
         Ok(Command::PlaybackFormat(reply)) => {
@@ -1397,6 +1425,7 @@ impl WorkerPlayer for RecordingPlayer {
         Some(PlaybackFormat {
             sample_rate_hz: 44_100,
             channels: 2,
+            bitrate_kbps: Some(256),
         })
     }
 
@@ -1845,6 +1874,7 @@ fn playback_format_query_returns_the_loaded_players_format() {
         Some(PlaybackFormat {
             sample_rate_hz: 44_100,
             channels: 2,
+            bitrate_kbps: Some(256),
         }),
         "the query must answer with the installed player's format"
     );

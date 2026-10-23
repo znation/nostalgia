@@ -3764,6 +3764,7 @@ fn track_selected_clears_the_playback_format() {
     player.playback_format = Some(PlaybackFormat {
         sample_rate_hz: 44_100,
         channels: 2,
+        bitrate_kbps: None,
     });
 
     let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
@@ -3973,6 +3974,7 @@ fn playback_format_reply_stores_the_loaded_previews_format() {
     let format = PlaybackFormat {
         sample_rate_hz: 44_100,
         channels: 2,
+        bitrate_kbps: Some(256),
     };
 
     let _ = update(
@@ -4009,6 +4011,7 @@ fn playback_format_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped()
     let stale = PlaybackFormat {
         sample_rate_hz: 48_000,
         channels: 2,
+        bitrate_kbps: None,
     };
     let _ = update(
         &mut player,
@@ -4024,6 +4027,7 @@ fn playback_format_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped()
     let kept = PlaybackFormat {
         sample_rate_hz: 44_100,
         channels: 1,
+        bitrate_kbps: None,
     };
     player.playback_format = Some(kept);
     let _ = update(&mut player, Message::Pause);
@@ -4056,6 +4060,7 @@ fn stop_clears_the_playback_format_while_pause_keeps_it() {
     let format = PlaybackFormat {
         sample_rate_hz: 44_100,
         channels: 2,
+        bitrate_kbps: Some(256),
     };
     player.playback_format = Some(format);
 

@@ -41,8 +41,8 @@ pub use player::RodioOutput;
 /// reports it.
 ///
 /// This is presentation data for the Now Playing LCD's status row: it names
-/// the sample rate and channel layout the decoded preview carries, and says
-/// nothing about playback state or the output device.
+/// the sample rate, channel layout, and average bitrate the decoded preview
+/// carries, and says nothing about playback state or the output device.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PlaybackFormat {
     /// The preview's sample rate in hertz, as the source reports it (for
@@ -51,6 +51,10 @@ pub struct PlaybackFormat {
     /// The number of audio channels in the preview: `1` is mono, `2` is
     /// stereo.
     pub channels: u16,
+    /// The preview's average encoded bitrate in kilobits per second, derived
+    /// from the downloaded body and the decoded source's own length. `None`
+    /// when either is unknown, so the status row omits it.
+    pub bitrate_kbps: Option<u32>,
 }
 
 /// The audio-output seam: a backend that can play, pause, and stop a track
