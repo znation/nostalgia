@@ -3321,6 +3321,69 @@ fn back_restores_a_sorted_artists_list_to_library_order() {
     assert_eq!(player.artists.epoch, epoch.wrapping_add(1));
 }
 
+// A fresh fetch that replaces a sorted parent list must drop the saved sort
+// permutation: the replacement's rows are already in library order, so Back
+// must not reapply the old sort's inverse to them. The sign-in re-issuing
+// `LoadArtists` is the production path that can replace the list the user
+// already sorted while a child list is open.
+#[test]
+fn a_fresh_artists_reply_drops_the_saved_sort_permutation() {
+    let (mut player, _state) = test_player();
+    player.artists.items = vec![
+        Artist {
+            id: "zulu".to_string(),
+            name: "Zulu".to_string(),
+        },
+        Artist {
+            id: "alpha".to_string(),
+            name: "alpha".to_string(),
+        },
+        Artist {
+            id: "bravo".to_string(),
+            name: "bravo".to_string(),
+        },
+    ];
+    player.artists.loading = false;
+    let _ = update(&mut player, Message::SortBrowse);
+    assert_eq!(artist_names(&player), ["alpha", "bravo", "Zulu"]);
+
+    // The refresh lands with a different same-length order while the child
+    // list is showing, so the saved permutation no longer describes these
+    // rows.
+    let _ = update(
+        &mut player,
+        Message::ArtistsLoaded(vec![
+            Artist {
+                id: "bravo".to_string(),
+                name: "bravo".to_string(),
+            },
+            Artist {
+                id: "zulu".to_string(),
+                name: "Zulu".to_string(),
+            },
+            Artist {
+                id: "alpha".to_string(),
+                name: "alpha".to_string(),
+            },
+        ]),
+    );
+    assert_eq!(artist_names(&player), ["bravo", "Zulu", "alpha"]);
+
+    player.current_view = CurrentView::Albums;
+    let epoch = player.artists.epoch;
+    let _ = update(&mut player, Message::Back);
+
+    assert_eq!(
+        artist_names(&player),
+        ["bravo", "Zulu", "alpha"],
+        "a fresh reply's library order must survive Back"
+    );
+    assert_eq!(
+        player.artists.epoch, epoch,
+        "restoring a list with no saved sort must be a no-op"
+    );
+}
+
 // The same one-shot rule holds for the other in-memory parent list: songs
 // opened from an album return to that album's list, whose library order Back
 // must restore after a Sort.

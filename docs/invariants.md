@@ -97,8 +97,9 @@ permutation as its songs, so each row keeps its own title and duration. The reor
 it bumps only that list's epoch, so a selection press rendered before the sort is rejected while
 the post-sort indices resolve to the sorted rows, and it leaves the other lists, the current
 view, the search state, and playback unchanged. Navigating away and back restores the library's
-order; no sort flag persists. Sorting an empty, loading, or failed list is a no-op: it neither
-reorders rows nor bumps the epoch.
+order; no sort flag persists. A fresh reply that replaces the rows drops any saved permutation, so
+a sort cannot reorder data stored after it. Sorting an empty, loading, or failed list is a no-op:
+it neither reorders rows nor bumps the epoch.
 
 **Enforced by.** `BrowseList::sort_rows_by` in `src/ui/browse.rs` builds a stable index permutation
 from the lowercased row keys and rebuilds `items`, `titles`, and `labels` by it, bumping the epoch
@@ -125,6 +126,7 @@ child is open), and `views::view_browse_nav_buttons` in `src/ui/views/browse.rs`
 - `sort_with_an_empty_or_loading_list_is_a_noop`
 - `sort_leaves_other_lists_view_search_and_playback_untouched`
 - `back_restores_a_sorted_artists_list_to_library_order`
+- `a_fresh_artists_reply_drops_the_saved_sort_permutation`
 - `back_from_songs_restores_a_sorted_albums_list_to_library_order`
 - `back_from_all_albums_songs_restores_a_sorted_flat_list_to_library_order`
 - `back_from_a_playlists_songs_restores_a_sorted_list_to_library_order`
