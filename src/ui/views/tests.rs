@@ -14,9 +14,9 @@ use super::now_playing::{
     CHANNEL_LABELS, KnownTrack, MARQUEE_WIDTH, TimeDisplay, channel_label_color,
     channel_mode_label, display_len, elapsed_readout_clickable, elapsed_readout_color,
     format_playback_prefix, lcd_indicator_strip, marquee_text, needs_marquee, now_playing_artist,
-    now_playing_content, now_playing_elapsed, now_playing_label, now_playing_row,
-    now_playing_status_row, now_playing_time, now_playing_visualizer_row, transport_glyph,
-    transport_glyph_color, visualizer_bar_heights,
+    now_playing_content, now_playing_elapsed, now_playing_label, now_playing_number,
+    now_playing_row, now_playing_status_row, now_playing_time, now_playing_visualizer_row,
+    transport_glyph, transport_glyph_color, visualizer_bar_heights,
 };
 use super::shade::{
     SHADE_STRIP_HEIGHT, SHADE_VOLUME_ID, SHADE_VOLUME_WIDTH, SHADED_HEIGHT, play_pause_glyph,
@@ -300,6 +300,7 @@ fn known_tracks(entries: &[(&str, &str, &str)]) -> HashMap<String, KnownTrack> {
                 KnownTrack {
                     title: title.to_string(),
                     artist: artist.to_string(),
+                    number: String::new(),
                     time: "--:--".to_string(),
                     duration_ms: 0,
                 },
@@ -371,6 +372,24 @@ fn now_playing_artist_borrows_the_artist() {
 
     let artist = now_playing_artist(&tracks, None);
     assert!(matches!(&artist, Cow::Borrowed(_)));
+}
+
+// The Now Playing bar draws the cached playlist number prefix between its
+// caption and the artist. Pin the known case, both empty fallbacks (unknown id
+// and no current track), and that the known prefix borrows from the caller's
+// map rather than cloning per frame.
+#[test]
+fn now_playing_number_resolves_known_track_to_its_cached_prefix() {
+    let mut tracks = known_tracks(&[("song-1", "The Sample Band", "Opening")]);
+    tracks.get_mut("song-1").expect("seed track").number = "1. ".to_string();
+
+    let number = now_playing_number(&tracks, Some("song-1"));
+    assert_eq!(number, "1. ");
+    assert!(matches!(&number, Cow::Borrowed(_)));
+    assert_eq!(number.as_ptr(), tracks["song-1"].number.as_ptr());
+
+    assert_eq!(now_playing_number(&tracks, Some("no-such-song")), "");
+    assert_eq!(now_playing_number(&tracks, None), "");
 }
 
 #[test]
@@ -570,8 +589,9 @@ impl Operation for CapturedContainers {
     }
 }
 
-/// Lays out the Now Playing row for `elapsed`, `label`, and `artist` at
-/// `marquee_offset` in `mode` and returns the text fragments it would draw.
+/// Lays out the Now Playing row for `elapsed`, `label`, `artist`, and the
+/// `number` prefix at `marquee_offset` in `mode` and returns the text fragments
+/// it would draw.
 ///
 /// The total readout is fixed at `"3:30"`, which the row draws at the right
 /// edge of the LCD well. The transport glyph leads the row and the large
@@ -580,6 +600,7 @@ fn captured_now_playing_texts(
     elapsed: &str,
     label: &str,
     artist: &str,
+    number: &str,
     offset: usize,
     mode: TransportMode,
 ) -> Vec<String> {
@@ -587,6 +608,7 @@ fn captured_now_playing_texts(
         Cow::Borrowed(elapsed),
         Cow::Borrowed(label),
         Cow::Borrowed(artist),
+        Cow::Borrowed(number),
         Cow::Borrowed("3:30"),
         offset,
         mode,
@@ -648,6 +670,7 @@ fn now_playing_content_draws_the_indicator_strip_beside_the_title() {
         Cow::Borrowed("00:53"),
         Cow::Borrowed("Opening"),
         Cow::Borrowed("Band"),
+        Cow::Borrowed(""),
         Cow::Borrowed("3:30"),
         0,
         None,
@@ -794,6 +817,7 @@ fn elapsed_readout_toggles_only_while_not_stopped() {
             Cow::Borrowed("00:53"),
             Cow::Borrowed("Opening"),
             Cow::Borrowed("Band"),
+            Cow::Borrowed(""),
             Cow::Borrowed("3:30"),
             0,
             mode,
@@ -851,6 +875,7 @@ fn now_playing_row_keeps_the_elapsed_bounds_when_the_blink_hides_it() {
             Cow::Borrowed("00:53"),
             Cow::Borrowed("Opening"),
             Cow::Borrowed("Band"),
+            Cow::Borrowed(""),
             Cow::Borrowed("3:30"),
             0,
             TransportMode::Paused,
@@ -887,6 +912,7 @@ fn now_playing_row_keeps_the_elapsed_readout_in_place_across_transport_modes() {
             Cow::Borrowed("00:53"),
             Cow::Borrowed("Opening"),
             Cow::Borrowed("Band"),
+            Cow::Borrowed(""),
             Cow::Borrowed("3:30"),
             0,
             mode,
@@ -910,19 +936,23 @@ fn now_playing_row_keeps_the_elapsed_readout_in_place_across_transport_modes() {
     }
 }
 
-// The bar's own measure of the line: the label's characters plus the
-// artist's and the `" - "` separator between them. The view windows the line
-// when the measure exceeds the LCD's budget, and the marquee timer runs only
-// while it does — so a measure that disagreed with the view's would leave the
-// timer scrolling a line the bar shows whole, or idle while the bar windows
-// one.
+// The bar's own measure of the line: the playlist number prefix's characters
+// plus the label's, the artist's, and the `" - "` separator between them. The
+// view windows the line when the measure exceeds the LCD's budget, and the
+// marquee timer runs only while it does — so a measure that disagreed with the
+// view's would leave the timer scrolling a line the bar shows whole, or idle
+// while the bar windows one. The prefix counts, since the view draws it on the
+// same line.
 #[test]
-fn display_len_counts_the_label_the_artist_and_the_separator() {
-    assert_eq!(display_len("Opening", ""), 7);
-    assert_eq!(display_len("Opening", "The Sample Band"), 25);
+fn display_len_counts_the_number_the_label_the_artist_and_the_separator() {
+    assert_eq!(display_len("Opening", "", ""), 7);
+    assert_eq!(display_len("Opening", "The Sample Band", ""), 25);
+    // The prefix adds its own characters (`"12. "` is four).
+    assert_eq!(display_len("Opening", "The Sample Band", "1. "), 28);
+    assert_eq!(display_len("Opening", "", "12. "), 11);
     // The separator is three characters, and a non-ASCII artist counts
     // characters rather than bytes.
-    assert_eq!(display_len("Café", "Ångström"), 4 + 8 + 3);
+    assert_eq!(display_len("Café", "Ångström", ""), 4 + 8 + 3);
 }
 
 // The line needs the marquee only when it does not fit the LCD's character
@@ -931,14 +961,18 @@ fn display_len_counts_the_label_the_artist_and_the_separator() {
 #[test]
 fn needs_marquee_only_for_a_line_too_long_for_the_lcd() {
     // A label alone fills the budget exactly and still fits.
-    assert!(!needs_marquee(&"x".repeat(MARQUEE_WIDTH), ""));
-    assert!(needs_marquee(&"x".repeat(MARQUEE_WIDTH + 1), ""));
+    assert!(!needs_marquee(&"x".repeat(MARQUEE_WIDTH), "", ""));
+    assert!(needs_marquee(&"x".repeat(MARQUEE_WIDTH + 1), "", ""));
     // With an artist, the artist and the `" - "` separator count toward the
     // budget: "The Sample Band" is 15 characters, so a 4-character label fits
     // the 22-character budget and a 5-character one does not.
     let artist = "The Sample Band";
-    assert!(!needs_marquee(&"x".repeat(4), artist));
-    assert!(needs_marquee(&"x".repeat(5), artist));
+    assert!(!needs_marquee(&"x".repeat(4), artist, ""));
+    assert!(needs_marquee(&"x".repeat(5), artist, ""));
+    // The prefix counts too: a 4-character label that just fits with this
+    // artist needs the marquee once a `"1. "` prefix joins it.
+    assert!(!needs_marquee(&"x".repeat(4), artist, ""));
+    assert!(needs_marquee(&"x".repeat(4), artist, "1. "));
 }
 
 // The row the Now Playing bar renders must use that window: an overlong line
@@ -953,8 +987,8 @@ fn overlong_now_playing_line_renders_a_new_window_as_the_offset_advances() {
     let second_window = marquee_text(&display, 1, MARQUEE_WIDTH);
     assert_ne!(first_window, second_window);
 
-    let first = captured_now_playing_texts("00:53", label, artist, 0, TransportMode::Playing);
-    let second = captured_now_playing_texts("00:53", label, artist, 1, TransportMode::Playing);
+    let first = captured_now_playing_texts("00:53", label, artist, "", 0, TransportMode::Playing);
+    let second = captured_now_playing_texts("00:53", label, artist, "", 1, TransportMode::Playing);
     assert!(first.iter().any(|text| text == &first_window), "{first:?}");
     assert!(
         second.iter().any(|text| text == &second_window),
@@ -965,10 +999,22 @@ fn overlong_now_playing_line_renders_a_new_window_as_the_offset_advances() {
     // offset: "Band" (4) plus the 3-character separator plus "Opening" (7)
     // is 14 characters, within the 22-character budget.
     let still_artist = "Band";
-    let still_a =
-        captured_now_playing_texts("00:00", "Opening", still_artist, 0, TransportMode::Playing);
-    let still_b =
-        captured_now_playing_texts("00:00", "Opening", still_artist, 5, TransportMode::Playing);
+    let still_a = captured_now_playing_texts(
+        "00:00",
+        "Opening",
+        still_artist,
+        "",
+        0,
+        TransportMode::Playing,
+    );
+    let still_b = captured_now_playing_texts(
+        "00:00",
+        "Opening",
+        still_artist,
+        "",
+        5,
+        TransportMode::Playing,
+    );
     assert_eq!(still_a, still_b);
     assert!(still_a.iter().any(|text| text == still_artist));
     assert!(still_a.iter().any(|text| text == "Opening"));
@@ -1185,6 +1231,7 @@ fn captured_content_with_spectrum(
         Cow::Borrowed("00:53"),
         Cow::Borrowed("Opening"),
         Cow::Borrowed("Band"),
+        Cow::Borrowed(""),
         Cow::Borrowed("3:30"),
         0,
         Some(PlaybackFormat {
@@ -1394,7 +1441,7 @@ fn view_seek_bar_constructs_with_and_without_a_length() {
 // empty-artist row was only constructed by the smoke test, never read back.
 #[test]
 fn now_playing_row_omits_the_artist_separator_when_the_track_has_no_artist() {
-    let texts = captured_now_playing_texts("00:00", "Opening", "", 0, TransportMode::Playing);
+    let texts = captured_now_playing_texts("00:00", "Opening", "", "", 0, TransportMode::Playing);
 
     assert!(
         texts.iter().any(|text| text == "Opening"),
@@ -1421,7 +1468,7 @@ fn an_overlong_title_without_an_artist_scrolls_the_title_alone() {
     let label = "A Title Much Longer Than The Display";
     let window = marquee_text(label, 0, MARQUEE_WIDTH);
 
-    let texts = captured_now_playing_texts("00:00", label, "", 0, TransportMode::Playing);
+    let texts = captured_now_playing_texts("00:00", label, "", "", 0, TransportMode::Playing);
 
     assert!(
         texts.iter().any(|text| text == &window),
@@ -1431,6 +1478,107 @@ fn an_overlong_title_without_an_artist_scrolls_the_title_alone() {
         !texts.iter().any(|text| text == " - "),
         "a track without an artist must not draw the separator: {texts:?}"
     );
+}
+
+// The playlist number comes between the caption and the artist, not before
+// the caption or after the title: that is the mockup's `Now Playing: 1. The
+// Sample Band - Opening` order. The fragments are read in draw order, so the
+// indices pin the position as well as the presence of each string.
+#[test]
+fn now_playing_row_draws_the_number_between_the_caption_and_the_artist() {
+    // A short line so the row takes its fitting branch and draws the number as
+    // its own fragment; the overlong branch is pinned separately below.
+    let texts =
+        captured_now_playing_texts("00:00", "One", "Band", "1. ", 0, TransportMode::Playing);
+
+    let caption = texts
+        .iter()
+        .position(|text| text == "Now Playing: ")
+        .expect("the caption must be drawn");
+    let number = texts
+        .iter()
+        .position(|text| text == "1. ")
+        .expect("the number must be drawn");
+    let artist = texts
+        .iter()
+        .position(|text| text == "Band")
+        .expect("the artist must be drawn");
+    let title = texts
+        .iter()
+        .position(|text| text == "One")
+        .expect("the title must be drawn");
+    assert!(
+        caption < number && number < artist && artist < title,
+        "expected caption, number, artist, title in order: {texts:?}"
+    );
+}
+
+// An overlong line scrolls one window that includes the number prefix: the
+// window is taken over the same `"<n>. <artist> - <title>"` string the bar
+// draws whole when it fits, so the prefix cannot overflow the budget or stay
+// fixed while the rest scrolls.
+#[test]
+fn an_overlong_now_playing_line_windows_the_number_with_the_title() {
+    let label = "A Title Much Longer Than The Display";
+    let artist = "The Sample Band";
+    let number = "1. ";
+    let display = format!("{number}{artist} - {label}");
+    let window = marquee_text(&display, 0, MARQUEE_WIDTH);
+    assert!(
+        window.starts_with(number),
+        "the window must include the prefix: {window:?}"
+    );
+
+    let texts =
+        captured_now_playing_texts("00:00", label, artist, number, 0, TransportMode::Playing);
+
+    assert!(
+        texts.iter().any(|text| text == &window),
+        "the window must be taken over the prefixed line: {texts:?}"
+    );
+    assert!(
+        !texts.iter().any(|text| text == number),
+        "the scrolling branch must not draw the prefix separately: {texts:?}"
+    );
+}
+
+// With no known number the row draws no prefix at all, whether the track has
+// no artist, is unknown, or none is current. The row only pushes the fragment
+// when the resolved number is non-empty, matching `now_playing_number`'s
+// empty fallbacks.
+#[test]
+fn now_playing_row_draws_no_number_when_none_is_known() {
+    let looks_like_number = |text: &str| {
+        text.strip_suffix(". ")
+            .is_some_and(|digits| !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()))
+    };
+
+    let artist_less =
+        captured_now_playing_texts("00:00", "Opening", "", "", 0, TransportMode::Playing);
+    assert!(
+        !artist_less.iter().any(|text| looks_like_number(text)),
+        "an artist-less track with no number must draw no prefix: {artist_less:?}"
+    );
+
+    let tracks = known_tracks(&[("song-1", "The Sample Band", "Opening")]);
+    for current_track in [Some("no-such-song"), None] {
+        let label = now_playing_label(&tracks, current_track);
+        let artist = now_playing_artist(&tracks, current_track);
+        let number = now_playing_number(&tracks, current_track);
+        assert_eq!(number, "");
+        let texts = captured_now_playing_texts(
+            "00:00",
+            &label,
+            &artist,
+            &number,
+            0,
+            TransportMode::Playing,
+        );
+        assert!(
+            !texts.iter().any(|text| looks_like_number(text)),
+            "an unknown or absent track must draw no prefix: {texts:?}"
+        );
+    }
 }
 
 #[test]
@@ -1761,6 +1909,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         "00:00".into(),
         "Opening".into(),
         "The Sample Band".into(),
+        "".into(),
         "3:30".into(),
         0,
         None,
@@ -1771,6 +1920,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
     let _bar = view_now_playing(
         "00:53".into(),
         "Opening".into(),
+        "".into(),
         "".into(),
         "3:30".into(),
         4,
@@ -1789,6 +1939,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         "03:12".into(),
         "A Title Much Longer Than The Display".into(),
         "The Sample Band".into(),
+        "".into(),
         "3:30".into(),
         7,
         None,

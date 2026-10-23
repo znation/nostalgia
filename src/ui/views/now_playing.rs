@@ -23,7 +23,8 @@ pub(super) mod text;
 
 pub use text::{
     KnownTrack, TimeDisplay, channel_mode_label, format_playback_prefix, needs_marquee,
-    now_playing_artist, now_playing_elapsed, now_playing_label, now_playing_time,
+    now_playing_artist, now_playing_elapsed, now_playing_label, now_playing_number,
+    now_playing_time,
 };
 pub(in crate::ui::views) use text::{MARQUEE_WIDTH, display_len, marquee_text};
 
@@ -78,22 +79,24 @@ const LCD_INDICATOR_SIZE: f32 = 10.0;
 
 /// The Now Playing bar: a small decorative `O A I D V` strip down the LCD's
 /// left edge, then the large elapsed readout, the "Now Playing:" caption
-/// followed by the current track's resolved artist and
-/// title (or "Nothing" when nothing is current), with the track's plain total
-/// length ([`super::format_track_time`]) laid at the right edge of the LCD well. The
-/// artist (from [`now_playing_artist`]) is pushed before the title with a
-/// `" - "` separator only when it is non-empty, so an artist-less track still
-/// reads `Now Playing: <title>`. A line within [`MARQUEE_WIDTH`] characters
-/// keeps that borrowed, still layout; a longer one is combined into one string
-/// and windowed by [`marquee_text`] at `marquee_offset`, scrolling one
-/// character per tick through the gap and back to its start. The character
-/// budget is an approximation of the LCD's pixel width beside the elapsed
-/// readout, the caption, and the total. Takes the already resolved elapsed,
-/// label, artist, and time strings so this per-frame widget build does no song
-/// lookup or formatting itself. All four text values are [`Cow`]s: the
-/// borrowed cases keep the strings owned by the caller's index (no
-/// allocation), while the owned fallbacks are moved into the widget, so the
-/// built element never borrows a temporary; the scrolling branch allocates
+/// followed by the current track's playlist number prefix, resolved artist,
+/// and title (or "Nothing" when nothing is current), with the track's plain
+/// total length ([`super::format_track_time`]) laid at the right edge of the
+/// LCD well. The number (from [`now_playing_number`]) is pushed after the
+/// caption only when it is non-empty, then the artist (from
+/// [`now_playing_artist`]) before the title with a `" - "` separator only when
+/// it is non-empty, so an artist-less track still reads
+/// `Now Playing: <title>`. A line within [`MARQUEE_WIDTH`] characters keeps
+/// that borrowed, still layout; a longer one is combined into one string and
+/// windowed by [`marquee_text`] at `marquee_offset`, scrolling one character
+/// per tick through the gap and back to its start, prefix included. The
+/// character budget is an approximation of the LCD's pixel width beside the
+/// elapsed readout, the caption, and the total. Takes the already resolved
+/// elapsed, label, artist, number, and time strings so this per-frame widget
+/// build does no song lookup or formatting itself. The five text values are
+/// [`Cow`]s: the borrowed cases keep the strings owned by the caller's index
+/// (no allocation), while the owned fallbacks are moved into the widget, so
+/// the built element never borrows a temporary; the scrolling branch allocates
 /// only its window, as the fitting branch allocates nothing.
 // The resolved LCD readouts and playback state; grouping them into a wrapper
 // would add a concept without making the call site clearer, as in `view_songs`.
@@ -102,6 +105,7 @@ pub fn view_now_playing<'a>(
     elapsed: Cow<'a, str>,
     label: Cow<'a, str>,
     artist: Cow<'a, str>,
+    number: Cow<'a, str>,
     time: Cow<'a, str>,
     marquee_offset: usize,
     format: Option<PlaybackFormat>,
@@ -113,6 +117,7 @@ pub fn view_now_playing<'a>(
         elapsed,
         label,
         artist,
+        number,
         time,
         marquee_offset,
         format,
@@ -134,6 +139,7 @@ pub(super) fn now_playing_content<'a, Theme, Renderer>(
     elapsed: Cow<'a, str>,
     label: Cow<'a, str>,
     artist: Cow<'a, str>,
+    number: Cow<'a, str>,
     time: Cow<'a, str>,
     marquee_offset: usize,
     format: Option<PlaybackFormat>,
@@ -155,6 +161,7 @@ where
                 elapsed,
                 label,
                 artist,
+                number,
                 time,
                 marquee_offset,
                 mode,
@@ -377,10 +384,14 @@ pub(super) fn elapsed_readout_clickable(mode: TransportMode) -> bool {
 /// back the text it would draw. The transport glyph leads the row in a fixed
 /// [`LCD_TRANSPORT_WIDTH`] slot, so the elapsed readout does not move as the
 /// glyph changes.
+// Mirrors `now_playing_content`'s arguments (without the status and visualizer
+// rows) so the row can be laid out headlessly on its own.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn now_playing_row<'a, Theme, Renderer>(
     elapsed: Cow<'a, str>,
     label: Cow<'a, str>,
     artist: Cow<'a, str>,
+    number: Cow<'a, str>,
     time: Cow<'a, str>,
     marquee_offset: usize,
     mode: TransportMode,
@@ -393,7 +404,7 @@ where
         From<iced::widget::container::StyleFn<'a, Theme>>,
     Renderer: iced::advanced::text::Renderer + 'a,
 {
-    let line_len = display_len(&label, &artist);
+    let line_len = display_len(&label, &artist, &number);
     let mut row = Row::new()
         .push(
             Container::new(
@@ -417,12 +428,15 @@ where
         .push(Space::new().width(Length::Fixed(12.0)))
         .push(Text::new("Now Playing: ").size(20));
     if line_len <= MARQUEE_WIDTH {
+        if !number.is_empty() {
+            row = row.push(lcd_text(number));
+        }
         if !artist.is_empty() {
             row = row.push(lcd_text(artist)).push(lcd_text(" - "));
         }
         row = row.push(lcd_text(label));
     } else {
-        let display = display_title_for(&artist, &label).into_owned();
+        let display = format!("{number}{}", display_title_for(&artist, &label));
         row = row.push(lcd_text(marquee_text(
             &display,
             marquee_offset,

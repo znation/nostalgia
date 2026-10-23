@@ -66,13 +66,14 @@ pub(in crate::ui) struct WinampPlayer {
     /// browse step or `Back` clears it, so Back leaves the search for the
     /// artists list instead of the album the search was issued from.
     pub(in crate::ui) search_active: bool,
-    /// Each played song's id mapped to its [`views::KnownTrack`] (title,
-    /// artist, and formatted length), so the Now Playing bar can still name and
-    /// time the playing track after the user browses to a different list
-    /// (whose load replaces the visible song buffer). The `TrackSelected` arm
-    /// records a track's title, artist, and formatted length once, when it is
-    /// played, and `now_playing_label` / `now_playing_artist` /
-    /// `now_playing_time` resolve the per-frame bar with a single get instead
+    /// Each played song's id mapped to its [`views::KnownTrack`] (playlist
+    /// number prefix, title, artist, and formatted length), so the Now Playing
+    /// bar can still name and time the playing track after the user browses to
+    /// a different list (whose load replaces the visible song buffer). The
+    /// `TrackSelected` arm records a track's number, title, artist, and
+    /// formatted length when it is played, and `now_playing_label` /
+    /// `now_playing_artist` / `now_playing_number` / `now_playing_time`
+    /// resolve the per-frame bar with a single get instead
     /// of scanning a growing list on every frame. Recording on play — rather
     /// than folding every song of every loaded list into the map — keeps the
     /// map proportional to songs actually played and takes the per-list fold
@@ -255,6 +256,18 @@ impl WinampPlayer {
         views::now_playing_artist(&self.known_tracks, current_track)
     }
 
+    /// The Now Playing bar's playlist number prefix for `current_track`,
+    /// resolved against the accumulated [`Self::known_tracks`] index like
+    /// [`Self::now_playing_label`]: the cached `"<n>. "` is borrowed from the
+    /// index, or the `""` literal when the track is unknown or none is
+    /// current, so `view` draws a number only for a track selected from a row.
+    pub(in crate::ui) fn now_playing_number<'a>(
+        &'a self,
+        current_track: Option<&str>,
+    ) -> Cow<'a, str> {
+        views::now_playing_number(&self.known_tracks, current_track)
+    }
+
     /// The Now Playing bar's right-edge length readout for `current_track`: the
     /// plain total borrowed from the label cached in [`Self::known_tracks`], or
     /// the static `--:--` placeholder for a track the index does not know. A
@@ -298,19 +311,20 @@ impl WinampPlayer {
     }
 
     /// Whether the Now Playing line is too long for the LCD's character
-    /// budget and so has to scroll: the combined artist and title exceed
-    /// `views::MARQUEE_WIDTH` characters.
+    /// budget and so has to scroll: the playlist number prefix plus the
+    /// combined artist and title exceed `views::MARQUEE_WIDTH` characters.
     ///
     /// The marquee timer is subscribed only while this holds (see
     /// [`super::timers::subscriptions`]), so the bar is not rebuilt four times a second for a
-    /// line that fits whole. The label and artist are resolved exactly as
-    /// `view` resolves them, so the timer scrolls precisely the lines the bar
-    /// windows.
+    /// line that fits whole. The label, artist, and number are resolved exactly
+    /// as `view` resolves them, so the timer scrolls precisely the lines the
+    /// bar windows.
     pub(in crate::ui) fn needs_marquee(&self) -> bool {
         let state = self.state.blocking_lock();
         let label = self.now_playing_label(state.current_track.as_deref());
         let artist = self.now_playing_artist(state.current_track.as_deref());
-        views::needs_marquee(&label, &artist)
+        let number = self.now_playing_number(state.current_track.as_deref());
+        views::needs_marquee(&label, &artist, &number)
     }
 
     /// Whether the position poll is needed: playback is running, the audio

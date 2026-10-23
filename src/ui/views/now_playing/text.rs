@@ -1,8 +1,8 @@
 //! Pure text resolution and formatting for the Now Playing bar: the label,
-//! artist, elapsed and total readouts, the marquee window, and the status
-//! row's bitrate/sample-rate prefix and channel label pair. Everything here is
-//! data in, string out, so it is testable without an iced renderer; the
-//! widgets that draw these strings live in [`super`].
+//! artist, playlist number prefix, elapsed and total readouts, the marquee
+//! window, and the status row's bitrate/sample-rate prefix and channel label
+//! pair. Everything here is data in, string out, so it is testable without an
+//! iced renderer; the widgets that draw these strings live in [`super`].
 
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -20,16 +20,17 @@ pub(in crate::ui::views) const MARQUEE_WIDTH: usize = 22;
 /// The spaces between the end of a scrolling line and its next repeat.
 const MARQUEE_GAP: usize = 3;
 
-/// The number of characters the Now Playing line occupies: the label's
-/// characters, plus the artist's and the three characters of the `" - "`
-/// separator that joins them.
+/// The number of characters the Now Playing line occupies: the playlist
+/// number prefix's characters, the label's characters, plus the artist's and
+/// the three characters of the `" - "` separator that joins them.
 ///
 /// The bar shows the line whole while it fits [`MARQUEE_WIDTH`] and windows it
 /// when it does not, so this is the one measure both the view and the marquee
 /// timer read — the timer runs only while the line is too long, and the view
 /// windows exactly the lines the timer scrolls.
-pub(in crate::ui::views) fn display_len(label: &str, artist: &str) -> usize {
-    label.chars().count()
+pub(in crate::ui::views) fn display_len(label: &str, artist: &str, number: &str) -> usize {
+    number.chars().count()
+        + label.chars().count()
         + if artist.is_empty() {
             0
         } else {
@@ -38,14 +39,14 @@ pub(in crate::ui::views) fn display_len(label: &str, artist: &str) -> usize {
 }
 
 /// Whether the Now Playing line is too long for the LCD's character budget
-/// and so has to scroll: the combined artist and title exceed
-/// [`MARQUEE_WIDTH`] characters.
+/// and so has to scroll: the number prefix plus the combined artist and title
+/// exceed [`MARQUEE_WIDTH`] characters.
 ///
 /// The marquee timer runs only while this holds. A line that fits is shown
 /// whole, so ticking for it would advance an offset the view ignores — and
 /// every tick makes iced rebuild the whole screen, browse list included.
-pub fn needs_marquee(label: &str, artist: &str) -> bool {
-    display_len(label, artist) > MARQUEE_WIDTH
+pub fn needs_marquee(label: &str, artist: &str, number: &str) -> bool {
+    display_len(label, artist, number) > MARQUEE_WIDTH
 }
 
 /// Returns the `width`-character window of `text` starting at
@@ -93,10 +94,10 @@ impl TimeDisplay {
     }
 }
 
-/// A track the Now Playing bar knows about: the title and artist it renders
-/// and the formatted length it shows beside them. Recorded once when a track
-/// is played, so the bar keeps naming and timing the playing track after the
-/// user browses to a different album.
+/// A track the Now Playing bar knows about: the playlist number prefix, title,
+/// and artist it renders and the formatted length it shows beside them.
+/// Recorded when a track is played, so the bar keeps naming and timing the
+/// playing track after the user browses to a different album.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnownTrack {
     /// The track's title, without the artist (the bar renders
@@ -105,6 +106,9 @@ pub struct KnownTrack {
     /// The performing artist's display name; `""` means the source supplied
     /// no artist, and the Now Playing bar falls back to the title alone.
     pub artist: String,
+    /// The cached `"<n>. "` prefix naming the track's 1-based position in the
+    /// list row that selected it; `""` when no number is known.
+    pub number: String,
     /// The track's formatted length ([`crate::ui::views::format_track_time`]), cached when the
     /// track is recorded so a per-frame bar refresh borrows it instead of
     /// formatting the same duration again.
@@ -138,8 +142,9 @@ pub fn now_playing_label<'a>(
 
 /// Looks up the [`KnownTrack`] for `current_track` in `tracks`, returning
 /// `None` when no track is current or the id is unknown. Shared by
-/// [`now_playing_label`], [`now_playing_artist`], [`now_playing_elapsed`], and
-/// [`now_playing_time`] so the four stay in sync on the lookup.
+/// [`now_playing_label`], [`now_playing_artist`], [`now_playing_number`],
+/// [`now_playing_elapsed`], and [`now_playing_time`] so the five stay in sync
+/// on the lookup.
 fn known_track_for<'a>(
     tracks: &'a HashMap<String, KnownTrack>,
     current_track: Option<&str>,
@@ -159,6 +164,22 @@ pub fn now_playing_artist<'a>(
 ) -> Cow<'a, str> {
     known_track_for(tracks, current_track)
         .map(|track| Cow::Borrowed(track.artist.as_str()))
+        .unwrap_or(Cow::Borrowed(""))
+}
+
+/// The Now Playing bar's playlist number prefix for `current_track`: the
+/// cached `"<n>. "` in [`KnownTrack::number`] for the row that selected it, or
+/// the `""` literal when the track is unknown or none is current. Mirrors
+/// [`now_playing_label`] and [`now_playing_artist`], so resolving the prefix
+/// adds no per-frame `String` allocation — the known case borrows from
+/// `tracks`. Pure data → `Cow` so the resolution is testable without an iced
+/// renderer.
+pub fn now_playing_number<'a>(
+    tracks: &'a HashMap<String, KnownTrack>,
+    current_track: Option<&str>,
+) -> Cow<'a, str> {
+    known_track_for(tracks, current_track)
+        .map(|track| Cow::Borrowed(track.number.as_str()))
         .unwrap_or(Cow::Borrowed(""))
 }
 

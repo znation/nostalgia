@@ -3823,7 +3823,60 @@ fn track_selected_records_the_played_tracks_title_and_time() {
 
     let track = player.known_tracks.get("song-2").expect("song-2 recorded");
     assert_eq!(track.title, "Two");
+    assert_eq!(track.number, "2. ");
     assert_eq!(track.time, "2:05");
+}
+
+// The number is the 1-based position of the row that selected the track, so
+// the first row records `"1. "` and the second `"2. "`.
+#[test]
+fn track_selected_records_the_selected_rows_number() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+    assert_eq!(
+        player
+            .known_tracks
+            .get("song-1")
+            .map(|track| track.number.as_str()),
+        Some("1. ")
+    );
+
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 1 });
+    assert_eq!(
+        player
+            .known_tracks
+            .get("song-2")
+            .map(|track| track.number.as_str()),
+        Some("2. ")
+    );
+}
+
+// Re-playing the same id from a row in another list refreshes its cached
+// number (and the rest of its fields) instead of keeping the first play's
+// number. song-1 is row 1 of `stepping_songs` and row 2 of the second list.
+#[test]
+fn replaying_a_track_from_another_row_updates_its_number() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+    assert_eq!(
+        player
+            .known_tracks
+            .get("song-1")
+            .map(|track| track.number.as_str()),
+        Some("1. ")
+    );
+
+    let mut second_list = second_album_songs();
+    second_list.push(sample_song());
+    let _ = update(&mut player, Message::SongsLoaded(second_list));
+    let _ = update(&mut player, Message::TrackSelected { epoch: 2, index: 1 });
+
+    let track = player.known_tracks.get("song-1").expect("song-1 recorded");
+    assert_eq!(track.number, "2. ");
+    assert_eq!(track.title, "Opening");
 }
 
 // The marquee timer advances the title window by one character without
@@ -3916,9 +3969,9 @@ async fn a_paused_preview_needs_the_position_poll_before_its_first_reply() {
 }
 
 // The timer is subscribed from the player's own view of the bar: the same
-// label and artist the view renders, measured the same way. A line that fits
-// leaves the timer unsubscribed; a line past the LCD's character budget needs
-// it.
+// number, label, and artist the view renders, measured the same way. A line
+// that fits leaves the timer unsubscribed; a line past the LCD's character
+// budget needs it, and the playlist number prefix counts towards that budget.
 #[test]
 fn the_player_knows_when_the_now_playing_line_needs_the_marquee() {
     let (mut player, state) = test_player();
@@ -3926,18 +3979,28 @@ fn the_player_knows_when_the_now_playing_line_needs_the_marquee() {
     // Nothing is current: the bar reads "Nothing", which fits.
     assert!(!player.needs_marquee());
 
-    // A known track with a short title fits too.
+    // A known track with a short title fits — until its row number joins the
+    // line. "One" (3) plus "The Sample Band" (15) and " - " (3) is 21
+    // characters; the 3-character `"1. "` prefix pushes it past the
+    // 22-character budget.
     player.known_tracks.insert(
         "song-1".to_string(),
         views::KnownTrack {
             title: "One".to_string(),
             artist: "The Sample Band".to_string(),
+            number: String::new(),
             time: "3:30".to_string(),
             duration_ms: 210_000,
         },
     );
     state.blocking_lock().current_track = Some("song-1".to_string());
     assert!(!player.needs_marquee());
+    player
+        .known_tracks
+        .get_mut("song-1")
+        .expect("seeded")
+        .number = "1. ".to_string();
+    assert!(player.needs_marquee());
 
     // A title that pushes the line past the LCD's budget needs the marquee.
     player.known_tracks.insert(
@@ -3945,6 +4008,7 @@ fn the_player_knows_when_the_now_playing_line_needs_the_marquee() {
         views::KnownTrack {
             title: "A Title Too Long For The LCD".to_string(),
             artist: "The Sample Band".to_string(),
+            number: "2. ".to_string(),
             time: "3:30".to_string(),
             duration_ms: 210_000,
         },
@@ -5637,6 +5701,18 @@ fn now_playing_artist_shows_the_played_tracks_artist_after_browsing_to_another_a
         "The Sample Band"
     );
     assert_eq!(player.now_playing_artist(Some("no-such-song")), "");
+}
+
+// The playlist number comes from the same `known_tracks` entry as the artist,
+// so it must survive the browse that replaces the visible song list, and be
+// absent for an unknown id or no current track.
+#[test]
+fn now_playing_number_survives_browsing_to_another_album() {
+    let (player, current_track) = play_song_1_then_browse_to_album_2();
+
+    assert_eq!(player.now_playing_number(None), "");
+    assert_eq!(player.now_playing_number(current_track.as_deref()), "1. ");
+    assert_eq!(player.now_playing_number(Some("no-such-song")), "");
 }
 
 // `fetch_into` schedules the fetch as an iced `Task`; the arm itself only

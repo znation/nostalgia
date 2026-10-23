@@ -301,9 +301,18 @@ playback behavior are unchanged.
 its internal id, whenever the id is in the known-track index:
 
 - A known id renders that track's title and artist, borrowed from the index.
-- An unknown id falls back to the raw id for the label and to the empty string for the artist.
-- No current track renders the label "Nothing" and an empty artist.
-- Stop keeps the interrupted track's title (the current track is not cleared by Stop).
+- A known id also renders the playlist number prefix (`<n>. `) cached in `KnownTrack::number`,
+  drawn after the `Now Playing: ` caption and before the artist/title. The number is the 1-based
+  position of the row that selected the track, so every new selection (Next/Previous and the
+  preview-end advance included) records the new row's number, and re-playing the same id from
+  another row or list refreshes it. It persists across browsing to another list and Stop.
+- An unknown id falls back to the raw id for the label, the empty string for the artist, and no
+  number prefix.
+- No current track renders the label "Nothing", an empty artist, and no number prefix.
+- Stop keeps the interrupted track's title and number (the current track is not cleared by Stop).
+- The number prefix counts towards the marquee character budget alongside the artist and title,
+  and an overlong line's scrolling window includes it, so it neither overflows the LCD nor stays
+  fixed while the rest of the line scrolls.
 - The LCD splits its time readouts: by default the large left-hand readout shows the backend's
   reported position as zero-padded `MM:SS` (for example `00:53`), and the right edge always shows
   the plain cached total (for example `3:30`). Clicking the large readout switches it to the
@@ -443,7 +452,10 @@ guards as the position, format, and duration, `spectrum_tick` schedules the back
 `reset_position_readout` clears the bars on Stop and a new selection. `ui::timers::subscriptions`
 subscribes `spectrum_ticks` only while `WinampPlayer::needs_spectrum_poll` reports that playback is
 running.
-`views::now_playing::marquee_text`
+`views::now_playing::now_playing_number` resolves `KnownTrack::number`,
+`handlers::playback::track_selected` records the selecting row's 1-based number, and
+`views::now_playing::now_playing_row` draws it (separately when the line fits, inside the window
+when it scrolls). `views::now_playing::marquee_text`
 windows an overlong line, and `WinampPlayer::marquee_offset` carries the advance through
 `Message::MarqueeTick`. The `WinampPlayer::time_display` field holds the readout's mode, and
 `handlers::playback::toggle_time_display` (routed from `Message::ToggleTimeDisplay`, pressed by
@@ -493,6 +505,7 @@ rather than the panic unwinding the event loop.
 - `now_playing_artist_is_empty_with_no_current_track`
 - `now_playing_label_borrows_the_title_and_nothing_literal`
 - `now_playing_artist_borrows_the_artist`
+- `now_playing_number_resolves_known_track_to_its_cached_prefix`
 - `now_playing_time_resolves_known_track_to_cached_label`
 - `now_playing_time_returns_the_plain_total_even_with_a_position`
 - `now_playing_elapsed_reads_placeholder_zero_or_position`
@@ -505,11 +518,18 @@ rather than the panic unwinding the event loop.
 - `marquee_text_windows_from_the_offset`
 - `marquee_text_wraps_through_the_gap_to_the_start`
 - `marquee_text_counts_characters_not_bytes`
-- `display_len_counts_the_label_the_artist_and_the_separator`
+- `display_len_counts_the_number_the_label_the_artist_and_the_separator`
 - `needs_marquee_only_for_a_line_too_long_for_the_lcd`
 - `overlong_now_playing_line_renders_a_new_window_as_the_offset_advances`
+- `now_playing_row_draws_the_number_between_the_caption_and_the_artist`
+- `an_overlong_now_playing_line_windows_the_number_with_the_title`
+- `now_playing_row_draws_no_number_when_none_is_known`
   (all in `src/ui/views/tests.rs`)
 - `now_playing_label_keeps_the_track_name_after_browsing_to_another_album` (`src/ui/tests.rs`)
+- `now_playing_number_survives_browsing_to_another_album` (`src/ui/tests.rs`)
+- `track_selected_records_the_selected_rows_number`
+- `replaying_a_track_from_another_row_updates_its_number`
+- `the_player_knows_when_the_now_playing_line_needs_the_marquee`
 - `now_playing_time_shows_the_played_tracks_duration_after_browsing_to_another_album` (`src/ui/tests.rs`)
 - `now_playing_elapsed_shows_the_position_while_it_is_known`
 - `now_playing_elapsed_previews_the_seek_drag`

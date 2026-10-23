@@ -208,23 +208,27 @@ pub(in crate::ui) fn track_selected(
     // A newly selected song starts its title at character zero; the
     // previous song's scroll position must not carry over.
     player.marquee_offset = 0;
-    // Record the played track's title, artist, and formatted length
-    // before handing the id to the async play: the Now Playing bar
-    // resolves its label, artist, and time from `known_tracks`, and the
-    // entry must survive a later browse to a different list (which
-    // replaces the visible song buffer). Recording once per play —
-    // rather than folding every song of every loaded list into the map —
-    // keeps the index proportional to songs actually played and takes the
-    // fold off the browse path.
-    player
-        .known_tracks
-        .entry(track_id.clone())
-        .or_insert_with(|| views::KnownTrack {
+    // Record the played track's playlist number, title, artist, and formatted
+    // length before handing the id to the async play: the Now Playing bar
+    // resolves its number, label, artist, and time from `known_tracks`, and
+    // the entry must survive a later browse to a different list (which
+    // replaces the visible song buffer). Recording once per play — rather
+    // than folding every song of every loaded list into the map — keeps the
+    // index proportional to songs actually played and takes the fold off the
+    // browse path. The number is the 1-based position of the row that
+    // selected the track, so re-playing the same id from another row or list
+    // refreshes it alongside the other cached fields rather than keeping the
+    // old number.
+    player.known_tracks.insert(
+        track_id.clone(),
+        views::KnownTrack {
             title: song.title.clone(),
             artist: song.artist.clone(),
+            number: format!("{}. ", index + 1),
             time: views::format_track_time(song.duration_ms),
             duration_ms: song.duration_ms,
-        });
+        },
+    );
     // A new selection starts with no elapsed position. Bumping the epoch
     // drops a poll reply issued for the previous track.
     reset_position_readout(player);

@@ -34,17 +34,20 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
             .into();
     }
 
-    // The now-playing title, artist, elapsed time, and total are resolved while
-    // the state lock is held, from a borrowed `current_track` against the
-    // accumulated `known_tracks` index (see [`WinampPlayer::now_playing_label`],
-    // [`WinampPlayer::now_playing_artist`], [`WinampPlayer::now_playing_elapsed`],
-    // and [`WinampPlayer::now_playing_time`]). The label, artist, and elapsed
-    // placeholder borrow from `known_tracks` (or the `"Nothing"`/`""`/
-    // `"00:00"`/`"--:--"` literals); the total borrows the cached length, while
-    // a reported elapsed position allocates its formatted `MM:SS` string.
+    // The now-playing title, artist, playlist number, elapsed time, and total
+    // are resolved while the state lock is held, from a borrowed `current_track`
+    // against the accumulated `known_tracks` index (see
+    // [`WinampPlayer::now_playing_label`], [`WinampPlayer::now_playing_artist`],
+    // [`WinampPlayer::now_playing_number`],
+    // [`WinampPlayer::now_playing_elapsed`], and
+    // [`WinampPlayer::now_playing_time`]). The label, artist, number, and
+    // elapsed placeholder borrow from `known_tracks` (or the `"Nothing"`/`""`/
+    // `""`/`"00:00"`/`"--:--"` literals); the total borrows the cached length,
+    // while a reported elapsed position allocates its formatted `MM:SS` string.
     let (
         now_playing,
         now_playing_artist,
+        now_playing_number,
         now_playing_elapsed,
         now_playing_time,
         playback_format,
@@ -64,6 +67,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
         (
             player.now_playing_label(state.current_track.as_deref()),
             player.now_playing_artist(state.current_track.as_deref()),
+            player.now_playing_number(state.current_track.as_deref()),
             player.now_playing_elapsed(state.current_track.as_deref()),
             player.now_playing_time(state.current_track.as_deref()),
             player.playback_format,
@@ -148,6 +152,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
             now_playing_elapsed,
             now_playing,
             now_playing_artist,
+            now_playing_number,
             now_playing_time,
             player.marquee_offset,
             playback_format,

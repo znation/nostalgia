@@ -48,8 +48,9 @@ Build and run with `cargo run`; the player opens an iced window showing the Now 
 small decorative `O A I D V` strip down the LCD's left edge, a large elapsed-time readout at the
 left for a loaded preview, shown while playing or paused and blank (though it keeps its space)
 while stopped, except that the `--:--` placeholder stays visible when stopped with no current
-track or no known time, the playing track's artist and title scrolled across the display when
-the line is longer than it, and the track's plain length at the right); the transport glyph before
+track or no known time, the playing track's 1-based position in the list it was played from
+(`1. The Sample Band - Opening`) followed by its artist and title, scrolled across the display
+when the line is longer than it, and the track's plain length at the right); the transport glyph before
 the readout is a green `▶` while playing, a green `II` while paused, and a red `■` while stopped.
 While paused, the large elapsed readout blinks once per second at its frozen position; it stays
 steady while playing and clears while stopped. A loaded preview's average bitrate and sample rate
