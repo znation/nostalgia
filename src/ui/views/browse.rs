@@ -148,7 +148,7 @@ fn scrollable_list<'a>(
         .on_press(message)
         .style(|_theme, status| style::playlist_row_style(status));
         // The current row keeps the playlist row's text and hover/press face
-        // and only swaps the background for the highlight colour.
+        // and only swaps the background for the highlight color.
         column = column.push(if is_current {
             button.style(|_theme, status| current_row_style(status))
         } else {

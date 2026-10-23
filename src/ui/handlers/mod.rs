@@ -6,7 +6,7 @@
 //! request and its completion in `playback`; the volume, balance, seek, and
 //! equalizer in `mixer`; the browse hierarchy, the library search, and the
 //! fetch results in `browse`; and the custom title bar's window actions in
-//! `window`. Each handler owns its message's whole behaviour, so a change to
+//! `window`. Each handler owns its message's whole behavior, so a change to
 //! one concern never reaches into another's code.
 
 pub(super) mod browse;

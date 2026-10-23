@@ -176,7 +176,7 @@ pub const PRESETS: [Preset; 19] = [
 /// gain in `AppState`. The gains are shared state, so the rule lives beside
 /// the band constants as a pure function the `AppState` gain setters call
 /// before storing, exactly as `state::clamp_volume` does for volume. The
-/// NaN-and-bounds behaviour itself is
+/// NaN-and-bounds behavior itself is
 /// [`crate::clamp::clamp_with_nan_fallback`], shared with
 /// `state::clamp_volume`; this wrapper only names the gain range and its flat
 /// fallback.

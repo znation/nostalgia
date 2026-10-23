@@ -32,7 +32,7 @@ mod tests {
     use super::clamp_with_nan_fallback;
 
     // A range and fallback distinct from any caller's, so these tests pin the
-    // helper's generic behaviour rather than one domain's numbers.
+    // helper's generic behavior rather than one domain's numbers.
     const MIN: f32 = -5.0;
     const MAX: f32 = 5.0;
     const FALLBACK: f32 = -1.0;

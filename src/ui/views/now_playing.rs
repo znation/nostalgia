@@ -340,7 +340,7 @@ pub fn view_now_playing<'a>(
 }
 
 /// The LCD's large elapsed-readout text style: [`LCD_ELAPSED_SIZE`]px in
-/// [`theme::LCD_GREEN`], matching the colour of the line beside it.
+/// [`theme::LCD_GREEN`], matching the color of the line beside it.
 fn lcd_elapsed_text<'a, Theme, Renderer>(
     fragment: impl iced::widget::text::IntoFragment<'a>,
 ) -> Text<'a, Theme, Renderer>

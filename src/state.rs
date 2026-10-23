@@ -279,7 +279,7 @@ impl AppState {
 /// or a stale in-flight change), and the UI must never store an unclamped
 /// volume in `AppState`. [`AppState::set_volume`] is the field's only writer
 /// and calls this, so the rule lives here as a pure function beside the state
-/// it protects rather than at each call site. The NaN-and-bounds behaviour
+/// it protects rather than at each call site. The NaN-and-bounds behavior
 /// itself is [`crate::clamp::clamp_with_nan_fallback`], shared with
 /// `equalizer::clamp_gain`; this wrapper only names volume's range and its
 /// silence fallback.
@@ -296,7 +296,7 @@ pub fn clamp_volume(volume: f32) -> f32 {
 /// must never store an unclamped balance in `AppState`.
 /// [`AppState::set_balance`] is the field's only writer and calls this, so the
 /// rule lives here as a pure function beside the state it protects rather than
-/// at each call site. The NaN-and-bounds behaviour itself is
+/// at each call site. The NaN-and-bounds behavior itself is
 /// [`crate::clamp::clamp_with_nan_fallback`], shared with
 /// `equalizer::clamp_gain`; this wrapper only names balance's range and its
 /// center fallback.

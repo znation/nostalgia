@@ -2,9 +2,9 @@
 //! it.
 //!
 //! The player's widgets render in iced's default theme unless one is applied
-//! app-wide, so this module names the base-skin colours once and exposes them
+//! app-wide, so this module names the base-skin colors once and exposes them
 //! as a single [`winamp_theme`] the `init_ui` builder installs. Keeping the
-//! colours as public constants — rather than inlining them in each view —
+//! colors as public constants — rather than inlining them in each view —
 //! lets the views and chrome styles share one named palette.
 
 use std::sync::OnceLock;
@@ -14,7 +14,7 @@ use iced::{Color, Theme};
 /// The dark gray window face every panel is drawn on.
 pub const WINDOW_BACKGROUND: Color = Color::from_rgb(0.18, 0.18, 0.18);
 
-/// The light chrome text colour used for captions and labels.
+/// The light chrome text color used for captions and labels.
 pub const TEXT: Color = Color::from_rgb(0.87, 0.87, 0.87);
 
 /// Winamp's title-bar and selection blue.
@@ -23,7 +23,7 @@ pub const TITLE_BLUE: Color = Color::from_rgb(0.0, 0.0, 0.55);
 /// The playlist/LCD green, used for the Now Playing title.
 pub const LCD_GREEN: Color = Color::from_rgb(0.0, 1.0, 0.0);
 
-/// The highlight colour behind the currently playing row in a Songs list,
+/// The highlight color behind the currently playing row in a Songs list,
 /// echoing Winamp's playlist selection bar (a saturated blue).
 pub const PLAYING_ROW_HIGHLIGHT: Color = Color::from_rgb(0.25, 0.5, 1.0);
 
@@ -48,10 +48,10 @@ pub const BUTTON_FACE_PRESSED: Color = Color::from_rgb(0.22, 0.22, 0.22);
 /// The near-black recess behind the green Now Playing title.
 pub const LCD_BACKGROUND: Color = Color::from_rgb(0.05, 0.05, 0.05);
 
-/// The base-skin colours as an iced [`Palette`](iced::theme::Palette): the
+/// The base-skin colors as an iced [`Palette`](iced::theme::Palette): the
 /// dark window face and light text are the background/foreground pair,
 /// [`TITLE_BLUE`] drives interactive accents, and [`LCD_GREEN`] is the
-/// success colour. Warning and danger keep conventional amber/red so a
+/// success color. Warning and danger keep conventional amber/red so a
 /// future error state reads correctly against the dark face.
 fn palette() -> iced::theme::Palette {
     iced::theme::Palette {
@@ -92,7 +92,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn palette_uses_the_named_base_skin_colours() {
+    fn palette_uses_the_named_base_skin_colors() {
         let palette = winamp_theme().palette();
         assert_eq!(palette.background, WINDOW_BACKGROUND);
         assert_eq!(palette.text, TEXT);
@@ -100,7 +100,7 @@ mod tests {
         assert_eq!(palette.success, LCD_GREEN);
     }
 
-    // The named-colour test above pins four of the palette's six slots; the
+    // The named-color test above pins four of the palette's six slots; the
     // remaining two, `warning` and `danger`, are inline literals rather than
     // named constants, so nothing read them and an accidental swap or edit
     // would clear the whole suite while iced's extended palette rendered the
@@ -108,7 +108,7 @@ mod tests {
     // conventional values, and that the two stay distinct from each other and
     // from the success green.
     #[test]
-    fn palette_keeps_conventional_warning_and_danger_colours() {
+    fn palette_keeps_conventional_warning_and_danger_colors() {
         let palette = winamp_theme().palette();
         assert_eq!(palette.warning, Color::from_rgb(1.0, 0.65, 0.0));
         assert_eq!(palette.danger, Color::from_rgb(1.0, 0.2, 0.2));
@@ -118,17 +118,17 @@ mod tests {
     }
 
     // The palette tests above read the six palette slots. The playing-row
-    // highlight and the LCD well's recess are the two base-skin colours
+    // highlight and the LCD well's recess are the two base-skin colors
     // painted from constants no test reads at all: `views::browse::scrollable_list`
     // and `bevel::lcd_well` apply them inside inline style closures, which
     // iced's `Element` API exposes no way to introspect. Their RGB values are
     // the skin contract — a regression could turn the playlist selection bar
-    // or the recess into any other colour and clear the whole suite. Pin
+    // or the recess into any other color and clear the whole suite. Pin
     // both, and that they keep their documented roles: the well is darker
     // than the window face it recesses into, and the highlight stands apart
     // from both.
     #[test]
-    fn panel_recess_and_playing_row_highlight_keep_their_base_skin_colours() {
+    fn panel_recess_and_playing_row_highlight_keep_their_base_skin_colors() {
         assert_eq!(LCD_BACKGROUND, Color::from_rgb(0.05, 0.05, 0.05));
         assert_eq!(PLAYING_ROW_HIGHLIGHT, Color::from_rgb(0.25, 0.5, 1.0));
 
@@ -150,12 +150,12 @@ mod tests {
     // feeds it, so a constant and its reader can drift together and clear the
     // suite. The base-skin RGB values are this project's visual contract — a
     // Winamp 2.x clone lives or dies on its palette — and the remaining named
-    // colours are read only constant-to-constant (or by inline widget
+    // colors are read only constant-to-constant (or by inline widget
     // closures iced exposes no way to introspect). Pin every literal here,
     // plus the bevel and button-face orderings their doc comments promise, so
-    // an accidental recolour is caught rather than shipped.
+    // an accidental recolor is caught rather than shipped.
     #[test]
-    fn base_skin_colours_keep_their_documented_literal_values() {
+    fn base_skin_colors_keep_their_documented_literal_values() {
         assert_eq!(WINDOW_BACKGROUND, Color::from_rgb(0.18, 0.18, 0.18));
         assert_eq!(TEXT, Color::from_rgb(0.87, 0.87, 0.87));
         assert_eq!(TITLE_BLUE, Color::from_rgb(0.0, 0.0, 0.55));

@@ -2,9 +2,9 @@
 //!
 //! Every iced widget this player dresses — buttons, the library search box,
 //! the preset pick list and its menu, sliders, playlist rows, the playlist
-//! scroll well, and the title bar — gets its base-skin colours and 1px chrome
+//! scroll well, and the title bar — gets its base-skin colors and 1px chrome
 //! geometry here. Each style is a pure `Status` → `Style` builder, so its
-//! colour rule is testable without building a widget. The reusable edge-colour
+//! color rule is testable without building a widget. The reusable edge-color
 //! rule the buttons and search box draw from lives in the sibling `bevel`
 //! module.
 
@@ -31,7 +31,7 @@ fn square_border(color: Color) -> Border {
 
 /// A 1px down-right [`Shadow`] in `color`, the bottom/right half of a bevel.
 ///
-/// iced's [`Border`] draws a single colour all around, so the other half of a
+/// iced's [`Border`] draws a single color all around, so the other half of a
 /// two-tone bevel is a no-blur shadow offset one pixel down and right; the
 /// shared geometry lives here rather than as a struct literal at each style
 /// site. Pure, so it needs no widget to test.
@@ -62,11 +62,11 @@ fn chrome_face(hovered: bool, pressed: bool) -> Color {
 }
 
 /// The flat base-skin title-bar fill: a solid [`theme::TITLE_BLUE`] band with
-/// the light [`theme::TEXT`] colour for the app name.
+/// the light [`theme::TEXT`] color for the app name.
 ///
 /// [`super::bevel::raised_panel`] composes with the window face and
 /// [`super::bevel::lcd_well`] paints its own background, but neither sets a text
-/// colour; the title bar paints both its own opaque background and its own
+/// color; the title bar paints both its own opaque background and its own
 /// light text. Pure, so both fields are testable without a widget.
 pub fn title_bar_style() -> container::Style {
     container::Style {
@@ -78,11 +78,11 @@ pub fn title_bar_style() -> container::Style {
 
 /// The raised (Active/Hovered) and sunken (Pressed) chrome style for a button.
 ///
-/// iced's [`Border`] carries a single colour, so the two-tone edge reuses
+/// iced's [`Border`] carries a single color, so the two-tone edge reuses
 /// [`bevel_edges`]: raised, it is a 1px light border on the top/left and a dark
 /// no-blur [`Shadow`] offset down-right on the bottom/right; pressing sinks the
 /// pair. The face comes from [`chrome_face`], which darkens it on hover and
-/// sinks it while pressed. Pure, so the colour rule is testable without
+/// sinks it while pressed. Pure, so the color rule is testable without
 /// building a widget.
 pub fn chrome_button_style(status: button::Status) -> button::Style {
     let (top_left, bottom_right) = bevel_edges(!matches!(status, button::Status::Pressed));
@@ -111,10 +111,10 @@ pub fn chrome_button_style(status: button::Status) -> button::Style {
 /// mirror [`chrome_button_style`]: resting and hovered stay raised, while focus
 /// sinks the face to [`theme::BUTTON_FACE_PRESSED`] and reverses the edge to
 /// [`theme::PANEL_EDGE_DARK`], the same press the buttons use. iced's
-/// [`text_input::Style`] carries a single border colour and no shadow, so the
+/// [`text_input::Style`] carries a single border color and no shadow, so the
 /// bevel's bottom-right dark half is not drawn. The placeholder uses the
 /// lighter [`theme::PANEL_EDGE_LIGHT`] so an empty box reads as empty, and the
-/// selection uses the title-bar [`theme::TITLE_BLUE`]. Pure, so the colour rule
+/// selection uses the title-bar [`theme::TITLE_BLUE`]. Pure, so the color rule
 /// is testable without building a widget.
 pub fn chrome_text_input_style(status: text_input::Status) -> text_input::Style {
     let focused = matches!(status, text_input::Status::Focused { .. });
@@ -141,7 +141,7 @@ pub fn chrome_text_input_style(status: text_input::Status) -> text_input::Style 
 /// through [`chrome_face`], the same press shade the other chrome uses. The
 /// placeholder (the `(none)` custom-curve label) is drawn in the lighter
 /// [`theme::PANEL_EDGE_LIGHT`] so an unselected list reads as empty. Pure, so
-/// the colour rule is testable without building a widget.
+/// the color rule is testable without building a widget.
 pub fn chrome_pick_list_style(status: pick_list::Status) -> pick_list::Style {
     let opened = matches!(status, pick_list::Status::Opened { .. });
 
@@ -160,7 +160,7 @@ pub fn chrome_pick_list_style(status: pick_list::Status) -> pick_list::Style {
 /// outline; its options are [`theme::TEXT`] on that face, and the highlighted
 /// option uses the title-bar [`theme::TITLE_BLUE`] with the same light text,
 /// matching Winamp's selection blue. No drop shadow, so the menu stays flat
-/// like the rest of the base-skin chrome. Pure, so the colour rule is
+/// like the rest of the base-skin chrome. Pure, so the color rule is
 /// testable without building a widget.
 pub fn preset_menu_style() -> menu::Style {
     menu::Style {
@@ -176,14 +176,14 @@ pub fn preset_menu_style() -> menu::Style {
 /// The sunken-groove / raised-thumb chrome style for a slider.
 ///
 /// The base skin's slider is a dark recess with a blocky chrome thumb. iced's
-/// [`slider::Rail`] paints a single-colour [`Border`] and no shadow, so the
+/// [`slider::Rail`] paints a single-color [`Border`] and no shadow, so the
 /// sunken edge is the dark 1px outline around a near-black groove; the
 /// [`slider::Handle`] carries the light 1px border that reads as raised
 /// chrome, the same light-border trick [`chrome_button_style`] uses. The rail
 /// is uniform (`LCD_BACKGROUND` on both sides of the handle) because the thumb,
-/// not a fill colour, marks the value. The handle face comes from
+/// not a fill color, marks the value. The handle face comes from
 /// [`chrome_face`], the same ladder [`chrome_button_style`] uses. Pure, so the
-/// colour rule is testable without building a widget.
+/// color rule is testable without building a widget.
 pub fn chrome_slider_style(status: slider::Status) -> slider::Style {
     let face = chrome_face(
         matches!(status, slider::Status::Hovered),
@@ -243,7 +243,7 @@ pub fn playlist_row_style(status: button::Status) -> button::Style {
 /// sit in [`theme::WINDOW_BACKGROUND`] with a [`theme::BUTTON_FACE`] scroller
 /// bordered light, and the touch `auto_scroll` overlay matches the well.
 /// Classic Winamp scrollbars give no hover/drag feedback, so the style ignores
-/// the [`scrollable::Status`] iced passes. Pure, so the colour rule is
+/// the [`scrollable::Status`] iced passes. Pure, so the color rule is
 /// testable without building a widget.
 pub fn playlist_scrollable_style() -> scrollable::Style {
     let rail = scrollable::Rail {
@@ -281,7 +281,7 @@ mod tests {
 
     /// Asserts `status`'s chrome bevel keeps `active`'s 1px square geometry.
     ///
-    /// Interaction statuses change the face and edge colours; they must not
+    /// Interaction statuses change the face and edge colors; they must not
     /// change the bevel's shape. The three non-resting button-status tests
     /// each pin that, so the geometry contract lives here once.
     fn assert_same_edge_geometry(active: &button::Style, status: &button::Style) {
@@ -382,7 +382,7 @@ mod tests {
         );
         assert_eq!(focused.border.color, theme::PANEL_EDGE_DARK);
         assert_eq!(focused.value, theme::TEXT);
-        // Focus changes the face and edge colours, not the 1px square
+        // Focus changes the face and edge colors, not the 1px square
         // geometry.
         assert_eq!(focused.border.width, active.border.width);
         assert_eq!(focused.border.radius, active.border.radius);
@@ -405,7 +405,7 @@ mod tests {
         // other test while the hovered label faded.
         assert_eq!(hovered.text_color, theme::TEXT);
         // "Lifts the face" is the name's contract: hovering swaps only the
-        // background. The edge colours are asserted unchanged above; assert the
+        // background. The edge colors are asserted unchanged above; assert the
         // geometry too, or a change that made (say) a hovered button's border
         // thicker or its shadow offset would clear every other test while the
         // chrome distorted under the cursor.
@@ -422,10 +422,10 @@ mod tests {
         );
         assert_eq!(pressed.border.color, theme::PANEL_EDGE_DARK);
         assert_eq!(pressed.shadow.color, theme::PANEL_EDGE_LIGHT);
-        // The Pressed twin of the Hovered text-colour assertion above.
+        // The Pressed twin of the Hovered text-color assertion above.
         assert_eq!(pressed.text_color, theme::TEXT);
         // "Sinks and reverses the edge" is the name's contract: pressing swaps
-        // the two edge colours and the face, but the 1px geometry stays. Assert
+        // the two edge colors and the face, but the 1px geometry stays. Assert
         // it, or a status-dependent border width, radius, or shadow offset
         // could pass every test while the pressed bevel changed shape.
         assert_same_edge_geometry(&active, &pressed);
@@ -485,8 +485,8 @@ mod tests {
         // handle face and nothing else. The Active test above pins the handle's
         // shape and border for the shared fields; assert the two non-resting
         // statuses keep them unchanged too, or a change that made (say) the
-        // dragged thumb's border a status-dependent colour would clear every
-        // other test while the thumb gained a colour no test read.
+        // dragged thumb's border a status-dependent color would clear every
+        // other test while the thumb gained a color no test read.
         assert_same_handle_geometry(&active, &hovered);
         assert_same_handle_geometry(&active, &dragged);
     }
@@ -500,7 +500,7 @@ mod tests {
         assert_eq!(disabled.background, active.background);
         assert!(disabled.text_color.a < theme::TEXT.a);
         // "Keeps the edges" is the name's contract: Disabled dims only the
-        // text, so the face and both edge colours (asserted above) and the 1px
+        // text, so the face and both edge colors (asserted above) and the 1px
         // geometry all stay. Assert the geometry too, or a status-dependent
         // width, radius, or shadow offset could pass every other test while the
         // disabled bevel changed shape.

@@ -549,12 +549,12 @@ fn boot(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> (WinampPlaye
     )
 }
 
-/// Routes each [`Message`] to the handler that owns its behaviour: the
+/// Routes each [`Message`] to the handler that owns its behavior: the
 /// transport buttons and keys, the track stepping, and the play request and
 /// its completion in `handlers::playback`; the volume, balance, seek, and
 /// equalizer in `handlers::mixer`; the browse hierarchy, the library search,
 /// and the fetch results in `handlers::browse`; and the custom title bar's
-/// window actions in `handlers::window`. The table carries no behaviour of its
+/// window actions in `handlers::window`. The table carries no behavior of its
 /// own, so a change to one concern stays in that concern's module.
 fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
     match message {

@@ -2,9 +2,9 @@
 //!
 //! The base skin's defining 3D edge is a light top/left and dark bottom/right
 //! pair on raised chrome, reversed in a sunken well. iced 0.14's `Border` is a
-//! single colour of uniform width, so this module composes the two-tone bevel
+//! single color of uniform width, so this module composes the two-tone bevel
 //! from 1px [`rule`] edges and overlays it on the panel content.
-//! [`bevel_edges`] is the pure colour rule at the heart of the layer;
+//! [`bevel_edges`] is the pure color rule at the heart of the layer;
 //! [`lcd_well`] and [`raised_panel`] are the two panel shapes the views use.
 //!
 //! The widget chrome styles that consume [`bevel_edges`] live in the sibling
@@ -17,11 +17,11 @@ use iced::{
 
 use super::{Message, theme};
 
-/// The `(top_left, bottom_right)` edge colours for a bevel.
+/// The `(top_left, bottom_right)` edge colors for a bevel.
 ///
 /// A raised edge catches the light on its top and left and falls dark on its
 /// bottom and right; a sunken (recessed) edge reverses that. Pure, so the
-/// colour rule is testable without building any widgets.
+/// color rule is testable without building any widgets.
 pub fn bevel_edges(raised: bool) -> (Color, Color) {
     if raised {
         (theme::PANEL_EDGE_LIGHT, theme::PANEL_EDGE_DARK)
@@ -99,7 +99,7 @@ where
 /// Wraps `content` in a sunken LCD well: a full-width near-black recess behind
 /// the content with a few px of padding and the reversed (sunken) bevel.
 ///
-/// No text colour is set, so the caller's caption keeps the theme text colour
+/// No text color is set, so the caller's caption keeps the theme text color
 /// and only the title's explicit green stays green.
 pub fn lcd_well<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
     let well = Container::new(content)
