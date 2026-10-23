@@ -489,6 +489,7 @@ backend queries. On the UI side, `views::now_playing::visualizer_bar_heights` an
 - `spectrum_bands_zero_a_band_at_or_above_nyquist` (`src/audio/tests.rs`)
 - `meter_source_passes_samples_through_and_records_their_spectrum` (`src/audio/tests.rs`)
 - `meter_source_seek_keeps_the_downmix_phase` (`src/audio/tests.rs`)
+- `meter_window_keeps_the_newest_samples_in_play_order` (`src/audio/tests.rs`)
 - `spectrum_query_returns_the_loaded_players_spectrum` (`src/audio/tests.rs`)
 - `spectrum_query_reports_none_when_nothing_is_loaded` (`src/audio/tests.rs`)
 - `loaded_player_reports_its_meter_but_an_unloaded_one_reports_nothing` (`src/audio/tests.rs`)

@@ -176,6 +176,32 @@ fn meter_source_passes_samples_through_and_records_their_spectrum() {
     );
 }
 
+// The meter ring keeps only the newest `SPECTRUM_WINDOW` mono samples, in
+// play order: once more samples arrive than fit, the oldest are overwritten
+// and `chronological` must start at the first sample still held rather than
+// serve the ring's storage order. `spectrum_bands` analyzes this order, so a
+// full ring must follow the live signal instead of a rotated window.
+#[test]
+fn meter_window_keeps_the_newest_samples_in_play_order() {
+    let total = SPECTRUM_WINDOW + 5;
+    let samples: Vec<f32> = (0..total).map(|index| index as f32).collect();
+    let buffer = rodio::buffer::SamplesBuffer::new(
+        ChannelCount::new(1).unwrap(),
+        SampleRate::new(44_100).unwrap(),
+        samples.clone(),
+    );
+    let meter = Arc::new(SpectrumMeter::default());
+    let mut source = MeterSource::new(buffer, Arc::clone(&meter));
+
+    assert_eq!(source.by_ref().count(), total);
+
+    assert_eq!(
+        meter.recorded(),
+        samples[total - SPECTRUM_WINDOW..].to_vec(),
+        "a full ring must serve the newest window in play order"
+    );
+}
+
 // A seek must not reset the partial downmix frame: rodio leaves the next
 // sample on the same channel as before the seek, so the frame spanning the
 // seek stays in phase instead of pairing a right sample with the next left.
