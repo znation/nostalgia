@@ -1,6 +1,6 @@
 //! The browse message handlers: the artist → album → song hierarchy, the flat
-//! whole-library lists, the library search, and the fetch results that fill
-//! them.
+//! whole-library lists, the Back, Top, and Sort navigation over every level,
+//! the library search, and the fetch results that fill them.
 //!
 //! Every fetch clears the list it refills before it goes out, so a press
 //! during the fetch cannot resolve against the previous level's rows, and

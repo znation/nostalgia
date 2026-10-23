@@ -1,7 +1,8 @@
 //! The playback message handlers: the transport buttons and keys, the track
-//! stepping, the play request and its completion, the Now Playing marquee
-//! tick, and the backend poll for the position, format, preview length, and
-//! finished state.
+//! stepping, the play request and its completion, the elapsed/remaining
+//! readout toggle, the Now Playing marquee tick, the seek drag and release,
+//! and the backend polls for the position, format, preview length, finished
+//! state, and live spectrum.
 //!
 //! The transport calls go through the service's async seam (`transport_into`)
 //! and the play request through `play_into`, so the shared playback state is
