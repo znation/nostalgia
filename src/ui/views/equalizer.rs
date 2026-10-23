@@ -141,8 +141,10 @@ where
 /// sliders start from. Every slider spans `GAIN_MIN_DB..=GAIN_MAX_DB` in 1 dB steps and
 /// emits its own change message, so dragging one routes a clamped gain back
 /// into shared state. The response curve traces the stored `bands` whether the
-/// EQ is on or off. The band row is built by index so each slider's closure
-/// captures its own band number — the vertical twin of the volume slider in
+/// EQ is on or off, and each band slider's groove is tinted by that band's own
+/// gain through [`style::band_slider_style`]. The band row is built by index so
+/// each slider's closure captures its own band number — the vertical twin of
+/// the volume slider in
 /// [`view_transport_controls`](super::transport::view_transport_controls).
 pub fn view_equalizer(
     enabled: bool,
@@ -152,15 +154,16 @@ pub fn view_equalizer(
 ) -> Element<'static, Message> {
     let mut band_row = Row::new().spacing(BAND_ROW_SPACING);
     for (index, frequency) in BAND_FREQUENCIES.iter().enumerate() {
+        let gain = bands[index];
         band_row = band_row.push(
             Column::new()
                 .push(
-                    VerticalSlider::new(GAIN_MIN_DB..=GAIN_MAX_DB, bands[index], move |gain| {
+                    VerticalSlider::new(GAIN_MIN_DB..=GAIN_MAX_DB, gain, move |gain| {
                         Message::EqBandChange(index, gain)
                     })
                     .step(EQ_STEP)
                     .height(Length::Fixed(100.0))
-                    .style(|_theme, status| style::chrome_slider_style(status)),
+                    .style(move |_theme, status| style::band_slider_style(gain, status)),
                 )
                 .push(Text::new(*frequency).size(12)),
         );

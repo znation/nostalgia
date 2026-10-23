@@ -162,6 +162,25 @@ documented layout" and "Transport buttons resize to their label text, so pressin
 reflows the whole control row" in `BUGS-FIXED.md`. Both carried a `real-run-needed` validation
 gap; the shared harness closes it.
 
+## Equalizer band tint
+
+**Guarantee.** Each equalizer band slider's groove is tinted by that band's stored gain: green at
+`GAIN_MIN_DB` (`-12 dB`), yellow at `0 dB`, and red at `GAIN_MAX_DB` (`+12 dB`), interpolating
+between adjacent stops. Both rail halves carry the tint, so no gray segment remains on either
+side of the thumb. A gain outside the range clamps to the matching end stop, and a NaN gain
+renders the flat yellow instead of an invalid color. The preamp slider keeps its uniform gray
+groove.
+
+**Enforced by.** `style::band_gain_color` and `style::band_slider_style` in `src/ui/style.rs`,
+used by `views::view_equalizer` in `src/ui/views/equalizer.rs`.
+
+**Pinned by.** `band_gain_color_runs_green_through_yellow_to_red`,
+`band_gain_color_clamps_and_maps_nan_to_flat`, and
+`band_slider_style_paints_both_rail_halves_and_keeps_the_chrome_thumb` in `src/ui/style.rs`.
+
+**History.** The tint is presentation-only: it reads the same stored gains the sliders and
+`BandFilter` use but does not change the curve the audio filter applies.
+
 ## Now Playing label
 
 **Guarantee.** The Now Playing bar shows the current track's human-readable title and artist, not

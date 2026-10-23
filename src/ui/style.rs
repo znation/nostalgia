@@ -211,6 +211,59 @@ pub fn chrome_slider_style(status: slider::Status) -> slider::Style {
     }
 }
 
+/// Interpolates one RGB channel from `start` to `end` at `t` in `0.0..=1.0`.
+/// The endpoint form returns each stop exactly, so the named gains can be
+/// compared for equality rather than within a tolerance.
+fn mix_channel(start: f32, end: f32, t: f32) -> f32 {
+    start * (1.0 - t) + end * t
+}
+
+/// The equalizer band tint for `gain`: green at
+/// [`GAIN_MIN_DB`](crate::equalizer::GAIN_MIN_DB), yellow at
+/// `0.0`, and red at [`GAIN_MAX_DB`](crate::equalizer::GAIN_MAX_DB),
+/// interpolated in between.
+///
+/// `gain` passes through [`clamp_gain`](crate::equalizer::clamp_gain) first, so
+/// an out-of-range value lands on the matching end stop and a NaN maps to the
+/// flat `0.0` (yellow) instead of producing an invalid color. Alpha stays
+/// `1.0`, so the tint is opaque on the dark groove. Pure, so the color rule is
+/// testable without building a widget.
+pub fn band_gain_color(gain: f32) -> Color {
+    let gain = crate::equalizer::clamp_gain(gain);
+    if gain <= 0.0 {
+        let t = (gain - crate::equalizer::GAIN_MIN_DB) / (0.0 - crate::equalizer::GAIN_MIN_DB);
+        Color::from_rgba(
+            mix_channel(theme::EQ_GAIN_LOW.r, theme::EQ_GAIN_MID.r, t),
+            mix_channel(theme::EQ_GAIN_LOW.g, theme::EQ_GAIN_MID.g, t),
+            mix_channel(theme::EQ_GAIN_LOW.b, theme::EQ_GAIN_MID.b, t),
+            1.0,
+        )
+    } else {
+        let t = gain / crate::equalizer::GAIN_MAX_DB;
+        Color::from_rgba(
+            mix_channel(theme::EQ_GAIN_MID.r, theme::EQ_GAIN_HIGH.r, t),
+            mix_channel(theme::EQ_GAIN_MID.g, theme::EQ_GAIN_HIGH.g, t),
+            mix_channel(theme::EQ_GAIN_MID.b, theme::EQ_GAIN_HIGH.b, t),
+            1.0,
+        )
+    }
+}
+
+/// The chrome slider style with both rail halves tinted by the band's `gain`.
+///
+/// iced paints `backgrounds.0` from the range start to the thumb and
+/// `backgrounds.1` from the thumb to the range end, so both halves must carry
+/// [`band_gain_color`]; tinting only one would leave a gray segment whose
+/// extent moves with the value. The rail width and border and the whole handle
+/// stay exactly [`chrome_slider_style`]'s, so the tint changes only the
+/// groove's color. Pure, so the rule is testable without building a widget.
+pub fn band_slider_style(gain: f32, status: slider::Status) -> slider::Style {
+    let mut style = chrome_slider_style(status);
+    let tint = Background::Color(band_gain_color(gain));
+    style.rail.backgrounds = (tint, tint);
+    style
+}
+
 /// The flat playlist-entry style for a browse row.
 ///
 /// The base skin's playlist rows are flat light text on the near-black well:
@@ -278,6 +331,7 @@ pub fn playlist_scrollable_style() -> scrollable::Style {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB};
 
     /// Asserts `status`'s chrome bevel keeps `active`'s 1px square geometry.
     ///
@@ -489,6 +543,70 @@ mod tests {
         // other test while the thumb gained a color no test read.
         assert_same_handle_geometry(&active, &hovered);
         assert_same_handle_geometry(&active, &dragged);
+    }
+
+    /// Asserts each RGB channel of `color` lies between `start` and `end`.
+    fn assert_between(color: Color, start: Color, end: Color) {
+        for (channel, (value, (low, high))) in [
+            (color.r, (start.r, end.r)),
+            (color.g, (start.g, end.g)),
+            (color.b, (start.b, end.b)),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let (low, high) = (low.min(high), low.max(high));
+            assert!(
+                value >= low && value <= high,
+                "channel {channel} = {value} is outside {low}..={high}"
+            );
+        }
+        assert_eq!(color.a, 1.0);
+    }
+
+    #[test]
+    fn band_gain_color_runs_green_through_yellow_to_red() {
+        assert_eq!(band_gain_color(GAIN_MIN_DB), theme::EQ_GAIN_LOW);
+        assert_eq!(band_gain_color(0.0), theme::EQ_GAIN_MID);
+        assert_eq!(band_gain_color(GAIN_MAX_DB), theme::EQ_GAIN_HIGH);
+
+        // The middle of each half sits strictly between its two stops, so the
+        // tint sweeps rather than jumping at the named gains.
+        assert_between(
+            band_gain_color(GAIN_MIN_DB / 2.0),
+            theme::EQ_GAIN_LOW,
+            theme::EQ_GAIN_MID,
+        );
+        assert_between(
+            band_gain_color(GAIN_MAX_DB / 2.0),
+            theme::EQ_GAIN_MID,
+            theme::EQ_GAIN_HIGH,
+        );
+    }
+
+    #[test]
+    fn band_gain_color_clamps_and_maps_nan_to_flat() {
+        assert_eq!(band_gain_color(GAIN_MIN_DB - 100.0), theme::EQ_GAIN_LOW);
+        assert_eq!(band_gain_color(GAIN_MAX_DB + 100.0), theme::EQ_GAIN_HIGH);
+        assert_eq!(band_gain_color(f32::NAN), theme::EQ_GAIN_MID);
+    }
+
+    #[test]
+    fn band_slider_style_paints_both_rail_halves_and_keeps_the_chrome_thumb() {
+        let gain = 6.0;
+        let tint = Background::Color(band_gain_color(gain));
+        for status in [
+            slider::Status::Active,
+            slider::Status::Hovered,
+            slider::Status::Dragged,
+        ] {
+            let style = band_slider_style(gain, status);
+            let chrome = chrome_slider_style(status);
+            assert_eq!(style.rail.backgrounds, (tint, tint));
+            assert_eq!(style.rail.width, chrome.rail.width);
+            assert_eq!(style.rail.border, chrome.rail.border);
+            assert_eq!(style.handle, chrome.handle);
+        }
     }
 
     #[test]

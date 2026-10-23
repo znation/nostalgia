@@ -48,6 +48,18 @@ pub const BUTTON_FACE_PRESSED: Color = Color::from_rgb(0.22, 0.22, 0.22);
 /// The near-black recess behind the green Now Playing title.
 pub const LCD_BACKGROUND: Color = Color::from_rgb(0.05, 0.05, 0.05);
 
+/// The equalizer band tint at [`GAIN_MIN_DB`](crate::equalizer::GAIN_MIN_DB):
+/// a full cut, matching the LCD green's "quiet" reading.
+pub const EQ_GAIN_LOW: Color = LCD_GREEN;
+
+/// The equalizer band tint at `0 dB`, the flat gain: yellow, so a neutral
+/// band reads neither boosted nor cut.
+pub const EQ_GAIN_MID: Color = Color::from_rgb(0.85, 0.85, 0.0);
+
+/// The equalizer band tint at [`GAIN_MAX_DB`](crate::equalizer::GAIN_MAX_DB):
+/// a full boost, a hot red-orange.
+pub const EQ_GAIN_HIGH: Color = Color::from_rgb(1.0, 0.2, 0.1);
+
 /// The base-skin colors as an iced [`Palette`](iced::theme::Palette): the
 /// dark window face and light text are the background/foreground pair,
 /// [`TITLE_BLUE`] drives interactive accents, and [`LCD_GREEN`] is the
@@ -165,6 +177,9 @@ mod tests {
         assert_eq!(BUTTON_FACE, Color::from_rgb(0.30, 0.30, 0.30));
         assert_eq!(BUTTON_FACE_HOVERED, Color::from_rgb(0.38, 0.38, 0.38));
         assert_eq!(BUTTON_FACE_PRESSED, Color::from_rgb(0.22, 0.22, 0.22));
+        assert_eq!(EQ_GAIN_LOW, LCD_GREEN);
+        assert_eq!(EQ_GAIN_MID, Color::from_rgb(0.85, 0.85, 0.0));
+        assert_eq!(EQ_GAIN_HIGH, Color::from_rgb(1.0, 0.2, 0.1));
 
         // The bevel's two edges must stay distinct, with the light edge
         // actually lighter, or a raised panel reads flat and a sunken one
