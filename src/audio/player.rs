@@ -7,14 +7,16 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
+use rodio::Source;
 use rodio::source::SeekError;
 
 use crate::music_error::AppleMusicError;
 
 use super::balance::BalanceSource;
 use super::equalizer::{EqSettings, EqSnapshot, EqSource};
+use super::meter::{MeterSource, SpectrumMeter};
 use super::preview::{DecodedPreview, download_and_decode, preview_agent};
-use super::{AudioOutput, PlaybackFormat};
+use super::{AudioOutput, PlaybackFormat, Spectrum};
 
 /// The longest [`RodioOutput::new`] waits for the worker to report whether the
 /// default audio device opened.
@@ -29,7 +31,8 @@ use super::{AudioOutput, PlaybackFormat};
 pub(super) const DEVICE_OPEN_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The longest [`RodioOutput::position`], [`RodioOutput::playback_format`],
-/// and [`RodioOutput::duration`] wait for the worker to answer.
+/// [`RodioOutput::spectrum`], and [`RodioOutput::duration`] wait for the
+/// worker to answer.
 ///
 /// The worker handles commands in channel order, so a query issued while the
 /// worker is downloading a preview is answered only after that download
@@ -37,8 +40,9 @@ pub(super) const DEVICE_OPEN_TIMEOUT: Duration = Duration::from_secs(5);
 /// [`super::preview::PREVIEW_TIMEOUT`], far longer than a UI poll should
 /// block, so this bound is short: a query that misses it reports `None`
 /// rather than stalling the caller, and the next poll asks again. It bounds
-/// all three queued backend queries — the position, the format, and the
-/// preview's length — because the same download sits in front of any of them.
+/// all four queued backend queries — the position, the format, the spectrum,
+/// and the preview's length — because the same download sits in front of any
+/// of them.
 pub(super) const WORKER_QUERY_TIMEOUT: Duration = Duration::from_millis(100);
 
 /// A command sent from [`RodioOutput`] to its worker thread.
@@ -68,6 +72,9 @@ pub(super) enum Command {
     /// Report the loaded preview's sample rate and channel mode on `reply`
     /// (`None` when none is loaded).
     PlaybackFormat(Sender<Option<PlaybackFormat>>),
+    /// Report the loaded preview's live spectrum on `reply` (`None` when none
+    /// is loaded).
+    Spectrum(Sender<Option<Spectrum>>),
     /// Set the equalizer curve applied to the output.
     SetEqualizer(EqSnapshot),
 }
@@ -102,6 +109,11 @@ pub(super) trait WorkerPlayer {
     /// Reports the loaded preview's format, when the player has one. The
     /// default answers `None`, so a fake without a format compiles.
     fn playback_format(&self) -> Option<PlaybackFormat> {
+        None
+    }
+    /// Reports the loaded preview's live spectrum, when the player has one.
+    /// The default answers `None`, so a fake without a spectrum compiles.
+    fn spectrum(&self) -> Option<Spectrum> {
         None
     }
     /// Sets the player's equalizer curve.
@@ -173,6 +185,15 @@ pub(super) fn duration_for_source(source: &impl rodio::Source) -> Option<Duratio
     source.total_duration()
 }
 
+/// Reports `meter`'s live spectrum only once the player holds a preview.
+///
+/// `loaded` is the player's format cell: it is set only after a preview is
+/// appended, so an unloaded player (before its append, or after a stop)
+/// reports nothing rather than a window that still holds older audio.
+pub(super) fn spectrum_for_loaded_player(loaded: bool, meter: &SpectrumMeter) -> Option<Spectrum> {
+    loaded.then(|| meter.take())
+}
+
 /// The two player operations a relative seek needs, split from
 /// [`RodioPlayer`] so the composition of reading the position and seeking to
 /// [`seek_target`] from it is testable without an output device.
@@ -202,7 +223,7 @@ pub(super) fn seek_player(player: &impl SeekablePlayer, offset_secs: i64) {
 
 /// The production [`WorkerPlayer`]: a `rodio::Player` plus the balance and
 /// equalizer shared with the source adapters wrapping each preview it appends.
-struct RodioPlayer {
+pub(super) struct RodioPlayer {
     player: rodio::Player,
     balance: Arc<AtomicU32>,
     equalizer: Arc<EqSettings>,
@@ -212,6 +233,9 @@ struct RodioPlayer {
     /// The appended preview's own length, set once beside the format. It can
     /// be absent even with a player loaded when the source cannot report it.
     duration: OnceLock<Option<Duration>>,
+    /// The mono window every sample this player pulls is recorded into for
+    /// the LCD visualizer.
+    spectrum: Arc<SpectrumMeter>,
 }
 
 impl RodioPlayer {
@@ -222,7 +246,57 @@ impl RodioPlayer {
             equalizer: Arc::new(EqSettings::default()),
             format: OnceLock::new(),
             duration: OnceLock::new(),
+            spectrum: Arc::new(SpectrumMeter::default()),
         }
+    }
+
+    /// Wraps `source` in the meter and equalizer chain and appends it, setting
+    /// the format and length cells from the source itself. Production appends
+    /// a decoded preview through here; keeping the chain generic lets a test
+    /// drive the same wiring with an in-memory source.
+    pub(super) fn append_source<S>(&self, source: S, encoded_bytes: u64)
+    where
+        S: Source<Item = f32> + Send + 'static,
+    {
+        let _ = self.format.set(format_for_source(&source, encoded_bytes));
+        let _ = self.duration.set(duration_for_source(&source));
+        let metered = MeterSource::new(source, Arc::clone(&self.spectrum));
+        let equalized = EqSource::new(metered, Arc::clone(&self.equalizer));
+        self.player
+            .append(BalanceSource::new(equalized, Arc::clone(&self.balance)));
+    }
+}
+
+#[cfg(test)]
+impl RodioPlayer {
+    /// Builds a player without an output device, sharing `spectrum` with the
+    /// caller and returning the queue its appended audio is pulled from. The
+    /// format cell stays empty until an append, as it does in production.
+    pub(super) fn without_device(
+        spectrum: Arc<SpectrumMeter>,
+    ) -> (Self, rodio::queue::SourcesQueueOutput) {
+        let (player, queue) = rodio::Player::new();
+        (
+            Self {
+                player,
+                balance: Arc::new(AtomicU32::new(0.0_f32.to_bits())),
+                equalizer: Arc::new(EqSettings::default()),
+                format: OnceLock::new(),
+                duration: OnceLock::new(),
+                spectrum,
+            },
+            queue,
+        )
+    }
+
+    /// Sets the format cell the way an append does, without needing a decoded
+    /// preview.
+    pub(super) fn mark_loaded_for_test(&self) {
+        let _ = self.format.set(PlaybackFormat {
+            sample_rate_hz: 44_100,
+            channels: 1,
+            bitrate_kbps: None,
+        });
     }
 }
 
@@ -260,6 +334,13 @@ impl WorkerPlayer for RodioPlayer {
         self.format.get().copied()
     }
 
+    fn spectrum(&self) -> Option<Spectrum> {
+        // The format cell is set only after a preview is appended, so a player
+        // without one (before its append, or after a stop) reports nothing
+        // rather than a window that still holds older audio.
+        spectrum_for_loaded_player(self.format.get().is_some(), &self.spectrum)
+    }
+
     fn set_equalizer(&self, equalizer: EqSnapshot) {
         self.equalizer.store(equalizer);
     }
@@ -273,11 +354,7 @@ impl WorkerPlayer for RodioPlayer {
             source,
             encoded_bytes,
         } = preview;
-        let _ = self.format.set(format_for_source(&source, encoded_bytes));
-        let _ = self.duration.set(duration_for_source(&source));
-        let equalized = EqSource::new(source, Arc::clone(&self.equalizer));
-        self.player
-            .append(BalanceSource::new(equalized, Arc::clone(&self.balance)));
+        self.append_source(source, encoded_bytes);
     }
 
     fn pause(&self) {
@@ -405,6 +482,14 @@ impl AudioOutput for RodioOutput {
 
     fn playback_format(&self) -> Option<PlaybackFormat> {
         self.query(Command::PlaybackFormat)
+    }
+
+    fn spectrum(&self) -> Option<Spectrum> {
+        let (reply, replies) = mpsc::channel();
+        if self.send(Command::Spectrum(reply)).is_err() {
+            return None;
+        }
+        replies.recv_timeout(WORKER_QUERY_TIMEOUT).ok().flatten()
     }
 
     fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
@@ -589,6 +674,9 @@ pub(super) fn serve_commands<P, D>(
             }
             Command::PlaybackFormat(reply) => {
                 let _ = reply.send(player.as_ref().and_then(WorkerPlayer::playback_format));
+            }
+            Command::Spectrum(reply) => {
+                let _ = reply.send(player.as_ref().and_then(WorkerPlayer::spectrum));
             }
             Command::SetEqualizer(new_equalizer) => {
                 settings.equalizer = new_equalizer;

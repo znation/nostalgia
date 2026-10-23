@@ -3,8 +3,9 @@
 
 use super::balance::BalanceSource;
 use super::equalizer::{EqSettings, EqSource};
+use super::meter::{MeterSource, SPECTRUM_WINDOW, SpectrumMeter, spectrum_bands};
 use super::player::{
-    Command, DEVICE_OPEN_TIMEOUT, SeekablePlayer, WORKER_QUERY_TIMEOUT, WorkerPlayer,
+    Command, DEVICE_OPEN_TIMEOUT, RodioPlayer, SeekablePlayer, WORKER_QUERY_TIMEOUT, WorkerPlayer,
     await_device_ready, clamp_seek, duration_for_source, format_for_source, preview_bitrate_kbps,
     seek_player, seek_target, serve_commands,
 };
@@ -13,6 +14,7 @@ use super::preview::{
     preview_agent_with_timeout,
 };
 use super::*;
+use crate::equalizer::BAND_COUNT;
 use crate::http::{agent_with_timeout, config_with_timeout};
 use crate::test_support::{
     AudioCall, PREVIEW_URL, RecordingAudio, loopback_listener, read_some_request,
@@ -75,6 +77,126 @@ fn silent_output_reports_no_playback_format() {
 
     let output = audio_with_fallback(|| Err(AppleMusicError::new("no device")));
     assert_eq!(output.playback_format(), None);
+}
+
+// The silent fallback has no samples to analyze, so the visualizer keeps every
+// bar at zero rather than inventing a spectrum.
+#[test]
+fn silent_output_reports_no_spectrum() {
+    assert_eq!(SilentOutput.spectrum(), None);
+
+    let output = audio_with_fallback(|| Err(AppleMusicError::new("no device")));
+    assert_eq!(output.spectrum(), None);
+}
+
+/// Builds a full-scale sine at `frequency`, `len` samples long.
+fn sine_samples(frequency: f32, sample_rate: u32, len: usize) -> Vec<f32> {
+    (0..len)
+        .map(|index| (std::f32::consts::TAU * frequency * index as f32 / sample_rate as f32).sin())
+        .collect()
+}
+
+// A 1 kHz tone must win the band centered on 1 kHz, with every other band
+// lower, and silence must read all zeros.
+#[test]
+fn spectrum_bands_peak_at_the_matching_band_for_a_sine() {
+    let bands = spectrum_bands(&sine_samples(1_000.0, 44_100, SPECTRUM_WINDOW), 44_100);
+    let peak = bands[4];
+    assert!(peak > 0.9, "the 1K band must read the tone, got {peak}");
+    for (index, band) in bands.iter().enumerate() {
+        if index != 4 {
+            assert!(
+                *band < peak,
+                "band {index} ({band}) must stay below the 1K band ({peak})"
+            );
+        }
+    }
+
+    assert_eq!(
+        spectrum_bands(&[0.0; SPECTRUM_WINDOW], 44_100),
+        [0.0; BAND_COUNT]
+    );
+}
+
+// A band at or above Nyquist has no representable tone, so it reads zero even
+// while a lower tone the source does carry is still detected.
+#[test]
+fn spectrum_bands_zero_a_band_at_or_above_nyquist() {
+    for sample_rate in [22_050, 32_000] {
+        let bands = spectrum_bands(
+            &sine_samples(1_000.0, sample_rate, SPECTRUM_WINDOW),
+            sample_rate,
+        );
+        assert_eq!(
+            bands[9], 0.0,
+            "the 16K band is at or above Nyquist at {sample_rate} Hz"
+        );
+        assert!(
+            bands[4] > 0.0,
+            "the 1K band must still detect a tone below Nyquist at {sample_rate} Hz"
+        );
+    }
+}
+
+// The meter adapter must not alter the audio: every sample it records is also
+// returned, it delegates its source's format and length, and a seek clears the
+// window so pre-seek audio is not analyzed at the new position.
+#[test]
+fn meter_source_passes_samples_through_and_records_their_spectrum() {
+    let sine = sine_samples(1_000.0, 44_100, SPECTRUM_WINDOW);
+    let buffer = rodio::buffer::SamplesBuffer::new(
+        ChannelCount::new(1).unwrap(),
+        SampleRate::new(44_100).unwrap(),
+        sine.clone(),
+    );
+    let expected_channels = buffer.channels().get();
+    let expected_rate = buffer.sample_rate().get();
+    let expected_duration = buffer.total_duration();
+    let expected_hint = buffer.size_hint();
+    let meter = Arc::new(SpectrumMeter::default());
+    let mut source = MeterSource::new(buffer, Arc::clone(&meter));
+
+    assert_eq!(source.channels().get(), expected_channels);
+    assert_eq!(source.sample_rate().get(), expected_rate);
+    assert_eq!(source.total_duration(), expected_duration);
+    assert_eq!(source.size_hint(), expected_hint);
+
+    let pulled: Vec<f32> = source.by_ref().collect();
+    assert_eq!(pulled, sine, "the meter must return every sample unchanged");
+    assert!(
+        meter.take().bands[4] > 0.9,
+        "the recorded samples must peak at the sine's band"
+    );
+
+    source.try_seek(Duration::ZERO).unwrap();
+    assert_eq!(
+        meter.take().bands,
+        [0.0; BAND_COUNT],
+        "a seek must clear the recorded window"
+    );
+}
+
+// A seek must not reset the partial downmix frame: rodio leaves the next
+// sample on the same channel as before the seek, so the frame spanning the
+// seek stays in phase instead of pairing a right sample with the next left.
+#[test]
+fn meter_source_seek_keeps_the_downmix_phase() {
+    let samples = vec![0.5, 0.25, 0.9, 0.1];
+    let meter = Arc::new(SpectrumMeter::default());
+    let mut source = MeterSource::new(SeekableSource::new(samples), Arc::clone(&meter));
+
+    assert_eq!(source.next(), Some(0.5), "the first sample opens a frame");
+    source.try_seek(Duration::ZERO).unwrap();
+    assert_eq!(
+        source.by_ref().collect::<Vec<_>>(),
+        vec![0.25, 0.9, 0.1],
+        "the seek must leave the next sample on the right channel"
+    );
+    assert_eq!(
+        meter.recorded(),
+        vec![0.375, 0.5],
+        "the partial frame must stay in phase across the seek"
+    );
 }
 
 // The status row's values come from the decoded source itself: a mono and a
@@ -979,6 +1101,26 @@ fn rodio_output_asks_the_worker_for_its_format() {
     worker.join().unwrap();
 }
 
+// A spectrum query crosses to the worker and returns the reply it sends, just
+// like the position, format, and duration queries.
+#[test]
+fn rodio_output_asks_the_worker_for_its_spectrum() {
+    let (commands, receiver) = std::sync::mpsc::channel();
+    let output = RodioOutput {
+        commands: Mutex::new(commands),
+    };
+    let spectrum = test_spectrum();
+    let worker = std::thread::spawn(move || match receiver.recv() {
+        Ok(Command::Spectrum(reply)) => {
+            reply.send(Some(spectrum)).unwrap();
+        }
+        _ => panic!("spectrum did not send Command::Spectrum"),
+    });
+
+    assert_eq!(output.spectrum(), Some(spectrum));
+    worker.join().unwrap();
+}
+
 // A worker that accepts the query but does not answer must not hold the
 // caller past the seam's bound: the query reports `None` instead of waiting
 // for the reply.
@@ -1092,6 +1234,10 @@ fn rodio_output_reports_a_closed_worker_for_every_command() {
     assert!(
         output.playback_format().is_none(),
         "a closed worker cannot answer a format query"
+    );
+    assert!(
+        output.spectrum().is_none(),
+        "a closed worker cannot answer a spectrum query"
     );
 }
 
@@ -1351,6 +1497,14 @@ fn with_a_proxy_set_the_preview_agent_stays_direct() {
     );
 }
 
+/// A distinctive spectrum for the recording player's query tests: one
+/// nonzero band, so a reply can be compared without float rounding.
+fn test_spectrum() -> Spectrum {
+    let mut bands = [0.0; BAND_COUNT];
+    bands[4] = 0.75;
+    Spectrum { bands }
+}
+
 /// A recording [`WorkerPlayer`] for the command-loop tests: it records the
 /// previews appended, the calls made and their order, the pause/resume
 /// calls, and whether it was stopped, and remembers its gain. Its position
@@ -1369,6 +1523,7 @@ struct RecordingPlayer {
     absolute_seeks: Arc<Mutex<Vec<Duration>>>,
     position: Arc<Mutex<Duration>>,
     duration: Arc<Mutex<Option<Duration>>>,
+    spectrum: Arc<Mutex<Option<Spectrum>>>,
     equalizer: Arc<Mutex<EqSnapshot>>,
 }
 
@@ -1386,6 +1541,7 @@ impl Default for RecordingPlayer {
             absolute_seeks: Arc::default(),
             position: Arc::new(Mutex::new(Duration::from_secs(42))),
             duration: Arc::new(Mutex::new(Some(Duration::from_secs(30)))),
+            spectrum: Arc::new(Mutex::new(Some(test_spectrum()))),
             equalizer: Arc::default(),
         }
     }
@@ -1428,6 +1584,10 @@ impl WorkerPlayer for RecordingPlayer {
             channels: 2,
             bitrate_kbps: Some(256),
         })
+    }
+
+    fn spectrum(&self) -> Option<Spectrum> {
+        *self.spectrum.lock().unwrap()
     }
 
     fn set_equalizer(&self, equalizer: EqSnapshot) {
@@ -1893,6 +2053,129 @@ fn playback_format_query_reports_none_when_nothing_is_loaded() {
     let (reply, replies) = mpsc::channel();
 
     sender.send(Command::PlaybackFormat(reply)).unwrap();
+    drop(sender);
+    serve_commands(receiver, create_player, fetch);
+
+    assert_eq!(replies.recv().unwrap(), None);
+}
+
+// The Rodio player's query guard reports its meter only once a preview is
+// loaded, so a player that has not appended one cannot answer with an old
+// window left behind by a previous preview. This drives the real
+// `RodioPlayer::spectrum` against its format cell, not a stand-in for the
+// guard.
+#[test]
+fn loaded_player_reports_its_meter_but_an_unloaded_one_reports_nothing() {
+    let meter = Arc::new(SpectrumMeter::default());
+    meter.set_sample_rate(44_100);
+    for sample in sine_samples(1_000.0, 44_100, SPECTRUM_WINDOW) {
+        meter.push(sample, 1);
+    }
+
+    let player = RodioPlayer::without_device(Arc::clone(&meter)).0;
+    assert_eq!(
+        player.spectrum(),
+        None,
+        "a player that has not appended a preview must not report the window"
+    );
+
+    player.mark_loaded_for_test();
+    let loaded = player
+        .spectrum()
+        .expect("a loaded player must report its meter's spectrum");
+    assert!(
+        loaded.bands[4] > 0.9,
+        "the loaded player must report the recorded sine"
+    );
+}
+
+// The player's append path must feed its meter from the source it actually
+// appends: a hand-filled meter would pass the guard test above even if
+// production stopped wrapping the preview in `MeterSource`.
+#[test]
+fn append_records_the_appended_source_through_the_players_meter() {
+    let meter = Arc::new(SpectrumMeter::default());
+    let (player, mut queue) = RodioPlayer::without_device(Arc::clone(&meter));
+    let sine = sine_samples(1_000.0, 44_100, SPECTRUM_WINDOW);
+    let buffer = rodio::buffer::SamplesBuffer::new(
+        ChannelCount::new(1).unwrap(),
+        SampleRate::new(44_100).unwrap(),
+        sine.clone(),
+    );
+
+    player.append_source(buffer, 0);
+    assert_eq!(
+        player.spectrum(),
+        Some(Spectrum {
+            bands: [0.0; BAND_COUNT]
+        }),
+        "the meter stays empty until the appended source is pulled"
+    );
+
+    // Pull the appended sound through the player's queue, as the output
+    // device would, so the meter records exactly the samples production plays.
+    queue.by_ref().take(sine.len()).for_each(drop);
+
+    let spectrum = player
+        .spectrum()
+        .expect("an appended preview must report a spectrum");
+    assert!(
+        spectrum.bands[4] > 0.9,
+        "the appended sine must reach the player's own meter, got {spectrum:?}"
+    );
+}
+
+// A spectrum query with a player installed must answer from that player, the
+// same way a format query does.
+#[test]
+fn spectrum_query_returns_the_loaded_players_spectrum() {
+    let (sender, receiver) = mpsc::channel();
+    let (_, create_player) = recording_players_without_queue();
+    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+    let (reply, replies) = mpsc::channel();
+
+    sender.send(Command::Play("first".to_string())).unwrap();
+    sender.send(Command::Spectrum(reply)).unwrap();
+    drop(sender);
+    serve_commands(receiver, create_player, fetch);
+
+    assert_eq!(
+        replies.recv().unwrap(),
+        Some(test_spectrum()),
+        "the query must answer with the installed player's spectrum"
+    );
+}
+
+// With no player installed, a spectrum query reports `None` instead of
+// inventing bars for a preview that is not loaded.
+#[test]
+fn spectrum_query_reports_none_when_nothing_is_loaded() {
+    let (sender, receiver) = mpsc::channel();
+    let create_player = || -> RecordingPlayer {
+        panic!("a spectrum query must not create a player");
+    };
+    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+    let (reply, replies) = mpsc::channel();
+
+    sender.send(Command::Spectrum(reply)).unwrap();
+    drop(sender);
+    serve_commands(receiver, create_player, fetch);
+
+    assert_eq!(replies.recv().unwrap(), None);
+}
+
+// Stop drops the loaded player, so a later spectrum query cannot answer with
+// the stopped preview's bars.
+#[test]
+fn stop_removes_the_player_so_a_spectrum_query_reports_none() {
+    let (sender, receiver) = mpsc::channel();
+    let (_, create_player) = recording_players_without_queue();
+    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+    let (reply, replies) = mpsc::channel();
+
+    sender.send(Command::Play("first".to_string())).unwrap();
+    sender.send(Command::Stop).unwrap();
+    sender.send(Command::Spectrum(reply)).unwrap();
     drop(sender);
     serve_commands(receiver, create_player, fetch);
 

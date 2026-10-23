@@ -421,3 +421,39 @@ gzip decoder and so counts compressed bytes.
 
 **History.** Added 2026-10-23 after the wire-byte cap was found to let a small gzip body expand
 past 10 MiB before decoding; the decoded-byte fix keeps the original wire cap alongside it.
+
+## Preview spectrum
+
+**Guarantee.** The backend reports ten normalized amplitude bands in
+`crate::equalizer::BAND_HZ` order only while a preview is loaded, computed from the samples the
+worker actually pulls through `audio::meter::MeterSource`; those samples reach the equalizer,
+balance, and output unchanged. A band at or above Nyquist reads zero, as do silence and an empty
+window. A seek clears the recorded window without resetting the partial downmix frame, so the
+sample rodio leaves on the same channel stays in phase; a player that has not appended a preview
+reports nothing, so Stop and a new selection cannot report the previous preview's spectrum. The
+silent fallback and a closed worker report `None`.
+
+**Enforced by.** `audio::meter::spectrum_bands` (the pure ten-band Goertzel analysis) and
+`audio::meter::SpectrumMeter` (`push` downmixes and fills the fixed ring, `take` copies it and
+analyzes outside the lock, `clear` empties the ring while keeping the partial downmix frame) in
+`src/audio/meter.rs`; `MeterSource` records each sample while returning it unchanged and clears
+the ring on `try_seek` without resetting that frame. `AudioOutput::spectrum`
+in `src/audio.rs` defaults to `None`, and `RodioPlayer::spectrum` in `src/audio/player.rs` answers
+`Some` only once the player holds a preview's format, through the worker's `Command::Spectrum`
+handled beside `Command::PlaybackFormat`; `RodioOutput::spectrum` bounds the query like the other
+backend queries.
+
+**Pinned by.**
+
+- `spectrum_bands_peak_at_the_matching_band_for_a_sine` (`src/audio/tests.rs`)
+- `spectrum_bands_zero_a_band_at_or_above_nyquist` (`src/audio/tests.rs`)
+- `meter_source_passes_samples_through_and_records_their_spectrum` (`src/audio/tests.rs`)
+- `meter_source_seek_keeps_the_downmix_phase` (`src/audio/tests.rs`)
+- `spectrum_query_returns_the_loaded_players_spectrum` (`src/audio/tests.rs`)
+- `spectrum_query_reports_none_when_nothing_is_loaded` (`src/audio/tests.rs`)
+- `loaded_player_reports_its_meter_but_an_unloaded_one_reports_nothing` (`src/audio/tests.rs`)
+- `append_records_the_appended_source_through_the_players_meter` (`src/audio/tests.rs`)
+- `stop_removes_the_player_so_a_spectrum_query_reports_none` (`src/audio/tests.rs`)
+- `silent_output_reports_no_spectrum` (`src/audio/tests.rs`)
+- `rodio_output_asks_the_worker_for_its_spectrum` (`src/audio/tests.rs`)
+- `rodio_output_reports_a_closed_worker_for_every_command` (`src/audio/tests.rs`)

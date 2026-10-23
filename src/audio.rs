@@ -31,10 +31,12 @@ use crate::music_error::AppleMusicError;
 
 mod balance;
 mod equalizer;
+mod meter;
 mod player;
 mod preview;
 
 pub use equalizer::EqSnapshot;
+pub use meter::Spectrum;
 pub use player::RodioOutput;
 
 /// The format of the loaded preview's audio, as the backend's own source
@@ -189,6 +191,19 @@ pub trait AudioOutput: Send + Sync {
     /// keeps every existing implementor compiling without a format of its
     /// own.
     fn playback_format(&self) -> Option<PlaybackFormat> {
+        None
+    }
+
+    /// Reports the loaded preview's live ten-band spectrum.
+    ///
+    /// Returns `Some` while a player is loaded, with one normalized amplitude
+    /// per [`crate::equalizer::BAND_HZ`] band computed from the samples the
+    /// worker pulled most recently, and `None` when no player is loaded
+    /// (including after a Stop) or the backend cannot answer (the silent
+    /// fallback, a test fake without a spectrum, or a query that waits past
+    /// the backend's bound). The default keeps every existing implementor
+    /// compiling without a spectrum of its own.
+    fn spectrum(&self) -> Option<Spectrum> {
         None
     }
 
