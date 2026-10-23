@@ -7,6 +7,7 @@ use crate::audio::{PlaybackFormat, Spectrum};
 use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB};
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::sample_library::sample_library;
+use crate::state::TransportMode;
 use crate::test_support::{
     AudioCall, FailingAudio, FailingCommand, PREVIEW_URL, RecordingAudio, StubTransport,
     assert_ids, assert_preview_calls, recording_spectrum, rock_preset, sample_album, sample_artist,
@@ -4900,6 +4901,55 @@ fn position_tick_queries_position_and_duration() {
                 if *reply_epoch == epoch && *duration == Duration::from_secs(30)
         )),
         "the tick must query the duration: {replies:?}"
+    );
+}
+
+// The paused elapsed readout blinks on the existing position poll: each tick
+// flips the phase while the transport is paused, and a tick after Play or Stop
+// restores it, so playing and stopped always show the readout. A loaded
+// preview is the paused state Play can resume.
+#[test]
+fn position_tick_blinks_the_elapsed_readout_only_while_paused() {
+    let (mut player, state) = player_with_audio(Arc::new(RecordingAudio::default()));
+    futures::executor::block_on(player.apple_music_service.play_track(
+        "song-1",
+        Some(PREVIEW_URL),
+        || true,
+    ))
+    .unwrap();
+    state.blocking_lock().pause();
+    assert_eq!(
+        state.blocking_lock().transport_mode(),
+        TransportMode::Paused
+    );
+    assert!(player.blink_visible);
+
+    let _ = update(&mut player, Message::PositionTick);
+    assert!(
+        !player.blink_visible,
+        "the first paused tick hides the readout"
+    );
+    let _ = update(&mut player, Message::PositionTick);
+    assert!(
+        player.blink_visible,
+        "the second paused tick shows it again"
+    );
+
+    state.blocking_lock().play();
+    let _ = update(&mut player, Message::PositionTick);
+    assert!(
+        player.blink_visible,
+        "a playing tick always shows the readout"
+    );
+
+    state.blocking_lock().pause();
+    let _ = update(&mut player, Message::PositionTick);
+    assert!(!player.blink_visible, "a paused tick resumes the blink");
+    state.blocking_lock().stop();
+    let _ = update(&mut player, Message::PositionTick);
+    assert!(
+        player.blink_visible,
+        "a stopped tick always shows the readout"
     );
 }
 

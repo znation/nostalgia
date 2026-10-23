@@ -236,10 +236,19 @@ its internal id, whenever the id is in the known-track index:
   Paused readout always has a preview Play can resume. `AppState::is_playing` alone no longer
   distinguishes Pause from Stop. `state::TransportMode` and `AppState::transport_mode` resolve the mode,
   `views::now_playing::transport_glyph` and `transport_glyph_color` choose the glyph and color,
-  and `views::now_playing::now_playing_row` draws the slot. Pinned by
+  and `views::now_playing::now_playing_row` draws the slot. While the mode is `Paused`, the large
+  elapsed readout blinks at the frozen position: `handlers::playback::position_tick` flips
+  `WinampPlayer::blink_visible` on each one-second position poll, and
+  `views::now_playing::elapsed_readout_color` draws the text transparent when the phase is hidden
+  instead of removing it, so the text keeps its bounds and the title, total, and status row do not
+  move. A poll after Play or Stop holds the phase visible, so playing and stopped always show the
+  readout; the blink adds no timer or subscription. Pinned by
   `transport_glyph_names_and_colors_each_mode`,
-  `now_playing_row_keeps_the_elapsed_readout_in_place_across_transport_modes`, and
-  `now_playing_content_draws_the_indicator_strip_beside_the_title` in `src/ui/views/tests.rs`;
+  `now_playing_row_keeps_the_elapsed_readout_in_place_across_transport_modes`,
+  `now_playing_content_draws_the_indicator_strip_beside_the_title`,
+  `elapsed_readout_color_blinks_only_while_paused`, and
+  `now_playing_row_keeps_the_elapsed_bounds_when_the_blink_hides_it` in `src/ui/views/tests.rs`;
+  `position_tick_blinks_the_elapsed_readout_only_while_paused` in `src/ui/tests.rs`; and
   `toggle_playing_switches_between_playing_and_paused` and
   `pause_sets_the_paused_mode_while_play_and_stop_clear_it` in `src/state.rs`; and
   `pause_stops_playing_but_keeps_current_track`,

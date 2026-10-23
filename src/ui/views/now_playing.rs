@@ -353,6 +353,7 @@ pub fn view_now_playing<'a>(
     format: Option<PlaybackFormat>,
     spectrum: Option<Spectrum>,
     mode: TransportMode,
+    elapsed_visible: bool,
 ) -> Element<'a, Message> {
     bevel::lcd_well(now_playing_content(
         elapsed,
@@ -363,6 +364,7 @@ pub fn view_now_playing<'a>(
         format,
         spectrum,
         mode,
+        elapsed_visible,
     ))
 }
 
@@ -383,6 +385,7 @@ pub(super) fn now_playing_content<'a, Theme, Renderer>(
     format: Option<PlaybackFormat>,
     spectrum: Option<Spectrum>,
     mode: TransportMode,
+    elapsed_visible: bool,
 ) -> Row<'a, Message, Theme, Renderer>
 where
     Theme: iced::widget::text::Catalog + iced::widget::container::Catalog + 'a,
@@ -401,6 +404,7 @@ where
                 time,
                 marquee_offset,
                 mode,
+                elapsed_visible,
             ))
             .push(now_playing_visualizer_row(spectrum))
             .push(now_playing_status_row(format)),
@@ -562,6 +566,18 @@ pub(super) fn transport_glyph_color(mode: TransportMode) -> Color {
     }
 }
 
+/// The large elapsed readout's color: fully transparent while the paused
+/// readout's blink phase is hidden, and [`theme::LCD_GREEN`] in every other
+/// mode or phase. Drawing it transparent rather than removing it keeps the
+/// text's bounds, so a blink does not move the title or total. Pure so the
+/// exact colors are testable without a renderer.
+pub(super) fn elapsed_readout_color(mode: TransportMode, visible: bool) -> Color {
+    match (mode, visible) {
+        (TransportMode::Paused, false) => Color::from_rgba(0.0, 0.0, 0.0, 0.0),
+        _ => theme::LCD_GREEN,
+    }
+}
+
 /// Builds the LCD row before the bevel wraps it, generic over the theme and
 /// renderer so the tests can lay it out with iced's null renderer and read
 /// back the text it would draw. The transport glyph leads the row in a fixed
@@ -574,6 +590,7 @@ pub(super) fn now_playing_row<'a, Theme, Renderer>(
     time: Cow<'a, str>,
     marquee_offset: usize,
     mode: TransportMode,
+    elapsed_visible: bool,
 ) -> Row<'a, Message, Theme, Renderer>
 where
     Theme: iced::widget::text::Catalog + iced::widget::container::Catalog + 'a,
@@ -593,9 +610,11 @@ where
             .width(Length::Fixed(LCD_TRANSPORT_WIDTH)),
         )
         .push(
-            MouseArea::new(lcd_elapsed_text(elapsed))
-                .on_press(Message::ToggleTimeDisplay)
-                .interaction(Interaction::Pointer),
+            MouseArea::new(
+                lcd_elapsed_text(elapsed).color(elapsed_readout_color(mode, elapsed_visible)),
+            )
+            .on_press(Message::ToggleTimeDisplay)
+            .interaction(Interaction::Pointer),
         )
         .push(Space::new().width(Length::Fixed(12.0)))
         .push(Text::new("Now Playing: ").size(20));

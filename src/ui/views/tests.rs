@@ -9,11 +9,11 @@ use super::equalizer::{
     response_curve_offsets, response_curve_row,
 };
 use super::now_playing::{
-    KnownTrack, MARQUEE_WIDTH, TimeDisplay, display_len, format_lcd_elapsed, format_lcd_remaining,
-    format_playback_status, lcd_indicator_strip, marquee_text, needs_marquee, now_playing_artist,
-    now_playing_content, now_playing_elapsed, now_playing_label, now_playing_row,
-    now_playing_status_row, now_playing_time, now_playing_visualizer_row, transport_glyph,
-    transport_glyph_color, visualizer_bar_heights,
+    KnownTrack, MARQUEE_WIDTH, TimeDisplay, display_len, elapsed_readout_color, format_lcd_elapsed,
+    format_lcd_remaining, format_playback_status, lcd_indicator_strip, marquee_text, needs_marquee,
+    now_playing_artist, now_playing_content, now_playing_elapsed, now_playing_label,
+    now_playing_row, now_playing_status_row, now_playing_time, now_playing_visualizer_row,
+    transport_glyph, transport_glyph_color, visualizer_bar_heights,
 };
 use super::shade::{
     SHADE_STRIP_HEIGHT, SHADE_VOLUME_ID, SHADE_VOLUME_WIDTH, SHADED_HEIGHT, play_pause_glyph,
@@ -42,7 +42,7 @@ use iced::advanced::{
     layout::Limits,
     widget::{Id, Tree, operation::Operation},
 };
-use iced::{Length, Rectangle, Size};
+use iced::{Color, Length, Rectangle, Size};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -539,6 +539,7 @@ fn captured_now_playing_texts(
         Cow::Borrowed("3:30"),
         offset,
         mode,
+        true,
     )
     .into();
     let capture = layout_capture::capture_text(&mut element, &());
@@ -601,6 +602,7 @@ fn now_playing_content_draws_the_indicator_strip_beside_the_title() {
         None,
         None,
         TransportMode::Playing,
+        true,
     )
     .into();
     let capture = layout_capture::capture_text(&mut element, &());
@@ -659,6 +661,69 @@ fn transport_glyph_names_and_colors_each_mode() {
     );
 }
 
+// Only the paused readout's hidden phase is transparent: a paused visible
+// phase, and playing and stopped in either phase, stay green. Pin the exact
+// transparent color so a refactor cannot blank the readout by hiding the
+// whole row.
+#[test]
+fn elapsed_readout_color_blinks_only_while_paused() {
+    let transparent = Color::from_rgba(0.0, 0.0, 0.0, 0.0);
+
+    assert_eq!(
+        elapsed_readout_color(TransportMode::Paused, false),
+        transparent
+    );
+    assert_eq!(
+        elapsed_readout_color(TransportMode::Paused, true),
+        theme::LCD_GREEN
+    );
+    assert_eq!(
+        elapsed_readout_color(TransportMode::Playing, false),
+        theme::LCD_GREEN
+    );
+    assert_eq!(
+        elapsed_readout_color(TransportMode::Playing, true),
+        theme::LCD_GREEN
+    );
+    assert_eq!(
+        elapsed_readout_color(TransportMode::Stopped, false),
+        theme::LCD_GREEN
+    );
+    assert_eq!(
+        elapsed_readout_color(TransportMode::Stopped, true),
+        theme::LCD_GREEN
+    );
+}
+
+// The hidden blink phase draws the elapsed text transparent instead of
+// removing it, so the text keeps the same bounds and the title, total, and
+// status row stay in place.
+#[test]
+fn now_playing_row_keeps_the_elapsed_bounds_when_the_blink_hides_it() {
+    let capture = |visible: bool| {
+        let mut element: iced::Element<'_, Message, iced::Theme, ()> = now_playing_row(
+            Cow::Borrowed("00:53"),
+            Cow::Borrowed("Opening"),
+            Cow::Borrowed("Band"),
+            Cow::Borrowed("3:30"),
+            0,
+            TransportMode::Paused,
+            visible,
+        )
+        .into();
+        layout_capture::capture_text(&mut element, &())
+    };
+
+    let visible = capture(true);
+    let hidden = capture(false);
+
+    assert_eq!(visible.find("00:53"), hidden.find("00:53"));
+    assert_eq!(
+        visible.texts().collect::<Vec<_>>(),
+        hidden.texts().collect::<Vec<_>>()
+    );
+}
+
 // The glyph sits in a fixed-width slot, so switching from `▶` to `II` or `■`
 // must not move the large elapsed readout (or, through it, the title line).
 #[test]
@@ -676,6 +741,7 @@ fn now_playing_row_keeps_the_elapsed_readout_in_place_across_transport_modes() {
             Cow::Borrowed("3:30"),
             0,
             mode,
+            true,
         )
         .into();
         let capture = layout_capture::capture_text(&mut element, &());
@@ -894,6 +960,7 @@ fn captured_content_with_spectrum(
         }),
         spectrum,
         TransportMode::Playing,
+        true,
     )
     .into();
     let capture = layout_capture::capture_text(&mut element, &());
@@ -1453,6 +1520,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         None,
         None,
         TransportMode::Stopped,
+        true,
     );
     let _bar = view_now_playing(
         "00:53".into(),
@@ -1469,6 +1537,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
             bands: [0.5; BAND_COUNT],
         }),
         TransportMode::Paused,
+        true,
     );
     let _overlong = view_now_playing(
         "03:12".into(),
@@ -1479,6 +1548,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         None,
         None,
         TransportMode::Playing,
+        true,
     );
     let _back = view_back_button();
     let _retry = view_retry_button();

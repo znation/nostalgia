@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use iced::Task;
 
-use crate::state::AppState;
+use crate::state::{AppState, TransportMode};
 use crate::ui::loading::{
     PLAY_TIMEOUT, RequestGeneration, play_failure_report, play_into, transport_into,
 };
@@ -266,16 +266,24 @@ pub(in crate::ui) fn transport_settled(player: &mut WinampPlayer) -> Task<Messag
 }
 
 /// The position poll's tick: schedule a query of the loaded preview's
-/// position, of its sample rate and channel mode, and of its own length. All
-/// three queries run in tasks, so the UI thread never blocks on the audio
-/// backend, and each reply carries the epoch the query was issued under, so a
-/// transition that lands first invalidates it. While a transport transition is
-/// still reaching the backend, none is issued: the backend would still report
-/// the previous preview, and the epoch no longer identifies it.
+/// position, of its sample rate and channel mode, and of its own length. It
+/// also advances the paused readout's blink phase, reusing this one-second
+/// poll rather than adding a timer. All three queries run in tasks, so the UI
+/// thread never blocks on the audio backend, and each reply carries the epoch
+/// the query was issued under, so a transition that lands first invalidates
+/// it. While a transport transition is still reaching the backend, none is
+/// issued: the backend would still report the previous preview, and the epoch
+/// no longer identifies it.
 pub(in crate::ui) fn position_tick(player: &mut WinampPlayer) -> Task<Message> {
     if player.pending_position_transitions > 0 {
         return Task::none();
     }
+    let mode = player.state.blocking_lock().transport_mode();
+    player.blink_visible = if mode == TransportMode::Paused {
+        !player.blink_visible
+    } else {
+        true
+    };
     let epoch = player.position_epoch;
     let position_service = player.apple_music_service.clone();
     let position = Task::perform(

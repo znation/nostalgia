@@ -5,6 +5,30 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
+### Show the transport state on the Now Playing LCD (Transport glyph, part 2/2: planned 2026-10-23 by the plan role, requires part 1/2 landed) — done 2026-10-23 by the feature role
+
+**Goal.** Finish the paused state from `docs/screenshots/transport.png`: while the player is paused, the large elapsed readout blinks instead of sitting steady, while the position it shows stays frozen. Reuse the existing one-second position poll for the blink phase rather than adding a timer, and hide the readout by drawing it transparent rather than blanking it, so the row keeps its bounds and the title does not reflow.
+
+**Approach.**
+
+- `src/ui/player.rs`: add `pub(in crate::ui) blink_visible: bool` to `WinampPlayer`, initialized `true`, documented as the paused readout's blink phase: `position_tick` toggles it while paused and holds it true whenever the transport is not paused. The view uses it only in the paused mode.
+- `src/ui/handlers/playback.rs`: in `position_tick`, after the `pending_position_transitions` early return and before scheduling the queries, read `player.state.blocking_lock().transport_mode()` into a local and set `player.blink_visible = if mode == TransportMode::Paused { !player.blink_visible } else { true };` so the paused readout alternates once per position tick and a resumed or stopped player is always visible.
+- `src/ui/views/now_playing.rs`: add `pub(super) fn elapsed_readout_color(mode: TransportMode, visible: bool) -> Color`, returning `Color::from_rgba(0.0, 0.0, 0.0, 0.0)` for `Paused` with `visible == false` and `theme::LCD_GREEN` otherwise. Add a trailing `elapsed_visible: bool` parameter to `now_playing_row`, `now_playing_content`, and `view_now_playing`; build the elapsed text with `lcd_elapsed_text(elapsed).color(elapsed_readout_color(mode, elapsed_visible))` so the text still lays out at the same width while transparent.
+- `src/ui/view.rs`: pass `player.blink_visible` into `views::view_now_playing`.
+- `src/ui/tests.rs`: add `position_tick_blinks_the_elapsed_readout_only_while_paused`, building a player with a loaded preview, setting `paused` through the state, and driving `position_tick`: the first tick hides the readout, the second shows it again, and a tick after `play` (or `stop`) leaves it visible.
+- `src/ui/views/tests.rs`: add `elapsed_readout_color_blinks_only_while_paused` (`Paused`/hidden is transparent; `Paused`/visible, `Playing`, and `Stopped` in either phase are `LCD_GREEN`) and `now_playing_row_keeps_the_elapsed_bounds_when_the_blink_hides_it` (the paused visible and hidden captures draw the same elapsed string with the same bounds). Update the existing row/content/view calls for the new argument.
+- `README.md`: extend the transport-glyph sentence with the paused blink. `docs/invariants.md`: extend the `## Now Playing label` glyph bullet with the blink guarantee and name `position_tick`'s phase flag and `elapsed_readout_color` as the enforcers and the new tests as the pins.
+
+**Files touched.** `src/ui/player.rs`, `src/ui/handlers/playback.rs`, `src/ui/views/now_playing.rs`, `src/ui/views/tests.rs`, `src/ui/tests.rs`, `src/ui/view.rs`, `README.md`, `docs/invariants.md`.
+
+**Acceptance criteria.**
+
+- While `transport_mode()` is `Paused`, each `position_tick` flips `blink_visible`; while it is `Playing` or `Stopped`, a tick sets `blink_visible` to true, so playing and stopped always show the elapsed readout.
+- `elapsed_readout_color(TransportMode::Paused, false)` is fully transparent, and every other mode/phase returns `theme::LCD_GREEN`.
+- The elapsed readout keeps the same text and bounds in the paused visible and hidden states, so blinking does not move the title, total, or status row.
+- The position poll keeps running while paused as it does today, and the blink adds no new subscription or timer.
+- `README.md` and `docs/invariants.md` describe the paused blink, and `make check` passes.
+
 ### Show the transport state on the Now Playing LCD (Transport glyph, part 1/2: planned 2026-10-23 by the plan role) — done 2026-10-23 by the feature role
 
 **Goal.** Match `docs/screenshots/transport.png`'s three LCD states: a green `▶` beside the elapsed readout while playing, a green `II` while paused, and a red `■` while stopped. The app draws no such glyph today, and `AppState` cannot tell Pause from Stop — both leave `is_playing == false` — so the view has no way to choose between `II` and `■`. Add that distinction to shared state and draw the glyph in a fixed-width slot before the elapsed readout. The paused blink is deliberately left to part 2/2.

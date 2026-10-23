@@ -113,6 +113,12 @@ pub(in crate::ui) struct WinampPlayer {
     /// keeps the catalog track's total. Stop and a new selection clear it
     /// through `reset_position_readout`.
     pub(in crate::ui) playback_duration: Option<Duration>,
+    /// The paused elapsed readout's blink phase. `position_tick` toggles it on
+    /// each poll while the transport is paused and holds it true whenever the
+    /// transport is not paused, so playing and stopped always show the
+    /// readout. The view reads it only in the paused mode and draws the text
+    /// transparent when it is false, keeping the row's bounds.
+    pub(in crate::ui) blink_visible: bool,
     /// The loaded preview's last reported live spectrum, or `None` when no
     /// preview is loaded or the backend cannot answer. `Message::Spectrum`
     /// stores it; the LCD's visualizer row reads it, and a missing value draws
@@ -211,6 +217,7 @@ impl WinampPlayer {
             playback_position: None,
             playback_format: None,
             playback_duration: None,
+            blink_visible: true,
             spectrum: None,
             seek_preview: None,
             time_display: views::TimeDisplay::Elapsed,
