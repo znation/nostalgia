@@ -190,6 +190,8 @@ enum RejectedCommand {
     Resume,
     Stop,
     SetVolume,
+    SetBalance,
+    SetEqualizer,
     /// Every `play` after the first, so a test can load the first preview and
     /// then refuse the restart a Play-after-Stop issues.
     PlayAfterFirst,
@@ -276,7 +278,7 @@ impl AudioOutput for RejectingAudio {
             .lock()
             .unwrap()
             .push(AudioCall::SetBalance(balance));
-        Ok(())
+        self.check(RejectedCommand::SetBalance)
     }
 
     fn seek_by(&self, offset_secs: i64) -> Result<(), AppleMusicError> {
@@ -292,7 +294,7 @@ impl AudioOutput for RejectingAudio {
             .lock()
             .unwrap()
             .push(AudioCall::SetEqualizer(equalizer));
-        Ok(())
+        self.check(RejectedCommand::SetEqualizer)
     }
 }
 
@@ -1222,6 +1224,70 @@ async fn play_track_does_not_start_the_preview_when_the_volume_cannot_be_set() {
     assert_eq!(error.to_string(), "the audio device is gone");
     assert_playback_state(&state, Some("song-1"), false).await;
     assert_eq!(audio.calls(), vec![AudioCall::SetVolume(0.5)]);
+}
+
+// `play_track` starts the preview as `set_volume -> set_balance ->
+// set_equalizer -> play`, so the first play uses the sliders' values and the
+// panel's curve rather than the backend's defaults. A backend that cannot set
+// the balance must stop the chain there: starting the preview anyway would
+// sound it at the wrong stereo image while reporting failure. The recorded
+// calls pin the order and that nothing past the rejected balance ran; the
+// shared-state rollback is the same one the volume and play failures pin. The
+// failed start is not remembered either, so a later Play has nothing to
+// resume and cannot claim playback the backend never produced.
+#[tokio::test]
+async fn play_track_does_not_start_the_preview_when_the_balance_cannot_be_set() {
+    let audio = Arc::new(RejectingAudio::new(RejectedCommand::SetBalance));
+    let (service, state) = service_with_audio(Arc::clone(&audio) as Arc<dyn AudioOutput>);
+
+    let error = service
+        .play_track("song-1", Some(PREVIEW_URL), || true)
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.to_string(), "the audio device is gone");
+    assert_eq!(
+        audio.calls(),
+        vec![AudioCall::SetVolume(0.5), AudioCall::SetBalance(0.0)],
+        "the start chain must stop at the rejected balance"
+    );
+    assert_playback_state(&state, Some("song-1"), false).await;
+
+    service.resume().await.unwrap();
+    assert_playback_state(&state, Some("song-1"), false).await;
+    assert_eq!(
+        audio.calls(),
+        vec![AudioCall::SetVolume(0.5), AudioCall::SetBalance(0.0)],
+        "a failed start must not be resumed later"
+    );
+}
+
+// The equalizer is the last value forwarded before `play`, so a backend that
+// cannot apply the curve must not start the preview at a stale or default
+// curve. Pin the exact prefix (volume and balance already applied, equalizer
+// refused) and that `play` was never reached, plus the rollback the previous
+// failure tests share.
+#[tokio::test]
+async fn play_track_does_not_start_the_preview_when_the_equalizer_cannot_be_set() {
+    let audio = Arc::new(RejectingAudio::new(RejectedCommand::SetEqualizer));
+    let (service, state) = service_with_audio(Arc::clone(&audio) as Arc<dyn AudioOutput>);
+
+    let error = service
+        .play_track("song-1", Some(PREVIEW_URL), || true)
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.to_string(), "the audio device is gone");
+    assert_eq!(
+        audio.calls(),
+        vec![
+            AudioCall::SetVolume(0.5),
+            AudioCall::SetBalance(0.0),
+            AudioCall::SetEqualizer(EqSnapshot::default()),
+        ],
+        "the start chain must stop at the rejected equalizer"
+    );
+    assert_playback_state(&state, Some("song-1"), false).await;
 }
 
 // `pause` pauses the injected backend as well as clearing the shared playing
