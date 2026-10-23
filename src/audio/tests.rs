@@ -1457,6 +1457,28 @@ fn recording_players(
     (players, create_player)
 }
 
+/// Builds the recording player factory for tests that queue no command from
+/// inside the factory: every call records the fresh [`RecordingPlayer`] it
+/// returns in creation order, so a test can assert what happened to it.
+/// Returns the shared recording list alongside the factory to pass to
+/// [`serve_commands`].
+///
+/// Unlike [`recording_players`], the factory holds no sender clone, so the
+/// test can drop its own sender and let the worker loop end.
+fn recording_players_without_queue() -> (
+    Arc<Mutex<Vec<RecordingPlayer>>>,
+    impl Fn() -> RecordingPlayer + use<>,
+) {
+    let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
+    let recorded = Arc::clone(&players);
+    let create_player = move || {
+        let player = RecordingPlayer::default();
+        recorded.lock().unwrap().push(player.clone());
+        player
+    };
+    (players, create_player)
+}
+
 /// Runs one [`serve_commands`] loop whose first preview download (for
 /// `"first"`) queues `supersede` from inside the fetch, so the command
 /// lands while that download is still in flight. Returns the players the
@@ -1468,15 +1490,8 @@ fn recording_players(
 /// (a newer Play or a Stop) and their assertions differ.
 fn run_with_superseding_command(supersede: Command) -> (Vec<RecordingPlayer>, Vec<String>) {
     let (sender, receiver) = mpsc::channel();
-    let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
     let fetched: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
-
-    let recorded = Arc::clone(&players);
-    let create_player = move || {
-        let player = RecordingPlayer::default();
-        recorded.lock().unwrap().push(player.clone());
-        player
-    };
+    let (players, create_player) = recording_players_without_queue();
     let queued = Arc::new(Mutex::new(Some((sender.clone(), supersede))));
     let seen = Arc::clone(&fetched);
     let fetch = move |url: &str| -> Result<(), AppleMusicError> {
@@ -1651,13 +1666,7 @@ fn a_seek_while_stopped_reaches_no_player() {
 #[test]
 fn position_query_returns_the_loaded_players_position() {
     let (sender, receiver) = mpsc::channel();
-    let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
-    let recorded = Arc::clone(&players);
-    let create_player = move || {
-        let player = RecordingPlayer::default();
-        recorded.lock().unwrap().push(player.clone());
-        player
-    };
+    let (players, create_player) = recording_players_without_queue();
     let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
     let (reply, replies) = mpsc::channel();
 
@@ -1684,13 +1693,7 @@ fn position_query_returns_the_loaded_players_position() {
 #[test]
 fn a_seek_is_reflected_by_the_next_position_query() {
     let (sender, receiver) = mpsc::channel();
-    let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
-    let recorded = Arc::clone(&players);
-    let create_player = move || {
-        let player = RecordingPlayer::default();
-        recorded.lock().unwrap().push(player.clone());
-        player
-    };
+    let (players, create_player) = recording_players_without_queue();
     let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
     let (reply, replies) = mpsc::channel();
 
@@ -1714,13 +1717,7 @@ fn a_seek_is_reflected_by_the_next_position_query() {
 #[test]
 fn seek_to_command_reaches_the_loaded_player() {
     let (sender, receiver) = mpsc::channel();
-    let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
-    let recorded = Arc::clone(&players);
-    let create_player = move || {
-        let player = RecordingPlayer::default();
-        recorded.lock().unwrap().push(player.clone());
-        player
-    };
+    let (players, create_player) = recording_players_without_queue();
     let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
     let (reply, replies) = mpsc::channel();
 
@@ -1748,13 +1745,7 @@ fn seek_to_command_reaches_the_loaded_player() {
 #[test]
 fn duration_query_returns_the_loaded_players_duration() {
     let (sender, receiver) = mpsc::channel();
-    let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
-    let recorded = Arc::clone(&players);
-    let create_player = move || {
-        let player = RecordingPlayer::default();
-        recorded.lock().unwrap().push(player.clone());
-        player
-    };
+    let (_, create_player) = recording_players_without_queue();
     let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
     let (reply, replies) = mpsc::channel();
 
@@ -1794,13 +1785,7 @@ fn duration_query_reports_none_when_nothing_is_loaded() {
 #[test]
 fn a_pause_keeps_the_loaded_player_reporting_its_position() {
     let (sender, receiver) = mpsc::channel();
-    let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
-    let recorded = Arc::clone(&players);
-    let create_player = move || {
-        let player = RecordingPlayer::default();
-        recorded.lock().unwrap().push(player.clone());
-        player
-    };
+    let (players, create_player) = recording_players_without_queue();
     let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
     let (reply, replies) = mpsc::channel();
 
@@ -1846,13 +1831,7 @@ fn position_query_reports_none_when_nothing_is_loaded() {
 #[test]
 fn playback_format_query_returns_the_loaded_players_format() {
     let (sender, receiver) = mpsc::channel();
-    let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
-    let recorded = Arc::clone(&players);
-    let create_player = move || {
-        let player = RecordingPlayer::default();
-        recorded.lock().unwrap().push(player.clone());
-        player
-    };
+    let (_, create_player) = recording_players_without_queue();
     let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
     let (reply, replies) = mpsc::channel();
 
@@ -2036,15 +2015,8 @@ fn a_preview_superseded_during_its_download_is_not_installed() {
 #[test]
 fn commands_queued_during_a_download_apply_to_the_new_player() {
     let (sender, receiver) = mpsc::channel();
-    let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
     let fetched: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
-
-    let recorded = Arc::clone(&players);
-    let create_player = move || {
-        let player = RecordingPlayer::default();
-        recorded.lock().unwrap().push(player.clone());
-        player
-    };
+    let (players, create_player) = recording_players_without_queue();
     // The commands are sent from inside the fetch, while the preview is
     // still downloading, so they are waiting in the channel when the loop
     // drains it. The sender clone is taken (and so dropped) with the
