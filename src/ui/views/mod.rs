@@ -9,7 +9,7 @@
 //!
 //! Each panel lives in its own submodule — `browse` (the artist → album →
 //! song drill-down, the flat lists, and Playlists, with their rows),
-//! `title_bar`, `now_playing`, `transport`, and
+//! `title_bar`, `now_playing`, `seek_bar`, `transport`, and
 //! `equalizer` — while the chrome helpers and slider specs the panels share
 //! ([`spacer`], [`labeled_button`], [`fixed_width_button`], and
 //! [`chrome_slider`]) live here.

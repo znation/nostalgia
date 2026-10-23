@@ -1,14 +1,14 @@
 //! The iced application: the `WinampPlayer` app struct, its `Message` event
 //! type, and the `update`/`view` loop `init_ui` hands to iced. Widget
-//! construction lives in the `views` submodule (browse lists, Now Playing bar,
-//! transport controls, equalizer panel), the Previous/Next stepping arithmetic
-//! in `transport`, the library-fetch/error-reporting adapter in `loading`, the
-//! per-level browse state machine in `browse`, the classic key bindings in
-//! `shortcuts`, and the marquee, position-poll and spectrum-poll timer
-//! subscriptions in `timers`; `update` is a dispatch table over the
-//! per-concern message handlers in `handlers`, and this module wires those
-//! to the shared `AppState` and the `AppleMusicService` seam. Its unit tests
-//! live in the `tests` submodule.
+//! construction lives in the `views` submodule (browse lists, the title bar,
+//! Now Playing bar, seek strip, transport controls, and equalizer panel), the
+//! Previous/Next stepping arithmetic in `transport`, the library-fetch and
+//! error-reporting adapter in `loading`, the per-level browse state machine in
+//! `browse`, the classic key bindings in `shortcuts`, and the marquee,
+//! position-poll and spectrum-poll timer subscriptions in `timers`; `update`
+//! is a dispatch table over the per-concern message handlers in `handlers`,
+//! and this module wires those to the shared `AppState` and the
+//! `AppleMusicService` seam. Its unit tests live in the `tests` submodule.
 
 use iced::{Element, Task, widget::Column};
 use std::{
@@ -687,16 +687,16 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
     }
 }
 
-/// Assembles the app screen: the Now Playing bar, transport row, and
-/// equalizer panel — all built in `views` from the resolved title and the
-/// shared playback, volume, Repeat, Shuffle, and EQ state — above the current
-/// browse list. When the window is shaded, only [`views::view_title_bar`] is built
-/// and the rest of the screen is dropped.
+/// Assembles the app screen: the title bar, Now Playing bar, seek strip,
+/// transport row, and equalizer panel — all built in `views` from the resolved
+/// title and the shared playback, volume, Repeat, Shuffle, and EQ state — above
+/// the current browse list. When the window is shaded, only
+/// [`views::view_title_bar`] is built and the rest of the screen is dropped.
 fn view(player: &WinampPlayer) -> Element<'_, Message> {
-    // Shade mode builds only the title bar — the Now Playing bar, transport
-    // row, equalizer, and browse list are all dropped, and the window itself
-    // is resized down to this strip. Returning before the state lock keeps
-    // the rolled-up frame cheap and free of a lock the content needs.
+    // Shade mode builds only the title bar — the Now Playing bar, seek strip,
+    // transport row, equalizer, and browse list are all dropped, and the window
+    // itself is resized down to this strip. Returning before the state lock
+    // keeps the rolled-up frame cheap and free of a lock the content needs.
     if player.shaded {
         return views::view_title_bar(player.always_on_top);
     }
