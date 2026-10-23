@@ -167,9 +167,11 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
         .push(views::view_transport_controls(
             is_playing, volume, balance, repeat, shuffle,
         ))
+        .push(views::view_title_band("NOSTALGIA EQUALIZER"))
         .push(views::view_equalizer(
             eq_enabled, eq_preamp, &eq_bands, eq_preset,
-        ));
+        ))
+        .push(views::view_title_band("NOSTALGIA LIBRARY"));
     // The Back button sits above the list it navigates and exists only where
     // the hierarchy has a level above to return to (see `views::can_go_back`).
     if views::can_go_back(&player.current_view) {

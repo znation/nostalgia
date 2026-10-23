@@ -81,7 +81,9 @@ artist rows show their album count at the right (`2 albums`, `1 album`, and no c
 artist with none), with each song list showing its song count and total playing time beneath
 the rows and artist, album, and playlist lists showing their item count beneath theirs. Each
 equalizer band slider's groove is tinted by that band's own gain, from green at `-12 dB` through
-yellow at `0 dB` to red at `+12 dB`.
+yellow at `0 dB` to red at `+12 dB`. The app bar sets `NOSTALGIA` between gold tape strips, and
+the equalizer and browse sections are each introduced by a matching title band — `NOSTALGIA
+EQUALIZER` above the equalizer panel and `NOSTALGIA LIBRARY` above the browse list.
 Every browse list numbers its rows from 1 like a Winamp playlist, with the playing song marked by
 `▶` before its number. A `Search library` box above the browse list searches the library when you
 press Enter, replacing the list with the matching songs; Back leaves a search for the artists

@@ -6386,6 +6386,60 @@ fn root_view_draws_the_glyph_for_the_shared_transport_mode() {
     );
 }
 
+// Normal mode introduces the equalizer and browse sections with the mockups'
+// title bands. A per-band widget test can pass while the root never pushes the
+// bands or pushes them in the wrong place, so lay out the whole root with an
+// album's songs open and read the vertical positions. The Songs view draws
+// Back above its list, so the library band must come before that button too,
+// not after it as a push placed with the Top/Sort group would.
+#[test]
+fn root_view_draws_the_equalizer_and_library_title_bands_in_order() {
+    let (mut player, _state) = player_stepping_from(None);
+    player.current_view = CurrentView::Songs;
+
+    let capture = captured_root_view_text_bounds(&player);
+    let equalizer = capture.find("NOSTALGIA EQUALIZER");
+    let library = capture.find("NOSTALGIA LIBRARY");
+    let back = capture.find("Back");
+    let first_row = capture.find("1. ");
+
+    assert!(
+        equalizer.y < library.y,
+        "the equalizer band must sit above the library band: {equalizer:?} vs {library:?}"
+    );
+    assert!(
+        library.y < back.y,
+        "the library band must sit above Back: {library:?} vs {back:?}"
+    );
+    assert!(
+        back.y < first_row.y,
+        "Back must sit above the first browse row: {back:?} vs {first_row:?}"
+    );
+}
+
+// The section bands are part of the normal column, not the rolled-up frame:
+// shade mode still draws the app bar but neither section label.
+#[test]
+fn shaded_root_view_draws_no_section_title_bands() {
+    let (mut player, _state) = test_player();
+    player.shaded = true;
+
+    let capture = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = capture.texts().collect();
+    assert!(
+        texts.contains(&"NOSTALGIA"),
+        "the shaded app bar must still draw the app name: {texts:?}"
+    );
+    assert!(
+        !texts.contains(&"NOSTALGIA EQUALIZER"),
+        "shade mode must not draw the equalizer band: {texts:?}"
+    );
+    assert!(
+        !texts.contains(&"NOSTALGIA LIBRARY"),
+        "shade mode must not draw the library band: {texts:?}"
+    );
+}
+
 // The root `view` decides which chrome the current level offers: Back below
 // the top of the hierarchy, Retry only for a failed top-level artists fetch,
 // and the All Songs/All Albums/Playlists buttons only on Artists. The

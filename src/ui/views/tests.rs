@@ -22,17 +22,18 @@ use super::shade::{
     SHADE_STRIP_HEIGHT, SHADE_VOLUME_ID, SHADE_VOLUME_WIDTH, SHADED_HEIGHT, shade_controls,
     shade_volume_spec, view_shade_strip,
 };
+use super::title_bar::{CLUTTER_BUTTON_WIDTH, TITLE_BAR_BUTTON_WIDTH};
 use super::transport::{
     play_pause_glyph, play_pause_word, repeat_label, shuffle_label, transport_buttons,
     transport_glyphs,
 };
 use super::{
-    BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, EQ_STEP, VOLUME_MAX, VOLUME_MIN, VOLUME_STEP,
-    can_go_back, can_retry_artists, format_track_time, seek_bar_value, view_albums,
+    BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, EQ_STEP, TITLE_BAR_HEIGHT, VOLUME_MAX, VOLUME_MIN,
+    VOLUME_STEP, can_go_back, can_retry_artists, format_track_time, seek_bar_value, view_albums,
     view_all_albums, view_all_albums_button, view_all_songs, view_all_songs_button, view_artists,
     view_back_button, view_browse_nav_buttons, view_equalizer, view_now_playing, view_playlists,
     view_playlists_button, view_retry_button, view_search_box, view_seek_bar, view_songs,
-    view_transport_controls,
+    view_title_band, view_title_bar, view_transport_controls,
 };
 use crate::audio::{PlaybackFormat, Spectrum};
 use crate::equalizer::{
@@ -2561,4 +2562,73 @@ fn shade_volume_slider_spec_matches_the_shared_volume_range_and_message() {
         on_change(0.5),
         Message::VolumeChange(value) if value == 0.5
     ));
+}
+
+// A section band must be exactly the title bar's height and carry only its
+// centered label between the two filler tapes. The root-view tests check where
+// the bands appear; this pins the band widget's own geometry and that no
+// button or stray text rides along with the decorative label.
+#[test]
+fn title_band_centers_its_label_at_the_title_bar_height() {
+    let mut element = view_title_band("NOSTALGIA EQUALIZER");
+    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+
+    assert_eq!(capture.size().height, TITLE_BAR_HEIGHT);
+    let texts: Vec<&str> = capture.texts().collect();
+    assert_eq!(texts, vec!["NOSTALGIA EQUALIZER"]);
+
+    let label = capture.find("NOSTALGIA EQUALIZER");
+    let label_center = label.x + label.width / 2.0;
+    let band_center = capture.size().width / 2.0;
+    assert!(
+        (label_center - band_center).abs() < 0.5,
+        "the section label must be centered in its band: {label:?} in {:?}",
+        capture.size()
+    );
+}
+
+// The app bar's drag region spans only the space between the A toggle and the
+// shade button. Putting the tapes inside it must center NOSTALGIA in that
+// middle span, not in the whole window, while the edge controls keep their
+// pinned places.
+#[test]
+fn title_bar_centers_its_name_between_its_edge_controls() {
+    let renderer = layout_capture::headless_renderer();
+    let mut element = view_title_bar(false);
+    let capture = layout_capture::capture_text(&mut element, &renderer);
+
+    let mut tree = Tree::new(element.as_widget());
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &layout_capture::limits());
+    let mut containers = CapturedContainers::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &renderer, &mut containers);
+
+    // The A toggle and the shade button each draw a container at their pinned
+    // width. Read the A slot's right edge and the leftmost 22px button's left
+    // edge from the laid-out tree rather than from their glyph bounds, whose
+    // measured widths vary with the renderer.
+    let a_right = containers
+        .0
+        .iter()
+        .filter(|bounds| (bounds.width - CLUTTER_BUTTON_WIDTH).abs() < 0.5)
+        .map(|bounds| bounds.x + bounds.width)
+        .fold(f32::NEG_INFINITY, f32::max);
+    let shade_left = containers
+        .0
+        .iter()
+        .filter(|bounds| (bounds.width - TITLE_BAR_BUTTON_WIDTH).abs() < 0.5)
+        .map(|bounds| bounds.x)
+        .fold(f32::INFINITY, f32::min);
+    let middle_center = (a_right + shade_left) / 2.0;
+
+    let name = capture.find("NOSTALGIA");
+    let name_center = name.x + name.width / 2.0;
+    assert!(
+        (name_center - middle_center).abs() < 0.5,
+        "NOSTALGIA must center between the A and shade controls: {name:?}, \
+         span {a_right:?}..{shade_left:?}"
+    );
 }

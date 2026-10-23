@@ -275,6 +275,11 @@ or placeholder as the row's secondary text.
   cached row text, and marks the playing row only in the Songs and All Songs lists.
 - The root `view` draws Back on every level below Artists, Retry only on Artists while its fetch
   has failed, and the All Songs, All Albums, and Playlists buttons only on Artists.
+- The app bar and the two section bands are `TITLE_BAR_HEIGHT` tall. The app bar centers
+  `NOSTALGIA` between gold tapes with its A and shade/minimize/close controls pinned at the
+  edges. Normal mode draws `NOSTALGIA EQUALIZER` immediately above the equalizer and
+  `NOSTALGIA LIBRARY` immediately above the browse controls; the section bands emit no messages
+  and are absent in shade mode.
 
 **Enforced by.** `views::view_browse_nav_buttons` in `src/ui/views/browse.rs` pushes the Top
 and Sort buttons into one `Row`. `views::view_transport_controls`,
@@ -288,15 +293,22 @@ browse and transport layout tests lay out the whole root `view` through the test
 `src/ui/layout_capture.rs` harness; the equalizer layout test lays out `view_equalizer`
 directly. `view` in `src/ui/view.rs` matches on `CurrentView` and passes each arm that
 level's buffer, caches, and current-track id, and gates its Back, Retry, and flat-list buttons on
-`can_go_back`, `can_retry_artists`, and a `CurrentView::Artists` match. The harness records each
+`can_go_back`, `can_retry_artists`, and a `CurrentView::Artists` match. `views::view_title_band`
+and `views::title_bar::title_tape` in `src/ui/views/title_bar.rs` build the section bands and the
+app bar's tape/label row from `theme::TITLE_TAPE` and `theme::TITLE_TAPE_SHADOW`; `view` in
+`src/ui/view.rs` pushes the two bands into the normal-mode column only. The harness records each
 drawn text fragment's absolute bounds with iced's headless tiny-skia renderer.
 
 **Pinned by.** `browse_nav_buttons_place_sort_beside_top`,
 `transport_row_does_not_reflow_when_the_play_glyph_changes`,
 `root_view_draws_the_transport_glyph_row`,
-`root_view_offers_back_retry_and_flat_list_buttons_only_where_they_belong`, and
-`root_view_draws_the_current_browse_levels_own_rows` (`src/ui/tests.rs`), plus
-`transport_glyphs_match_the_mockup_order_and_widths`,
+`root_view_offers_back_retry_and_flat_list_buttons_only_where_they_belong`,
+`root_view_draws_the_current_browse_levels_own_rows`,
+`root_view_draws_the_equalizer_and_library_title_bands_in_order`, and
+`shaded_root_view_draws_no_section_title_bands` (`src/ui/tests.rs`), plus
+`title_band_centers_its_label_at_the_title_bar_height` and
+`title_bar_centers_its_name_between_its_edge_controls` (`src/ui/views/tests.rs`) for the title
+bands and app bar, `transport_glyphs_match_the_mockup_order_and_widths`,
 `transport_buttons_keep_a_fixed_width_across_label_changes`,
 `transport_buttons_keep_their_measured_face_widths`,
 `main_transport_and_shade_strip_share_glyphs_order_and_widths`, and

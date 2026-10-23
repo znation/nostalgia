@@ -44,7 +44,7 @@ pub use now_playing::{
 };
 pub use seek_bar::view_seek_bar;
 pub use shade::view_shade_strip;
-pub use title_bar::view_title_bar;
+pub use title_bar::{view_title_band, view_title_bar};
 pub use transport::view_transport_controls;
 
 #[cfg(test)]

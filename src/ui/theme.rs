@@ -20,6 +20,14 @@ pub const TEXT: Color = Color::from_rgb(0.87, 0.87, 0.87);
 /// Winamp's title-bar and selection blue.
 pub const TITLE_BLUE: Color = Color::from_rgb(0.0, 0.0, 0.55);
 
+/// The title tape's bright gold face, sampled from the mockups' tape strips
+/// that flank each title band's label.
+pub const TITLE_TAPE: Color = Color::from_rgb(0.93, 0.81, 0.48);
+
+/// The title tape's darker bottom edge, the shadow that makes the gold face
+/// read as a raised strip.
+pub const TITLE_TAPE_SHADOW: Color = Color::from_rgb(0.64, 0.58, 0.42);
+
 /// The playlist/LCD green, used for the Now Playing title.
 pub const LCD_GREEN: Color = Color::from_rgb(0.0, 1.0, 0.0);
 
@@ -187,6 +195,8 @@ mod tests {
         assert_eq!(WINDOW_BACKGROUND, Color::from_rgb(0.18, 0.18, 0.18));
         assert_eq!(TEXT, Color::from_rgb(0.87, 0.87, 0.87));
         assert_eq!(TITLE_BLUE, Color::from_rgb(0.0, 0.0, 0.55));
+        assert_eq!(TITLE_TAPE, Color::from_rgb(0.93, 0.81, 0.48));
+        assert_eq!(TITLE_TAPE_SHADOW, Color::from_rgb(0.64, 0.58, 0.42));
         assert_eq!(LCD_GREEN, Color::from_rgb(0.0, 1.0, 0.0));
         assert_eq!(LCD_GREEN_DIM, Color::from_rgb(0.0, 0.35, 0.0));
         assert_eq!(LCD_RED, Color::from_rgb(1.0, 0.1, 0.1));
@@ -209,6 +219,13 @@ mod tests {
         assert_ne!(volume_fill, balance_fill);
         assert_ne!(volume_fill, groove);
         assert_ne!(balance_fill, groove);
+
+        // The title tapes must read apart from the blue band they cross, or
+        // the strip disappears into the title bar.
+        let (tape, tape_shadow, title_blue) = (TITLE_TAPE, TITLE_TAPE_SHADOW, TITLE_BLUE);
+        assert_ne!(tape, title_blue);
+        assert_ne!(tape_shadow, title_blue);
+        assert_ne!(tape, tape_shadow);
 
         // The bevel's two edges must stay distinct, with the light edge
         // actually lighter, or a raised panel reads flat and a sunken one
