@@ -2308,6 +2308,38 @@ async fn get_albums_by_artist_uses_the_rest_library_when_signed_in() {
     );
 }
 
+// The per-artist albums load reads the whole-library songs collection after
+// the artist's album list so it can fill in each row's running time. A
+// failure there must fail the whole load (the Retry path) instead of
+// quietly leaving every duration at zero, which the row would render as the
+// `--:--` placeholder. The All Albums twin is already pinned; this covers
+// the same guarantee on the Albums view's own query.
+#[tokio::test]
+async fn get_albums_by_artist_fails_when_the_album_durations_request_fails() {
+    let stub = StubTransport::returning_results(&[
+        Ok(
+            r#"{"data":[{"id":"album-1","attributes":{"name":"First Record","artistName":"The Sample Band"}}]}"#
+                .to_string(),
+        ),
+        Err(AppleMusicError::new("songs down")),
+    ]);
+    let service = signed_in_service(&stub);
+
+    let error = service.get_albums_by_artist("artist-9").await.unwrap_err();
+
+    assert_eq!(error.to_string(), "songs down");
+    let calls = stub.calls();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(
+        calls[0].0,
+        "https://api.music.apple.com/v1/me/library/artists/artist-9/albums"
+    );
+    assert_eq!(
+        calls[1].0,
+        "https://api.music.apple.com/v1/me/library/songs"
+    );
+}
+
 #[tokio::test]
 async fn get_songs_from_album_uses_the_rest_library_when_signed_in() {
     let stub = StubTransport::returning(
