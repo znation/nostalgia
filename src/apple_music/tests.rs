@@ -2527,6 +2527,39 @@ async fn get_all_albums_fails_when_the_album_durations_request_fails() {
     );
 }
 
+// The documented guarantee is that a failure in *either* signed-in request
+// fails the whole album load. The durations request is pinned above; this
+// covers the albums collection itself. The songs body is left successful, so
+// a regression that swallowed the album error (say with `unwrap_or_default`)
+// would return an empty album list instead of an error, and the single
+// recorded call pins that the songs request is not attempted after the first
+// failure.
+#[tokio::test]
+async fn get_all_albums_fails_when_the_albums_request_fails() {
+    let stub = StubTransport::returning_results(&[
+        Err(AppleMusicError::new("albums down")),
+        Ok(
+            r#"{"data":[{"id":"song-1","attributes":{"name":"Opening","artistName":"The Sample Band","albumName":"Remote Record","durationInMillis":210000}}]}"#
+                .to_string(),
+        ),
+    ]);
+    let service = signed_in_service(&stub);
+
+    let error = service.get_all_albums().await.unwrap_err();
+
+    assert_eq!(error.to_string(), "albums down");
+    let calls = stub.calls();
+    assert_eq!(
+        calls.len(),
+        1,
+        "the songs request must not follow a failed albums request"
+    );
+    assert_eq!(
+        calls[0].0,
+        "https://api.music.apple.com/v1/me/library/albums"
+    );
+}
+
 #[tokio::test]
 async fn a_transport_error_propagates_from_a_signed_in_browse_query() {
     let service = signed_in_service(&StubTransport::failing("network down"));
