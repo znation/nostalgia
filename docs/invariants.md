@@ -198,7 +198,13 @@ its internal id, whenever the id is in the known-track index:
   loaded, a failed start, or a backend that cannot answer) reads `00:00` at the left and the
   cached total at the right; no current track, or an unknown id, reads `--:--` at both edges.
   Pause keeps the stored position, so the paused player's frozen elapsed value stays on the bar;
-  Stop and a new selection clear it immediately to `00:00`. A position reply issued before a Stop
+  Stop and a new selection clear it immediately to `00:00`. While the transport is stopped the
+  large readout for the current track draws transparent in both time modes and both blink phases
+  whenever its text is not the `--:--` placeholder, keeping its bounds and its clickability off,
+  so a stopped player shows no elapsed or remaining time other than the placeholder; the stored
+  value is still the `00:00` Stop clears it to, and Play draws it again. The `--:--`
+  placeholder still shows while stopped when no track is current, the id is unknown, or a known
+  track in `Remaining` mode has no length, since it reports that there is no time to clear. A position reply issued before a Stop
   or a new selection is dropped rather than restoring the previous elapsed value, and the poll
   stays suspended while any backend transport transition is in flight, so it cannot read the
   previous player under the new epoch. A selection whose song has no preview stops the previous
@@ -240,13 +246,20 @@ its internal id, whenever the id is in the known-track index:
   elapsed readout blinks at the frozen position: `handlers::playback::position_tick` flips
   `WinampPlayer::blink_visible` on each one-second position poll, and
   `views::now_playing::elapsed_readout_color` draws the text transparent when the phase is hidden
-  instead of removing it, so the text keeps its bounds and the title, total, and status row do not
-  move. A poll after Play or Stop holds the phase visible, so playing and stopped always show the
-  readout; the blink adds no timer or subscription. Pinned by
+  or the transport is stopped and the text is not the `--:--` placeholder instead of removing it,
+  and
+  `views::now_playing::elapsed_readout_clickable` turns off its click while stopped, so the text
+  keeps its bounds and the title, total, and status row do not move. A poll after Play or Stop
+  holds the phase visible, so playing always shows the readout and the stopped view clears it
+  unless it is the `--:--` placeholder, which still shows while stopped. The blink adds no
+  timer or subscription. Pinned by
   `transport_glyph_names_and_colors_each_mode`,
   `now_playing_row_keeps_the_elapsed_readout_in_place_across_transport_modes`,
   `now_playing_content_draws_the_indicator_strip_beside_the_title`,
-  `elapsed_readout_color_blinks_only_while_paused`, and
+  `elapsed_readout_color_blinks_when_paused_and_clears_when_stopped`,
+  `elapsed_readout_color_keeps_the_placeholder_visible_while_stopped`,
+  `elapsed_readout_is_clickable_only_while_not_stopped`,
+  `elapsed_readout_toggles_only_while_not_stopped`, and
   `now_playing_row_keeps_the_elapsed_bounds_when_the_blink_hides_it` in `src/ui/views/tests.rs`;
   `position_tick_blinks_the_elapsed_readout_only_while_paused` in `src/ui/tests.rs`; and
   `toggle_playing_switches_between_playing_and_paused` and
@@ -274,9 +287,9 @@ its internal id, whenever the id is in the known-track index:
 - The position poll is subscribed only while there is a position to refresh:
   `WinampPlayer::needs_position_poll` includes it while playback is running, the backend still holds
   a preview (paused, even before its first position reply, so a seek can still move it), or a stored
-  position is still shown, and leaves it out for a stopped player, whose readout is already the
-  `00:00` Stop cleared it to. Without the gate, every tick and reply would rebuild the whole screen
-  twice a second for an unchanged readout.
+  position is still shown, and leaves it out for a stopped player, whose view clears its current
+  track's readout while stopped so there is nothing to poll. Without the gate, every tick and
+  reply would rebuild the whole screen twice a second for an unchanged readout.
 
 **Enforced by.** `views::now_playing_label` and `views::now_playing_artist` in
 `src/ui/views/now_playing.rs` (re-exported by `src/ui/views/mod.rs`), pure functions over the

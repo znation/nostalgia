@@ -115,9 +115,10 @@ pub(in crate::ui) struct WinampPlayer {
     pub(in crate::ui) playback_duration: Option<Duration>,
     /// The paused elapsed readout's blink phase. `position_tick` toggles it on
     /// each poll while the transport is paused and holds it true whenever the
-    /// transport is not paused, so playing and stopped always show the
-    /// readout. The view reads it only in the paused mode and draws the text
-    /// transparent when it is false, keeping the row's bounds.
+    /// transport is not paused. The view reads it only in the paused mode and
+    /// draws the text transparent when it is false, keeping the row's bounds;
+    /// while stopped, the view clears a current track's time readout regardless
+    /// of this flag, keeping only the `--:--` placeholder.
     pub(in crate::ui) blink_visible: bool,
     /// The loaded preview's last reported live spectrum, or `None` when no
     /// preview is loaded or the backend cannot answer. `Message::Spectrum`
@@ -302,8 +303,9 @@ impl WinampPlayer {
     /// Whether the position poll is needed: playback is running, the audio
     /// backend still holds a preview (paused, even before its first position
     /// reply, so a seek can still move it), or a stored position is still shown
-    /// because Pause kept it. A stopped player's readout is already the `00:00`
-    /// Stop cleared it to, so the poll stays unsubscribed and the UI does not
+    /// because Pause kept it. A stopped player's view clears the current
+    /// track's time readout (except the `--:--` placeholder), so the poll stays
+    /// unsubscribed and the UI does not
     /// rebuild the whole screen, browse list included, twice a second to
     /// re-render an unchanged readout (see [`super::timers::subscriptions`]).
     pub(in crate::ui) fn needs_position_poll(&self) -> bool {

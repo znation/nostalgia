@@ -3735,10 +3735,11 @@ fn the_marquee_timer_runs_only_while_the_line_needs_to_scroll() {
 }
 
 // The position poll has the same cost as the marquee: every tick and reply
-// rebuilds the whole screen, browse list included. A stopped player's readout
-// is already the `00:00` Stop left it at, so the poll must leave the
-// subscription set then, and join it again only while playback is running or
-// the backend still holds a preview whose position a seek can move.
+// rebuilds the whole screen, browse list included. A stopped player's view
+// clears its current track's time readout (except the `--:--` placeholder), so
+// the poll must leave the subscription set then, and join it again only while
+// playback is running or the backend still holds a preview whose position a
+// seek can move.
 #[test]
 fn the_position_timer_runs_only_while_there_is_a_position_to_refresh() {
     assert_eq!(subscriptions(false, true, false).len(), 2);
@@ -5193,8 +5194,9 @@ fn preview_end_with_a_stale_epoch_or_pending_transition_is_dropped() {
 
 // The paused elapsed readout blinks on the existing position poll: each tick
 // flips the phase while the transport is paused, and a tick after Play or Stop
-// restores it, so playing and stopped always show the readout. A loaded
-// preview is the paused state Play can resume.
+// restores it. A stopped tick still holds the flag true, but the view draws the
+// stopped readout transparent regardless of the phase except for the `--:--`
+// placeholder. A loaded preview is the paused state Play can resume.
 #[test]
 fn position_tick_blinks_the_elapsed_readout_only_while_paused() {
     let (mut player, state) = player_with_audio(Arc::new(RecordingAudio::default()));
@@ -5236,7 +5238,7 @@ fn position_tick_blinks_the_elapsed_readout_only_while_paused() {
     let _ = update(&mut player, Message::PositionTick);
     assert!(
         player.blink_visible,
-        "a stopped tick always shows the readout"
+        "a stopped tick holds the blink phase visible, though the view clears a real readout"
     );
 }
 

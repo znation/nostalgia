@@ -46,11 +46,13 @@ The player on its own: [docs/screenshots/player.png](docs/screenshots/player.png
 
 Build and run with `cargo run`; the player opens an iced window showing the Now Playing bar (a
 small decorative `O A I D V` strip down the LCD's left edge, a large elapsed-time readout at the
-left for a loaded preview, the playing track's artist and title scrolled across the display when
+left for a loaded preview, shown while playing or paused and blank (though it keeps its space)
+while stopped, except that the `--:--` placeholder stays visible when stopped with no current
+track or no known time, the playing track's artist and title scrolled across the display when
 the line is longer than it, and the track's plain length at the right); the transport glyph before
 the readout is a green `▶` while playing, a green `II` while paused, and a red `■` while stopped.
 While paused, the large elapsed readout blinks once per second at its frozen position; it stays
-steady while playing or stopped. A loaded preview's average
+steady while playing and clears while stopped. A loaded preview's average
 bitrate, sample rate, and mono/stereo mode appear in a small status row beneath the title
 (`256 KBPS  44 KHZ  STEREO`) when the backend reports them, falling back to the sample rate and
 mode alone (`44 KHZ  STEREO`) when it cannot compute the bitrate, and the row stays blank
@@ -62,8 +64,8 @@ own length and tracks its playback position; dragging moves only the thumb, and 
 to that position. The seek slider is blank (but keeps its height) until the backend reports
 both a playback position and a preview length, such as on the silent fallback; its scale is
 the preview's length, not the catalog track's length shown at the LCD's right edge. Clicking
-the large elapsed readout switches it to the track's remaining time (`-02:37`) and back; the
-choice stays until clicked again. The bar sits above the Play/Pause/Stop/Previous/Next
+the large elapsed readout while playing or paused switches it to the track's remaining time
+(`-02:37`) and back; the choice stays until clicked again. The bar sits above the Play/Pause/Stop/Previous/Next
 controls, Repeat and Shuffle toggles, volume and balance sliders, an equalizer panel (an EQ on/off
 button, a preset pick list, a preamp slider, a response curve above ten band sliders), and a
 browse list whose song rows read `artist - title` (or the title alone when the source supplies

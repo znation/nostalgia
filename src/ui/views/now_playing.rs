@@ -244,8 +244,9 @@ pub fn now_playing_time<'a>(
 /// loaded, a failed start, or a backend that cannot answer), or `"--:--"`
 /// when the track is unknown or none is current. In [`TimeDisplay::Remaining`]
 /// a known track with a length reads `-MM:SS` counting down from that length,
-/// treating a missing position as zero so a stopped track shows its full
-/// length; a missing position past the length saturates at `"-00:00"`, and a
+/// treating a missing position as zero so a stopped track computes its full
+/// length remaining (which the stopped view then paints transparent); a
+/// missing position past the length saturates at `"-00:00"`, and a
 /// known track whose source supplied no length (`duration_ms == 0`) or an
 /// unknown/absent track reads the `"--:--"` placeholder. Mirrors
 /// [`now_playing_label`], [`now_playing_artist`], and [`now_playing_time`].
@@ -566,16 +567,29 @@ pub(super) fn transport_glyph_color(mode: TransportMode) -> Color {
     }
 }
 
-/// The large elapsed readout's color: fully transparent while the paused
-/// readout's blink phase is hidden, and [`theme::LCD_GREEN`] in every other
-/// mode or phase. Drawing it transparent rather than removing it keeps the
-/// text's bounds, so a blink does not move the title or total. Pure so the
-/// exact colors are testable without a renderer.
-pub(super) fn elapsed_readout_color(mode: TransportMode, visible: bool) -> Color {
+/// The large elapsed readout's color: fully transparent while the transport
+/// is stopped for a current track and while the paused readout's blink phase
+/// is hidden, and [`theme::LCD_GREEN`] in every other mode or phase. The
+/// `--:--` placeholder stays green even while stopped: it reports that there
+/// is no track or no known time, not a time to clear. Drawing the stopped
+/// readout transparent rather than removing it keeps its bounds, so the
+/// title, total, and status row stay in place. Pure so the exact colors are
+/// testable without a renderer.
+pub(super) fn elapsed_readout_color(mode: TransportMode, visible: bool, elapsed: &str) -> Color {
     match (mode, visible) {
+        (TransportMode::Stopped, _) if elapsed != "--:--" => Color::from_rgba(0.0, 0.0, 0.0, 0.0),
         (TransportMode::Paused, false) => Color::from_rgba(0.0, 0.0, 0.0, 0.0),
         _ => theme::LCD_GREEN,
     }
+}
+
+/// Whether the large elapsed readout responds to a click in `mode`: it does
+/// while playing or paused, and not while stopped, where the readout clears
+/// any time (except the `--:--` placeholder) and a click must not silently
+/// switch the persisted time mode. Pure so the exact gating is testable
+/// without a renderer.
+pub(super) fn elapsed_readout_clickable(mode: TransportMode) -> bool {
+    !matches!(mode, TransportMode::Stopped)
 }
 
 /// Builds the LCD row before the bevel wraps it, generic over the theme and
@@ -609,13 +623,17 @@ where
             )
             .width(Length::Fixed(LCD_TRANSPORT_WIDTH)),
         )
-        .push(
-            MouseArea::new(
-                lcd_elapsed_text(elapsed).color(elapsed_readout_color(mode, elapsed_visible)),
-            )
-            .on_press(Message::ToggleTimeDisplay)
-            .interaction(Interaction::Pointer),
-        )
+        .push({
+            let color = elapsed_readout_color(mode, elapsed_visible, elapsed.as_ref());
+            let readout = MouseArea::new(lcd_elapsed_text(elapsed).color(color));
+            if elapsed_readout_clickable(mode) {
+                readout
+                    .on_press(Message::ToggleTimeDisplay)
+                    .interaction(Interaction::Pointer)
+            } else {
+                readout.interaction(Interaction::None)
+            }
+        })
         .push(Space::new().width(Length::Fixed(12.0)))
         .push(Text::new("Now Playing: ").size(20));
     if line_len <= MARQUEE_WIDTH {

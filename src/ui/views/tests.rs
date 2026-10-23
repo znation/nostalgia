@@ -9,11 +9,12 @@ use super::equalizer::{
     response_curve_offsets, response_curve_row,
 };
 use super::now_playing::{
-    KnownTrack, MARQUEE_WIDTH, TimeDisplay, display_len, elapsed_readout_color, format_lcd_elapsed,
-    format_lcd_remaining, format_playback_status, lcd_indicator_strip, marquee_text, needs_marquee,
-    now_playing_artist, now_playing_content, now_playing_elapsed, now_playing_label,
-    now_playing_row, now_playing_status_row, now_playing_time, now_playing_visualizer_row,
-    transport_glyph, transport_glyph_color, visualizer_bar_heights,
+    KnownTrack, MARQUEE_WIDTH, TimeDisplay, display_len, elapsed_readout_clickable,
+    elapsed_readout_color, format_lcd_elapsed, format_lcd_remaining, format_playback_status,
+    lcd_indicator_strip, marquee_text, needs_marquee, now_playing_artist, now_playing_content,
+    now_playing_elapsed, now_playing_label, now_playing_row, now_playing_status_row,
+    now_playing_time, now_playing_visualizer_row, transport_glyph, transport_glyph_color,
+    visualizer_bar_heights,
 };
 use super::shade::{
     SHADE_STRIP_HEIGHT, SHADE_VOLUME_ID, SHADE_VOLUME_WIDTH, SHADED_HEIGHT, play_pause_glyph,
@@ -661,38 +662,133 @@ fn transport_glyph_names_and_colors_each_mode() {
     );
 }
 
-// Only the paused readout's hidden phase is transparent: a paused visible
-// phase, and playing and stopped in either phase, stay green. Pin the exact
-// transparent color so a refactor cannot blank the readout by hiding the
-// whole row.
+// Only the paused readout's hidden phase and a stopped readout with a real
+// time are transparent: a paused visible phase, both playing phases, and the
+// stopped `--:--` placeholder stay green. Pin the exact transparent color so a
+// refactor cannot blank the readout by hiding the whole row.
 #[test]
-fn elapsed_readout_color_blinks_only_while_paused() {
+fn elapsed_readout_color_blinks_when_paused_and_clears_when_stopped() {
     let transparent = Color::from_rgba(0.0, 0.0, 0.0, 0.0);
+    let elapsed = "00:53";
 
     assert_eq!(
-        elapsed_readout_color(TransportMode::Paused, false),
+        elapsed_readout_color(TransportMode::Paused, false, elapsed),
         transparent
     );
     assert_eq!(
-        elapsed_readout_color(TransportMode::Paused, true),
+        elapsed_readout_color(TransportMode::Paused, true, elapsed),
         theme::LCD_GREEN
     );
     assert_eq!(
-        elapsed_readout_color(TransportMode::Playing, false),
+        elapsed_readout_color(TransportMode::Playing, false, elapsed),
         theme::LCD_GREEN
     );
     assert_eq!(
-        elapsed_readout_color(TransportMode::Playing, true),
+        elapsed_readout_color(TransportMode::Playing, true, elapsed),
         theme::LCD_GREEN
     );
     assert_eq!(
-        elapsed_readout_color(TransportMode::Stopped, false),
+        elapsed_readout_color(TransportMode::Stopped, false, elapsed),
+        transparent
+    );
+    assert_eq!(
+        elapsed_readout_color(TransportMode::Stopped, true, elapsed),
+        transparent
+    );
+}
+
+// The `--:--` placeholder says there is no track or no known time, so a
+// stopped player must keep showing it instead of clearing it like a real
+// elapsed value. The paused hidden phase still blinks it, as before.
+#[test]
+fn elapsed_readout_color_keeps_the_placeholder_visible_while_stopped() {
+    let transparent = Color::from_rgba(0.0, 0.0, 0.0, 0.0);
+
+    assert_eq!(
+        elapsed_readout_color(TransportMode::Stopped, false, "--:--"),
         theme::LCD_GREEN
     );
     assert_eq!(
-        elapsed_readout_color(TransportMode::Stopped, true),
+        elapsed_readout_color(TransportMode::Stopped, true, "--:--"),
         theme::LCD_GREEN
     );
+    assert_eq!(
+        elapsed_readout_color(TransportMode::Paused, false, "--:--"),
+        transparent
+    );
+}
+
+// The stopped readout must not react to a click, so it cannot switch the
+// persisted elapsed/remaining mode while it clears the time (the `--:--`
+// placeholder aside); the playing and paused readouts still toggle it.
+#[test]
+fn elapsed_readout_is_clickable_only_while_not_stopped() {
+    assert!(elapsed_readout_clickable(TransportMode::Playing));
+    assert!(elapsed_readout_clickable(TransportMode::Paused));
+    assert!(!elapsed_readout_clickable(TransportMode::Stopped));
+}
+
+// The row must wire that predicate up, not just expose it: drive a real left
+// press at the elapsed text's bounds and read the messages it publishes. A
+// stopped press must publish none, while playing and paused publish
+// `ToggleTimeDisplay`.
+#[test]
+fn elapsed_readout_toggles_only_while_not_stopped() {
+    let mut renderer = layout_capture::headless_renderer();
+    for (mode, expected) in [
+        (TransportMode::Playing, true),
+        (TransportMode::Paused, true),
+        (TransportMode::Stopped, false),
+    ] {
+        let mut element: iced::Element<'_, Message, iced::Theme, iced::Renderer> = now_playing_row(
+            Cow::Borrowed("00:53"),
+            Cow::Borrowed("Opening"),
+            Cow::Borrowed("Band"),
+            Cow::Borrowed("3:30"),
+            0,
+            mode,
+            true,
+        )
+        .into();
+        let capture = layout_capture::capture_text(&mut element, &renderer);
+        let elapsed = capture.find("00:53");
+        let mut user_interface = iced_runtime::user_interface::UserInterface::build(
+            element,
+            layout_capture::limits().max(),
+            iced_runtime::user_interface::Cache::new(),
+            &mut renderer,
+        );
+        let mut messages = Vec::new();
+        let mut clipboard = iced::advanced::clipboard::Null;
+        let _ = user_interface.update(
+            &[iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
+                iced::mouse::Button::Left,
+            ))],
+            iced::mouse::Cursor::Available(iced::Point::new(
+                elapsed.center_x(),
+                elapsed.center_y(),
+            )),
+            &mut renderer,
+            &mut clipboard,
+            &mut messages,
+        );
+        let toggles = messages
+            .iter()
+            .filter(|message| matches!(message, Message::ToggleTimeDisplay))
+            .count();
+        assert_eq!(
+            toggles,
+            usize::from(expected),
+            "a press on the {mode:?} readout must {} publish ToggleTimeDisplay",
+            if expected { "still" } else { "not" }
+        );
+        if !expected {
+            assert!(
+                messages.is_empty(),
+                "the stopped readout published {messages:?}"
+            );
+        }
+    }
 }
 
 // The hidden blink phase draws the elapsed text transparent instead of
@@ -726,6 +822,9 @@ fn now_playing_row_keeps_the_elapsed_bounds_when_the_blink_hides_it() {
 
 // The glyph sits in a fixed-width slot, so switching from `▶` to `II` or `■`
 // must not move the large elapsed readout (or, through it, the title line).
+// A stopped readout with a real time is drawn transparent but still laid out
+// at the same bounds, so its equal-x assertion pins that stopping does not
+// move it.
 #[test]
 fn now_playing_row_keeps_the_elapsed_readout_in_place_across_transport_modes() {
     let mut elapsed_x: Option<f32> = None;
