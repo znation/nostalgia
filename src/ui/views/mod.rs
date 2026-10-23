@@ -8,11 +8,12 @@
 //! can be reworked (or tested) independently of how the app is booted.
 //!
 //! Each panel lives in its own submodule — `browse` (the artist → album →
-//! song drill-down, the flat lists, and Playlists, with their rows),
-//! `title_bar`, `shade` (the rolled-up transport strip), `now_playing`,
-//! `seek_bar`, `transport`, and `equalizer` — while the chrome helpers and
-//! slider specs the panels share ([`spacer`], [`labeled_button`],
-//! [`fixed_width_button`], and [`chrome_slider`]) live here.
+//! song drill-down, the flat lists, and Playlists, with their rows and list
+//! scaffolding in `browse::rows`), `title_bar`, `shade` (the rolled-up
+//! transport strip), `now_playing`, `seek_bar`, `transport`, and `equalizer`
+//! — while the chrome helpers, slider specs, and track-length formatting the
+//! panels share ([`spacer`], [`labeled_button`], [`fixed_width_button`],
+//! [`chrome_slider`], and [`format_track_time`]) live here.
 
 use iced::{
     Element, Length,
@@ -37,8 +38,8 @@ pub use browse::{
 };
 pub use equalizer::view_equalizer;
 pub use now_playing::{
-    KnownTrack, TimeDisplay, format_track_time, needs_marquee, now_playing_artist,
-    now_playing_elapsed, now_playing_label, now_playing_time, view_now_playing,
+    KnownTrack, TimeDisplay, needs_marquee, now_playing_artist, now_playing_elapsed,
+    now_playing_label, now_playing_time, view_now_playing,
 };
 pub use seek_bar::view_seek_bar;
 pub use shade::view_shade_strip;
@@ -55,6 +56,31 @@ pub(super) use title_bar::TITLE_BAR_HEIGHT;
 
 #[cfg(test)]
 mod tests;
+
+/// Formats `duration_ms` as zero-padded `m:ss`, with unbounded minutes so an
+/// hour or more reads as `60:00`/`61:05` rather than rolling over. This is the
+/// shared core of [`format_track_time`], whose zero case is the per-track
+/// `"--:--"` placeholder, and the browse song list's total-playing-time
+/// footer, whose zero total is a real `"0:00"`. Shared by the Now Playing bar
+/// and the browse rows, so it lives beside the other cross-panel helpers here
+/// rather than inside one panel.
+fn format_minutes_seconds(duration_ms: u64) -> String {
+    let total_seconds = duration_ms / 1000;
+    format!("{}:{:02}", total_seconds / 60, total_seconds % 60)
+}
+
+/// A track's length readout for `duration_ms`: `"--:--"` when the source
+/// supplied no duration (`0`), else the shared [`format_minutes_seconds`] form
+/// (so a track under a minute reads `0:45` and one over an hour keeps counting
+/// minutes rather than rolling into hours). Shared by the Now Playing bar and
+/// the browse song rows, so it lives here rather than inside one panel. Pure so
+/// the formatting is testable without an iced renderer.
+pub fn format_track_time(duration_ms: u64) -> String {
+    if duration_ms == 0 {
+        return "--:--".to_string();
+    }
+    format_minutes_seconds(duration_ms)
+}
 
 /// A fixed-width horizontal gap between adjacent widgets.
 ///

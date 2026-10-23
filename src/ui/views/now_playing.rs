@@ -162,7 +162,7 @@ pub struct KnownTrack {
     /// The performing artist's display name; `""` means the source supplied
     /// no artist, and the Now Playing bar falls back to the title alone.
     pub artist: String,
-    /// The track's formatted length ([`format_track_time`]), cached when the
+    /// The track's formatted length ([`super::format_track_time`]), cached when the
     /// track is recorded so a per-frame bar refresh borrows it instead of
     /// formatting the same duration again.
     pub time: String,
@@ -301,28 +301,6 @@ pub fn format_lcd_remaining(remaining_ms: u64) -> String {
     format!("-{}", format_lcd_elapsed(remaining_ms))
 }
 
-/// Formats `duration_ms` as zero-padded `m:ss`, with unbounded minutes so an
-/// hour or more reads as `60:00`/`61:05` rather than rolling over. This is the
-/// shared core of [`format_track_time`], whose zero case is the per-track
-/// `"--:--"` placeholder, and the browse song list's total-playing-time
-/// footer, whose zero total is a real `"0:00"`.
-pub(super) fn format_minutes_seconds(duration_ms: u64) -> String {
-    let total_seconds = duration_ms / 1000;
-    format!("{}:{:02}", total_seconds / 60, total_seconds % 60)
-}
-
-/// The Now Playing bar's length readout for `duration_ms`: `"--:--"` when the
-/// source supplied no duration (`0`), else the shared
-/// [`format_minutes_seconds`] form (so a track under a minute reads `0:45` and
-/// one over an hour keeps counting minutes rather than rolling into hours).
-/// Pure so the formatting is testable without an iced renderer.
-pub fn format_track_time(duration_ms: u64) -> String {
-    if duration_ms == 0 {
-        return "--:--".to_string();
-    }
-    format_minutes_seconds(duration_ms)
-}
-
 /// Formats a loaded preview's [`PlaybackFormat`] as the LCD's status row,
 /// `"{kbps} KBPS  {khz} KHZ  {mode}"` (for example
 /// `256 KBPS  44 KHZ  STEREO`). The rate is truncated to whole kilohertz
@@ -348,7 +326,7 @@ pub fn format_playback_status(format: PlaybackFormat) -> String {
 /// left edge, then the large elapsed readout, the "Now Playing:" caption
 /// followed by the current track's resolved artist and
 /// title (or "Nothing" when nothing is current), with the track's plain total
-/// length ([`format_track_time`]) laid at the right edge of the LCD well. The
+/// length ([`super::format_track_time`]) laid at the right edge of the LCD well. The
 /// artist (from [`now_playing_artist`]) is pushed before the title with a
 /// `" - "` separator only when it is non-empty, so an artist-less track still
 /// reads `Now Playing: <title>`. A line within [`MARQUEE_WIDTH`] characters

@@ -1,6 +1,7 @@
 use super::super::{CurrentView, Message, style, theme};
-use super::browse::{
-    BROWSE_VIEWS, album_row, artist_row, browse_placeholder, current_row_style, empty_list_label,
+use super::browse::BROWSE_VIEWS;
+use super::browse::rows::{
+    album_row, artist_row, browse_placeholder, current_row_style, empty_list_label,
     list_count_summary, playlist_row, row_prefix, song_list_summary, song_row,
 };
 use super::equalizer::{
@@ -9,10 +10,10 @@ use super::equalizer::{
 };
 use super::now_playing::{
     KnownTrack, MARQUEE_WIDTH, TimeDisplay, display_len, format_lcd_elapsed, format_lcd_remaining,
-    format_playback_status, format_track_time, lcd_indicator_strip, marquee_text, needs_marquee,
-    now_playing_artist, now_playing_content, now_playing_elapsed, now_playing_label,
-    now_playing_row, now_playing_status_row, now_playing_time, now_playing_visualizer_row,
-    transport_glyph, transport_glyph_color, visualizer_bar_heights,
+    format_playback_status, lcd_indicator_strip, marquee_text, needs_marquee, now_playing_artist,
+    now_playing_content, now_playing_elapsed, now_playing_label, now_playing_row,
+    now_playing_status_row, now_playing_time, now_playing_visualizer_row, transport_glyph,
+    transport_glyph_color, visualizer_bar_heights,
 };
 use super::shade::{
     SHADE_STRIP_HEIGHT, SHADE_VOLUME_ID, SHADE_VOLUME_WIDTH, SHADED_HEIGHT, play_pause_glyph,
@@ -21,9 +22,9 @@ use super::shade::{
 use super::transport::{play_pause_label, repeat_label, shuffle_label, transport_buttons};
 use super::{
     BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, EQ_STEP, VOLUME_MAX, VOLUME_MIN, VOLUME_STEP,
-    can_go_back, can_retry_artists, seek_bar_value, view_albums, view_all_albums,
-    view_all_albums_button, view_all_songs, view_all_songs_button, view_artists, view_back_button,
-    view_browse_nav_buttons, view_equalizer, view_now_playing, view_playlists,
+    can_go_back, can_retry_artists, format_track_time, seek_bar_value, view_albums,
+    view_all_albums, view_all_albums_button, view_all_songs, view_all_songs_button, view_artists,
+    view_back_button, view_browse_nav_buttons, view_equalizer, view_now_playing, view_playlists,
     view_playlists_button, view_retry_button, view_search_box, view_seek_bar, view_songs,
     view_transport_controls,
 };
