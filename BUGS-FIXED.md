@@ -5,6 +5,30 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### Shuffle's Previous skips a play paused before its completion (found by the bugfix role 2026-10-23) — fixed 2026-10-23 by the bugfix role
+
+Symptom: with Shuffle on, Previous retraces past a track the user paused, so the step lands on an
+older song than the one actually played before the current one. `README.md` says Shuffle's Previous
+retraces "the tracks actually played before the current one".
+
+How to reproduce: select a song, then press Pause after the selection's play has committed but
+before its `TrackPlayed` completion reaches `update` (the Pause's `TransportSettled` can be
+processed first). The play committed, but `update` sees `is_playing == false`. Deterministically,
+the regression test `track_played_records_a_play_paused_before_its_completion` in
+`src/ui/tests.rs` drives that state order: record song-1 and song-2, set `current_track` to song-3
+and call `AppState::pause`, then feed `TrackPlayed`, record song-4, and ask
+`play_history.previous` from song-4. Before the fix it returned song-2, skipping the paused song-3.
+
+Suspected cause: `handlers::playback::track_played` inferred the play's outcome from the shared
+`is_playing` flag (`if state.is_playing && let Some(current) ...`), but Pause and Stop clear that
+flag after a play has committed, and Pause's `paused` flag is gone again after a Stop. The
+completion now carries its own `committed` outcome from `play_into` (`true` only for `Ok`), so the
+handler never reads mutable transport state to decide whether the play happened.
+
+**Validation gap:** unclear-invariant — the rule for a play paused before its completion was not
+written down, and the handler inferred it from mutable shared state; the reconstructed guarantee
+now lives in `docs/invariants.md` under "Play history".
+
 ### Equalizer frequency labels run together at the default window size (found by qa 2026-10-23) — fixed 2026-10-23 by the bugfix role
 
 Symptom: the equalizer's ten band labels are unreadable as separate frequencies. The row reads

@@ -196,7 +196,10 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::BrowseReply { issued, reply } => {
             handlers::browse::browse_reply(player, issued, reply)
         }
-        Message::TrackPlayed { generation } => handlers::playback::track_played(player, generation),
+        Message::TrackPlayed {
+            generation,
+            committed,
+        } => handlers::playback::track_played(player, generation, committed),
         Message::WindowIdResolved(id) => handlers::window::window_id_resolved(player, id),
         Message::WindowDragged => handlers::window::window_dragged(player),
         Message::MinimizeWindow => handlers::window::minimize_window(player),

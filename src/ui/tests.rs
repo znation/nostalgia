@@ -124,7 +124,13 @@ fn record_a_play(player: &mut WinampPlayer, state: &Arc<Mutex<AppState>>, track_
     let generation = player
         .plays_generation
         .load(std::sync::atomic::Ordering::SeqCst);
-    let _ = update(player, Message::TrackPlayed { generation });
+    let _ = update(
+        player,
+        Message::TrackPlayed {
+            generation,
+            committed: true,
+        },
+    );
 }
 
 /// A fresh player showing the Albums view: it seeds the one
@@ -2012,8 +2018,9 @@ async fn track_selected_starts_playback_of_the_selected_track() {
     player.songs.items = vec![sample_song()];
 
     let task = update(&mut player, Message::TrackSelected { epoch: 0, index: 0 });
-    drive_task(task, "playback", |message| {
-        assert!(matches!(message, Message::TrackPlayed { .. }));
+    drive_task(task, "playback", |message| match message {
+        Message::TrackPlayed { committed, .. } => assert!(committed),
+        other => panic!("unexpected playback task output: {other:?}"),
     })
     .await;
 
@@ -2044,7 +2051,13 @@ fn track_played_handoff_schedules_no_work_and_leaves_shared_state_untouched() {
         state.set_volume(0.7);
     }
 
-    let task = update(&mut player, Message::TrackPlayed { generation: 0 });
+    let task = update(
+        &mut player,
+        Message::TrackPlayed {
+            generation: 0,
+            committed: true,
+        },
+    );
 
     // The arm schedules no follow-up work...
     assert_no_task(task);
@@ -2083,16 +2096,28 @@ fn assert_track_selected(task: Task<Message>, expected_epoch: u64, expected_inde
 }
 
 /// Drives `task` to its single output and asserts it is a `TrackPlayed`
-/// completion carrying `expected_generation`, as the iced runtime would
-/// deliver the play task's completion. The two `play_into` tests both drive a
-/// play to completion and pin the same contract — the completion carries the
-/// generation the play was issued as, so `update` can tell a superseded play's
-/// completion from the current one — so the drive-and-assert block lives here
-/// once. Async, unlike [`assert_track_selected`], because the `play_into`
-/// tests run inside a tokio runtime.
-async fn assert_track_played(task: Task<Message>, expected_generation: u64) {
+/// completion carrying `expected_generation` and `expected_committed`, as the
+/// iced runtime would deliver the play task's completion. The two `play_into`
+/// tests both drive a play to completion and pin the same contract — the
+/// completion carries the generation the play was issued as, so `update` can
+/// tell a superseded play's completion from the current one, and whether the
+/// play itself committed, so a failed play is not recorded — so the
+/// drive-and-assert block lives here once. Async, unlike
+/// [`assert_track_selected`], because the `play_into` tests run inside a tokio
+/// runtime.
+async fn assert_track_played(
+    task: Task<Message>,
+    expected_generation: u64,
+    expected_committed: bool,
+) {
     drive_task(task, "play", |message| match message {
-        Message::TrackPlayed { generation } => assert_eq!(generation, expected_generation),
+        Message::TrackPlayed {
+            generation,
+            committed,
+        } => {
+            assert_eq!(generation, expected_generation);
+            assert_eq!(committed, expected_committed);
+        }
         other => panic!("unexpected play task output: {other:?}"),
     })
     .await;
@@ -2551,7 +2576,13 @@ fn a_failed_history_jump_retries_the_target() {
     let generation = player
         .plays_generation
         .load(std::sync::atomic::Ordering::SeqCst);
-    let _ = update(&mut player, Message::TrackPlayed { generation });
+    let _ = update(
+        &mut player,
+        Message::TrackPlayed {
+            generation,
+            committed: false,
+        },
+    );
 
     let task = update(&mut player, Message::PreviousTrack);
     assert_track_selected(task, 0, 1);
@@ -2591,11 +2622,56 @@ fn track_played_ignores_a_failed_completion() {
         state.is_playing = false;
     }
 
-    let _ = update(&mut player, Message::TrackPlayed { generation: 0 });
+    let _ = update(
+        &mut player,
+        Message::TrackPlayed {
+            generation: 0,
+            committed: false,
+        },
+    );
 
     assert_eq!(
         player.play_history.previous(&stepping_songs(), None),
         Some("song-2".to_string())
+    );
+}
+
+// A play can commit and then be paused before its completion reaches
+// `update`: the Pause's `TransportSettled` may be processed first, leaving
+// `is_playing` false although the play committed and the preview is merely
+// paused. `TrackPlayed` must still record that play, or Shuffle's Previous
+// retraces past it. The completion carries the play's own outcome for exactly
+// this case; the shared flags cannot stand in, because Pause clears
+// `is_playing`. Without the carried outcome this test sees history song-1,
+// song-2 only and the paused song-3 is treated as a failed play.
+#[test]
+fn track_played_records_a_play_paused_before_its_completion() {
+    let (mut player, state) = player_stepping_from(None);
+    record_a_play(&mut player, &state, "song-1");
+    record_a_play(&mut player, &state, "song-2");
+    {
+        let mut state = state.blocking_lock();
+        state.current_track = Some("song-3".to_string());
+        state.pause();
+    }
+
+    let generation = player
+        .plays_generation
+        .load(std::sync::atomic::Ordering::SeqCst);
+    let _ = update(
+        &mut player,
+        Message::TrackPlayed {
+            generation,
+            committed: true,
+        },
+    );
+
+    record_a_play(&mut player, &state, "song-4");
+    assert_eq!(
+        player
+            .play_history
+            .previous(&stepping_songs(), Some("song-4")),
+        Some("song-3".to_string())
     );
 }
 
@@ -2616,7 +2692,13 @@ fn track_played_ignores_a_superseded_completion() {
         state.is_playing = true;
     }
 
-    let _ = update(&mut player, Message::TrackPlayed { generation: 0 });
+    let _ = update(
+        &mut player,
+        Message::TrackPlayed {
+            generation: 0,
+            committed: true,
+        },
+    );
 
     assert_eq!(
         player.play_history.previous(&stepping_songs(), None),
@@ -4167,7 +4249,13 @@ fn play_song_1_then_browse_to_album_2() -> (WinampPlayer, Option<String>) {
     let generation = player
         .plays_generation
         .load(std::sync::atomic::Ordering::SeqCst);
-    let _ = update(&mut player, Message::TrackPlayed { generation });
+    let _ = update(
+        &mut player,
+        Message::TrackPlayed {
+            generation,
+            committed: true,
+        },
+    );
     let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
     let current_track = state.blocking_lock().current_track.clone();
     (player, current_track)
@@ -4442,7 +4530,13 @@ fn position_poll_waits_for_a_selected_tracks_play_to_settle() {
     let generation = player
         .plays_generation
         .load(std::sync::atomic::Ordering::SeqCst);
-    let _ = update(&mut player, Message::TrackPlayed { generation });
+    let _ = update(
+        &mut player,
+        Message::TrackPlayed {
+            generation,
+            committed: true,
+        },
+    );
     assert_message_schedules_work(&mut player, Message::PositionTick);
 }
 
@@ -5662,7 +5756,7 @@ async fn play_into_maps_a_hanging_play_to_a_completed_message() {
         |_service, _id, _generation| std::future::pending::<Result<(), String>>(),
         |_err| {},
     );
-    assert_track_played(task, expected).await;
+    assert_track_played(task, expected, false).await;
 }
 
 // The play path's error is handed to `play_into`'s injected reporter; the real
@@ -5687,7 +5781,7 @@ async fn play_into_reports_a_failed_play_and_still_completes() {
             let _ = reported.send(err.clone());
         },
     );
-    assert_track_played(task, expected).await;
+    assert_track_played(task, expected, false).await;
 
     assert_eq!(received.try_recv().ok().as_deref(), Some("boom"));
 }

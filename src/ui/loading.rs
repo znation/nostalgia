@@ -30,7 +30,9 @@ use super::browse::BrowseList;
 /// completion, so success maps straight to `TrackPlayed` while an error is
 /// handed to `report_error` first so a failed play is never dropped silently —
 /// a backend that rejects a track would otherwise look like the button did
-/// nothing. A backend that never answers is the failure `timeout` exists to
+/// nothing. The completion's `committed` flag is that result — `true` only for
+/// `Ok` — so a failed or timed-out play never records its track in the history.
+/// A backend that never answers is the failure `timeout` exists to
 /// bound: without it the play's task would stay pending forever and never emit
 /// its completion, so the title recorded for it would linger until some later
 /// play pruned it. A timeout is reported with [`play_timeout_report`] and still
@@ -57,13 +59,20 @@ where
     Task::perform(
         async move { with_timeout(timeout, play(service, track_id, generation)).await },
         move |result| {
-            match result {
-                Some(Ok(())) => {}
-                Some(Err(err)) => report_error(&err),
-                None => eprintln!("{}", play_timeout_report(&report_id, timeout)),
-            }
+            let committed = match result {
+                Some(Ok(())) => true,
+                Some(Err(err)) => {
+                    report_error(&err);
+                    false
+                }
+                None => {
+                    eprintln!("{}", play_timeout_report(&report_id, timeout));
+                    false
+                }
+            };
             Message::TrackPlayed {
                 generation: play_generation,
+                committed,
             }
         },
     )

@@ -818,3 +818,32 @@ same list/Shuffle/Repeat rules as Next, and the no-next-song case reuses `handle
 - `preview_end_with_shuffle_on_a_single_song_stops` (`src/ui/tests.rs`)
 - `preview_end_while_paused_or_stopped_does_not_advance` (`src/ui/tests.rs`)
 - `preview_end_with_a_stale_epoch_or_pending_transition_is_dropped` (`src/ui/tests.rs`)
+
+## Play history
+
+**Guarantee.** Shuffle's Previous retraces the tracks whose playback actually committed, and only
+those. The play completion carries the play's own outcome: `Message::TrackPlayed`'s `committed`
+flag is true only when the play future returned `Ok`, so a Pause or Stop processed after the play
+committed but before the completion reaches `update` cannot make a committed play look failed. The
+shared `is_playing` and `paused` flags are mutable transport state and are not consulted for this
+decision. A committed completion of the latest generation records the current track; a failed or
+timed-out one records nothing and keeps a pending history jump available for retry; a completion a
+newer selection superseded records and prunes nothing. Any current-generation completion prunes
+the known-track index to the current track, or clears it when no track is current.
+
+**Enforced by.** `ui::loading::play_into` maps the play result to `committed` in
+`src/ui/loading.rs`; `Message::TrackPlayed` carries it in `src/ui/message.rs`;
+`handlers::playback::track_played` in `src/ui/handlers/playback.rs` records only a committed play
+of the current generation and otherwise calls `PlayHistory::retry_pending`; `transport::PlayHistory`
+in `src/ui/transport.rs` implements the recorded-play walk.
+
+**Pinned by.**
+
+- `track_played_records_a_play_paused_before_its_completion` (`src/ui/tests.rs`)
+- `track_played_ignores_a_failed_completion` (`src/ui/tests.rs`)
+- `track_played_ignores_a_superseded_completion` (`src/ui/tests.rs`)
+- `a_failed_history_jump_retries_the_target` (`src/ui/tests.rs`)
+- `previous_with_shuffle_resumes_from_the_last_recorded_play_after_a_new_track` (`src/ui/tests.rs`)
+- `track_selected_starts_playback_of_the_selected_track` (`src/ui/tests.rs`)
+- `play_into_maps_a_hanging_play_to_a_completed_message` (`src/ui/tests.rs`)
+- `play_into_reports_a_failed_play_and_still_completes` (`src/ui/tests.rs`)

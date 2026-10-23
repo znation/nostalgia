@@ -183,9 +183,12 @@ pub(in crate::ui) enum Message {
     // The play's completion carries the generation its selection issued, so
     // the arm can tell whether a newer selection has superseded it. Only the
     // latest completion may prune the title index; a superseded one must not
-    // drop a still-pending selection's title.
+    // drop a still-pending selection's title. `committed` is whether the play
+    // itself succeeded: shared state's flags cannot stand in, because a Pause
+    // or Stop processed after the commit but before this message clears them.
     TrackPlayed {
         generation: u64,
+        committed: bool,
     },
     // A Play/Pause/Stop transition finished (or failed; the failure was
     // logged). It carries no payload — the service already wrote shared

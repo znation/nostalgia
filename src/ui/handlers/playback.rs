@@ -263,15 +263,24 @@ pub(in crate::ui) fn track_selected(
 /// completion is the latest, no newer selection is pending, so reducing to
 /// `current_track` is safe — and when nothing committed, clearing the map
 /// keeps it bounded rather than leaving the failed selection's entry.
-pub(in crate::ui) fn track_played(player: &mut WinampPlayer, generation: u64) -> Task<Message> {
+///
+/// `committed` is the play future's own outcome, not read back from shared
+/// state: a Pause or Stop processed after the play committed but before this
+/// completion reaches `update` clears `is_playing` (and Pause's `paused` flag
+/// is gone again after a Stop), so the flags cannot tell a committed-then-
+/// paused play from a failed one. Only a committed play enters the history;
+/// a failed one keeps a pending history jump available for retry.
+pub(in crate::ui) fn track_played(
+    player: &mut WinampPlayer,
+    generation: u64,
+    committed: bool,
+) -> Task<Message> {
     end_position_transition(player);
     if generation == player.plays_generation.load(Ordering::SeqCst) {
         let state = player.state.blocking_lock();
-        if state.is_playing
-            && let Some(current) = state.current_track.as_deref()
-        {
+        if committed && let Some(current) = state.current_track.as_deref() {
             player.play_history.record(current);
-        } else {
+        } else if !committed {
             // A failed play leaves shared state naming the jump's
             // target (the backend leaves `current_track` set), so keep
             // the pending jump and mark it for retry: the next Previous
