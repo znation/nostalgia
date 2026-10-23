@@ -79,6 +79,41 @@ fn artist_row_uses_name_and_selects_the_artist_by_index() {
     assert!(!is_current);
 }
 
+// An overlong title must stay inside its own column instead of drawing
+// across the spacer into the right-aligned label. The shared list puts the
+// title in a clipping container, so lay it out with one very long unbroken
+// title, draw it, and read the pixels in the spacer gap: the container clips
+// the title there, leaving only the dark well behind.
+#[test]
+fn scrollable_list_clips_an_overlong_title_to_its_column() {
+    let long_title = "W".repeat(400);
+    let mut element = scrollable_list(
+        [(
+            Cow::Borrowed(long_title.as_str()),
+            Cow::Borrowed("3:30"),
+            Message::Ignored,
+            false,
+        )],
+        "No songs",
+    );
+    let mut renderer = layout_capture::headless_renderer();
+    let (capture, pixels) =
+        layout_capture::capture_text_and_pixels(&mut element, &mut renderer, &iced::Theme::Dark);
+    let title = capture.find(&long_title);
+    let label = capture.find("3:30");
+    let gap = Rectangle {
+        x: label.x - 9.0,
+        y: title.y,
+        width: 8.0,
+        height: title.height,
+    };
+    let green = pixels.max_green_in(gap);
+    assert!(
+        green < 64,
+        "the title must be clipped at its column, not drawn into the label's gap: {title:?} vs {label:?} (green {green})"
+    );
+}
+
 #[test]
 fn album_count_label_singular_plural_and_none() {
     assert_eq!(album_count_label(0), "");

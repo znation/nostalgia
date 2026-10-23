@@ -186,6 +186,36 @@ pub(in crate::ui) fn scroll_browse_to_top() -> Task<Message> {
     )
 }
 
+/// Scroll the browse list so its row `index` starts at the viewport's top
+/// edge. The absolute offset is the list's top padding plus the row's
+/// laid-out pitch times its position; iced clamps it to the list's content,
+/// so a row near the end scrolls only as far as the list allows and a short
+/// list simply stays put.
+pub(in crate::ui) fn scroll_browse_to_row(index: usize) -> Task<Message> {
+    iced::widget::operation::scroll_to(
+        views::BROWSE_LIST_ID,
+        iced::widget::scrollable::AbsoluteOffset {
+            x: None,
+            y: Some(views::BROWSE_LIST_PADDING + index as f32 * views::BROWSE_ROW_HEIGHT),
+        },
+    )
+}
+
+/// Keep the stepped-to playing row visible: scroll the browse list to `index`
+/// only while a song list (`Songs` or `AllSongs`) is showing, since those are
+/// the levels whose rows carry the `▶` playing marker. Another browse level
+/// leaves the list where it is, and so does a direct row press — the pressed
+/// row is already in view — which deliberately does not call this.
+pub(in crate::ui) fn scroll_browse_to_playing_row(
+    player: &WinampPlayer,
+    index: usize,
+) -> Task<Message> {
+    match player.current_view {
+        CurrentView::Songs | CurrentView::AllSongs => scroll_browse_to_row(index),
+        _ => Task::none(),
+    }
+}
+
 /// The Artists view's All Songs button: fetch the whole library flat and
 /// show it under the All Songs view. The flat list hangs off the artists
 /// list, so an active search's results are left behind and Back returns to

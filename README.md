@@ -102,7 +102,9 @@ classic Winamp keys drive playback: Z
 and B step back and forward, X plays, C pauses, V stops, R toggles Repeat and S toggles Shuffle,
 and the up/down arrows nudge the volume while the left/right arrows seek five seconds back or
 forward. With Shuffle on, Previous retraces the tracks actually played before the current one
-instead of stepping one row backward in the list. The volume slider and the up/down arrows set
+instead of stepping one row backward in the list. While a song list is showing, Next, Previous
+(including a shuffled retrace), and the preview-end advance scroll that list so the landed row
+stays in view. The volume slider and the up/down arrows set
 the audio backend's playback level, the balance slider sets its stereo balance, and the
 equalizer panel's toggles, sliders, and presets change the playing preview's curve live; the
 volume and balance are remembered for the next track. Setting `APPLE_MUSIC_DEVELOPER_TOKEN` at

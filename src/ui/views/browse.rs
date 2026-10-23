@@ -26,7 +26,7 @@ use rows::{
     song_list,
 };
 
-pub use rows::BROWSE_LIST_ID;
+pub use rows::{BROWSE_LIST_ID, BROWSE_LIST_PADDING, BROWSE_ROW_HEIGHT};
 
 /// The Artists browse view: one row per artist, in the order given, each
 /// emitting [`Message::ArtistSelected`] with the artist's index in the list

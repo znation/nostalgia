@@ -32,10 +32,10 @@ mod title_bar;
 mod transport;
 
 pub use browse::{
-    BROWSE_LIST_ID, can_go_back, can_retry_artists, view_albums, view_all_albums,
-    view_all_albums_button, view_all_songs, view_all_songs_button, view_artists, view_back_button,
-    view_browse_nav_buttons, view_playlists, view_playlists_button, view_retry_button,
-    view_search_box, view_songs,
+    BROWSE_LIST_ID, BROWSE_LIST_PADDING, BROWSE_ROW_HEIGHT, can_go_back, can_retry_artists,
+    view_albums, view_all_albums, view_all_albums_button, view_all_songs, view_all_songs_button,
+    view_artists, view_back_button, view_browse_nav_buttons, view_playlists, view_playlists_button,
+    view_retry_button, view_search_box, view_songs,
 };
 pub use equalizer::view_equalizer;
 pub use now_playing::{

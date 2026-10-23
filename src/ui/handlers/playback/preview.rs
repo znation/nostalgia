@@ -156,10 +156,15 @@ pub(in crate::ui) fn playback_finished(
         (index, list_epoch)
     };
     match stepped {
-        Some(index) => Task::done(Message::TrackSelected {
-            epoch: list_epoch,
-            index,
-        }),
+        Some(index) => Task::batch([
+            Task::done(Message::TrackSelected {
+                epoch: list_epoch,
+                index,
+            }),
+            // A natural preview end follows the advanced row exactly as Next
+            // does, so keep that row in view too.
+            super::super::browse::scroll_browse_to_playing_row(player, index),
+        ]),
         None => stop(player),
     }
 }

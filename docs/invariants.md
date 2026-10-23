@@ -137,6 +137,45 @@ child is open), and `views::view_browse_nav_buttons` in `src/ui/views/browse.rs`
 - `back_from_a_playlists_songs_restores_a_sorted_list_to_library_order`
   (all in `src/ui/tests.rs`)
 
+## Browse playing-row visibility
+
+**Guarantee.** When Next, Previous (including Shuffle's retrace of the tracks actually played),
+or the preview-end advance lands on a song while a song list (`CurrentView::Songs` or
+`CurrentView::AllSongs`) is showing, the update loop scrolls the browse list to that row's
+offset, `BROWSE_LIST_PADDING + index * BROWSE_ROW_HEIGHT`, in addition to scheduling the
+existing `TrackSelected`. `BROWSE_ROW_HEIGHT` is the laid-out vertical pitch between
+consecutive browse rows: every shared row title stays on one line — hard line breaks are
+flattened to spaces and a title wider than its column is clipped there — so no title can
+make its row taller or draw under the right-aligned label. `BROWSE_LIST_PADDING` is the list's top padding, which the offset
+includes. A later row therefore cannot drift out of view from a stale constant; iced clamps
+the absolute offset to the list's content. A direct row press does not scroll — the pressed row is already in view —
+and stepping while another browse level is showing does not scroll, since only a song list
+carries the `▶` playing marker. Top, Back, and every list-opening navigation keep their
+existing snap-to-top behavior, and playback, selection, sorting, row text, and audio behavior
+are unchanged.
+
+**Enforced by.** `views::BROWSE_ROW_HEIGHT` and `views::BROWSE_LIST_PADDING` in
+`src/ui/views/browse/rows.rs` are the one pitch and padding `scrollable_list` lays its rows
+out with, and `scrollable_list` flattens title line breaks and clips each title to its
+column, so every row keeps that pitch and stays inside its column;
+`handlers::browse::scroll_browse_to_row` in `src/ui/handlers/browse.rs` schedules the
+`iced::widget::operation::scroll_to` absolute offset, and
+`handlers::browse::scroll_browse_to_playing_row` gates it on the current view.
+`handlers::playback::step_track` and
+`handlers::playback::preview::playback_finished` batch that scroll with their `TrackSelected`,
+so Next, Previous, a shuffled retrace, and a natural preview end all follow the landed row.
+
+**Pinned by.**
+
+- `browse_row_height_matches_the_laid_out_row_pitch`
+- `scrollable_list_clips_an_overlong_title_to_its_column`
+  (`src/ui/views/tests.rs`)
+- `a_hard_line_break_in_a_title_does_not_change_the_row_pitch`
+- `next_and_previous_scroll_the_showing_song_list_to_the_landed_row`
+- `a_finished_preview_scrolls_the_song_list_to_the_advanced_row`
+- `stepping_while_another_browse_level_shows_does_not_scroll`
+- `a_row_press_does_not_scroll_the_list`
+
 ## Browse row labels
 
 **Guarantee.** Each artist row shows the number of albums the loaded library holds for that

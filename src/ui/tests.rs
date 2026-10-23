@@ -304,32 +304,45 @@ async fn task_output(task: Task<Message>, what: &str) -> Message {
     output.expect("drive_task must pass the output to its callback")
 }
 
-/// Drives `task` until it runs an iced scroll operation and asserts that
-/// operation snaps the browse list to its first row. A batched browse fetch
-/// and its snap-to-top effect are separate stream actions, so the effect is
-/// applied to a capturing [`Scrollable`](iced::advanced::widget::operation::scrollable::Scrollable)
-/// under the browse list's id and under an unrelated id: only the first may
-/// see a snap, and it must be [`RelativeOffset::START`]. This distinguishes
-/// the real scroll task from any other follow-up work a navigation arm might
-/// schedule.
-async fn assert_task_snaps_browse_list_to_top(task: Task<Message>, what: &str) {
-    use futures::StreamExt;
-    use iced::advanced::widget::Id;
+/// The browse-list scroll operations a task emitted: a relative snap-to-top
+/// and an absolute scroll-to-row are captured separately, so a test pins
+/// which one an arm schedules (and that it schedules no other).
+#[derive(Default)]
+struct BrowseScrollEffects {
+    snapped: Option<iced::advanced::widget::operation::scrollable::RelativeOffset<Option<f32>>>,
+    scrolled: Option<iced::advanced::widget::operation::scrollable::AbsoluteOffset<Option<f32>>>,
+}
+
+impl BrowseScrollEffects {
+    fn any(&self) -> bool {
+        self.snapped.is_some() || self.scrolled.is_some()
+    }
+}
+
+/// Applies an iced widget operation to a capture under `id` and returns the
+/// browse scroll effects it produced. An operation aimed at another id must
+/// produce none, so each caller checks the unrelated id too.
+fn browse_scroll_effects_by(
+    operation: &mut dyn iced::advanced::widget::Operation<()>,
+    id: &iced::advanced::widget::Id,
+) -> BrowseScrollEffects {
     use iced::advanced::widget::operation::scrollable::{
         AbsoluteOffset, RelativeOffset, Scrollable as ScrollableOperation,
     };
 
     #[derive(Default)]
     struct Capture {
-        snapped: Option<RelativeOffset<Option<f32>>>,
+        effects: BrowseScrollEffects,
     }
 
     impl ScrollableOperation for Capture {
         fn snap_to(&mut self, offset: RelativeOffset<Option<f32>>) {
-            self.snapped = Some(offset);
+            self.effects.snapped = Some(offset);
         }
 
-        fn scroll_to(&mut self, _offset: AbsoluteOffset<Option<f32>>) {}
+        fn scroll_to(&mut self, offset: AbsoluteOffset<Option<f32>>) {
+            self.effects.scrolled = Some(offset);
+        }
 
         fn scroll_by(
             &mut self,
@@ -340,49 +353,100 @@ async fn assert_task_snaps_browse_list_to_top(task: Task<Message>, what: &str) {
         }
     }
 
-    fn snapped_by(
-        operation: &mut dyn iced::advanced::widget::Operation<()>,
-        id: &Id,
-    ) -> Option<RelativeOffset<Option<f32>>> {
-        let mut capture = Capture::default();
-        operation.scrollable(
-            Some(id),
-            iced::Rectangle::default(),
-            iced::Rectangle::default(),
-            iced::Vector::default(),
-            &mut capture,
-        );
-        capture.snapped
-    }
+    let mut capture = Capture::default();
+    operation.scrollable(
+        Some(id),
+        iced::Rectangle::default(),
+        iced::Rectangle::default(),
+        iced::Vector::default(),
+        &mut capture,
+    );
+    capture.effects
+}
+
+/// Drives `task` until it runs a browse-list scroll operation, returning the
+/// effects it captured, or until the task ends with none. A batched browse
+/// fetch (or a batched stepping selection) and its scroll effect are separate
+/// stream actions, so the operation is captured under the browse list's id and
+/// under an unrelated id: only the first may produce an effect. The task may
+/// emit non-widget actions first, so they are skipped rather than treated as
+/// the scroll.
+async fn browse_scroll_effects(task: Task<Message>, what: &str) -> BrowseScrollEffects {
+    use futures::StreamExt;
+    use iced::advanced::widget::Id;
 
     let mut stream = iced_runtime::task::into_stream(task)
         .unwrap_or_else(|| panic!("{what} must schedule a task"));
     loop {
-        let action = await_or_timeout(what, TASK_TIMEOUT, stream.next())
-            .await
-            .unwrap_or_else(|| panic!("{what} task ended without a snap-to-top operation"));
+        let Some(action) = await_or_timeout(what, TASK_TIMEOUT, stream.next()).await else {
+            return BrowseScrollEffects::default();
+        };
         let iced_runtime::Action::Widget(mut operation) = action else {
             continue;
         };
-        let matching = snapped_by(&mut operation, &Id::new(BROWSE_LIST_ID));
-        let unrelated = snapped_by(&mut operation, &Id::new("not-the-browse-list"));
-        if let Some(offset) = matching {
-            assert_eq!(
-                offset,
-                RelativeOffset::START.into(),
-                "{what} must snap the browse list to its first row"
-            );
-            assert_eq!(
-                unrelated, None,
-                "{what} must target only the browse list id"
-            );
-            return;
-        }
-        assert_eq!(
-            unrelated, None,
-            "{what} must snap the browse list id, not another widget"
+        let matching = browse_scroll_effects_by(&mut operation, &Id::new(BROWSE_LIST_ID));
+        let unrelated = browse_scroll_effects_by(&mut operation, &Id::new("not-the-browse-list"));
+        assert!(
+            !unrelated.any(),
+            "{what} must scroll only the browse list id"
         );
+        if matching.any() {
+            return matching;
+        }
     }
+}
+
+/// Drives `task` until it runs an iced scroll operation and asserts that
+/// operation snaps the browse list to its first row. This distinguishes the
+/// real scroll task from any other follow-up work a navigation arm might
+/// schedule, and pins that the same arm does not also scroll to a row.
+async fn assert_task_snaps_browse_list_to_top(task: Task<Message>, what: &str) {
+    use iced::advanced::widget::operation::scrollable::RelativeOffset;
+
+    let effects = browse_scroll_effects(task, what).await;
+    assert_eq!(
+        effects.snapped,
+        Some(RelativeOffset::START.into()),
+        "{what} must snap the browse list to its first row"
+    );
+    assert_eq!(
+        effects.scrolled, None,
+        "{what} must not scroll the browse list to a row"
+    );
+}
+
+/// Drives `task` until it runs an iced scroll operation and asserts that
+/// operation scrolls the browse list to absolute row offset `expected`.
+async fn assert_task_scrolls_browse_list_to(task: Task<Message>, what: &str, expected: f32) {
+    use iced::advanced::widget::operation::scrollable::AbsoluteOffset;
+
+    let effects = browse_scroll_effects(task, what).await;
+    assert_eq!(
+        effects.scrolled,
+        Some(AbsoluteOffset {
+            x: None,
+            y: Some(expected),
+        }),
+        "{what} must scroll the browse list to row offset {expected}"
+    );
+    assert_eq!(
+        effects.snapped, None,
+        "{what} must not snap the browse list to the top"
+    );
+}
+
+/// Drives `task` to its end and asserts it never scrolls the browse list,
+/// neither to the top nor to a row.
+async fn assert_task_scrolls_nothing(task: Task<Message>, what: &str) {
+    let effects = browse_scroll_effects(task, what).await;
+    assert_eq!(
+        effects.scrolled, None,
+        "{what} must not scroll the browse list to a row"
+    );
+    assert_eq!(
+        effects.snapped, None,
+        "{what} must not snap the browse list to the top"
+    );
 }
 
 /// Unwraps the [`Message::BrowseReply`] stamp `fetch_into` puts on every
@@ -2407,6 +2471,53 @@ fn previous_track_with_no_songs_loaded_does_nothing() {
     let (mut player, _state) = test_player();
 
     assert_message_schedules_no_work(&mut player, Message::PreviousTrack);
+}
+
+// Next and Previous can step the playing row outside the visible list, so
+// while a song list is showing each step batches a scroll to the landed row's
+// laid-out offset with the selection it already scheduled. From song-2, Next
+// lands on song-3 (index 2) and Previous on song-1 (index 0).
+#[test]
+fn next_and_previous_scroll_the_showing_song_list_to_the_landed_row() {
+    let (mut player, _state) = player_stepping_from(Some("song-2"));
+    player.current_view = CurrentView::Songs;
+
+    futures::executor::block_on(assert_task_scrolls_browse_list_to(
+        update(&mut player, Message::NextTrack),
+        "next",
+        views::BROWSE_LIST_PADDING + 2.0 * views::BROWSE_ROW_HEIGHT,
+    ));
+    futures::executor::block_on(assert_task_scrolls_browse_list_to(
+        update(&mut player, Message::PreviousTrack),
+        "previous",
+        views::BROWSE_LIST_PADDING,
+    ));
+}
+
+// A step only follows the playing row when a song list is showing: the other
+// browse levels carry no playing marker, and their lists keep their offset.
+#[test]
+fn stepping_while_another_browse_level_shows_does_not_scroll() {
+    let (mut player, _state) = player_stepping_from(Some("song-1"));
+    assert_view(&player, CurrentView::Artists);
+
+    futures::executor::block_on(assert_task_scrolls_nothing(
+        update(&mut player, Message::NextTrack),
+        "next from artists",
+    ));
+}
+
+// A pressed row is already in view, so the direct-press path deliberately
+// leaves the list where it is.
+#[test]
+fn a_row_press_does_not_scroll_the_list() {
+    let (mut player, _state) = player_stepping_from(Some("song-1"));
+    player.current_view = CurrentView::Songs;
+
+    futures::executor::block_on(assert_task_scrolls_nothing(
+        update(&mut player, Message::TrackSelected { epoch: 0, index: 1 }),
+        "row press",
+    ));
 }
 
 /// Drives a step `message` twice from `start` — once with Repeat off (the
@@ -5256,6 +5367,28 @@ fn preview_end_in_all_songs_steps_the_flat_list() {
     assert!(state.is_playing);
 }
 
+// A natural preview end follows the advanced row exactly as Next does: from
+// song-1 it scrolls the showing song list to song-2's row.
+#[test]
+fn a_finished_preview_scrolls_the_song_list_to_the_advanced_row() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, _state) = player_playing_stepping_song(&recording, "song-1");
+    player.current_view = CurrentView::Songs;
+    let epoch = player.position_epoch;
+
+    futures::executor::block_on(assert_task_scrolls_browse_list_to(
+        update(
+            &mut player,
+            Message::PlaybackFinished {
+                epoch,
+                finished: true,
+            },
+        ),
+        "preview end",
+        views::BROWSE_LIST_PADDING + views::BROWSE_ROW_HEIGHT,
+    ));
+}
+
 // Repeat wraps a natural end at the last song back to the first, just as the
 // Next button does.
 #[test]
@@ -6090,6 +6223,60 @@ fn browse_nav_buttons_place_sort_beside_top() {
         sort.x >= top.x + top.width,
         "Sort must render to the right of Top: {:?}",
         capture.fragments()
+    );
+}
+
+// The scroll-to-playing-row operation offsets by `BROWSE_LIST_PADDING +
+// index * BROWSE_ROW_HEIGHT`, so that constant must equal the pitch the browse
+// list actually lays its rows out at. A stale constant would scroll a later
+// row out of position. Lay the root view out with the stepping album showing
+// — its first title far too long for one line if it wrapped — and measure the
+// distance between the first two row prefixes. The same long title must stay
+// inside its own column instead of drawing under the right-aligned length.
+#[test]
+fn browse_row_height_matches_the_laid_out_row_pitch() {
+    let (mut player, _state) = player_stepping_from(None);
+    player.current_view = CurrentView::Songs;
+    player.songs.items[0].title = "A very long title ".repeat(20);
+    let long_title = player.songs.items[0].display_title().into_owned();
+
+    let capture = captured_root_view_text_bounds(&player);
+    let first = capture.find("1. ");
+    let second = capture.find("2. ");
+    let title = capture.find(&long_title);
+    let label = capture.find("3:30");
+    let pitch = second.y - first.y;
+
+    assert!(
+        (pitch - views::BROWSE_ROW_HEIGHT).abs() < 0.01,
+        "row pitch {pitch} must equal BROWSE_ROW_HEIGHT {}; rows at {first:?} and {second:?}",
+        views::BROWSE_ROW_HEIGHT
+    );
+    assert!(
+        title.x + title.width <= label.x,
+        "the title must be clipped to its column, not drawn under the label: {title:?} ends after {label:?} begins"
+    );
+}
+
+// `Wrapping::None` only suppresses soft wrapping: cosmic-text still splits a
+// hard line break into another `BufferLine`, which would make the first row
+// taller than `BROWSE_ROW_HEIGHT`. The list flattens line breaks to spaces, so
+// a title carrying one keeps the same row pitch as any other.
+#[test]
+fn a_hard_line_break_in_a_title_does_not_change_the_row_pitch() {
+    let (mut player, _state) = player_stepping_from(None);
+    player.current_view = CurrentView::Songs;
+    player.songs.items[0].title = "One\nTwo".to_string();
+
+    let capture = captured_root_view_text_bounds(&player);
+    let first = capture.find("1. ");
+    let second = capture.find("2. ");
+    let pitch = second.y - first.y;
+
+    assert!(
+        (pitch - views::BROWSE_ROW_HEIGHT).abs() < 0.01,
+        "row pitch {pitch} must equal BROWSE_ROW_HEIGHT {} despite the title's line break; rows at {first:?} and {second:?}",
+        views::BROWSE_ROW_HEIGHT
     );
 }
 

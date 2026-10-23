@@ -174,7 +174,12 @@ pub(in crate::ui) fn step_track(player: &mut WinampPlayer, forward: bool) -> Tas
         // not per view refresh, and the stepped id always names a song in
         // this buffer.
         Some(track_id) => match items.iter().position(|song| song.id == track_id) {
-            Some(index) => Task::done(Message::TrackSelected { epoch, index }),
+            Some(index) => Task::batch([
+                Task::done(Message::TrackSelected { epoch, index }),
+                // Keep the landed row in view: Next and Previous (including
+                // Shuffle's retrace) can step outside the visible list.
+                super::browse::scroll_browse_to_playing_row(player, index),
+            ]),
             None => Task::none(),
         },
         None => Task::none(),

@@ -11,7 +11,7 @@ use std::borrow::Cow;
 
 use iced::{
     Background, Element, Length,
-    widget::{Button, Column, Row, Scrollable, Space, Text, button},
+    widget::{Button, Column, Row, Scrollable, Text, button, container, text::Wrapping},
 };
 
 use crate::library::{Album, Artist, Playlist, Song};
@@ -100,8 +100,45 @@ pub(in crate::ui::views) fn row_prefix(position: usize, is_current: bool) -> Str
 
 /// The one browse [`Scrollable`]'s widget id: the update loop's snap-to-top
 /// operation targets it, so every view assembled by [`scrollable_list`] can be
-/// returned to its first row by [`Message::ScrollBrowseToTop`].
+/// returned to its first row by [`Message::ScrollBrowseToTop`], and its
+/// scroll-to-row operation targets it to bring a stepped-to row into view.
 pub const BROWSE_LIST_ID: &str = "nostalgia-browse-list";
+
+/// The padding [`scrollable_list`] puts around its rows. Row `i`'s top sits
+/// `BROWSE_LIST_PADDING + i * BROWSE_ROW_HEIGHT` from the list's top, so the
+/// transport's scroll-to-playing-row operation includes this padding in its
+/// absolute offset.
+pub const BROWSE_LIST_PADDING: f32 = 20.0;
+
+/// The vertical pitch between consecutive laid-out browse rows: the row
+/// button's padding plus its 18px text height. [`scrollable_list`] stacks the
+/// rows in a plain [`Column`], flattens line breaks, and clips each title to
+/// its column, so each row is exactly this tall. Measured by
+/// `browse_row_height_matches_the_laid_out_row_pitch`, which lays out the root
+/// view with an overlong title and checks consecutive row prefixes land
+/// exactly this far apart, so a styling change cannot leave a stale constant
+/// behind.
+pub const BROWSE_ROW_HEIGHT: f32 = 33.4;
+
+/// Flattens the line breaks in a browse row's `title` to spaces. cosmic-text
+/// starts a new `BufferLine` at `\n`/`\r\n` even with wrapping disabled, so a
+/// title carrying one would make its row taller than [`BROWSE_ROW_HEIGHT`];
+/// the scroll-to-row offset counts on every row having exactly that pitch.
+fn one_line_title<'a>(title: Cow<'a, str>) -> Cow<'a, str> {
+    if title.contains('\n') || title.contains('\r') {
+        Cow::Owned(
+            title
+                .chars()
+                .map(|character| match character {
+                    '\n' | '\r' => ' ',
+                    other => other,
+                })
+                .collect(),
+        )
+    } else {
+        title
+    }
+}
 
 /// Builds a scrollable list where each item is a button showing its 1-based
 /// position, a title, and a secondary label pinned to the row's right edge,
@@ -109,6 +146,10 @@ pub const BROWSE_LIST_ID: &str = "nostalgia-browse-list";
 /// last tuple element marks the currently playing row: its prefix carries a
 /// `▶` marker first and it gets a highlighted background so the list reads as
 /// a playlist. Only `song_row` ever sets the flag to true.
+///
+/// A title carrying a line break is flattened to one line, and a title too
+/// long for its column is clipped there, so it can neither grow the row past
+/// [`BROWSE_ROW_HEIGHT`] nor draw over the right-aligned label.
 ///
 /// When `items` yields nothing, the list renders `empty_label` in place of a
 /// blank panel. The caller picks the wording via [`browse_placeholder`],
@@ -128,7 +169,7 @@ pub(in crate::ui::views) fn scrollable_list<'a>(
     items: impl IntoIterator<Item = (Cow<'a, str>, Cow<'a, str>, Message, bool)>,
     empty_label: &'a str,
 ) -> Element<'a, Message> {
-    let mut column = Column::new().padding(20);
+    let mut column = Column::new().padding(BROWSE_LIST_PADDING);
     let mut is_empty = true;
 
     for (position, (title, label, message, is_current)) in items.into_iter().enumerate() {
@@ -137,9 +178,20 @@ pub(in crate::ui::views) fn scrollable_list<'a>(
             Row::new()
                 .width(Length::Fill)
                 .push(Text::new(row_prefix(position, is_current)).size(18))
-                .push(Text::new(title).size(18))
+                // A wrapped title would make its row taller than
+                // BROWSE_ROW_HEIGHT and break the absolute scroll offset.
+                // The fill container clips a title wider than its column so
+                // it cannot draw under the right-aligned label.
+                .push(
+                    container(
+                        Text::new(one_line_title(title))
+                            .size(18)
+                            .wrapping(Wrapping::None),
+                    )
+                    .width(Length::Fill)
+                    .clip(true),
+                )
                 .push(spacer(10.0))
-                .push(Space::new().width(Length::Fill))
                 .push(Text::new(label).size(14)),
         )
         .width(Length::Fill)
