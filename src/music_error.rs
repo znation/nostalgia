@@ -53,3 +53,35 @@ impl AppleMusicError {
         Self(message.into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::AppleMusicError;
+
+    #[test]
+    fn display_echoes_the_message() {
+        let err = AppleMusicError::new("boom");
+        assert_eq!(err.to_string(), "boom");
+    }
+
+    #[test]
+    fn new_accepts_string_and_str() {
+        let from_str = AppleMusicError::new("x");
+        let from_string = AppleMusicError::new(String::from("x"));
+        assert_eq!(from_str, from_string);
+    }
+
+    #[test]
+    fn equality_and_clone() {
+        let a = AppleMusicError::new("msg");
+        let b = a.clone();
+        assert_eq!(a, b);
+        assert_ne!(a, AppleMusicError::new("other"));
+    }
+
+    #[test]
+    fn implements_std_error() {
+        let err: &dyn std::error::Error = &AppleMusicError::new("e");
+        assert_eq!(err.to_string(), "e");
+    }
+}
