@@ -709,11 +709,40 @@ fn reap_with_timeout_and_spawn(
         else {
             return;
         };
-        let _ = child.kill();
-        let _ = child.wait();
-        report(format!(
-            "could not start the browser opener reaper thread: {error}; killed and reaped the opener"
-        ));
+        kill_and_reap(
+            &mut child,
+            |child| child.kill(),
+            &format!("could not start the browser opener reaper thread: {error}"),
+            report,
+        );
+    }
+}
+
+/// Kills `child` and reaps it, reporting the outcome in one line prefixed by
+/// `context`.
+///
+/// A successful kill is followed by a blocking `wait`: the signal was
+/// delivered, so the wait reaps the child and cannot be mistaken for the
+/// original hang. If `kill` itself fails, the child may still be running and
+/// an unbounded `wait` would block this reaper forever without ever reporting
+/// why; the failure is therefore reported *before* the wait, then the wait
+/// still runs so a child that does exit is reaped rather than left a zombie.
+/// `kill` is injected so a test can make it fail against a real child.
+fn kill_and_reap(
+    child: &mut std::process::Child,
+    kill: impl FnOnce(&mut std::process::Child) -> io::Result<()>,
+    context: &str,
+    report: impl FnOnce(String),
+) {
+    match kill(child) {
+        Ok(()) => match child.wait() {
+            Ok(_) => report(format!("{context}; killed and reaped it")),
+            Err(error) => report(format!("{context}; killed it but reaping failed: {error}")),
+        },
+        Err(error) => {
+            report(format!("{context}; killing it failed: {error}"));
+            let _ = child.wait();
+        }
     }
 }
 
@@ -754,26 +783,24 @@ fn reap_child_with(
                 thread::sleep(OPENER_REAP_POLL_INTERVAL);
             }
             Ok(None) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                report(format!(
-                    "the browser opener did not exit within {timeout:?}; killed it"
-                ));
+                kill_and_reap(
+                    child,
+                    |child| child.kill(),
+                    &format!("the browser opener did not exit within {timeout:?}"),
+                    report,
+                );
                 return;
             }
             Err(error) => {
                 // A failed poll says nothing about the child's state: it may
-                // still be running. Kill and wait anyway so the error path
+                // still be running. Kill and reap it anyway so the error path
                 // cannot leave the opener (and its pid) behind.
-                let _ = child.kill();
-                match child.wait() {
-                    Ok(_) => report(format!(
-                        "could not reap the browser opener process: {error}; killed and reaped it"
-                    )),
-                    Err(cleanup) => report(format!(
-                        "could not reap the browser opener process: {error}; cleanup also failed: {cleanup}"
-                    )),
-                }
+                kill_and_reap(
+                    child,
+                    |child| child.kill(),
+                    &format!("could not reap the browser opener process: {error}"),
+                    report,
+                );
                 return;
             }
         }

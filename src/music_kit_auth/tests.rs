@@ -1659,6 +1659,44 @@ fn a_failed_reap_poll_kills_the_opener_and_reports_the_cause() {
     assert_child_is_reaped(pid, "the failed reap poll");
 }
 
+// A kill that fails must not hide the reason behind an unbounded wait: the
+// reaper used to discard the kill error and then call `wait`, so a child that
+// could not be signalled kept the thread — and the report — blocked until the
+// child happened to exit. The injected fault is a refused kill against a real
+// child that outlives the assertion; the report must arrive while that child
+// is still running, then the follow-up wait reaps it once it exits on its own.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_failed_opener_kill_is_reported_before_waiting_for_the_child() {
+    let mut child = Command::new("sh")
+        .args(["-c", "sleep 2"])
+        .spawn()
+        .expect("spawn a child that outlives the report");
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let reaper = thread::spawn(move || {
+        kill_and_reap(
+            &mut child,
+            |_child| Err(io::Error::other("the kill was refused")),
+            "the browser opener did not exit within 50ms",
+            move |report| {
+                let _ = sender.send(report);
+            },
+        );
+    });
+    let report = receiver
+        .recv_timeout(Duration::from_secs(1))
+        .expect("a failed kill must be reported without waiting for the child");
+    assert!(
+        report.contains("did not exit"),
+        "the report must name the timeout, got: {report}"
+    );
+    assert!(
+        report.contains("the kill was refused"),
+        "the report must carry the kill failure, got: {report}"
+    );
+    reaper.join().expect("the reaper thread finished");
+}
+
 // The reaper runs on a named thread, so a panic in it is attributed to
 // `nostalgia-opener-reaper` rather than `<unnamed>`. Pin the name on the
 // production spawner, since the failure test above injects its own spawner
