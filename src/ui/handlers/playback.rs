@@ -20,6 +20,8 @@ use crate::ui::views;
 use crate::ui::{CurrentView, Message, WinampPlayer};
 
 /// The Play/Pause button: toggles the preview between playing and paused.
+/// A track with no loaded preview stops instead, since there is nothing to
+/// pause.
 pub(in crate::ui) fn play_pause(player: &mut WinampPlayer) -> Task<Message> {
     begin_position_transition(player);
     transport_into(
@@ -39,7 +41,8 @@ pub(in crate::ui) fn play(player: &mut WinampPlayer) -> Task<Message> {
 }
 
 /// The keyboard's C key: an explicit pause rather than the button's toggle.
-/// C pauses the preview.
+/// C pauses a loaded preview; with none loaded it stops the transport, since
+/// there is nothing to pause.
 pub(in crate::ui) fn pause(player: &mut WinampPlayer) -> Task<Message> {
     begin_position_transition(player);
     transport_into(&player.apple_music_service, "pause", |service| async move {
@@ -47,10 +50,10 @@ pub(in crate::ui) fn pause(player: &mut WinampPlayer) -> Task<Message> {
     })
 }
 
-/// Stop discards the preview and clears the playing flag; the service
-/// remembers the last preview URL so Play can restart it. The elapsed readout
-/// clears immediately, and any poll in flight is invalidated so it cannot
-/// bring the old position back.
+/// Stop discards the preview and clears the playing and paused flags; the
+/// service remembers the last preview URL so Play can restart it. The elapsed
+/// readout clears immediately, and any poll in flight is invalidated so it
+/// cannot bring the old position back.
 pub(in crate::ui) fn stop(player: &mut WinampPlayer) -> Task<Message> {
     reset_position_readout(player);
     begin_position_transition(player);

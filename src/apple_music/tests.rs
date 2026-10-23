@@ -1004,10 +1004,10 @@ async fn play_track_without_a_preview_url_stops_the_previous_preview() {
 // A `None` preview replaces the previous one by stopping the backend, and a
 // backend that rejects that stop must surface the error rather than claim the
 // new selection is playing: the old preview may still be sounding, so the
-// service clears the playing flag and forgets the remembered URL so a later
-// Play cannot restart it under the new track's name. `current_track` stays
-// committed as the rollback leaves it for a rejected `Some` preview, so the
-// bar still names the track the user picked.
+// service clears the playing and paused flags and forgets the remembered URL
+// so a later Play cannot restart it under the new track's name.
+// `current_track` stays committed as the rollback leaves it for a rejected
+// `Some` preview, so the bar still names the track the user picked.
 #[tokio::test]
 async fn play_track_without_a_preview_url_reports_a_stop_failure_without_claiming_playback() {
     let audio = Arc::new(RejectingAudio::new(RejectedCommand::Stop));
@@ -1434,7 +1434,8 @@ async fn play_track_does_not_start_the_preview_when_the_equalizer_cannot_be_set(
 }
 
 // `pause` pauses the injected backend as well as clearing the shared playing
-// flag; the test pins both halves of that contract.
+// flag and setting the paused mode; the test pins both halves of that
+// contract.
 #[tokio::test]
 async fn pause_pauses_the_audio_backend() {
     let (service, state, recording) = recording_service();
@@ -1595,10 +1596,10 @@ async fn pause_after_stop_leaves_the_transport_stopped() {
     assert_transport_mode(&state, TransportMode::Stopped).await;
 }
 
-// `resume` drives the injected backend and sets the shared playing flag, the
-// other half of `pause`. A `Some` preview is loaded first so the backend has a
-// paused player to resume (the service only resumes a loaded preview, or
-// restarts a stopped one).
+// `resume` drives the injected backend, sets the shared playing flag, and
+// clears the paused flag, the other half of `pause`. A `Some` preview is
+// loaded first so the backend has a paused player to resume (the service only
+// resumes a loaded preview, or restarts a stopped one).
 #[tokio::test]
 async fn resume_resumes_the_audio_backend() {
     let (service, state, recording) = recording_service_with_preview().await;
@@ -1611,8 +1612,8 @@ async fn resume_resumes_the_audio_backend() {
     assert_transport_mode(&state, TransportMode::Playing).await;
 }
 
-// `stop` drives the injected backend and clears the shared playing flag while
-// keeping `current_track`, exactly as `AppState::stop` does.
+// `stop` drives the injected backend and clears the shared playing and paused
+// flags while keeping `current_track`, exactly as `AppState::stop` does.
 #[tokio::test]
 async fn stop_stops_the_audio_backend() {
     let (service, state, recording) = recording_service_with_preview().await;

@@ -7,9 +7,10 @@
 //! ([`crate::sample_library::sample_library`]) otherwise; it plays the
 //! selected track's preview through an injected [`crate::audio::AudioOutput`],
 //! committing the shared-state transition: `play_track` records the selected
-//! track and marks it playing, `pause` pauses the audio and clears the flag,
-//! `stop` stops the audio and clears the flag, and `resume` resumes (or
-//! restarts) the preview and sets the flag. The still-unimplemented stubs
+//! track and marks it playing, `pause` pauses the audio and marks the track
+//! paused (or stops it when no preview is loaded), `stop` stops the audio and
+//! clears both the playing and paused flags, and `resume` resumes (or
+//! restarts) the preview and marks it playing. The still-unimplemented stubs
 //! (`next_track` and `previous_track`) stay so a real implementation has a
 //! surface to land on. Inside, `browse` holds the queries (over `rest` or the
 //! `sample` fallbacks), `playback` the transport transitions, `validation` the
