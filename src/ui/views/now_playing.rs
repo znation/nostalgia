@@ -13,6 +13,7 @@ use iced::{
 };
 
 use crate::audio::{PlaybackFormat, Spectrum};
+use crate::clamp::clamp_with_nan_fallback;
 use crate::equalizer::BAND_COUNT;
 use crate::library::display_title_for;
 use crate::state::TransportMode;
@@ -221,7 +222,7 @@ where
 /// inside their strip. Pure so the scaling is testable without a renderer.
 pub fn visualizer_bar_heights(spectrum: Option<Spectrum>) -> [f32; BAND_COUNT] {
     let bands = spectrum.map_or([0.0; BAND_COUNT], |spectrum| spectrum.bands);
-    bands.map(|band| band.clamp(0.0, 1.0) * LCD_VISUALIZER_HEIGHT)
+    bands.map(|band| clamp_with_nan_fallback(band, 0.0, 1.0, 0.0) * LCD_VISUALIZER_HEIGHT)
 }
 
 /// Builds the LCD's visualizer row: exactly [`BAND_COUNT`] bottom-aligned green

@@ -1155,6 +1155,26 @@ fn visualizer_bar_heights_floors_a_negative_band_at_zero() {
     );
 }
 
+// `f32::clamp` passes NaN through unchanged, and a NaN height would poison the
+// visualizer row's layout. A stub backend can report one, so the documented
+// `0.0..=1.0` clamp must map it to an empty bar like the shared NaN-safe clamp
+// does for the sliders. Pin it beside a finite band so the rest of the row
+// still scales normally.
+#[test]
+fn visualizer_bar_heights_maps_a_nan_band_to_empty() {
+    let mut bands = [0.0; BAND_COUNT];
+    bands[0] = f32::NAN;
+    bands[1] = 0.5;
+    let heights = visualizer_bar_heights(Some(Spectrum { bands }));
+
+    assert_eq!(heights[0], 0.0, "a NaN band must draw an empty bar");
+    assert_eq!(heights[1], 12.0);
+    assert!(
+        heights.iter().all(|height| height.is_finite()),
+        "every bar height must be finite: {heights:?}"
+    );
+}
+
 /// Lays out the LCD content for `spectrum` and returns the text fragments it
 /// would draw, each fragment's bounds, the height the content occupies, and
 /// the bounds of every container it draws.

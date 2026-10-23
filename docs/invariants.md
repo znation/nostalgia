@@ -735,7 +735,8 @@ backend queries. On the UI side, `views::now_playing::visualizer_bar_heights` an
 - `rodio_output_asks_the_worker_for_its_spectrum` (`src/audio/tests.rs`)
 - `rodio_output_reports_a_closed_worker_for_every_command` (`src/audio/tests.rs`)
 - `playback_spectrum_forwards_the_audio_output_spectrum` (`src/apple_music/tests.rs`)
-- `visualizer_bar_heights_scale_and_clamp_the_reported_bands` (`src/ui/views/tests.rs`)
+- `visualizer_bar_heights_scale_and_clamp_the_reported_bands`
+- `visualizer_bar_heights_maps_a_nan_band_to_empty` (`src/ui/views/tests.rs`)
 - `now_playing_content_keeps_the_visualizer_height_with_and_without_a_spectrum`
 - `now_playing_visualizer_row_keeps_its_height_without_a_spectrum` (`src/ui/views/tests.rs`)
 - `now_playing_visualizer_row_draws_one_fixed_width_bar_per_band` (`src/ui/views/tests.rs`)
