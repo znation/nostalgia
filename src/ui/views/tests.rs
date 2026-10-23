@@ -65,7 +65,24 @@ fn album_row_uses_title_and_selects_the_album_by_index() {
     // `ui::tests` pins the index-to-id mapping.
     let album = sample_album();
     let (title, label, message, is_current) = album_row(0, 0, &album);
+    assert_eq!(title, "The Sample Band - First Record");
+    assert_eq!(label, "View Songs");
+    assert!(matches!(
+        message,
+        Message::AlbumSelected { epoch: 0, index: 0 }
+    ));
+    assert!(!is_current);
+}
+
+// An album with no artist has nothing to join, so the row must not render a
+// dangling `" - "` prefix; it shows the bare title and borrows it.
+#[test]
+fn album_row_shows_the_title_alone_when_the_artist_is_empty() {
+    let mut album = sample_album();
+    album.artist = String::new();
+    let (title, label, message, is_current) = album_row(0, 0, &album);
     assert_eq!(title, "First Record");
+    assert!(matches!(title, std::borrow::Cow::Borrowed(_)));
     assert_eq!(label, "View Songs");
     assert!(matches!(
         message,

@@ -29,6 +29,21 @@ pub struct Album {
     pub title: String,
     /// The [`Artist::id`] of the artist this album belongs to.
     pub artist_id: String,
+    /// The performing artist's display name; `""` means the source supplied
+    /// no artist. Album rows render `<artist> - <title>` when it is non-empty.
+    #[serde(default)]
+    pub artist: String,
+}
+
+impl Album {
+    /// The text an album row renders: `<artist> - <title>` when the source
+    /// supplied an artist, and just the title when [`Self::artist`] is empty.
+    /// Presentation-only; the serialized model is unchanged. The title is
+    /// borrowed in the artist-less case so a view refresh of a large library
+    /// does not allocate for it.
+    pub fn display_title(&self) -> Cow<'_, str> {
+        display_title_for(&self.artist, &self.title)
+    }
 }
 
 /// A user-created playlist in the library.
@@ -80,8 +95,8 @@ impl Song {
 
 /// Joins an artist and title into the browse row's display text: the title alone
 /// when the artist is empty, else `<artist> - <title>`. Shared by
-/// [`Song::display_title`] and the Now Playing marquee so the two stay in
-/// sync.
+/// [`Album::display_title`], [`Song::display_title`], and the Now Playing
+/// marquee so they stay in sync.
 pub fn display_title_for<'a>(artist: &'a str, title: &'a str) -> Cow<'a, str> {
     if artist.is_empty() {
         Cow::Borrowed(title)
@@ -113,7 +128,7 @@ mod tests {
     /// The [`Album`] twin of [`artist_payload`]: the full, valid wire payload
     /// the album round-trip and missing-field tests share.
     fn album_payload() -> serde_json::Value {
-        json!({ "id": "album-1", "title": "First Record", "artist_id": "artist-1" })
+        json!({ "id": "album-1", "title": "First Record", "artist_id": "artist-1", "artist": "The Sample Band" })
     }
 
     /// The [`Playlist`] twin of [`artist_payload`]: the full, valid wire
@@ -210,6 +225,7 @@ mod tests {
                 "id": "album-1",
                 "title": "First Record",
                 "artist_id": "artist-1",
+                "artist": "The Sample Band",
                 "release_date": "2026-01-01"
             }),
             sample_album(),
@@ -256,9 +272,22 @@ mod tests {
     // added to tolerate a payload variant) would clear them while silently
     // rendering blank data. `Album`, `Song`, and `Playlist` each get the same
     // every-field probe as Artist.
+    /// The [`Album`] payload carrying every required field and omitting the
+    /// optional `artist`, so [`assert_every_field_required`] can remove each
+    /// key and see the parse fail.
+    fn album_required_fields_payload() -> serde_json::Value {
+        json!({ "id": "album-1", "title": "First Record", "artist_id": "artist-1" })
+    }
+
     #[test]
     fn album_deserialization_rejects_missing_required_fields() {
-        assert_every_field_required::<Album>(album_payload());
+        assert_every_field_required::<Album>(album_required_fields_payload());
+    }
+
+    #[test]
+    fn album_deserialization_defaults_a_missing_artist_to_empty() {
+        let album: Album = serde_json::from_value(album_required_fields_payload()).unwrap();
+        assert_eq!(album.artist, "");
     }
 
     #[test]
@@ -279,6 +308,29 @@ mod tests {
         let parsed: Song = serde_json::from_value(song_required_fields_payload())
             .expect("a Song without preview_url must deserialize");
         assert_eq!(parsed.preview_url, None);
+    }
+
+    #[test]
+    fn album_display_title_joins_the_artist_and_title() {
+        assert_eq!(
+            sample_album().display_title(),
+            "The Sample Band - First Record"
+        );
+        assert!(matches!(
+            sample_album().display_title(),
+            std::borrow::Cow::Owned(_)
+        ));
+    }
+
+    #[test]
+    fn album_display_title_borrows_the_title_when_the_artist_is_empty() {
+        let mut album = sample_album();
+        album.artist = String::new();
+        assert_eq!(album.display_title(), "First Record");
+        assert!(matches!(
+            album.display_title(),
+            std::borrow::Cow::Borrowed(_)
+        ));
     }
 
     #[test]

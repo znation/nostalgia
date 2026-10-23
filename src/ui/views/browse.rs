@@ -190,8 +190,10 @@ pub(super) fn artist_row<'a>(
     )
 }
 
-/// The browse row an album becomes: its title, the "View Songs" hint, the
-/// message emitted when it is pressed, and the current-track flag. `epoch`
+/// The browse row an album becomes: its display title (`<artist> - <title>`,
+/// or the title alone when the artist is empty; see [`Album::display_title`]),
+/// the "View Songs" hint, the message emitted when it is pressed, and the
+/// current-track flag. `epoch`
 /// and `index` are the loaded-list epoch and the album's position in that
 /// list, carried so building a row never clones the album's id (see
 /// [`artist_row`]). Albums are never the currently playing row, so the flag
@@ -202,7 +204,7 @@ pub(super) fn album_row<'a>(
     album: &'a Album,
 ) -> (Cow<'a, str>, Cow<'a, str>, Message, bool) {
     (
-        Cow::Borrowed(album.title.as_str()),
+        album.display_title(),
         Cow::Borrowed("View Songs"),
         Message::AlbumSelected { epoch, index },
         false,

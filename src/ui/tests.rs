@@ -1105,6 +1105,7 @@ async fn album_selected_in_all_albums_loads_its_songs_and_back_returns_to_all_al
         id: "album-3".to_string(),
         title: "Debut".to_string(),
         artist_id: String::new(),
+        artist: "Echo Chamber".to_string(),
     };
     let _ = update(&mut player, Message::AllAlbumsLoaded(vec![flat_album]));
     player.current_view = CurrentView::AllAlbums;
@@ -1255,6 +1256,7 @@ async fn album_selected_fetches_the_albums_songs_into_the_player() {
         id: "album-3".to_string(),
         title: "Debut".to_string(),
         artist_id: "artist-2".to_string(),
+        artist: "Echo Chamber".to_string(),
     }];
 
     let task = update(&mut player, Message::AlbumSelected { epoch: 0, index: 0 });

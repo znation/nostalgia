@@ -82,16 +82,19 @@ impl SampleLibrary {
                 id: "album-1".to_string(),
                 title: "First Record".to_string(),
                 artist_id: "artist-1".to_string(),
+                artist: "The Sample Band".to_string(),
             },
             Album {
                 id: "album-2".to_string(),
                 title: "Second Record".to_string(),
                 artist_id: "artist-1".to_string(),
+                artist: "The Sample Band".to_string(),
             },
             Album {
                 id: "album-3".to_string(),
                 title: "Debut".to_string(),
                 artist_id: "artist-2".to_string(),
+                artist: "Echo Chamber".to_string(),
             },
         ];
         let songs = vec![

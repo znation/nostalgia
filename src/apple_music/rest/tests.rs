@@ -56,7 +56,7 @@ fn favorite_artists_map_library_json() {
 #[test]
 fn albums_by_artist_map_library_json_and_set_the_artist_id() {
     let stub = StubTransport::returning(
-        r#"{"data":[{"id":"album-1","attributes":{"name":"First Record"}}]}"#,
+        r#"{"data":[{"id":"album-1","attributes":{"name":"First Record","artistName":"The Sample Band"}}]}"#,
     );
     let library = library_over(&stub);
 
@@ -428,7 +428,7 @@ fn get_all_songs_rejects_a_nameless_song() {
 #[test]
 fn get_all_albums_maps_the_library_albums_collection() {
     let stub = StubTransport::returning(
-        r#"{"data":[{"id":"album-1","attributes":{"name":"First Record"}}]}"#,
+        r#"{"data":[{"id":"album-1","attributes":{"name":"First Record","artistName":"The Sample Band"}}]}"#,
     );
     let library = library_over(&stub);
 
@@ -440,9 +440,39 @@ fn get_all_albums_maps_the_library_albums_collection() {
             id: "album-1".to_string(),
             title: "First Record".to_string(),
             artist_id: String::new(),
+            artist: "The Sample Band".to_string(),
         }]
     );
     assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/albums");
+}
+
+// An album resource without `attributes.artistName` must map to the model's
+// `""` "no artist supplied" sentinel rather than dropping the album, so a
+// library album that carries no artist still shows its bare title.
+#[test]
+fn get_all_albums_leaves_a_missing_album_artist_empty() {
+    let stub = StubTransport::returning(
+        r#"{"data":[{"id":"album-1","attributes":{"name":"First Record"}}]}"#,
+    );
+    let library = library_over(&stub);
+
+    let albums = library.get_all_albums(&rest_session()).unwrap();
+
+    assert_eq!(albums[0].artist, "");
+}
+
+// A whitespace-only artist name is as useless as a missing one, so it must map
+// to the same empty sentinel instead of rendering a blank prefix.
+#[test]
+fn get_all_albums_leaves_a_blank_album_artist_empty() {
+    let stub = StubTransport::returning(
+        r#"{"data":[{"id":"album-1","attributes":{"name":"First Record","artistName":"   "}}]}"#,
+    );
+    let library = library_over(&stub);
+
+    let albums = library.get_all_albums(&rest_session()).unwrap();
+
+    assert_eq!(albums[0].artist, "");
 }
 
 // A library larger than one page is read in full: the flat album list follows

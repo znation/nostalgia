@@ -758,15 +758,22 @@ impl Resource {
     fn into_album(self, artist_id: &str) -> Result<Album, AppleMusicError> {
         let Resource { id, attributes } = self;
         let id = required_id(id, "album")?;
-        let title = required_name(
-            attributes.and_then(|attributes| attributes.name),
-            &id,
-            "album",
-        )?;
+        let (title, artist_name) = match attributes {
+            Some(attributes) => (attributes.name, attributes.artist_name),
+            None => (None, None),
+        };
+        let title = required_name(title, &id, "album")?;
+        // `""` is `Album::artist`'s "source supplied no artist" sentinel, so a
+        // missing or whitespace-only name maps to the empty sentinel, exactly as
+        // `Resource::into_song` does.
+        let artist = artist_name
+            .filter(|name| !name.trim().is_empty())
+            .unwrap_or_default();
         Ok(Album {
             id,
             title,
             artist_id: artist_id.to_string(),
+            artist,
         })
     }
 

@@ -1920,7 +1920,7 @@ async fn get_favorite_artists_uses_the_rest_library_when_signed_in() {
 #[tokio::test]
 async fn get_albums_by_artist_uses_the_rest_library_when_signed_in() {
     let stub = StubTransport::returning(
-        r#"{"data":[{"id":"album-1","attributes":{"name":"First Record"}}]}"#,
+        r#"{"data":[{"id":"album-1","attributes":{"name":"First Record","artistName":"The Sample Band"}}]}"#,
     );
     let service = signed_in_service(&stub);
 
@@ -2002,7 +2002,7 @@ async fn get_all_songs_uses_the_rest_library_when_signed_in() {
 #[tokio::test]
 async fn get_all_albums_uses_the_rest_library_when_signed_in() {
     let stub = StubTransport::returning(
-        r#"{"data":[{"id":"rest-album","attributes":{"name":"Remote Record"}}]}"#,
+        r#"{"data":[{"id":"rest-album","attributes":{"name":"Remote Record","artistName":"The Sample Band"}}]}"#,
     );
     let service = signed_in_service(&stub);
 
@@ -2014,6 +2014,7 @@ async fn get_all_albums_uses_the_rest_library_when_signed_in() {
             id: "rest-album".to_string(),
             title: "Remote Record".to_string(),
             artist_id: String::new(),
+            artist: "The Sample Band".to_string(),
         }]
     );
     assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/albums");
