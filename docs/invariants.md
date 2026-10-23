@@ -687,5 +687,6 @@ same list/Shuffle/Repeat rules as Next, and the no-next-song case reuses `handle
 - `preview_end_repeats_a_single_song_with_repeat_on` (`src/ui/tests.rs`)
 - `preview_end_at_the_last_song_stops_when_repeat_is_off` (`src/ui/tests.rs`)
 - `preview_end_with_shuffle_on_picks_the_other_song` (`src/ui/tests.rs`)
+- `preview_end_with_shuffle_on_a_single_song_stops` (`src/ui/tests.rs`)
 - `preview_end_while_paused_or_stopped_does_not_advance` (`src/ui/tests.rs`)
 - `preview_end_with_a_stale_epoch_or_pending_transition_is_dropped` (`src/ui/tests.rs`)

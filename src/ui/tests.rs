@@ -5125,6 +5125,34 @@ fn preview_end_with_shuffle_on_picks_the_other_song() {
     );
 }
 
+// Repeat alone repeats a one-song list, but Shuffle changes the forward step:
+// `shuffled_track_id` can only pick the current song, so the advance filters it
+// out and stops rather than replaying, whether Repeat is on or off. The
+// two-song Shuffle test above never reaches this no-other-song path.
+#[test]
+fn preview_end_with_shuffle_on_a_single_song_stops() {
+    for repeat in [false, true] {
+        let recording = Arc::new(RecordingAudio::default());
+        let (mut player, state) = player_playing_stepping_song(&recording, "song-1");
+        player.songs.items.truncate(1);
+        {
+            let mut state = state.blocking_lock();
+            state.shuffle = true;
+            state.repeat = repeat;
+        }
+
+        let settled = drive_playback_finished(&mut player);
+        assert!(
+            matches!(settled, Message::TransportSettled),
+            "Shuffle with a single song and Repeat {repeat} must take the Stop path"
+        );
+        assert_eq!(recording.calls(), vec![AudioCall::Stop]);
+        let state = state.blocking_lock();
+        assert!(!state.is_playing);
+        assert_eq!(state.current_track.as_deref(), Some("song-1"));
+    }
+}
+
 // Pause and Stop never advance: the finished signal may still arrive from a
 // poll issued before the transport changed, and a paused or stopped player has
 // nothing to step past.
