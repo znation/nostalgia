@@ -627,3 +627,33 @@ backend queries. On the UI side, `views::now_playing::visualizer_bar_heights` an
 - `stop_clears_the_spectrum_while_pause_keeps_it`
 - `spectrum_tick_queries_spectrum_and_carries_the_epoch`
 - `the_spectrum_timer_runs_only_while_playback_runs` (`src/ui/tests.rs`)
+
+## Preview end
+
+**Guarantee.** The backend reports whether the loaded preview has played to its end, and only
+while a preview is loaded. A paused but unended preview, a stopped player, the silent fallback, a
+closed worker, and an unanswered query all report not finished, so the UI can never advance off a
+state that is not a completed preview. Reading the state changes no output and issues no audio
+command. The UI consumer arrives in part 2/2; this half changes no UI behavior.
+
+**Enforced by.** `audio::AudioOutput::is_finished` in `src/audio.rs` defaults to false, and
+`audio::player::RodioPlayer::is_finished` in `src/audio/player.rs` answers true only once the
+player holds a preview's format and `rodio::Player::empty` reports the queued source has drained;
+`RodioOutput::is_finished` bounds the worker's `Command::Finished` reply like the other backend
+queries, mapping a missing reply to false. `AppleMusicService::preview_finished` in
+`src/apple_music/playback.rs` forwards the backend's answer without touching shared state.
+
+**Pinned by.**
+
+- `finished_query_returns_the_loaded_players_finished_state` (`src/audio/tests.rs`)
+- `finished_query_reports_none_when_nothing_is_loaded` (`src/audio/tests.rs`)
+- `rodio_player_reports_finished_only_after_its_appended_preview_drains` (`src/audio/tests.rs`)
+- `a_paused_preview_reports_unfinished` (`src/audio/tests.rs`)
+- `silent_output_reports_an_unfinished_preview` (`src/audio/tests.rs`)
+- `rodio_output_asks_the_worker_for_its_finished_state` (`src/audio/tests.rs`)
+- `rodio_output_reports_none_when_the_finished_reply_times_out` (`src/audio/tests.rs`)
+- `rodio_output_reports_a_closed_worker_for_every_command` (`src/audio/tests.rs`)
+- `stop_removes_the_player_so_a_finished_query_reports_none` (`src/audio/tests.rs`)
+- `preview_finished_forwards_the_audio_output_state` (`src/apple_music/tests.rs`)
+
+**Part 2/2** consumes the signal to advance the transport; it is not implemented here.

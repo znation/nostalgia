@@ -207,6 +207,18 @@ pub trait AudioOutput: Send + Sync {
         None
     }
 
+    /// Reports whether the loaded preview has played to its end.
+    ///
+    /// Returns true only while a preview is loaded and its source has played
+    /// to the end. Returns false when no player is loaded (including after a
+    /// Stop), while a paused preview is still mid-asset, for the silent
+    /// fallback, and when the backend cannot answer within its bound. The
+    /// default keeps every existing implementor compiling without a finished
+    /// state of its own.
+    fn is_finished(&self) -> bool {
+        false
+    }
+
     /// Sets the equalizer curve applied to the output.
     ///
     /// Applies to the current player, if one is loaded, and is remembered so

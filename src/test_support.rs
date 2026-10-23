@@ -14,7 +14,7 @@
 use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -433,12 +433,19 @@ pub(crate) fn recording_spectrum() -> Spectrum {
 #[derive(Debug, Default)]
 pub(crate) struct RecordingAudio {
     calls: Mutex<Vec<AudioCall>>,
+    finished: AtomicBool,
 }
 
 impl RecordingAudio {
     /// A snapshot of the recorded calls, cloned out from under the mutex.
     pub(crate) fn calls(&self) -> Vec<AudioCall> {
         self.calls.lock().unwrap().clone()
+    }
+
+    /// Sets the finished state [`AudioOutput::is_finished`] reports, so a test
+    /// can drive both values of a preview's completion without a real player.
+    pub(crate) fn set_finished(&self, finished: bool) {
+        self.finished.store(finished, Ordering::Relaxed);
     }
 }
 
@@ -521,6 +528,12 @@ impl AudioOutput for RecordingAudio {
     /// test can pin what the backend's loaded preview reports.
     fn duration(&self) -> Option<Duration> {
         Some(Duration::from_secs(30))
+    }
+
+    /// Reports the settable finished state, so a test can drive a preview's
+    /// natural end without a real player.
+    fn is_finished(&self) -> bool {
+        self.finished.load(Ordering::Relaxed)
     }
 
     fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {

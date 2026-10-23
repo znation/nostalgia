@@ -31,8 +31,8 @@ use super::{AudioOutput, PlaybackFormat, Spectrum};
 pub(super) const DEVICE_OPEN_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// The longest [`RodioOutput::position`], [`RodioOutput::playback_format`],
-/// [`RodioOutput::spectrum`], and [`RodioOutput::duration`] wait for the
-/// worker to answer.
+/// [`RodioOutput::spectrum`], [`RodioOutput::duration`], and
+/// [`RodioOutput::is_finished`] wait for the worker to answer.
 ///
 /// The worker handles commands in channel order, so a query issued while the
 /// worker is downloading a preview is answered only after that download
@@ -40,9 +40,9 @@ pub(super) const DEVICE_OPEN_TIMEOUT: Duration = Duration::from_secs(5);
 /// [`super::preview::PREVIEW_TIMEOUT`], far longer than a UI poll should
 /// block, so this bound is short: a query that misses it reports `None`
 /// rather than stalling the caller, and the next poll asks again. It bounds
-/// all four queued backend queries — the position, the format, the spectrum,
-/// and the preview's length — because the same download sits in front of any
-/// of them.
+/// all five queued backend queries — the position, the format, the spectrum,
+/// the preview's length, and whether the preview has finished — because the
+/// same download sits in front of any of them.
 pub(super) const WORKER_QUERY_TIMEOUT: Duration = Duration::from_millis(100);
 
 /// A command sent from [`RodioOutput`] to its worker thread.
@@ -75,6 +75,9 @@ pub(super) enum Command {
     /// Report the loaded preview's live spectrum on `reply` (`None` when none
     /// is loaded).
     Spectrum(Sender<Option<Spectrum>>),
+    /// Report whether the loaded preview has played to its end on `reply`
+    /// (`None` when none is loaded).
+    Finished(Sender<Option<bool>>),
     /// Set the equalizer curve applied to the output.
     SetEqualizer(EqSnapshot),
 }
@@ -115,6 +118,11 @@ pub(super) trait WorkerPlayer {
     /// The default answers `None`, so a fake without a spectrum compiles.
     fn spectrum(&self) -> Option<Spectrum> {
         None
+    }
+    /// Reports whether the player's loaded preview has played to its end. The
+    /// default answers `false`, so a fake without a finished state compiles.
+    fn is_finished(&self) -> bool {
+        false
     }
     /// Sets the player's equalizer curve.
     fn set_equalizer(&self, equalizer: EqSnapshot);
@@ -341,6 +349,12 @@ impl WorkerPlayer for RodioPlayer {
         spectrum_for_loaded_player(self.format.get().is_some(), &self.spectrum)
     }
 
+    fn is_finished(&self) -> bool {
+        // `empty` also holds before a preview is ever appended, so the format
+        // gate keeps a fresh player from reporting a finished preview.
+        self.format.get().is_some() && self.player.empty()
+    }
+
     fn set_equalizer(&self, equalizer: EqSnapshot) {
         self.equalizer.store(equalizer);
     }
@@ -427,10 +441,10 @@ impl RodioOutput {
     /// [`WORKER_QUERY_TIMEOUT`] for its reply.
     ///
     /// Returns `None` when the worker is gone or misses the bound, matching
-    /// the four backend queries [`AudioOutput::position`],
-    /// [`AudioOutput::duration`], [`AudioOutput::playback_format`], and
-    /// [`AudioOutput::spectrum`], which all call this helper so a stalled
-    /// worker cannot block the caller.
+    /// the five backend queries [`AudioOutput::position`],
+    /// [`AudioOutput::duration`], [`AudioOutput::playback_format`],
+    /// [`AudioOutput::spectrum`], and [`AudioOutput::is_finished`], which all
+    /// call this helper so a stalled worker cannot block the caller.
     fn query<T>(&self, command: impl FnOnce(Sender<Option<T>>) -> Command) -> Option<T> {
         let (reply, replies) = mpsc::channel();
         if self.send(command(reply)).is_err() {
@@ -487,6 +501,10 @@ impl AudioOutput for RodioOutput {
 
     fn spectrum(&self) -> Option<Spectrum> {
         self.query(Command::Spectrum)
+    }
+
+    fn is_finished(&self) -> bool {
+        self.query(Command::Finished).unwrap_or(false)
     }
 
     fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
@@ -674,6 +692,9 @@ pub(super) fn serve_commands<P, D>(
             }
             Command::Spectrum(reply) => {
                 let _ = reply.send(player.as_ref().and_then(WorkerPlayer::spectrum));
+            }
+            Command::Finished(reply) => {
+                let _ = reply.send(player.as_ref().map(WorkerPlayer::is_finished));
             }
             Command::SetEqualizer(new_equalizer) => {
                 settings.equalizer = new_equalizer;

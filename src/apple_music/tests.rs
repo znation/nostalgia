@@ -923,6 +923,24 @@ async fn playback_spectrum_forwards_the_audio_output_spectrum() {
     );
 }
 
+// `preview_finished` reports exactly what the injected backend answers and
+// records no audio command, so the completion poll stays observational.
+#[tokio::test]
+async fn preview_finished_forwards_the_audio_output_state() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (service, _state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+
+    assert!(!service.preview_finished());
+    recording.set_finished(true);
+    assert!(service.preview_finished());
+    recording.set_finished(false);
+    assert!(!service.preview_finished());
+    assert!(
+        recording.calls().is_empty(),
+        "reading the finished state must not record an audio command"
+    );
+}
+
 // `seek_output_to` forwards an absolute seek to the injected backend without
 // touching the shared state: the position belongs to the playing preview, not
 // to `AppState`.

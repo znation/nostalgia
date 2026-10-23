@@ -70,30 +70,6 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Handle the end of a preview (Preview end, part 1/2: planned 2026-10-23 by the plan role)
-
-**Goal.** A loaded Apple Music preview has no completion signal today: once its ~30-second asset drains, the backend has nothing left to play, but `AudioOutput` cannot say so, so the UI keeps `is_playing` true and polls a silent sink forever. Add a narrow query, `AudioOutput::is_finished`, that reports whether the loaded preview has played to its end, and forward it as `AppleMusicService::preview_finished`. This is the backend half of the Preview end series and changes no UI behavior; part 2/2 consumes the signal to advance the transport.
-
-**Approach.**
-
-- `src/audio.rs`: add `fn is_finished(&self) -> bool { false }` to `AudioOutput`, documented like `duration`/`position`: true only while a preview is loaded and its source has played to the end; false when no player is loaded (including after Stop), while a paused preview is still mid-asset, for the silent fallback, and when the worker cannot answer within its bound. The default keeps every existing implementor compiling without a finished state of its own.
-- `src/audio/player.rs`: add `fn is_finished(&self) -> bool { false }` to `WorkerPlayer`. Override it for `RodioPlayer` as `self.format.get().is_some() && self.player.empty()`: rodio 0.22.2's `Player::empty` becomes true once the queued source has drained, and the format gate keeps a player that has never had a preview from reporting finished. Add `Command::Finished(Sender<Option<bool>>)` beside `Duration`/`PlaybackFormat`/`Spectrum`, handle it in `serve_commands` with `reply.send(player.as_ref().map(WorkerPlayer::is_finished))`, and add `RodioOutput::is_finished` through the existing `query` helper, mapping a missing reply to `false`. Extend the `WORKER_QUERY_TIMEOUT` doc (which names the queued backend queries) and the `AudioOutput` trait doc to include the finished query.
-- `src/test_support.rs`: give `RecordingAudio` a `finished: AtomicBool` (default false), a `pub(crate) fn set_finished(&self, finished: bool)`, and an `is_finished` override returning it, so part 2 and the service test can drive both values.
-- `src/apple_music/playback.rs`: add `pub(crate) fn preview_finished(&self) -> bool` beside `playback_spectrum`, forwarding to `self.audio.is_finished()` and documenting that it is observational and touches no shared state.
-- `src/audio/tests.rs`: give `RecordingPlayer` a settable `finished` flag (an `Arc<AtomicBool>` field with a default like `spectrum`) and an `is_finished` override. Add `finished_query_returns_the_loaded_players_finished_state` (Play then a `Command::Finished` query answers `Some(true)` when the installed player's flag is set and `Some(false)` when it is not), `finished_query_reports_none_when_nothing_is_loaded` (no Play, query answers `None` and creates no player), `silent_output_reports_an_unfinished_preview` (`SilentOutput::is_finished()` is false), and `rodio_output_asks_the_worker_for_its_finished_state` (a worker thread answering `Command::Finished` with `Some(true)` makes `RodioOutput::is_finished()` true). Extend `rodio_output_reports_a_closed_worker_for_every_command` with `!output.is_finished()`.
-- `src/apple_music/tests.rs`: add `preview_finished_forwards_the_audio_output_state` over `service_with_audio` and a `RecordingAudio`: false by default, true after `set_finished(true)`, false again after `set_finished(false)`, with no `AudioCall` recorded.
-- `docs/invariants.md`: add a `## Preview end` section after `## Preview spectrum`: the backend reports whether the loaded preview has played to its end, only while a preview is loaded; a paused but unended preview, a stopped player, the silent fallback, a closed worker, and an unanswered query all report not finished; reading it changes no output. Name `audio::AudioOutput::is_finished`, `audio::player::RodioPlayer::is_finished`, and `AppleMusicService::preview_finished` as the enforcers and list the new tests. Say that part 2/2 is the UI consumer.
-
-**Files touched.** `src/audio.rs`, `src/audio/player.rs`, `src/audio/tests.rs`, `src/test_support.rs`, `src/apple_music/playback.rs`, `src/apple_music/tests.rs`, `docs/invariants.md`.
-
-**Acceptance criteria.**
-
-- `AudioOutput::is_finished` defaults to false; `SilentOutput`, a closed worker, and an unanswered query all report false.
-- The worker answers `Some(<player answer>)` for a loaded player and `None` when no player is installed; `RodioPlayer::is_finished` is false before a preview is appended and follows `rodio::Player::empty` once one is.
-- `AppleMusicService::preview_finished` returns exactly what the injected backend's `is_finished` returns, and calling it records no audio command.
-- No UI code reads the signal yet, so playback, the Now Playing readout, and the browse views are unchanged.
-- `docs/invariants.md` records the guarantee, and `make check` passes with no new dependency.
-
 ### Handle the end of a preview (Preview end, part 2/2: planned 2026-10-23 by the plan role, requires part 1/2 landed)
 
 **Goal.** Make the end of a preview follow the transport's own rules instead of leaving the UI claiming playback against a silent sink. When a loaded preview finishes while playing, behave exactly like Next: step forward through the showing list with Shuffle choosing a non-current song and Repeat wrapping at the end. With Repeat off on the last song, take the existing Stop path so playback becomes stopped, the current song stays queued for Play, and the elapsed readout, status row, visualizer, and seek bar clear together. Pause and Stop never advance. Reuse the one-second position poll; add no timer or subscription.

@@ -89,6 +89,16 @@ fn silent_output_reports_no_spectrum() {
     assert_eq!(output.spectrum(), None);
 }
 
+// The silent fallback plays nothing to the end, so the UI must never advance
+// the transport off it.
+#[test]
+fn silent_output_reports_an_unfinished_preview() {
+    assert!(!SilentOutput.is_finished());
+
+    let output = audio_with_fallback(|| Err(AppleMusicError::new("no device")));
+    assert!(!output.is_finished());
+}
+
 /// Builds a full-scale sine at `frequency`, `len` samples long.
 fn sine_samples(frequency: f32, sample_rate: u32, len: usize) -> Vec<f32> {
     (0..len)
@@ -1147,6 +1157,53 @@ fn rodio_output_asks_the_worker_for_its_spectrum() {
     worker.join().unwrap();
 }
 
+// A finished query crosses to the worker and returns the reply it sends, just
+// like the position, format, spectrum, and duration queries.
+#[test]
+fn rodio_output_asks_the_worker_for_its_finished_state() {
+    let (commands, receiver) = std::sync::mpsc::channel();
+    let output = RodioOutput {
+        commands: Mutex::new(commands),
+    };
+    let worker = std::thread::spawn(move || match receiver.recv() {
+        Ok(Command::Finished(reply)) => {
+            reply.send(Some(true)).unwrap();
+        }
+        _ => panic!("finished did not send Command::Finished"),
+    });
+
+    assert!(output.is_finished());
+    worker.join().unwrap();
+}
+
+// A worker that accepts the finished query but does not answer must not hold
+// the caller past the seam's bound: the query reports not finished instead of
+// waiting for the reply.
+#[test]
+fn rodio_output_reports_none_when_the_finished_reply_times_out() {
+    let (commands, receiver) = std::sync::mpsc::channel();
+    let output = RodioOutput {
+        commands: Mutex::new(commands),
+    };
+    let worker = std::thread::spawn(move || match receiver.recv() {
+        Ok(Command::Finished(reply)) => {
+            // Keep the reply channel alive well past the seam's bound, as a
+            // worker busy installing a preview would.
+            std::thread::sleep(WORKER_QUERY_TIMEOUT * 10);
+            drop(reply);
+        }
+        _ => panic!("finished did not send Command::Finished"),
+    });
+
+    let started = Instant::now();
+    assert!(!output.is_finished());
+    assert!(
+        started.elapsed() < WORKER_QUERY_TIMEOUT * 5,
+        "a missing finished reply must time out instead of blocking"
+    );
+    worker.join().unwrap();
+}
+
 // A worker that accepts the query but does not answer must not hold the
 // caller past the seam's bound: the query reports `None` instead of waiting
 // for the reply.
@@ -1264,6 +1321,10 @@ fn rodio_output_reports_a_closed_worker_for_every_command() {
     assert!(
         output.spectrum().is_none(),
         "a closed worker cannot answer a spectrum query"
+    );
+    assert!(
+        !output.is_finished(),
+        "a closed worker cannot report a finished preview"
     );
 }
 
@@ -1550,6 +1611,7 @@ struct RecordingPlayer {
     position: Arc<Mutex<Duration>>,
     duration: Arc<Mutex<Option<Duration>>>,
     spectrum: Arc<Mutex<Option<Spectrum>>>,
+    finished: Arc<AtomicBool>,
     equalizer: Arc<Mutex<EqSnapshot>>,
 }
 
@@ -1568,6 +1630,7 @@ impl Default for RecordingPlayer {
             position: Arc::new(Mutex::new(Duration::from_secs(42))),
             duration: Arc::new(Mutex::new(Some(Duration::from_secs(30)))),
             spectrum: Arc::new(Mutex::new(Some(test_spectrum()))),
+            finished: Arc::default(),
             equalizer: Arc::default(),
         }
     }
@@ -1614,6 +1677,10 @@ impl WorkerPlayer for RecordingPlayer {
 
     fn spectrum(&self) -> Option<Spectrum> {
         *self.spectrum.lock().unwrap()
+    }
+
+    fn is_finished(&self) -> bool {
+        self.finished.load(Ordering::SeqCst)
     }
 
     fn set_equalizer(&self, equalizer: EqSnapshot) {
@@ -2151,6 +2218,65 @@ fn append_records_the_appended_source_through_the_players_meter() {
     );
 }
 
+// The production player's finished state must come from rodio's own queue:
+// the format cell alone is set by an append, and `empty` alone also holds
+// before a preview is ever queued. This drives the real
+// `RodioPlayer::is_finished` over a real `rodio::Player`.
+#[test]
+fn rodio_player_reports_finished_only_after_its_appended_preview_drains() {
+    let (player, mut queue) = RodioPlayer::without_device(Arc::new(SpectrumMeter::default()));
+    assert!(
+        !player.is_finished(),
+        "a player that has appended nothing must not report a finished preview"
+    );
+
+    let samples = sine_samples(1_000.0, 44_100, 16);
+    let total = samples.len();
+    let buffer = rodio::buffer::SamplesBuffer::new(
+        ChannelCount::new(1).unwrap(),
+        SampleRate::new(44_100).unwrap(),
+        samples,
+    );
+    player.append_source(buffer, 0);
+    assert!(
+        !player.is_finished(),
+        "a preview that is still queued must not report finished"
+    );
+
+    // Pull every sample but leave the source unpolled for its end, so the
+    // queue still holds the preview even though its audio is exhausted.
+    queue.by_ref().take(total).for_each(drop);
+    assert!(
+        !player.is_finished(),
+        "a preview whose end has not been observed must not report finished"
+    );
+
+    // The output device polls once more, which is when rodio observes the
+    // source ending and decrements its queued-sound count.
+    let _ = queue.next();
+    assert!(
+        player.is_finished(),
+        "a drained appended preview must report finished"
+    );
+}
+
+// A paused preview has not reached its end, so the production player must not
+// report it as finished even though no more samples are being pulled.
+#[test]
+fn a_paused_preview_reports_unfinished() {
+    let (player, _queue) = RodioPlayer::without_device(Arc::new(SpectrumMeter::default()));
+    let buffer = rodio::buffer::SamplesBuffer::new(
+        ChannelCount::new(1).unwrap(),
+        SampleRate::new(44_100).unwrap(),
+        sine_samples(1_000.0, 44_100, 16),
+    );
+
+    player.append_source(buffer, 0);
+    player.pause();
+
+    assert!(!player.is_finished());
+}
+
 // A spectrum query with a player installed must answer from that player, the
 // same way a format query does.
 #[test]
@@ -2170,6 +2296,50 @@ fn spectrum_query_returns_the_loaded_players_spectrum() {
         Some(test_spectrum()),
         "the query must answer with the installed player's spectrum"
     );
+}
+
+// A finished query answers from the installed player, so the UI observes a
+// preview's natural end without reading the worker's state itself.
+#[test]
+fn finished_query_returns_the_loaded_players_finished_state() {
+    for finished in [true, false] {
+        let (sender, receiver) = mpsc::channel();
+        let player = RecordingPlayer::default();
+        player.finished.store(finished, Ordering::SeqCst);
+        let installed = player.clone();
+        let create_player = move || installed.clone();
+        let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+        let (reply, replies) = mpsc::channel();
+
+        sender.send(Command::Play("first".to_string())).unwrap();
+        sender.send(Command::Finished(reply)).unwrap();
+        drop(sender);
+        serve_commands(receiver, create_player, fetch);
+
+        assert_eq!(
+            replies.recv().unwrap(),
+            Some(finished),
+            "the query must answer with the installed player's finished state"
+        );
+    }
+}
+
+// With no player installed, a finished query reports `None` instead of
+// claiming a preview that is not loaded has ended.
+#[test]
+fn finished_query_reports_none_when_nothing_is_loaded() {
+    let (sender, receiver) = mpsc::channel();
+    let create_player = || -> RecordingPlayer {
+        panic!("a finished query must not create a player");
+    };
+    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+    let (reply, replies) = mpsc::channel();
+
+    sender.send(Command::Finished(reply)).unwrap();
+    drop(sender);
+    serve_commands(receiver, create_player, fetch);
+
+    assert_eq!(replies.recv().unwrap(), None);
 }
 
 // With no player installed, a spectrum query reports `None` instead of
@@ -2205,6 +2375,46 @@ fn stop_removes_the_player_so_a_spectrum_query_reports_none() {
     drop(sender);
     serve_commands(receiver, create_player, fetch);
 
+    assert_eq!(replies.recv().unwrap(), None);
+}
+
+// Stop drops the loaded player, so a later finished query cannot report the
+// stopped preview as having reached its end. Stop and the query are sent from
+// inside the first `create_player` call, once that player is recorded, so they
+// arrive after the Play installs it; were the player still installed, the
+// finished query would answer with its state instead of `None`.
+#[test]
+fn stop_removes_the_player_so_a_finished_query_reports_none() {
+    let (sender, receiver) = mpsc::channel();
+    let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
+    let recorded = Arc::clone(&players);
+    let (reply, replies) = mpsc::channel();
+    let queued = Arc::new(Mutex::new(Some((
+        sender.clone(),
+        vec![Command::Stop, Command::Finished(reply)],
+    ))));
+    let create_player = move || {
+        let player = RecordingPlayer::default();
+        recorded.lock().unwrap().push(player.clone());
+        if let Some((sender, commands)) = queued.lock().unwrap().take() {
+            for command in commands {
+                sender.send(command).unwrap();
+            }
+        }
+        player
+    };
+    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+
+    sender.send(Command::Play("first".to_string())).unwrap();
+    drop(sender);
+    serve_commands(receiver, create_player, fetch);
+
+    let players = players.lock().unwrap();
+    assert_eq!(players.len(), 1, "the Play must install one player");
+    assert!(
+        players[0].stopped.load(Ordering::SeqCst),
+        "Stop must stop the installed player"
+    );
     assert_eq!(replies.recv().unwrap(), None);
 }
 

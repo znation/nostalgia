@@ -263,6 +263,19 @@ impl AppleMusicService {
         self.audio.spectrum()
     }
 
+    /// Reports whether the loaded preview has played to its end.
+    ///
+    /// Synchronous and touches no shared state: it forwards the backend's own
+    /// finished state (see [`crate::audio::AudioOutput::is_finished`]). The
+    /// backend bounds the wait, so callers on the UI thread should run it as a
+    /// task rather than blocking `update`. Part 2/2's position poll consumes
+    /// it to advance the transport, so no production caller exists yet and
+    /// `dead_code` is allowed on exactly this seam.
+    #[allow(dead_code)]
+    pub(crate) fn preview_finished(&self) -> bool {
+        self.audio.is_finished()
+    }
+
     /// Forwards `equalizer` to the audio backend, so a preview starts at the
     /// curve the equalizer panel shows. Synchronous, and touches no shared
     /// state: the UI already stored the clamped curve under its own lock, and
