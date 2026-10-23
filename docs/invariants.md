@@ -208,6 +208,10 @@ browser's `POST /token` callback behind it:
   served within `ceil((N + 1) / MAX_ACCEPTS_PER_PASS) + 1` poll intervals (`ACCEPT_POLL_INTERVAL`,
   25 ms) — one poll interval for every eight connections queued ahead of it. The flow's deadline
   remains the outer bound.
+- A bootstrap directory left in the temp dir by a process that died before its guard could remove it
+  is swept by the next sign-in once it is older than `BOOTSTRAP_STALE_AFTER` (twice `AUTH_TIMEOUT`).
+  A fresher bootstrap directory (which may belong to another running instance), an entry with a
+  different name, and a non-directory entry are left alone; a symlink is not followed.
 
 **Enforced by.** `authorize_with_bounds` in `src/music_kit_auth.rs` keeps the accepted connections
 in a `Vec<PendingConnection>`. Every pass calls `serve_pending`, which polls each pending
@@ -215,7 +219,9 @@ connection through `http::RequestReader::poll` and serves the ones whose request
 then `accept_pending`, which takes on the connections that are waiting. `http::RequestReader` owns a
 non-blocking socket and parses the request from the bytes received so far, so polling a silent peer
 reports "nothing yet" instead of waiting for it; `serve_pending` drops a connection whose budget is
-spent.
+spent. `BootstrapPage::write` calls `sweep_stale_bootstrap_dirs` before creating the new owner-only
+directory; the sweep reads one level of the temp dir, removes only aged directories whose names
+carry `BOOTSTRAP_DIR_PREFIX`, and reports a removal failure without failing the new sign-in.
 
 **Pinned by.**
 
@@ -225,6 +231,8 @@ spent.
 - `the_pending_list_is_capped_and_the_oldest_connection_makes_way`
 - `one_pass_takes_on_a_bounded_number_of_connections`
 - `the_reader_reports_a_partial_request_as_incomplete`
+- `the_bootstrap_sweep_removes_only_old_bootstrap_directories`
+- `a_new_bootstrap_write_sweeps_a_stale_directory_from_a_crashed_flow`
   (all in `src/music_kit_auth/tests.rs`)
 
 **History.** Reconstructed from "A stalled connection is served for its whole budget before the next

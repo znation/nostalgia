@@ -55,7 +55,7 @@ use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use crate::music_error::AppleMusicError;
 
@@ -413,10 +413,82 @@ struct BootstrapPage {
     file: PathBuf,
 }
 
+/// The prefix every bootstrap directory gets. A new sign-in sweeps only the
+/// entries carrying it, so a cleanup cannot touch unrelated temp files.
+const BOOTSTRAP_DIR_PREFIX: &str = "nostalgia-auth-";
+
+/// How old a bootstrap directory must be before a new sign-in removes it as
+/// the leftover of a flow that never finished. Twice [`AUTH_TIMEOUT`]: a live
+/// flow removes its own directory when it returns, so a directory still there
+/// after twice the flow's whole budget belonged to a process that died (or was
+/// suspended and resumed after its flow had already given up).
+const BOOTSTRAP_STALE_AFTER: Duration = Duration::from_secs(600);
+
+/// Removes `root`'s bootstrap directories whose last modification is at or
+/// before `now - stale_after`.
+///
+/// The [`BootstrapPage`] guard removes its directory when its flow returns, so
+/// a directory left in the temp dir means the process died during sign-in and
+/// the guard never ran. Removing it on the next sign-in keeps a crashed run
+/// from leaving one `nostalgia-auth-*` directory (with the stale loopback URL
+/// and nonce it embeds) behind per attempt. Only real directories carrying the
+/// bootstrap prefix are removed; a symlink is skipped rather than followed,
+/// and an entry with no readable modification time or an unrelated name is
+/// left alone. A failed removal is reported and does not stop the sweep or the
+/// sign-in: the new bootstrap needs a new, differently named directory.
+fn sweep_stale_bootstrap_dirs(root: &Path, now: SystemTime, stale_after: Duration) {
+    let Some(cutoff) = now.checked_sub(stale_after) else {
+        return;
+    };
+    let entries = match fs::read_dir(root) {
+        Ok(entries) => entries,
+        Err(error) => {
+            eprintln!("could not read the temp directory to clean up stale sign-in pages: {error}");
+            return;
+        }
+    };
+    for entry in entries {
+        let Ok(entry) = entry else {
+            continue;
+        };
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        if !name.starts_with(BOOTSTRAP_DIR_PREFIX) {
+            continue;
+        }
+        let path = entry.path();
+        let Ok(metadata) = fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if !metadata.file_type().is_dir() {
+            continue;
+        }
+        let Ok(modified) = metadata.modified() else {
+            continue;
+        };
+        if modified > cutoff {
+            continue;
+        }
+        if let Err(error) = fs::remove_dir_all(&path) {
+            eprintln!(
+                "could not remove the stale sign-in page directory {}: {error}",
+                path.display()
+            );
+        }
+    }
+}
+
 impl BootstrapPage {
     /// Writes a redirect page carrying `url` into a fresh owner-only temp
     /// directory and returns the guard that owns it.
+    ///
+    /// A stale directory left by a crashed earlier flow is swept first (see
+    /// [`sweep_stale_bootstrap_dirs`]); the sweep is best effort and never
+    /// fails the new sign-in.
     fn write(url: &str) -> io::Result<Self> {
+        sweep_stale_bootstrap_dirs(&env::temp_dir(), SystemTime::now(), BOOTSTRAP_STALE_AFTER);
         Self::write_with(url, &write_private_file)
     }
 
@@ -436,7 +508,8 @@ impl BootstrapPage {
         // cannot wedge the flow; `create_dir` refuses an existing path, so a
         // pre-planted file or symlink is never followed.
         for _ in 0..8 {
-            let directory = env::temp_dir().join(format!("nostalgia-auth-{}", random_nonce()));
+            let directory =
+                env::temp_dir().join(format!("{BOOTSTRAP_DIR_PREFIX}{}", random_nonce()));
             match create_private_dir(&directory) {
                 Ok(()) => {
                     // Own the directory before writing, so a failed write

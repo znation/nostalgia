@@ -274,6 +274,75 @@ fn a_failed_bootstrap_write_removes_the_private_directory() {
     );
 }
 
+// A directory left behind by a process that died mid-sign-in has no guard to
+// remove it, so a later sign-in sweeps it once it is older than twice the flow
+// deadline. Only the aged bootstrap directories go: a fresh one may belong to
+// a flow still running in another process, and an entry with another name or a
+// non-directory entry is not ours to remove.
+#[cfg(unix)]
+#[test]
+fn the_bootstrap_sweep_removes_only_old_bootstrap_directories() {
+    let root = std::env::temp_dir().join(format!("nostalgia-sweep-{}", random_nonce()));
+    std::fs::create_dir(&root).expect("create the sweep scratch root");
+    let old = root.join(format!("{BOOTSTRAP_DIR_PREFIX}old"));
+    let fresh = root.join(format!("{BOOTSTRAP_DIR_PREFIX}fresh"));
+    let unrelated = root.join("other");
+    let file = root.join(format!("{BOOTSTRAP_DIR_PREFIX}file"));
+    std::fs::create_dir(&old).expect("create the old bootstrap directory");
+    std::fs::create_dir(&fresh).expect("create the fresh bootstrap directory");
+    std::fs::create_dir(&unrelated).expect("create an unrelated directory");
+    std::fs::write(&file, b"not a directory").expect("create an unrelated file");
+    std::fs::write(old.join("sign-in.html"), b"stale").expect("plant a stale page");
+
+    let now = std::time::SystemTime::now();
+    std::fs::File::open(&old)
+        .expect("open the old directory")
+        .set_modified(now - Duration::from_secs(3600))
+        .expect("age the old directory");
+
+    sweep_stale_bootstrap_dirs(&root, now, BOOTSTRAP_STALE_AFTER);
+
+    assert!(
+        !old.exists(),
+        "an aged bootstrap directory must be swept, got: {}",
+        old.display()
+    );
+    assert!(
+        fresh.exists(),
+        "a fresh bootstrap directory must be left alone"
+    );
+    assert!(
+        unrelated.exists(),
+        "an unrelated directory must be left alone"
+    );
+    assert!(file.exists(), "a non-directory entry must be left alone");
+
+    std::fs::remove_dir_all(&root).expect("remove the sweep scratch root");
+}
+
+// The guard cannot run when the process dies, so the sweep must actually be
+// wired into the next bootstrap write rather than only existing as a helper.
+#[cfg(unix)]
+#[test]
+fn a_new_bootstrap_write_sweeps_a_stale_directory_from_a_crashed_flow() {
+    let stale = std::env::temp_dir().join(format!("{BOOTSTRAP_DIR_PREFIX}{}", random_nonce()));
+    std::fs::create_dir(&stale).expect("create the stale bootstrap directory");
+    std::fs::write(stale.join("sign-in.html"), b"stale").expect("plant a stale page");
+    std::fs::File::open(&stale)
+        .expect("open the stale directory")
+        .set_modified(std::time::SystemTime::now() - Duration::from_secs(3600))
+        .expect("age the stale directory");
+
+    let page = BootstrapPage::write("http://127.0.0.1:1/?state=deadbeefdeadbeef")
+        .expect("write a new bootstrap page");
+    assert!(
+        !stale.exists(),
+        "a new sign-in must sweep the crashed flow's directory, got: {}",
+        stale.display()
+    );
+    drop(page);
+}
+
 // `render_auth_page` fills every template placeholder. The flow tests assert
 // that the served page carries the developer token and the per-flow nonce, but
 // nothing pins the build version the page hands MusicKit's `configure` as
