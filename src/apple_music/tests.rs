@@ -683,6 +683,28 @@ async fn get_songs_from_playlist_uses_the_rest_library_when_signed_in() {
     );
 }
 
+// A signed-in playlist load has no sample-library fallback: it answers from
+// the sample library only when no session is stored, so a failed tracks
+// request must surface the error for the UI's Retry path. The id is a sample
+// playlist's, so a fallback on failure would have sample songs to return
+// instead of the error.
+#[tokio::test]
+async fn get_songs_from_playlist_fails_when_the_tracks_request_fails() {
+    let stub = StubTransport::failing("playlist tracks down");
+    let service = signed_in_service(&stub);
+
+    let error = service
+        .get_songs_from_playlist("playlist-1")
+        .await
+        .unwrap_err();
+
+    assert_eq!(error.to_string(), "playlist tracks down");
+    assert_single_call(
+        &stub,
+        "https://api.music.apple.com/v1/me/library/playlists/playlist-1/tracks",
+    );
+}
+
 // The library search is the UI search box's backend: it answers with the
 // sample songs whose title or artist contains the query, case-insensitively,
 // so a user can find a track by either field without matching the exact case.
