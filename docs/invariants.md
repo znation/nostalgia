@@ -123,6 +123,7 @@ child is open), and `views::view_browse_nav_buttons` in `src/ui/views/browse.rs`
 - `sort_reorders_all_albums_by_their_display_title`
 - `sort_bumps_the_epoch_so_a_pre_sort_press_is_rejected`
 - `sort_with_an_empty_or_loading_list_is_a_noop`
+- `sort_leaves_other_lists_view_search_and_playback_untouched`
 - `back_restores_a_sorted_artists_list_to_library_order`
 - `back_from_songs_restores_a_sorted_albums_list_to_library_order`
 - `back_from_all_albums_songs_restores_a_sorted_flat_list_to_library_order`

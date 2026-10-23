@@ -3067,6 +3067,211 @@ fn sort_with_an_empty_or_loading_list_is_a_noop() {
     assert_eq!(player.artists.epoch, epoch);
 }
 
+/// The ids in each browse list, in the order Artists, Albums, Songs, All
+/// Songs, All Albums, Playlists.
+fn browse_list_ids(player: &WinampPlayer) -> [Vec<String>; 6] {
+    [
+        player
+            .artists
+            .items
+            .iter()
+            .map(|row| row.id.clone())
+            .collect(),
+        player
+            .albums
+            .items
+            .iter()
+            .map(|row| row.id.clone())
+            .collect(),
+        player
+            .songs
+            .items
+            .iter()
+            .map(|row| row.id.clone())
+            .collect(),
+        player
+            .all_songs
+            .items
+            .iter()
+            .map(|row| row.id.clone())
+            .collect(),
+        player
+            .all_albums
+            .items
+            .iter()
+            .map(|row| row.id.clone())
+            .collect(),
+        player
+            .playlists
+            .items
+            .iter()
+            .map(|row| row.id.clone())
+            .collect(),
+    ]
+}
+
+/// The epochs of the six browse lists, in the same order as
+/// [`browse_list_ids`].
+fn browse_list_epochs(player: &WinampPlayer) -> [u64; 6] {
+    [
+        player.artists.epoch,
+        player.albums.epoch,
+        player.songs.epoch,
+        player.all_songs.epoch,
+        player.all_albums.epoch,
+        player.playlists.epoch,
+    ]
+}
+
+/// Gives every browse list finished-loading rows in an order Sort would change,
+/// so a locality test can tell sorting the current list from touching another.
+fn seed_lists_for_sort_locality(player: &mut WinampPlayer) {
+    player.artists.items = vec![
+        Artist {
+            id: "Zulu".to_string(),
+            name: "Zulu".to_string(),
+        },
+        Artist {
+            id: "alpha".to_string(),
+            name: "alpha".to_string(),
+        },
+        Artist {
+            id: "bravo".to_string(),
+            name: "bravo".to_string(),
+        },
+    ];
+    let albums = || {
+        vec![
+            Album {
+                id: "zulu".to_string(),
+                title: "Alpha".to_string(),
+                artist_id: "artist-1".to_string(),
+                artist: "Zulu".to_string(),
+            },
+            Album {
+                id: "alpha".to_string(),
+                title: "Zulu".to_string(),
+                artist_id: "artist-1".to_string(),
+                artist: "alpha".to_string(),
+            },
+        ]
+    };
+    player.albums.items = albums();
+    player.songs.items = stepping_songs();
+    player.all_songs.items = stepping_songs();
+    player.all_albums.items = albums();
+    player.playlists.items = vec![
+        Playlist {
+            id: "zulu".to_string(),
+            name: "Zulu".to_string(),
+        },
+        Playlist {
+            id: "alpha".to_string(),
+            name: "alpha".to_string(),
+        },
+    ];
+    player.artists.loading = false;
+    player.albums.loading = false;
+    player.songs.loading = false;
+    player.all_songs.loading = false;
+    player.all_albums.loading = false;
+    player.playlists.loading = false;
+}
+
+// The "Browse row order" invariant says a sort leaves every other list, the
+// current view, the search state, and playback alone. Each test above seeds
+// only the list it sorts, so a handler that also sorted another list (or
+// cleared a search or playback) could pass them all. Seed every list and both
+// kinds of state, then sort each view in turn and check only its own list's
+// rows and epoch moved.
+#[test]
+fn sort_leaves_other_lists_view_search_and_playback_untouched() {
+    let views = [
+        CurrentView::Artists,
+        CurrentView::Albums,
+        CurrentView::Songs,
+        CurrentView::AllSongs,
+        CurrentView::AllAlbums,
+        CurrentView::Playlists,
+    ];
+    for view in views {
+        let target = match &view {
+            CurrentView::Artists => 0,
+            CurrentView::Albums => 1,
+            CurrentView::Songs => 2,
+            CurrentView::AllSongs => 3,
+            CurrentView::AllAlbums => 4,
+            CurrentView::Playlists => 5,
+        };
+        let expected_sorted = match &view {
+            CurrentView::Artists => vec!["alpha", "bravo", "Zulu"],
+            CurrentView::Albums | CurrentView::AllAlbums => vec!["alpha", "zulu"],
+            CurrentView::Songs | CurrentView::AllSongs => vec!["song-1", "song-3", "song-2"],
+            CurrentView::Playlists => vec!["alpha", "zulu"],
+        };
+        let view_name = format!("{view:?}");
+
+        let (mut player, state) = test_player();
+        seed_lists_for_sort_locality(&mut player);
+        player.current_view = view;
+        player.search_query = "echo".to_string();
+        player.search_active = true;
+        {
+            let mut shared = state.blocking_lock();
+            shared.current_track = Some("song-2".to_string());
+            shared.is_playing = true;
+            shared.repeat = true;
+            shared.shuffle = true;
+            shared.set_volume(0.3);
+            shared.set_balance(-0.4);
+            shared.eq_enabled = true;
+        }
+        let state_before = format!("{:?}", *state.blocking_lock());
+        let ids_before = browse_list_ids(&player);
+        let epochs_before = browse_list_epochs(&player);
+        let view_before = std::mem::discriminant(&player.current_view);
+
+        let _ = update(&mut player, Message::SortBrowse);
+
+        let ids_after = browse_list_ids(&player);
+        let epochs_after = browse_list_epochs(&player);
+        assert_eq!(ids_after[target], expected_sorted, "sorting {view_name}");
+        assert_eq!(
+            epochs_after[target],
+            epochs_before[target].wrapping_add(1),
+            "sorting {view_name} must bump its own epoch"
+        );
+        for index in 0..ids_after.len() {
+            if index == target {
+                continue;
+            }
+            assert_eq!(
+                ids_after[index], ids_before[index],
+                "sorting {view_name} touched list {index}'s rows"
+            );
+            assert_eq!(
+                epochs_after[index], epochs_before[index],
+                "sorting {view_name} bumped list {index}'s epoch"
+            );
+        }
+        assert_eq!(
+            std::mem::discriminant(&player.current_view),
+            view_before,
+            "sorting {view_name} changed the view"
+        );
+        assert_eq!(player.search_query, "echo", "sorting {view_name}");
+        assert!(
+            player.search_active,
+            "sorting {view_name} cleared the search"
+        );
+        assert_eq!(
+            format!("{:?}", *state.blocking_lock()),
+            state_before,
+            "sorting {view_name} changed playback state"
+        );
+    }
+}
+
 /// The names the artists list shows, in row order.
 fn artist_names(player: &WinampPlayer) -> Vec<&str> {
     player
