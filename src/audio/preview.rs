@@ -1,7 +1,7 @@
 //! Preview download and its SSRF guard: the process-wide `ureq` agent, the
 //! resolver that refuses internal addresses, and the MP4/AAC decode.
 
-use std::io::Cursor;
+use std::io::{Cursor, Read};
 use std::sync::OnceLock;
 use std::time::Duration;
 
@@ -20,6 +20,19 @@ use crate::music_error::AppleMusicError;
 /// it. Matches the REST client's `REQUEST_TIMEOUT` so both of the app's network
 /// calls share one bound.
 pub(super) const PREVIEW_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// The largest preview body, in both wire and decoded bytes,
+/// [`download_and_decode`] accepts.
+///
+/// `ureq`'s `Body::read_to_vec` cap counts the bytes on the wire, not the
+/// bytes its gzip decoder produces: the limiter sits under the decoder, so a
+/// small `Content-Encoding: gzip` body can expand without bound and exhaust
+/// memory. The download keeps the wire limit through `Body::with_config` and
+/// additionally reads the decoded stream through this cap (see
+/// [`download_and_decode`]). Ten mebibytes matches `ureq`'s wire cap and is
+/// well above an Apple Music preview (about a mebibyte for 30 seconds of
+/// AAC).
+pub(super) const MAX_PREVIEW_BYTES: u64 = 10 * 1024 * 1024;
 
 /// The process-wide [`ureq::Agent`] the audio worker downloads previews
 /// through, so consecutive plays reuse its pooled connection. It carries
@@ -91,13 +104,16 @@ impl Resolver for PublicAddressResolver {
 /// The Apple Music preview is an `M4A` (AAC in an `MP4` container), so the
 /// decoder is hinted with that format. The whole asset is buffered in memory
 /// before decoding because the preview is short and the decoder needs a
-/// `Seek` source; `ureq` caps that buffer at its 10 MiB body limit.
+/// `Seek` source. The download keeps `ureq`'s wire-byte limit and also reads
+/// the *decoded* body through [`MAX_PREVIEW_BYTES`], so neither a large wire
+/// body nor a compressed response can expand past the cap (see that constant).
 ///
 /// # Errors
 ///
 /// Returns an [`AppleMusicError`] when the download fails (including its
-/// timeout), the response is not a success status, the body cannot be read, or
-/// the bytes do not decode.
+/// timeout), the response is not a success status, the body cannot be read or
+/// is larger than [`MAX_PREVIEW_BYTES`] on the wire or after decoding, or the
+/// bytes do not decode.
 pub(super) fn download_and_decode(
     agent: &ureq::Agent,
     url: &str,
@@ -111,10 +127,21 @@ pub(super) fn download_and_decode(
             "the preview download returned HTTP {status}"
         )));
     }
-    let bytes = response
+    let mut bytes = Vec::new();
+    response
         .body_mut()
-        .read_to_vec()
+        .with_config()
+        .limit(MAX_PREVIEW_BYTES)
+        .reader()
+        .take(MAX_PREVIEW_BYTES + 1)
+        .read_to_end(&mut bytes)
         .map_err(|error| AppleMusicError::new(format!("reading the preview failed: {error}")))?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_PREVIEW_BYTES {
+        return Err(AppleMusicError::new(format!(
+            "the downloaded preview is larger than the {} MiB cap",
+            MAX_PREVIEW_BYTES / (1024 * 1024)
+        )));
+    }
     rodio::Decoder::new_mp4(Cursor::new(bytes))
         .map_err(|error| AppleMusicError::new(format!("decoding the preview failed: {error}")))
 }

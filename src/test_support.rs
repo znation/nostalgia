@@ -721,6 +721,22 @@ pub(crate) fn serve_one_response(response: &str) -> SocketAddr {
     address
 }
 
+/// [`serve_one_response`] with a binary response, so a test can serve a body
+/// that is not valid UTF-8 (a gzip stream, say). Otherwise identical: binds,
+/// accepts one connection, reads whatever request arrived, writes `response`
+/// verbatim, and closes.
+pub(crate) fn serve_one_response_bytes(response: &[u8]) -> SocketAddr {
+    let (listener, address) = loopback_listener();
+    let response = response.to_vec();
+    std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let _ = read_some_request(&mut stream);
+        let _ = stream.write_all(&response);
+        let _ = stream.flush();
+    });
+    address
+}
+
 /// Serves exactly one HTTP response on a fresh loopback listener and returns
 /// the bound address together with a receiver for the request text it read, so
 /// a test can assert on the bytes the client sent as well as the response. The

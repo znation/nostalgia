@@ -8,14 +8,14 @@ use super::player::{
     await_device_ready, format_for_source, seek_player, seek_target, serve_commands,
 };
 use super::preview::{
-    PREVIEW_TIMEOUT, PublicAddressResolver, download_and_decode, preview_agent,
+    MAX_PREVIEW_BYTES, PREVIEW_TIMEOUT, PublicAddressResolver, download_and_decode, preview_agent,
     preview_agent_with_timeout,
 };
 use super::*;
 use crate::http::{agent_with_timeout, config_with_timeout};
 use crate::test_support::{
     AudioCall, PREVIEW_URL, RecordingAudio, loopback_listener, read_some_request,
-    record_first_request, serve_one_response,
+    record_first_request, serve_one_response, serve_one_response_bytes,
 };
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Sender};
@@ -557,6 +557,174 @@ fn audio_with_fallback_returns_the_opened_output() {
         recording.calls(),
         vec![AudioCall::Play(PREVIEW_URL.to_string())]
     );
+}
+
+// A preview URL is server-controlled data (it arrives in the Apple Music API
+// reply), and the preview agent allows any public host by design, so a hostile
+// preview server can answer the download. The 10 MiB body cap must count the
+// bytes the decoder produces, not the bytes on the wire: `ureq`'s
+// `read_to_vec` limiter sits under its gzip decoder, so a small
+// `Content-Encoding: gzip` body expands past the cap. This body is a fixed
+// Huffman stream that decodes to just over the cap; a wire-byte cap reads it
+// and the over-cap bytes reach the decoder (the pre-fix result is a decode
+// failure on the zeros), while a decoded-byte cap rejects it.
+#[test]
+fn a_compressed_preview_larger_than_the_cap_is_rejected() {
+    let cap = usize::try_from(MAX_PREVIEW_BYTES).expect("the cap fits a usize");
+    let body = gzip_zeros(cap / 258 + 1);
+    assert!(
+        body.len() < cap,
+        "the compressed body must stay under the wire cap, got {}",
+        body.len()
+    );
+    let mut response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: audio/mp4\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
+    )
+    .into_bytes();
+    response.extend_from_slice(&body);
+    let address = serve_one_response_bytes(&response);
+    let agent = agent_with_timeout(Duration::from_secs(10));
+    let url = format!("http://{address}/bomb.m4a");
+
+    let error = download_and_decode(&agent, &url)
+        .err()
+        .expect("an over-cap preview must not reach the decoder");
+    assert!(
+        error.to_string().contains("larger than the 10 MiB cap"),
+        "unexpected error: {error}"
+    );
+}
+
+// The decoded-byte cap alone would leave the download willing to read an
+// arbitrarily large compressed body that decodes to little: an empty stored
+// block costs five wire bytes and produces no output. This body puts more than
+// the cap on the wire while decoding to zero bytes, so only `ureq`'s
+// wire-byte limit can reject it; without that limit the read succeeds and the
+// failure moves to the decoder.
+#[test]
+fn a_preview_with_more_wire_bytes_than_the_cap_is_rejected() {
+    let cap = usize::try_from(MAX_PREVIEW_BYTES).expect("the cap fits a usize");
+    let body = gzip_empty_stored_blocks(cap / 5 + 1);
+    assert!(
+        body.len() > cap,
+        "the compressed body must exceed the wire cap, got {}",
+        body.len()
+    );
+    let mut response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: audio/mp4\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
+    )
+    .into_bytes();
+    response.extend_from_slice(&body);
+    let address = serve_one_response_bytes(&response);
+    let agent = agent_with_timeout(Duration::from_secs(10));
+    let url = format!("http://{address}/bomb.m4a");
+
+    let error = download_and_decode(&agent, &url)
+        .err()
+        .expect("an over-cap wire body must not reach the decoder");
+    assert!(
+        error.to_string().contains("reading the preview failed"),
+        "unexpected error: {error}"
+    );
+}
+
+/// Builds a gzip stream with `blocks` non-final empty stored blocks and a
+/// final empty one, decoding to no bytes while occupying five wire bytes per
+/// block. The wire-only expansion that a decoded-byte cap misses.
+fn gzip_empty_stored_blocks(blocks: usize) -> Vec<u8> {
+    // gzip header: magic, deflate, no flags, no mtime, OS = unknown.
+    let mut bytes = vec![0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0, 0, 0xff];
+    // BFINAL = 0, BTYPE = 00, padded to a byte, then LEN = 0, NLEN = 0xffff.
+    for _ in 0..blocks {
+        bytes.extend_from_slice(&[0x00, 0x00, 0x00, 0xff, 0xff]);
+    }
+    // The final block sets BFINAL = 1; empty output has CRC 0 and size 0.
+    bytes.extend_from_slice(&[0x01, 0x00, 0x00, 0xff, 0xff]);
+    bytes.extend_from_slice(&[0; 8]);
+    bytes
+}
+
+/// Builds a gzip stream that decodes to `1 + 258 * matches` zero bytes: one
+/// literal zero, then `matches` DEFLATE fixed-Huffman length-258/distance-1
+/// matches. A body much smaller than its decoded output is the shape that
+/// defeats a cap applied to the wire bytes; the suite has no compression
+/// crate, and fixed Huffman is the least code that writes such a stream.
+fn gzip_zeros(matches: usize) -> Vec<u8> {
+    struct BitWriter {
+        bytes: Vec<u8>,
+        current: u8,
+        used: u8,
+    }
+    impl BitWriter {
+        fn new() -> Self {
+            // gzip header: magic, deflate, no flags, no mtime, OS = unknown.
+            Self {
+                bytes: vec![0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0, 0, 0xff],
+                current: 0,
+                used: 0,
+            }
+        }
+        fn bit(&mut self, bit: u8) {
+            self.current |= (bit & 1) << self.used;
+            self.used += 1;
+            if self.used == 8 {
+                self.bytes.push(self.current);
+                self.current = 0;
+                self.used = 0;
+            }
+        }
+        fn code(&mut self, code: u32, bits: u8) {
+            for shift in (0..bits).rev() {
+                self.bit(((code >> shift) & 1) as u8);
+            }
+        }
+        fn finish(mut self) -> Vec<u8> {
+            if self.used > 0 {
+                self.bytes.push(self.current);
+            }
+            self.bytes
+        }
+    }
+
+    let mut writer = BitWriter::new();
+    writer.bit(1); // BFINAL
+    writer.bit(1); // BTYPE = 01 (fixed), least-significant bit first
+    writer.bit(0);
+    writer.code(0x30, 8); // literal 0x00
+    for _ in 0..matches {
+        writer.code(0xC5, 8); // length 258, no extra bits
+        writer.code(0, 5); // distance 1
+    }
+    writer.code(0, 7); // end of block
+    let decoded = 1 + 258 * matches;
+    let mut bytes = writer.finish();
+    bytes.extend_from_slice(&crc32_of_zeros(decoded).to_le_bytes());
+    bytes.extend_from_slice(&(decoded as u32).to_le_bytes());
+    bytes
+}
+
+/// CRC-32 (IEEE, reflected) of `count` zero bytes, the gzip trailer's check
+/// value for [`gzip_zeros`]. Built from a runtime table so the test is fast.
+fn crc32_of_zeros(count: usize) -> u32 {
+    let mut table = [0u32; 256];
+    for (index, slot) in table.iter_mut().enumerate() {
+        let mut value = index as u32;
+        for _ in 0..8 {
+            value = if value & 1 == 0 {
+                value >> 1
+            } else {
+                0xedb8_8320 ^ (value >> 1)
+            };
+        }
+        *slot = value;
+    }
+    let mut crc = 0xffff_ffffu32;
+    for _ in 0..count {
+        crc = table[(crc & 0xff) as usize] ^ (crc >> 8);
+    }
+    crc ^ 0xffff_ffff
 }
 
 #[test]

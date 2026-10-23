@@ -339,3 +339,27 @@ carry `BOOTSTRAP_DIR_PREFIX`, and reports a removal failure without failing the 
 
 **History.** Reconstructed from "A stalled connection is served for its whole budget before the next
 one, so repeated stalls starve the sign-in callback" in `BUGS-FIXED.md`.
+
+## Preview download
+
+**Guarantee.** The preview downloader bounds both the *wire* body and the *decoded* body at
+`MAX_PREVIEW_BYTES` (10 MiB). `ureq`'s reader limit stops a hostile server from streaming more
+than the cap on the wire, and reading that reader through `std::io::Read::take(MAX_PREVIEW_BYTES +
+1)` stops a `Content-Encoding: gzip` response smaller than the cap from expanding the buffered
+preview past it; the decoded take rejects before the decoder when its extra byte is present. The
+decoded over-cap failure names the cap; other read failures, including the wire limit, keep the
+`reading the preview failed:` prefix.
+
+**Enforced by.** `download_and_decode` in `src/audio/preview.rs` calls
+`response.body_mut().with_config().limit(MAX_PREVIEW_BYTES).reader()` for the wire limit, then
+reads it through `take(MAX_PREVIEW_BYTES + 1)` and checks the decoded length before
+`rodio::Decoder::new_mp4`. It does not use `Body::read_to_vec`, whose limiter sits under `ureq`'s
+gzip decoder and so counts compressed bytes.
+
+**Pinned by.**
+
+- `a_compressed_preview_larger_than_the_cap_is_rejected` (`src/audio/tests.rs`)
+- `a_preview_with_more_wire_bytes_than_the_cap_is_rejected` (`src/audio/tests.rs`)
+
+**History.** Added 2026-10-23 after the wire-byte cap was found to let a small gzip body expand
+past 10 MiB before decoding; the decoded-byte fix keeps the original wire cap alongside it.
