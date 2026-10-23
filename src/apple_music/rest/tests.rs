@@ -1,3 +1,5 @@
+use super::transport::shared_agent;
+use super::wire::api_error_cause;
 use super::*;
 
 use crate::test_support::{
