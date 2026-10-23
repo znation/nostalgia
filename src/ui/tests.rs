@@ -2750,6 +2750,65 @@ fn sort_reorders_artists_case_insensitively() {
     assert_eq!(names, ["Apple", "banana", "cherry"]);
 }
 
+// The documented sort is stable: rows whose rendered text compares equal
+// (ignoring case) keep the library order. Every other sort test uses distinct
+// keys, so a regression to an unstable sort could reorder these equal-key rows
+// and leave them green. Enough rows are used that an unstable sort cannot keep
+// them in place by luck on a short list. The same rows also pin the saved
+// permutation when keys collide: Back must still restore their stored order.
+#[test]
+fn sort_is_stable_for_equal_keys_and_back_restores_them() {
+    const EQUAL_ROWS: usize = 32;
+    let same_rows = || {
+        (0..EQUAL_ROWS).map(|index| Artist {
+            id: format!("same-{index:02}"),
+            name: "Same".to_string(),
+        })
+    };
+    let (mut player, _state) = test_player();
+    player.artists.items = std::iter::once(Artist {
+        id: "zulu".to_string(),
+        name: "Zulu".to_string(),
+    })
+    .chain(same_rows())
+    .chain(std::iter::once(Artist {
+        id: "alpha".to_string(),
+        name: "alpha".to_string(),
+    }))
+    .collect();
+    player.artists.loading = false;
+
+    let _ = update(&mut player, Message::SortBrowse);
+
+    let sorted_ids: Vec<String> = player
+        .artists
+        .items
+        .iter()
+        .map(|artist| artist.id.clone())
+        .collect();
+    let mut expected_sorted = vec!["alpha".to_string()];
+    expected_sorted.extend((0..EQUAL_ROWS).map(|index| format!("same-{index:02}")));
+    expected_sorted.push("zulu".to_string());
+    assert_eq!(
+        sorted_ids, expected_sorted,
+        "equal keys must keep library order"
+    );
+
+    player.current_view = CurrentView::Albums;
+    let _ = update(&mut player, Message::Back);
+
+    let restored_ids: Vec<String> = player
+        .artists
+        .items
+        .iter()
+        .map(|artist| artist.id.clone())
+        .collect();
+    let mut expected_restored = vec!["zulu".to_string()];
+    expected_restored.extend((0..EQUAL_ROWS).map(|index| format!("same-{index:02}")));
+    expected_restored.push("alpha".to_string());
+    assert_eq!(restored_ids, expected_restored);
+}
+
 #[test]
 fn sort_reorders_albums_by_their_display_title() {
     let (mut player, _state) = test_player();

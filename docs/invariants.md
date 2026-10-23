@@ -115,6 +115,7 @@ child is open), and `views::view_browse_nav_buttons` in `src/ui/views/browse.rs`
 
 - `browse_nav_buttons_place_sort_beside_top`
 - `sort_reorders_artists_case_insensitively`
+- `sort_is_stable_for_equal_keys_and_back_restores_them`
 - `sort_reorders_albums_by_their_display_title`
 - `sort_reorders_playlists_by_name`
 - `sort_reorders_songs_and_keeps_their_cached_text_aligned`
