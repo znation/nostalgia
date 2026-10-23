@@ -6,11 +6,11 @@
 //! request and its completion, the elapsed/remaining toggle, the marquee
 //! tick in `playback`; the seek drag and release and the backend polls in
 //! `playback::preview`; the volume, balance, seek nudges, and equalizer in
-//! `mixer`; the browse
-//! hierarchy, the Back, Top, and Sort navigation, the library search, and the
-//! fetch results in `browse`; and the custom title bar's window actions in
-//! `window`. Each handler owns its message's whole behavior, so a change to
-//! one concern never reaches into another's code.
+//! `mixer`; the browse hierarchy, the Back, Top, and Sort navigation, and the
+//! library search in `browse`; the initial load and the fetch results in
+//! `browse::fetch`; and the custom title bar's window actions in `window`.
+//! Each handler owns its message's whole behavior, so a change to one concern
+//! never reaches into another's code.
 
 pub(super) mod browse;
 pub(super) mod mixer;

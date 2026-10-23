@@ -99,8 +99,9 @@ fn boot(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> (WinampPlaye
 /// `handlers::playback`; the seek drag and release and the backend polls in
 /// `handlers::playback::preview`; the volume,
 /// balance, seek nudges, and equalizer in `handlers::mixer`; the browse
-/// hierarchy, the Back, Top, and Sort navigation, the library search, and the
-/// fetch results in `handlers::browse`; and the custom title bar's window
+/// hierarchy, the Back, Top, and Sort navigation, and the library search in
+/// `handlers::browse`, and the initial load and fetch results in
+/// `handlers::browse::fetch`; and the custom title bar's window
 /// actions in `handlers::window`. The table carries no behavior of its own,
 /// so a change to one concern stays in that concern's module.
 fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
@@ -172,29 +173,37 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::ShowPlaylists => handlers::browse::show_playlists(player),
         Message::SearchChanged(text) => handlers::browse::search_changed(player, text),
         Message::SearchSubmitted => handlers::browse::search_submitted(player),
-        Message::LoadArtists => handlers::browse::load_artists(player),
-        Message::ArtistsLoaded(artists) => handlers::browse::artists_loaded(player, artists),
-        Message::AlbumsLoaded(albums) => handlers::browse::albums_loaded(player, albums),
-        Message::SongsLoaded(songs) => handlers::browse::songs_loaded(player, songs),
-        Message::AllSongsLoaded(songs) => handlers::browse::all_songs_loaded(player, songs),
-        Message::AllAlbumsLoaded(albums) => handlers::browse::all_albums_loaded(player, albums),
-        Message::PlaylistsLoaded(playlists) => {
-            handlers::browse::playlists_loaded(player, playlists)
+        Message::LoadArtists => handlers::browse::fetch::load_artists(player),
+        Message::ArtistsLoaded(artists) => handlers::browse::fetch::artists_loaded(player, artists),
+        Message::AlbumsLoaded(albums) => handlers::browse::fetch::albums_loaded(player, albums),
+        Message::SongsLoaded(songs) => handlers::browse::fetch::songs_loaded(player, songs),
+        Message::AllSongsLoaded(songs) => handlers::browse::fetch::all_songs_loaded(player, songs),
+        Message::AllAlbumsLoaded(albums) => {
+            handlers::browse::fetch::all_albums_loaded(player, albums)
         }
-        Message::ArtistsLoadFailed(report) => handlers::browse::artists_load_failed(player, report),
-        Message::AlbumsLoadFailed(report) => handlers::browse::albums_load_failed(player, report),
-        Message::SongsLoadFailed(report) => handlers::browse::songs_load_failed(player, report),
+        Message::PlaylistsLoaded(playlists) => {
+            handlers::browse::fetch::playlists_loaded(player, playlists)
+        }
+        Message::ArtistsLoadFailed(report) => {
+            handlers::browse::fetch::artists_load_failed(player, report)
+        }
+        Message::AlbumsLoadFailed(report) => {
+            handlers::browse::fetch::albums_load_failed(player, report)
+        }
+        Message::SongsLoadFailed(report) => {
+            handlers::browse::fetch::songs_load_failed(player, report)
+        }
         Message::AllSongsLoadFailed(report) => {
-            handlers::browse::all_songs_load_failed(player, report)
+            handlers::browse::fetch::all_songs_load_failed(player, report)
         }
         Message::AllAlbumsLoadFailed(report) => {
-            handlers::browse::all_albums_load_failed(player, report)
+            handlers::browse::fetch::all_albums_load_failed(player, report)
         }
         Message::PlaylistsLoadFailed(report) => {
-            handlers::browse::playlists_load_failed(player, report)
+            handlers::browse::fetch::playlists_load_failed(player, report)
         }
         Message::BrowseReply { issued, reply } => {
-            handlers::browse::browse_reply(player, issued, reply)
+            handlers::browse::fetch::browse_reply(player, issued, reply)
         }
         Message::TrackPlayed {
             generation,
@@ -207,7 +216,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::ToggleWindowShade => handlers::window::toggle_window_shade(player),
         Message::WindowShadeMeasured(size) => handlers::window::window_shade_measured(player, size),
         Message::ToggleAlwaysOnTop => handlers::window::toggle_always_on_top(player),
-        Message::Ignored => handlers::browse::ignored(player),
+        Message::Ignored => handlers::browse::fetch::ignored(player),
         Message::TransportSettled => handlers::playback::transport_settled(player),
     }
 }

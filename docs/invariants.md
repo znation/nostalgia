@@ -68,7 +68,8 @@ that rendered it is still current: a press that outlived its list is a no-op.
   to a message; a superseded result maps to `Message::Ignored` instead of a `*Loaded`/`*LoadFailed`
   message (see `loading::fetch_into`).
 - `BrowseList::is_current` re-checks the same request counter at the store on the UI thread, in
-  the `Message::BrowseReply` handler (`browse::browse_reply` in `src/ui/handlers/browse.rs`),
+  the `Message::BrowseReply` handler (`browse::fetch::browse_reply` in
+  `src/ui/handlers/browse/fetch.rs`),
   closing the window where a navigation issues a newer request between the executor check and
   the store.
 - `BrowseList::select` rejects a selection whose epoch no longer matches the list's epoch (the
