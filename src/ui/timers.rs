@@ -2,8 +2,9 @@
 //! playback-position poll.
 //!
 //! iced's timed subscription is gated behind backend features the app does not
-//! enable, so each timer is fed by a named std thread through the futures
-//! channel iced re-exports. The marquee runs only while the title needs to
+//! enable, so each timer is fed by a named std thread through the shared tick
+//! source in [`super::ticks`], which uses the futures channel iced re-exports.
+//! The marquee runs only while the title needs to
 //! scroll (see [`subscriptions`]); the position poll is always on and only
 //! schedules the actual backend query from its `update` arm, so the UI thread
 //! never waits on the audio backend.
@@ -11,7 +12,7 @@
 use iced::keyboard;
 use std::{io, time::Duration};
 
-use super::{Message, shortcuts::message_for};
+use super::{Message, shortcuts::message_for, ticks};
 
 /// How often the Now Playing title window advances one character while an
 /// overlong line scrolls. The timer runs only while the line is too long to
@@ -55,23 +56,10 @@ pub(super) fn marquee_tick_stream() -> impl iced::futures::Stream<Item = Message
 pub(super) fn marquee_tick_stream_with(
     spawn: impl FnOnce(Box<dyn FnOnce() + Send>) -> io::Result<()>,
 ) -> impl iced::futures::Stream<Item = Message> {
-    use iced::futures::{StreamExt, channel::mpsc};
+    use iced::futures::StreamExt;
 
-    let (mut sender, receiver) = mpsc::channel(1);
-    let work: Box<dyn FnOnce() + Send> = Box::new(move || {
-        loop {
-            std::thread::sleep(MARQUEE_TICK);
-            if let Err(error) = sender.try_send(())
-                && error.is_disconnected()
-            {
-                break;
-            }
-        }
-    });
-    if let Err(error) = spawn(work) {
-        eprintln!("{}", marquee_thread_failure_report(&error));
-    }
-    receiver.map(|()| Message::MarqueeTick)
+    ticks::tick_stream(MARQUEE_TICK, spawn, marquee_thread_failure_report)
+        .map(|()| Message::MarqueeTick)
 }
 
 /// The production spawner for the marquee timer thread: the named
@@ -149,23 +137,14 @@ pub(super) fn position_tick_stream() -> impl iced::futures::Stream<Item = Messag
 pub(super) fn position_tick_stream_with(
     spawn: impl FnOnce(Box<dyn FnOnce() + Send>) -> io::Result<()>,
 ) -> impl iced::futures::Stream<Item = Message> {
-    use iced::futures::{StreamExt, channel::mpsc};
+    use iced::futures::StreamExt;
 
-    let (mut sender, receiver) = mpsc::channel(1);
-    let work: Box<dyn FnOnce() + Send> = Box::new(move || {
-        loop {
-            std::thread::sleep(POSITION_POLL_INTERVAL);
-            if let Err(error) = sender.try_send(())
-                && error.is_disconnected()
-            {
-                break;
-            }
-        }
-    });
-    if let Err(error) = spawn(work) {
-        eprintln!("{}", position_thread_failure_report(&error));
-    }
-    receiver.map(|()| Message::PositionTick)
+    ticks::tick_stream(
+        POSITION_POLL_INTERVAL,
+        spawn,
+        position_thread_failure_report,
+    )
+    .map(|()| Message::PositionTick)
 }
 
 /// The production spawner for the position poll thread: the named

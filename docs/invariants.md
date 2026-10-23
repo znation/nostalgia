@@ -134,7 +134,8 @@ windows an overlong line, and `WinampPlayer::marquee_offset` carries the advance
 measure the line, and `ui::timers::subscriptions` subscribes `marquee_ticks` only while that measure
 exceeds `MARQUEE_WIDTH`.
 
-The scrolling timer itself starts through `spawn_marquee_thread` in `src/ui/timers.rs`, which delegates
+The scrolling timer's stream is built by `ui::ticks::tick_stream` in `src/ui/ticks.rs`, and its
+thread starts through `spawn_marquee_thread` in `src/ui/timers.rs`, which delegates
 to `crate::threads::spawn_named`, the fallible `std::thread::Builder::spawn` every worker in the app
 uses. `std::thread::spawn` panics when
 the OS refuses a thread, and iced builds the subscription's stream on its main thread while it

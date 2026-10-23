@@ -26,6 +26,7 @@ mod loading;
 mod shortcuts;
 mod style;
 mod theme;
+mod ticks;
 mod timers;
 mod transport;
 mod views;
