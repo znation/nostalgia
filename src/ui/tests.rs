@@ -5562,3 +5562,48 @@ fn transport_row_does_not_reflow_when_the_play_label_changes() {
         playing.fragments()
     );
 }
+
+// The root `view` resolves the LCD's transport mode from the shared state, so
+// the glyph the user sees follows Play, Pause, and Stop. The unit tests in
+// `src/ui/views/tests.rs` pass a mode straight to the row and cannot catch the
+// root handing it a stale or hard-coded mode. Lay out the whole root `view`
+// after each state change and read the glyphs it would draw.
+#[test]
+fn root_view_draws_the_glyph_for_the_shared_transport_mode() {
+    let (player, state) = test_player();
+    let shown_glyphs = |player: &WinampPlayer| {
+        let capture = captured_root_view_text_bounds(player);
+        ["▶", "II", "■"]
+            .into_iter()
+            .filter(|glyph| capture.texts().any(|text| text == *glyph))
+            .collect::<Vec<_>>()
+    };
+
+    state.blocking_lock().stop();
+    assert_eq!(
+        shown_glyphs(&player),
+        vec!["■"],
+        "a stopped transport must draw the stopped glyph"
+    );
+
+    state.blocking_lock().play();
+    assert_eq!(
+        shown_glyphs(&player),
+        vec!["▶"],
+        "a playing transport must draw the playing glyph"
+    );
+
+    state.blocking_lock().pause();
+    assert_eq!(
+        shown_glyphs(&player),
+        vec!["II"],
+        "a paused transport must draw the paused glyph"
+    );
+
+    state.blocking_lock().stop();
+    assert_eq!(
+        shown_glyphs(&player),
+        vec!["■"],
+        "Stop after Pause must draw the stopped glyph again"
+    );
+}
