@@ -4167,9 +4167,9 @@ fn now_playing_time_shows_the_played_tracks_duration_after_browsing_to_another_a
     assert_eq!(player.now_playing_time(Some("no-such-song")), "--:--");
 }
 
-// The bar's large left readout follows the backend's reported position while
-// it is known and reads 00:00 before one is reported, while the right edge
-// keeps showing the plain cached total.
+// The bar's large left readout follows the backend's reported position (or a
+// held seek drag) while it is known and reads 00:00 before one is reported,
+// while the right edge keeps showing the plain cached total.
 #[test]
 fn now_playing_elapsed_shows_the_position_while_it_is_known() {
     let (mut player, current_track) = play_song_1_then_browse_to_album_2();
@@ -4184,6 +4184,43 @@ fn now_playing_elapsed_shows_the_position_while_it_is_known() {
         "00:45"
     );
     assert_eq!(player.now_playing_time(current_track.as_deref()), "3:30");
+}
+
+// A held seek drag previews the time the thumb points at in the large
+// readout, counting down from it in remaining mode, while the right-edge total
+// stays put. Clearing the drag falls back to the backend's reported position,
+// proving the drag is a preview and not a replacement.
+#[test]
+fn now_playing_elapsed_previews_the_seek_drag() {
+    let (mut player, current_track) = play_song_1_then_browse_to_album_2();
+    player.playback_position = Some(Duration::from_secs(45));
+
+    let _ = update(&mut player, Message::SeekPreviewChanged(12.0));
+
+    assert_eq!(player.readout_position(), Some(Duration::from_secs(12)));
+    assert_eq!(
+        player.now_playing_elapsed(current_track.as_deref()),
+        "00:12"
+    );
+    assert_eq!(player.now_playing_time(current_track.as_deref()), "3:30");
+
+    player.time_display = views::TimeDisplay::Remaining;
+    assert_eq!(
+        player.now_playing_elapsed(current_track.as_deref()),
+        "-03:18"
+    );
+
+    player.seek_preview = None;
+    assert_eq!(player.readout_position(), Some(Duration::from_secs(45)));
+    assert_eq!(
+        player.now_playing_elapsed(current_track.as_deref()),
+        "-02:45"
+    );
+    player.time_display = views::TimeDisplay::Elapsed;
+    assert_eq!(
+        player.now_playing_elapsed(current_track.as_deref()),
+        "00:45"
+    );
 }
 
 // Pause stops the backend clock but keeps the loaded player, so the stored

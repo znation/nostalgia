@@ -70,28 +70,6 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Preview a seek drag's target time in the Now Playing readout (planned 2026-10-23 by the plan role)
-
-**Goal.** While the user drags the seek slider beneath the Now Playing LCD, show the time the thumb points at in the large left-hand readout, so seeking a long preview is not blind. Today `WinampPlayer::now_playing_elapsed` in `src/ui/player.rs` reads only `playback_position`, while the slider thumb reads `seek_preview.or(playback_position)` inline in `src/ui/view.rs`; a drag therefore moves the thumb but leaves the readout on the backend's last position. Releasing already seeks to the drag and records that position, so the readout lands where the thumb pointed with no playback change. It touches only the Now Playing readout and the seek bar's shared position source.
-
-**Approach.**
-
-- `src/ui/player.rs`: add `pub(in crate::ui) fn readout_position(&self) -> Option<Duration>` returning `self.seek_preview.or(self.playback_position)`. Document it as the one position the seek thumb and the large readout both show: an in-progress drag wins, otherwise the backend-reported position. Use it in `WinampPlayer::now_playing_elapsed` in place of `self.playback_position`, so elapsed mode previews the drag and remaining mode counts down from it through the existing `views::now_playing_elapsed` paths. Extend the `seek_preview` field's doc to say the held drag also previews in the readout.
-- `src/ui/view.rs`: pass `player.readout_position()` to `views::view_seek_bar` instead of the inline `player.seek_preview.or(player.playback_position)`, so the thumb and readout cannot drift apart.
-- Leave the right-edge total, marquee, paused blink, position/format/duration/spectrum tick batches, and the seek-on-release path unchanged. `reset_position_readout` still clears `seek_preview` on Stop and a new selection, so the readout returns to the cleared state then.
-- `src/ui/tests.rs`: add `now_playing_elapsed_previews_the_seek_drag` beside `now_playing_elapsed_shows_the_position_while_it_is_known`. Build a player with `play_song_1_then_browse_to_album_2()` (song 1 is 3:30), set `playback_position = Some(Duration::from_secs(45))`, then send `Message::SeekPreviewChanged(12.0)`; assert `player.readout_position()` is `Some(Duration::from_secs(12))`, the elapsed readout is `"00:12"`, and `player.now_playing_time(...)` is still `"3:30"`. Set `player.time_display = views::TimeDisplay::Remaining` and assert `"-03:18"`. Set `player.seek_preview = None` and assert the readout falls back to `"00:45"` in elapsed mode (and `"-02:45"` in remaining mode), proving the drag is a preview, not a replacement.
-- `README.md`: in the Usage sentence about the seek slider, replace "dragging moves only the thumb, and releasing seeks to that position" with wording that dragging moves the thumb and previews that position in the large elapsed readout (counting down from it in remaining-time mode), and releasing seeks to it. Do not touch the `<!-- tumwater:status:start -->` block.
-- `docs/invariants.md`: in the `## Now Playing label` seek-slider bullet, add that the large readout follows the in-progress drag in both time modes while the right-edge total does not, and that the thumb and readout share `WinampPlayer::readout_position`; add the new test to that bullet's Pinned-by list.
-
-**Files touched.** `src/ui/player.rs`, `src/ui/view.rs`, `src/ui/tests.rs`, `README.md`, `docs/invariants.md`.
-
-**Acceptance criteria.**
-
-- While `seek_preview` holds a drag, the large readout shows that time in elapsed mode and counts down from it in remaining mode; the right-edge total is unchanged.
-- The seek slider's thumb and the large readout both resolve their position through `WinampPlayer::readout_position`, so an in-progress drag wins over `playback_position` and clearing the drag falls back to the reported position.
-- A release still sends exactly one `seek_output_to` with the dragged position and records it; Stop and a new selection still clear the drag and readout through `reset_position_readout`. No marquee, blink, tick, format, duration, spectrum, or playback behavior changes.
-- `README.md` and `docs/invariants.md` describe the preview, `make check` passes, and the new test covers the drag, the remaining-mode countdown, and the fallback.
-
 ### Show each artist row's album count (planned 2026-10-23 by the plan role)
 
 **Goal.** Match `docs/screenshots/library.png`'s Artists panel: each artist row shows how many albums the library holds for that artist at the right (`2 albums`, `1 album`), replacing the current `View Albums` hint. An artist with no albums shows no count, as the mockup's third row does. The count is display data only: the row still selects the artist by index and epoch, Sort still orders artists by name, and no browse or playback behavior changes. The count is derived from albums the service already knows, so this adds no new Apple Music endpoint shape.

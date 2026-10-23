@@ -285,12 +285,18 @@ its internal id, whenever the id is in the known-track index:
   `resume_after_stop_restarts_the_preview` in `src/apple_music/tests.rs`.
 - The seek slider beneath the LCD measures the backend-reported preview length, not the catalog
   track's length at the LCD's right edge. Its thumb follows the stored position, or the drag in
-  progress while one is held; only a release sends `AudioOutput::seek_to`, exactly once, with the
+  progress while one is held; the thumb and the large elapsed readout both resolve their position
+  through `WinampPlayer::readout_position`, so an in-progress drag wins in both time modes and the
+  readout previews its target time (counting down from it in remaining mode) while the right-edge
+  total stays unchanged. Only a release sends `AudioOutput::seek_to`, exactly once, with the
   dragged position. The backend clamps that absolute seek to the preview length. A successful
   seek records the position optimistically and bumps `position_epoch`, so position and duration
   replies already in flight are dropped; a failed seek is logged and lets the next poll correct
-  the thumb. Stop and a new selection clear the length and any drag, and the strip is blank and
-  keeps its fixed height until the backend reports both a position and a positive preview length.
+  the thumb. Stop and a new selection clear the length, any drag, and the reported position
+  through `reset_position_readout`, so the readout returns to the cleared state (`00:00` in
+  elapsed mode for a known track) rather than falling back to a reported position. The strip stays
+  blank and keeps its fixed height until the backend reports both a position and a positive preview
+  length.
 - A combined artist/title longer than `MARQUEE_WIDTH` characters is windowed by
   `views::now_playing::marquee_text`, advanced one character per `Message::MarqueeTick`, and
   reset to the start by `TrackSelected`; a line that fits is shown whole and borrowed.
@@ -314,6 +320,8 @@ formats the left-hand readout as chosen by `views::now_playing::TimeDisplay`, wh
 `views::now_playing::now_playing_time` returns the plain cached total for the right edge; the
 `playback_position` field on `WinampPlayer` stores the reply the
 `PlaybackPosition` handler received, which is stamped with `position_epoch`, and
+`WinampPlayer::readout_position` prefers an in-progress seek drag over that value so the large
+readout and the seek thumb share one position source;
 `reset_position_readout` bumps that epoch and clears the value
 on Stop and on a new selection. `pending_position_transitions` counts the backend transport
 transitions that are still in flight: every handler in `src/ui/handlers/playback.rs` that
@@ -399,6 +407,7 @@ rather than the panic unwinding the event loop.
 - `now_playing_label_keeps_the_track_name_after_browsing_to_another_album` (`src/ui/tests.rs`)
 - `now_playing_time_shows_the_played_tracks_duration_after_browsing_to_another_album` (`src/ui/tests.rs`)
 - `now_playing_elapsed_shows_the_position_while_it_is_known`
+- `now_playing_elapsed_previews_the_seek_drag`
 - `pause_keeps_the_stored_elapsed_readout`
 - `a_position_reply_after_a_seek_updates_the_readout`
 - `track_selected_clears_the_elapsed_readout`

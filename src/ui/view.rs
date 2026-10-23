@@ -156,7 +156,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
             player.blink_visible,
         ))
         .push(views::view_seek_bar(
-            player.seek_preview.or(player.playback_position),
+            player.readout_position(),
             player.playback_duration,
         ))
         .push(views::view_transport_controls(

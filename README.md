@@ -60,8 +60,9 @@ otherwise. A loaded preview also drives a small green ten-bar spectrum visualize
 title, updating about four times a second while playback runs; Pause freezes the bars at their
 last levels, Stop and a new selection clear them, and the strip stays blank (with its height)
 when no preview reports a spectrum. Beneath the LCD, a chrome slider spans the loaded preview's
-own length and tracks its playback position; dragging moves only the thumb, and releasing seeks
-to that position. The seek slider is blank (but keeps its height) until the backend reports
+own length and tracks its playback position; dragging moves the thumb and previews that
+position in the large elapsed readout (counting down from it when the readout shows remaining
+time), and releasing seeks to it. The seek slider is blank (but keeps its height) until the backend reports
 both a playback position and a preview length, such as on the silent fallback; its scale is
 the preview's length, not the catalog track's length shown at the LCD's right edge. Clicking
 the large elapsed readout while playing or paused switches it to the track's remaining time

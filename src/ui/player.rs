@@ -130,7 +130,9 @@ pub(in crate::ui) struct WinampPlayer {
     /// The seek bar's in-progress drag, or `None` while the thumb follows the
     /// reported position. `Message::SeekPreviewChanged` stores the drag and
     /// `Message::SeekPreviewReleased` seeks to and clears it, so only a release
-    /// touches the backend. Stop and a new selection clear it too.
+    /// touches the backend. The held drag also previews in the large elapsed
+    /// readout through [`Self::readout_position`], and clearing it falls back
+    /// to the reported position. Stop and a new selection clear it too.
     pub(in crate::ui) seek_preview: Option<Duration>,
     /// Which time the large left-hand LCD readout shows: elapsed by default,
     /// or the track's remaining time after a click. Presentation-only: it
@@ -266,11 +268,21 @@ impl WinampPlayer {
         views::now_playing_time(&self.known_tracks, current_track)
     }
 
+    /// The one position the seek thumb and the large elapsed readout both
+    /// show: an in-progress drag wins, otherwise the position
+    /// [`Self::playback_position`] reports. Resolving both through this method
+    /// keeps them from drifting apart. A drag is only a preview: it never
+    /// touches the backend, so clearing it falls back to the reported position.
+    pub(in crate::ui) fn readout_position(&self) -> Option<Duration> {
+        self.seek_preview.or(self.playback_position)
+    }
+
     /// The Now Playing bar's large left-hand time readout for
     /// `current_track`, in the mode [`Self::time_display`] selects: the
-    /// position [`Self::playback_position`] reports as zero-padded `MM:SS` by
+    /// position [`Self::readout_position`] resolves as zero-padded `MM:SS` by
     /// default, or the countdown from the known track's length when the user
-    /// has clicked the readout. The placeholder cases borrow, so a per-frame
+    /// has clicked the readout. A held seek drag therefore previews its target
+    /// time in both modes. The placeholder cases borrow, so a per-frame
     /// refresh allocates only while an actual time is shown.
     pub(in crate::ui) fn now_playing_elapsed<'a>(
         &'a self,
@@ -279,7 +291,7 @@ impl WinampPlayer {
         views::now_playing_elapsed(
             &self.known_tracks,
             current_track,
-            self.playback_position,
+            self.readout_position(),
             self.time_display,
         )
     }
