@@ -1205,16 +1205,25 @@ fn unfollowable_next_notice_names_the_unfollowed_page() {
     );
 }
 
+#[test]
+fn repeated_next_notice_names_the_already_read_page() {
+    assert_eq!(
+        repeated_next_notice("/v1/me/library/artists"),
+        "Apple Music returned a next page \"/v1/me/library/artists\" that was already read; not following it"
+    );
+}
+
 // `next` is server-controlled and reaches the terminal, so a control character
 // or a Unicode format character must be escaped rather than emitted raw, as
-// `api_error_cause` escapes an API error detail. Pin both notices: `\u{1b}` (a
-// control character) and `\u{202e}` (the right-to-left override, which
-// `char::is_control` does not classify as a control).
+// `api_error_cause` escapes an API error detail. Pin every pagination notice:
+// `\u{1b}` (a control character) and `\u{202e}` (the right-to-left override,
+// which `char::is_control` does not classify as a control).
 #[test]
 fn pagination_notices_escape_control_and_format_characters() {
     for notice in [
         page_bound_notice("/v1/evil\u{1b}\u{202e}"),
         unfollowable_next_notice("/v1/evil\u{1b}\u{202e}"),
+        repeated_next_notice("/v1/evil\u{1b}\u{202e}"),
     ] {
         assert!(!notice.contains('\u{1b}'), "{notice:?}");
         assert!(!notice.contains('\u{202e}'), "{notice:?}");
@@ -1319,21 +1328,44 @@ fn a_transport_error_on_a_later_page_surfaces_instead_of_truncating() {
     );
 }
 
-// An endless `next` chain — a server that always links another page, or one
-// that links back to a page already read — must stop at `MAX_PAGES` rather
-// than loop forever. The stub repeats its one body, so the call count is the
-// page bound.
+// An endless chain of *new* pages must stop at `MAX_PAGES` rather than loop
+// forever. Each page here links a distinct next offset, so the page bound —
+// not the repeated-link check — is what ends the follow.
 #[test]
 fn an_endless_next_chain_stops_at_the_page_bound() {
-    let stub = StubTransport::returning(
-        r#"{"data":[{"id":"artist-1","attributes":{"name":"The Sample Band"}}],"next":"/v1/me/library/artists?offset=1"}"#,
-    );
+    let pages: Vec<String> = (1..=MAX_PAGES)
+        .map(|page| {
+            format!(
+                r#"{{"data":[{{"id":"artist-{page}","attributes":{{"name":"Artist {page}"}}}}],"next":"/v1/me/library/artists?offset={page}"}}"#
+            )
+        })
+        .collect();
+    let bodies: Vec<&str> = pages.iter().map(String::as_str).collect();
+    let stub = StubTransport::returning_bodies(&bodies);
     let library = library_over(&stub);
 
     let artists = library.get_favorite_artists(&rest_session()).unwrap();
 
     assert_eq!(artists.len(), MAX_PAGES);
     assert_eq!(stub.calls().len(), MAX_PAGES);
+}
+
+// A server whose second page links back to the first has no new data to add:
+// following the cycle would append the same rows again up to `MAX_PAGES`,
+// silently showing a duplicated list. Stop at the first link to an
+// already-read page, after returning each page once.
+#[test]
+fn a_next_link_back_to_an_already_read_page_stops_at_the_repeat() {
+    let stub = StubTransport::returning_bodies(&[
+        r#"{"data":[{"id":"artist-1","attributes":{"name":"Artist 1"}}],"next":"/v1/me/library/artists?offset=1"}"#,
+        r#"{"data":[{"id":"artist-2","attributes":{"name":"Artist 2"}}],"next":"/v1/me/library/artists"}"#,
+    ]);
+    let library = library_over(&stub);
+
+    let artists = library.get_favorite_artists(&rest_session()).unwrap();
+
+    assert_eq!(artists.len(), 2);
+    assert_eq!(stub.calls().len(), 2);
 }
 
 /// A transport that records the deadline each request receives, so a test can

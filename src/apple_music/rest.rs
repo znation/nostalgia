@@ -7,6 +7,7 @@
 //! (`crate::apple_music`) decides when to call it, from the browse, search,
 //! and playlist queries, once a `MusicKit` session is stored.
 
+use std::collections::HashSet;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
@@ -30,9 +31,10 @@ const API_BASE: &str = "https://api.music.apple.com/v1";
 ///
 /// Apple caps a collection page at 100 items and links the next in `next`, so
 /// the client follows that link to read a large library in full. The bound
-/// stops a server that returns an endless `next` chain — or a link back to a
-/// page already read — from looping forever; when it is reached, `fetch` logs
-/// [`page_bound_notice`] and returns the rows read so far.
+/// stops a server that returns an endless chain of new `next` links from
+/// looping forever; a `next` link that resolves to a page already read stops
+/// the follow sooner (see [`RestLibrary::fetch`]). When the bound is reached,
+/// `fetch` logs [`page_bound_notice`] and returns the rows read so far.
 const MAX_PAGES: usize = 10;
 
 /// The page size [`RestLibrary::search_library`] asks for. Apple documents the
@@ -442,6 +444,12 @@ impl RestLibrary {
     ) -> Result<Vec<T>, AppleMusicError> {
         let mut items = Vec::new();
         let mut next_url = url.to_string();
+        // The pages already requested, so a `next` link that points back to
+        // one of them stops the follow instead of appending that page's rows
+        // again (a server that repeats a link, or a two-page cycle, would
+        // otherwise return duplicated data until `MAX_PAGES` was reached).
+        let mut visited_urls = HashSet::new();
+        visited_urls.insert(next_url.clone());
         // One deadline for the whole follow, not one per page: a server that
         // answers each page just inside the request bound cannot stretch a
         // ten-page fetch into ten times the UI's wait.
@@ -462,13 +470,20 @@ impl RestLibrary {
                 break;
             };
             match absolute_next_url(next) {
-                // Another page exists and the bound allows reading it.
-                Some(resolved) if page < MAX_PAGES => next_url = resolved,
                 // The bound is reached: report the unread page and stop.
-                Some(_) => {
+                Some(_) if page >= MAX_PAGES => {
                     eprintln!("{}", page_bound_notice(next));
                     break;
                 }
+                // A link back to a page already read is a malformed
+                // pagination chain: stop rather than append that page's rows
+                // again until the page bound is reached.
+                Some(resolved) if !visited_urls.insert(resolved.clone()) => {
+                    eprintln!("{}", repeated_next_notice(next));
+                    break;
+                }
+                // Another unread page exists and the bound allows reading it.
+                Some(resolved) => next_url = resolved,
                 // The link is not a same-origin path, so following it could
                 // send the session's tokens to another host.
                 None => {
@@ -581,6 +596,14 @@ fn unfollowable_next_notice(next: &str) -> String {
     format!(
         "Apple Music returned a next page {next:?} that is not a same-origin path; not following it"
     )
+}
+
+/// The notice logged when a collection's `next` link resolves to a page this
+/// fetch has already read, so following it would append that page's rows
+/// again. Escaped with `Debug` for the same reason as [`page_bound_notice`]:
+/// the link is server-controlled and reaches the terminal.
+fn repeated_next_notice(next: &str) -> String {
+    format!("Apple Music returned a next page {next:?} that was already read; not following it")
 }
 
 /// Percent-encodes `segment` for use as a single URL path segment.
