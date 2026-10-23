@@ -43,3 +43,25 @@ pub(crate) fn config_builder_with_timeout(
         .max_redirects(0)
         .http_status_as_error(false)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn agent_carries_timeout_max_redirects_and_status_as_ok() {
+        let config = config_with_timeout(Duration::from_secs(7));
+        // config is ureq::config::Config; inspect fields
+        assert_eq!(config.timeouts().global, Some(Duration::from_secs(7)));
+        assert_eq!(config.max_redirects(), 0);
+        assert!(!config.http_status_as_error());
+    }
+
+    #[test]
+    fn builder_matches_config() {
+        let builder = config_builder_with_timeout(Duration::from_secs(3));
+        let config = builder.build();
+        assert_eq!(config.timeouts().global, Some(Duration::from_secs(3)));
+    }
+}
