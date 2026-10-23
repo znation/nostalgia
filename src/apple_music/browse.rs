@@ -1,5 +1,6 @@
 //! Browse and search queries for [`AppleMusicService`].
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::rest;
@@ -12,6 +13,20 @@ use super::{AppleMusicError, AppleMusicService};
 use crate::library::{Album, Artist, Playlist, Song, album_counts_by_artist};
 use crate::music_kit_auth::MusicKitSession;
 use crate::sample_library::sample_library;
+
+/// Assigns each album its running time from `durations`, keyed by the exact
+/// `(album title, artist display name)` pair the whole-library songs read
+/// groups by. A miss — no song reported that album — sets `0`, which the row
+/// renders as the `--:--` placeholder. The lookup clones the two key parts
+/// because the map owns its keys while `albums` borrows its strings.
+fn apply_album_durations(albums: &mut [Album], durations: &HashMap<(String, String), u64>) {
+    for album in albums {
+        album.duration_ms = durations
+            .get(&(album.title.clone(), album.artist.clone()))
+            .copied()
+            .unwrap_or(0);
+    }
+}
 
 impl AppleMusicService {
     /// All favorite artists: the signed-in user's library artists when a
@@ -55,10 +70,16 @@ impl AppleMusicService {
     /// ordinary "no albums" case. The same id guard
     /// [`AppleMusicService::play_track`] applies to its track id.
     ///
+    /// A signed-in load also reads the whole-library songs collection (one
+    /// extra paginated request) and fills each album's [`Album::duration_ms`]
+    /// from the songs' summed durations; a failed songs request fails the
+    /// whole album load through the existing Retry path. The signed-out sample
+    /// library's albums already carry their durations.
+    ///
     /// # Errors
     ///
     /// Returns an [`AppleMusicError`] when `artist_id` is blank (empty or only
-    /// whitespace), carries a control character, or the signed-in request
+    /// whitespace), carries a control character, or either signed-in request
     /// fails.
     pub async fn get_albums_by_artist(
         &self,
@@ -67,7 +88,12 @@ impl AppleMusicService {
         ensure_id_is_valid(artist_id, IdKind::Artist)?;
         let id = artist_id.to_string();
         self.browse(
-            move |rest, session| rest.get_albums_by_artist(session, &id),
+            move |rest, session| {
+                let mut albums = rest.get_albums_by_artist(session, &id)?;
+                let durations = rest.get_album_durations(session)?;
+                apply_album_durations(&mut albums, &durations);
+                Ok(albums)
+            },
             || lookup(&sample_library().albums_by_artist, artist_id),
         )
         .await
@@ -160,13 +186,25 @@ impl AppleMusicService {
     /// library when a session is stored, and every sample-library album
     /// otherwise.
     ///
+    /// A signed-in load reads the albums collection first and the whole-library
+    /// songs collection second (one extra paginated request), then fills each
+    /// album's [`Album::duration_ms`] from the songs' summed durations; a
+    /// failed songs request fails the whole album load through the existing
+    /// Retry path. The signed-out sample library's albums already carry their
+    /// durations.
+    ///
     /// # Errors
     ///
-    /// Returns an [`AppleMusicError`] when the signed-in request fails; with
+    /// Returns an [`AppleMusicError`] when either signed-in request fails; with
     /// no session the sample-library lookup never fails.
     pub async fn get_all_albums(&self) -> Result<Vec<Album>, AppleMusicError> {
         self.browse(
-            |rest, session| rest.get_all_albums(session),
+            |rest, session| {
+                let mut albums = rest.get_all_albums(session)?;
+                let durations = rest.get_album_durations(session)?;
+                apply_album_durations(&mut albums, &durations);
+                Ok(albums)
+            },
             sample_all_albums,
         )
         .await

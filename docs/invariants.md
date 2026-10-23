@@ -171,6 +171,45 @@ pins every row's secondary label to the right edge.
 - `artist_album_count_is_not_serialized_and_defaults_to_zero`
   (both in `src/library.rs`)
 
+## Browse album running times
+
+**Guarantee.** Each album row in the per-artist Albums view and the flat All Albums view shows the
+summed running time of the songs the library reports for that album at the right (`10:30`), or the
+`--:--` placeholder when it reports none, instead of the old `View Songs` hint. The time is
+display data only — the row still selects the album by index and epoch, and Sort, Back, and
+selection are unchanged. A signed-out service answers from the sample library, whose derived
+totals are `10:30` for `First Record`, `1:35` for `Second Record`, and `3:20` for `Debut`. A
+signed-in service reads the album collection first and the whole-library songs collection second
+(one extra paginated request), groups the songs by exact `(album title, artist display name)`,
+and sums their durations with `saturating_add`; a song without a non-blank `albumName` is
+skipped, an album with no matching song is `0`, and a failure in either request surfaces as the
+existing album-load failure and its Retry path. `Album::duration_ms` is derived data, not an
+Apple Music album field: it is skipped by serde and deserializes to `0`.
+
+**Enforced by.** `Album::duration_ms` in `src/library.rs`; `SampleLibrary::new` in
+`src/sample_library.rs` derives each sample album's total from its indexed songs;
+`RestLibrary::get_album_durations` in `src/apple_music/rest.rs` groups and sums the library songs;
+`browse::apply_album_durations` in `src/apple_music/browse.rs` fills the signed-in album lists;
+and `views::browse::rows::album_row` in `src/ui/views/browse/rows.rs` renders the formatted time
+or placeholder as the row's secondary text.
+
+**Pinned by.**
+
+- `album_row_uses_title_and_selects_the_album_by_index`
+- `album_row_shows_the_title_alone_when_the_artist_is_empty`
+- `album_row_shows_a_placeholder_when_the_duration_is_unknown`
+  (all in `src/ui/views/tests.rs`)
+- `albums_carry_their_songs_total_durations`
+  (in `src/sample_library.rs`)
+- `album_duration_is_not_serialized_and_defaults_to_zero`
+  (in `src/library.rs`)
+- `get_album_durations_groups_and_sums_library_songs`
+  (in `src/apple_music/rest/tests.rs`)
+- `get_albums_by_artist_uses_the_rest_library_when_signed_in`
+- `get_all_albums_uses_the_rest_library_when_signed_in`
+- `get_all_albums_fails_when_the_album_durations_request_fails`
+  (all in `src/apple_music/tests.rs`)
+
 ## UI layout
 
 **Guarantee.** The root `view`'s layout keeps these geometry guarantees:

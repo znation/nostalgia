@@ -63,24 +63,27 @@ impl SampleLibrary {
     /// each, one with none — one to three songs per album, and three playlists
     /// drawing songs from those albums in their own order.
     fn new() -> Self {
-        let albums = vec![
+        let mut albums = vec![
             Album {
                 id: "album-1".to_string(),
                 title: "First Record".to_string(),
                 artist_id: "artist-1".to_string(),
                 artist: "The Sample Band".to_string(),
+                duration_ms: 0,
             },
             Album {
                 id: "album-2".to_string(),
                 title: "Second Record".to_string(),
                 artist_id: "artist-1".to_string(),
                 artist: "The Sample Band".to_string(),
+                duration_ms: 0,
             },
             Album {
                 id: "album-3".to_string(),
                 title: "Debut".to_string(),
                 artist_id: "artist-2".to_string(),
                 artist: "Echo Chamber".to_string(),
+                duration_ms: 0,
             },
         ];
         let album_count = |artist_id: &str| {
@@ -176,10 +179,22 @@ impl SampleLibrary {
                 songs_in_named_order(&songs, &["song-1", "song-2", "song-3"]),
             ),
         ]);
+        // Each album's running time is the sum of the sample songs the
+        // library reports for it, derived here rather than hardcoded so the
+        // row's total follows the songs. `saturating_add` keeps a pathological
+        // total from wrapping instead of wrapping to a nonsense short time.
+        let songs_by_album = index_by(&songs, |song| &song.album_id);
+        for album in &mut albums {
+            if let Some(songs) = songs_by_album.get(&album.id) {
+                album.duration_ms = songs
+                    .iter()
+                    .fold(0, |total, song| total.saturating_add(song.duration_ms));
+            }
+        }
         SampleLibrary {
             artists,
             albums_by_artist: index_by(&albums, |album| &album.artist_id),
-            songs_by_album: index_by(&songs, |song| &song.album_id),
+            songs_by_album,
             playlists,
             songs_by_playlist,
         }
@@ -284,6 +299,21 @@ mod tests {
             |album| album.title.as_str(),
             &[("album-3", "Debut")],
         );
+    }
+
+    // The album rows render each album's running time from `Album::duration_ms`,
+    // and these totals are user-visible when no Apple Music session is stored.
+    // Pin the three derived totals in artist order so a changed song duration
+    // or album grouping cannot silently make a row show a wrong time. The
+    // expected values are the sums of the sample songs' durations above:
+    // 210+240+180 seconds, 95 seconds, and 200 seconds.
+    #[test]
+    fn albums_carry_their_songs_total_durations() {
+        let library = sample_library();
+
+        assert_eq!(library.albums_by_artist["artist-1"][0].duration_ms, 630_000);
+        assert_eq!(library.albums_by_artist["artist-1"][1].duration_ms, 95_000);
+        assert_eq!(library.albums_by_artist["artist-2"][0].duration_ms, 200_000);
     }
 
     // As with albums: every album with songs gets exactly one group keyed by

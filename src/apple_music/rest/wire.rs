@@ -166,6 +166,10 @@ struct Attributes {
     /// The performing artist's display name; absent when the API omits it.
     #[serde(rename = "artistName")]
     artist_name: Option<String>,
+    /// The title of the album the resource belongs to; absent when the API
+    /// omits it.
+    #[serde(rename = "albumName")]
+    album_name: Option<String>,
     /// The track's length in milliseconds; absent when the API omits it.
     #[serde(rename = "durationInMillis")]
     duration_in_millis: Option<u64>,
@@ -228,7 +232,35 @@ impl Resource {
             title,
             artist_id: artist_id.to_string(),
             artist,
+            duration_ms: 0,
         })
+    }
+
+    /// Maps this resource to the `(album title, artist display name, duration)`
+    /// triple the whole-library duration map groups by, or `None` when it
+    /// carries no non-blank `albumName`.
+    ///
+    /// A resource without an album name cannot be attributed to an album, so
+    /// the caller skips it rather than failing the whole songs request. The
+    /// artist uses [`Album::artist`]'s `""` "source supplied no artist"
+    /// sentinel, and a missing duration is `0`, matching [`Self::into_song`].
+    pub(super) fn into_album_duration(self) -> Option<(String, String, u64)> {
+        let attributes = self.attributes?;
+        let album_name = attributes
+            .album_name
+            .filter(|name| !name.trim().is_empty())?;
+        // `""` is `Album::artist`'s "source supplied no artist" sentinel, so a
+        // missing or whitespace-only name maps to the empty sentinel, exactly
+        // as `Resource::into_album` does.
+        let artist = attributes
+            .artist_name
+            .filter(|name| !name.trim().is_empty())
+            .unwrap_or_default();
+        Some((
+            album_name,
+            artist,
+            attributes.duration_in_millis.unwrap_or(0),
+        ))
     }
 
     /// Maps this resource to a [`Playlist`], moving its id and name into the

@@ -11,7 +11,7 @@
 //! the API's response shapes and their mapping onto the model, and this module
 //! holds the queries, pagination, and URL construction that tie them together.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 use super::AppleMusicError;
@@ -147,6 +147,38 @@ impl RestLibrary {
     pub fn get_all_songs(&self, session: &MusicKitSession) -> Result<Vec<Song>, AppleMusicError> {
         let url = format!("{API_BASE}/me/library/songs");
         self.fetch(&url, session, |resource| resource.into_song(""))
+    }
+
+    /// The summed duration of each album in the signed-in user's library,
+    /// keyed by its exact `(album title, artist display name)` pair.
+    ///
+    /// This reads the whole-library songs collection through the same
+    /// paginated helper as [`RestLibrary::get_all_songs`], because a library
+    /// song carries its album's title in `attributes.albumName` rather than an
+    /// album id, and it groups the songs by that title and their
+    /// `attributes.artistName` (the `""` sentinel for a missing or blank
+    /// artist). Durations are summed with `saturating_add`. A resource without
+    /// a non-blank `albumName` cannot be attributed to an album and is skipped
+    /// rather than failing the request; an album with no matching song is
+    /// simply absent from the map, which callers read as `0`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the request fails or the response is
+    /// not valid JSON.
+    pub fn get_album_durations(
+        &self,
+        session: &MusicKitSession,
+    ) -> Result<HashMap<(String, String), u64>, AppleMusicError> {
+        let url = format!("{API_BASE}/me/library/songs");
+        let songs = self.fetch(&url, session, |resource| Ok(resource.into_album_duration()))?;
+        let mut durations: HashMap<(String, String), u64> = HashMap::new();
+        for song in songs.into_iter().flatten() {
+            let (album, artist, duration_ms) = song;
+            let total = durations.entry((album, artist)).or_insert(0);
+            *total = total.saturating_add(duration_ms);
+        }
+        Ok(durations)
     }
 
     /// Every album in the signed-in user's library, in library order.

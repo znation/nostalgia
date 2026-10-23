@@ -397,6 +397,49 @@ fn get_all_songs_maps_the_library_songs_collection() {
     assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/songs");
 }
 
+// The album running times are grouped from the whole-library songs collection
+// by exact `(albumName, artistName)`, summing each album's songs. A resource
+// without a non-blank album name is skipped, an album missing from the map is
+// left to the caller's `0`, a blank artist maps to the empty sentinel, and a
+// missing duration counts as `0`. The URL pins the songs endpoint.
+#[test]
+fn get_album_durations_groups_and_sums_library_songs() {
+    let stub = StubTransport::returning(
+        r#"{"data":[
+            {"id":"song-1","attributes":{"name":"Opening","artistName":"The Sample Band","albumName":"First Record","durationInMillis":210000}},
+            {"id":"song-2","attributes":{"name":"Middle","artistName":"The Sample Band","albumName":"First Record","durationInMillis":240000}},
+            {"id":"song-3","attributes":{"name":"B-side","artistName":"The Sample Band","albumName":"Second Record","durationInMillis":95000}},
+            {"id":"song-4","attributes":{"name":"Orphan","artistName":"Nobody","durationInMillis":1000}},
+            {"id":"song-5","attributes":{"name":"Blank","artistName":"Nobody","albumName":"   ","durationInMillis":1000}},
+            {"id":"song-6","attributes":{"name":"Headliner","artistName":"   ","albumName":"Debut","durationInMillis":200000}},
+            {"id":"song-7","attributes":{"name":"Unknown","artistName":"The Sample Band","albumName":"Unknown Record"}}
+        ]}"#,
+    );
+    let library = library_over(&stub);
+
+    let durations = library.get_album_durations(&rest_session()).unwrap();
+
+    assert_eq!(
+        durations,
+        std::collections::HashMap::from([
+            (
+                ("First Record".to_string(), "The Sample Band".to_string()),
+                450_000,
+            ),
+            (
+                ("Second Record".to_string(), "The Sample Band".to_string()),
+                95_000,
+            ),
+            (("Debut".to_string(), String::new()), 200_000),
+            (
+                ("Unknown Record".to_string(), "The Sample Band".to_string()),
+                0,
+            ),
+        ])
+    );
+    assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/songs");
+}
+
 // A library larger than one page is read in full: the flat list follows the
 // same-origin `next` link with the same pagination rules as a browse
 // collection.
@@ -462,6 +505,7 @@ fn get_all_albums_maps_the_library_albums_collection() {
             title: "First Record".to_string(),
             artist_id: String::new(),
             artist: "The Sample Band".to_string(),
+            duration_ms: 0,
         }]
     );
     assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/albums");

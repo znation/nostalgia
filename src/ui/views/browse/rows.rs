@@ -203,7 +203,8 @@ pub(in crate::ui::views) fn album_count_label(count: usize) -> Cow<'static, str>
 
 /// The browse row an album becomes: its display title (`<artist> - <title>`,
 /// or the title alone when the artist is empty; see [`Album::display_title`]),
-/// the "View Songs" hint, the message emitted when it is pressed, and the
+/// its total running time ([`format_track_time`], or `--:--` when the source
+/// supplied no songs), the message emitted when it is pressed, and the
 /// current-track flag. `epoch`
 /// and `index` are the loaded-list epoch and the album's position in that
 /// list, carried so building a row never clones the album's id (see
@@ -216,7 +217,7 @@ pub(in crate::ui::views) fn album_row<'a>(
 ) -> (Cow<'a, str>, Cow<'a, str>, Message, bool) {
     (
         album.display_title(),
-        Cow::Borrowed("View Songs"),
+        Cow::Owned(format_track_time(album.duration_ms)),
         Message::AlbumSelected { epoch, index },
         false,
     )

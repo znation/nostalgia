@@ -1147,6 +1147,7 @@ async fn album_selected_in_all_albums_loads_its_songs_and_back_returns_to_all_al
         title: "Debut".to_string(),
         artist_id: String::new(),
         artist: "Echo Chamber".to_string(),
+        duration_ms: 0,
     };
     let _ = update(&mut player, Message::AllAlbumsLoaded(vec![flat_album]));
     player.current_view = CurrentView::AllAlbums;
@@ -1298,6 +1299,7 @@ async fn album_selected_fetches_the_albums_songs_into_the_player() {
         title: "Debut".to_string(),
         artist_id: "artist-2".to_string(),
         artist: "Echo Chamber".to_string(),
+        duration_ms: 0,
     }];
 
     let task = update(&mut player, Message::AlbumSelected { epoch: 0, index: 0 });
@@ -2868,12 +2870,14 @@ fn sort_reorders_albums_by_their_display_title() {
             title: "Alpha".to_string(),
             artist_id: "artist-1".to_string(),
             artist: "Zulu".to_string(),
+            duration_ms: 0,
         },
         Album {
             id: "alpha".to_string(),
             title: "Zulu".to_string(),
             artist_id: "artist-1".to_string(),
             artist: "alpha".to_string(),
+            duration_ms: 0,
         },
     ];
 
@@ -2980,12 +2984,14 @@ fn sort_reorders_all_albums_by_their_display_title() {
             title: "Alpha".to_string(),
             artist_id: "artist-1".to_string(),
             artist: "Zulu".to_string(),
+            duration_ms: 0,
         },
         Album {
             id: "alpha".to_string(),
             title: "Zulu".to_string(),
             artist_id: "artist-1".to_string(),
             artist: "alpha".to_string(),
+            duration_ms: 0,
         },
     ];
 
@@ -3200,12 +3206,14 @@ fn seed_lists_for_sort_locality(player: &mut WinampPlayer) {
                 title: "Alpha".to_string(),
                 artist_id: "artist-1".to_string(),
                 artist: "Zulu".to_string(),
+                duration_ms: 0,
             },
             Album {
                 id: "alpha".to_string(),
                 title: "Zulu".to_string(),
                 artist_id: "artist-1".to_string(),
                 artist: "alpha".to_string(),
+                duration_ms: 0,
             },
         ]
     };
@@ -3460,12 +3468,14 @@ fn back_from_songs_restores_a_sorted_albums_list_to_library_order() {
                 title: "Zulu".to_string(),
                 artist_id: "artist-1".to_string(),
                 artist: "Zulu".to_string(),
+                duration_ms: 0,
             },
             Album {
                 id: "alpha".to_string(),
                 title: "alpha".to_string(),
                 artist_id: "artist-1".to_string(),
                 artist: "alpha".to_string(),
+                duration_ms: 0,
             },
         ]),
     );
@@ -3500,12 +3510,14 @@ fn back_from_all_albums_songs_restores_a_sorted_flat_list_to_library_order() {
             title: "Zulu".to_string(),
             artist_id: "artist-1".to_string(),
             artist: "Zulu".to_string(),
+            duration_ms: 0,
         },
         Album {
             id: "alpha".to_string(),
             title: "alpha".to_string(),
             artist_id: "artist-1".to_string(),
             artist: "alpha".to_string(),
+            duration_ms: 0,
         },
     ];
 

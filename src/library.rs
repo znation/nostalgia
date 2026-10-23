@@ -40,6 +40,12 @@ pub struct Album {
     /// no artist. Album rows render `<artist> - <title>` when it is non-empty.
     #[serde(default)]
     pub artist: String,
+    /// The summed duration of the songs the library reports for this album in
+    /// milliseconds, and `0` when it reports none. Derived display data
+    /// rather than an Apple Music field, so it is skipped by serde and
+    /// deserializes to `0`; the service fills it from the library's songs.
+    #[serde(skip)]
+    pub duration_ms: u64,
 }
 
 impl Album {
@@ -229,6 +235,18 @@ mod tests {
         assert_eq!(counts.get("Echo Chamber"), Some(&1));
         assert_eq!(counts.get("Mono Tones"), None);
         assert_eq!(counts.len(), 2);
+    }
+
+    #[test]
+    fn album_duration_is_not_serialized_and_defaults_to_zero() {
+        // `duration_ms` is derived display data, not an Apple Music field: a
+        // nonzero total must not leak into the wire payload, and a payload
+        // without the field must deserialize to the `0` no-songs default.
+        let mut album = sample_album();
+        album.duration_ms = 630_000;
+        assert_eq!(serde_json::to_value(&album).unwrap(), album_payload());
+        let parsed: Album = serde_json::from_value(album_payload()).unwrap();
+        assert_eq!(parsed.duration_ms, 0);
     }
 
     #[test]

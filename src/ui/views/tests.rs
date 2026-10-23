@@ -111,10 +111,11 @@ fn album_row_uses_title_and_selects_the_album_by_index() {
     // list's epoch, and
     // `album_selected_fetches_the_albums_songs_into_the_player` in
     // `ui::tests` pins the index-to-id mapping.
-    let album = sample_album();
+    let mut album = sample_album();
+    album.duration_ms = 630_000;
     let (title, label, message, is_current) = album_row(0, 0, &album);
     assert_eq!(title, "The Sample Band - First Record");
-    assert_eq!(label, "View Songs");
+    assert_eq!(label, "10:30");
     assert!(matches!(
         message,
         Message::AlbumSelected { epoch: 0, index: 0 }
@@ -128,10 +129,26 @@ fn album_row_uses_title_and_selects_the_album_by_index() {
 fn album_row_shows_the_title_alone_when_the_artist_is_empty() {
     let mut album = sample_album();
     album.artist = String::new();
+    album.duration_ms = 95_000;
     let (title, label, message, is_current) = album_row(0, 0, &album);
     assert_eq!(title, "First Record");
     assert!(matches!(title, std::borrow::Cow::Borrowed(_)));
-    assert_eq!(label, "View Songs");
+    assert_eq!(label, "1:35");
+    assert!(matches!(
+        message,
+        Message::AlbumSelected { epoch: 0, index: 0 }
+    ));
+    assert!(!is_current);
+}
+
+// An album the source reported no songs for has no known running time, so the
+// row must show the same `--:--` placeholder a song with no duration does
+// rather than a misleading `0:00`.
+#[test]
+fn album_row_shows_a_placeholder_when_the_duration_is_unknown() {
+    let album = sample_album();
+    let (_, label, message, is_current) = album_row(0, 0, &album);
+    assert_eq!(label, "--:--");
     assert!(matches!(
         message,
         Message::AlbumSelected { epoch: 0, index: 0 }

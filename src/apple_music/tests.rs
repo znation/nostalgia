@@ -2320,9 +2320,10 @@ async fn get_favorite_artists_counts_albums_by_artist_name_from_the_rest_library
 
 #[tokio::test]
 async fn get_albums_by_artist_uses_the_rest_library_when_signed_in() {
-    let stub = StubTransport::returning(
+    let stub = StubTransport::returning_bodies(&[
         r#"{"data":[{"id":"album-1","attributes":{"name":"First Record","artistName":"The Sample Band"}}]}"#,
-    );
+        r#"{"data":[{"id":"song-1","attributes":{"name":"Opening","artistName":"The Sample Band","albumName":"First Record","durationInMillis":210000}}]}"#,
+    ]);
     let service = signed_in_service(&stub);
 
     let albums = service.get_albums_by_artist("artist-9").await.unwrap();
@@ -2331,12 +2332,19 @@ async fn get_albums_by_artist_uses_the_rest_library_when_signed_in() {
         albums,
         vec![Album {
             artist_id: "artist-9".to_string(),
+            duration_ms: 210_000,
             ..sample_album()
         }]
     );
-    assert_single_call(
-        &stub,
-        "https://api.music.apple.com/v1/me/library/artists/artist-9/albums",
+    let calls = stub.calls();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(
+        calls[0].0,
+        "https://api.music.apple.com/v1/me/library/artists/artist-9/albums"
+    );
+    assert_eq!(
+        calls[1].0,
+        "https://api.music.apple.com/v1/me/library/songs"
     );
 }
 
@@ -2402,9 +2410,13 @@ async fn get_all_songs_uses_the_rest_library_when_signed_in() {
 // can only have come from the REST collection; the URL pins the endpoint.
 #[tokio::test]
 async fn get_all_albums_uses_the_rest_library_when_signed_in() {
-    let stub = StubTransport::returning(
+    let stub = StubTransport::returning_bodies(&[
         r#"{"data":[{"id":"rest-album","attributes":{"name":"Remote Record","artistName":"The Sample Band"}}]}"#,
-    );
+        r#"{"data":[
+            {"id":"song-1","attributes":{"name":"Opening","artistName":"The Sample Band","albumName":"Remote Record","durationInMillis":210000}},
+            {"id":"song-2","attributes":{"name":"Middle","artistName":"The Sample Band","albumName":"Remote Record","durationInMillis":1000}}
+        ]}"#,
+    ]);
     let service = signed_in_service(&stub);
 
     let albums = service.get_all_albums().await.unwrap();
@@ -2416,9 +2428,45 @@ async fn get_all_albums_uses_the_rest_library_when_signed_in() {
             title: "Remote Record".to_string(),
             artist_id: String::new(),
             artist: "The Sample Band".to_string(),
+            duration_ms: 211_000,
         }]
     );
-    assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/albums");
+    let calls = stub.calls();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(
+        calls[0].0,
+        "https://api.music.apple.com/v1/me/library/albums"
+    );
+    assert_eq!(
+        calls[1].0,
+        "https://api.music.apple.com/v1/me/library/songs"
+    );
+}
+
+// The signed-in all-albums load reads the songs collection after the album
+// list so it can total each album's running time. A failure there must fail
+// the whole load (the Retry path) instead of quietly leaving every duration
+// at zero.
+#[tokio::test]
+async fn get_all_albums_fails_when_the_album_durations_request_fails() {
+    let stub = StubTransport::returning_results(&[
+        Ok(
+            r#"{"data":[{"id":"rest-album","attributes":{"name":"Remote Record","artistName":"The Sample Band"}}]}"#
+                .to_string(),
+        ),
+        Err(AppleMusicError::new("songs down")),
+    ]);
+    let service = signed_in_service(&stub);
+
+    let error = service.get_all_albums().await.unwrap_err();
+
+    assert_eq!(error.to_string(), "songs down");
+    let calls = stub.calls();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(
+        calls[1].0,
+        "https://api.music.apple.com/v1/me/library/songs"
+    );
 }
 
 #[tokio::test]
