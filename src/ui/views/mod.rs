@@ -17,7 +17,7 @@
 //! [`chrome_slider`], and [`format_track_time`]) live here.
 
 use iced::{
-    Element, Length,
+    Color, Element, Length,
     widget::{Button, Slider, Space, Text},
 };
 
@@ -164,24 +164,27 @@ const BALANCE_STEP: f32 = 0.01;
 const EQ_STEP: f32 = 1.0;
 
 /// Builds one horizontal chrome slider: it spans `min..=max`, starts at
-/// `value`, steps by `step`, is `width` pixels wide, and is restyled with the
-/// shared [`style::chrome_slider_style`]. Dragging it emits `on_change`.
+/// `value`, steps by `step`, is `width` pixels wide, and paints both halves of
+/// its rail `fill` with the shared [`style::level_slider_style`]. Dragging it
+/// emits `on_change`.
 ///
 /// The transport row's volume and balance sliders and the shade strip's volume
-/// slider differ only in those values, so the construction lives here once.
-/// The equalizer's preamp and band sliders are vertical twins beside each other
-/// in the band row and build a `VerticalSlider`, so they do not call this.
+/// slider differ only in those values and their fill, so the construction lives
+/// here once. The seek bar and the equalizer's preamp build their own sliders
+/// and keep the neutral chrome groove, while the equalizer's band sliders carry
+/// the per-band gain tint from [`style::band_slider_style`].
 fn chrome_slider(
     min: f32,
     max: f32,
     value: f32,
     step: f32,
     width: f32,
+    fill: Color,
     on_change: fn(f32) -> Message,
 ) -> Element<'static, Message> {
     Slider::new(min..=max, value, on_change)
         .step(step)
         .width(Length::Fixed(width))
-        .style(|_theme, status| style::chrome_slider_style(status))
+        .style(move |_theme, status| style::level_slider_style(fill, status))
         .into()
 }

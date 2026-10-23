@@ -109,11 +109,20 @@ pub fn view_shade_strip<'a>(
 
 /// The strip's volume slider: the shared volume range and step, pinned to
 /// [`SHADE_VOLUME_WIDTH`], emitting [`Message::VolumeChange`] like the full
-/// transport row's volume slider. Returned as a widget only; the test pins
-/// its spec through [`shade_volume_spec`].
+/// transport row's volume slider and painting the same
+/// [`theme::VOLUME_SLIDER_FILL`] groove. Returned as a widget only; the test
+/// pins its spec through [`shade_volume_spec`].
 fn shade_volume_slider(volume: f32) -> Element<'static, Message> {
     let (min, max, step, width, on_change) = shade_volume_spec();
-    chrome_slider(min, max, volume, step, width, on_change)
+    chrome_slider(
+        min,
+        max,
+        volume,
+        step,
+        width,
+        theme::VOLUME_SLIDER_FILL,
+        on_change,
+    )
 }
 
 /// The strip's volume slider parameters, in `chrome_slider` order: the shared

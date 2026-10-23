@@ -274,6 +274,25 @@ used by `views::view_equalizer` in `src/ui/views/equalizer.rs`.
 **History.** The tint is presentation-only: it reads the same stored gains the sliders and
 `BandFilter` use but does not change the curve the audio filter applies.
 
+## Level slider fill
+
+**Guarantee.** The transport volume slider and the shade-mode volume slider paint both halves of
+their rail `theme::VOLUME_SLIDER_FILL` (the mockup's orange), and the transport balance slider
+paints both halves in `theme::BALANCE_SLIDER_FILL` (the mockup's green). Both rail halves carry
+the fill in every interaction status, so no gray segment remains on either side of the thumb.
+The chrome thumb, the 4px rail width, the 1px dark rail border, and the square geometry are
+unchanged from `chrome_slider_style`, and hover and drag still change only the handle face. The
+seek bar and the equalizer preamp keep the neutral `theme::LCD_BACKGROUND` groove.
+
+**Enforced by.** `style::level_slider_style` in `src/ui/style.rs`, used by `views::chrome_slider`
+in `src/ui/views/mod.rs` (the transport row and shade strip pass their fills there).
+
+**Pinned by.** `base_skin_colors_keep_their_documented_literal_values` in `src/ui/theme.rs` and
+`level_slider_style_paints_both_rail_halves_and_keeps_the_chrome_thumb` in `src/ui/style.rs`.
+
+**History.** The fill is presentation-only: slider ranges, steps, messages, thumb geometry, and
+playback behavior are unchanged.
+
 ## Now Playing label
 
 **Guarantee.** The Now Playing bar shows the current track's human-readable title and artist, not

@@ -264,6 +264,22 @@ pub fn band_slider_style(gain: f32, status: slider::Status) -> slider::Style {
     style
 }
 
+/// The chrome slider style with both rail halves painted `fill`.
+///
+/// This is the level sliders' style (transport volume and balance, shade
+/// volume): iced paints `backgrounds.0` from the range start to the thumb and
+/// `backgrounds.1` from the thumb to the range end, so both halves carry the
+/// fill and no gray segment remains on either side. The rail width and border
+/// and the whole handle stay exactly [`chrome_slider_style`]'s, so the fill
+/// changes only the groove's color while hover and drag still swap only the
+/// handle face. Pure, so the rule is testable without building a widget.
+pub fn level_slider_style(fill: Color, status: slider::Status) -> slider::Style {
+    let mut style = chrome_slider_style(status);
+    let fill = Background::Color(fill);
+    style.rail.backgrounds = (fill, fill);
+    style
+}
+
 /// The flat playlist-entry style for a browse row.
 ///
 /// The base skin's playlist rows are flat light text on the near-black well:
@@ -606,6 +622,25 @@ mod tests {
             assert_eq!(style.rail.width, chrome.rail.width);
             assert_eq!(style.rail.border, chrome.rail.border);
             assert_eq!(style.handle, chrome.handle);
+        }
+    }
+
+    #[test]
+    fn level_slider_style_paints_both_rail_halves_and_keeps_the_chrome_thumb() {
+        for fill_color in [theme::VOLUME_SLIDER_FILL, theme::BALANCE_SLIDER_FILL] {
+            let fill = Background::Color(fill_color);
+            for status in [
+                slider::Status::Active,
+                slider::Status::Hovered,
+                slider::Status::Dragged,
+            ] {
+                let style = level_slider_style(fill_color, status);
+                let chrome = chrome_slider_style(status);
+                assert_eq!(style.rail.backgrounds, (fill, fill));
+                assert_eq!(style.rail.width, chrome.rail.width);
+                assert_eq!(style.rail.border, chrome.rail.border);
+                assert_eq!(style.handle, chrome.handle);
+            }
         }
     }
 

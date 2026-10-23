@@ -5,6 +5,30 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
+### Fill the volume and balance sliders with the mockup's orange and green rails (planned 2026-10-23 by the plan role) — done 2026-10-23 by the feature role
+
+**Goal.** Match `docs/screenshots/player.png` and `docs/screenshots/transport.png`, which draw the transport's volume slider over an orange groove and its balance slider over a green groove, each with the same chrome thumb. The build styles both through `chrome_slider` (`src/ui/views/mod.rs`) with `style::chrome_slider_style`, whose near-black `LCD_BACKGROUND` rail makes the two sliders look identical. Give the level sliders their own filled rail while leaving the equalizer preamp and the seek slider on the neutral chrome groove. This is presentation only: slider ranges, steps, messages, thumb geometry, and every playback behavior stay unchanged.
+
+**Approach.**
+
+- `src/ui/theme.rs`: add `pub const VOLUME_SLIDER_FILL: Color = Color::from_rgb(0.88, 0.49, 0.15);` and `pub const BALANCE_SLIDER_FILL: Color = Color::from_rgb(0.09, 0.57, 0.04);`, documented as the mockup's orange volume groove and green balance groove. Extend `base_skin_colors_keep_their_documented_literal_values` with both exact values and assert they differ from each other and from `LCD_BACKGROUND`.
+- `src/ui/style.rs`: add `pub fn level_slider_style(fill: Color, status: slider::Status) -> slider::Style` beside `band_slider_style`. It starts from `chrome_slider_style(status)` and sets `rail.backgrounds` to `(Background::Color(fill), Background::Color(fill))`, so both rail halves carry the fill; the 4px rail, 1px dark border, square geometry, and chrome handle stay exactly `chrome_slider_style`'s, with only the handle face following hover/drag. Add `level_slider_style_paints_both_rail_halves_and_keeps_the_chrome_thumb`, iterating `VOLUME_SLIDER_FILL`, `BALANCE_SLIDER_FILL`, and the Active/Hovered/Dragged statuses, asserting the exact rail backgrounds and equality of the rail width, rail border, and handle with `chrome_slider_style`.
+- `src/ui/views/mod.rs`: give `chrome_slider` a `fill: Color` parameter after `width` and style the widget with `move |_theme, status| style::level_slider_style(fill, status)`. Update its doc comment to say it builds the filled level sliders (transport volume and balance, shade volume) rather than a neutral chrome groove.
+- `src/ui/views/transport.rs`: pass `theme::VOLUME_SLIDER_FILL` to the volume slider and `theme::BALANCE_SLIDER_FILL` to the balance slider, importing `theme` beside `Message`.
+- `src/ui/views/shade.rs`: in `shade_volume_slider`, pass `theme::VOLUME_SLIDER_FILL` to `chrome_slider`; keep `shade_volume_spec`'s range, width, and message tuple unchanged.
+- Leave `src/ui/views/seek_bar.rs` and the equalizer preamp's direct `style::chrome_slider_style` calls on the neutral groove, so only the level sliders gain a fill.
+- `README.md`: in the Usage sentence naming the volume and balance sliders, say the volume slider's groove is orange and the balance slider's is green, matching the mockup. Do not touch the `<!-- tumwater:status:start -->` block.
+- `docs/invariants.md`: add a `## Level slider fill` section after `## Equalizer band tint`: the transport volume and shade volume rails are `theme::VOLUME_SLIDER_FILL`, the transport balance rail is `theme::BALANCE_SLIDER_FILL`, both rail halves carry the fill in every interaction status, the chrome thumb and rail geometry are unchanged, and the seek bar and equalizer preamp keep the neutral `LCD_BACKGROUND` groove. Name `style::level_slider_style` and `views::chrome_slider` as the enforcers and list the theme and style tests.
+
+**Files touched.** `src/ui/theme.rs`, `src/ui/style.rs`, `src/ui/views/mod.rs`, `src/ui/views/transport.rs`, `src/ui/views/shade.rs`, `README.md`, `docs/invariants.md`.
+
+**Acceptance criteria.**
+
+- The transport volume slider draws both halves of its rail in `theme::VOLUME_SLIDER_FILL` (orange) and the balance slider in `theme::BALANCE_SLIDER_FILL` (green); the shade-mode volume slider uses the same orange fill.
+- The chrome thumb, 4px rail width, 1px dark rail border, and square geometry are unchanged from `chrome_slider_style`, and hover/drag still change only the thumb face.
+- The seek bar and the equalizer preamp keep the neutral `LCD_BACKGROUND` groove; no range, step, message, state, or playback behavior changes.
+- `base_skin_colors_keep_their_documented_literal_values` and `level_slider_style_paints_both_rail_halves_and_keeps_the_chrome_thumb` pin the exact fills and the style mapping, `make check` passes, and the README and invariants section describe the same behavior.
+
 ### Draw the LCD's MONO and STEREO indicators as a lit pair (planned 2026-10-23 by the plan role) — done 2026-10-23 by the feature role
 
 **Goal.** Match `docs/screenshots/player.png` and `docs/screenshots/transport.png`, which draw the channel indicators as a pair of labels, `MONO` and `STEREO`, with the mode the loaded preview reports lit green and the other dimmed. Today `now_playing_status_row` (`src/ui/views/now_playing.rs`) draws one right-aligned green string ending in the active mode only (`256 KBPS  44 KHZ  STEREO`), and `format_playback_status` (`src/ui/views/now_playing/text.rs`) builds that whole string. Split the status row so the bitrate/sample-rate prefix keeps its place and the two channel labels draw beside it; when no format is reported, both labels stay dim and the prefix is absent. This is presentation only: the format value, its Pause/Stop clearing rules, and the status row's fixed height are unchanged.

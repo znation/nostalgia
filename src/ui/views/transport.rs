@@ -4,7 +4,7 @@
 
 use iced::{Element, widget::Row};
 
-use crate::ui::Message;
+use crate::ui::{Message, theme};
 
 use super::{
     BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, VOLUME_MAX, VOLUME_MIN, VOLUME_STEP, chrome_slider,
@@ -107,6 +107,7 @@ pub fn view_transport_controls(
         volume,
         VOLUME_STEP,
         100.0,
+        theme::VOLUME_SLIDER_FILL,
         Message::VolumeChange,
     ))
     .push(chrome_slider(
@@ -115,6 +116,7 @@ pub fn view_transport_controls(
         balance,
         BALANCE_STEP,
         100.0,
+        theme::BALANCE_SLIDER_FILL,
         Message::BalanceChange,
     ))
     .into()

@@ -56,6 +56,14 @@ pub const BUTTON_FACE_PRESSED: Color = Color::from_rgb(0.22, 0.22, 0.22);
 /// The near-black recess behind the green Now Playing title.
 pub const LCD_BACKGROUND: Color = Color::from_rgb(0.05, 0.05, 0.05);
 
+/// The transport and shade volume sliders' groove fill: the mockup's orange
+/// rail, distinct from the neutral [`LCD_BACKGROUND`] groove of the seek bar
+/// and equalizer preamp.
+pub const VOLUME_SLIDER_FILL: Color = Color::from_rgb(0.88, 0.49, 0.15);
+
+/// The transport balance slider's groove fill: the mockup's green rail.
+pub const BALANCE_SLIDER_FILL: Color = Color::from_rgb(0.09, 0.57, 0.04);
+
 /// The equalizer band tint at [`GAIN_MIN_DB`](crate::equalizer::GAIN_MIN_DB):
 /// a full cut, matching the LCD green's "quiet" reading.
 pub const EQ_GAIN_LOW: Color = LCD_GREEN;
@@ -187,9 +195,20 @@ mod tests {
         assert_eq!(BUTTON_FACE, Color::from_rgb(0.30, 0.30, 0.30));
         assert_eq!(BUTTON_FACE_HOVERED, Color::from_rgb(0.38, 0.38, 0.38));
         assert_eq!(BUTTON_FACE_PRESSED, Color::from_rgb(0.22, 0.22, 0.22));
+        assert_eq!(VOLUME_SLIDER_FILL, Color::from_rgb(0.88, 0.49, 0.15));
+        assert_eq!(BALANCE_SLIDER_FILL, Color::from_rgb(0.09, 0.57, 0.04));
         assert_eq!(EQ_GAIN_LOW, LCD_GREEN);
         assert_eq!(EQ_GAIN_MID, Color::from_rgb(0.85, 0.85, 0.0));
         assert_eq!(EQ_GAIN_HIGH, Color::from_rgb(1.0, 0.2, 0.1));
+
+        // The two level fills must read apart from each other and from the
+        // neutral groove, or the volume and balance sliders would look
+        // identical again.
+        let (volume_fill, balance_fill, groove) =
+            (VOLUME_SLIDER_FILL, BALANCE_SLIDER_FILL, LCD_BACKGROUND);
+        assert_ne!(volume_fill, balance_fill);
+        assert_ne!(volume_fill, groove);
+        assert_ne!(balance_fill, groove);
 
         // The bevel's two edges must stay distinct, with the light edge
         // actually lighter, or a raised panel reads flat and a sunken one
