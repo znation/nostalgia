@@ -340,18 +340,18 @@ impl AppleMusicService {
     /// same way a blank id is, before shared state is touched. A non-blank
     /// `preview_url` must be an `https` URL whose host is not an internal
     /// address literal or a legacy numeric address form (see
-    /// [`preview_url_problem`](super::validation::preview_url_problem)); the audio backend hands it to a network
-    /// fetch, so a cleartext URL, an internal address literal, a numeric
-    /// host, or a value carrying a control character is rejected before
-    /// shared state is touched.
+    /// [`preview_url_problem`](super::validation::preview_url_problem)); the
+    /// audio backend hands it to a network fetch, so a cleartext URL, an
+    /// internal address literal, a numeric host, or a value carrying a control
+    /// character is rejected before shared state is touched.
     ///
     /// When the audio backend rejects the preview, shared state must not keep
     /// claiming playback: [`crate::state::AppState::stop`] runs before the
     /// error is returned, clearing the playing and paused flags and leaving
     /// `current_track` set as that method leaves it, so the Now Playing bar
-    /// still names the track the user selected. The rollback is itself guarded by `is_current` (see below),
-    /// so a play a newer one has superseded never clears the newer play's
-    /// flag.
+    /// still names the track the user selected. The rollback is itself guarded
+    /// by `is_current` (see below), so a play a newer one has superseded never
+    /// clears the newer play's flag.
     ///
     /// `is_current` guards the commit: it is evaluated while the state lock is
     /// held, and when it returns `false` the track is left uncommitted — and

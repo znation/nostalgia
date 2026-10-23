@@ -31,10 +31,11 @@ pub(super) struct BootstrapPage {
 pub(super) const BOOTSTRAP_DIR_PREFIX: &str = "nostalgia-auth-";
 
 /// How old a bootstrap directory must be before a new sign-in removes it as
-/// the leftover of a flow that never finished. Twice [`crate::music_kit_auth::AUTH_TIMEOUT`]: a live
-/// flow removes its own directory when it returns, so a directory still there
-/// after twice the flow's whole budget belonged to a process that died (or was
-/// suspended and resumed after its flow had already given up).
+/// the leftover of a flow that never finished. Twice
+/// [`crate::music_kit_auth::AUTH_TIMEOUT`]: a live flow removes its own
+/// directory when it returns, so a directory still there after twice the
+/// flow's whole budget belonged to a process that died (or was suspended and
+/// resumed after its flow had already given up).
 pub(super) const BOOTSTRAP_STALE_AFTER: Duration = Duration::from_secs(600);
 
 /// Removes `root`'s bootstrap directories whose last modification is at or

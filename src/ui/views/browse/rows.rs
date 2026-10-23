@@ -39,8 +39,9 @@ pub(in crate::ui::views) fn empty_list_label(view: &CurrentView) -> &'static str
 /// between a fetch failure, "still loading", and "loaded, but empty".
 ///
 /// `error` is the list's most recent fetch-failure report (see
-/// `crate::ui::browse::BrowseList::fail`/`crate::ui::browse::BrowseList::clear`): when present it wins, so a
-/// backend failure is shown rather than misread as an empty library.
+/// `crate::ui::browse::BrowseList::fail`/`crate::ui::browse::BrowseList::clear`):
+/// when present it wins, so a backend failure is shown rather than misread as
+/// an empty library.
 /// Otherwise `loading` is the list's load state: true means the reply the
 /// navigation just scheduled is still in flight, so the panel reads as
 /// loading rather than as an empty library; false means a reply landed —

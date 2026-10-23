@@ -373,12 +373,12 @@ where
 ///
 /// Every browse fetch — the artists load, the navigation arms' albums and
 /// songs loads, the flat-list and Playlists loads, and the library search's
-/// songs load — repeats the same clear-then-issue-then-fetch sequence. Issuing the request without clearing
-/// first would let the previous level's rows render, and be pressed, while the
-/// reply is in flight, so the ordering lives here once instead of at each
-/// arm. `list` and `service` are separate borrows of the player's fields, so a
-/// caller can pass `&mut player.songs` and `&player.apple_music_service`
-/// together.
+/// songs load — repeats the same clear-then-issue-then-fetch sequence. Issuing
+/// the request without clearing first would let the previous level's rows
+/// render, and be pressed, while the reply is in flight, so the ordering lives
+/// here once instead of at each arm. `list` and `service` are separate borrows
+/// of the player's fields, so a caller can pass `&mut player.songs` and
+/// `&player.apple_music_service` together.
 pub(super) fn fetch_level<T, E, Fut>(
     list: &mut BrowseList<T>,
     service: &AppleMusicService,
