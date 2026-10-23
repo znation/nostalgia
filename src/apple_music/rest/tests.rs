@@ -49,6 +49,7 @@ fn favorite_artists_map_library_json() {
             Artist {
                 id: "artist-2".to_string(),
                 name: "Second Act".to_string(),
+                album_count: 0,
             },
         ]
     );
@@ -1331,6 +1332,7 @@ fn a_next_page_is_followed_and_both_pages_are_returned_in_order() {
             Artist {
                 id: "artist-2".to_string(),
                 name: "Echo Chamber".to_string(),
+                album_count: 0,
             },
         ]
     );

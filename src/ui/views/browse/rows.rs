@@ -11,7 +11,7 @@ use std::borrow::Cow;
 
 use iced::{
     Background, Element, Length,
-    widget::{Button, Column, Row, Scrollable, Text, button},
+    widget::{Button, Column, Row, Scrollable, Space, Text, button},
 };
 
 use crate::library::{Album, Artist, Playlist, Song};
@@ -104,11 +104,11 @@ pub(in crate::ui::views) fn row_prefix(position: usize, is_current: bool) -> Str
 pub const BROWSE_LIST_ID: &str = "nostalgia-browse-list";
 
 /// Builds a scrollable list where each item is a button showing its 1-based
-/// position, a title, and a secondary label, emitting the given message on
-/// press. Shared by every browse list view. The last tuple element marks the
-/// currently playing row: its prefix carries a `▶` marker first and it gets a
-/// highlighted background so the list reads as a playlist. Only `song_row`
-/// ever sets the flag to true.
+/// position, a title, and a secondary label pinned to the row's right edge,
+/// emitting the given message on press. Shared by every browse list view. The
+/// last tuple element marks the currently playing row: its prefix carries a
+/// `▶` marker first and it gets a highlighted background so the list reads as
+/// a playlist. Only `song_row` ever sets the flag to true.
 ///
 /// When `items` yields nothing, the list renders `empty_label` in place of a
 /// blank panel. The caller picks the wording via [`browse_placeholder`],
@@ -135,11 +135,14 @@ pub(in crate::ui::views) fn scrollable_list<'a>(
         is_empty = false;
         let button = Button::new(
             Row::new()
+                .width(Length::Fill)
                 .push(Text::new(row_prefix(position, is_current)).size(18))
                 .push(Text::new(title).size(18))
                 .push(spacer(10.0))
+                .push(Space::new().width(Length::Fill))
                 .push(Text::new(label).size(14)),
         )
+        .width(Length::Fill)
         .on_press(message)
         .style(|_theme, status| style::playlist_row_style(status));
         // The current row keeps the playlist row's text and hover/press face
@@ -163,8 +166,9 @@ pub(in crate::ui::views) fn scrollable_list<'a>(
         .into()
 }
 
-/// The browse row an artist becomes: its name, the "View Albums" hint, the
-/// message emitted when it is pressed, and the current-track flag. `epoch` is
+/// The browse row an artist becomes: its name, its album count (``"1 album"``,
+/// ``"2 albums"``, or no label when it has none), the message emitted when it
+/// is pressed, and the current-track flag. `epoch` is
 /// the loaded-list epoch and `index` the artist's position in that list; both
 /// become the selection message's payload, so building a row never clones the
 /// artist's id — the update loop resolves the index back to an id only when
@@ -179,10 +183,22 @@ pub(in crate::ui::views) fn artist_row<'a>(
 ) -> (Cow<'a, str>, Cow<'a, str>, Message, bool) {
     (
         Cow::Borrowed(artist.name.as_str()),
-        Cow::Borrowed("View Albums"),
+        album_count_label(artist.album_count),
         Message::ArtistSelected { epoch, index },
         false,
     )
+}
+
+/// The secondary label an artist row shows for its album count: no label for
+/// `0` (the mockup's artist with no albums shows no count), `"1 album"` for
+/// one, and `"N albums"` otherwise. The empty label borrows so the common
+/// no-albums row allocates nothing.
+pub(in crate::ui::views) fn album_count_label(count: usize) -> Cow<'static, str> {
+    match count {
+        0 => Cow::Borrowed(""),
+        1 => Cow::Borrowed("1 album"),
+        count => Cow::Owned(format!("{count} albums")),
+    }
 }
 
 /// The browse row an album becomes: its display title (`<artist> - <title>`,

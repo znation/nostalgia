@@ -71,8 +71,10 @@ controls, Repeat and Shuffle toggles, volume and balance sliders, an equalizer p
 button, a preset pick list, a response curve above a vertical preamp slider, a `+12 dB` / `0 dB` /
 `-12 dB` scale, and ten band sliders), and a
 browse list whose song rows read `artist - title` (or the title alone when the source supplies
-no artist) and show each track's length, and whose album rows read `artist - title` (or the
-title alone when the source supplies no artist), with each song list showing its song count
+no artist) and show each track's length, whose album rows read `artist - title` (or the
+title alone when the source supplies no artist), and whose artist rows show their album count
+at the right (`2 albums`, `1 album`, and no count for an artist with none), with each song list
+showing its song count
 and total playing time beneath the rows and artist, album, and playlist lists showing their
 item count beneath theirs. Each equalizer band slider's groove is tinted by that band's own
 gain, from green at `-12 dB` through yellow at `0 dB` to red at `+12 dB`.

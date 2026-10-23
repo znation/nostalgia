@@ -8,6 +8,7 @@
 //! the REST library or the sample stub without touching the model or the UI.
 
 use std::borrow::Cow;
+use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -18,6 +19,12 @@ pub struct Artist {
     pub id: String,
     /// The display name the Artists view renders.
     pub name: String,
+    /// The number of albums the loaded library holds for this artist, and `0`
+    /// when it holds none. Derived display data rather than an Apple Music
+    /// field, so it is skipped by serde and deserializes to `0`; the service
+    /// fills it from the library's albums.
+    #[serde(skip)]
+    pub album_count: usize,
 }
 
 /// An album by an [`Artist`], linked to it by [`Album::artist_id`].
@@ -105,9 +112,25 @@ pub fn display_title_for<'a>(artist: &'a str, title: &'a str) -> Cow<'a, str> {
     }
 }
 
+/// Counts the albums each artist display name owns, skipping albums whose
+/// [`Album::artist`] is empty (the source supplied no artist). The returned
+/// map borrows its keys from `albums`, so callers can match an
+/// [`Artist::name`] against it without allocating. This is the display-name
+/// link a signed-in artists load uses because `get_all_albums` deliberately
+/// leaves [`Album::artist_id`] empty.
+pub fn album_counts_by_artist(albums: &[Album]) -> HashMap<&str, usize> {
+    let mut counts = HashMap::new();
+    for album in albums {
+        if !album.artist.is_empty() {
+            *counts.entry(album.artist.as_str()).or_insert(0) += 1;
+        }
+    }
+    counts
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Album, Artist, Playlist, Song};
+    use super::{Album, Artist, Playlist, Song, album_counts_by_artist};
     use crate::test_support::{
         PREVIEW_URL, assert_every_field_required, assert_serializes_as,
         assert_unknown_fields_tolerated, sample_album, sample_artist, sample_playlist, sample_song,
@@ -172,6 +195,40 @@ mod tests {
         // Field names are serialized as-is (no renames): the wire contract a
         // real Apple Music payload must satisfy.
         assert_serializes_as(sample_artist(), artist_payload());
+    }
+
+    #[test]
+    fn artist_album_count_is_not_serialized_and_defaults_to_zero() {
+        // `album_count` is derived display data, not an Apple Music field: a
+        // nonzero count must not leak into the wire payload, and a payload
+        // without the field must deserialize to the `0` no-albums default.
+        let mut artist = sample_artist();
+        artist.album_count = 3;
+        assert_eq!(serde_json::to_value(&artist).unwrap(), artist_payload());
+        let parsed: Artist = serde_json::from_value(artist_payload()).unwrap();
+        assert_eq!(parsed.album_count, 0);
+    }
+
+    #[test]
+    fn album_counts_by_artist_counts_non_empty_names() {
+        let mut first = sample_album();
+        first.artist = "The Sample Band".to_string();
+        let mut second = first.clone();
+        second.id = "album-2".to_string();
+        let mut third = first.clone();
+        third.id = "album-3".to_string();
+        third.artist = "Echo Chamber".to_string();
+        let mut nameless = first.clone();
+        nameless.id = "album-4".to_string();
+        nameless.artist = String::new();
+
+        let albums = vec![first, second, third, nameless];
+        let counts = album_counts_by_artist(&albums);
+
+        assert_eq!(counts.get("The Sample Band"), Some(&2));
+        assert_eq!(counts.get("Echo Chamber"), Some(&1));
+        assert_eq!(counts.get("Mono Tones"), None);
+        assert_eq!(counts.len(), 2);
     }
 
     #[test]

@@ -135,6 +135,42 @@ child is open), and `views::view_browse_nav_buttons` in `src/ui/views/browse.rs`
 - `back_from_a_playlists_songs_restores_a_sorted_list_to_library_order`
   (all in `src/ui/tests.rs`)
 
+## Browse row labels
+
+**Guarantee.** Each artist row shows the number of albums the loaded library holds for that
+artist at the right: `1 album` for one, `N albums` for more, and no label at all for an artist
+with none. The count is display data only — the row still selects the artist by index and epoch,
+and Sort still orders artists by name. A signed-out service answers from the sample library,
+whose counts are `2`, `1`, and `0` in artist order. A signed-in service reads the artist list
+first and the whole albums collection second (one extra paginated request), counts albums by
+exact `Album::artist` display name (skipping albums whose artist name is empty), and matches an
+artist by `Artist::name`; a failure in either request surfaces as the existing artists load
+failure and its Retry path. `Artist::album_count` is derived data, not an Apple Music field: it
+is skipped by serde and deserializes to `0`.
+
+**Enforced by.** `Artist::album_count` in `src/library.rs`;
+`library::album_counts_by_artist` counts non-empty `Album::artist` names;
+`AppleMusicService::get_favorite_artists` in `src/apple_music/browse.rs` fills the counts from
+the sample library or from the two signed-in requests; and
+`views::browse::rows::album_count_label` in `src/ui/views/browse/rows.rs` renders the singular,
+plural, and empty labels that `artist_row` uses as its secondary text, and `scrollable_list`
+pins every row's secondary label to the right edge.
+
+**Pinned by.**
+
+- `artist_row_uses_name_and_selects_the_artist_by_index`
+- `album_count_label_singular_plural_and_none`
+- `artist_row_puts_its_album_count_at_the_right_edge`
+  (all in `src/ui/views/tests.rs`)
+- `sample_library_artists_carry_their_album_counts`
+  (in `src/sample_library.rs`)
+- `get_favorite_artists_uses_the_rest_library_when_signed_in`
+- `get_favorite_artists_counts_albums_by_artist_name_from_the_rest_library`
+  (both in `src/apple_music/tests.rs`)
+- `album_counts_by_artist_counts_non_empty_names`
+- `artist_album_count_is_not_serialized_and_defaults_to_zero`
+  (both in `src/library.rs`)
+
 ## UI layout
 
 **Guarantee.** The root `view`'s layout keeps these geometry guarantees:

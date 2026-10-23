@@ -1387,6 +1387,7 @@ async fn a_slow_stale_browse_failure_does_not_overwrite_the_newer_list_or_error(
         Artist {
             id: String::new(),
             name: "Blank".to_string(),
+            album_count: 0,
         },
         sample_artist(),
     ];
@@ -2764,14 +2765,17 @@ fn sort_reorders_artists_case_insensitively() {
         Artist {
             id: "banana".to_string(),
             name: "banana".to_string(),
+            album_count: 0,
         },
         Artist {
             id: "apple".to_string(),
             name: "Apple".to_string(),
+            album_count: 0,
         },
         Artist {
             id: "cherry".to_string(),
             name: "cherry".to_string(),
+            album_count: 0,
         },
     ];
     // A list with rows has finished its fetch; the startup list is still
@@ -2802,17 +2806,20 @@ fn sort_is_stable_for_equal_keys_and_back_restores_them() {
         (0..EQUAL_ROWS).map(|index| Artist {
             id: format!("same-{index:02}"),
             name: "Same".to_string(),
+            album_count: 0,
         })
     };
     let (mut player, _state) = test_player();
     player.artists.items = std::iter::once(Artist {
         id: "zulu".to_string(),
         name: "Zulu".to_string(),
+        album_count: 0,
     })
     .chain(same_rows())
     .chain(std::iter::once(Artist {
         id: "alpha".to_string(),
         name: "alpha".to_string(),
+        album_count: 0,
     }))
     .collect();
     player.artists.loading = false;
@@ -3000,10 +3007,12 @@ fn sort_bumps_the_epoch_so_a_pre_sort_press_is_rejected() {
         Artist {
             id: "banana".to_string(),
             name: "banana".to_string(),
+            album_count: 0,
         },
         Artist {
             id: "apple".to_string(),
             name: "Apple".to_string(),
+            album_count: 0,
         },
     ];
     // A list with rows has finished its fetch; the startup list is still
@@ -3085,10 +3094,12 @@ fn sort_with_an_empty_or_loading_list_is_a_noop() {
         Artist {
             id: "banana".to_string(),
             name: "banana".to_string(),
+            album_count: 0,
         },
         Artist {
             id: "apple".to_string(),
             name: "Apple".to_string(),
+            album_count: 0,
         },
     ];
     player.artists.loading = true;
@@ -3169,14 +3180,17 @@ fn seed_lists_for_sort_locality(player: &mut WinampPlayer) {
         Artist {
             id: "Zulu".to_string(),
             name: "Zulu".to_string(),
+            album_count: 0,
         },
         Artist {
             id: "alpha".to_string(),
             name: "alpha".to_string(),
+            album_count: 0,
         },
         Artist {
             id: "bravo".to_string(),
             name: "bravo".to_string(),
+            album_count: 0,
         },
     ];
     let albums = || {
@@ -3332,14 +3346,17 @@ fn back_restores_a_sorted_artists_list_to_library_order() {
         Artist {
             id: "zulu".to_string(),
             name: "Zulu".to_string(),
+            album_count: 0,
         },
         Artist {
             id: "alpha".to_string(),
             name: "alpha".to_string(),
+            album_count: 0,
         },
         Artist {
             id: "bravo".to_string(),
             name: "bravo".to_string(),
+            album_count: 0,
         },
     ];
     player.artists.loading = false;
@@ -3372,14 +3389,17 @@ fn a_fresh_artists_reply_drops_the_saved_sort_permutation() {
         Artist {
             id: "zulu".to_string(),
             name: "Zulu".to_string(),
+            album_count: 0,
         },
         Artist {
             id: "alpha".to_string(),
             name: "alpha".to_string(),
+            album_count: 0,
         },
         Artist {
             id: "bravo".to_string(),
             name: "bravo".to_string(),
+            album_count: 0,
         },
     ];
     player.artists.loading = false;
@@ -3395,14 +3415,17 @@ fn a_fresh_artists_reply_drops_the_saved_sort_permutation() {
             Artist {
                 id: "bravo".to_string(),
                 name: "bravo".to_string(),
+                album_count: 0,
             },
             Artist {
                 id: "zulu".to_string(),
                 name: "Zulu".to_string(),
+                album_count: 0,
             },
             Artist {
                 id: "alpha".to_string(),
                 name: "alpha".to_string(),
+                album_count: 0,
             },
         ]),
     );

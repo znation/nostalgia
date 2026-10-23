@@ -5,7 +5,7 @@ use super::threads::{
 use super::validation::{IdKind, ensure_id_is_valid, is_numeric_host_form, preview_url_problem};
 use super::*;
 use crate::audio::{AudioOutput, EqSnapshot};
-use crate::library::{Album, Playlist, Song};
+use crate::library::{Album, Artist, Playlist, Song};
 use crate::sample_library::sample_library;
 use crate::state::TransportMode;
 use crate::test_support::{
@@ -2252,15 +2252,70 @@ fn signed_in_service(transport: &StubTransport) -> AppleMusicService {
 
 #[tokio::test]
 async fn get_favorite_artists_uses_the_rest_library_when_signed_in() {
-    let stub = StubTransport::returning(
+    let stub = StubTransport::returning_bodies(&[
         r#"{"data":[{"id":"artist-1","attributes":{"name":"The Sample Band"}}]}"#,
-    );
+        r#"{"data":[]}"#,
+    ]);
     let service = signed_in_service(&stub);
 
     let artists = service.get_favorite_artists().await.unwrap();
 
     assert_eq!(artists, vec![sample_artist()]);
-    assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/artists");
+    let calls = stub.calls();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(
+        calls[0].0,
+        "https://api.music.apple.com/v1/me/library/artists"
+    );
+    assert_eq!(
+        calls[1].0,
+        "https://api.music.apple.com/v1/me/library/albums"
+    );
+}
+
+#[tokio::test]
+async fn get_favorite_artists_counts_albums_by_artist_name_from_the_rest_library() {
+    let stub = StubTransport::returning_bodies(&[
+        r#"{"data":[
+            {"id":"artist-1","attributes":{"name":"The Sample Band"}},
+            {"id":"artist-2","attributes":{"name":"Echo Chamber"}}
+        ]}"#,
+        r#"{"data":[
+            {"id":"album-1","attributes":{"name":"First Record","artistName":"The Sample Band"}},
+            {"id":"album-2","attributes":{"name":"Second Record","artistName":"The Sample Band"}},
+            {"id":"album-3","attributes":{"name":"Debut","artistName":"Echo Chamber"}},
+            {"id":"album-4","attributes":{"name":"Unknown Artist Record"}}
+        ]}"#,
+    ]);
+    let service = signed_in_service(&stub);
+
+    let artists = service.get_favorite_artists().await.unwrap();
+
+    assert_eq!(
+        artists,
+        vec![
+            Artist {
+                id: "artist-1".to_string(),
+                name: "The Sample Band".to_string(),
+                album_count: 2,
+            },
+            Artist {
+                id: "artist-2".to_string(),
+                name: "Echo Chamber".to_string(),
+                album_count: 1,
+            },
+        ]
+    );
+    let calls = stub.calls();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(
+        calls[0].0,
+        "https://api.music.apple.com/v1/me/library/artists"
+    );
+    assert_eq!(
+        calls[1].0,
+        "https://api.music.apple.com/v1/me/library/albums"
+    );
 }
 
 #[tokio::test]
@@ -2373,6 +2428,28 @@ async fn a_transport_error_propagates_from_a_signed_in_browse_query() {
     let error = service.get_favorite_artists().await.unwrap_err();
 
     assert_eq!(error.to_string(), "network down");
+}
+
+// The signed-in artists load reads the albums collection after the artist
+// list so it can count them. A failure there must fail the whole load (the
+// Retry path) instead of quietly leaving every count at zero.
+#[tokio::test]
+async fn get_favorite_artists_fails_when_the_albums_request_fails() {
+    let stub = StubTransport::returning_results(&[
+        Ok(r#"{"data":[{"id":"artist-1","attributes":{"name":"The Sample Band"}}]}"#.to_string()),
+        Err(AppleMusicError::new("albums down")),
+    ]);
+    let service = signed_in_service(&stub);
+
+    let error = service.get_favorite_artists().await.unwrap_err();
+
+    assert_eq!(error.to_string(), "albums down");
+    let calls = stub.calls();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(
+        calls[1].0,
+        "https://api.music.apple.com/v1/me/library/albums"
+    );
 }
 
 #[tokio::test]

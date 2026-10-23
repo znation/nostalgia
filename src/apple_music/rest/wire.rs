@@ -197,7 +197,11 @@ impl Resource {
             &id,
             "artist",
         )?;
-        Ok(Artist { id, name })
+        Ok(Artist {
+            id,
+            name,
+            album_count: 0,
+        })
     }
 
     /// Maps this resource to an [`Album`] linked to `artist_id`, moving its id

@@ -63,20 +63,6 @@ impl SampleLibrary {
     /// each, one with none — one to three songs per album, and three playlists
     /// drawing songs from those albums in their own order.
     fn new() -> Self {
-        let artists = vec![
-            Artist {
-                id: "artist-1".to_string(),
-                name: "The Sample Band".to_string(),
-            },
-            Artist {
-                id: "artist-2".to_string(),
-                name: "Echo Chamber".to_string(),
-            },
-            Artist {
-                id: "artist-3".to_string(),
-                name: "Mono Tones".to_string(),
-            },
-        ];
         let albums = vec![
             Album {
                 id: "album-1".to_string(),
@@ -95,6 +81,29 @@ impl SampleLibrary {
                 title: "Debut".to_string(),
                 artist_id: "artist-2".to_string(),
                 artist: "Echo Chamber".to_string(),
+            },
+        ];
+        let album_count = |artist_id: &str| {
+            albums
+                .iter()
+                .filter(|album| album.artist_id == artist_id)
+                .count()
+        };
+        let artists = vec![
+            Artist {
+                id: "artist-1".to_string(),
+                name: "The Sample Band".to_string(),
+                album_count: album_count("artist-1"),
+            },
+            Artist {
+                id: "artist-2".to_string(),
+                name: "Echo Chamber".to_string(),
+                album_count: album_count("artist-2"),
+            },
+            Artist {
+                id: "artist-3".to_string(),
+                name: "Mono Tones".to_string(),
+                album_count: album_count("artist-3"),
             },
         ];
         let songs = vec![
@@ -238,6 +247,16 @@ mod tests {
                 ("artist-3", "Mono Tones"),
             ],
         );
+    }
+
+    #[test]
+    fn sample_library_artists_carry_their_album_counts() {
+        let counts: Vec<usize> = sample_library()
+            .artists
+            .iter()
+            .map(|artist| artist.album_count)
+            .collect();
+        assert_eq!(counts, vec![2, 1, 0]);
     }
 
     // `index_by` inserts only groups that exist, so an artist without albums

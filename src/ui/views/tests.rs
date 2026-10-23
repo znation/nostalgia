@@ -1,8 +1,9 @@
 use super::super::{CurrentView, Message, style, theme};
 use super::browse::BROWSE_VIEWS;
 use super::browse::rows::{
-    album_row, artist_row, browse_placeholder, current_row_style, empty_list_label,
-    list_count_summary, playlist_row, row_prefix, song_list_summary, song_row,
+    album_count_label, album_row, artist_row, browse_placeholder, current_row_style,
+    empty_list_label, list_count_summary, playlist_row, row_prefix, scrollable_list,
+    song_list_summary, song_row,
 };
 use super::equalizer::{
     EQ_SLIDER_HEIGHT, RESPONSE_CURVE_COLUMNS, RESPONSE_CURVE_HEIGHT, RESPONSE_CURVE_LINE_HEIGHT,
@@ -62,15 +63,46 @@ fn artist_row_uses_name_and_selects_the_artist_by_index() {
     // to the artist. The index-to-id mapping is pinned by
     // `artist_selected_fetches_the_artists_albums_into_the_player` in
     // `ui::tests`.
-    let artist = sample_artist();
+    let mut artist = sample_artist();
+    artist.album_count = 2;
     let (title, label, message, is_current) = artist_row(0, 0, &artist);
     assert_eq!(title, "The Sample Band");
-    assert_eq!(label, "View Albums");
+    assert_eq!(label, "2 albums");
     assert!(matches!(
         message,
         Message::ArtistSelected { epoch: 0, index: 0 }
     ));
     assert!(!is_current);
+}
+
+#[test]
+fn album_count_label_singular_plural_and_none() {
+    assert_eq!(album_count_label(0), "");
+    assert_eq!(album_count_label(1), "1 album");
+    assert_eq!(album_count_label(2), "2 albums");
+}
+
+// The mockup puts the album count at the artist row's right edge, not
+// directly after the name. Lay the real list out and require the count to
+// reach the right of the row while the name stays on the left.
+#[test]
+fn artist_row_puts_its_album_count_at_the_right_edge() {
+    let mut artist = sample_artist();
+    artist.album_count = 2;
+    let mut element = scrollable_list([artist_row(0, 0, &artist)], "No artists");
+    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+
+    let title = capture.find("The Sample Band");
+    let count = capture.find("2 albums");
+    assert!(
+        count.x > title.x + title.width,
+        "the count must follow the name: {title:?}, {count:?}"
+    );
+    assert!(
+        capture.size().width - (count.x + count.width) < 40.0,
+        "the count must sit at the right edge: {count:?} in {:?}",
+        capture.size()
+    );
 }
 
 #[test]

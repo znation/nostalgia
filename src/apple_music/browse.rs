@@ -9,7 +9,7 @@ use super::sample::{
 use super::threads::off_thread;
 use super::validation::{IdKind, ensure_id_is_valid};
 use super::{AppleMusicError, AppleMusicService};
-use crate::library::{Album, Artist, Playlist, Song};
+use crate::library::{Album, Artist, Playlist, Song, album_counts_by_artist};
 use crate::music_kit_auth::MusicKitSession;
 use crate::sample_library::sample_library;
 
@@ -17,13 +17,28 @@ impl AppleMusicService {
     /// All favorite artists: the signed-in user's library artists when a
     /// session is stored, and every sample-library artist otherwise.
     ///
+    /// A signed-in load also reads the whole albums collection (one extra
+    /// paginated request) and counts its albums by exact [`Album::artist`]
+    /// display name, because `get_all_albums` deliberately leaves
+    /// [`Album::artist_id`] empty. An artist whose name matches no album gets
+    /// a count of `0`. Either request failing surfaces as this query's
+    /// [`AppleMusicError`], which the UI's existing Retry path handles.
+    ///
     /// # Errors
     ///
-    /// Returns an [`AppleMusicError`] when the signed-in request fails; with
+    /// Returns an [`AppleMusicError`] when either signed-in request fails; with
     /// no session the sample-library lookup never fails.
     pub async fn get_favorite_artists(&self) -> Result<Vec<Artist>, AppleMusicError> {
         self.browse(
-            |rest, session| rest.get_favorite_artists(session),
+            |rest, session| {
+                let mut artists = rest.get_favorite_artists(session)?;
+                let albums = rest.get_all_albums(session)?;
+                let counts = album_counts_by_artist(&albums);
+                for artist in &mut artists {
+                    artist.album_count = counts.get(artist.name.as_str()).copied().unwrap_or(0);
+                }
+                Ok(artists)
+            },
             || sample_library().artists.clone(),
         )
         .await
