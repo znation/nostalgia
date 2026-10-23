@@ -116,12 +116,6 @@ pub fn now_playing_label<'a>(
     }
 }
 
-/// The Now Playing bar's artist for `current_track`: the artist of the track
-/// `tracks` knows, or the `""` literal when the track is unknown or none is
-/// current. Mirrors [`now_playing_label`], so resolving the artist adds no
-/// per-frame `String` allocation — the known case borrows from `tracks`.
-/// Pure data → `Cow` so the artist resolution is testable without an iced
-/// renderer.
 /// Looks up the [`KnownTrack`] for `current_track` in `tracks`, returning
 /// `None` when no track is current or the id is unknown. Shared by
 /// [`now_playing_label`], [`now_playing_artist`], [`now_playing_elapsed`], and
@@ -133,6 +127,12 @@ pub(super) fn known_track_for<'a>(
     current_track.and_then(|id| tracks.get(id))
 }
 
+/// The Now Playing bar's artist for `current_track`: the artist of the track
+/// `tracks` knows, or the `""` literal when the track is unknown or none is
+/// current. Mirrors [`now_playing_label`], so resolving the artist adds no
+/// per-frame `String` allocation — the known case borrows from `tracks`.
+/// Pure data → `Cow` so the artist resolution is testable without an iced
+/// renderer.
 pub fn now_playing_artist<'a>(
     tracks: &'a HashMap<String, KnownTrack>,
     current_track: Option<&str>,
