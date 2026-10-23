@@ -103,8 +103,7 @@ pub fn now_playing_label<'a>(
     current_track: Option<&str>,
 ) -> Cow<'a, str> {
     match current_track {
-        Some(id) => tracks
-            .get(id)
+        Some(id) => known_track_for(tracks, Some(id))
             .map(|track| Cow::Borrowed(track.title.as_str()))
             .unwrap_or_else(|| Cow::Owned(id.to_string())),
         None => Cow::Borrowed("Nothing"),
@@ -117,12 +116,22 @@ pub fn now_playing_label<'a>(
 /// per-frame `String` allocation — the known case borrows from `tracks`.
 /// Pure data → `Cow` so the artist resolution is testable without an iced
 /// renderer.
+/// Looks up the [`KnownTrack`] for `current_track` in `tracks`, returning
+/// `None` when no track is current or the id is unknown. Shared by
+/// [`now_playing_label`], [`now_playing_artist`], and [`now_playing_time`] so
+/// the three stay in sync on the lookup.
+pub(super) fn known_track_for<'a>(
+    tracks: &'a HashMap<String, KnownTrack>,
+    current_track: Option<&str>,
+) -> Option<&'a KnownTrack> {
+    current_track.and_then(|id| tracks.get(id))
+}
+
 pub fn now_playing_artist<'a>(
     tracks: &'a HashMap<String, KnownTrack>,
     current_track: Option<&str>,
 ) -> Cow<'a, str> {
-    current_track
-        .and_then(|id| tracks.get(id))
+    known_track_for(tracks, current_track)
         .map(|track| Cow::Borrowed(track.artist.as_str()))
         .unwrap_or(Cow::Borrowed(""))
 }
@@ -141,7 +150,7 @@ pub fn now_playing_time<'a>(
     current_track: Option<&str>,
     position: Option<Duration>,
 ) -> Cow<'a, str> {
-    let Some(track) = current_track.and_then(|id| tracks.get(id)) else {
+    let Some(track) = known_track_for(tracks, current_track) else {
         return Cow::Borrowed("--:--");
     };
     match position {
