@@ -100,8 +100,9 @@ launch starts a browser-based MusicKit sign-in: browse and search queries then r
 Music library through the REST API, and fall back to the built-in sample library when it is
 unset. Playback plays the selected song's Apple Music preview through `rodio` when the library
 supplies one, and updates the UI state either way. Pause and Stop silence the preview through
-the audio backend, and Play resumes a paused preview or restarts a stopped one from the
-beginning. There are no CLI flags or config files yet.
+the audio backend; a pause with no loaded preview stops the transport instead, since there is
+nothing to pause. Play resumes a paused preview or restarts a stopped one from the beginning.
+There are no CLI flags or config files yet.
 
 ## Development
 
