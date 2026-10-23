@@ -335,6 +335,36 @@ pub(in crate::ui) fn all_albums_loaded(
     Task::none()
 }
 
+/// The browse view's Sort button was pressed: reorder the currently showing
+/// list alphabetically by each row's rendered text, case-insensitively.
+///
+/// The reorder is one-shot and local to the visible list: it bumps that list's
+/// epoch (so a press rendered before the sort is rejected) but leaves every
+/// other list, the current view, the search state, and playback alone. A
+/// later navigation reloads its list from the library, so no sort mode
+/// persists.
+pub(in crate::ui) fn sort_browse(player: &mut WinampPlayer) -> Task<Message> {
+    match player.current_view {
+        CurrentView::Artists => player.artists.sort_rows_by(|artist| artist.name.clone()),
+        CurrentView::Albums => player
+            .albums
+            .sort_rows_by(|album| album.display_title().into_owned()),
+        CurrentView::Songs => player
+            .songs
+            .sort_rows_by(|song| song.display_title().into_owned()),
+        CurrentView::AllSongs => player
+            .all_songs
+            .sort_rows_by(|song| song.display_title().into_owned()),
+        CurrentView::AllAlbums => player
+            .all_albums
+            .sort_rows_by(|album| album.display_title().into_owned()),
+        CurrentView::Playlists => player
+            .playlists
+            .sort_rows_by(|playlist| playlist.name.clone()),
+    }
+    Task::none()
+}
+
 /// The playlists fetch landed: store the rows in the playlists list.
 pub(in crate::ui) fn playlists_loaded(
     player: &mut WinampPlayer,

@@ -581,6 +581,14 @@ pub fn view_top_button() -> Element<'static, Message> {
     labeled_button("Top", Message::ScrollBrowseToTop).into()
 }
 
+/// The browse view's Sort button, reordering the showing list in place by its
+/// rows' rendered text. Rendered above every browse level beside Top; the
+/// update loop's `SortBrowse` arm reorders that level's list and bumps its
+/// epoch.
+pub fn view_sort_button() -> Element<'static, Message> {
+    labeled_button("Sort", Message::SortBrowse).into()
+}
+
 /// The Artists view's All Songs button, opening the flat whole-library list.
 /// Rendered only on the Artists view; the update loop's `ShowAllSongs` arm
 /// switches to `CurrentView::AllSongs` and issues the fetch.

@@ -166,6 +166,49 @@ impl<T> BrowseList<T> {
         self.error = None;
     }
 
+    /// Reorders the loaded rows in place by `key`, comparing each key
+    /// lowercased so the order ignores case, and keeps library order for keys
+    /// that compare equal (the sort is stable).
+    ///
+    /// The cached row titles and labels are rebuilt by the same permutation
+    /// whenever they are populated, so a reordered song list still shows each
+    /// track's own title and length. The epoch is bumped like
+    /// [`Self::replace_rows`] because the indices a rendered row emits now name
+    /// different entries; `loading`, `error`, and the request generation are
+    /// left alone, and a list with fewer than two rows is a no-op.
+    pub(super) fn sort_rows_by(&mut self, key: impl Fn(&T) -> String)
+    where
+        T: Clone,
+    {
+        if self.items.len() < 2 {
+            return;
+        }
+        let keys: Vec<String> = self
+            .items
+            .iter()
+            .map(|item| key(item).to_lowercase())
+            .collect();
+        let mut order: Vec<usize> = (0..self.items.len()).collect();
+        order.sort_by(|&left, &right| keys[left].cmp(&keys[right]));
+        self.items = order
+            .iter()
+            .map(|&index| self.items[index].clone())
+            .collect();
+        if !self.titles.is_empty() {
+            self.titles = order
+                .iter()
+                .map(|&index| self.titles[index].clone())
+                .collect();
+        }
+        if !self.labels.is_empty() {
+            self.labels = order
+                .iter()
+                .map(|&index| self.labels[index].clone())
+                .collect();
+        }
+        self.epoch = self.epoch.wrapping_add(1);
+    }
+
     /// Empties the rows and marks the list loading before a new fetch for this
     /// level is issued, so the view never shows — or lets the user press — the
     /// previous selection's rows while the new fetch is in flight. `loading`

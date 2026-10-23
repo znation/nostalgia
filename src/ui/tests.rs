@@ -2717,7 +2717,259 @@ async fn track_selected_in_all_songs_plays_the_flat_lists_song() {
     assert_preview_calls(&recording.calls(), &[]);
 }
 
-// Next/Previous must step the list the current view shows: the flat All
+#[test]
+fn sort_reorders_artists_case_insensitively() {
+    let (mut player, _state) = test_player();
+    player.artists.items = vec![
+        Artist {
+            id: "banana".to_string(),
+            name: "banana".to_string(),
+        },
+        Artist {
+            id: "apple".to_string(),
+            name: "Apple".to_string(),
+        },
+        Artist {
+            id: "cherry".to_string(),
+            name: "cherry".to_string(),
+        },
+    ];
+
+    let _ = update(&mut player, Message::SortBrowse);
+
+    let names: Vec<&str> = player
+        .artists
+        .items
+        .iter()
+        .map(|artist| artist.name.as_str())
+        .collect();
+    assert_eq!(names, ["Apple", "banana", "cherry"]);
+}
+
+#[test]
+fn sort_reorders_albums_by_their_display_title() {
+    let (mut player, _state) = test_player();
+    player.current_view = CurrentView::Albums;
+    // The display titles are "Zulu - Alpha" and "alpha - Zulu", so sorting
+    // by the rendered text puts the second row first; sorting by `title`
+    // alone would leave this order unchanged.
+    player.albums.items = vec![
+        Album {
+            id: "zulu".to_string(),
+            title: "Alpha".to_string(),
+            artist_id: "artist-1".to_string(),
+            artist: "Zulu".to_string(),
+        },
+        Album {
+            id: "alpha".to_string(),
+            title: "Zulu".to_string(),
+            artist_id: "artist-1".to_string(),
+            artist: "alpha".to_string(),
+        },
+    ];
+
+    let _ = update(&mut player, Message::SortBrowse);
+
+    let ids: Vec<&str> = player
+        .albums
+        .items
+        .iter()
+        .map(|album| album.id.as_str())
+        .collect();
+    assert_eq!(ids, ["alpha", "zulu"]);
+}
+
+#[test]
+fn sort_reorders_playlists_by_name() {
+    let (mut player, _state) = test_player();
+    player.current_view = CurrentView::Playlists;
+    player.playlists.items = vec![
+        Playlist {
+            id: "banana".to_string(),
+            name: "banana".to_string(),
+        },
+        Playlist {
+            id: "apple".to_string(),
+            name: "Apple".to_string(),
+        },
+        Playlist {
+            id: "cherry".to_string(),
+            name: "cherry".to_string(),
+        },
+    ];
+
+    let _ = update(&mut player, Message::SortBrowse);
+
+    let names: Vec<&str> = player
+        .playlists
+        .items
+        .iter()
+        .map(|playlist| playlist.name.as_str())
+        .collect();
+    assert_eq!(names, ["Apple", "banana", "cherry"]);
+}
+
+#[test]
+fn sort_reorders_songs_and_keeps_their_cached_text_aligned() {
+    let (mut player, _state) = test_player();
+    player.current_view = CurrentView::Songs;
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+
+    let _ = update(&mut player, Message::SortBrowse);
+
+    let ids: Vec<&str> = player
+        .songs
+        .items
+        .iter()
+        .map(|song| song.id.as_str())
+        .collect();
+    assert_eq!(ids, ["song-1", "song-3", "song-2"]);
+    assert_eq!(
+        player.songs.titles,
+        [
+            "The Sample Band - One",
+            "The Sample Band - Three",
+            "The Sample Band - Two"
+        ]
+    );
+    assert_eq!(player.songs.labels, ["3:30", "1:35", "2:05"]);
+}
+
+#[test]
+fn sort_reorders_all_songs_and_keeps_their_cached_text_aligned() {
+    let (mut player, _state) = test_player();
+    player.current_view = CurrentView::AllSongs;
+    let _ = update(&mut player, Message::AllSongsLoaded(stepping_songs()));
+
+    let _ = update(&mut player, Message::SortBrowse);
+
+    let ids: Vec<&str> = player
+        .all_songs
+        .items
+        .iter()
+        .map(|song| song.id.as_str())
+        .collect();
+    assert_eq!(ids, ["song-1", "song-3", "song-2"]);
+    assert_eq!(
+        player.all_songs.titles,
+        [
+            "The Sample Band - One",
+            "The Sample Band - Three",
+            "The Sample Band - Two"
+        ]
+    );
+    assert_eq!(player.all_songs.labels, ["3:30", "1:35", "2:05"]);
+}
+
+#[test]
+fn sort_reorders_all_albums_by_their_display_title() {
+    let (mut player, _state) = test_player();
+    player.current_view = CurrentView::AllAlbums;
+    player.all_albums.items = vec![
+        Album {
+            id: "zulu".to_string(),
+            title: "Alpha".to_string(),
+            artist_id: "artist-1".to_string(),
+            artist: "Zulu".to_string(),
+        },
+        Album {
+            id: "alpha".to_string(),
+            title: "Zulu".to_string(),
+            artist_id: "artist-1".to_string(),
+            artist: "alpha".to_string(),
+        },
+    ];
+
+    let _ = update(&mut player, Message::SortBrowse);
+
+    let ids: Vec<&str> = player
+        .all_albums
+        .items
+        .iter()
+        .map(|album| album.id.as_str())
+        .collect();
+    assert_eq!(ids, ["alpha", "zulu"]);
+}
+
+#[test]
+fn sort_bumps_the_epoch_so_a_pre_sort_press_is_rejected() {
+    let (mut player, _state) = test_player();
+    player.artists.items = vec![
+        Artist {
+            id: "banana".to_string(),
+            name: "banana".to_string(),
+        },
+        Artist {
+            id: "apple".to_string(),
+            name: "Apple".to_string(),
+        },
+    ];
+    let old_epoch = player.artists.epoch;
+
+    let _ = update(&mut player, Message::SortBrowse);
+
+    assert_eq!(player.artists.epoch, old_epoch.wrapping_add(1));
+    let _ = update(
+        &mut player,
+        Message::ArtistSelected {
+            epoch: old_epoch,
+            index: 0,
+        },
+    );
+    assert_view(&player, CurrentView::Artists);
+
+    let new_epoch = player.artists.epoch;
+    let _ = update(
+        &mut player,
+        Message::ArtistSelected {
+            epoch: new_epoch,
+            index: 0,
+        },
+    );
+    assert_view(&player, CurrentView::Albums);
+}
+
+/// Pressing Sort on `view`'s list before any rows load must leave every list's
+/// epoch and the current view alone.
+fn assert_sort_is_a_noop_on_an_unloaded_view(view: CurrentView) {
+    let (mut player, _state) = test_player();
+    let expected_view = std::mem::discriminant(&view);
+    player.current_view = view;
+    let epochs = [
+        player.artists.epoch,
+        player.albums.epoch,
+        player.songs.epoch,
+        player.all_songs.epoch,
+        player.all_albums.epoch,
+        player.playlists.epoch,
+    ];
+
+    let _ = update(&mut player, Message::SortBrowse);
+
+    assert_eq!(
+        [
+            player.artists.epoch,
+            player.albums.epoch,
+            player.songs.epoch,
+            player.all_songs.epoch,
+            player.all_albums.epoch,
+            player.playlists.epoch,
+        ],
+        epochs
+    );
+    assert_eq!(std::mem::discriminant(&player.current_view), expected_view);
+}
+
+#[test]
+fn sort_with_an_empty_or_loading_list_is_a_noop() {
+    assert_sort_is_a_noop_on_an_unloaded_view(CurrentView::Artists);
+    assert_sort_is_a_noop_on_an_unloaded_view(CurrentView::Albums);
+    assert_sort_is_a_noop_on_an_unloaded_view(CurrentView::Songs);
+    assert_sort_is_a_noop_on_an_unloaded_view(CurrentView::AllSongs);
+    assert_sort_is_a_noop_on_an_unloaded_view(CurrentView::AllAlbums);
+    assert_sort_is_a_noop_on_an_unloaded_view(CurrentView::Playlists);
+}
+
 // Songs view draws from `all_songs`, so Next there moves through the flat
 // rows, not the browsed `songs` buffer. `songs` holds a single song while the
 // flat list holds the three-song stepping album, so a Next that stepped

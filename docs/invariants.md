@@ -87,6 +87,37 @@ that rendered it is still current: a press that outlived its list is a no-op.
 **History.** Reconstructed from "A browse reply is stored after a newer request was issued, so a
 navigation shows the previous level's rows" in `BUGS-FIXED.md`.
 
+## Browse row order
+
+**Guarantee.** The Sort button reorders only the browse list currently showing, ascending by each
+row's rendered text compared case-insensitively: Artists and Playlists by name, Albums and All
+Albums by `artist - title`, and Songs and All Songs by `artist - title`. Rows whose keys compare
+equal keep their library order. A song list reorders its cached titles and labels by the same
+permutation as its songs, so each row keeps its own title and duration. The reorder is one-shot:
+it bumps only that list's epoch, so a selection press rendered before the sort is rejected while
+the post-sort indices resolve to the sorted rows, and it leaves the other lists, the current
+view, the search state, and playback unchanged. Navigating away and back reloads the library's
+order; no sort flag persists. Sorting an empty, loading, or failed list is a no-op: it neither
+reorders rows nor bumps the epoch.
+
+**Enforced by.** `BrowseList::sort_rows_by` in `src/ui/browse.rs` builds a stable index permutation
+from the lowercased row keys and rebuilds `items`, `titles`, and `labels` by it, bumping the epoch
+only when there are at least two rows. `browse::sort_browse` in `src/ui/handlers/browse.rs`
+matches the current view onto its list and key, routed from `Message::SortBrowse` in the `update`
+dispatch table; `views::view_sort_button` in `src/ui/views/browse.rs` draws the button beside Top.
+
+**Pinned by.**
+
+- `sort_reorders_artists_case_insensitively`
+- `sort_reorders_albums_by_their_display_title`
+- `sort_reorders_playlists_by_name`
+- `sort_reorders_songs_and_keeps_their_cached_text_aligned`
+- `sort_reorders_all_songs_and_keeps_their_cached_text_aligned`
+- `sort_reorders_all_albums_by_their_display_title`
+- `sort_bumps_the_epoch_so_a_pre_sort_press_is_rejected`
+- `sort_with_an_empty_or_loading_list_is_a_noop`
+  (all in `src/ui/tests.rs`)
+
 ## Now Playing label
 
 **Guarantee.** The Now Playing bar shows the current track's human-readable title and artist, not

@@ -140,6 +140,11 @@ enum Message {
     // row. The arm schedules an iced scroll operation on the browse list's
     // stable widget id and changes no state.
     ScrollBrowseToTop,
+    // The browse view's Sort button: reorder the showing list alphabetically
+    // by its rows' rendered text. The handler bumps that list's epoch so a
+    // press rendered before the sort is rejected, and leaves every other list
+    // and the playback state alone.
+    SortBrowse,
     // The Artists view's All Songs button: fetch the whole library flat and
     // show it under the All Songs view.
     ShowAllSongs,
@@ -525,6 +530,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         }
         Message::Back => handlers::browse::back(player),
         Message::ScrollBrowseToTop => handlers::browse::scroll_browse_to_top(),
+        Message::SortBrowse => handlers::browse::sort_browse(player),
         Message::ShowAllSongs => handlers::browse::show_all_songs(player),
         Message::ShowAllAlbums => handlers::browse::show_all_albums(player),
         Message::ShowPlaylists => handlers::browse::show_playlists(player),
@@ -713,6 +719,8 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // The Top button sits above every browse level, beside Back/Retry, so the
     // current list can always be returned to its first row.
     column = column.push(views::view_top_button());
+    // The Sort button sits beside Top and reorders the showing list in place.
+    column = column.push(views::view_sort_button());
     // The All Songs, All Albums, and Playlists buttons open the flat lists;
     // they live on the Artists view, beside Back/Retry, so each list is one
     // press from the top of the hierarchy.

@@ -64,7 +64,9 @@ flat list of every playlist, whose rows open that playlist's songs. Back from an
 returns to the artists list, Back from songs opened through All Albums returns to All Albums, Back
 from songs opened through Playlists returns to Playlists, and Next/Previous step through the flat
 song list while it is showing. A `Top` button above every browse list returns it to its first row,
-and opening a list starts it at the top. The title bar's `A` button toggles always-on-top, its
+and opening a list starts it at the top. A `Sort` button beside `Top` reorders the showing list
+alphabetically by its rows' rendered text, ignoring case; the reorder is one-shot, so reopening
+the list restores the library's order. The title bar's `A` button toggles always-on-top, its
 shade button (or a double-click on the bar) rolls the window up to just that title bar and back,
 and its `–` and
 `✕` buttons minimize and close. With the window focused, the classic Winamp keys drive playback: Z
