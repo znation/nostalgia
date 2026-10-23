@@ -2734,6 +2734,9 @@ fn sort_reorders_artists_case_insensitively() {
             name: "cherry".to_string(),
         },
     ];
+    // A list with rows has finished its fetch; the startup list is still
+    // marked loading until a reply lands.
+    player.artists.loading = false;
 
     let _ = update(&mut player, Message::SortBrowse);
 
@@ -2904,6 +2907,9 @@ fn sort_bumps_the_epoch_so_a_pre_sort_press_is_rejected() {
             name: "Apple".to_string(),
         },
     ];
+    // A list with rows has finished its fetch; the startup list is still
+    // marked loading until a reply lands.
+    player.artists.loading = false;
     let old_epoch = player.artists.epoch;
 
     let _ = update(&mut player, Message::SortBrowse);
@@ -2968,6 +2974,37 @@ fn sort_with_an_empty_or_loading_list_is_a_noop() {
     assert_sort_is_a_noop_on_an_unloaded_view(CurrentView::AllSongs);
     assert_sort_is_a_noop_on_an_unloaded_view(CurrentView::AllAlbums);
     assert_sort_is_a_noop_on_an_unloaded_view(CurrentView::Playlists);
+
+    // A loading list is a no-op even if its buffer still holds rows: the
+    // documented guarantee is about the list's state, not just its emptiness,
+    // so a future transition that keeps rows while a fetch is in flight must
+    // not let Sort reorder them or bump the epoch. (The current transitions
+    // empty the rows in `clear` before setting `loading`, so this state is
+    // constructed here to pin that rule.)
+    let (mut player, _state) = test_player();
+    player.artists.items = vec![
+        Artist {
+            id: "banana".to_string(),
+            name: "banana".to_string(),
+        },
+        Artist {
+            id: "apple".to_string(),
+            name: "Apple".to_string(),
+        },
+    ];
+    player.artists.loading = true;
+    let epoch = player.artists.epoch;
+
+    let _ = update(&mut player, Message::SortBrowse);
+
+    let names: Vec<&str> = player
+        .artists
+        .items
+        .iter()
+        .map(|artist| artist.name.as_str())
+        .collect();
+    assert_eq!(names, ["banana", "Apple"]);
+    assert_eq!(player.artists.epoch, epoch);
 }
 
 // Songs view draws from `all_songs`, so Next there moves through the flat

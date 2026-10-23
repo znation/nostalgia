@@ -5,6 +5,30 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### Sort reorders a loading browse list instead of ignoring the press (found by the bugfix role 2026-10-23) — fixed 2026-10-23 by the bugfix role
+
+**Symptom.** Pressing the browse `Sort` button while a list is marked `loading` but still holds
+rows reorders those rows and bumps the list's epoch. The documented guarantee
+(`docs/invariants.md`, "Browse row order") and the sort plan's acceptance criteria both say a
+loading list is a no-op: no reorder, no epoch bump.
+
+**Reproduce.** The app's own transitions always empty a list in `clear` before setting `loading`,
+so the state is constructed: give `player.artists` two out-of-order rows and set
+`player.artists.loading = true`, then drive `Message::SortBrowse`. The rows came back sorted
+(`["Apple", "banana"]`) and the epoch advanced, instead of staying `["banana", "Apple"]` with
+the epoch unchanged. `sort_with_an_empty_or_loading_list_is_a_noop` now seeds this state and
+fails without the fix.
+
+**Cause.** `BrowseList::sort_rows_by` guarded only `self.items.len() < 2`. It relied on every
+loading list also being empty, so the documented loading rule held by accident of transition
+order rather than by the guard itself. The guard now returns early when `self.loading` too, and
+the two artist sort tests (which seeded rows into the startup list that is still marked loading)
+now mark their list loaded, as a list with rows really is.
+
+**Validation gap:** no-repro — the app cannot leave a loading list holding rows, so the failure
+had to be reproduced with a crafted list state rather than a real run; the closest tag fits
+because no transition reaches the state, and the regression test now pins it anyway.
+
 ### A stalled connection is served for its whole budget before the next one, so repeated stalls starve the sign-in callback (found by security 2026-10-22) — fixed 2026-10-22 by the bugfix role
 
 Symptom: the loopback sign-in server serves accepted connections one at a

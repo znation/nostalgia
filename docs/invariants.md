@@ -102,9 +102,10 @@ reorders rows nor bumps the epoch.
 
 **Enforced by.** `BrowseList::sort_rows_by` in `src/ui/browse.rs` builds a stable index permutation
 from the lowercased row keys and rebuilds `items`, `titles`, and `labels` by it, bumping the epoch
-only when there are at least two rows. `browse::sort_browse` in `src/ui/handlers/browse.rs`
-matches the current view onto its list and key, routed from `Message::SortBrowse` in the `update`
-dispatch table; `views::view_sort_button` in `src/ui/views/browse.rs` draws the button beside Top.
+only when there are at least two rows and the list is not loading. `browse::sort_browse` in
+`src/ui/handlers/browse.rs` matches the current view onto its list and key, routed from
+`Message::SortBrowse` in the `update` dispatch table; `views::view_sort_button` in
+`src/ui/views/browse.rs` draws the button beside Top.
 
 **Pinned by.**
 

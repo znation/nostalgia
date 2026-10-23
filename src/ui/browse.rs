@@ -175,12 +175,18 @@ impl<T> BrowseList<T> {
     /// track's own title and length. The epoch is bumped like
     /// [`Self::replace_rows`] because the indices a rendered row emits now name
     /// different entries; `loading`, `error`, and the request generation are
-    /// left alone, and a list with fewer than two rows is a no-op.
+    /// left alone, and a list with fewer than two rows or one still loading is
+    /// a no-op.
     pub(super) fn sort_rows_by(&mut self, key: impl Fn(&T) -> String)
     where
         T: Clone,
     {
-        if self.items.len() < 2 {
+        // A loading list's rows are being replaced by a fetch, so reordering
+        // them would be undone (or raced) by the reply; the documented
+        // guarantee is that Sort while loading changes nothing. The app's
+        // transitions empty the rows in `clear` before setting `loading`, but
+        // this check pins the guarantee independently of that ordering.
+        if self.items.len() < 2 || self.loading {
             return;
         }
         let keys: Vec<String> = self
