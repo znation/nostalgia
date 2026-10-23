@@ -23,6 +23,10 @@ pub const TITLE_BLUE: Color = Color::from_rgb(0.0, 0.0, 0.55);
 /// The playlist/LCD green, used for the Now Playing title.
 pub const LCD_GREEN: Color = Color::from_rgb(0.0, 1.0, 0.0);
 
+/// The unlit LCD indicator color: a dark green for the channel label that is
+/// not the loaded preview's reported mode.
+pub const LCD_GREEN_DIM: Color = Color::from_rgb(0.0, 0.35, 0.0);
+
 /// The stopped-transport glyph color on the Now Playing LCD, a red square
 /// that tells Stop apart from the green playing and paused glyphs.
 pub const LCD_RED: Color = Color::from_rgb(1.0, 0.1, 0.1);
@@ -176,6 +180,7 @@ mod tests {
         assert_eq!(TEXT, Color::from_rgb(0.87, 0.87, 0.87));
         assert_eq!(TITLE_BLUE, Color::from_rgb(0.0, 0.0, 0.55));
         assert_eq!(LCD_GREEN, Color::from_rgb(0.0, 1.0, 0.0));
+        assert_eq!(LCD_GREEN_DIM, Color::from_rgb(0.0, 0.35, 0.0));
         assert_eq!(LCD_RED, Color::from_rgb(1.0, 0.1, 0.1));
         assert_eq!(PANEL_EDGE_LIGHT, Color::from_rgb(0.55, 0.55, 0.55));
         assert_eq!(PANEL_EDGE_DARK, Color::from_rgb(0.05, 0.05, 0.05));

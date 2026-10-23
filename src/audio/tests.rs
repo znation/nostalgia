@@ -70,7 +70,8 @@ fn silent_output_reports_no_playback_position() {
 }
 
 // The silent fallback also has no preview format to report, so the LCD's
-// status row stays blank rather than inventing a sample rate.
+// status row omits the prefix and leaves both channel labels dim rather than
+// inventing a sample rate.
 #[test]
 fn silent_output_reports_no_playback_format() {
     assert_eq!(SilentOutput.playback_format(), None);

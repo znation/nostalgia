@@ -309,14 +309,17 @@ its internal id, whenever the id is in the known-track index:
   position is past the total; a known track whose source supplied no length (`duration_ms == 0`)
   and any unknown or absent track read `--:--` at the left. The right edge keeps the plain total in
   both modes.
-- The LCD's small status row shows the loaded preview's average bitrate, sample rate, and channel
-  mode (`256 KBPS  44 KHZ  STEREO`, or `MONO` for one channel) only while the backend reports a
-  format for a loaded preview. The bitrate is derived from the downloaded body's length and the
-  decoded source's own duration and is omitted, leaving `44 KHZ  STEREO`, when either is unknown;
-  the sample rate and channel values come from the backend's own decoded source. The row is blank
-  and keeps its fixed height when no preview is loaded or the backend cannot answer. Pause keeps
-  the reported format; Stop and a new selection clear it. A format reply issued before a Stop or a
-  new selection, or landing while a transport transition is in flight, is dropped.
+- The LCD's small status row always draws both `MONO` and `STEREO` labels side by side in that
+  order at its right edge and keeps its fixed height. A loaded preview whose backend reports a
+  format draws the average bitrate and sample-rate prefix (`256 KBPS  44 KHZ`) at the row's left
+  edge, lights the reported channel mode `theme::LCD_GREEN`, and dims the other label
+  `theme::LCD_GREEN_DIM`. The bitrate is
+  derived from the downloaded body's length and the decoded source's own duration and is omitted,
+  leaving `44 KHZ`, when either is unknown; the sample rate and channel values come from the
+  backend's own decoded source. With no reported format both labels stay dim and the prefix is
+  absent. Pause keeps the reported format; Stop and a new selection clear it. A format reply issued
+  before a Stop or a new selection, or landing while a transport transition is in flight, is
+  dropped.
 - The LCD's visualizer row draws exactly `BAND_COUNT` green bars, left to right in band order,
   bottom-aligned inside a fixed-height strip between the title and the status row. The bar heights
   come from the loaded preview's stored spectrum, each band clamped to `0.0..=1.0`; no reported
@@ -432,8 +435,9 @@ channel count, and average bitrate; `audio::preview::DecodedPreview` hands the d
 byte count to `audio::player::format_for_source`, which reads the rate and channels from the
 decoded `rodio` source and computes the bitrate through `audio::player::preview_bitrate_kbps` from
 the source's own total duration, and
-`views::now_playing::format_playback_status`/`views::now_playing::now_playing_status_row` render
-them in the LCD's status row built by `views::view_now_playing`. The `PlaybackFormat` handler in
+`views::now_playing::text::format_playback_prefix`/`text::channel_mode_label` format them, and
+`views::now_playing::CHANNEL_LABELS`/`channel_label_color`/`now_playing_status_row` render them in
+the LCD's status row built by `views::view_now_playing`. The `PlaybackFormat` handler in
 `src/ui/handlers/playback/preview.rs` stores the reply beside the position under the same epoch and
 pending-transition guards, and `reset_position_readout` clears the format on Stop and a new
 selection;
@@ -514,8 +518,10 @@ rather than the panic unwinding the event loop.
 - `rodio_output_asks_the_worker_for_its_format`
 - `silent_output_reports_no_playback_format` (`src/audio/tests.rs`)
 - `playback_format_forwards_the_audio_output_format` (`src/apple_music/tests.rs`)
-- `format_playback_status_formats_khz_and_channel_mode`
-- `now_playing_status_row_draws_the_format_or_nothing` (`src/ui/views/tests.rs`)
+- `format_playback_prefix_formats_khz_and_bitrate`
+- `channel_mode_label_names_the_reported_channels`
+- `channel_label_color_lights_only_the_reported_mode`
+- `now_playing_status_row_lights_the_reported_channel_mode` (`src/ui/views/tests.rs`)
 - `lcd_indicator_strip_draws_each_label_in_order_at_a_fixed_width`
 - `now_playing_content_draws_the_indicator_strip_beside_the_title`
   (`src/ui/views/tests.rs`)
@@ -756,8 +762,8 @@ non-current song when Shuffle is on. With Shuffle off, Repeat wraps a one-song l
 itself, so it repeats that song rather than stopping; Shuffle with no other song still takes the
 Stop path. A finished preview on the last song with Repeat off takes
 the Stop path, so playback becomes stopped, the song stays queued for Play, and the elapsed
-readout, status row, visualizer, and seek bar clear together. Pause, Stop, a stale epoch, a
-pending transition, and a not-finished reply never advance.
+readout, status row's reported format, visualizer, and seek bar clear together. Pause, Stop, a
+stale epoch, a pending transition, and a not-finished reply never advance.
 
 **Enforced by.** `audio::AudioOutput::is_finished` in `src/audio.rs` defaults to false, and
 `audio::player::RodioPlayer::is_finished` in `src/audio/player.rs` answers true only once the

@@ -1,7 +1,8 @@
 //! Pure text resolution and formatting for the Now Playing bar: the label,
 //! artist, elapsed and total readouts, the marquee window, and the status
-//! line. Everything here is data in, string out, so it is testable without an
-//! iced renderer; the widgets that draw these strings live in [`super`].
+//! row's bitrate/sample-rate prefix and channel label pair. Everything here is
+//! data in, string out, so it is testable without an iced renderer; the
+//! widgets that draw these strings live in [`super`].
 
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -244,23 +245,23 @@ pub fn format_lcd_remaining(remaining_ms: u64) -> String {
     format!("-{}", format_lcd_elapsed(remaining_ms))
 }
 
-/// Formats a loaded preview's [`PlaybackFormat`] as the LCD's status row,
-/// `"{kbps} KBPS  {khz} KHZ  {mode}"` (for example
-/// `256 KBPS  44 KHZ  STEREO`). The rate is truncated to whole kilohertz
-/// (`44_100` reads `44`, `48_000` reads `48`), and previews are mono or
-/// stereo, so one channel reads `MONO` and any other count reads `STEREO`.
-/// The bitrate prefix is omitted when the backend could not compute it, so
-/// the row falls back to `44 KHZ  STEREO`. Pure so the formatting is testable
-/// without an iced renderer.
-pub fn format_playback_status(format: PlaybackFormat) -> String {
-    let mode = if format.channels == 1 {
-        "MONO"
-    } else {
-        "STEREO"
-    };
-    let rate = format!("{} KHZ  {mode}", format.sample_rate_hz / 1000);
+/// Formats a loaded preview's bitrate and sample rate as the LCD status row's
+/// prefix, `"{kbps} KBPS  {khz} KHZ"` (for example `256 KBPS  44 KHZ`). The
+/// rate is truncated to whole kilohertz (`44_100` reads `44`, `48_000` reads
+/// `48`), and the bitrate is omitted when the backend could not compute it,
+/// leaving `44 KHZ`. The row draws the channel labels beside this prefix. Pure
+/// so the formatting is testable without an iced renderer.
+pub fn format_playback_prefix(format: PlaybackFormat) -> String {
+    let rate = format!("{} KHZ", format.sample_rate_hz / 1000);
     match format.bitrate_kbps {
         Some(kbps) => format!("{kbps} KBPS  {rate}"),
         None => rate,
     }
+}
+
+/// Names the loaded preview's channel mode: one channel is `MONO` and any
+/// other count is `STEREO`. Pure so the row's label mapping is testable
+/// without an iced renderer.
+pub fn channel_mode_label(channels: u16) -> &'static str {
+    if channels == 1 { "MONO" } else { "STEREO" }
 }

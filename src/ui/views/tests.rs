@@ -11,11 +11,12 @@ use super::equalizer::{
 };
 use super::now_playing::text::{format_lcd_elapsed, format_lcd_remaining};
 use super::now_playing::{
-    KnownTrack, MARQUEE_WIDTH, TimeDisplay, display_len, elapsed_readout_clickable,
-    elapsed_readout_color, format_playback_status, lcd_indicator_strip, marquee_text,
-    needs_marquee, now_playing_artist, now_playing_content, now_playing_elapsed, now_playing_label,
-    now_playing_row, now_playing_status_row, now_playing_time, now_playing_visualizer_row,
-    transport_glyph, transport_glyph_color, visualizer_bar_heights,
+    CHANNEL_LABELS, KnownTrack, MARQUEE_WIDTH, TimeDisplay, channel_label_color,
+    channel_mode_label, display_len, elapsed_readout_clickable, elapsed_readout_color,
+    format_playback_prefix, lcd_indicator_strip, marquee_text, needs_marquee, now_playing_artist,
+    now_playing_content, now_playing_elapsed, now_playing_label, now_playing_row,
+    now_playing_status_row, now_playing_time, now_playing_visualizer_row, transport_glyph,
+    transport_glyph_color, visualizer_bar_heights,
 };
 use super::shade::{
     SHADE_STRIP_HEIGHT, SHADE_VOLUME_ID, SHADE_VOLUME_WIDTH, SHADED_HEIGHT, play_pause_glyph,
@@ -973,80 +974,145 @@ fn overlong_now_playing_line_renders_a_new_window_as_the_offset_advances() {
     assert!(still_a.iter().any(|text| text == "Opening"));
 }
 
-// The status row's text names the encoded bitrate, the sample rate in whole
-// kilohertz, and the channel mode: 44.1 kHz truncates to 44, 48 kHz reads 48,
-// one channel is mono while any other count is stereo, and an unknown bitrate
-// is omitted.
+// The status row's prefix names the encoded bitrate and the sample rate in
+// whole kilohertz: 44.1 kHz truncates to 44, 48 kHz reads 48, the bitrate
+// value is kept, and an unknown bitrate is omitted.
 #[test]
-fn format_playback_status_formats_khz_and_channel_mode() {
+fn format_playback_prefix_formats_khz_and_bitrate() {
     assert_eq!(
-        format_playback_status(PlaybackFormat {
+        format_playback_prefix(PlaybackFormat {
             sample_rate_hz: 44_100,
             channels: 2,
             bitrate_kbps: Some(256),
         }),
-        "256 KBPS  44 KHZ  STEREO"
+        "256 KBPS  44 KHZ"
     );
     assert_eq!(
-        format_playback_status(PlaybackFormat {
+        format_playback_prefix(PlaybackFormat {
             sample_rate_hz: 44_100,
             channels: 2,
             bitrate_kbps: None,
         }),
-        "44 KHZ  STEREO"
+        "44 KHZ"
     );
     assert_eq!(
-        format_playback_status(PlaybackFormat {
-            sample_rate_hz: 44_100,
-            channels: 1,
-            bitrate_kbps: None,
-        }),
-        "44 KHZ  MONO"
-    );
-    assert_eq!(
-        format_playback_status(PlaybackFormat {
+        format_playback_prefix(PlaybackFormat {
             sample_rate_hz: 48_000,
             channels: 2,
-            bitrate_kbps: Some(192),
+            bitrate_kbps: None,
         }),
-        "192 KBPS  48 KHZ  STEREO"
+        "48 KHZ"
     );
 }
 
-/// Lays out the LCD status row for `format` and returns the text fragments it
-/// would draw and the height the row occupies.
-fn captured_status_row(format: Option<PlaybackFormat>) -> (Vec<String>, f32) {
-    let mut element: iced::Element<'_, Message, iced::Theme, ()> =
-        now_playing_status_row(format).into();
-    let capture = layout_capture::capture_text(&mut element, &());
-    (
-        capture.texts().map(str::to_string).collect(),
-        capture.size().height,
-    )
+// The channel label mapping follows the reported channel count: one channel
+// is mono, and any other count is stereo.
+#[test]
+fn channel_mode_label_names_the_reported_channels() {
+    assert_eq!(channel_mode_label(1), "MONO");
+    assert_eq!(channel_mode_label(2), "STEREO");
+    assert_eq!(channel_mode_label(0), "STEREO");
 }
 
-// The status row draws the formatted format when the backend reports one, and
-// draws nothing when it does not, while keeping the same fixed height either
-// way so the bar does not jump when a preview loads.
+// The status row lights only the reported channel mode: stereo lights
+// `STEREO` and dims `MONO`, mono does the reverse, and no reported format
+// leaves both labels dim. The exact palette values are pinned here too, so a
+// recolored dim green is caught rather than shipped.
 #[test]
-fn now_playing_status_row_draws_the_format_or_nothing() {
-    let (texts, height) = captured_status_row(Some(PlaybackFormat {
+fn channel_label_color_lights_only_the_reported_mode() {
+    assert_eq!(channel_label_color(Some(2), "STEREO"), theme::LCD_GREEN);
+    assert_eq!(channel_label_color(Some(2), "MONO"), theme::LCD_GREEN_DIM);
+    assert_eq!(channel_label_color(Some(1), "MONO"), theme::LCD_GREEN);
+    assert_eq!(channel_label_color(Some(1), "STEREO"), theme::LCD_GREEN_DIM);
+    assert_eq!(channel_label_color(None, "MONO"), theme::LCD_GREEN_DIM);
+    assert_eq!(channel_label_color(None, "STEREO"), theme::LCD_GREEN_DIM);
+    assert_eq!(theme::LCD_GREEN, iced::Color::from_rgb(0.0, 1.0, 0.0));
+    assert_eq!(theme::LCD_GREEN_DIM, iced::Color::from_rgb(0.0, 0.35, 0.0));
+}
+
+/// Lays the LCD status row out with the headless tiny-skia renderer and returns
+/// the text fragments it draws, the RGBA pixels it paints, and its height.
+fn captured_status_row(
+    format: Option<PlaybackFormat>,
+) -> (layout_capture::TextCapture, layout_capture::PixelCapture) {
+    let mut renderer = layout_capture::headless_renderer();
+    let mut element: iced::Element<'_, Message, iced::Theme, iced::Renderer> =
+        now_playing_status_row(format).into();
+    layout_capture::capture_text_and_pixels(&mut element, &mut renderer, &iced::Theme::Dark)
+}
+
+// The status row lays out in the mockup's two ends: the bitrate/sample-rate
+// prefix at the left edge and both channel labels at the right. It lights only
+// the reported channel mode by drawing it brighter green than the other label,
+// so a row that drew both labels lit would fail here even though its text
+// still matched. With no reported format both labels stay dim, and the row
+// keeps its fixed height either way so the bar does not jump when a preview
+// loads.
+#[test]
+fn now_playing_status_row_lights_the_reported_channel_mode() {
+    let (capture, pixels) = captured_status_row(Some(PlaybackFormat {
         sample_rate_hz: 44_100,
         channels: 2,
         bitrate_kbps: Some(256),
     }));
-    assert_eq!(texts, vec!["256 KBPS  44 KHZ  STEREO".to_string()]);
-
-    let (blank, blank_height) = captured_status_row(None);
+    assert_eq!(
+        capture.texts().collect::<Vec<_>>(),
+        vec!["256 KBPS  44 KHZ", "MONO", "STEREO"]
+    );
+    let prefix = capture.find("256 KBPS  44 KHZ");
+    let mono = capture.find("MONO");
+    let stereo = capture.find("STEREO");
     assert!(
-        blank.is_empty(),
-        "no reported format must draw no status text"
+        prefix.x < 10.0,
+        "the prefix must sit at the row's left edge: {prefix:?}"
+    );
+    assert!(
+        mono.x > prefix.x + prefix.width,
+        "the labels must follow the prefix, not overlap it: prefix {prefix:?}, mono {mono:?}"
+    );
+    assert!(
+        stereo.x + stereo.width > 990.0,
+        "the label pair must sit at the row's right edge: {stereo:?}"
+    );
+
+    let stereo_green = pixels.max_green_in(stereo);
+    let mono_green = pixels.max_green_in(mono);
+    assert!(
+        stereo_green > mono_green + 100,
+        "stereo must be lit and mono dim: stereo green {stereo_green}, mono green {mono_green}"
+    );
+
+    let (mono_capture, mono_pixels) = captured_status_row(Some(PlaybackFormat {
+        sample_rate_hz: 44_100,
+        channels: 1,
+        bitrate_kbps: None,
+    }));
+    let lit_mono = mono_pixels.max_green_in(mono_capture.find("MONO"));
+    let dim_stereo = mono_pixels.max_green_in(mono_capture.find("STEREO"));
+    assert!(
+        lit_mono > dim_stereo + 100,
+        "mono must be lit and stereo dim: mono green {lit_mono}, stereo green {dim_stereo}"
+    );
+
+    let (blank, blank_pixels) = captured_status_row(None);
+    assert_eq!(blank.texts().collect::<Vec<_>>(), vec!["MONO", "STEREO"]);
+    let blank_mono = blank_pixels.max_green_in(blank.find("MONO"));
+    let blank_stereo = blank_pixels.max_green_in(blank.find("STEREO"));
+    assert!(
+        blank_mono < 128 && blank_stereo < 128,
+        "no reported format must leave both labels dim: mono green {blank_mono}, \
+         stereo green {blank_stereo}"
+    );
+    assert!(
+        blank.find("STEREO").x + blank.find("STEREO").width > 990.0,
+        "the dim label pair must still sit at the row's right edge"
     );
     assert_eq!(
-        height, blank_height,
+        capture.size().height,
+        blank.size().height,
         "the status row must keep its height whether or not a format is reported"
     );
-    assert_eq!(height, 16.0, "the status row's fixed height");
+    assert_eq!(capture.size().height, 16.0, "the status row's fixed height");
 }
 
 /// The visualizer's bar heights come straight from the reported bands: a
@@ -1147,10 +1213,14 @@ fn now_playing_content_keeps_the_visualizer_height_with_and_without_a_spectrum()
         "the title must still draw: {reporting:?}"
     );
     assert!(
-        reporting
+        reporting.iter().any(|text| text == "256 KBPS  44 KHZ"),
+        "the status row must still draw its prefix: {reporting:?}"
+    );
+    assert!(
+        CHANNEL_LABELS
             .iter()
-            .any(|text| text == "256 KBPS  44 KHZ  STEREO"),
-        "the status row must still draw: {reporting:?}"
+            .all(|label| reporting.iter().any(|text| text == label)),
+        "the status row must draw both channel labels: {reporting:?}"
     );
     assert!(
         blank.iter().any(|text| text == "Opening"),
@@ -1165,12 +1235,20 @@ fn now_playing_content_keeps_the_visualizer_height_with_and_without_a_spectrum()
             .unwrap_or_else(|| panic!("missing {text}: {reporting:?}"))
     };
     let title_y = fragment_y("Opening");
-    let status_y = fragment_y("256 KBPS  44 KHZ  STEREO");
+    let status_y = fragment_y("256 KBPS  44 KHZ");
     assert!(
         status_y - title_y >= 24.0,
         "the 24px visualizer row must sit between the title and status rows: \
          title y {title_y}, status y {status_y}"
     );
+    for label in CHANNEL_LABELS {
+        let label_y = fragment_y(label);
+        assert!(
+            label_y - title_y >= 24.0,
+            "the {label} label must also sit below the visualizer row: \
+             title y {title_y}, label y {label_y}"
+        );
+    }
 
     // The bars themselves, not just the extra height, must sit between the
     // title and status text. Moving the visualizer row above the title or

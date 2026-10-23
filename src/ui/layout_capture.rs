@@ -80,6 +80,38 @@ impl TextCapture {
 #[derive(Default)]
 struct CapturedText(Vec<(String, Rectangle)>);
 
+/// The rendered RGBA pixels a laid-out tree draws and their pixel size.
+#[derive(Debug)]
+pub(crate) struct PixelCapture {
+    pixels: Vec<u8>,
+    size: Size<u32>,
+}
+
+impl PixelCapture {
+    /// The strongest green channel value drawn inside `bounds`.
+    ///
+    /// Text is antialiased, so a label's glyph interiors carry its fill color
+    /// while its edges blend toward the background. Taking the maximum green
+    /// over the label's bounds recovers the fill it was drawn with without
+    /// depending on any single glyph pixel.
+    pub(crate) fn max_green_in(&self, bounds: Rectangle) -> u8 {
+        let width = self.size.width as f32;
+        let height = self.size.height as f32;
+        let x_start = bounds.x.max(0.0).floor() as u32;
+        let y_start = bounds.y.max(0.0).floor() as u32;
+        let x_end = (bounds.x + bounds.width).min(width).ceil() as u32;
+        let y_end = (bounds.y + bounds.height).min(height).ceil() as u32;
+        let mut green = 0;
+        for y in y_start..y_end {
+            for x in x_start..x_end {
+                let index = ((y * self.size.width + x) * 4 + 1) as usize;
+                green = green.max(self.pixels[index]);
+            }
+        }
+        green
+    }
+}
+
 impl Operation for CapturedText {
     fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
         operate(self);
@@ -112,6 +144,56 @@ where
         fragments: captured.0,
         size,
     }
+}
+
+/// Lays `element` out and draws it with `renderer`, returning the text
+/// fragments it would draw, the RGBA pixels it actually paints, and the root
+/// size. A test can use the rendered pixels to check a label's color, which
+/// the text operation alone does not carry.
+pub(crate) fn capture_text_and_pixels<'a, Message, Theme, Renderer>(
+    element: &mut Element<'a, Message, Theme, Renderer>,
+    renderer: &mut Renderer,
+    theme: &Theme,
+) -> (TextCapture, PixelCapture)
+where
+    Renderer: iced::advanced::Renderer + iced::advanced::text::Renderer + Headless,
+{
+    let mut tree = Tree::new(element.as_widget());
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, renderer, &limits());
+    let size = node.size();
+    let mut captured = CapturedText::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), renderer, &mut captured);
+
+    let style = iced::advanced::renderer::Style {
+        text_color: iced::Color::BLACK,
+    };
+    let viewport = Rectangle::with_size(size);
+    element.as_widget().draw(
+        &tree,
+        renderer,
+        theme,
+        &style,
+        Layout::new(&node),
+        iced::mouse::Cursor::Unavailable,
+        &viewport,
+    );
+
+    let pixel_size = Size::new(size.width.ceil() as u32, size.height.ceil() as u32);
+    let pixels = renderer.screenshot(pixel_size, 1.0, iced::Color::TRANSPARENT);
+    (
+        TextCapture {
+            fragments: captured.0,
+            size,
+        },
+        PixelCapture {
+            pixels,
+            size: pixel_size,
+        },
+    )
 }
 
 #[cfg(test)]

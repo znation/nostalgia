@@ -104,8 +104,9 @@ pub(in crate::ui) struct WinampPlayer {
     /// The loaded preview's backend-reported sample rate and channel mode, or
     /// `None` when no preview is loaded or the backend cannot answer.
     /// `Message::PlaybackFormat` stores it; the LCD's small status row reads
-    /// it, and a missing value leaves that row blank. Pause keeps it, while
-    /// Stop and a new selection clear it through `reset_position_readout`.
+    /// it, and a missing value omits the prefix and leaves both channel labels
+    /// dim. Pause keeps it, while Stop and a new selection clear it through
+    /// `reset_position_readout`.
     pub(in crate::ui) playback_format: Option<PlaybackFormat>,
     /// The loaded preview's own backend-reported length, or `None` when no
     /// preview is loaded or the backend cannot answer. `Message::PlaybackDuration`

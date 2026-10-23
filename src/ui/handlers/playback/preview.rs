@@ -78,7 +78,8 @@ pub(in crate::ui) fn playback_position(
 }
 
 /// The format query's reply: store the reported sample rate and channel mode,
-/// or clear the status row when the backend reports no format. A reply
+/// or clear them so the status row drops its prefix and dims both channel
+/// labels when the backend reports no format. A reply
 /// stamped with an older epoch is dropped, so a poll in flight across a Stop
 /// or a new selection cannot restore the previous preview's format. A reply
 /// that lands while a transport transition is still in flight is dropped too:
@@ -120,8 +121,9 @@ pub(in crate::ui) fn playback_duration(
 /// re-lands on the current song, or a Shuffle list with no other song than the
 /// current one — or the picked id is no longer in the list, it takes the
 /// existing [`stop`] path, so playback becomes stopped and the elapsed
-/// readout, status row, visualizer, and seek bar clear together while
-/// `current_track` keeps naming the song for Play. With Repeat on and Shuffle
+/// readout, status row's reported format, visualizer, and seek bar clear
+/// together while `current_track` keeps naming the song for Play. With Repeat
+/// on and Shuffle
 /// off, a wrap back to the same song is a step: even a one-song list repeats.
 /// A reply that is not finished, is stale, arrives while a transition is in
 /// flight, or lands while paused or stopped is dropped: Pause and Stop never

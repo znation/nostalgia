@@ -305,11 +305,12 @@ pub(in crate::ui) fn transport_settled(player: &mut WinampPlayer) -> Task<Messag
     Task::none()
 }
 
-/// Clears the Now Playing elapsed readout, the LCD's status row, the
-/// visualizer's bars, and the seek bar's scale and drag, and invalidates any
-/// position, format, duration, or spectrum query already in flight, so a reply
-/// issued before the track changed cannot restore the previous values. Stop and
-/// a new selection call this; a Pause deliberately does not, so the paused
+/// Clears the Now Playing elapsed readout, the LCD status row's reported
+/// format, the visualizer's bars, and the seek bar's scale and drag, and
+/// invalidates any position, format, duration, or spectrum query already in
+/// flight, so a reply issued before the track changed cannot restore the
+/// previous values. Stop and a new selection call this; a Pause deliberately
+/// does not, so the paused
 /// player's frozen position, format, bars, and seek bar stay on screen. The
 /// caller pairs it with [`begin_position_transition`], so the polls also wait
 /// until the backend has stopped or replaced the player.

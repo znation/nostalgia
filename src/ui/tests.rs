@@ -4523,7 +4523,8 @@ fn position_replies_store_and_stale_ones_are_dropped() {
 }
 
 // A format reply stores exactly what the backend reported, and a later
-// `None` reply clears the status row instead of keeping the old format.
+// `None` reply clears the format (dropping the prefix and dimming both labels)
+// instead of keeping the old one.
 #[test]
 fn playback_format_reply_stores_the_loaded_previews_format() {
     let (mut player, _state) = test_player();
@@ -4706,7 +4707,7 @@ fn spectrum_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped() {
 }
 
 // Pause keeps the loaded preview's bars frozen, while Stop clears them
-// immediately, like the elapsed readout and the status row.
+// immediately, like the elapsed readout and the status row's format.
 #[test]
 fn stop_clears_the_spectrum_while_pause_keeps_it() {
     let (mut player, _current_track) = play_song_1_then_browse_to_album_2();
@@ -5144,7 +5145,7 @@ fn preview_end_repeats_a_single_song_with_repeat_on() {
 
 // With Repeat off, a natural end at the last song takes the Stop path: the
 // transport becomes stopped, the song stays queued for Play, and the readout,
-// status row, visualizer, and seek bar clear together.
+// status row's format, visualizer, and seek bar clear together.
 #[test]
 fn preview_end_at_the_last_song_stops_when_repeat_is_off() {
     let recording = Arc::new(RecordingAudio::default());

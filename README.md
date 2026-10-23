@@ -52,11 +52,12 @@ track or no known time, the playing track's artist and title scrolled across the
 the line is longer than it, and the track's plain length at the right); the transport glyph before
 the readout is a green `▶` while playing, a green `II` while paused, and a red `■` while stopped.
 While paused, the large elapsed readout blinks once per second at its frozen position; it stays
-steady while playing and clears while stopped. A loaded preview's average
-bitrate, sample rate, and mono/stereo mode appear in a small status row beneath the title
-(`256 KBPS  44 KHZ  STEREO`) when the backend reports them, falling back to the sample rate and
-mode alone (`44 KHZ  STEREO`) when it cannot compute the bitrate, and the row stays blank
-otherwise. A loaded preview also drives a small green ten-bar spectrum visualizer beneath the
+steady while playing and clears while stopped. A loaded preview's average bitrate and sample rate
+appear at the left of a small status row beneath the title, with `MONO` and `STEREO` side by side
+at its right; the reported mode is lit green and the other dim. The prefix (`256 KBPS  44 KHZ`)
+appears only when the backend reports a format, falling back to the sample rate alone (`44 KHZ`)
+when it cannot compute the bitrate; with no reported format both labels stay dim and the prefix is
+absent. A loaded preview also drives a small green ten-bar spectrum visualizer beneath the
 title, updating about four times a second while playback runs; Pause freezes the bars at their
 last levels, Stop and a new selection clear them, and the strip stays blank (with its height)
 when no preview reports a spectrum. Beneath the LCD, a chrome slider spans the loaded preview's
