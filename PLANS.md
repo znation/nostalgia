@@ -70,25 +70,7 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Retire the `unclear-invariant` validation gap by pinning subsystem contracts in docs/invariants.md (planned 2026-10-23 by the steward role)
-
-**Goal.** Three Fixed entries (the stale browse reply store-time invariant, the bidirectional browse contract, and the Now Playing title contract) each reconstructed a guarantee that nothing had written down, recorded as `gap: unclear-invariant`. Promote that recurring tag into infrastructure: make `docs/invariants.md` the single, discoverable home for every subsystem contract that a bug has had to reconstruct, so the next bug in those areas finds the invariant instead of rebuilding it, and so the tag stops recurring.
-
-**Approach.**
-
-- Audit `docs/invariants.md` against the three Fixed entries cited below and ensure each reconstructed guarantee is stated as a named, test-cited section (Browse hierarchy, Now Playing label, stale reply store-time window), adding any that are missing.
-- Add a short "How to use" note at the top of `docs/invariants.md` pointing readers (and the bugfix role) at it before reconstructing an invariant, and cross-reference it from the BUGS.md header's Validation gap description.
-- No code change; this is a docs-only plan whose acceptance is `make check` plus the three cited guarantees each having a section.
-
-**Cited entries.** `BUGS-FIXED.md`: "A browse reply is stored after a newer request was issued …" (unclear-invariant, store-time invariant), "Now Playing bar shows the track id instead of the song title" (unclear-invariant, Now Playing contract), and the bidirectional-browse entry (unclear-invariant, browse hierarchy).
-
-**Files touched.** `docs/invariants.md`, `BUGS.md`.
-
-**Acceptance criteria.**
-
-- `make check` passes.
-- Every `unclear-invariant` Fixed entry cited above has a matching section in `docs/invariants.md` naming the enforcing code and the tests that fail if it is removed.
-- The BUGS.md header cross-references `docs/invariants.md` for the `unclear-invariant` tag.
+_None yet._
 
 ### Add the classic elapsed readout to the Now Playing LCD and restore the plain total at its right edge (planned 2026-10-23 by the plan role)
 
@@ -115,6 +97,5 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 - Pausing keeps the frozen elapsed readout, Stop and a new selection reset it to `00:00`, and a `PlaybackPosition` reply stamped with an older epoch is still dropped (the existing position tests pass unchanged apart from the elapsed accessor).
 - `make check` passes (fmt, clippy, rustdoc, tests).
 - The README Usage paragraph and the `docs/invariants.md` Now Playing guarantee describe the split readout in the same change.
-
 
 ## Done

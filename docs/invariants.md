@@ -5,6 +5,12 @@ states the guarantee, names the code that enforces it, and names the tests that 
 removed. When a change alters a guarantee, update its section in the same commit. Each section
 cites the `BUGS-FIXED.md` entry it was reconstructed from.
 
+**How to use.** Before reconstructing an invariant that a fix's `unclear-invariant` validation
+gap names, read this file for the matching subsystem section — it already states the guarantee,
+the enforcing code, and the tests that pin it. When a fix's gap is `unclear-invariant`, or a
+change alters a guarantee that has a section here, update that section in the same commit, or add
+a new section when none fits. `BUGS.md`'s header points here for the tag.
+
 ## Browse hierarchy
 
 **Guarantee.** Artists is the top browse level. Every level below it has a Back action that steps
