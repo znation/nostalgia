@@ -4501,3 +4501,67 @@ fn title_bar_constructs_for_both_always_on_top_states() {
 fn title_bar_height_pins_the_shade_strip() {
     assert_eq!(views::TITLE_BAR_HEIGHT, 24.0);
 }
+
+// The README and the Browse row order invariant both say Sort renders beside
+// Top. This lays out the whole root `view` — the same column whose separate
+// `.push()` calls once stacked the buttons — and reads the text bounds it
+// would draw: Top and Sort must share a row, with Sort at or after Top's
+// right edge. A unit test of the nav row alone would not catch the root
+// pushing the two buttons itself.
+#[test]
+fn browse_nav_buttons_place_sort_beside_top() {
+    use iced::advanced::widget::{Id, Tree, operation::Operation};
+    use iced::advanced::{Layout, layout::Limits, renderer::Headless};
+    use iced::{Font, Pixels, Rectangle, Size};
+
+    #[derive(Debug, Default)]
+    struct CapturedTextBounds(Vec<(String, Rectangle)>);
+
+    impl Operation for CapturedTextBounds {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+
+        fn text(&mut self, _id: Option<&Id>, bounds: Rectangle, text: &str) {
+            self.0.push((text.to_string(), bounds));
+        }
+    }
+
+    let (player, _state) = test_player();
+    let mut element = view(&player);
+    // tiny-skia draws in software, so this lays out the real root view
+    // without a window or GPU; naming the backend keeps the fallback renderer
+    // from trying wgpu first.
+    let renderer = futures::executor::block_on(<iced::Renderer as Headless>::new(
+        Font::default(),
+        Pixels(16.0),
+        Some("tiny-skia"),
+    ))
+    .expect("the headless tiny-skia renderer");
+    let mut tree = Tree::new(element.as_widget());
+    let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &limits);
+    let mut captured = CapturedTextBounds::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &renderer, &mut captured);
+
+    let find = |label: &str| {
+        captured
+            .0
+            .iter()
+            .find(|(text, _)| text == label)
+            .map(|(_, bounds)| *bounds)
+            .unwrap_or_else(|| panic!("no {label} button was drawn: {:?}", captured.0))
+    };
+    let top = find("Top");
+    let sort = find("Sort");
+
+    assert_eq!(top.y, sort.y, "Sort must share Top's row: {captured:?}");
+    assert!(
+        sort.x >= top.x + top.width,
+        "Sort must render to the right of Top: {captured:?}"
+    );
+}

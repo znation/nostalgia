@@ -589,6 +589,16 @@ pub fn view_sort_button() -> Element<'static, Message> {
     labeled_button("Sort", Message::SortBrowse).into()
 }
 
+/// The Top and Sort buttons as one row, so Sort renders beside Top rather than
+/// on the row below it, as the README and the Browse row order invariant
+/// promise. Rendered above every browse level.
+pub fn view_browse_nav_buttons() -> Element<'static, Message> {
+    Row::new()
+        .push(view_top_button())
+        .push(view_sort_button())
+        .into()
+}
+
 /// The Artists view's All Songs button, opening the flat whole-library list.
 /// Rendered only on the Artists view; the update loop's `ShowAllSongs` arm
 /// switches to `CurrentView::AllSongs` and issues the fetch.

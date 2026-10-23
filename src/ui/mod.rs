@@ -768,11 +768,10 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
     if views::can_retry_artists(&player.current_view, player.artists.error.as_deref()) {
         column = column.push(views::view_retry_button());
     }
-    // The Top button sits above every browse level, beside Back/Retry, so the
-    // current list can always be returned to its first row.
-    column = column.push(views::view_top_button());
-    // The Sort button sits beside Top and reorders the showing list in place.
-    column = column.push(views::view_sort_button());
+    // The Top and Sort buttons share one row, Sort beside Top, so the
+    // current list can always be returned to its first row and reordered
+    // in place.
+    column = column.push(views::view_browse_nav_buttons());
     // The All Songs, All Albums, and Playlists buttons open the flat lists;
     // they live on the Artists view, beside Back/Retry, so each list is one
     // press from the top of the hierarchy.

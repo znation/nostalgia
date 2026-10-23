@@ -108,11 +108,12 @@ permutation back to library order, and `BrowseList::restore_library_order` inver
 change must. `browse::sort_browse` in `src/ui/handlers/browse.rs` matches the current view onto
 its list and key, routed from `Message::SortBrowse` in the `update` dispatch table;
 `browse::back` restores that order on the list Back returns to (those lists stay in memory while a
-child is open), and `views::view_sort_button` in `src/ui/views/browse.rs` draws the button beside
-Top.
+child is open), and `views::view_browse_nav_buttons` in `src/ui/views/browse.rs` pushes
+`view_top_button` and `view_sort_button` into one `Row`, so Sort draws beside Top.
 
 **Pinned by.**
 
+- `browse_nav_buttons_place_sort_beside_top`
 - `sort_reorders_artists_case_insensitively`
 - `sort_reorders_albums_by_their_display_title`
 - `sort_reorders_playlists_by_name`
