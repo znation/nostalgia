@@ -386,6 +386,14 @@ pub(in crate::ui) fn playlists_loaded(
     Task::none()
 }
 
+/// Record a fetch failure on one browse list and leave the UI task-free.
+/// The per-list handlers below differ only in which list they name, so the
+/// shared body — `BrowseList::fail` plus the empty task — lives here once.
+fn fail_list<T>(list: &mut super::super::browse::BrowseList<T>, report: String) -> Task<Message> {
+    list.fail(report);
+    Task::none()
+}
+
 /// The artists fetch failed: record the report so the browse panel can show
 /// why the list is empty instead of misreading the failure as an empty
 /// library.
@@ -393,8 +401,7 @@ pub(in crate::ui) fn artists_load_failed(
     player: &mut WinampPlayer,
     report: String,
 ) -> Task<Message> {
-    player.artists.fail(report);
-    Task::none()
+    fail_list(&mut player.artists, report)
 }
 
 /// The albums fetch failed: record the report on the albums list.
@@ -402,14 +409,12 @@ pub(in crate::ui) fn albums_load_failed(
     player: &mut WinampPlayer,
     report: String,
 ) -> Task<Message> {
-    player.albums.fail(report);
-    Task::none()
+    fail_list(&mut player.albums, report)
 }
 
 /// The songs fetch failed: record the report on the songs list.
 pub(in crate::ui) fn songs_load_failed(player: &mut WinampPlayer, report: String) -> Task<Message> {
-    player.songs.fail(report);
-    Task::none()
+    fail_list(&mut player.songs, report)
 }
 
 /// The flat whole-library songs fetch failed: record the report on the All
@@ -418,8 +423,7 @@ pub(in crate::ui) fn all_songs_load_failed(
     player: &mut WinampPlayer,
     report: String,
 ) -> Task<Message> {
-    player.all_songs.fail(report);
-    Task::none()
+    fail_list(&mut player.all_songs, report)
 }
 
 /// The flat whole-library albums fetch failed: record the report on the All
@@ -428,8 +432,7 @@ pub(in crate::ui) fn all_albums_load_failed(
     player: &mut WinampPlayer,
     report: String,
 ) -> Task<Message> {
-    player.all_albums.fail(report);
-    Task::none()
+    fail_list(&mut player.all_albums, report)
 }
 
 /// The playlists fetch failed: record the report on the playlists list.
@@ -437,8 +440,7 @@ pub(in crate::ui) fn playlists_load_failed(
     player: &mut WinampPlayer,
     report: String,
 ) -> Task<Message> {
-    player.playlists.fail(report);
-    Task::none()
+    fail_list(&mut player.playlists, report)
 }
 
 /// A browse reply stamped with the generation that produced it. The
