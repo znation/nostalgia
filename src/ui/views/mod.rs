@@ -108,7 +108,8 @@ const VOLUME_MAX: f32 = 1.0;
 
 /// The volume slider's drag granularity: one percent, so a drag spans the
 /// whole `[VOLUME_MIN, VOLUME_MAX]` scale in fine steps. `pub(super)` so the
-/// keyboard volume arms in `ui::mod` nudge by the slider's own step.
+/// keyboard volume handlers in `handlers::mixer` nudge by the slider's own
+/// step.
 pub(super) const VOLUME_STEP: f32 = 0.01;
 
 /// The left and right arrows' seek granularity: classic Winamp seeks five
