@@ -1854,6 +1854,31 @@ async fn resume_without_a_preview_leaves_the_transport_stopped() {
     assert_playback_state(&state, None, false).await;
 }
 
+// `has_loaded_preview` runs on the UI's main thread each time `update`
+// re-evaluates the timer subscriptions, and a transport transition may be
+// holding the transport lock then. It must answer without waiting for that
+// lock: blocking there would stall the thread that has to drive the
+// transition to completion. While a transition holds the lock it reports
+// `true`, so a paused preview's position poll stays subscribed instead of
+// being dropped on a stale read; once the lock is free the real flag answers.
+// With no preview ever played, that flag is false.
+#[tokio::test]
+async fn has_loaded_preview_answers_true_while_a_transition_holds_the_lock() {
+    let (service, _state) = test_service_with_state();
+
+    let held = service.transport.lock().await;
+    assert!(
+        service.has_loaded_preview(),
+        "a held transport lock must report a loaded preview without waiting"
+    );
+    drop(held);
+
+    assert!(
+        !service.has_loaded_preview(),
+        "with the lock free and no preview played, the real flag is false"
+    );
+}
+
 // Two Play/Pause toggles can arrive close together (a double-click), and each
 // runs as its own task. The service holds the transport lock across the flag
 // read, the backend call, and the flag write, so the second toggle observes
