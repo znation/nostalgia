@@ -110,4 +110,24 @@ _None yet._
 - `position_tick` asks the backend for both the position and the duration, and asks for neither while a transport transition is in flight.
 - The right-edge LCD total continues to show the catalog track's length, not the preview length, and the README and `docs/invariants.md` describe the slider that way; `make check` passes (fmt, clippy, rustdoc, tests).
 
+### Draw the classic O A I D V strip at the LCD's left edge (planned 2026-10-23 by the plan role)
+
+**Goal.** Draw the mockup's still-missing static LCD element (`docs/screenshots/player.png`): a vertical column of the classic `O`, `A`, `I`, `D`, `V` letters down the well's left edge, beside the large elapsed readout and the title/status rows. The strip is decorative — it emits no messages and toggles nothing, because the app already exposes always-on-top through the title bar's `A` button — and it is drawn in every Now Playing state, including the empty `--:--` bar, so the LCD matches the mockup without duplicating controls. It has a fixed width so adding it does not shift the title or the right-edge total. This is independent of the queued seek slider: that plan adds a strip below the LCD well, while this one adds content inside it.
+
+**Approach.**
+
+- `src/ui/views/now_playing.rs`: add `pub(super) const LCD_INDICATOR_LABELS: [&str; 5] = ["O", "A", "I", "D", "V"]` (the mockup's order; the steward's 2026-10-22 note spells the strip `O C I D V`, which the screenshot shows is a typo), a fixed-width constant (`LCD_INDICATOR_WIDTH = 12.0`), and a small text-size constant (`LCD_INDICATOR_SIZE = 10.0`). Add `pub(super) fn lcd_indicator_strip<'a, Theme, Renderer>() -> Column<'a, Message, Theme, Renderer>` with the same text-catalog and renderer bounds as `lcd_text`, building one small [`theme::LCD_GREEN`] `Text` per label in a fixed-width column with tight spacing, top-aligned and vertically arranged. Change `view_now_playing` to put the strip and the existing title/status `Column` in a `Row` before wrapping that row in `bevel::lcd_well`, so the letters sit inside the same recessed well; keep `now_playing_row`, `now_playing_status_row`, and all readout logic unchanged. Update the function's doc comment to mention the decorative strip.
+- `src/ui/views/tests.rs`: import `LCD_INDICATOR_LABELS`, `LCD_INDICATOR_WIDTH`, and `lcd_indicator_strip`. Add a `captured_indicator_texts` helper that lays out `lcd_indicator_strip()` with iced's null renderer and the existing `CapturedText` operation, returning the drawn text and the laid-out width. Add `lcd_indicator_strip_draws_each_label_in_order_at_a_fixed_width`, asserting the captured text equals `["O", "A", "I", "D", "V"]` and the width equals `LCD_INDICATOR_WIDTH`. Add `view_now_playing_draws_the_indicator_strip_beside_the_title`, which lays out `view_now_playing` itself (a fitting track, e.g. `"00:53"` / `"Opening"` / `"The Sample Band"` / `"3:30"` with no format) through the same operation and asserts every indicator letter plus the elapsed value, the title, and the total appear, so a future refactor cannot drop the strip while leaving its builder tested.
+- `README.md`: in the Usage sentence that describes the Now Playing bar, say a small vertical `O A I D V` strip runs down the LCD's left edge as in the mockup and is decorative. Keep the hunk to that sentence; do not edit the `<!-- tumwater:status:start -->` block.
+- `docs/invariants.md`: in the `## Now Playing label` section, add a bullet stating that the LCD's left edge always draws the five classic indicator letters `O`, `A`, `I`, `D`, `V` in that order at a fixed width, in every playback state, and that the strip is decorative (it emits no message and changes nothing); name `views::now_playing::LCD_INDICATOR_LABELS` and `lcd_indicator_strip` as the enforcers and add the two new test names to the Pinned-by list.
+
+**Files touched.** `src/ui/views/now_playing.rs`, `src/ui/views/tests.rs`, `README.md`, `docs/invariants.md`.
+
+**Acceptance criteria.**
+
+- `LCD_INDICATOR_LABELS` is exactly `["O", "A", "I", "D", "V"]`, and `lcd_indicator_strip` draws them in that order, one letter per line, in the LCD green at a fixed `LCD_INDICATOR_WIDTH` width.
+- `view_now_playing` lays the strip out at the left of the existing elapsed/title/status content inside `bevel::lcd_well`; laying out the whole bar captures all five letters and the unchanged elapsed, title, and total text.
+- The strip is present in the empty and loaded states, has no `Message` and no event handler, and does not alter the large readout, the marquee, the status row, or the right-edge total.
+- The README and `docs/invariants.md` describe the strip as decorative, and `make check` passes (fmt, clippy, rustdoc, tests).
+
 ## Done
