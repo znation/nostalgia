@@ -773,6 +773,36 @@ fn nameless_song_is_an_error() {
     assert_eq!(error, "response carried song \"song-1\" without a name");
 }
 
+// A resource that omits the whole `attributes` object (not just its `name`)
+// has no name either. `into_album` takes its explicit `None` arm and the
+// artist and playlist maps fold the missing object through `and_then`; every
+// one must reject the response as nameless rather than panic on the missing
+// object. The song map's missing-attributes case is `nameless_song_is_an_error`
+// above.
+#[test]
+fn a_resource_without_attributes_is_rejected_as_nameless() {
+    let artist = error_over(r#"{"data":[{"id":"artist-1"}]}"#, |library| {
+        library.get_favorite_artists(&rest_session())
+    });
+    assert_eq!(
+        artist,
+        "response carried artist \"artist-1\" without a name"
+    );
+
+    let album = error_over(r#"{"data":[{"id":"album-1"}]}"#, |library| {
+        library.get_albums_by_artist(&rest_session(), "artist-9")
+    });
+    assert_eq!(album, "response carried album \"album-1\" without a name");
+
+    let playlist = error_over(r#"{"data":[{"id":"playlist-1"}]}"#, |library| {
+        library.get_all_playlists(&rest_session())
+    });
+    assert_eq!(
+        playlist,
+        "response carried playlist \"playlist-1\" without a name"
+    );
+}
+
 // A resource with a blank id and a valid name is the id twin of the
 // `nameless_*` cases: an id is how the model links rows together and how the
 // seam later resolves a browse, so a blank one can name nothing and must fail
