@@ -5,6 +5,36 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
+### Toggle the Now Playing elapsed readout between elapsed and remaining time (planned 2026-10-23 by the plan role) — done 2026-10-23 by the feature role
+
+**Goal.** Make the large left-hand LCD readout behave like Winamp's: clicking it switches from the elapsed time (`00:53`) to the time remaining (`-02:37`), and clicking again returns to elapsed. The mode is presentation-only, survives Pause, Stop, Next/Previous, and a new selection until clicked again, and changes nothing about playback, the right-edge total, or the marquee. This is independent of the queued Sort plan: it touches the Now Playing machinery, not the browse lists.
+
+**Approach.**
+
+- `src/ui/views/now_playing.rs`:
+  - Add `pub enum TimeDisplay { Elapsed, Remaining }` (derive `Debug, Clone, Copy, PartialEq, Eq, Default`, with `Elapsed` as `#[default]`) and a `pub fn toggled(self) -> Self` beside it (public so `handlers::playback` can flip it; `pub(super)` would be confined to `views`). Re-export `TimeDisplay` from `src/ui/views/mod.rs` like `KnownTrack`.
+  - Add `duration_ms: u64` to `KnownTrack` and document it as the raw length the remaining readout subtracts from (the existing `time` field stays the formatted total for the right edge). `src/ui/handlers/playback.rs`'s `track_selected` records `duration_ms: song.duration_ms` in the same entry it already builds.
+  - Add `pub fn format_lcd_remaining(remaining_ms: u64) -> String`, formatting the shared core of `format_lcd_elapsed` with a leading `-`: `0` → `"-00:00"`, `157_000` → `"-02:37"`, `3_600_000` → `"-60:00"`.
+  - Change `now_playing_elapsed` to take the display mode as its last argument. Unknown/absent track still returns borrowed `"--:--"`. In `TimeDisplay::Elapsed` keep today's behavior exactly (`00:00` with no reported position). In `TimeDisplay::Remaining`, return borrowed `"--:--"` when the known track's `duration_ms` is `0` (no length to count down from), otherwise `Cow::Owned(format_lcd_remaining(duration_ms.saturating_sub(position_ms)))`, treating a missing position as zero (so a stopped track shows its full length remaining). Position milliseconds come from the existing `duration_millis` helper. Document the mode's persistence and the saturating subtraction.
+  - Wrap the elapsed fragment in `now_playing_row` in `iced::widget::MouseArea::new(lcd_elapsed_text(elapsed)).on_press(Message::ToggleTimeDisplay).interaction(iced::mouse::Interaction::Pointer)`, keeping it the row's first child so the existing captured-text tests still see it first. The helper's existing `text::Renderer` and theme bounds already satisfy `MouseArea`, and `view_now_playing` keeps its signature.
+- `src/ui/mod.rs`:
+  - Add `Message::ToggleTimeDisplay` next to `PlaybackPosition` with a doc comment saying it only flips the LCD's time mode, and dispatch it to `handlers::playback::toggle_time_display` beside the position arms (not among the browse arms, so the Sort plan's message edits stay separate).
+  - Add `time_display: TimeDisplay` to `WinampPlayer`, initialized `TimeDisplay::Elapsed` in `new` (or via `Default`), documented as presentation-only and preserved across tracks. Pass it to `views::now_playing_elapsed` in `WinampPlayer::now_playing_elapsed`; the accessor keeps its one-argument signature.
+- `src/ui/handlers/playback.rs`: add `pub(in crate::ui) fn toggle_time_display(player: &mut WinampPlayer) -> Task<Message>` that assigns `player.time_display = player.time_display.toggled()` and returns `Task::none()`. It touches no playback state and clears no position.
+- Tests. `src/ui/views/tests.rs`: give the `known_tracks` helper `duration_ms: 0`; update its existing `now_playing_elapsed` calls with `TimeDisplay::Elapsed`; add `format_lcd_remaining_prefixes_a_minus_and_pads` and `now_playing_elapsed_remaining_counts_down_from_the_total` (known 210_000 ms track with a 53 s position → `-02:37`, no position → `-03:30`, `duration_ms` 0 → `--:--`, unknown id → `--:--`, a position past the total → `-00:00`). `src/ui/tests.rs`: add `duration_ms` to the two hand-built `KnownTrack` literals, then add `toggle_time_display_switches_to_remaining_and_persists` beside the elapsed tests: play song 1 (210 s), set `playback_position` to 53 s, send `Message::ToggleTimeDisplay`, assert `-02:37` and an unchanged right-edge total; send `Message::Pause` and assert the remaining value survives; select song 2 and assert the new track counts down from its own total (`-02:05`); toggle back and assert elapsed mode again (`00:00` after the selection). Add `toggle_time_display_with_no_track_keeps_the_placeholder` (a fresh player toggles and still reads `--:--`).
+- `README.md`: in the Usage paragraph describing the Now Playing bar, say clicking the large elapsed readout switches it to the track's remaining time (`-02:37`) and back, and that the choice stays until clicked again. Do not touch the `<!-- tumwater:status:start -->` block.
+- `docs/invariants.md`: extend the `## Now Playing label` split-readout bullet with the toggle: the left readout shows elapsed by default, clicking it shows `-MM:SS` remaining (saturating at `-00:00`, `--:--` when the track's length is unknown), the right edge keeps the plain total in both modes, and the mode persists across Pause, Stop, Next/Previous, and a new selection. Name `TimeDisplay`, `views::now_playing_elapsed`, and `format_lcd_remaining` as the enforcers, and add the new tests to the Pinned-by list.
+
+**Files touched.** `src/ui/views/now_playing.rs`, `src/ui/views/mod.rs`, `src/ui/mod.rs`, `src/ui/handlers/playback.rs`, `src/ui/views/tests.rs`, `src/ui/tests.rs`, `README.md`, `docs/invariants.md`.
+
+**Acceptance criteria.**
+
+- The large left readout still shows elapsed `MM:SS` by default, unchanged for every existing position case.
+- Pressing the readout flips it to `-MM:SS` remaining and pressing it again flips back; no other control, playback call, track selection, marquee offset, or right-edge total changes.
+- Remaining is `total - position`, saturating at `-00:00`; a known track with `duration_ms == 0` and any unknown/absent track read `--:--`.
+- The chosen mode survives Pause, Stop, Next/Previous, and selecting another track, and applies to that track's own length.
+- The README and `docs/invariants.md` describe the toggle in the same change, and `make check` passes (fmt, clippy, rustdoc, tests).
+
 ### Sort the current browse list alphabetically from a Sort button (planned 2026-10-23 by the plan role) — done 2026-10-23 by the feature role
 
 **Goal.** Add the library window's `SORT LIB` button from `docs/screenshots/player.png` as a title-case `Sort` button above every browse level, beside `Top`. Pressing it reorders the list currently showing (Artists, Albums, Songs, All Songs, All Albums, or Playlists) alphabetically by each row's rendered text, case-insensitively, leaving every other list and the player state alone. The sort is one-shot like the classic button: it changes only the loaded list in place, so reopening the level fetches its library order again. No persistent sort mode or new dependency is needed.

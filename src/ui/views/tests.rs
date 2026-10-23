@@ -5,9 +5,9 @@ use super::browse::{
 };
 use super::equalizer::eq_enabled_label;
 use super::now_playing::{
-    KnownTrack, MARQUEE_WIDTH, display_len, format_lcd_elapsed, format_track_time, marquee_text,
-    needs_marquee, now_playing_artist, now_playing_elapsed, now_playing_label, now_playing_row,
-    now_playing_time,
+    KnownTrack, MARQUEE_WIDTH, TimeDisplay, display_len, format_lcd_elapsed, format_lcd_remaining,
+    format_track_time, marquee_text, needs_marquee, now_playing_artist, now_playing_elapsed,
+    now_playing_label, now_playing_row, now_playing_time,
 };
 use super::transport::{play_pause_label, repeat_label, shuffle_label, transport_buttons};
 use super::{
@@ -235,6 +235,7 @@ fn known_tracks(entries: &[(&str, &str, &str)]) -> HashMap<String, KnownTrack> {
                     title: title.to_string(),
                     artist: artist.to_string(),
                     time: "--:--".to_string(),
+                    duration_ms: 0,
                 },
             )
         })
@@ -335,7 +336,12 @@ fn now_playing_time_returns_the_plain_total_even_with_a_position() {
 
     assert_eq!(now_playing_time(&tracks, Some("song-1")), "3:30");
     assert_eq!(
-        now_playing_elapsed(&tracks, Some("song-1"), Some(Duration::from_secs(192))),
+        now_playing_elapsed(
+            &tracks,
+            Some("song-1"),
+            Some(Duration::from_secs(192)),
+            TimeDisplay::Elapsed,
+        ),
         "03:12"
     );
     assert_eq!(now_playing_time(&tracks, Some("song-1")), "3:30");
@@ -346,19 +352,34 @@ fn now_playing_elapsed_reads_placeholder_zero_or_position() {
     let mut tracks = known_tracks(&[("song-1", "The Sample Band", "Opening")]);
     tracks.get_mut("song-1").expect("seed track").time = "3:30".to_string();
 
-    let unknown = now_playing_elapsed(&tracks, Some("no-such-song"), Some(Duration::from_secs(53)));
+    let unknown = now_playing_elapsed(
+        &tracks,
+        Some("no-such-song"),
+        Some(Duration::from_secs(53)),
+        TimeDisplay::Elapsed,
+    );
     assert_eq!(unknown, "--:--");
     assert!(matches!(&unknown, Cow::Borrowed(_)));
 
-    let none = now_playing_elapsed(&tracks, None, Some(Duration::from_secs(53)));
+    let none = now_playing_elapsed(
+        &tracks,
+        None,
+        Some(Duration::from_secs(53)),
+        TimeDisplay::Elapsed,
+    );
     assert_eq!(none, "--:--");
     assert!(matches!(&none, Cow::Borrowed(_)));
 
-    let zero = now_playing_elapsed(&tracks, Some("song-1"), None);
+    let zero = now_playing_elapsed(&tracks, Some("song-1"), None, TimeDisplay::Elapsed);
     assert_eq!(zero, "00:00");
     assert!(matches!(&zero, Cow::Borrowed(_)));
 
-    let position = now_playing_elapsed(&tracks, Some("song-1"), Some(Duration::from_secs(53)));
+    let position = now_playing_elapsed(
+        &tracks,
+        Some("song-1"),
+        Some(Duration::from_secs(53)),
+        TimeDisplay::Elapsed,
+    );
     assert_eq!(position, "00:53");
     assert!(matches!(&position, Cow::Owned(_)));
 }
@@ -371,6 +392,66 @@ fn format_lcd_elapsed_pads_minutes_and_seconds() {
     // Minutes stay unbounded, so an hour reads as 60:00 rather than rolling
     // over.
     assert_eq!(format_lcd_elapsed(3_600_000), "60:00");
+}
+
+#[test]
+fn format_lcd_remaining_prefixes_a_minus_and_pads() {
+    assert_eq!(format_lcd_remaining(0), "-00:00");
+    assert_eq!(format_lcd_remaining(157_000), "-02:37");
+    assert_eq!(format_lcd_remaining(3_600_000), "-60:00");
+}
+
+// The remaining mode counts down from the known track's own length, treating a
+// missing position as zero; the length and position share milliseconds, so a
+// position past the length saturates at -00:00 instead of underflowing. A
+// known track with no length has nothing to count down from, and an unknown or
+// absent track keeps the placeholder.
+#[test]
+fn now_playing_elapsed_remaining_counts_down_from_the_total() {
+    let mut tracks = known_tracks(&[("song-1", "The Sample Band", "Opening")]);
+    tracks.get_mut("song-1").expect("seed track").duration_ms = 210_000;
+
+    assert_eq!(
+        now_playing_elapsed(
+            &tracks,
+            Some("song-1"),
+            Some(Duration::from_secs(53)),
+            TimeDisplay::Remaining,
+        ),
+        "-02:37"
+    );
+    assert_eq!(
+        now_playing_elapsed(&tracks, Some("song-1"), None, TimeDisplay::Remaining),
+        "-03:30"
+    );
+    assert_eq!(
+        now_playing_elapsed(
+            &tracks,
+            Some("song-1"),
+            Some(Duration::from_secs(300)),
+            TimeDisplay::Remaining,
+        ),
+        "-00:00"
+    );
+
+    tracks.get_mut("song-1").expect("seed track").duration_ms = 0;
+    let no_length = now_playing_elapsed(
+        &tracks,
+        Some("song-1"),
+        Some(Duration::from_secs(53)),
+        TimeDisplay::Remaining,
+    );
+    assert_eq!(no_length, "--:--");
+    assert!(matches!(&no_length, Cow::Borrowed(_)));
+
+    let unknown = now_playing_elapsed(
+        &tracks,
+        Some("no-such-song"),
+        Some(Duration::from_secs(53)),
+        TimeDisplay::Remaining,
+    );
+    assert_eq!(unknown, "--:--");
+    assert!(matches!(&unknown, Cow::Borrowed(_)));
 }
 
 #[test]

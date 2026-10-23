@@ -3166,6 +3166,7 @@ fn the_player_knows_when_the_now_playing_line_needs_the_marquee() {
             title: "One".to_string(),
             artist: "The Sample Band".to_string(),
             time: "3:30".to_string(),
+            duration_ms: 210_000,
         },
     );
     state.blocking_lock().current_track = Some("song-1".to_string());
@@ -3178,6 +3179,7 @@ fn the_player_knows_when_the_now_playing_line_needs_the_marquee() {
             title: "A Title Too Long For The LCD".to_string(),
             artist: "The Sample Band".to_string(),
             time: "3:30".to_string(),
+            duration_ms: 210_000,
         },
     );
     state.blocking_lock().current_track = Some("song-2".to_string());
@@ -3588,6 +3590,47 @@ fn track_selected_clears_the_elapsed_readout() {
     assert_eq!(player.playback_position, None);
     assert_eq!(player.now_playing_elapsed(Some("song-1")), "00:00");
     assert_eq!(player.now_playing_time(Some("song-1")), "3:30");
+}
+
+// Clicking the large readout switches it to the track's remaining time and
+// back. The mode is presentation-only: the right-edge total never changes,
+// Pause leaves the remaining value frozen, and a new selection counts down
+// from that track's own length. The mode itself survives both transports and
+// selections until the next click.
+#[test]
+fn toggle_time_display_switches_to_remaining_and_persists() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+    player.playback_position = Some(Duration::from_secs(53));
+
+    let _ = update(&mut player, Message::ToggleTimeDisplay);
+    assert_eq!(player.time_display, views::TimeDisplay::Remaining);
+    assert_eq!(player.now_playing_elapsed(Some("song-1")), "-02:37");
+    assert_eq!(player.now_playing_time(Some("song-1")), "3:30");
+
+    let _ = update(&mut player, Message::Pause);
+    assert_eq!(player.now_playing_elapsed(Some("song-1")), "-02:37");
+
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 1 });
+    assert_eq!(player.time_display, views::TimeDisplay::Remaining);
+    assert_eq!(player.now_playing_elapsed(Some("song-2")), "-02:05");
+    assert_eq!(player.now_playing_time(Some("song-2")), "2:05");
+
+    let _ = update(&mut player, Message::ToggleTimeDisplay);
+    assert_eq!(player.time_display, views::TimeDisplay::Elapsed);
+    assert_eq!(player.now_playing_elapsed(Some("song-2")), "00:00");
+    assert_eq!(player.now_playing_time(Some("song-2")), "2:05");
+}
+
+#[test]
+fn toggle_time_display_with_no_track_keeps_the_placeholder() {
+    let (mut player, _state) = test_player();
+
+    let _ = update(&mut player, Message::ToggleTimeDisplay);
+
+    assert_eq!(player.time_display, views::TimeDisplay::Remaining);
+    assert_eq!(player.now_playing_elapsed(None), "--:--");
 }
 
 #[test]

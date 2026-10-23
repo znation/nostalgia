@@ -8,7 +8,8 @@ use std::time::Duration;
 
 use iced::{
     Element, Length,
-    widget::{Row, Space, Text},
+    mouse::Interaction,
+    widget::{MouseArea, Row, Space, Text},
 };
 
 use crate::library::display_title_for;
@@ -77,6 +78,29 @@ pub(super) fn marquee_text(text: &str, offset: usize, width: usize) -> String {
         })
         .collect()
 }
+/// Which time the Now Playing LCD's large left-hand readout shows. The mode
+/// is presentation-only: it changes nothing about playback or the right-edge
+/// total, and the player keeps it across Pause, Stop, Next/Previous, and a new
+/// selection until the readout is clicked again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TimeDisplay {
+    /// The elapsed playback position, the default (`00:53`).
+    #[default]
+    Elapsed,
+    /// The time left in the track (`-02:37`).
+    Remaining,
+}
+
+impl TimeDisplay {
+    /// The other mode: [`Self::Elapsed`] becomes [`Self::Remaining`] and back.
+    pub fn toggled(self) -> Self {
+        match self {
+            Self::Elapsed => Self::Remaining,
+            Self::Remaining => Self::Elapsed,
+        }
+    }
+}
+
 /// A track the Now Playing bar knows about: the title and artist it renders
 /// and the formatted length it shows beside them. Recorded once when a track
 /// is played, so the bar keeps naming and timing the playing track after the
@@ -93,6 +117,10 @@ pub struct KnownTrack {
     /// track is recorded so a per-frame bar refresh borrows it instead of
     /// formatting the same duration again.
     pub time: String,
+    /// The track's raw length in milliseconds, the value the remaining
+    /// readout subtracts the playback position from; `0` means the source
+    /// supplied no duration.
+    pub duration_ms: u64,
 }
 
 /// The Now Playing bar label: the title of `current_track` when `tracks`
@@ -159,26 +187,45 @@ pub fn now_playing_time<'a>(
         .unwrap_or(Cow::Borrowed("--:--"))
 }
 
-/// The Now Playing bar's large elapsed readout for `current_track`: the
-/// backend-reported position formatted as zero-padded `MM:SS` when there is
-/// one (`"00:53"`), `"00:00"` when the track is known but no position is
-/// reported (no preview loaded, a failed start, or a backend that cannot
-/// answer), or `"--:--"` when the track is unknown or none is current.
-/// Mirrors [`now_playing_label`], [`now_playing_artist`], and
-/// [`now_playing_time`]. The placeholder cases borrow static strings, while a
-/// reported position allocates its formatted `String`. Pure data → `Cow` so
-/// the resolution is testable without an iced renderer.
+/// The Now Playing bar's large left-hand time readout for `current_track`,
+/// as chosen by `display`: elapsed `MM:SS` (the default) or the remaining
+/// time with a leading `-`. In [`TimeDisplay::Elapsed`] the backend-reported
+/// position formats as zero-padded `MM:SS` when there is one (`"00:53"`),
+/// `"00:00"` when the track is known but no position is reported (no preview
+/// loaded, a failed start, or a backend that cannot answer), or `"--:--"`
+/// when the track is unknown or none is current. In [`TimeDisplay::Remaining`]
+/// a known track with a length reads `-MM:SS` counting down from that length,
+/// treating a missing position as zero so a stopped track shows its full
+/// length; a missing position past the length saturates at `"-00:00"`, and a
+/// known track whose source supplied no length (`duration_ms == 0`) or an
+/// unknown/absent track reads the `"--:--"` placeholder. Mirrors
+/// [`now_playing_label`], [`now_playing_artist`], and [`now_playing_time`].
+/// The placeholder cases borrow static strings, while a reported position
+/// allocates its formatted `String`. Pure data → `Cow` so the resolution is
+/// testable without an iced renderer.
 pub fn now_playing_elapsed<'a>(
     tracks: &'a HashMap<String, KnownTrack>,
     current_track: Option<&str>,
     position: Option<Duration>,
+    display: TimeDisplay,
 ) -> Cow<'a, str> {
-    if known_track_for(tracks, current_track).is_none() {
+    let Some(track) = known_track_for(tracks, current_track) else {
         return Cow::Borrowed("--:--");
-    }
-    match position {
-        Some(position) => Cow::Owned(format_lcd_elapsed(duration_millis(position))),
-        None => Cow::Borrowed("00:00"),
+    };
+    match display {
+        TimeDisplay::Elapsed => match position {
+            Some(position) => Cow::Owned(format_lcd_elapsed(duration_millis(position))),
+            None => Cow::Borrowed("00:00"),
+        },
+        TimeDisplay::Remaining => {
+            if track.duration_ms == 0 {
+                return Cow::Borrowed("--:--");
+            }
+            let position_ms = position.map(duration_millis).unwrap_or(0);
+            Cow::Owned(format_lcd_remaining(
+                track.duration_ms.saturating_sub(position_ms),
+            ))
+        }
     }
 }
 
@@ -195,6 +242,14 @@ fn duration_millis(duration: Duration) -> u64 {
 pub fn format_lcd_elapsed(position_ms: u64) -> String {
     let total_seconds = position_ms / 1000;
     format!("{:02}:{:02}", total_seconds / 60, total_seconds % 60)
+}
+
+/// Formats a remaining time in milliseconds as the LCD's countdown form with
+/// a leading `-`, so `0` reads `"-00:00"`, `157_000` reads `"-02:37"`, and
+/// `3_600_000` reads `"-60:00"`. Shares [`format_lcd_elapsed`]'s unbounded
+/// minutes and zero padding after the sign.
+pub fn format_lcd_remaining(remaining_ms: u64) -> String {
+    format!("-{}", format_lcd_elapsed(remaining_ms))
 }
 
 /// Formats `duration_ms` as zero-padded `m:ss`, with unbounded minutes so an
@@ -298,7 +353,11 @@ where
 {
     let line_len = display_len(&label, &artist);
     let mut row = Row::new()
-        .push(lcd_elapsed_text(elapsed))
+        .push(
+            MouseArea::new(lcd_elapsed_text(elapsed))
+                .on_press(Message::ToggleTimeDisplay)
+                .interaction(Interaction::Pointer),
+        )
         .push(Space::new().width(Length::Fixed(12.0)))
         .push(Text::new("Now Playing: ").size(20));
     if line_len <= MARQUEE_WIDTH {

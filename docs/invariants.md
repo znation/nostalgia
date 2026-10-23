@@ -127,9 +127,11 @@ its internal id, whenever the id is in the known-track index:
 - An unknown id falls back to the raw id for the label and to the empty string for the artist.
 - No current track renders the label "Nothing" and an empty artist.
 - Stop keeps the interrupted track's title (the current track is not cleared by Stop).
-- The LCD splits its time readouts: the large left-hand elapsed readout shows the backend's
-  reported position as zero-padded `MM:SS` (for example `00:53`), and the right edge shows the
-  plain cached total (for example `3:30`). A known track with no reported position (no preview
+- The LCD splits its time readouts: by default the large left-hand readout shows the backend's
+  reported position as zero-padded `MM:SS` (for example `00:53`), and the right edge always shows
+  the plain cached total (for example `3:30`). Clicking the large readout switches it to the
+  track's remaining time as `-MM:SS` (for example `-02:37`) and clicking again returns to elapsed.
+  A known track with no reported position (no preview
   loaded, a failed start, or a backend that cannot answer) reads `00:00` at the left and the
   cached total at the right; no current track, or an unknown id, reads `--:--` at both edges.
   Pause keeps the stored position, so the paused player's frozen elapsed value stays on the bar;
@@ -139,6 +141,12 @@ its internal id, whenever the id is in the known-track index:
   previous player under the new epoch. A selection whose song has no preview stops the previous
   preview, so the backend reports no position for the new track and the elapsed readout reads
   `00:00` while the right edge keeps the cached total.
+- The chosen time mode is presentation-only and persists across Pause, Stop, Next/Previous, and a
+  new selection until the readout is clicked again. In remaining mode a known track counts down
+  from its own length, treating a missing position as zero and saturating at `-00:00` when the
+  position is past the total; a known track whose source supplied no length (`duration_ms == 0`)
+  and any unknown or absent track read `--:--` at the left. The right edge keeps the plain total in
+  both modes.
 - A combined artist/title longer than `MARQUEE_WIDTH` characters is windowed by
   `views::now_playing::marquee_text`, advanced one character per `Message::MarqueeTick`, and
   reset to the start by `TrackSelected`; a line that fits is shown whole and borrowed.
@@ -151,7 +159,8 @@ its internal id, whenever the id is in the known-track index:
 known-track index. `WinampPlayer::now_playing_label` and `WinampPlayer::now_playing_artist` in
 `src/ui/mod.rs` resolve against `known_tracks`, so the bar keeps naming a playing track after
 browsing to another album replaced the visible song list. `views::now_playing::now_playing_elapsed`
-(through `format_lcd_elapsed`) formats the left-hand zero-padded `MM:SS` position, while
+(through `format_lcd_elapsed` for elapsed mode and `format_lcd_remaining` for remaining mode)
+formats the left-hand readout as chosen by `views::now_playing::TimeDisplay`, while
 `views::now_playing::now_playing_time` returns the plain cached total for the right edge; the
 `playback_position` field on `WinampPlayer` stores the reply the
 `PlaybackPosition` handler received, which is stamped with `position_epoch`, and
@@ -164,7 +173,10 @@ while the count is nonzero the `PositionTick` handler issues no query and the
 stops the backend's previous preview when a selection has no preview URL.
 `views::now_playing::marquee_text`
 windows an overlong line, and `WinampPlayer::marquee_offset` carries the advance through
-`Message::MarqueeTick`. `views::now_playing::display_len` and `views::now_playing::needs_marquee`
+`Message::MarqueeTick`. The `WinampPlayer::time_display` field holds the readout's mode, and
+`handlers::playback::toggle_time_display` (routed from `Message::ToggleTimeDisplay`, pressed by
+the `MouseArea` wrapping the readout in `now_playing_row`) flips it without touching playback
+state. `views::now_playing::display_len` and `views::now_playing::needs_marquee`
 measure the line, and `ui::timers::subscriptions` subscribes `marquee_ticks` only while that measure
 exceeds `MARQUEE_WIDTH`.
 
@@ -190,7 +202,11 @@ rather than the panic unwinding the event loop.
 - `now_playing_time_resolves_known_track_to_cached_label`
 - `now_playing_time_returns_the_plain_total_even_with_a_position`
 - `now_playing_elapsed_reads_placeholder_zero_or_position`
+- `now_playing_elapsed_remaining_counts_down_from_the_total`
 - `format_lcd_elapsed_pads_minutes_and_seconds`
+- `format_lcd_remaining_prefixes_a_minus_and_pads`
+- `toggle_time_display_switches_to_remaining_and_persists`
+- `toggle_time_display_with_no_track_keeps_the_placeholder`
 - `marquee_text_keeps_a_line_that_fits`
 - `marquee_text_windows_from_the_offset`
 - `marquee_text_wraps_through_the_gap_to_the_start`

@@ -69,6 +69,14 @@ pub(in crate::ui) fn toggle_shuffle(player: &mut WinampPlayer) -> Task<Message> 
     mutate_state(player, AppState::toggle_shuffle)
 }
 
+/// The LCD readout's click: flips the large left-hand time between elapsed and
+/// remaining. It touches no playback state and clears no stored position, so
+/// the chosen mode survives transports and a new selection.
+pub(in crate::ui) fn toggle_time_display(player: &mut WinampPlayer) -> Task<Message> {
+    player.time_display = player.time_display.toggled();
+    Task::none()
+}
+
 /// The task the Next/Previous buttons schedule: step the current track
 /// through the list the current view shows — `all_songs` for the flat All
 /// Songs view, the browsed `songs` otherwise — in the given direction — with
@@ -175,6 +183,7 @@ pub(in crate::ui) fn track_selected(
             title: song.title.clone(),
             artist: song.artist.clone(),
             time: views::format_track_time(song.duration_ms),
+            duration_ms: song.duration_ms,
         });
     // A new selection starts with no elapsed position. Bumping the epoch
     // drops a poll reply issued for the previous track.

@@ -35,8 +35,8 @@ pub use browse::{
 };
 pub use equalizer::view_equalizer;
 pub use now_playing::{
-    KnownTrack, format_track_time, needs_marquee, now_playing_artist, now_playing_elapsed,
-    now_playing_label, now_playing_time, view_now_playing,
+    KnownTrack, TimeDisplay, format_track_time, needs_marquee, now_playing_artist,
+    now_playing_elapsed, now_playing_label, now_playing_time, view_now_playing,
 };
 pub use title_bar::view_title_bar;
 pub use transport::view_transport_controls;

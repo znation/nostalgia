@@ -106,6 +106,10 @@ enum Message {
         epoch: u64,
         position: Option<Duration>,
     },
+    // The large left-hand LCD readout's mode toggle: flips between elapsed and
+    // remaining time. It changes no playback state and leaves the right-edge
+    // total alone.
+    ToggleTimeDisplay,
     ToggleEqualizer,
     EqPreampChange(f32),
     EqBandChange(usize, f32),
@@ -314,6 +318,11 @@ struct WinampPlayer {
     /// Pause leaves it alone, so the bar keeps showing the paused player's
     /// frozen position.
     playback_position: Option<Duration>,
+    /// Which time the large left-hand LCD readout shows: elapsed by default,
+    /// or the track's remaining time after a click. Presentation-only: it
+    /// changes no playback state, and the mode survives Pause, Stop,
+    /// Next/Previous, and a new selection until clicked again.
+    time_display: views::TimeDisplay,
     /// The playback transition counter. A position query carries its value;
     /// `reset_position_readout` bumps it on a Stop or a new selection, so a
     /// reply that was already in flight is dropped rather than restoring the
@@ -393,6 +402,7 @@ impl WinampPlayer {
             play_history: transport::PlayHistory::default(),
             marquee_offset: 0,
             playback_position: None,
+            time_display: views::TimeDisplay::Elapsed,
             position_epoch: 0,
             pending_position_transitions: 0,
             plays_generation: Arc::new(AtomicU64::new(0)),
@@ -428,14 +438,19 @@ impl WinampPlayer {
         views::now_playing_time(&self.known_tracks, current_track)
     }
 
-    /// The Now Playing bar's large left-hand elapsed readout for
-    /// `current_track`: the position [`Self::playback_position`] reports as
-    /// zero-padded `MM:SS`, `00:00` for a known track the backend reports no
-    /// position for, or the static `--:--` placeholder when the track is
-    /// unknown or none is current. The placeholder cases borrow, so a per-frame
-    /// refresh allocates only while a position is actually reported.
+    /// The Now Playing bar's large left-hand time readout for
+    /// `current_track`, in the mode [`Self::time_display`] selects: the
+    /// position [`Self::playback_position`] reports as zero-padded `MM:SS` by
+    /// default, or the countdown from the known track's length when the user
+    /// has clicked the readout. The placeholder cases borrow, so a per-frame
+    /// refresh allocates only while an actual time is shown.
     fn now_playing_elapsed<'a>(&'a self, current_track: Option<&str>) -> Cow<'a, str> {
-        views::now_playing_elapsed(&self.known_tracks, current_track, self.playback_position)
+        views::now_playing_elapsed(
+            &self.known_tracks,
+            current_track,
+            self.playback_position,
+            self.time_display,
+        )
     }
 
     /// Whether the Now Playing line is too long for the LCD's character
@@ -516,6 +531,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::PlaybackPosition { epoch, position } => {
             handlers::playback::playback_position(player, epoch, position)
         }
+        Message::ToggleTimeDisplay => handlers::playback::toggle_time_display(player),
         Message::TrackSelected { epoch, index } => {
             handlers::playback::track_selected(player, epoch, index)
         }
