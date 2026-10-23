@@ -2395,6 +2395,25 @@ async fn get_songs_from_album_uses_the_rest_library_when_signed_in() {
     );
 }
 
+// A signed-in album load has no sample-library fallback: it answers from the
+// sample library only when no session is stored, so a failed tracks request
+// must surface the error for the UI's Retry path. The id is a sample album's,
+// so a fallback on failure would have sample songs to return instead of the
+// error.
+#[tokio::test]
+async fn get_songs_from_album_fails_when_the_tracks_request_fails() {
+    let stub = StubTransport::failing("tracks down");
+    let service = signed_in_service(&stub);
+
+    let error = service.get_songs_from_album("album-1").await.unwrap_err();
+
+    assert_eq!(error.to_string(), "tracks down");
+    assert_single_call(
+        &stub,
+        "https://api.music.apple.com/v1/me/library/albums/album-1/tracks",
+    );
+}
+
 // The search box's backend routes through the REST client when a session is
 // stored, so a signed-in user searches the real library rather than the
 // sample one. The stub returns a song whose id is not a sample id, so the
