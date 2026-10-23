@@ -2308,6 +2308,39 @@ async fn get_albums_by_artist_uses_the_rest_library_when_signed_in() {
     );
 }
 
+// The documented guarantee is that a failure in *either* signed-in request
+// fails the whole album load. The durations request is pinned below; this
+// covers the artist's album request itself. The songs body is left
+// successful, so a regression that swallowed the album error (say with
+// `unwrap_or_default`) would return an empty album list instead of an error,
+// and the single recorded call pins that the songs request is not attempted
+// after the first failure.
+#[tokio::test]
+async fn get_albums_by_artist_fails_when_the_albums_request_fails() {
+    let stub = StubTransport::returning_results(&[
+        Err(AppleMusicError::new("albums down")),
+        Ok(
+            r#"{"data":[{"id":"song-1","attributes":{"name":"Opening","artistName":"The Sample Band","albumName":"First Record","durationInMillis":210000}}]}"#
+                .to_string(),
+        ),
+    ]);
+    let service = signed_in_service(&stub);
+
+    let error = service.get_albums_by_artist("artist-9").await.unwrap_err();
+
+    assert_eq!(error.to_string(), "albums down");
+    let calls = stub.calls();
+    assert_eq!(
+        calls.len(),
+        1,
+        "the songs request must not follow a failed album request"
+    );
+    assert_eq!(
+        calls[0].0,
+        "https://api.music.apple.com/v1/me/library/artists/artist-9/albums"
+    );
+}
+
 // The per-artist albums load reads the whole-library songs collection after
 // the artist's album list so it can fill in each row's running time. A
 // failure there must fail the whole load (the Retry path) instead of
