@@ -109,11 +109,7 @@ impl AppleMusicService {
             // replaying at whatever was set when the previous preview began.
             let equalizer = {
                 let state = self.state.lock().await;
-                audio::EqSnapshot {
-                    enabled: state.eq_enabled,
-                    preamp_db: state.eq_preamp(),
-                    bands_db: state.eq_bands(),
-                }
+                state.eq_snapshot()
             };
             self.set_output_equalizer(equalizer)?;
             self.audio.play(&url)?;
@@ -303,11 +299,7 @@ impl AppleMusicService {
         // and the panel's curve rather than rodio's defaults.
         let volume = state.volume();
         let balance = state.balance();
-        let equalizer = audio::EqSnapshot {
-            enabled: state.eq_enabled,
-            preamp_db: state.eq_preamp(),
-            bands_db: state.eq_bands(),
-        };
+        let equalizer = state.eq_snapshot();
         drop(state);
 
         println!("{}", play_log_line(track_id));

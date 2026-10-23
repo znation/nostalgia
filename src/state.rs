@@ -2,6 +2,7 @@
 //! status. Both the Apple Music service and the UI read and mutate it,
 //! so it lives in its own module rather than in the binary's entry point.
 
+use crate::audio;
 use crate::clamp;
 use crate::equalizer;
 
@@ -230,6 +231,20 @@ impl AppState {
     #[must_use]
     pub fn eq_preset(&self) -> Option<equalizer::Preset> {
         self.eq_preset
+    }
+
+    /// A copyable snapshot of the stored equalizer curve, for the audio seam.
+    /// [`audio::EqSnapshot`] is what crosses to the audio worker, so every
+    /// caller that forwards the curve — starting a preview, resuming one, and
+    /// the equalizer handlers' mutate-and-forward — reads it through this one
+    /// conversion instead of rebuilding the struct field by field.
+    #[must_use]
+    pub fn eq_snapshot(&self) -> audio::EqSnapshot {
+        audio::EqSnapshot {
+            enabled: self.eq_enabled,
+            preamp_db: self.eq_preamp(),
+            bands_db: self.eq_bands(),
+        }
     }
 
     /// Stores `volume`, clamped to `[0.0, 1.0]` with NaN mapped to silence by

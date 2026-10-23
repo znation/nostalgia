@@ -8,7 +8,6 @@
 use iced::Task;
 
 use crate::apple_music::{AppleMusicError, AppleMusicService};
-use crate::audio::EqSnapshot;
 use crate::equalizer::Preset;
 use crate::state::AppState;
 use crate::ui::views;
@@ -146,14 +145,7 @@ fn mutate_equalizer(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState))
     mutate_and_forward(
         player,
         mutation,
-        |service, state| {
-            let equalizer = EqSnapshot {
-                enabled: state.eq_enabled,
-                preamp_db: state.eq_preamp(),
-                bands_db: state.eq_bands(),
-            };
-            service.set_output_equalizer(equalizer)
-        },
+        |service, state| service.set_output_equalizer(state.eq_snapshot()),
         "forwarding equalizer to the audio backend failed",
     )
 }
