@@ -900,6 +900,18 @@ async fn playback_format_forwards_the_audio_output_format() {
     );
 }
 
+// `playback_spectrum` reports exactly what the injected backend answers, so
+// the LCD visualizer has one seam to the loaded preview's live bands.
+#[tokio::test]
+async fn playback_spectrum_forwards_the_audio_output_spectrum() {
+    let (service, _state) = service_with_audio(Arc::new(RecordingAudio::default()));
+
+    assert_eq!(
+        service.playback_spectrum(),
+        Some(crate::test_support::recording_spectrum())
+    );
+}
+
 // `seek_output_to` forwards an absolute seek to the injected backend without
 // touching the shared state: the position belongs to the playing preview, not
 // to `AppState`.

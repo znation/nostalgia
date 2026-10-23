@@ -20,8 +20,8 @@ use std::time::{Duration, Instant};
 
 use crate::apple_music::AppleMusicError;
 use crate::apple_music::rest::HttpTransport;
-use crate::audio::{AudioOutput, EqSnapshot, PlaybackFormat};
-use crate::equalizer::{PRESETS, Preset};
+use crate::audio::{AudioOutput, EqSnapshot, PlaybackFormat, Spectrum};
+use crate::equalizer::{BAND_COUNT, PRESETS, Preset};
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::music_kit_auth::MusicKitSession;
 
@@ -418,6 +418,15 @@ pub(crate) fn assert_preview_calls(calls: &[AudioCall], expected: &[AudioCall]) 
     assert_eq!(calls, wanted);
 }
 
+/// The fixed spectrum [`RecordingAudio`] reports: one distinctive nonzero
+/// band, so a test can pin that the UI draws what the backend's loaded preview
+/// reports rather than an all-zero fallback.
+pub(crate) fn recording_spectrum() -> Spectrum {
+    let mut bands = [0.0; BAND_COUNT];
+    bands[2] = 0.5;
+    Spectrum { bands }
+}
+
 /// A recording [`AudioOutput`] so a test observes the commands issued to the
 /// backend without touching an audio device. The `apple_music`, `ui`, and
 /// `audio` suites all need one, so the fake lives here once.
@@ -500,6 +509,12 @@ impl AudioOutput for RecordingAudio {
             channels: 2,
             bitrate_kbps: Some(256),
         })
+    }
+
+    /// Reports a fixed stub spectrum, so the LCD visualizer has known bands
+    /// and a test can pin what the backend's loaded preview reports.
+    fn spectrum(&self) -> Option<Spectrum> {
+        Some(recording_spectrum())
     }
 
     /// Reports a fixed stub preview length, so the seek bar has a scale and a

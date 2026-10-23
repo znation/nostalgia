@@ -8,11 +8,13 @@ use std::time::Duration;
 
 use iced::{
     Element, Length,
+    alignment::Vertical,
     mouse::Interaction,
-    widget::{Column, MouseArea, Row, Space, Text},
+    widget::{Column, Container, MouseArea, Row, Space, Text, container},
 };
 
-use crate::audio::PlaybackFormat;
+use crate::audio::{PlaybackFormat, Spectrum};
+use crate::equalizer::BAND_COUNT;
 use crate::library::display_title_for;
 use crate::ui::{Message, bevel, theme};
 
@@ -38,6 +40,18 @@ const LCD_STATUS_HEIGHT: f32 = 16.0;
 /// The status text's size in pixels: small enough to sit quietly beneath the
 /// title line.
 const LCD_STATUS_SIZE: f32 = 12.0;
+
+/// The fixed height of the LCD's visualizer row, in pixels, and the maximum
+/// height of one bar. The row keeps this height whether or not a preview
+/// reports a spectrum, so loading one does not move the title or status text.
+const LCD_VISUALIZER_HEIGHT: f32 = 24.0;
+
+/// The fixed width of one visualizer bar, in pixels, so the ten bars keep
+/// their places as their heights change.
+const LCD_VISUALIZER_BAR_WIDTH: f32 = 8.0;
+
+/// The gap between adjacent visualizer bars, in pixels.
+const LCD_VISUALIZER_BAR_GAP: f32 = 3.0;
 
 /// The classic indicator letters down the LCD's left edge, in the mockup's
 /// order. [`lcd_indicator_strip`] draws them; the strip is decorative and
@@ -346,6 +360,7 @@ pub fn view_now_playing<'a>(
     time: Cow<'a, str>,
     marquee_offset: usize,
     format: Option<PlaybackFormat>,
+    spectrum: Option<Spectrum>,
 ) -> Element<'a, Message> {
     bevel::lcd_well(now_playing_content(
         elapsed,
@@ -354,6 +369,7 @@ pub fn view_now_playing<'a>(
         time,
         marquee_offset,
         format,
+        spectrum,
     ))
 }
 
@@ -369,10 +385,13 @@ pub(super) fn now_playing_content<'a, Theme, Renderer>(
     time: Cow<'a, str>,
     marquee_offset: usize,
     format: Option<PlaybackFormat>,
+    spectrum: Option<Spectrum>,
 ) -> Row<'a, Message, Theme, Renderer>
 where
-    Theme: iced::widget::text::Catalog + 'a,
-    Theme::Class<'a>: From<iced::widget::text::StyleFn<'a, Theme>>,
+    Theme: iced::widget::text::Catalog + iced::widget::container::Catalog + 'a,
+    <Theme as iced::widget::text::Catalog>::Class<'a>: From<iced::widget::text::StyleFn<'a, Theme>>,
+    <Theme as iced::widget::container::Catalog>::Class<'a>:
+        From<iced::widget::container::StyleFn<'a, Theme>>,
     Renderer: iced::advanced::text::Renderer + 'a,
 {
     Row::new().push(lcd_indicator_strip()).push(
@@ -385,6 +404,7 @@ where
                 time,
                 marquee_offset,
             ))
+            .push(now_playing_visualizer_row(spectrum))
             .push(now_playing_status_row(format)),
     )
 }
@@ -438,6 +458,62 @@ where
     Renderer: iced::advanced::text::Renderer,
 {
     Text::new(fragment).size(20).color(theme::LCD_GREEN)
+}
+
+/// Resolves the visualizer's bar heights from the loaded preview's spectrum.
+/// A missing spectrum yields all-zero bars, and each reported band is clamped
+/// to `0.0..=1.0` before it scales the fixed row height, so the bars stay
+/// inside their strip. Pure so the scaling is testable without a renderer.
+pub fn visualizer_bar_heights(spectrum: Option<Spectrum>) -> [f32; BAND_COUNT] {
+    let bands = spectrum.map_or([0.0; BAND_COUNT], |spectrum| spectrum.bands);
+    bands.map(|band| band.clamp(0.0, 1.0) * LCD_VISUALIZER_HEIGHT)
+}
+
+/// Builds the LCD's visualizer row: exactly [`BAND_COUNT`] bottom-aligned green
+/// bars, left to right in band order, inside a row of fixed
+/// [`LCD_VISUALIZER_HEIGHT`]. Every band keeps a fixed-width slot even when its
+/// height is zero, so a real spectrum with silent bands still draws all ten
+/// bars. A missing spectrum draws the same row with zero-height bars, so the
+/// title and status text keep their places in every playback state. Generic
+/// over the theme and renderer so the tests can lay it out with iced's null
+/// renderer.
+pub(super) fn now_playing_visualizer_row<'a, Theme, Renderer>(
+    spectrum: Option<Spectrum>,
+) -> Row<'a, Message, Theme, Renderer>
+where
+    Theme: iced::widget::text::Catalog + iced::widget::container::Catalog + 'a,
+    <Theme as iced::widget::text::Catalog>::Class<'a>: From<iced::widget::text::StyleFn<'a, Theme>>,
+    <Theme as iced::widget::container::Catalog>::Class<'a>:
+        From<iced::widget::container::StyleFn<'a, Theme>>,
+    Renderer: iced::advanced::text::Renderer + 'a,
+{
+    visualizer_bar_heights(spectrum).into_iter().fold(
+        Row::new()
+            .height(Length::Fixed(LCD_VISUALIZER_HEIGHT))
+            .spacing(LCD_VISUALIZER_BAR_GAP)
+            .align_y(Vertical::Bottom),
+        |row, height| {
+            // A zero band uses `Length::Shrink` rather than `Fixed(0.0)`:
+            // iced's `Row::push` drops a child whose size hint is void (either
+            // dimension `Fixed(0.0)`), which would silently remove silent
+            // bands and leave fewer than `BAND_COUNT` bars. `Shrink` still
+            // lays the bar out at zero height while keeping it in the row.
+            let bar_height = if height > 0.0 {
+                Length::Fixed(height)
+            } else {
+                Length::Shrink
+            };
+            row.push(
+                Container::new(Space::new())
+                    .width(Length::Fixed(LCD_VISUALIZER_BAR_WIDTH))
+                    .height(bar_height)
+                    .style(|_theme| container::Style {
+                        background: Some(theme::LCD_GREEN.into()),
+                        ..container::Style::default()
+                    }),
+            )
+        },
+    )
 }
 
 /// Builds the LCD's status row: the loaded preview's bitrate, sample rate, and

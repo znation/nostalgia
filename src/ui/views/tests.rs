@@ -8,7 +8,8 @@ use super::now_playing::{
     KnownTrack, MARQUEE_WIDTH, TimeDisplay, display_len, format_lcd_elapsed, format_lcd_remaining,
     format_playback_status, format_track_time, lcd_indicator_strip, marquee_text, needs_marquee,
     now_playing_artist, now_playing_content, now_playing_elapsed, now_playing_label,
-    now_playing_row, now_playing_status_row, now_playing_time,
+    now_playing_row, now_playing_status_row, now_playing_time, now_playing_visualizer_row,
+    visualizer_bar_heights,
 };
 use super::transport::{play_pause_label, repeat_label, shuffle_label, transport_buttons};
 use super::{
@@ -19,7 +20,7 @@ use super::{
     view_playlists_button, view_retry_button, view_search_box, view_seek_bar, view_songs,
     view_transport_controls,
 };
-use crate::audio::PlaybackFormat;
+use crate::audio::{PlaybackFormat, Spectrum};
 use crate::equalizer::{
     BAND_COUNT, BAND_FREQUENCIES, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, clamp_gain,
 };
@@ -514,6 +515,22 @@ impl Operation for CapturedText {
     }
 }
 
+/// The bounds of every container a built widget draws, collected through a
+/// widget operation. The visualizer's bars are borderless containers with no
+/// text, so counting their containers is how a test pins the bar count.
+#[derive(Default)]
+struct CapturedContainers(Vec<Rectangle>);
+
+impl Operation for CapturedContainers {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+        operate(self);
+    }
+
+    fn container(&mut self, _id: Option<&Id>, bounds: Rectangle) {
+        self.0.push(bounds);
+    }
+}
+
 /// Lays out the Now Playing row for `elapsed`, `label`, and `artist` at
 /// `marquee_offset` and returns the text fragments it would draw.
 ///
@@ -591,6 +608,7 @@ fn now_playing_content_draws_the_indicator_strip_beside_the_title() {
         Cow::Borrowed("Band"),
         Cow::Borrowed("3:30"),
         0,
+        None,
         None,
     )
     .into();
@@ -778,6 +796,193 @@ fn now_playing_status_row_draws_the_format_or_nothing() {
         "the status row must keep its height whether or not a format is reported"
     );
     assert_eq!(height, 16.0, "the status row's fixed height");
+}
+
+/// The visualizer's bar heights come straight from the reported bands: a
+/// missing spectrum is all zero, each band scales the row height, and values
+/// outside `0.0..=1.0` clamp to the strip's bounds.
+#[test]
+fn visualizer_bar_heights_scale_and_clamp_the_reported_bands() {
+    let mut bands = [0.0; BAND_COUNT];
+    bands[0] = 0.0;
+    bands[1] = 0.5;
+    bands[2] = 1.0;
+    bands[3] = 2.0;
+    let heights = visualizer_bar_heights(Some(Spectrum { bands }));
+
+    assert_eq!(heights.len(), BAND_COUNT);
+    assert_eq!(heights[0], 0.0);
+    assert_eq!(heights[1], 12.0);
+    assert_eq!(heights[2], 24.0);
+    assert_eq!(heights[3], 24.0);
+    assert_eq!(&heights[4..], &[0.0; BAND_COUNT - 4]);
+    assert_eq!(visualizer_bar_heights(None), [0.0; BAND_COUNT]);
+}
+
+/// Lays out the LCD content for `spectrum` and returns the text fragments it
+/// would draw, each fragment's bounds, the height the content occupies, and
+/// the bounds of every container it draws.
+fn captured_content_with_spectrum(
+    spectrum: Option<Spectrum>,
+) -> (Vec<String>, Vec<Rectangle>, f32, Vec<Rectangle>) {
+    let mut element: iced::Element<'_, Message, iced::Theme, ()> = now_playing_content(
+        Cow::Borrowed("00:53"),
+        Cow::Borrowed("Opening"),
+        Cow::Borrowed("Band"),
+        Cow::Borrowed("3:30"),
+        0,
+        Some(PlaybackFormat {
+            sample_rate_hz: 44_100,
+            channels: 2,
+            bitrate_kbps: Some(256),
+        }),
+        spectrum,
+    )
+    .into();
+    let mut tree = Tree::new(element.as_widget());
+    let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
+    let node = element.as_widget_mut().layout(&mut tree, &(), &limits);
+    let height = node.bounds().height;
+    let mut captured = CapturedText::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &(), &mut captured);
+    let mut containers = CapturedContainers::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &(), &mut containers);
+    (captured.0, captured.1, height, containers.0)
+}
+
+// The visualizer row keeps its fixed height whether a preview reports a
+// spectrum or not, so loading one leaves the title and status text in place.
+// The status text sits at least one visualizer-row height below the title, so
+// the row is really wired between them rather than merely adding height.
+#[test]
+fn now_playing_content_keeps_the_visualizer_height_with_and_without_a_spectrum() {
+    let mut bands = [0.0; BAND_COUNT];
+    bands[0] = 1.0;
+    let (reporting, reporting_bounds, reporting_height, reporting_containers) =
+        captured_content_with_spectrum(Some(Spectrum { bands }));
+    let (blank, _blank_bounds, blank_height, _blank_containers) =
+        captured_content_with_spectrum(None);
+
+    assert!(
+        reporting.iter().any(|text| text == "Opening"),
+        "the title must still draw: {reporting:?}"
+    );
+    assert!(
+        reporting
+            .iter()
+            .any(|text| text == "256 KBPS  44 KHZ  STEREO"),
+        "the status row must still draw: {reporting:?}"
+    );
+    assert!(
+        blank.iter().any(|text| text == "Opening"),
+        "the title must draw without a spectrum: {blank:?}"
+    );
+
+    let fragment_y = |text: &str| -> f32 {
+        reporting
+            .iter()
+            .position(|drawn| drawn == text)
+            .map(|index| reporting_bounds[index].y)
+            .unwrap_or_else(|| panic!("missing {text}: {reporting:?}"))
+    };
+    let title_y = fragment_y("Opening");
+    let status_y = fragment_y("256 KBPS  44 KHZ  STEREO");
+    assert!(
+        status_y - title_y >= 24.0,
+        "the 24px visualizer row must sit between the title and status rows: \
+         title y {title_y}, status y {status_y}"
+    );
+
+    // The bars themselves, not just the extra height, must sit between the
+    // title and status text. Moving the visualizer row above the title or
+    // below the status row leaves the spacing above intact, so check the bar
+    // containers' own bounds as well.
+    let bars: Vec<Rectangle> = reporting_containers
+        .iter()
+        .copied()
+        .filter(|bounds| bounds.width == 8.0)
+        .collect();
+    assert_eq!(
+        bars.len(),
+        BAND_COUNT,
+        "the visualizer row must draw one bar per band: {bars:?}"
+    );
+    assert!(
+        bars.iter().all(|bar| bar.y >= title_y),
+        "the visualizer bars must sit below the title: title y {title_y}, bars {bars:?}"
+    );
+    assert!(
+        bars.iter().all(|bar| bar.y + bar.height <= status_y),
+        "the visualizer bars must sit above the status row: status y {status_y}, bars {bars:?}"
+    );
+    assert_eq!(
+        reporting_height, blank_height,
+        "the visualizer row must keep its height whether or not a spectrum is reported"
+    );
+}
+
+// The visualizer row keeps the fixed height even when every bar is empty; the
+// silent bands still occupy a zero-height fixed-width slot inside the row.
+#[test]
+fn now_playing_visualizer_row_keeps_its_height_without_a_spectrum() {
+    for spectrum in [
+        None,
+        Some(Spectrum {
+            bands: [0.0; BAND_COUNT],
+        }),
+    ] {
+        let mut element: iced::Element<'_, Message, iced::Theme, ()> =
+            now_playing_visualizer_row(spectrum).into();
+        let mut tree = Tree::new(element.as_widget());
+        let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
+        let node = element.as_widget_mut().layout(&mut tree, &(), &limits);
+        assert_eq!(node.bounds().height, 24.0);
+    }
+}
+
+// The row draws exactly one fixed-width bar per band, scaled by the band
+// level, so a refactor cannot collapse the visualizer to a single bar while
+// the pure height helper stays tested. The bands include zeros because a real
+// spectrum does: iced's `Row` drops a `Fixed(0.0)`-height child, so this is
+// the state that would silently lose the silent bars.
+#[test]
+fn now_playing_visualizer_row_draws_one_fixed_width_bar_per_band() {
+    let mut bands = [0.0; BAND_COUNT];
+    for (index, band) in bands.iter_mut().enumerate() {
+        *band = (index % 3) as f32 * 0.25;
+    }
+    let mut element: iced::Element<'_, Message, iced::Theme, ()> =
+        now_playing_visualizer_row(Some(Spectrum { bands })).into();
+    let mut tree = Tree::new(element.as_widget());
+    let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
+    let node = element.as_widget_mut().layout(&mut tree, &(), &limits);
+
+    let mut captured = CapturedContainers::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &(), &mut captured);
+    let bars: Vec<_> = captured
+        .0
+        .iter()
+        .filter(|bounds| bounds.width == 8.0)
+        .collect();
+    assert_eq!(
+        bars.len(),
+        BAND_COUNT,
+        "the row must draw one bar per band, including silent bands"
+    );
+    for (bar, band) in bars.iter().zip(bands) {
+        assert_eq!(bar.width, 8.0, "each bar keeps its fixed width: {bar:?}");
+        assert_eq!(
+            bar.height,
+            band * 24.0,
+            "a {band} band draws a proportionally tall bar: {bar:?}"
+        );
+    }
 }
 
 // The seek bar's thumb never exceeds the preview's own length, and a missing
@@ -1186,6 +1391,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         "3:30".into(),
         0,
         None,
+        None,
     );
     let _bar = view_now_playing(
         "00:53".into(),
@@ -1198,6 +1404,9 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
             channels: 2,
             bitrate_kbps: Some(256),
         }),
+        Some(Spectrum {
+            bands: [0.5; BAND_COUNT],
+        }),
     );
     let _overlong = view_now_playing(
         "03:12".into(),
@@ -1205,6 +1414,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         "The Sample Band".into(),
         "3:30".into(),
         7,
+        None,
         None,
     );
     let _back = view_back_button();

@@ -346,6 +346,41 @@ pub(in crate::ui) fn playback_duration(
     Task::none()
 }
 
+/// The spectrum poll's tick: schedule a query of the loaded preview's live
+/// ten-band spectrum. The query runs in a task, so the UI thread never blocks
+/// on the audio backend, and the reply carries the epoch the query was issued
+/// under, so a transition that lands first invalidates it. While a transport
+/// transition is still reaching the backend, none is issued: the backend would
+/// still report the previous preview.
+pub(in crate::ui) fn spectrum_tick(player: &mut WinampPlayer) -> Task<Message> {
+    if player.pending_position_transitions > 0 {
+        return Task::none();
+    }
+    let epoch = player.position_epoch;
+    let service = player.apple_music_service.clone();
+    Task::perform(
+        async move { service.playback_spectrum() },
+        move |spectrum| Message::Spectrum { epoch, spectrum },
+    )
+}
+
+/// The spectrum query's reply: store the reported bars, or clear the
+/// visualizer when the backend reports no spectrum. A reply stamped with an
+/// older epoch is dropped, so a poll in flight across a Stop or a new
+/// selection cannot restore the previous preview's bars. A reply that lands
+/// while a transport transition is still in flight is dropped too: the backend
+/// may still be holding the previous player.
+pub(in crate::ui) fn spectrum(
+    player: &mut WinampPlayer,
+    epoch: u64,
+    spectrum: Option<crate::audio::Spectrum>,
+) -> Task<Message> {
+    if player.pending_position_transitions == 0 && epoch == player.position_epoch {
+        player.spectrum = spectrum;
+    }
+    Task::none()
+}
+
 /// The seek bar's drag: store the slider value as the in-progress thumb
 /// position without touching the backend. Dragging must not seek on every
 /// step, so only [`seek_preview_released`] reaches the audio seam.
@@ -373,19 +408,20 @@ pub(in crate::ui) fn seek_preview_released(player: &mut WinampPlayer) -> Task<Me
     Task::none()
 }
 
-/// Clears the Now Playing elapsed readout, the LCD's status row, and the seek
-/// bar's scale and drag, and invalidates any position, format, or duration
-/// query already in flight, so a reply issued before the track changed cannot
-/// restore the previous values. Stop and a new selection call this; a Pause
-/// deliberately does not, so the paused player's frozen position, format, and
-/// seek bar stay on screen. The caller pairs it with
-/// [`begin_position_transition`], so the poll also waits until the backend has
-/// stopped or replaced the player.
+/// Clears the Now Playing elapsed readout, the LCD's status row, the
+/// visualizer's bars, and the seek bar's scale and drag, and invalidates any
+/// position, format, duration, or spectrum query already in flight, so a reply
+/// issued before the track changed cannot restore the previous values. Stop and
+/// a new selection call this; a Pause deliberately does not, so the paused
+/// player's frozen position, format, bars, and seek bar stay on screen. The
+/// caller pairs it with [`begin_position_transition`], so the polls also wait
+/// until the backend has stopped or replaced the player.
 fn reset_position_readout(player: &mut WinampPlayer) {
     player.position_epoch = player.position_epoch.wrapping_add(1);
     player.playback_position = None;
     player.playback_format = None;
     player.playback_duration = None;
+    player.spectrum = None;
     player.seek_preview = None;
 }
 

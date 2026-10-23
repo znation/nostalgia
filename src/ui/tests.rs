@@ -2,13 +2,13 @@ use super::loading::{RequestGeneration, fetch_into, play_into};
 use super::timers::*;
 use super::views::{BROWSE_LIST_ID, BROWSE_VIEWS};
 use super::*;
-use crate::audio::PlaybackFormat;
-use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB};
+use crate::audio::{PlaybackFormat, Spectrum};
+use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB};
 use crate::sample_library::sample_library;
 use crate::test_support::{
     AudioCall, FailingAudio, FailingCommand, PREVIEW_URL, RecordingAudio, StubTransport,
-    assert_ids, assert_preview_calls, rock_preset, sample_album, sample_artist, sample_playlist,
-    sample_song, second_album_songs, sign_in_session, stepping_songs,
+    assert_ids, assert_preview_calls, recording_spectrum, rock_preset, sample_album, sample_artist,
+    sample_playlist, sample_song, second_album_songs, sign_in_session, stepping_songs,
 };
 
 /// A fresh player over its own shared state, so a test can inspect the
@@ -3691,8 +3691,8 @@ fn marquee_tick_advances_the_offset() {
 // until the line needs to scroll.
 #[test]
 fn the_marquee_timer_runs_only_while_the_line_needs_to_scroll() {
-    assert_eq!(subscriptions(false, false).len(), 1);
-    assert_eq!(subscriptions(true, false).len(), 2);
+    assert_eq!(subscriptions(false, false, false).len(), 1);
+    assert_eq!(subscriptions(true, false, false).len(), 2);
 }
 
 // The position poll has the same cost as the marquee: every tick and reply
@@ -3702,8 +3702,8 @@ fn the_marquee_timer_runs_only_while_the_line_needs_to_scroll() {
 // the backend still holds a preview whose position a seek can move.
 #[test]
 fn the_position_timer_runs_only_while_there_is_a_position_to_refresh() {
-    assert_eq!(subscriptions(false, true).len(), 2);
-    assert_eq!(subscriptions(true, true).len(), 3);
+    assert_eq!(subscriptions(false, true, false).len(), 2);
+    assert_eq!(subscriptions(true, true, false).len(), 3);
 
     let (mut player, state) = test_player();
     assert!(!player.needs_position_poll());
@@ -3718,6 +3718,31 @@ fn the_position_timer_runs_only_while_there_is_a_position_to_refresh() {
     player.playback_position = None;
     state.blocking_lock().stop();
     assert!(!player.needs_position_poll());
+}
+
+// The spectrum poll costs the same as the others: it is subscribed only while
+// playback runs, since a paused or stopped player keeps the last bars the view
+// already stored.
+#[test]
+fn the_spectrum_timer_runs_only_while_playback_runs() {
+    assert_eq!(subscriptions(false, false, false).len(), 1);
+    assert_eq!(subscriptions(false, false, true).len(), 2);
+    assert_eq!(subscriptions(true, true, true).len(), 4);
+
+    let (player, state) = test_player();
+    assert!(!player.needs_spectrum_poll());
+
+    state.blocking_lock().play();
+    assert!(player.needs_spectrum_poll());
+
+    state.blocking_lock().pause();
+    assert!(!player.needs_spectrum_poll());
+
+    state.blocking_lock().play();
+    assert!(player.needs_spectrum_poll());
+
+    state.blocking_lock().stop();
+    assert!(!player.needs_spectrum_poll());
 }
 
 // A preview can be paused before its first position reply lands: the backend
@@ -4491,6 +4516,98 @@ fn stop_clears_the_playback_format_while_pause_keeps_it() {
     assert_eq!(player.playback_format, None);
 }
 
+// A spectrum reply stores exactly what the backend reported, and a later
+// `None` reply clears the visualizer instead of keeping the old bars.
+#[test]
+fn spectrum_reply_stores_the_loaded_previews_spectrum() {
+    let (mut player, _state) = test_player();
+    let epoch = player.position_epoch;
+    let spectrum = recording_spectrum();
+
+    let _ = update(
+        &mut player,
+        Message::Spectrum {
+            epoch,
+            spectrum: Some(spectrum),
+        },
+    );
+    assert_eq!(player.spectrum, Some(spectrum));
+
+    let _ = update(
+        &mut player,
+        Message::Spectrum {
+            epoch,
+            spectrum: None,
+        },
+    );
+    assert_eq!(player.spectrum, None);
+}
+
+// A spectrum reply is dropped when it was issued before a Stop, or when it
+// lands while a transport transition is still reaching the backend: either
+// way it could describe the previous player. A reply at the current epoch
+// with no transition pending is stored, so the drops above come from the
+// guards and not from the message being ignored entirely.
+#[test]
+fn spectrum_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped() {
+    let (mut player, _current_track) = play_song_1_then_browse_to_album_2();
+    let old_epoch = player.position_epoch;
+
+    let _ = update(&mut player, Message::Stop);
+    let _ = update(&mut player, Message::TransportSettled);
+    let stale = Spectrum {
+        bands: [0.25; BAND_COUNT],
+    };
+    let _ = update(
+        &mut player,
+        Message::Spectrum {
+            epoch: old_epoch,
+            spectrum: Some(stale),
+        },
+    );
+    assert_eq!(player.spectrum, None);
+
+    // A pending transition drops even a reply at the current epoch.
+    let current_epoch = player.position_epoch;
+    let kept = recording_spectrum();
+    player.spectrum = Some(kept);
+    let _ = update(&mut player, Message::Pause);
+    let _ = update(
+        &mut player,
+        Message::Spectrum {
+            epoch: current_epoch,
+            spectrum: Some(stale),
+        },
+    );
+    assert_eq!(player.spectrum, Some(kept));
+
+    // Once the transition settles, the same reply is stored.
+    let _ = update(&mut player, Message::TransportSettled);
+    let _ = update(
+        &mut player,
+        Message::Spectrum {
+            epoch: current_epoch,
+            spectrum: Some(stale),
+        },
+    );
+    assert_eq!(player.spectrum, Some(stale));
+}
+
+// Pause keeps the loaded preview's bars frozen, while Stop clears them
+// immediately, like the elapsed readout and the status row.
+#[test]
+fn stop_clears_the_spectrum_while_pause_keeps_it() {
+    let (mut player, _current_track) = play_song_1_then_browse_to_album_2();
+    let spectrum = recording_spectrum();
+    player.spectrum = Some(spectrum);
+
+    let _ = update(&mut player, Message::Pause);
+    assert_eq!(player.spectrum, Some(spectrum));
+
+    let _ = update(&mut player, Message::Stop);
+    assert_eq!(player.spectrum, None);
+}
+
 // A duration reply stores exactly what the backend reported, and a later
 // `None` reply clears the seek bar's scale instead of keeping the old length.
 #[test]
@@ -4783,6 +4900,37 @@ fn position_tick_queries_position_and_duration() {
 }
 
 #[test]
+fn spectrum_tick_queries_spectrum_and_carries_the_epoch() {
+    use futures::StreamExt;
+
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, _state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    let epoch = player.position_epoch;
+    let mut stream = iced_runtime::task::into_stream(update(&mut player, Message::SpectrumTick))
+        .expect("the spectrum tick must schedule a task");
+    let mut replies = Vec::new();
+    while let Some(action) = futures::executor::block_on(await_or_timeout(
+        "spectrum tick",
+        TASK_TIMEOUT,
+        stream.next(),
+    )) {
+        if let iced_runtime::Action::Output(message) = action {
+            replies.push(message);
+        }
+    }
+
+    assert!(
+        replies.iter().any(|message| matches!(
+            message,
+            Message::Spectrum { epoch: reply_epoch, spectrum: Some(spectrum) }
+                if *reply_epoch == epoch && *spectrum == recording_spectrum()
+        )),
+        "the tick must query the spectrum at its epoch: {replies:?}"
+    );
+}
+
+#[test]
 fn position_tick_stream_emits_position_ticks() {
     use futures::StreamExt;
 
@@ -4854,6 +5002,82 @@ fn the_position_thread_is_named_nostalgia_position_poll() {
         .recv_timeout(TASK_TIMEOUT)
         .expect("the position thread reports its name");
     assert_eq!(name.as_deref(), Some("nostalgia-position-poll"));
+}
+
+// The spectrum poll's stream emits the tick its `update` arm turns into a
+// backend query, just as the position stream does: without this, the
+// visualizer would never refresh even though the subscription is wired.
+#[test]
+fn spectrum_tick_stream_emits_spectrum_ticks() {
+    use futures::StreamExt;
+
+    let mut ticks = spectrum_tick_stream();
+    for what in ["first spectrum tick", "second spectrum tick"] {
+        let tick = futures::executor::block_on(await_or_timeout(what, TASK_TIMEOUT, ticks.next()));
+        assert!(
+            matches!(tick, Some(Message::SpectrumTick)),
+            "{what} did not yield SpectrumTick: {tick:?}"
+        );
+    }
+}
+
+// A refused spectrum poll thread must not take the player down, for the same
+// reason as the other timers: `std::thread::spawn` panics when the OS refuses
+// a thread, and iced builds the stream on its main thread. The fallible spawn
+// reports the refusal and ends the tick stream, so the app keeps running with
+// a visualizer that stops updating.
+#[test]
+fn a_refused_spectrum_thread_ends_the_tick_stream_instead_of_panicking() {
+    use futures::StreamExt;
+
+    let mut ticks = spectrum_tick_stream_with(|_work| {
+        Err(std::io::Error::other("the OS refused another thread"))
+    });
+
+    let next = futures::executor::block_on(await_or_timeout(
+        "the spectrum stream after a refused thread",
+        TASK_TIMEOUT,
+        ticks.next(),
+    ));
+    assert!(
+        next.is_none(),
+        "a refused spectrum thread must end the tick stream, not tick or panic"
+    );
+}
+
+// The spectrum refusal is reported, not swallowed: the report names the cause
+// and says what the user loses, so a visualizer that never moves is
+// diagnosable instead of mysterious.
+#[test]
+fn a_refused_spectrum_thread_reports_the_cause_and_the_loss() {
+    let report = spectrum_thread_failure_report(&std::io::Error::other("no threads left"));
+
+    assert!(
+        report.contains("no threads left"),
+        "the report must name the cause, got: {report}"
+    );
+    assert!(
+        report.contains("will not update"),
+        "the report must say what the user loses, got: {report}"
+    );
+}
+
+// The spectrum poll thread carries a name, like the audio, REST, and other
+// timer workers, so a panic in it is attributable. The name is spelled out
+// here rather than read from the production constant, so renaming it fails.
+#[test]
+fn the_spectrum_thread_is_named_nostalgia_spectrum_poll() {
+    let (sender, receiver) = std::sync::mpsc::channel();
+
+    spawn_spectrum_thread(Box::new(move || {
+        let _ = sender.send(std::thread::current().name().map(str::to_string));
+    }))
+    .expect("the spectrum thread starts");
+
+    let name = receiver
+        .recv_timeout(TASK_TIMEOUT)
+        .expect("the spectrum thread reports its name");
+    assert_eq!(name.as_deref(), Some("nostalgia-spectrum-poll"));
 }
 
 // The Now Playing bar renders the played track's artist before its title

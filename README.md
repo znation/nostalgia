@@ -51,7 +51,10 @@ the line is longer than it, and the track's plain length at the right). A loaded
 bitrate, sample rate, and mono/stereo mode appear in a small status row beneath the title
 (`256 KBPS  44 KHZ  STEREO`) when the backend reports them, falling back to the sample rate and
 mode alone (`44 KHZ  STEREO`) when it cannot compute the bitrate, and the row stays blank
-otherwise. Beneath the LCD, a chrome slider spans the loaded preview's own length and tracks its
+otherwise. A loaded preview also drives a small green ten-bar spectrum visualizer beneath the
+title, updating about four times a second while playback runs; Pause freezes the bars at their
+last levels, Stop and a new selection clear them, and the strip stays blank (with its height)
+when no preview reports a spectrum. Beneath the LCD, a chrome slider spans the loaded preview's own length and tracks its
 playback position; dragging moves only the thumb, and releasing seeks to that position. The seek
 slider is blank (but keeps its height) until the backend reports both a playback position and a
 preview length, such as on the silent fallback; its scale is the preview's length, not the catalog

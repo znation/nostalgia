@@ -4,11 +4,11 @@
 //! transport controls, equalizer panel), the Previous/Next stepping arithmetic
 //! in `transport`, the library-fetch/error-reporting adapter in `loading`, the
 //! per-level browse state machine in `browse`, the classic key bindings in
-//! `shortcuts`, and the marquee and position-poll timer subscriptions in
-//! `timers`; `update` is a dispatch table over the per-concern message
-//! handlers in `handlers`, and this module wires those to the shared
-//! `AppState` and the `AppleMusicService` seam. Its unit tests live in the
-//! `tests` submodule.
+//! `shortcuts`, and the marquee, position-poll and spectrum-poll timer
+//! subscriptions in `timers`; `update` is a dispatch table over the
+//! per-concern message handlers in `handlers`, and this module wires those
+//! to the shared `AppState` and the `AppleMusicService` seam. Its unit tests
+//! live in the `tests` submodule.
 
 use iced::{Element, Task, widget::Column};
 use std::{
@@ -36,7 +36,7 @@ use timers::subscriptions;
 
 use crate::{
     apple_music::AppleMusicService,
-    audio::PlaybackFormat,
+    audio::{PlaybackFormat, Spectrum},
     equalizer::Preset,
     library::{Album, Artist, Playlist, Song},
     state::AppState,
@@ -65,6 +65,7 @@ pub fn init_ui(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> iced:
             iced::Subscription::batch(subscriptions(
                 player.needs_marquee(),
                 player.needs_position_poll(),
+                player.needs_spectrum_poll(),
             ))
         })
         .run()
@@ -114,6 +115,17 @@ enum Message {
     PlaybackFormat {
         epoch: u64,
         format: Option<PlaybackFormat>,
+    },
+    // The spectrum poll's tick: schedule a query of the loaded preview's live
+    // ten-band spectrum. It runs only while playback is running (see
+    // [`subscriptions`]), so a paused or stopped player keeps its last bars.
+    SpectrumTick,
+    // The spectrum query's reply, stamped with the `position_epoch` that
+    // issued it. A reply from before a Stop or a new selection is dropped so
+    // it cannot restore the previous track's bars.
+    Spectrum {
+        epoch: u64,
+        spectrum: Option<Spectrum>,
     },
     // The duration query's reply, also stamped with the `position_epoch` that
     // issued it. It carries the loaded preview's own length, which the seek
@@ -352,6 +364,13 @@ struct WinampPlayer {
     /// keeps the catalog track's total. Stop and a new selection clear it
     /// through `reset_position_readout`.
     playback_duration: Option<Duration>,
+    /// The loaded preview's last reported live spectrum, or `None` when no
+    /// preview is loaded or the backend cannot answer. `Message::Spectrum`
+    /// stores it; the LCD's visualizer row reads it, and a missing value draws
+    /// zero-height bars without changing the row's height. Pause keeps it, so
+    /// the bars freeze at their last levels, while Stop and a new selection
+    /// clear it through `reset_position_readout`.
+    spectrum: Option<Spectrum>,
     /// The seek bar's in-progress drag, or `None` while the thumb follows the
     /// reported position. `Message::SeekPreviewChanged` stores the drag and
     /// `Message::SeekPreviewReleased` seeks to and clears it, so only a release
@@ -443,6 +462,7 @@ impl WinampPlayer {
             playback_position: None,
             playback_format: None,
             playback_duration: None,
+            spectrum: None,
             seek_preview: None,
             time_display: views::TimeDisplay::Elapsed,
             position_epoch: 0,
@@ -524,6 +544,14 @@ impl WinampPlayer {
         }
         self.state.blocking_lock().is_playing
     }
+
+    /// Whether the spectrum poll is needed: only while playback is running.
+    /// Pause and Stop drop the timer, so the bars freeze at their last levels
+    /// instead of repainting the whole screen four times a second for an
+    /// unchanged strip (see [`subscriptions`]).
+    fn needs_spectrum_poll(&self) -> bool {
+        self.state.blocking_lock().is_playing
+    }
 }
 
 fn boot(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> (WinampPlayer, Task<Message>) {
@@ -592,6 +620,10 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         }
         Message::PlaybackDuration { epoch, duration } => {
             handlers::playback::playback_duration(player, epoch, duration)
+        }
+        Message::SpectrumTick => handlers::playback::spectrum_tick(player),
+        Message::Spectrum { epoch, spectrum } => {
+            handlers::playback::spectrum(player, epoch, spectrum)
         }
         Message::SeekPreviewChanged(value) => {
             handlers::playback::seek_preview_changed(player, value)
@@ -683,6 +715,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
         now_playing_elapsed,
         now_playing_time,
         playback_format,
+        spectrum,
         is_playing,
         volume,
         balance,
@@ -700,6 +733,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
             player.now_playing_elapsed(state.current_track.as_deref()),
             player.now_playing_time(state.current_track.as_deref()),
             player.playback_format,
+            player.spectrum,
             state.is_playing,
             state.volume(),
             state.balance(),
@@ -782,6 +816,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
             now_playing_time,
             player.marquee_offset,
             playback_format,
+            spectrum,
         ))
         .push(views::view_seek_bar(
             player.seek_preview.or(player.playback_position),

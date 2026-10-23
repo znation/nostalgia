@@ -1,13 +1,14 @@
-//! Timer subscriptions for the iced UI: the Now Playing marquee and the
-//! playback-position poll.
+//! Timer subscriptions for the iced UI: the Now Playing marquee, the
+//! playback-position poll, and the spectrum poll.
 //!
 //! iced's timed subscription is gated behind backend features the app does not
 //! enable, so each timer is fed by a named std thread through the shared tick
 //! source in [`super::ticks`], which uses the futures channel iced re-exports.
 //! The marquee runs only while the title needs to
-//! scroll, and the position poll only while there is a position to refresh
-//! (see [`subscriptions`]); each only schedules the actual backend query from
-//! its `update` arm, so the UI thread never waits on the audio backend.
+//! scroll, the position poll only while there is a position to refresh, and
+//! the spectrum poll only while playback runs (see [`subscriptions`]); each
+//! only schedules the actual backend query from its `update` arm, so the UI
+//! thread never waits on the audio backend.
 
 use iced::keyboard;
 use std::{io, time::Duration};
@@ -25,6 +26,12 @@ pub(super) const MARQUEE_TICK: Duration = Duration::from_millis(250);
 /// playback, so this bounds only how often the UI asks; it does not affect the
 /// audio itself.
 pub(super) const POSITION_POLL_INTERVAL: Duration = Duration::from_secs(1);
+
+/// How often the Now Playing LCD polls the audio backend for the loaded
+/// preview's live spectrum, refreshing the visualizer's bars. The visualizer
+/// updates about four times a second while playback runs; the backend owns the
+/// signal, so this bounds only how often the UI asks.
+pub(super) const SPECTRUM_TICK: Duration = Duration::from_millis(250);
 
 /// A subscription that emits [`Message::MarqueeTick`] once per
 /// [`MARQUEE_TICK`]. iced's timed subscription is gated behind `smol`/`tokio`
@@ -89,7 +96,8 @@ pub(super) fn marquee_thread_failure_report(error: &io::Error) -> String {
 
 /// The subscriptions the UI runs: the keyboard listener, plus the marquee
 /// timer while the Now Playing line is too long to fit the LCD's character
-/// budget, plus the position poll while there is a position to refresh.
+/// budget, plus the position poll while there is a position to refresh, plus
+/// the spectrum poll while playback is running.
 ///
 /// The marquee timer exists to advance the Now Playing title window, and the
 /// view ignores that window while the line fits — so ticking for a fitting line
@@ -105,9 +113,14 @@ pub(super) fn marquee_thread_failure_report(error: &io::Error) -> String {
 /// playback is running or the backend still holds a preview (a paused player's
 /// position a seek can still move, even before the first position reply); a
 /// stopped player leaves it out.
+///
+/// The spectrum poll runs only while playback is running: a paused or stopped
+/// player keeps the last bars the view stored, so ticking would rebuild the
+/// whole screen for an unchanged strip.
 pub(super) fn subscriptions(
     marquee_needed: bool,
     position_needed: bool,
+    spectrum_needed: bool,
 ) -> Vec<iced::Subscription<Message>> {
     let mut subscriptions = vec![keyboard::listen().filter_map(message_for)];
     if marquee_needed {
@@ -115,6 +128,9 @@ pub(super) fn subscriptions(
     }
     if position_needed {
         subscriptions.push(position_ticks());
+    }
+    if spectrum_needed {
+        subscriptions.push(spectrum_ticks());
     }
     subscriptions
 }
@@ -165,7 +181,8 @@ pub(super) fn position_tick_stream_with(
 /// [`POSITION_THREAD_NAME`] thread, started through
 /// [`crate::threads::spawn_named`]. That shared spawner uses the fallible
 /// `std::thread::Builder::spawn` form, as do the audio worker, the REST
-/// worker, the sign-in thread, the timeout timer, and the marquee timer.
+/// worker, the sign-in thread, the timeout timer, the marquee timer, and the
+/// spectrum poll timer.
 pub(super) fn spawn_position_thread(work: Box<dyn FnOnce() + Send>) -> io::Result<()> {
     crate::threads::spawn_named(POSITION_THREAD_NAME, work)
 }
@@ -183,5 +200,58 @@ const POSITION_THREAD_NAME: &str = "nostalgia-position-poll";
 pub(super) fn position_thread_failure_report(error: &io::Error) -> String {
     format!(
         "the position poll thread could not start: {error}; the Now Playing elapsed time will not update"
+    )
+}
+
+/// A subscription that emits [`Message::SpectrumTick`] once per
+/// [`SPECTRUM_TICK`], using the same std-thread tick source as the other
+/// timers because iced's timed subscription is not enabled. Each tick's
+/// `update` arm schedules the actual backend query as a task, so the UI thread
+/// never blocks on the audio backend.
+pub(super) fn spectrum_ticks() -> iced::Subscription<Message> {
+    iced::Subscription::run(spectrum_tick_stream)
+}
+
+/// The tick stream behind [`spectrum_ticks`], split out so a test can poll it.
+/// Like the other tick streams, the one-slot channel drops a tick when the UI
+/// has not polled the previous one yet, and only a disconnected receiver ends
+/// the thread.
+pub(super) fn spectrum_tick_stream() -> impl iced::futures::Stream<Item = Message> {
+    spectrum_tick_stream_with(spawn_spectrum_thread)
+}
+
+/// [`spectrum_tick_stream`] with an injectable thread spawner, so a test can
+/// make the spawn fail and prove the stream reports it instead of panicking.
+/// A refused spawn ends the stream — the sender goes down with the thread that
+/// never started — so the visualizer simply stops updating and the app keeps
+/// running.
+pub(super) fn spectrum_tick_stream_with(
+    spawn: impl FnOnce(Box<dyn FnOnce() + Send>) -> io::Result<()>,
+) -> impl iced::futures::Stream<Item = Message> {
+    use iced::futures::StreamExt;
+
+    ticks::tick_stream(SPECTRUM_TICK, spawn, spectrum_thread_failure_report)
+        .map(|()| Message::SpectrumTick)
+}
+
+/// The production spawner for the spectrum poll thread: the named
+/// [`SPECTRUM_THREAD_NAME`] thread, started through
+/// [`crate::threads::spawn_named`].
+pub(super) fn spawn_spectrum_thread(work: Box<dyn FnOnce() + Send>) -> io::Result<()> {
+    crate::threads::spawn_named(SPECTRUM_THREAD_NAME, work)
+}
+
+/// The name [`spawn_spectrum_thread`] gives the spectrum poll thread, so a
+/// panic in it is attributed to `nostalgia-spectrum-poll` rather than
+/// `<unnamed>`.
+const SPECTRUM_THREAD_NAME: &str = "nostalgia-spectrum-poll";
+
+/// The report for a spectrum poll thread that could not start: it names the
+/// cause and what the user loses — the live spectrum — so a visualizer that
+/// never moves is diagnosable instead of mysterious. Pure, so the report
+/// contract is testable without capturing stderr.
+pub(super) fn spectrum_thread_failure_report(error: &io::Error) -> String {
+    format!(
+        "the spectrum timer thread could not start: {error}; the Now Playing visualizer will not update"
     )
 }

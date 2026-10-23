@@ -1,10 +1,10 @@
-//! The std-thread tick source shared by the UI's two timers.
+//! The std-thread tick source shared by the UI's timers.
 //!
 //! iced's timed subscription is gated behind backend features the app does not
 //! enable (its default thread-pool backend has no `time::every`), so the Now
-//! Playing marquee and the position poll each feed a one-slot futures channel
-//! from a sleeping std thread. The stream, its drop-when-full send, and the
-//! fallible-spawn reporting live here once.
+//! Playing marquee, the position poll, and the spectrum poll each feed a
+//! one-slot futures channel from a sleeping std thread. The stream, its
+//! drop-when-full send, and the fallible-spawn reporting live here once.
 
 use std::io;
 use std::time::Duration;

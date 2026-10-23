@@ -169,6 +169,14 @@ its internal id, whenever the id is in the known-track index:
   and keeps its fixed height when no preview is loaded or the backend cannot answer. Pause keeps
   the reported format; Stop and a new selection clear it. A format reply issued before a Stop or a
   new selection, or landing while a transport transition is in flight, is dropped.
+- The LCD's visualizer row draws exactly `BAND_COUNT` green bars, left to right in band order,
+  bottom-aligned inside a fixed-height strip between the title and the status row. The bar heights
+  come from the loaded preview's stored spectrum, each band clamped to `0.0..=1.0`; no reported
+  spectrum, including the silent fallback, draws zero-height bars while keeping the row's height,
+  so loading a preview does not move the title or status text. Pause keeps the last bars frozen,
+  while Stop and a new selection clear them. A spectrum reply issued before a Stop or a new
+  selection, or landing while a transport transition is in flight, is dropped. The spectrum poll
+  is subscribed only while playback is running.
 - The LCD's left edge always draws the five classic indicator letters `O`, `A`, `I`, `D`, `V`,
   in that order, at a fixed width, in every playback state including the empty `--:--` bar. The
   strip is decorative: it emits no message and changes nothing.
@@ -212,6 +220,14 @@ while the count is nonzero the `PositionTick` handler issues no query and the
 stops the backend's previous preview when a selection has no preview URL.
 `views::now_playing::lcd_indicator_strip` draws `views::now_playing::LCD_INDICATOR_LABELS` down
 the LCD's left edge in a fixed-width column, with no message and no handler.
+`views::now_playing::visualizer_bar_heights` scales and clamps the stored spectrum, and
+`views::now_playing::now_playing_visualizer_row` draws its `BAND_COUNT` bars at fixed width inside
+the row `views::view_now_playing` places between the title and status rows. The `Spectrum` handler
+in `src/ui/handlers/playback.rs` stores the reply under the same epoch and pending-transition
+guards as the position, format, and duration, `spectrum_tick` schedules the backend query, and
+`reset_position_readout` clears the bars on Stop and a new selection. `ui::timers::subscriptions`
+subscribes `spectrum_ticks` only while `WinampPlayer::needs_spectrum_poll` reports that playback is
+running.
 `views::now_playing::marquee_text`
 windows an overlong line, and `WinampPlayer::marquee_offset` carries the advance through
 `Message::MarqueeTick`. The `WinampPlayer::time_display` field holds the readout's mode, and
@@ -340,6 +356,18 @@ rather than the panic unwinding the event loop.
 - `position_tick_queries_position_and_format` (`src/ui/tests.rs`)
 - `marquee_tick_advances_the_offset`
 - `marquee_ticks_keep_ticking_when_the_receiver_falls_behind`
+- `visualizer_bar_heights_scale_and_clamp_the_reported_bands`
+- `now_playing_content_keeps_the_visualizer_height_with_and_without_a_spectrum`
+- `now_playing_visualizer_row_keeps_its_height_without_a_spectrum`
+- `spectrum_reply_stores_the_loaded_previews_spectrum`
+- `spectrum_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped`
+- `stop_clears_the_spectrum_while_pause_keeps_it`
+- `spectrum_tick_queries_spectrum_and_carries_the_epoch`
+- `the_spectrum_timer_runs_only_while_playback_runs` (`src/ui/tests.rs`)
+- `a_refused_spectrum_thread_ends_the_tick_stream_instead_of_panicking` (`src/ui/tests.rs`)
+- `a_refused_spectrum_thread_reports_the_cause_and_the_loss` (`src/ui/tests.rs`)
+- `the_spectrum_thread_is_named_nostalgia_spectrum_poll` (`src/ui/tests.rs`)
+- `playback_spectrum_forwards_the_audio_output_spectrum` (`src/apple_music/tests.rs`)
 - `the_marquee_timer_runs_only_while_the_line_needs_to_scroll`
 - `the_player_knows_when_the_now_playing_line_needs_the_marquee`
 - `track_selected_resets_the_marquee_offset` (`src/ui/tests.rs`)
@@ -436,7 +464,10 @@ balance, and output unchanged. A band at or above Nyquist reads zero, as do sile
 window. A seek clears the recorded window without resetting the partial downmix frame, so the
 sample rodio leaves on the same channel stays in phase; a player that has not appended a preview
 reports nothing, so Stop and a new selection cannot report the previous preview's spectrum. The
-silent fallback and a closed worker report `None`.
+silent fallback and a closed worker report `None`. The UI half stores that reply in
+`WinampPlayer::spectrum` and draws exactly `BAND_COUNT` bars from it: their heights clamp to the
+fixed visualizer row, Pause freezes them, Stop and a new selection clear them, stale or
+pre-transition replies are dropped, and the poll runs only while playing.
 
 **Enforced by.** `audio::meter::spectrum_bands` (the pure ten-band Goertzel analysis) and
 `audio::meter::SpectrumMeter` (`push` downmixes and fills the fixed ring, `take` copies it and
@@ -446,7 +477,11 @@ the ring on `try_seek` without resetting that frame. `AudioOutput::spectrum`
 in `src/audio.rs` defaults to `None`, and `RodioPlayer::spectrum` in `src/audio/player.rs` answers
 `Some` only once the player holds a preview's format, through the worker's `Command::Spectrum`
 handled beside `Command::PlaybackFormat`; `RodioOutput::spectrum` bounds the query like the other
-backend queries.
+backend queries. On the UI side, `views::now_playing::visualizer_bar_heights` and
+`views::now_playing::now_playing_visualizer_row` scale and draw the bands,
+`WinampPlayer::needs_spectrum_poll` gates the poll, `ui::timers::spectrum_ticks` feeds it, and
+`handlers::playback::spectrum_tick`/`spectrum` issue and guard the query while
+`reset_position_readout` clears the stored value.
 
 **Pinned by.**
 
@@ -462,3 +497,17 @@ backend queries.
 - `silent_output_reports_no_spectrum` (`src/audio/tests.rs`)
 - `rodio_output_asks_the_worker_for_its_spectrum` (`src/audio/tests.rs`)
 - `rodio_output_reports_a_closed_worker_for_every_command` (`src/audio/tests.rs`)
+- `playback_spectrum_forwards_the_audio_output_spectrum` (`src/apple_music/tests.rs`)
+- `visualizer_bar_heights_scale_and_clamp_the_reported_bands` (`src/ui/views/tests.rs`)
+- `now_playing_content_keeps_the_visualizer_height_with_and_without_a_spectrum`
+- `now_playing_visualizer_row_keeps_its_height_without_a_spectrum` (`src/ui/views/tests.rs`)
+- `now_playing_visualizer_row_draws_one_fixed_width_bar_per_band` (`src/ui/views/tests.rs`)
+- `spectrum_tick_stream_emits_spectrum_ticks` (`src/ui/tests.rs`)
+- `a_refused_spectrum_thread_ends_the_tick_stream_instead_of_panicking` (`src/ui/tests.rs`)
+- `a_refused_spectrum_thread_reports_the_cause_and_the_loss` (`src/ui/tests.rs`)
+- `the_spectrum_thread_is_named_nostalgia_spectrum_poll` (`src/ui/tests.rs`)
+- `spectrum_reply_stores_the_loaded_previews_spectrum`
+- `spectrum_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped`
+- `stop_clears_the_spectrum_while_pause_keeps_it`
+- `spectrum_tick_queries_spectrum_and_carries_the_epoch`
+- `the_spectrum_timer_runs_only_while_playback_runs` (`src/ui/tests.rs`)
