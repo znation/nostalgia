@@ -1,15 +1,19 @@
+use super::browse::BrowseList;
 use super::loading::{RequestGeneration, fetch_into, play_into};
 use super::timers::*;
 use super::views::{BROWSE_LIST_ID, BROWSE_VIEWS};
 use super::*;
 use crate::audio::{PlaybackFormat, Spectrum};
 use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB};
+use crate::library::{Album, Artist, Playlist, Song};
 use crate::sample_library::sample_library;
 use crate::test_support::{
     AudioCall, FailingAudio, FailingCommand, PREVIEW_URL, RecordingAudio, StubTransport,
     assert_ids, assert_preview_calls, recording_spectrum, rock_preset, sample_album, sample_artist,
     sample_playlist, sample_song, second_album_songs, sign_in_session, stepping_songs,
 };
+use std::sync::atomic::AtomicU64;
+use std::time::Duration;
 
 /// A fresh player over its own shared state, so a test can inspect the
 /// same `AppState` the player mutates.

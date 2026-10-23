@@ -1,0 +1,193 @@
+//! The root screen assembly: the title bar, Now Playing bar, seek strip,
+//! transport row, equalizer panel, and browse level stacked into the tree
+//! `init_ui` hands to iced. Widget construction itself lives in `views`.
+
+use iced::{Element, widget::Column};
+
+use super::message::Message;
+use super::player::{CurrentView, WinampPlayer};
+use super::views;
+
+/// Assembles the app screen: the title bar, Now Playing bar, seek strip,
+/// transport row, and equalizer panel — all built in `views` from the resolved
+/// title and the shared playback, volume, Repeat, Shuffle, and EQ state — above
+/// the current browse list. When the window is shaded, the tree is the title
+/// bar over the compact transport strip and the rest of the screen is dropped.
+pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
+    // Shade mode builds only the title bar and its compact transport strip —
+    // the Now Playing bar, seek strip, transport row, equalizer, and browse
+    // list are all dropped, and the window itself is resized down to that
+    // pair. The short state lock resolves only what the strip draws, so the
+    // rolled-up frame stays cheap.
+    if player.shaded {
+        let (is_playing, volume, elapsed) = {
+            let state = player.state.blocking_lock();
+            (
+                state.is_playing,
+                state.volume(),
+                player.now_playing_elapsed(state.current_track.as_deref()),
+            )
+        };
+        return Column::new()
+            .push(views::view_title_bar(player.always_on_top))
+            .push(views::view_shade_strip(is_playing, volume, elapsed))
+            .into();
+    }
+
+    // The now-playing title, artist, elapsed time, and total are resolved while
+    // the state lock is held, from a borrowed `current_track` against the
+    // accumulated `known_tracks` index (see [`WinampPlayer::now_playing_label`],
+    // [`WinampPlayer::now_playing_artist`], [`WinampPlayer::now_playing_elapsed`],
+    // and [`WinampPlayer::now_playing_time`]). The label, artist, and elapsed
+    // placeholder borrow from `known_tracks` (or the `"Nothing"`/`""`/
+    // `"00:00"`/`"--:--"` literals); the total borrows the cached length, while
+    // a reported elapsed position allocates its formatted `MM:SS` string.
+    let (
+        now_playing,
+        now_playing_artist,
+        now_playing_elapsed,
+        now_playing_time,
+        playback_format,
+        spectrum,
+        is_playing,
+        volume,
+        balance,
+        repeat,
+        shuffle,
+        eq_enabled,
+        eq_preamp,
+        eq_bands,
+        eq_preset,
+    ) = {
+        let state = player.state.blocking_lock();
+        (
+            player.now_playing_label(state.current_track.as_deref()),
+            player.now_playing_artist(state.current_track.as_deref()),
+            player.now_playing_elapsed(state.current_track.as_deref()),
+            player.now_playing_time(state.current_track.as_deref()),
+            player.playback_format,
+            player.spectrum,
+            state.is_playing,
+            state.volume(),
+            state.balance(),
+            state.repeat,
+            state.shuffle,
+            state.eq_enabled,
+            state.eq_preamp(),
+            state.eq_bands(),
+            state.eq_preset(),
+        )
+    };
+
+    let main_content = match &player.current_view {
+        CurrentView::Artists => views::view_artists(
+            &player.artists.items,
+            player.artists.epoch,
+            player.artists.loading,
+            player.artists.error.as_deref(),
+        ),
+        CurrentView::Albums => views::view_albums(
+            &player.albums.items,
+            player.albums.epoch,
+            player.albums.loading,
+            player.albums.error.as_deref(),
+        ),
+        // A second short lock (like the label block above) hands the current
+        // track's id to the Songs view so it can mark the playing row. The
+        // borrowed id is compared inside `song_row` and the guard drops at
+        // the end of this arm, so no per-frame `Option<String>` clone is
+        // needed.
+        CurrentView::Songs => {
+            let state = player.state.blocking_lock();
+            views::view_songs(
+                &player.songs.items,
+                &player.songs.titles,
+                &player.songs.labels,
+                player.songs.epoch,
+                player.songs.loading,
+                player.songs.error.as_deref(),
+                state.current_track.as_deref(),
+                player.search_active,
+            )
+        }
+        // The flat whole-library view marks its playing row from the same
+        // second lock the Songs arm takes.
+        CurrentView::AllSongs => {
+            let state = player.state.blocking_lock();
+            views::view_all_songs(
+                &player.all_songs.items,
+                &player.all_songs.titles,
+                &player.all_songs.labels,
+                player.all_songs.epoch,
+                player.all_songs.loading,
+                player.all_songs.error.as_deref(),
+                state.current_track.as_deref(),
+            )
+        }
+        // The flat album list renders like the per-artist Albums view: album
+        // rows with no current-track marker.
+        CurrentView::AllAlbums => views::view_all_albums(
+            &player.all_albums.items,
+            player.all_albums.epoch,
+            player.all_albums.loading,
+            player.all_albums.error.as_deref(),
+        ),
+        CurrentView::Playlists => views::view_playlists(
+            &player.playlists.items,
+            player.playlists.epoch,
+            player.playlists.loading,
+            player.playlists.error.as_deref(),
+        ),
+    };
+
+    let mut column = Column::new()
+        .push(views::view_title_bar(player.always_on_top))
+        .push(views::view_now_playing(
+            now_playing_elapsed,
+            now_playing,
+            now_playing_artist,
+            now_playing_time,
+            player.marquee_offset,
+            playback_format,
+            spectrum,
+        ))
+        .push(views::view_seek_bar(
+            player.seek_preview.or(player.playback_position),
+            player.playback_duration,
+        ))
+        .push(views::view_transport_controls(
+            is_playing, volume, balance, repeat, shuffle,
+        ))
+        .push(views::view_equalizer(
+            eq_enabled, eq_preamp, &eq_bands, eq_preset,
+        ));
+    // The Back button sits above the list it navigates and exists only where
+    // the hierarchy has a level above to return to (see `views::can_go_back`).
+    if views::can_go_back(&player.current_view) {
+        column = column.push(views::view_back_button());
+    }
+    // A failed top-level artists fetch is a dead end: no navigation re-issues
+    // it, so the Artists view offers a Retry that re-runs `LoadArtists`.
+    // Every other browse level recovers by navigating back into it, so those
+    // failures need no button.
+    if views::can_retry_artists(&player.current_view, player.artists.error.as_deref()) {
+        column = column.push(views::view_retry_button());
+    }
+    // The Top and Sort buttons share one row, Sort beside Top, so the
+    // current list can always be returned to its first row and reordered
+    // in place.
+    column = column.push(views::view_browse_nav_buttons());
+    // The All Songs, All Albums, and Playlists buttons open the flat lists;
+    // they live on the Artists view, beside Back/Retry, so each list is one
+    // press from the top of the hierarchy.
+    if matches!(player.current_view, CurrentView::Artists) {
+        column = column
+            .push(views::view_all_songs_button())
+            .push(views::view_all_albums_button())
+            .push(views::view_playlists_button());
+    }
+    // The search box sits on every browse screen, so a query can be typed
+    // from any level of the hierarchy.
+    column = column.push(views::view_search_box(&player.search_query));
+    column.push(main_content).into()
+}

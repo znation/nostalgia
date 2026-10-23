@@ -47,7 +47,7 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 > `256 KBPS 44 KHZ` / `MONO STEREO` status row. The build renders one row
 > instead: `now_playing_row` (`src/ui/views/now_playing.rs`) pushes a
 > `Now Playing: ` caption, the artist and title, a fill, and the track length
-> at the right edge of the LCD well, and `view` (`src/ui/mod.rs`) stacks that
+> at the right edge of the LCD well, and `view` (`src/ui/view.rs`) stacks that
 > bar above the transport row — no elapsed-time readout, no `O C I D V` strip,
 > no status row.
 >

@@ -204,7 +204,7 @@ its internal id, whenever the id is in the known-track index:
 **Enforced by.** `views::now_playing_label` and `views::now_playing_artist` in
 `src/ui/views/now_playing.rs` (re-exported by `src/ui/views/mod.rs`), pure functions over the
 known-track index. `WinampPlayer::now_playing_label` and `WinampPlayer::now_playing_artist` in
-`src/ui/mod.rs` resolve against `known_tracks`, so the bar keeps naming a playing track after
+`src/ui/player.rs` resolve against `known_tracks`, so the bar keeps naming a playing track after
 browsing to another album replaced the visible song list. `views::now_playing::now_playing_elapsed`
 (through `format_lcd_elapsed` for elapsed mode and `format_lcd_remaining` for remaining mode)
 formats the left-hand readout as chosen by `views::now_playing::TimeDisplay`, while
@@ -400,7 +400,7 @@ rather than the panic unwinding the event loop.
 `views::shade::shade_controls`/`views::shade::play_pause_glyph` define its buttons;
 `views::shade::shade_volume_spec` fixes the slider's shared range and `Message::VolumeChange`;
 `views::shade::SHADE_STRIP_HEIGHT` and `views::shade::SHADED_HEIGHT` own the heights; the shaded
-branch of `ui::view` stacks the bar and strip; and `handlers::window::resize_to_shade` resizes to
+branch of `ui::view::view` stacks the bar and strip; and `handlers::window::resize_to_shade` resizes to
 `handlers::window::shade_target_size`, which reads `SHADED_HEIGHT`. `views::view_shade_strip` is
 re-exported by `src/ui/views/mod.rs`.
 
