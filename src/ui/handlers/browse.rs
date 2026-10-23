@@ -300,12 +300,19 @@ pub(in crate::ui) fn albums_loaded(player: &mut WinampPlayer, albums: Vec<Album>
 /// and formatting every row's duration again (see
 /// `BrowseList::store_with_row_text`).
 pub(in crate::ui) fn songs_loaded(player: &mut WinampPlayer, songs: Vec<Song>) -> Task<Message> {
-    player.songs.store_with_row_text(
+    store_songs(&mut player.songs, songs);
+    Task::none()
+}
+
+/// Store a loaded song list, caching each row's display title and formatted
+/// length once (see `BrowseList::store_with_row_text`). Shared by
+/// [`songs_loaded`] and [`all_songs_loaded`] so the two stay in sync.
+fn store_songs(list: &mut super::super::browse::BrowseList<Song>, songs: Vec<Song>) {
+    list.store_with_row_text(
         songs,
         |song| song.display_title().into_owned(),
         |song| views::format_track_time(song.duration_ms),
     );
-    Task::none()
 }
 
 /// The flat whole-library songs fetch landed: store the rows in the All Songs
@@ -314,11 +321,7 @@ pub(in crate::ui) fn all_songs_loaded(
     player: &mut WinampPlayer,
     songs: Vec<Song>,
 ) -> Task<Message> {
-    player.all_songs.store_with_row_text(
-        songs,
-        |song| song.display_title().into_owned(),
-        |song| views::format_track_time(song.duration_ms),
-    );
+    store_songs(&mut player.all_songs, songs);
     Task::none()
 }
 
