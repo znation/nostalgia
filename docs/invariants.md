@@ -669,6 +669,7 @@ same list/Shuffle/Repeat rules as Next, and the no-next-song case reuses `handle
 - `preview_finished_forwards_the_audio_output_state` (`src/apple_music/tests.rs`)
 - `position_tick_queries_preview_finished` (`src/ui/tests.rs`)
 - `preview_end_advances_to_the_next_song` (`src/ui/tests.rs`)
+- `preview_end_in_all_songs_steps_the_flat_list` (`src/ui/tests.rs`)
 - `preview_end_wraps_to_the_first_song_with_repeat_on` (`src/ui/tests.rs`)
 - `preview_end_repeats_a_single_song_with_repeat_on` (`src/ui/tests.rs`)
 - `preview_end_at_the_last_song_stops_when_repeat_is_off` (`src/ui/tests.rs`)

@@ -4998,6 +4998,32 @@ fn preview_end_advances_to_the_next_song() {
     assert!(state.is_playing);
 }
 
+// The All Songs view draws from `all_songs`, so a natural end there must step
+// the flat list, not the browsed `songs` buffer, and carry the flat list's
+// epoch. `songs` holds only "song-4" while `all_songs` holds the three-song
+// stepping album, so a preview end that read `songs` could not select index 1.
+#[test]
+fn preview_end_in_all_songs_steps_the_flat_list() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) = player_playing_stepping_song(&recording, "song-1");
+    player.songs.items = second_album_songs();
+    let _ = update(&mut player, Message::AllSongsLoaded(stepping_songs()));
+    player.current_view = CurrentView::AllSongs;
+    let all_songs_epoch = player.all_songs.epoch;
+
+    let selected = drive_playback_finished(&mut player);
+    assert!(matches!(
+        selected,
+        Message::TrackSelected { epoch, index } if epoch == all_songs_epoch && index == 1
+    ));
+    let task = update(&mut player, selected);
+    futures::executor::block_on(drive_task(task, "preview end play", |_| {}));
+
+    let state = state.blocking_lock();
+    assert_eq!(state.current_track.as_deref(), Some("song-2"));
+    assert!(state.is_playing);
+}
+
 // Repeat wraps a natural end at the last song back to the first, just as the
 // Next button does.
 #[test]
