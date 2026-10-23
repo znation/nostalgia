@@ -300,6 +300,20 @@ pub(super) fn list_count_summary(count: usize, singular: &str, plural: &str) -> 
     format!("{count} {noun}")
 }
 
+/// Appends a loaded list's footer line beneath it, filling the browse panel.
+/// The shared layout of the item-count footer ([`list_with_count`]) and the
+/// song list's count-and-time footer ([`song_list_summary`]). Callers skip
+/// this for an empty list, whose loading, error, or empty placeholder must
+/// stay alone beneath the rows it replaces.
+fn with_footer<'a>(list: Element<'a, Message>, footer: String) -> Element<'a, Message> {
+    Column::new()
+        .push(list)
+        .push(Text::new(footer).size(14))
+        .width(Length::Fill)
+        .height(Length::FillPortion(3))
+        .into()
+}
+
 /// Wraps a non-song browse list in a footer naming how many rows it holds,
 /// matching the song list's count-and-time footer above it. A zero count
 /// returns `list` unchanged: the list is then showing its loading, error, or
@@ -314,12 +328,7 @@ fn list_with_count<'a>(
     if count == 0 {
         return list;
     }
-    Column::new()
-        .push(list)
-        .push(Text::new(list_count_summary(count, singular, plural)).size(14))
-        .width(Length::Fill)
-        .height(Length::FillPortion(3))
-        .into()
+    with_footer(list, list_count_summary(count, singular, plural))
 }
 
 /// The count-and-time footer beneath a loaded song list: `"<count> song(s) -
@@ -375,12 +384,7 @@ fn song_list<'a>(
     if songs.is_empty() {
         return list;
     }
-    Column::new()
-        .push(list)
-        .push(Text::new(song_list_summary(songs)).size(14))
-        .width(Length::Fill)
-        .height(Length::FillPortion(3))
-        .into()
+    with_footer(list, song_list_summary(songs))
 }
 
 /// The Artists browse view: one row per artist, in the order given, each
