@@ -70,8 +70,6 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
-
 ### Add the LCD spectrum visualizer (Spectrum visualizer, part 1/2: planned 2026-10-23 by the plan role)
 
 **Goal.** Add a narrow backend query that reports the loaded preview's live ten-band amplitude spectrum, computed from the samples the audio worker actually pulls. This is the deferred half of the mockup's LCD visualizer (`docs/screenshots/player.png` draws green bars beneath the elapsed time): it gives part 2 a real signal to draw instead of an animation, with no new dependency and no UI change in this part. The meter is observational only — it must not alter the samples reaching the equalizer, balance, or output. When no preview is loaded, or the backend cannot answer (the silent fallback, a test fake, a closed worker), the query reports nothing, so part 2 can keep its strip blank.
@@ -122,6 +120,35 @@ _None yet._
 - The LCD draws the fixed-height visualizer row beneath the title and above the status row in both the reporting and blank states, so loading a preview or the silent fallback does not move the title or status text.
 - The spectrum poll is subscribed only while playback runs, queries `AudioOutput::spectrum` through the service, and drops a reply whose epoch is stale or whose transport transition is still pending; Pause keeps the last bars, Stop and a new selection clear them.
 - The silent fallback and a backend without a spectrum leave every bar at zero while keeping the row's height.
+- `make check` passes (fmt, clippy, rustdoc, tests).
+
+### Show the mini transport in window-shade mode (planned 2026-10-23 by the plan role)
+
+**Goal.** Match the mockup's rolled-up window (`docs/screenshots/equalizer.png`, the "WINDOW SHADE" panel): shading the window shows, below the title bar, a compact strip with Previous, Play/Pause, Stop, Next, the current elapsed readout, and a volume slider, so playback stays controllable while rolled up. Normal mode is unchanged; the strip only reads existing state and emits existing messages, adding no new playback behavior.
+
+**Approach.**
+
+- Add `src/ui/views/shade.rs` (declare `mod shade;` and re-export it from `src/ui/views/mod.rs` beside `TITLE_BAR_HEIGHT`):
+  - `pub(super) const SHADE_STRIP_HEIGHT: f32 = 28.0;` and `pub(super) const SHADED_HEIGHT: f32 = TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT;`, so the strip height and the whole rolled-up height have one owner each.
+  - `pub(super) fn play_pause_glyph(is_playing: bool) -> &'static str`: `"II"` while playing and `"▶"` otherwise, the compact twin of `transport::play_pause_label`.
+  - `pub(super) fn shade_controls(is_playing: bool) -> [(&'static str, f32, Message); 5]`: the five `(label, fixed width, message)` specs in row order — `"◀◀"`/`Message::PreviousTrack`, [`play_pause_glyph`]/`Message::PlayPause`, `"■"`/`Message::Stop`, `"▶▶"`/`Message::NextTrack` — each with a fixed width (34, 30, 30, 34 px) so the glyph swap cannot reflow the strip. Pure, so labels, messages, and widths are testable without an iced renderer.
+  - `pub fn view_shade_strip<'a>(is_playing: bool, volume: f32, elapsed: Cow<'a, str>) -> Element<'a, Message>`: one full-width row built from `fixed_width_button` per `shade_controls` entry with `spacer(6.0)` between them, the elapsed as `Text::new(elapsed).size(14).color(theme::LCD_GREEN)`, and `chrome_slider(VOLUME_MIN, VOLUME_MAX, volume, VOLUME_STEP, 80.0, Message::VolumeChange)` at the right. Paint the row with `style::title_bar_style()` inside a container fixed at `SHADE_STRIP_HEIGHT` (wrapped in `bevel::raised_panel` like the title bar) so the strip shares the title bar's blue chrome. No new message or handler is added.
+- `src/ui/mod.rs` `view`: replace the shaded early return's bare title bar with a short state lock for `state.is_playing`, `state.volume()`, and `player.now_playing_elapsed(state.current_track.as_deref())`, then a `Column` of `views::view_title_bar(...)` and `views::view_shade_strip(...)`. Passing the same `now_playing_elapsed` string the LCD uses means the elapsed/remaining toggle carries into shade mode. Update the function's doc comment and inline comment to say the rolled-up tree is the title bar plus the strip. Leave the unshaded assembly untouched.
+- `src/ui/handlers/window.rs`: `resize_to_shade` resizes to `views::SHADED_HEIGHT` instead of `views::TITLE_BAR_HEIGHT`, and its doc comment names the strip as part of the rolled-up window. The measurement and restore paths in `toggle_window_shade` and `window_shade_measured` are unchanged.
+- `src/ui/views/tests.rs`: add `shade_play_pause_glyph_switches_with_playback_state`, `shade_controls_map_to_transport_messages_and_keep_fixed_widths`, `shade_height_pins_the_rolled_up_window` (`SHADED_HEIGHT == TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT`, both positive), and `view_shade_strip_keeps_its_fixed_height_for_both_playback_states` (lay the widget out with the headless-renderer `Limits` pattern already used in this file and assert the resolved height is `SHADE_STRIP_HEIGHT`).
+- `src/ui/tests.rs`: update `title_bar_height_pins_the_shade_strip`'s comment to point at `SHADED_HEIGHT`; add `shaded_root_view_is_the_title_bar_plus_the_strip` (lay out the root `view` with `player.shaded = true` using the headless tiny-skia pattern from `browse_nav_buttons_place_sort_beside_top`, and assert the resolved height is `views::SHADED_HEIGHT`) and `shade_strip_draws_only_while_shaded` (capture text bounds and assert the `"◀◀"` control appears in the shaded tree and not in the normal-mode tree). Keep the existing shade measurement/restore tests green.
+- `README.md`: in the Usage paragraph, say shade mode rolls the window up to the title bar plus a compact transport strip with Previous, Play/Pause, Stop, Next, the current time readout, and a volume slider. Do not edit the `<!-- tumwater:status:start -->` block.
+- `docs/invariants.md`: add a `## Window shade` section after `## Now Playing label`: shade mode builds exactly the title bar plus the fixed-height strip and resizes the window to `SHADED_HEIGHT`; the strip's five controls emit the same messages as their full transport-row twins, its Play/Pause glyph follows the playback state, its time label follows the elapsed/remaining choice, and its volume slider writes `Message::VolumeChange`; normal mode builds no strip. Name `views::shade::view_shade_strip`/`shade_controls`/`play_pause_glyph`/`SHADED_HEIGHT` and `handlers::window::resize_to_shade` as the enforcers, and list the new test names.
+
+**Files touched.** `src/ui/views/shade.rs` (new), `src/ui/views/mod.rs`, `src/ui/mod.rs`, `src/ui/handlers/window.rs`, `src/ui/views/tests.rs`, `src/ui/tests.rs`, `README.md`, `docs/invariants.md`.
+
+**Acceptance criteria.**
+
+- In shade mode the rendered tree is the title bar over a strip exactly `SHADE_STRIP_HEIGHT` tall, and the window resizes to `SHADED_HEIGHT`; the normal-mode tree contains no strip.
+- The strip shows Previous, Play/Pause, Stop, Next, the current elapsed/remaining readout, and a volume slider, each emitting the same message as its full transport-row twin (`Message::PreviousTrack`, `Message::PlayPause`, `Message::Stop`, `Message::NextTrack`, `Message::VolumeChange`).
+- The Play/Pause glyph is `"▶"` while stopped and `"II"` while playing, and every compact button keeps its fixed width across that swap.
+- Laying out the strip and the shaded root view with a headless renderer resolves to the fixed heights above, so the view and `resize_to_shade` cannot drift apart.
+- Normal-mode layout, the existing shade measurement/restore tests, and playback behavior are unchanged.
 - `make check` passes (fmt, clippy, rustdoc, tests).
 
 ## Done
