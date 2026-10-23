@@ -7,6 +7,7 @@
 
 use iced::Task;
 
+use crate::apple_music::{AppleMusicError, AppleMusicService};
 use crate::audio::EqSnapshot;
 use crate::equalizer::Preset;
 use crate::state::AppState;
@@ -73,39 +74,54 @@ pub(in crate::ui) fn eq_preset_selected(
     mutate_equalizer(player, |state| state.apply_eq_preset(preset))
 }
 
-/// Locks the shared playback state, applies `mutation` to it, forwards the
-/// resulting clamped volume to the audio backend, and returns no task. The
-/// volume handlers — the slider's drag and the two arrow keys — all repeat
-/// the same two-step update: `blocking_lock`, one mutation, read back the
-/// clamped `state.volume()`, then hand it to
-/// `AppleMusicService::set_output_volume`. The state write and the backend
-/// forward both happen under the one lock, and the forward is a non-blocking
-/// channel send, so a slider drag stays responsive and its messages stay
-/// ordered. A backend error is logged; the state write has already committed.
-fn mutate_volume(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> Task<Message> {
+/// Locks the shared playback state, applies `mutation`, forwards the resulting
+/// clamped value to the audio backend, and returns no task.
+///
+/// The volume, balance, and equalizer helpers below all repeat the same
+/// sequence — `blocking_lock`, one mutation, read the clamped value back
+/// under the lock, then one non-blocking channel send to the audio backend —
+/// so the shape lives here once and each helper names only its value and
+/// backend call. The state write and the forward happen under the one lock,
+/// so a slider drag stays responsive and its messages stay ordered. A backend
+/// error is logged; the state write has already committed.
+fn mutate_and_forward(
+    player: &WinampPlayer,
+    mutation: impl FnOnce(&mut AppState),
+    forward: impl FnOnce(&AppleMusicService, &AppState) -> Result<(), AppleMusicError>,
+    failure: &'static str,
+) -> Task<Message> {
     let mut state = player.state.blocking_lock();
     mutation(&mut state);
-    let volume = state.volume();
-    if let Err(error) = player.apple_music_service.set_output_volume(volume) {
-        eprintln!("forwarding volume to the audio backend failed: {error}");
+    if let Err(error) = forward(&player.apple_music_service, &state) {
+        eprintln!("{failure}: {error}");
     }
     Task::none()
 }
 
-/// Locks the shared playback state, applies `mutation` to it, forwards the
-/// resulting clamped balance to the audio backend, and returns no task. The
-/// balance slider's drag uses this so a slider drag reaches the playing
-/// preview without restarting it; the state write and the backend forward
-/// both happen under the one lock, exactly as `mutate_volume` does. A
-/// backend error is logged; the state write has already committed.
+/// Forwards the mutated state's clamped volume to the audio backend. The
+/// volume handlers — the slider's drag and the two arrow keys — all use this
+/// so a slider drag reaches the playing preview without restarting it; the
+/// lock-mutate-forward shape is [`mutate_and_forward`]'s.
+fn mutate_volume(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> Task<Message> {
+    mutate_and_forward(
+        player,
+        mutation,
+        |service, state| service.set_output_volume(state.volume()),
+        "forwarding volume to the audio backend failed",
+    )
+}
+
+/// Forwards the mutated state's clamped balance to the audio backend. The
+/// balance slider's drag uses this so a drag reaches the playing preview
+/// without restarting it; the lock-mutate-forward shape is
+/// [`mutate_and_forward`]'s.
 fn mutate_balance(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> Task<Message> {
-    let mut state = player.state.blocking_lock();
-    mutation(&mut state);
-    let balance = state.balance();
-    if let Err(error) = player.apple_music_service.set_output_balance(balance) {
-        eprintln!("forwarding balance to the audio backend failed: {error}");
-    }
-    Task::none()
+    mutate_and_forward(
+        player,
+        mutation,
+        |service, state| service.set_output_balance(state.balance()),
+        "forwarding balance to the audio backend failed",
+    )
 }
 
 /// Forwards a relative seek to the audio backend and returns no task. The
@@ -120,25 +136,24 @@ fn seek_preview(player: &WinampPlayer, offset_secs: i64) -> Task<Message> {
     Task::none()
 }
 
-/// Locks the shared playback state, applies `mutation` to it, forwards the
-/// resulting clamped curve to the audio backend, and returns no task. The
+/// Forwards the mutated state's clamped curve to the audio backend. The
 /// equalizer handlers — the on/off button, the preamp and band sliders, and
 /// the preset pick — use this so a toggle, slider drag, or preset pick
-/// reaches the playing preview without restarting it; the running
-/// `EqSource` re-reads its shared curve between samples. The
-/// state write and the backend forward both happen under the one lock, exactly
-/// as `mutate_volume` and `mutate_balance` do. A backend error is logged;
-/// the state write has already committed.
+/// reaches the playing preview without restarting it; the running `EqSource`
+/// re-reads its shared curve between samples. The lock-mutate-forward shape is
+/// [`mutate_and_forward`]'s.
 fn mutate_equalizer(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> Task<Message> {
-    let mut state = player.state.blocking_lock();
-    mutation(&mut state);
-    let equalizer = EqSnapshot {
-        enabled: state.eq_enabled,
-        preamp_db: state.eq_preamp(),
-        bands_db: state.eq_bands(),
-    };
-    if let Err(error) = player.apple_music_service.set_output_equalizer(equalizer) {
-        eprintln!("forwarding equalizer to the audio backend failed: {error}");
-    }
-    Task::none()
+    mutate_and_forward(
+        player,
+        mutation,
+        |service, state| {
+            let equalizer = EqSnapshot {
+                enabled: state.eq_enabled,
+                preamp_db: state.eq_preamp(),
+                bands_db: state.eq_bands(),
+            };
+            service.set_output_equalizer(equalizer)
+        },
+        "forwarding equalizer to the audio backend failed",
+    )
 }
