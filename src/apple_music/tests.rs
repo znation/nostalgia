@@ -2433,6 +2433,26 @@ async fn search_songs_uses_the_rest_library_when_signed_in() {
     );
 }
 
+// A signed-in search has no sample-library fallback: it answers from the
+// sample library only when no session is stored, so a failed REST search must
+// surface the error for the UI's Retry path. The query matches a sample title
+// case-insensitively, so a fallback on failure would return that song instead
+// of the error. The surrounding whitespace is trimmed from the term the
+// request carries, as the signed-out sample path trims it for matching.
+#[tokio::test]
+async fn search_songs_fails_when_the_rest_search_fails() {
+    let stub = StubTransport::failing("search down");
+    let service = signed_in_service(&stub);
+
+    let error = service.search_songs("  OPENING  ").await.unwrap_err();
+
+    assert_eq!(error.to_string(), "search down");
+    assert_single_call(
+        &stub,
+        "https://api.music.apple.com/v1/me/library/search?term=OPENING&types=library-songs&limit=25",
+    );
+}
+
 // The All Songs view routes through the REST client when a session is stored,
 // so a signed-in user sees the real library rather than the sample one. The
 // stub returns a song whose id is not a sample id, so the result can only
