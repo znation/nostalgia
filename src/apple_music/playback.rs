@@ -169,6 +169,21 @@ impl AppleMusicService {
         self.audio.seek_by(offset_secs)
     }
 
+    /// Reports whether the audio backend still holds a preview that can be
+    /// paused, resumed, or seeked — true for a playing or paused preview, and
+    /// false after [`stop`](Self::stop) discarded it or before the first play.
+    ///
+    /// The UI's subscription builder calls this on its main thread, so it never
+    /// waits: it takes the transport lock only if that lock is free. While a
+    /// transport transition holds the lock it reports `true`, keeping the
+    /// position poll subscribed across the transition rather than dropping it
+    /// from a stale read; the transition's completion re-evaluates it.
+    pub(crate) fn has_loaded_preview(&self) -> bool {
+        self.transport
+            .try_lock()
+            .map_or(true, |transport| transport.loaded)
+    }
+
     /// Reports the loaded preview's playback position, or `None` when no
     /// preview is loaded or the audio backend cannot answer.
     ///

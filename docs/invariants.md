@@ -167,6 +167,12 @@ its internal id, whenever the id is in the known-track index:
 - The marquee timer is subscribed only while the line needs to scroll: `WinampPlayer::needs_marquee`
   measures the same label and artist the bar renders, so a line that fits leaves the timer out
   (every message makes iced rebuild the whole screen, browse list included).
+- The position poll is subscribed only while there is a position to refresh:
+  `WinampPlayer::needs_position_poll` includes it while playback is running, the backend still holds
+  a preview (paused, even before its first position reply, so a seek can still move it), or a stored
+  position is still shown, and leaves it out for a stopped player, whose readout is already the
+  `00:00` Stop cleared it to. Without the gate, every tick and reply would rebuild the whole screen
+  twice a second for an unchanged readout.
 
 **Enforced by.** `views::now_playing_label` and `views::now_playing_artist` in
 `src/ui/views/now_playing.rs` (re-exported by `src/ui/views/mod.rs`), pure functions over the
@@ -192,7 +198,8 @@ windows an overlong line, and `WinampPlayer::marquee_offset` carries the advance
 the `MouseArea` wrapping the readout in `now_playing_row`) flips it without touching playback
 state. `views::now_playing::display_len` and `views::now_playing::needs_marquee`
 measure the line, and `ui::timers::subscriptions` subscribes `marquee_ticks` only while that measure
-exceeds `MARQUEE_WIDTH`. `audio::PlaybackFormat` carries the preview's sample rate and channel
+exceeds `MARQUEE_WIDTH`, and `position_ticks` only while `WinampPlayer::needs_position_poll` reports
+a preview whose position can still change. `audio::PlaybackFormat` carries the preview's sample rate and channel
 count, `audio::player::format_for_source` reads them from the decoded `rodio` source, and
 `views::now_playing::format_playback_status`/`views::now_playing::now_playing_status_row` render
 them in the LCD's status row built by `views::view_now_playing`. The `PlaybackFormat` handler in
@@ -251,7 +258,9 @@ rather than the panic unwinding the event loop.
 - `position_tick_stream_emits_position_ticks`
 - `a_refused_position_thread_ends_the_tick_stream_instead_of_panicking`
 - `a_refused_position_thread_reports_the_cause_and_the_loss`
-- `the_position_thread_is_named_nostalgia_position_poll` (`src/ui/tests.rs`)
+- `the_position_thread_is_named_nostalgia_position_poll`
+- `the_position_timer_runs_only_while_there_is_a_position_to_refresh`
+- `a_paused_preview_needs_the_position_poll_before_its_first_reply` (`src/ui/tests.rs`)
 - `play_track_without_a_preview_url_stops_the_previous_preview` (`src/apple_music/tests.rs`)
 - `position_query_reports_none_when_nothing_is_loaded`
 - `a_seek_is_reflected_by_the_next_position_query`

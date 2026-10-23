@@ -5,9 +5,9 @@
 //! enable, so each timer is fed by a named std thread through the shared tick
 //! source in [`super::ticks`], which uses the futures channel iced re-exports.
 //! The marquee runs only while the title needs to
-//! scroll (see [`subscriptions`]); the position poll is always on and only
-//! schedules the actual backend query from its `update` arm, so the UI thread
-//! never waits on the audio backend.
+//! scroll, and the position poll only while there is a position to refresh
+//! (see [`subscriptions`]); each only schedules the actual backend query from
+//! its `update` arm, so the UI thread never waits on the audio backend.
 
 use iced::keyboard;
 use std::{io, time::Duration};
@@ -88,19 +88,32 @@ pub(super) fn marquee_thread_failure_report(error: &io::Error) -> String {
 
 /// The subscriptions the UI runs: the keyboard listener, plus the marquee
 /// timer while the Now Playing line is too long to fit the LCD's character
-/// budget.
+/// budget, plus the position poll while there is a position to refresh.
 ///
-/// The timer exists to advance the Now Playing title window, and the view
-/// ignores that window while the line fits — so ticking for a fitting line
+/// The marquee timer exists to advance the Now Playing title window, and the
+/// view ignores that window while the line fits — so ticking for a fitting line
 /// would advance nothing. Every message makes iced rebuild the whole screen
 /// (the browse list's rows included), so an always-on timer would rebuild the
 /// UI four times a second to redraw a bar that cannot change. The timer is
 /// therefore subscribed only while the line needs to scroll, and dropped again
 /// once it fits.
-pub(super) fn subscriptions(marquee_needed: bool) -> Vec<iced::Subscription<Message>> {
+///
+/// The position poll has the same shape: each tick and its reply rebuild the
+/// same whole screen, and a stopped player's readout is already the `00:00`
+/// Stop cleared it to, so there is nothing to refresh. It is subscribed while
+/// playback is running or the backend still holds a preview (a paused player's
+/// position a seek can still move, even before the first position reply); a
+/// stopped player leaves it out.
+pub(super) fn subscriptions(
+    marquee_needed: bool,
+    position_needed: bool,
+) -> Vec<iced::Subscription<Message>> {
     let mut subscriptions = vec![keyboard::listen().filter_map(message_for)];
     if marquee_needed {
         subscriptions.push(marquee_ticks());
+    }
+    if position_needed {
+        subscriptions.push(position_ticks());
     }
     subscriptions
 }
@@ -129,8 +142,8 @@ pub(super) fn position_tick_stream() -> impl iced::futures::Stream<Item = Messag
 /// `std::thread::spawn` panics when the OS refuses a thread, and iced builds
 /// this stream on its main thread while it updates the subscriptions, so such
 /// a panic would unwind the event loop and take the whole player down. Unlike
-/// the marquee timer, this subscription is always on, so that panic could hit
-/// any startup where the OS is short of threads. A refused spawn is reported
+/// the marquee timer, this subscription is part of the set whenever a position
+/// can refresh, so that panic could hit any playback start. A refused spawn is reported
 /// instead, and the tick stream then ends — the sender goes down with the
 /// thread that never started — so the elapsed readout stops updating and the
 /// app keeps running.

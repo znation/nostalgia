@@ -3271,8 +3271,46 @@ fn marquee_tick_advances_the_offset() {
 // until the line needs to scroll.
 #[test]
 fn the_marquee_timer_runs_only_while_the_line_needs_to_scroll() {
-    assert_eq!(subscriptions(false).len(), 1);
-    assert_eq!(subscriptions(true).len(), 2);
+    assert_eq!(subscriptions(false, false).len(), 1);
+    assert_eq!(subscriptions(true, false).len(), 2);
+}
+
+// The position poll has the same cost as the marquee: every tick and reply
+// rebuilds the whole screen, browse list included. A stopped player's readout
+// is already the `00:00` Stop left it at, so the poll must leave the
+// subscription set then, and join it again only while playback is running or
+// the backend still holds a preview whose position a seek can move.
+#[test]
+fn the_position_timer_runs_only_while_there_is_a_position_to_refresh() {
+    assert_eq!(subscriptions(false, true).len(), 2);
+    assert_eq!(subscriptions(true, true).len(), 3);
+
+    let (mut player, state) = test_player();
+    assert!(!player.needs_position_poll());
+
+    state.blocking_lock().play();
+    assert!(player.needs_position_poll());
+
+    player.playback_position = Some(Duration::from_secs(45));
+    state.blocking_lock().pause();
+    assert!(player.needs_position_poll());
+
+    player.playback_position = None;
+    state.blocking_lock().stop();
+    assert!(!player.needs_position_poll());
+}
+
+// A preview can be paused before its first position reply lands: the backend
+// still holds it and a seek can move it, so the poll must stay subscribed even
+// though `playback_position` is still `None`.
+#[tokio::test]
+async fn a_paused_preview_needs_the_position_poll_before_its_first_reply() {
+    let (player, state) = player_playing_preview(Arc::new(RecordingAudio::default())).await;
+    assert!(player.playback_position.is_none());
+
+    state.lock().await.pause();
+    assert!(!state.lock().await.is_playing);
+    assert!(player.needs_position_poll());
 }
 
 // The timer is subscribed from the player's own view of the bar: the same

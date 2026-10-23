@@ -32,7 +32,7 @@ mod transport;
 mod views;
 
 use browse::BrowseList;
-use timers::{position_ticks, subscriptions};
+use timers::subscriptions;
 
 use crate::{
     apple_music::AppleMusicService,
@@ -62,9 +62,10 @@ pub fn init_ui(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> iced:
         .decorations(false)
         .resizable(false)
         .subscription(|player| {
-            let mut all = subscriptions(player.needs_marquee());
-            all.push(position_ticks());
-            iced::Subscription::batch(all)
+            iced::Subscription::batch(subscriptions(
+                player.needs_marquee(),
+                player.needs_position_poll(),
+            ))
         })
         .run()
 }
@@ -482,6 +483,20 @@ impl WinampPlayer {
         let label = self.now_playing_label(state.current_track.as_deref());
         let artist = self.now_playing_artist(state.current_track.as_deref());
         views::needs_marquee(&label, &artist)
+    }
+
+    /// Whether the position poll is needed: playback is running, the audio
+    /// backend still holds a preview (paused, even before its first position
+    /// reply, so a seek can still move it), or a stored position is still shown
+    /// because Pause kept it. A stopped player's readout is already the `00:00`
+    /// Stop cleared it to, so the poll stays unsubscribed and the UI does not
+    /// rebuild the whole screen, browse list included, twice a second to
+    /// re-render an unchanged readout (see [`subscriptions`]).
+    fn needs_position_poll(&self) -> bool {
+        if self.playback_position.is_some() || self.apple_music_service.has_loaded_preview() {
+            return true;
+        }
+        self.state.blocking_lock().is_playing
     }
 }
 
