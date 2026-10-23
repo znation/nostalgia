@@ -3663,7 +3663,7 @@ fn now_playing_elapsed_shows_the_position_while_it_is_known() {
 }
 
 // Pause stops the backend clock but keeps the loaded player, so the stored
-// elapsed readout must survive the arm and continue to render. Part 2/3's
+// elapsed readout must survive the arm and continue to render.
 // `a_pause_keeps_the_loaded_player_reporting_its_position` pins the backend
 // side; this pins that the UI does not clear the value on Pause.
 #[test]
