@@ -306,6 +306,24 @@ fn search_library_returns_no_songs_when_the_results_carry_no_library_songs() {
     }
 }
 
+// Like a browse collection, a search response can be valid JSON and still
+// not match the `{ "results": { ... } }` envelope the client expects. The
+// report must name the search envelope, not the collection one, so a
+// malformed search response points at the shape that failed; a regression
+// that passed `"collection"` from `parse_search_envelope` would still produce
+// a plausible-looking message for every other test.
+#[test]
+fn valid_json_that_is_not_the_search_envelope_names_the_search_envelope() {
+    for body in [r#"{"data":[]}"#, r#"{"results":[]}"#] {
+        let error = error_over(body, |library| library.search_library(&rest_session(), "x"));
+
+        assert!(
+            error.starts_with("response did not match the Apple Music search envelope:"),
+            "{body}: {error}"
+        );
+    }
+}
+
 // A search matching more than one page is read in full: the client follows
 // the same-origin `next` link with the same pagination rules as a browse
 // collection.
