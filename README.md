@@ -49,9 +49,10 @@ small decorative `O A I D V` strip down the LCD's left edge, a large elapsed-tim
 left for a loaded preview, shown while playing or paused and blank (though it keeps its space)
 while stopped, except that the `--:--` placeholder stays visible when stopped with no current
 track or no known time, the playing track's 1-based position in the list it was played from
-(`1. The Sample Band - Opening`) followed by its artist and title, scrolled across the display
-when the line is longer than it, and the track's plain length at the right); the transport glyph before
-the readout is a green `▶` while playing, a green `II` while paused, and a red `■` while stopped.
+(`1. The Sample Band - Opening`) followed by its artist and title, scrolled across the
+display when the line is longer than it, and the track's plain length at the right); the
+transport glyph before the readout is a green `▶` while playing, a green `II` while paused, and
+a red `■` while stopped.
 While paused, the large elapsed readout blinks once per second at its frozen position; it stays
 steady while playing and clears while stopped. A loaded preview's average bitrate and sample rate
 appear at the left of a small status row beneath the title, with `MONO` and `STEREO` side by side
@@ -120,7 +121,11 @@ When a loaded preview reaches its end while playing, the player steps forward th
 showing list: to the next song, to the first song with Repeat on at the end, or, with Shuffle
 on, to a shuffled song when another exists. With Repeat off on the last song it stops instead
 and keeps that song queued for Play.
-The volume, balance, Repeat and Shuffle flags, and the equalizer's on/off state, curve, and preset are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or `$HOME/.config/nostalgia/settings.ini`) and restored at the next launch; `NOSTALGIA_SETTINGS_PATH` overrides the path. A missing or malformed entry falls back to its default. There are no CLI flags yet.
+The volume, balance, Repeat and Shuffle flags, and the equalizer's on/off state, curve, and
+preset are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or
+`$HOME/.config/nostalgia/settings.ini`) and restored at the next launch;
+`NOSTALGIA_SETTINGS_PATH` overrides the path. A missing or malformed entry falls back to its
+default. There are no CLI flags yet.
 
 ## Development
 
