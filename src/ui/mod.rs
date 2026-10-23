@@ -95,8 +95,9 @@ fn boot(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> (WinampPlaye
 
 /// Routes each [`Message`] to the handler that owns its behavior: the
 /// transport buttons and keys, the track stepping, the play request and its
-/// completion, the elapsed/remaining toggle, the marquee tick, the seek drag
-/// and release, and the backend polls in `handlers::playback`; the volume,
+/// completion, the elapsed/remaining toggle, and the marquee tick in
+/// `handlers::playback`; the seek drag and release and the backend polls in
+/// `handlers::playback::preview`; the volume,
 /// balance, seek nudges, and equalizer in `handlers::mixer`; the browse
 /// hierarchy, the Back, Top, and Sort navigation, the library search, and the
 /// fetch results in `handlers::browse`; and the custom title bar's window
@@ -129,27 +130,27 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         // lands first invalidates it. While a transport transition is still
         // reaching the backend, no query is issued: the backend would still
         // report the previous preview, and the epoch no longer identifies it.
-        Message::PositionTick => handlers::playback::position_tick(player),
+        Message::PositionTick => handlers::playback::preview::position_tick(player),
         Message::PlaybackPosition { epoch, position } => {
-            handlers::playback::playback_position(player, epoch, position)
+            handlers::playback::preview::playback_position(player, epoch, position)
         }
         Message::PlaybackFormat { epoch, format } => {
-            handlers::playback::playback_format(player, epoch, format)
+            handlers::playback::preview::playback_format(player, epoch, format)
         }
         Message::PlaybackDuration { epoch, duration } => {
-            handlers::playback::playback_duration(player, epoch, duration)
+            handlers::playback::preview::playback_duration(player, epoch, duration)
         }
         Message::PlaybackFinished { epoch, finished } => {
-            handlers::playback::playback_finished(player, epoch, finished)
+            handlers::playback::preview::playback_finished(player, epoch, finished)
         }
-        Message::SpectrumTick => handlers::playback::spectrum_tick(player),
+        Message::SpectrumTick => handlers::playback::preview::spectrum_tick(player),
         Message::Spectrum { epoch, spectrum } => {
-            handlers::playback::spectrum(player, epoch, spectrum)
+            handlers::playback::preview::spectrum(player, epoch, spectrum)
         }
         Message::SeekPreviewChanged(value) => {
-            handlers::playback::seek_preview_changed(player, value)
+            handlers::playback::preview::seek_preview_changed(player, value)
         }
-        Message::SeekPreviewReleased => handlers::playback::seek_preview_released(player),
+        Message::SeekPreviewReleased => handlers::playback::preview::seek_preview_released(player),
         Message::ToggleTimeDisplay => handlers::playback::toggle_time_display(player),
         Message::TrackSelected { epoch, index } => {
             handlers::playback::track_selected(player, epoch, index)

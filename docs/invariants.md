@@ -335,7 +335,7 @@ its internal id, whenever the id is in the known-track index:
   distinguishes Pause from Stop. `state::TransportMode` and `AppState::transport_mode` resolve the mode,
   `views::now_playing::transport_glyph` and `transport_glyph_color` choose the glyph and color,
   and `views::now_playing::now_playing_row` draws the slot. While the mode is `Paused`, the large
-  elapsed readout blinks at the frozen position: `handlers::playback::position_tick` flips
+  elapsed readout blinks at the frozen position: `handlers::playback::preview::position_tick` flips
   `WinampPlayer::blink_visible` on each one-second position poll, and
   `views::now_playing::elapsed_readout_color` draws the text transparent when the phase is hidden
   or the transport is stopped and the text is not the `--:--` placeholder instead of removing it,
@@ -403,17 +403,17 @@ formats the left-hand readout as chosen by `views::now_playing::TimeDisplay`, wh
 readout and the seek thumb share one position source;
 `reset_position_readout` bumps that epoch and clears the value
 on Stop and on a new selection. `pending_position_transitions` counts the backend transport
-transitions that are still in flight: every handler in `src/ui/handlers/playback.rs` that
-schedules one begins a transition, and the completion that reports that same transition ends it;
-while the count is nonzero the `PositionTick` handler issues no query and the
-`PlaybackPosition` handler stores no reply. `AppleMusicService::play_track`
+transitions that are still in flight: every transport handler in `src/ui/handlers/playback.rs`
+that schedules one begins a transition, and the completion that reports that same transition ends
+it; while the count is nonzero the `handlers::playback::preview` poll handlers issue no query and
+its reply handlers store no reply. `AppleMusicService::play_track`
 stops the backend's previous preview when a selection has no preview URL.
 `views::now_playing::lcd_indicator_strip` draws `views::now_playing::LCD_INDICATOR_LABELS` down
 the LCD's left edge in a fixed-width column, with no message and no handler.
 `views::now_playing::visualizer_bar_heights` scales and clamps the stored spectrum, and
 `views::now_playing::now_playing_visualizer_row` draws its `BAND_COUNT` bars at fixed width inside
 the row `views::view_now_playing` places between the title and status rows. The `Spectrum` handler
-in `src/ui/handlers/playback.rs` stores the reply under the same epoch and pending-transition
+in `src/ui/handlers/playback/preview.rs` stores the reply under the same epoch and pending-transition
 guards as the position, format, and duration, `spectrum_tick` schedules the backend query, and
 `reset_position_readout` clears the bars on Stop and a new selection. `ui::timers::subscriptions`
 subscribes `spectrum_ticks` only while `WinampPlayer::needs_spectrum_poll` reports that playback is
@@ -433,7 +433,7 @@ decoded `rodio` source and computes the bitrate through `audio::player::preview_
 the source's own total duration, and
 `views::now_playing::format_playback_status`/`views::now_playing::now_playing_status_row` render
 them in the LCD's status row built by `views::view_now_playing`. The `PlaybackFormat` handler in
-`src/ui/handlers/playback.rs` stores the reply beside the position under the same epoch and
+`src/ui/handlers/playback/preview.rs` stores the reply beside the position under the same epoch and
 pending-transition guards, and `reset_position_readout` clears the format on Stop and a new
 selection;
 `position_tick` batches all three backend queries: the position, the format, and the preview's
@@ -709,7 +709,7 @@ handled beside `Command::PlaybackFormat`; `RodioOutput::spectrum` bounds the que
 backend queries. On the UI side, `views::now_playing::visualizer_bar_heights` and
 `views::now_playing::now_playing_visualizer_row` scale and draw the bands,
 `WinampPlayer::needs_spectrum_poll` gates the poll, `ui::timers::spectrum_ticks` feeds it, and
-`handlers::playback::spectrum_tick`/`spectrum` issue and guard the query while
+`handlers::playback::preview::spectrum_tick`/`spectrum` issue and guard the query while
 `reset_position_readout` clears the stored value.
 
 **Pinned by.**
@@ -764,8 +764,8 @@ player holds a preview's format and `rodio::Player::empty` reports the queued so
 `RodioOutput::is_finished` bounds the worker's `Command::Finished` reply like the other backend
 queries, mapping a missing reply to false. `AppleMusicService::preview_finished` in
 `src/apple_music/playback.rs` forwards the backend's answer without touching shared state.
-`handlers::playback::position_tick` schedules the finished query, `Message::PlaybackFinished`
-carries its reply, and `handlers::playback::playback_finished` advances the transport;
+`handlers::playback::preview::position_tick` schedules the finished query, `Message::PlaybackFinished`
+carries its reply, and `handlers::playback::preview::playback_finished` advances the transport;
 `handlers::playback::forward_track_id` (shared with `handlers::playback::step_track`) applies the
 same list/Shuffle/Repeat rules as Next, and the no-next-song case reuses `handlers::playback::stop`.
 
