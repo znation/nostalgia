@@ -5,8 +5,8 @@ use super::browse::rows::{
     list_count_summary, playlist_row, row_prefix, song_list_summary, song_row,
 };
 use super::equalizer::{
-    RESPONSE_CURVE_COLUMNS, RESPONSE_CURVE_HEIGHT, RESPONSE_CURVE_LINE_HEIGHT, eq_enabled_label,
-    response_curve_offsets, response_curve_row,
+    EQ_SLIDER_HEIGHT, RESPONSE_CURVE_COLUMNS, RESPONSE_CURVE_HEIGHT, RESPONSE_CURVE_LINE_HEIGHT,
+    eq_enabled_label, response_curve_offsets, response_curve_row,
 };
 use super::now_playing::text::{format_lcd_elapsed, format_lcd_remaining};
 use super::now_playing::{
@@ -1809,6 +1809,72 @@ fn equalizer_slider_spec_matches_the_gain_clamp_and_steps_whole_decibels() {
     assert_slider_range_matches_clamp(clamp_gain, GAIN_MIN_DB, GAIN_MAX_DB, EQ_STEP);
 
     assert_eq!(EQ_STEP, 1.0);
+}
+
+// The mockup draws the preamp as a vertical slider in the band row with a dB
+// scale beside it, not as a horizontal slider above the curve. Lay out the
+// real panel and pin the scale's top-to-bottom order, the preamp label's
+// baseline sharing the band labels' row, and the scale sitting left of the
+// first band.
+#[test]
+fn equalizer_preamp_and_db_scale_sit_left_of_the_band_sliders() {
+    let bands = [0.0; BAND_COUNT];
+    let mut element = view_equalizer(false, 0.0, &bands, None);
+    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+
+    let plus_twelve = capture.find("+12 DB");
+    let zero = capture.find("0 DB");
+    let minus_twelve = capture.find("-12 DB");
+    assert!(
+        plus_twelve.y < zero.y && zero.y < minus_twelve.y,
+        "the dB scale reads top to bottom: +12 {:?}, 0 {:?}, -12 {:?}",
+        plus_twelve.y,
+        zero.y,
+        minus_twelve.y
+    );
+    assert!(
+        minus_twelve.y - plus_twelve.y <= EQ_SLIDER_HEIGHT,
+        "the dB scale fits one slider's height: +12 {:?}, -12 {:?}",
+        plus_twelve.y,
+        minus_twelve.y
+    );
+
+    let preamp = capture.find("Preamp");
+    let first_frequency = capture.find(BAND_FREQUENCIES[0]);
+    assert!(
+        (preamp.y - first_frequency.y).abs() <= 0.5,
+        "the preamp label sits in the band row: {preamp:?} vs {first_frequency:?}"
+    );
+
+    for scale in [plus_twelve, zero, minus_twelve] {
+        assert!(
+            scale.x + scale.width <= first_frequency.x,
+            "the dB scale sits left of the first band: {scale:?} vs {first_frequency:?}"
+        );
+    }
+
+    // The curve now shares the band row's left edge instead of starting over
+    // the preamp and scale, so its first column must sit on the first band.
+    let mut tree = Tree::new(element.as_widget());
+    let renderer = layout_capture::headless_renderer();
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &layout_capture::limits());
+    let mut containers = CapturedContainers::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &renderer, &mut containers);
+    let first_segment = containers
+        .0
+        .iter()
+        .filter(|bounds| bounds.height == RESPONSE_CURVE_LINE_HEIGHT)
+        .min_by(|left, right| left.x.total_cmp(&right.x))
+        .copied()
+        .expect("the curve draws a segment");
+    assert!(
+        (first_segment.x - first_frequency.x).abs() <= 0.5,
+        "the curve starts at the first band: {first_segment:?} vs {first_frequency:?}"
+    );
 }
 
 // The ten band labels are the equalizer's only frequency readout: when a

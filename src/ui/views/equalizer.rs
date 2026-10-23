@@ -1,5 +1,6 @@
-//! The equalizer panel: the on/off button, the preset pick list, the preamp
-//! slider, the response curve, and the [`BAND_COUNT`] vertical band sliders.
+//! The equalizer panel: the on/off button, the preset pick list, the response
+//! curve, and one row of a vertical preamp slider, a dB scale, and the
+//! [`BAND_COUNT`] vertical band sliders.
 
 use iced::{
     Element, Length,
@@ -11,12 +12,16 @@ use crate::equalizer::{
 };
 use crate::ui::{Message, bevel, style, theme};
 
-use super::{EQ_STEP, chrome_slider, labeled_button, spacer};
+use super::{EQ_STEP, labeled_button, spacer};
 
 /// The horizontal gap between adjacent equalizer band columns. Without it the
 /// labels sit edge to edge, so `170`, `310`, `600`, and `1K` read as one
 /// number in the rendered panel.
 const BAND_ROW_SPACING: f32 = 6.0;
+
+/// The height of every equalizer slider's rail, in pixels. The preamp, the dB
+/// scale, and the band sliders share it so their labels land on one row.
+pub(super) const EQ_SLIDER_HEIGHT: f32 = 100.0;
 
 /// The response curve's horizontal resolution: one green segment per column,
 /// so the line reads as a smooth trace over the ten band sliders.
@@ -80,6 +85,37 @@ pub(super) fn response_curve_offsets(bands: &[f32; BAND_COUNT], columns: usize) 
         .collect()
 }
 
+/// Builds the equalizer's dB scale: `+12 DB` at the rail's top, `0 DB` in the
+/// middle, and `-12 DB` at its bottom. The column is exactly
+/// [`EQ_SLIDER_HEIGHT`] tall and its two fill `Space`s split the leftover height
+/// evenly, so the middle label centers on the rail beside it.
+pub(super) fn db_scale_column() -> Column<'static, Message> {
+    Column::new()
+        .width(Length::Shrink)
+        .height(Length::Fixed(EQ_SLIDER_HEIGHT))
+        .push(Text::new("+12 DB").size(12))
+        .push(Space::new().height(Length::Fill))
+        .push(Text::new("0 DB").size(12))
+        .push(Space::new().height(Length::Fill))
+        .push(Text::new("-12 DB").size(12))
+}
+
+/// Builds the equalizer's preamp column: a [`VerticalSlider`] over the
+/// `Preamp` label, matching a band column's shape so it sits in the band row.
+/// The slider spans `GAIN_MIN_DB..=GAIN_MAX_DB` in [`EQ_STEP`] increments and
+/// keeps the uniform gray [`style::chrome_slider_style`], not the band gain
+/// tint.
+pub(super) fn preamp_column(preamp: f32) -> Column<'static, Message> {
+    Column::new()
+        .push(
+            VerticalSlider::new(GAIN_MIN_DB..=GAIN_MAX_DB, preamp, Message::EqPreampChange)
+                .step(EQ_STEP)
+                .height(Length::Fixed(EQ_SLIDER_HEIGHT))
+                .style(|_theme, status| style::chrome_slider_style(status)),
+        )
+        .push(Text::new("Preamp").size(12))
+}
+
 /// Builds the response curve row: one green line segment per
 /// [`RESPONSE_CURVE_COLUMNS`] column, placed at the height
 /// [`response_curve_offsets`] gives for the stored band gains. The row keeps
@@ -130,9 +166,11 @@ where
         .into()
 }
 
-/// The equalizer panel: an on/off button, a preset pick list, a preamp slider,
-/// a response curve above a row of the [`BAND_COUNT`] vertical band sliders
-/// labelled from [`BAND_FREQUENCIES`].
+/// The equalizer panel: an on/off button, a preset pick list, a response
+/// curve above the [`BAND_COUNT`] band sliders, and to their left the vertical
+/// preamp slider and the `+12 DB` / `0 DB` / `-12 DB` scale. The curve starts at
+/// the first band, so its column 0 sits on that band rather than over the
+/// preamp.
 ///
 /// `enabled` is the shared EQ on/off flag shown on the button and toggled by
 /// pressing it; `preset` is the applied curve the pick list shows (or `None`,
@@ -152,22 +190,44 @@ pub fn view_equalizer(
     bands: &[f32; BAND_COUNT],
     preset: Option<Preset>,
 ) -> Element<'static, Message> {
-    let mut band_row = Row::new().spacing(BAND_ROW_SPACING);
+    let mut bands_row = Row::new().spacing(BAND_ROW_SPACING);
     for (index, frequency) in BAND_FREQUENCIES.iter().enumerate() {
         let gain = bands[index];
-        band_row = band_row.push(
+        bands_row = bands_row.push(
             Column::new()
                 .push(
                     VerticalSlider::new(GAIN_MIN_DB..=GAIN_MAX_DB, gain, move |gain| {
                         Message::EqBandChange(index, gain)
                     })
                     .step(EQ_STEP)
-                    .height(Length::Fixed(100.0))
+                    .height(Length::Fixed(EQ_SLIDER_HEIGHT))
                     .style(move |_theme, status| style::band_slider_style(gain, status)),
                 )
                 .push(Text::new(*frequency).size(12)),
         );
     }
+
+    let preamp_and_scale = Row::new()
+        .spacing(BAND_ROW_SPACING)
+        .push(preamp_column(preamp))
+        .push(db_scale_column());
+
+    // The curve spans only the band area: the left column's curve-height
+    // spacer keeps the preamp and scale in the band row while the right
+    // column starts both the curve and the bands at the first band's x, so the
+    // curve's column 0 sits on the first band instead of over the preamp.
+    let sliders = Row::new()
+        .spacing(BAND_ROW_SPACING)
+        .push(
+            Column::new()
+                .push(Space::new().height(Length::Fixed(RESPONSE_CURVE_HEIGHT)))
+                .push(preamp_and_scale),
+        )
+        .push(
+            Column::new()
+                .push(response_curve_row(bands))
+                .push(bands_row),
+        );
 
     bevel::raised_panel(
         Column::new()
@@ -191,15 +251,6 @@ pub fn view_equalizer(
                             .menu_style(|_theme| style::preset_menu_style()),
                     ),
             )
-            .push(Row::new().push(Text::new("Preamp")).push(chrome_slider(
-                GAIN_MIN_DB,
-                GAIN_MAX_DB,
-                preamp,
-                EQ_STEP,
-                150.0,
-                Message::EqPreampChange,
-            )))
-            .push(response_curve_row(bands))
-            .push(band_row),
+            .push(sliders),
     )
 }

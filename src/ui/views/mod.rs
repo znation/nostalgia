@@ -167,10 +167,10 @@ const EQ_STEP: f32 = 1.0;
 /// `value`, steps by `step`, is `width` pixels wide, and is restyled with the
 /// shared [`style::chrome_slider_style`]. Dragging it emits `on_change`.
 ///
-/// The transport row's volume and balance sliders, the shade strip's volume
-/// slider, and the equalizer's preamp slider differ only in those values, so
-/// the construction lives here once. The equalizer's band sliders are the
-/// vertical twin and build a `VerticalSlider`, so they do not call this.
+/// The transport row's volume and balance sliders and the shade strip's volume
+/// slider differ only in those values, so the construction lives here once.
+/// The equalizer's preamp and band sliders are vertical twins beside each other
+/// in the band row and build a `VerticalSlider`, so they do not call this.
 fn chrome_slider(
     min: f32,
     max: f32,

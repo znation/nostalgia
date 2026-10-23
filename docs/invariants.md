@@ -144,18 +144,27 @@ child is open), and `views::view_browse_nav_buttons` in `src/ui/views/browse.rs`
 - The transport row's faces keep their absolute positions when the Play/Pause label changes:
   the Play button's Play and Pause faces are pinned to one fixed width. The Repeat: Off/On and
   Shuffle: Off/On faces are pinned the same way, so their label swaps cannot reflow the row.
+- The equalizer band row puts the vertical preamp slider leftmost, then the `+12 DB` / `0 DB` /
+  `-12 DB` scale, then the ten band sliders. The scale reads top to bottom beside the rail's top,
+  middle, and bottom, and the preamp label shares the band labels' text row. The response curve
+  above them starts at the first band, not over the preamp and scale.
 
 **Enforced by.** `views::view_browse_nav_buttons` in `src/ui/views/browse.rs` pushes the Top
 and Sort buttons into one `Row`. `views::view_transport_controls` and
 `views::transport::transport_buttons` in `src/ui/views/transport.rs` build the transport row
-from `fixed_width_button`s. Both layout tests lay out the whole root `view` through the test-only
-`src/ui/layout_capture.rs` harness, which records each drawn text fragment's absolute bounds
-with iced's headless tiny-skia renderer.
+from `fixed_width_button`s. `views::equalizer::preamp_column`,
+`views::equalizer::db_scale_column`, and `views::view_equalizer` in
+`src/ui/views/equalizer.rs` build the equalizer band row and align the curve with it. The
+browse and transport layout tests lay out the whole root `view` through the test-only
+`src/ui/layout_capture.rs` harness; the equalizer layout test lays out `view_equalizer`
+directly. The harness records each drawn text fragment's absolute bounds with iced's headless
+tiny-skia renderer.
 
 **Pinned by.** `browse_nav_buttons_place_sort_beside_top` and
 `transport_row_does_not_reflow_when_the_play_label_changes` (`src/ui/tests.rs`), plus
-`transport_buttons_keep_a_fixed_width_across_label_changes` (`src/ui/views/tests.rs`) for the
-Repeat and Shuffle faces.
+`transport_buttons_keep_a_fixed_width_across_label_changes` and
+`equalizer_preamp_and_db_scale_sit_left_of_the_band_sliders` (`src/ui/views/tests.rs`) for the
+Repeat and Shuffle faces and the equalizer band row.
 
 **History.** Reconstructed from "Sort renders below Top instead of beside it, contradicting the
 documented layout" and "Transport buttons resize to their label text, so pressing Play/Pause
@@ -168,8 +177,8 @@ gap; the shared harness closes it.
 `GAIN_MIN_DB` (`-12 dB`), yellow at `0 dB`, and red at `GAIN_MAX_DB` (`+12 dB`), interpolating
 between adjacent stops. Both rail halves carry the tint, so no gray segment remains on either
 side of the thumb. A gain outside the range clamps to the matching end stop, and a NaN gain
-renders the flat yellow instead of an invalid color. The preamp slider keeps its uniform gray
-groove.
+renders the flat yellow instead of an invalid color. The vertical preamp slider in the band row
+keeps its uniform gray groove.
 
 **Enforced by.** `style::band_gain_color` and `style::band_slider_style` in `src/ui/style.rs`,
 used by `views::view_equalizer` in `src/ui/views/equalizer.rs`.
