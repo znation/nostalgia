@@ -195,6 +195,10 @@ enum RejectedCommand {
     /// Every `play` after the first, so a test can load the first preview and
     /// then refuse the restart a Play-after-Stop issues.
     PlayAfterFirst,
+    /// Every `set_equalizer` after the first, so a test can load the first
+    /// preview and then refuse the curve Play-after-Stop forwards before it
+    /// replays.
+    SetEqualizerAfterFirst,
 }
 
 /// An audio backend that records every command and refuses one chosen command,
@@ -210,6 +214,10 @@ struct RejectingAudio {
     /// Counts `play` calls so [`RejectedCommand::PlayAfterFirst`] lets the
     /// initial preview load before refusing its restart.
     plays: std::sync::Mutex<usize>,
+    /// Counts `set_equalizer` calls so
+    /// [`RejectedCommand::SetEqualizerAfterFirst`] lets the initial preview
+    /// load before refusing the curve a restart forwards.
+    equalizers: std::sync::Mutex<usize>,
 }
 
 impl RejectingAudio {
@@ -218,6 +226,7 @@ impl RejectingAudio {
             rejected,
             calls: std::sync::Mutex::new(Vec::new()),
             plays: std::sync::Mutex::new(0),
+            equalizers: std::sync::Mutex::new(0),
         }
     }
 
@@ -294,6 +303,13 @@ impl AudioOutput for RejectingAudio {
             .lock()
             .unwrap()
             .push(AudioCall::SetEqualizer(equalizer));
+        if self.rejected == RejectedCommand::SetEqualizerAfterFirst {
+            let mut equalizers = self.equalizers.lock().unwrap();
+            *equalizers += 1;
+            if *equalizers > 1 {
+                return Err(AppleMusicError::new("the audio device is gone"));
+            }
+        }
         self.check(RejectedCommand::SetEqualizer)
     }
 }
@@ -1636,6 +1652,40 @@ async fn resume_after_stop_reports_a_restart_failure_without_claiming_playback()
             AudioCall::Play(PREVIEW_URL.to_string()),
             AudioCall::SetEqualizer(EqSnapshot::default()),
             AudioCall::Play(PREVIEW_URL.to_string()),
+        ]
+    );
+    assert_playback_state(&state, Some("song-1"), false).await;
+}
+
+// A restart after Stop forwards the panel's curve before it replays, so a
+// backend that refuses that curve must surface the error and leave the
+// transport stopped: replaying anyway would sound at the wrong curve, and
+// marking the transport loaded first would send the next Play as a `Resume` to
+// a backend with no player. The retry here must therefore issue another
+// `SetEqualizer`, not a `Resume`.
+#[tokio::test]
+async fn resume_after_stop_reports_an_equalizer_failure_without_claiming_playback() {
+    let audio = Arc::new(RejectingAudio::new(RejectedCommand::SetEqualizerAfterFirst));
+    let (service, state) =
+        service_with_preview_playing(Arc::clone(&audio) as Arc<dyn AudioOutput>).await;
+    service.stop().await.unwrap();
+
+    let error = service.resume().await.unwrap_err();
+    assert_eq!(error.to_string(), "the audio device is gone");
+    assert_playback_state(&state, Some("song-1"), false).await;
+
+    let error = service.resume().await.unwrap_err();
+    assert_eq!(error.to_string(), "the audio device is gone");
+    assert_eq!(
+        audio.calls(),
+        vec![
+            AudioCall::SetVolume(0.5),
+            AudioCall::SetBalance(0.0),
+            AudioCall::SetEqualizer(EqSnapshot::default()),
+            AudioCall::Play(PREVIEW_URL.to_string()),
+            AudioCall::Stop,
+            AudioCall::SetEqualizer(EqSnapshot::default()),
+            AudioCall::SetEqualizer(EqSnapshot::default()),
         ]
     );
     assert_playback_state(&state, Some("song-1"), false).await;
