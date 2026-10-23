@@ -168,7 +168,10 @@ rather than the panic unwinding the event loop.
 - `position_poll_waits_for_a_selected_tracks_play_to_settle`
 - `an_unrelated_transport_completion_keeps_the_poll_waiting`
 - `position_tick_schedules_a_query`
-- `position_tick_stream_emits_position_ticks` (`src/ui/tests.rs`)
+- `position_tick_stream_emits_position_ticks`
+- `a_refused_position_thread_ends_the_tick_stream_instead_of_panicking`
+- `a_refused_position_thread_reports_the_cause_and_the_loss`
+- `the_position_thread_is_named_nostalgia_position_poll` (`src/ui/tests.rs`)
 - `play_track_without_a_preview_url_stops_the_previous_preview` (`src/apple_music/tests.rs`)
 - `position_query_reports_none_when_nothing_is_loaded`
 - `a_seek_is_reflected_by_the_next_position_query`

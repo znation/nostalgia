@@ -160,10 +160,28 @@ fn position_ticks() -> iced::Subscription<Message> {
 /// has not polled the previous one yet, and only a disconnected receiver ends
 /// the thread.
 fn position_tick_stream() -> impl iced::futures::Stream<Item = Message> {
+    position_tick_stream_with(spawn_position_thread)
+}
+
+/// [`position_tick_stream`] with an injectable thread spawner, so a test can
+/// make the spawn fail and prove the stream reports it instead of panicking.
+///
+/// The timer thread starts through the fallible [`spawn_position_thread`]:
+/// `std::thread::spawn` panics when the OS refuses a thread, and iced builds
+/// this stream on its main thread while it updates the subscriptions, so such
+/// a panic would unwind the event loop and take the whole player down. Unlike
+/// the marquee timer, this subscription is always on, so that panic could hit
+/// any startup where the OS is short of threads. A refused spawn is reported
+/// instead, and the tick stream then ends — the sender goes down with the
+/// thread that never started — so the elapsed readout stops updating and the
+/// app keeps running.
+fn position_tick_stream_with(
+    spawn: impl FnOnce(Box<dyn FnOnce() + Send>) -> io::Result<()>,
+) -> impl iced::futures::Stream<Item = Message> {
     use iced::futures::{StreamExt, channel::mpsc};
 
     let (mut sender, receiver) = mpsc::channel(1);
-    std::thread::spawn(move || {
+    let work: Box<dyn FnOnce() + Send> = Box::new(move || {
         loop {
             std::thread::sleep(POSITION_POLL_INTERVAL);
             if let Err(error) = sender.try_send(())
@@ -173,7 +191,38 @@ fn position_tick_stream() -> impl iced::futures::Stream<Item = Message> {
             }
         }
     });
+    if let Err(error) = spawn(work) {
+        eprintln!("{}", position_thread_failure_report(&error));
+    }
     receiver.map(|()| Message::PositionTick)
+}
+
+/// The production spawner for the position poll thread: the named
+/// [`POSITION_THREAD_NAME`] thread. `std::thread::Builder::spawn` is the
+/// fallible form `std::thread::spawn` wraps with a panic, and it is the same
+/// form the audio worker, the REST worker, the sign-in thread, the timeout
+/// timer, and the marquee timer already use.
+fn spawn_position_thread(work: Box<dyn FnOnce() + Send>) -> io::Result<()> {
+    std::thread::Builder::new()
+        .name(POSITION_THREAD_NAME.to_string())
+        .spawn(work)
+        .map(|_handle| ())
+}
+
+/// The name [`spawn_position_thread`] gives the position poll thread, so a
+/// panic in it is attributed to `nostalgia-position-poll` rather than
+/// `<unnamed>`, like the audio worker's `nostalgia-audio`, the REST worker's
+/// `nostalgia-rest`, and the marquee's `nostalgia-marquee`.
+const POSITION_THREAD_NAME: &str = "nostalgia-position-poll";
+
+/// The report for a position poll thread that could not start: it names the
+/// cause and what the user loses — the live elapsed time — so a readout that
+/// never advances is diagnosable instead of mysterious. Pure, so the report
+/// contract is testable without capturing stderr.
+fn position_thread_failure_report(error: &io::Error) -> String {
+    format!(
+        "the position poll thread could not start: {error}; the Now Playing elapsed time will not update"
+    )
 }
 
 /// Runs the UI, blocking until the window is closed.
