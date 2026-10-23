@@ -345,6 +345,21 @@ impl RodioOutput {
             .send(command)
             .map_err(|_| AppleMusicError::new("the audio thread is gone"))
     }
+
+    /// Issues a query command to the worker and waits up to
+    /// [`WORKER_QUERY_TIMEOUT`] for its reply.
+    ///
+    /// Returns `None` when the worker is gone or misses the bound, matching
+    /// the three backend queries [`AudioOutput::position`],
+    /// [`AudioOutput::duration`], and [`AudioOutput::playback_format`], which
+    /// share this wait so a stalled worker cannot block the caller.
+    fn query<T>(&self, command: impl FnOnce(Sender<Option<T>>) -> Command) -> Option<T> {
+        let (reply, replies) = mpsc::channel();
+        if self.send(command(reply)).is_err() {
+            return None;
+        }
+        replies.recv_timeout(WORKER_QUERY_TIMEOUT).ok().flatten()
+    }
 }
 
 impl AudioOutput for RodioOutput {
@@ -381,27 +396,15 @@ impl AudioOutput for RodioOutput {
     }
 
     fn position(&self) -> Option<Duration> {
-        let (reply, replies) = mpsc::channel();
-        if self.send(Command::Position(reply)).is_err() {
-            return None;
-        }
-        replies.recv_timeout(WORKER_QUERY_TIMEOUT).ok().flatten()
+        self.query(Command::Position)
     }
 
     fn duration(&self) -> Option<Duration> {
-        let (reply, replies) = mpsc::channel();
-        if self.send(Command::Duration(reply)).is_err() {
-            return None;
-        }
-        replies.recv_timeout(WORKER_QUERY_TIMEOUT).ok().flatten()
+        self.query(Command::Duration)
     }
 
     fn playback_format(&self) -> Option<PlaybackFormat> {
-        let (reply, replies) = mpsc::channel();
-        if self.send(Command::PlaybackFormat(reply)).is_err() {
-            return None;
-        }
-        replies.recv_timeout(WORKER_QUERY_TIMEOUT).ok().flatten()
+        self.query(Command::PlaybackFormat)
     }
 
     fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
