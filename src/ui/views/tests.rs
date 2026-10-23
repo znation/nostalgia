@@ -778,6 +778,25 @@ fn visualizer_bar_heights_scale_and_clamp_the_reported_bands() {
     assert_eq!(visualizer_bar_heights(None), [0.0; BAND_COUNT]);
 }
 
+// The clamp's lower edge: a spectrum carrying a negative band must not draw a
+// bar below the strip. The test above pins the upper edge, so a regression to
+// `min(1.0)` would keep every existing assertion green while a negative band
+// produced a negative height.
+#[test]
+fn visualizer_bar_heights_floors_a_negative_band_at_zero() {
+    let mut bands = [0.0; BAND_COUNT];
+    bands[0] = -1.0;
+    bands[1] = -0.5;
+    bands[2] = 0.25;
+    let heights = visualizer_bar_heights(Some(Spectrum { bands }));
+
+    assert_eq!(
+        &heights[..3],
+        &[0.0, 0.0, 6.0],
+        "a negative band must clamp to the strip's bottom"
+    );
+}
+
 /// Lays out the LCD content for `spectrum` and returns the text fragments it
 /// would draw, each fragment's bounds, the height the content occupies, and
 /// the bounds of every container it draws.
