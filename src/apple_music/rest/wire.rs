@@ -316,7 +316,7 @@ impl Resource {
             .filter(|name| !name.trim().is_empty())
             .unwrap_or_default();
         // A blank URL (empty or only whitespace) can play nothing, so skip it
-        // in favour of a later preview; a non-blank URL is returned exactly as
+        // in favor of a later preview; a non-blank URL is returned exactly as
         // the resource carried it.
         let preview_url = previews.and_then(|previews| {
             previews

@@ -933,7 +933,7 @@ fn needs_marquee_only_for_a_line_too_long_for_the_lcd() {
     // A label alone fills the budget exactly and still fits.
     assert!(!needs_marquee(&"x".repeat(MARQUEE_WIDTH), ""));
     assert!(needs_marquee(&"x".repeat(MARQUEE_WIDTH + 1), ""));
-    // With an artist, the artist and the `" - "` separator count towards the
+    // With an artist, the artist and the `" - "` separator count toward the
     // budget: "The Sample Band" is 15 characters, so a 4-character label fits
     // the 22-character budget and a 5-character one does not.
     let artist = "The Sample Band";

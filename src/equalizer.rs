@@ -5,7 +5,7 @@
 
 use crate::clamp;
 
-/// The centre frequencies of Winamp's ten equalizer bands, low to high, as
+/// The center frequencies of Winamp's ten equalizer bands, low to high, as
 /// the short display labels printed under each slider (Winamp shows the
 /// hundreds-of-hertz bands in full and abbreviates the kilohertz ones).
 pub const BAND_FREQUENCIES: [&str; 10] = [
@@ -17,7 +17,7 @@ pub const BAND_FREQUENCIES: [&str; 10] = [
 /// drift out of step with the label list.
 pub const BAND_COUNT: usize = BAND_FREQUENCIES.len();
 
-/// The numeric centre frequency of each band, in hertz and in
+/// The numeric center frequency of each band, in hertz and in
 /// [`BAND_FREQUENCIES`] order, matching the labels the panel shows.
 ///
 /// [`BandFilter`] builds one peaking biquad per entry, so changing a label
@@ -217,7 +217,7 @@ impl BandFilter {
     /// state so a changed curve starts from silence rather than carrying the
     /// old curve's ringing.
     ///
-    /// A band whose centre is at or above the source's Nyquist frequency
+    /// A band whose center is at or above the source's Nyquist frequency
     /// (half its sample rate) is left as a pass-through: a peaking section
     /// built above Nyquist has poles outside the unit circle and would blow
     /// up the output. Sources below 32 kHz therefore lose the bands above
@@ -282,7 +282,7 @@ impl Biquad {
         }
     }
 
-    /// An RBJ peaking-EQ section centred at `frequency` with bandwidth `q`
+    /// An RBJ peaking-EQ section centered at `frequency` with bandwidth `q`
     /// and `gain_db` decibels of boost (or cut).
     fn peaking(sample_rate: f32, frequency: f32, q: f32, gain_db: f32) -> Self {
         let amplitude = 10.0_f32.powf(gain_db / 40.0);
@@ -323,12 +323,12 @@ mod tests {
         assert_eq!(BAND_FREQUENCIES.len(), BAND_COUNT);
     }
 
-    // The display labels and the filters' numeric centres are separate
+    // The display labels and the filters' numeric centers are separate
     // tables; a typo or reordering in either would leave the panel and the
     // sound out of step while every other test still passed. Pin both in the
     // same low-to-high order.
     #[test]
-    fn band_frequencies_have_matching_numeric_centres() {
+    fn band_frequencies_have_matching_numeric_centers() {
         assert_eq!(
             BAND_HZ,
             [
@@ -544,11 +544,11 @@ mod tests {
 
         assert!(
             settled_sine_rms(&mut boost, 1_000.0) > input_rms * 2.0,
-            "a +12 dB band must raise a centred sine's RMS"
+            "a +12 dB band must raise a centered sine's RMS"
         );
         assert!(
             settled_sine_rms(&mut cut, 1_000.0) < input_rms * 0.5,
-            "a -12 dB band must lower a centred sine's RMS"
+            "a -12 dB band must lower a centered sine's RMS"
         );
     }
 

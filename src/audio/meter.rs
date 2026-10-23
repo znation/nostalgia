@@ -223,7 +223,7 @@ impl<S: Source> Source for MeterSource<S> {
 /// Analyzes a mono window into one normalized amplitude per
 /// [`crate::equalizer::BAND_HZ`] band.
 ///
-/// Each band runs a Goertzel magnitude at its centre frequency and normalizes
+/// Each band runs a Goertzel magnitude at its center frequency and normalizes
 /// a full-scale sine to about `1.0` (`2 * magnitude / window length`). Bands
 /// at or above Nyquist have no representable tone and read zero, as does
 /// silence and an empty window. Pure, so the frequency mapping is testable
