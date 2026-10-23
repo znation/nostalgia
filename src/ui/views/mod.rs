@@ -59,20 +59,22 @@ mod tests;
 /// A fixed-width horizontal gap between adjacent widgets.
 ///
 /// The browse rows (a 10px gap between the title and the secondary label),
-/// the transport row (a 20px gap between each control), and the equalizer
-/// header (an 8px gap between its on/off button and preset pick list) all
-/// construct the same `Space`, so the `Space::new().width(Length::Fixed(..))`
-/// expression lives here once instead of being repeated at every call site.
+/// the transport row (a 20px gap between each control), the equalizer header
+/// (an 8px gap between its on/off button and preset pick list), and the shade
+/// strip (a 6px gap between its transport buttons) all construct the same
+/// `Space`, so the `Space::new().width(Length::Fixed(..))` expression lives
+/// here once instead of being repeated at every call site.
 fn spacer(width: f32) -> Space {
     Space::new().width(Length::Fixed(width))
 }
 
 /// A button showing a single text label that emits `message` on press.
 ///
-/// The browse Back, Top, Sort, All Songs, All Albums, Playlists, and Retry buttons and
-/// the equalizer panel's on/off button call this directly; the transport row's six
-/// buttons (Play/Pause, Stop, Previous, Next, Repeat, Shuffle) and the title
-/// bar's shade, minimize, and close buttons reach it through
+/// The browse Back, Top, Sort, All Songs, All Albums, Playlists, and Retry
+/// buttons and the equalizer panel's on/off button call this directly; the
+/// transport row's six buttons (Play/Pause, Stop, Previous, Next, Repeat,
+/// Shuffle), the shade strip's four (Previous, Play/Pause, Stop, Next), and
+/// the title bar's shade, minimize, and close buttons reach it through
 /// [`fixed_width_button`]. They all build the same
 /// `Button::new(Text::new(..)).on_press(..)` widget, so that expression lives
 /// here once instead of being repeated at every call site. The label is
@@ -138,10 +140,10 @@ const EQ_STEP: f32 = 1.0;
 /// `value`, steps by `step`, is `width` pixels wide, and is restyled with the
 /// shared [`style::chrome_slider_style`]. Dragging it emits `on_change`.
 ///
-/// The transport row's volume and balance sliders and the equalizer's preamp
-/// slider differ only in those values, so the construction lives here once.
-/// The equalizer's band sliders are the vertical twin and build a
-/// `VerticalSlider`, so they do not call this.
+/// The transport row's volume and balance sliders, the shade strip's volume
+/// slider, and the equalizer's preamp slider differ only in those values, so
+/// the construction lives here once. The equalizer's band sliders are the
+/// vertical twin and build a `VerticalSlider`, so they do not call this.
 fn chrome_slider(
     min: f32,
     max: f32,
