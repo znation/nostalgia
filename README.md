@@ -80,8 +80,9 @@ song list while it is showing. A `Top` button above every browse list returns it
 and opening a list starts it at the top. A `Sort` button beside `Top` reorders the showing list
 alphabetically by its rows' rendered text, ignoring case; the reorder is one-shot, so reopening
 the list restores the library's order. The title bar's `A` button toggles always-on-top, its
-shade button (or a double-click on the bar) rolls the window up to just that title bar and back,
-and its `–` and
+shade button (or a double-click on the bar) rolls the window up to the title bar plus a compact
+transport strip with Previous, Play/Pause, Stop, Next, the current time readout, and a volume
+slider, and back. Its `–` and
 `✕` buttons minimize and close. With the window focused, the classic Winamp keys drive playback: Z
 and B step back and forward, X plays, C pauses, V stops, R toggles Repeat and S toggles Shuffle,
 and the up/down arrows nudge the volume while the left/right arrows seek five seconds back or

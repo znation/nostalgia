@@ -11,6 +11,10 @@ use super::now_playing::{
     now_playing_row, now_playing_status_row, now_playing_time, now_playing_visualizer_row,
     visualizer_bar_heights,
 };
+use super::shade::{
+    SHADE_STRIP_HEIGHT, SHADE_VOLUME_ID, SHADE_VOLUME_WIDTH, SHADED_HEIGHT, play_pause_glyph,
+    shade_controls, shade_volume_spec, view_shade_strip,
+};
 use super::transport::{play_pause_label, repeat_label, shuffle_label, transport_buttons};
 use super::{
     BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, EQ_STEP, VOLUME_MAX, VOLUME_MIN, VOLUME_STEP,
@@ -1639,4 +1643,162 @@ fn equalizer_band_labels_leave_a_gap_between_frequencies() {
             captured.0
         );
     }
+}
+
+// The shade strip's Play/Pause face is the compact twin of the transport
+// row's label: it switches with playback so the rolled-up window still shows
+// what pressing it will do.
+#[test]
+fn shade_play_pause_glyph_switches_with_playback_state() {
+    assert_eq!(play_pause_glyph(false), "▶");
+    assert_eq!(play_pause_glyph(true), "II");
+}
+
+// The four compact buttons must emit the same messages as their full
+// transport-row twins, and each keeps a fixed width so the glyph swap cannot
+// reflow the strip. Pin both, in row order.
+#[test]
+fn shade_controls_map_to_transport_messages_and_keep_fixed_widths() {
+    let stopped = shade_controls(false);
+    let playing = shade_controls(true);
+
+    let labels: Vec<&str> = stopped.iter().map(|(label, _, _)| *label).collect();
+    assert_eq!(labels, vec!["◀◀", "▶", "■", "▶▶"]);
+    let widths: Vec<f32> = stopped.iter().map(|(_, width, _)| *width).collect();
+    assert_eq!(widths, vec![34.0, 30.0, 30.0, 34.0]);
+
+    let messages: Vec<&Message> = stopped.iter().map(|(_, _, message)| message).collect();
+    assert!(matches!(messages[0], Message::PreviousTrack));
+    assert!(matches!(messages[1], Message::PlayPause));
+    assert!(matches!(messages[2], Message::Stop));
+    assert!(matches!(messages[3], Message::NextTrack));
+
+    assert_eq!(playing[1].0, "II");
+    let playing_widths: Vec<f32> = playing.iter().map(|(_, width, _)| *width).collect();
+    assert_eq!(
+        playing_widths, widths,
+        "the glyph swap must not resize a button"
+    );
+}
+
+// The rolled-up window is exactly the title bar plus the strip; both the
+// view and `resize_to_shade` read `SHADED_HEIGHT`, so pin its composition and
+// its positive, fixed size.
+#[test]
+fn shade_height_pins_the_rolled_up_window() {
+    assert_eq!(SHADE_STRIP_HEIGHT, 28.0);
+    assert_eq!(SHADED_HEIGHT, super::TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT);
+}
+
+// Laying the strip out with the headless renderer resolves its fixed height
+// for both playback states, so a browser or layout change cannot shrink the
+// rolled-up window to an empty band.
+#[test]
+fn view_shade_strip_keeps_its_fixed_height_for_both_playback_states() {
+    use iced::advanced::renderer::Headless;
+    use iced::{Font, Pixels};
+
+    let renderer = futures::executor::block_on(<iced::Renderer as Headless>::new(
+        Font::default(),
+        Pixels(16.0),
+        Some("tiny-skia"),
+    ))
+    .expect("the headless tiny-skia renderer");
+
+    for is_playing in [false, true] {
+        let mut element = view_shade_strip(is_playing, 0.5, Cow::Borrowed("00:53"));
+        let mut tree = Tree::new(element.as_widget());
+        let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
+        let node = element
+            .as_widget_mut()
+            .layout(&mut tree, &renderer, &limits);
+        assert_eq!(
+            node.size().height,
+            SHADE_STRIP_HEIGHT,
+            "the strip must keep its fixed height while is_playing = {is_playing}"
+        );
+    }
+}
+
+/// Lays the shade strip out with the headless tiny-skia renderer and records
+/// every text fragment plus the bounds of the container tagged
+/// [`SHADE_VOLUME_ID`], so a test can see the time readout and the volume
+/// slider's place in the real laid-out row.
+fn captured_shade_strip(elapsed: &str) -> (Vec<String>, Option<Rectangle>, Size) {
+    use iced::advanced::renderer::Headless;
+    use iced::{Font, Pixels};
+
+    #[derive(Default)]
+    struct Captured {
+        texts: Vec<String>,
+        slider: Option<Rectangle>,
+    }
+    impl Operation for Captured {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+        fn text(&mut self, _id: Option<&Id>, _bounds: Rectangle, text: &str) {
+            self.texts.push(text.to_string());
+        }
+        fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
+            if id == Some(&Id::new(SHADE_VOLUME_ID)) {
+                self.slider = Some(bounds);
+            }
+        }
+    }
+
+    let renderer = futures::executor::block_on(<iced::Renderer as Headless>::new(
+        Font::default(),
+        Pixels(16.0),
+        Some("tiny-skia"),
+    ))
+    .expect("the headless tiny-skia renderer");
+    let mut element = view_shade_strip(false, 0.5, Cow::Borrowed(elapsed));
+    let mut tree = Tree::new(element.as_widget());
+    let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &limits);
+    let size = node.size();
+    let mut captured = Captured::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &renderer, &mut captured);
+    (captured.texts, captured.slider, size)
+}
+
+// The strip's two non-button controls must actually reach the laid-out row:
+// the time readout the caller gives it (elapsed or remaining) and the volume
+// slider. The fill spacer pushes the slider to the right edge, so it does not
+// sit immediately after the readout on the left.
+#[test]
+fn shade_strip_draws_the_time_readout_and_puts_the_volume_slider_at_the_right_edge() {
+    for time in ["00:53", "-02:37"] {
+        let (texts, slider, size) = captured_shade_strip(time);
+        assert!(
+            texts.iter().any(|text| text == time),
+            "missing {time} readout: {texts:?}"
+        );
+        let slider = slider.unwrap_or_else(|| panic!("missing volume slider: {texts:?}"));
+        assert_eq!(slider.width, SHADE_VOLUME_WIDTH);
+        assert!(
+            (slider.x + slider.width - (size.width - 6.0)).abs() < 0.5,
+            "slider must sit at the strip's right edge: {slider:?} in {size:?}"
+        );
+    }
+}
+
+// The strip's volume slider must read the shared volume range and write
+// `Message::VolumeChange`, the same contract as the full transport row's
+// volume slider.
+#[test]
+fn shade_volume_slider_spec_matches_the_shared_volume_range_and_message() {
+    let (min, max, step, width, on_change) = shade_volume_spec();
+    assert_eq!((min, max, step), (VOLUME_MIN, VOLUME_MAX, VOLUME_STEP));
+    assert_eq!(width, SHADE_VOLUME_WIDTH);
+    assert_eq!(SHADE_VOLUME_WIDTH, 80.0);
+    assert!(matches!(
+        on_change(0.5),
+        Message::VolumeChange(value) if value == 0.5
+    ));
 }

@@ -277,8 +277,8 @@ struct WinampPlayer {
     /// resolves, or if it fails) makes their window calls no-ops.
     window_id: Option<iced::window::Id>,
     /// Whether the window is rolled up into shade mode: `view` then renders
-    /// only the title bar and the window is resized to
-    /// [`views::TITLE_BAR_HEIGHT`].
+    /// only the title bar and the compact transport strip, and the window is
+    /// resized to [`views::SHADED_HEIGHT`].
     shaded: bool,
     /// Whether the window is pinned above other windows. The title bar's
     /// clutter toggle flips it, and `update` schedules
@@ -690,15 +690,27 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
 /// Assembles the app screen: the title bar, Now Playing bar, seek strip,
 /// transport row, and equalizer panel — all built in `views` from the resolved
 /// title and the shared playback, volume, Repeat, Shuffle, and EQ state — above
-/// the current browse list. When the window is shaded, only
-/// [`views::view_title_bar`] is built and the rest of the screen is dropped.
+/// the current browse list. When the window is shaded, the tree is the title
+/// bar over the compact transport strip and the rest of the screen is dropped.
 fn view(player: &WinampPlayer) -> Element<'_, Message> {
-    // Shade mode builds only the title bar — the Now Playing bar, seek strip,
-    // transport row, equalizer, and browse list are all dropped, and the window
-    // itself is resized down to this strip. Returning before the state lock
-    // keeps the rolled-up frame cheap and free of a lock the content needs.
+    // Shade mode builds only the title bar and its compact transport strip —
+    // the Now Playing bar, seek strip, transport row, equalizer, and browse
+    // list are all dropped, and the window itself is resized down to that
+    // pair. The short state lock resolves only what the strip draws, so the
+    // rolled-up frame stays cheap.
     if player.shaded {
-        return views::view_title_bar(player.always_on_top);
+        let (is_playing, volume, elapsed) = {
+            let state = player.state.blocking_lock();
+            (
+                state.is_playing,
+                state.volume(),
+                player.now_playing_elapsed(state.current_track.as_deref()),
+            )
+        };
+        return Column::new()
+            .push(views::view_title_bar(player.always_on_top))
+            .push(views::view_shade_strip(is_playing, volume, elapsed))
+            .into();
     }
 
     // The now-playing title, artist, elapsed time, and total are resolved while

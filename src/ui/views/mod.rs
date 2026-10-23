@@ -9,10 +9,10 @@
 //!
 //! Each panel lives in its own submodule — `browse` (the artist → album →
 //! song drill-down, the flat lists, and Playlists, with their rows),
-//! `title_bar`, `now_playing`, `seek_bar`, `transport`, and
-//! `equalizer` — while the chrome helpers and slider specs the panels share
-//! ([`spacer`], [`labeled_button`], [`fixed_width_button`], and
-//! [`chrome_slider`]) live here.
+//! `title_bar`, `shade` (the rolled-up transport strip), `now_playing`,
+//! `seek_bar`, `transport`, and `equalizer` — while the chrome helpers and
+//! slider specs the panels share ([`spacer`], [`labeled_button`],
+//! [`fixed_width_button`], and [`chrome_slider`]) live here.
 
 use iced::{
     Element, Length,
@@ -25,6 +25,7 @@ mod browse;
 mod equalizer;
 mod now_playing;
 mod seek_bar;
+mod shade;
 mod title_bar;
 mod transport;
 
@@ -40,6 +41,7 @@ pub use now_playing::{
     now_playing_elapsed, now_playing_label, now_playing_time, view_now_playing,
 };
 pub use seek_bar::view_seek_bar;
+pub use shade::view_shade_strip;
 pub use title_bar::view_title_bar;
 pub use transport::view_transport_controls;
 
@@ -47,6 +49,8 @@ pub use transport::view_transport_controls;
 pub(super) use browse::BROWSE_VIEWS;
 #[cfg(test)]
 pub(super) use seek_bar::seek_bar_value;
+pub(super) use shade::SHADED_HEIGHT;
+#[cfg(test)]
 pub(super) use title_bar::TITLE_BAR_HEIGHT;
 
 #[cfg(test)]

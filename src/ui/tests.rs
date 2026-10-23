@@ -5383,16 +5383,103 @@ fn title_bar_constructs_for_both_always_on_top_states() {
     let _ = views::view_title_bar(true);
 }
 
-// `TITLE_BAR_HEIGHT` is the height of the shade strip twice over:
-// `view_title_bar` sizes the rolled-up frame's only band with it, and
-// `resize_to_shade` shrinks the whole window to it. The shade tests above
-// never read the value — they pass a literal 24.0 only as a stale measurement
-// argument — so a zero or oversized height could leave the rolled-up window
-// blank or full-window while every test stayed green. Pin the user-visible
-// strip height.
+// `TITLE_BAR_HEIGHT` is the title bar band alone. The rolled-up window is
+// that band plus the compact transport strip: `views::SHADED_HEIGHT` owns the
+// sum, and both the shaded root view and `resize_to_shade` read it. The shade
+// tests above never read the value — they pass a literal 24.0 only as a stale
+// measurement argument — so a zero or oversized band could leave the
+// rolled-up window blank or push the strip out of view while every test
+// stayed green. Pin the user-visible band height.
 #[test]
 fn title_bar_height_pins_the_shade_strip() {
     assert_eq!(views::TITLE_BAR_HEIGHT, 24.0);
+}
+
+// `resize_to_shade` sends `shade_target_size` to the window; pin the target
+// itself, because the `Task` it returns is opaque and the shade tests above
+// only see that some work was scheduled. A title-bar-only target would still
+// schedule work while cutting the compact strip off below the window.
+#[test]
+fn shade_target_size_is_the_title_bar_plus_the_strip() {
+    let target = handlers::window::shade_target_size(800.0);
+    assert_eq!(target, iced::Size::new(800.0, views::SHADED_HEIGHT));
+    assert_ne!(target.height, views::TITLE_BAR_HEIGHT);
+}
+
+/// Lays the root `view` out with the headless tiny-skia renderer and returns
+/// every text fragment's absolute bounds plus the resolved root size.
+fn captured_root_view_text_bounds(
+    player: &WinampPlayer,
+) -> (Vec<(String, iced::Rectangle)>, iced::Size) {
+    use iced::advanced::widget::{Id, Tree, operation::Operation};
+    use iced::advanced::{Layout, layout::Limits, renderer::Headless};
+    use iced::{Font, Pixels, Rectangle};
+
+    #[derive(Debug, Default)]
+    struct CapturedTextBounds(Vec<(String, Rectangle)>);
+
+    impl Operation for CapturedTextBounds {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+
+        fn text(&mut self, _id: Option<&Id>, bounds: Rectangle, text: &str) {
+            self.0.push((text.to_string(), bounds));
+        }
+    }
+
+    let mut element = view(player);
+    let renderer = futures::executor::block_on(<iced::Renderer as Headless>::new(
+        Font::default(),
+        Pixels(16.0),
+        Some("tiny-skia"),
+    ))
+    .expect("the headless tiny-skia renderer");
+    let mut tree = Tree::new(element.as_widget());
+    let limits = Limits::new(iced::Size::ZERO, iced::Size::new(1000.0, 1000.0));
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &limits);
+    let size = node.size();
+    let mut captured = CapturedTextBounds::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &renderer, &mut captured);
+    (captured.0, size)
+}
+
+// In shade mode the root view is the title bar over the compact strip, so the
+// whole laid-out tree must resolve to `SHADED_HEIGHT` — the same height
+// `resize_to_shade` gives the window. A title-bar-only tree would leave the
+// controls cut off below the resized window and fail here.
+#[test]
+fn shaded_root_view_is_the_title_bar_plus_the_strip() {
+    let (mut player, _state) = test_player();
+    player.shaded = true;
+
+    let (_texts, size) = captured_root_view_text_bounds(&player);
+    assert_eq!(size.height, views::SHADED_HEIGHT);
+}
+
+// The strip is shade-mode-only: its Previous glyph appears in the rolled-up
+// tree and nowhere in the normal-mode tree, whose transport row uses the
+// word labels instead.
+#[test]
+fn shade_strip_draws_only_while_shaded() {
+    let (mut player, _state) = test_player();
+
+    let (normal_texts, _size) = captured_root_view_text_bounds(&player);
+    assert!(
+        !normal_texts.iter().any(|(text, _)| text == "◀◀"),
+        "normal mode built a shade strip: {normal_texts:?}"
+    );
+
+    player.shaded = true;
+    let (shaded_texts, _size) = captured_root_view_text_bounds(&player);
+    assert!(
+        shaded_texts.iter().any(|(text, _)| text == "◀◀"),
+        "shade mode is missing the strip: {shaded_texts:?}"
+    );
 }
 
 // The README and the Browse row order invariant both say Sort renders beside

@@ -379,6 +379,44 @@ rather than the panic unwinding the event loop.
 **History.** Reconstructed from "Now Playing bar shows the track id instead of the song title" in
 `BUGS-FIXED.md`.
 
+## Window shade
+
+**Guarantee.** Rolling the window up into shade mode keeps playback controllable:
+
+- Shade mode builds exactly the title bar over the compact transport strip, and the window is
+  resized to that same height (`SHADED_HEIGHT = TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT`). The
+  strip keeps a fixed `SHADE_STRIP_HEIGHT`, and normal mode builds no strip at all.
+- The strip shows Previous, Play/Pause, Stop, Next, the current time readout, and a volume
+  slider. Its four buttons emit the same messages as their full transport-row twins
+  (`Message::PreviousTrack`, `Message::PlayPause`, `Message::Stop`, `Message::NextTrack`), each
+  pinned to a fixed width so the glyph swap cannot reflow the strip. The Play/Pause glyph is
+  `"▶"` while stopped and `"II"` while playing. A fill spacer pushes the slider to the right
+  edge, after the left-aligned buttons and time readout.
+- The time readout is the same `WinampPlayer::now_playing_elapsed` string the Now Playing bar
+  draws, so the elapsed/remaining choice carries into shade mode. The volume slider writes
+  `Message::VolumeChange` and reads the shared volume.
+
+**Enforced by.** `views::shade::view_shade_strip` builds the strip and
+`views::shade::shade_controls`/`views::shade::play_pause_glyph` define its buttons;
+`views::shade::shade_volume_spec` fixes the slider's shared range and `Message::VolumeChange`;
+`views::shade::SHADE_STRIP_HEIGHT` and `views::shade::SHADED_HEIGHT` own the heights; the shaded
+branch of `ui::view` stacks the bar and strip; and `handlers::window::resize_to_shade` resizes to
+`handlers::window::shade_target_size`, which reads `SHADED_HEIGHT`. `views::view_shade_strip` is
+re-exported by `src/ui/views/mod.rs`.
+
+**Pinned by.** `shade_play_pause_glyph_switches_with_playback_state`,
+`shade_controls_map_to_transport_messages_and_keep_fixed_widths`,
+`shade_height_pins_the_rolled_up_window`,
+`shade_volume_slider_spec_matches_the_shared_volume_range_and_message`,
+`shade_strip_draws_the_time_readout_and_puts_the_volume_slider_at_the_right_edge`, and
+`view_shade_strip_keeps_its_fixed_height_for_both_playback_states` (`src/ui/views/tests.rs`);
+`shaded_root_view_is_the_title_bar_plus_the_strip`, `shade_strip_draws_only_while_shaded`,
+`shade_target_size_is_the_title_bar_plus_the_strip`, and
+`title_bar_height_pins_the_shade_strip` (`src/ui/tests.rs`).
+
+**History.** Added with the window-shade transport strip; the earlier shade mode built the title
+bar alone.
+
 ## Sign-in server
 
 **Guarantee.** The loopback sign-in server never waits for one connection to finish before it reads
