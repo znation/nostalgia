@@ -5,6 +5,29 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### Sorted browse lists stay sorted after Back, contradicting the one-shot guarantee (found by the bugfix role 2026-10-23) — fixed 2026-10-23 by the bugfix role
+
+**Symptom.** Pressing Sort, opening a child list, then pressing Back showed the parent list still in
+sorted order. `docs/invariants.md` ("Browse row order") and the README both promise the reorder is
+one-shot, so navigating away and back restores the library's order.
+
+**Reproduce.** Seed `player.artists` with rows out of library order, press `Message::SortBrowse`,
+switch to `CurrentView::Albums` (what opening an artist leaves behind), then press
+`Message::Back`. The artists came back sorted instead of in their seeded order.
+`back_restores_a_sorted_artists_list_to_library_order` and
+`back_from_songs_restores_a_sorted_albums_list_to_library_order` fail without the fix.
+
+**Cause.** `browse::back` only switched `current_view` and scrolled, so a parent list that stayed
+in memory kept the order Sort put it in. Back cannot refetch cheaply (it has no artist id for the
+Albums list), so `BrowseList` now records the cumulative permutation back to library order when
+Sort runs, composes it on a second Sort, and `restore_library_order` inverts it on Back for the
+list being returned to. Any transition that replaces the rows drops the saved permutation, since a
+fresh fetch is already in library order.
+
+**Validation gap:** unclear-invariant — the guarantee was written in `docs/invariants.md` and the
+README but no test pinned Back, so I first had to confirm the documented one-shot rule (not Back's
+no-refetch behavior) was the intended contract; the two new tests now pin it.
+
 ### Sort reorders a loading browse list instead of ignoring the press (found by the bugfix role 2026-10-23) — fixed 2026-10-23 by the bugfix role
 
 **Symptom.** Pressing the browse `Sort` button while a list is marked `loading` but still holds

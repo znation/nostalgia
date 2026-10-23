@@ -96,16 +96,20 @@ equal keep their library order. A song list reorders its cached titles and label
 permutation as its songs, so each row keeps its own title and duration. The reorder is one-shot:
 it bumps only that list's epoch, so a selection press rendered before the sort is rejected while
 the post-sort indices resolve to the sorted rows, and it leaves the other lists, the current
-view, the search state, and playback unchanged. Navigating away and back reloads the library's
+view, the search state, and playback unchanged. Navigating away and back restores the library's
 order; no sort flag persists. Sorting an empty, loading, or failed list is a no-op: it neither
 reorders rows nor bumps the epoch.
 
 **Enforced by.** `BrowseList::sort_rows_by` in `src/ui/browse.rs` builds a stable index permutation
 from the lowercased row keys and rebuilds `items`, `titles`, and `labels` by it, bumping the epoch
-only when there are at least two rows and the list is not loading. `browse::sort_browse` in
-`src/ui/handlers/browse.rs` matches the current view onto its list and key, routed from
-`Message::SortBrowse` in the `update` dispatch table; `views::view_sort_button` in
-`src/ui/views/browse.rs` draws the button beside Top.
+only when there are at least two rows and the list is not loading; it also records the cumulative
+permutation back to library order, and `BrowseList::restore_library_order` inverts it so the rows
+(and their cached text) return to the order they were stored in, bumping the epoch as any index
+change must. `browse::sort_browse` in `src/ui/handlers/browse.rs` matches the current view onto
+its list and key, routed from `Message::SortBrowse` in the `update` dispatch table;
+`browse::back` restores that order on the list Back returns to (those lists stay in memory while a
+child is open), and `views::view_sort_button` in `src/ui/views/browse.rs` draws the button beside
+Top.
 
 **Pinned by.**
 
@@ -117,6 +121,8 @@ only when there are at least two rows and the list is not loading. `browse::sort
 - `sort_reorders_all_albums_by_their_display_title`
 - `sort_bumps_the_epoch_so_a_pre_sort_press_is_rejected`
 - `sort_with_an_empty_or_loading_list_is_a_noop`
+- `back_restores_a_sorted_artists_list_to_library_order`
+- `back_from_songs_restores_a_sorted_albums_list_to_library_order`
   (all in `src/ui/tests.rs`)
 
 ## Now Playing label

@@ -54,6 +54,14 @@ pub(super) struct BrowseList<T> {
     /// epoch (see [`Self::clear`]), so the replacing list's epoch is bumped
     /// past the cleared one's and differs from it.
     pub(super) epoch: u64,
+    /// The permutation [`Self::sort_rows_by`] has applied to the rows, or
+    /// `None` while they are in library order. Entry `i` is the library index
+    /// of the row now at position `i`, so [`Self::restore_library_order`] can
+    /// undo every sort since the rows were stored. Any transition that
+    /// replaces the rows ([`Self::store`], [`Self::store_with_row_text`],
+    /// [`Self::clear`], [`Self::fail`]) drops it: a freshly fetched list is
+    /// already in library order.
+    library_positions: Option<Vec<usize>>,
     /// True while a fetch for this level is waiting on a reply: it starts
     /// true for the artists fetch `boot` schedules, and [`Self::clear`] sets
     /// it whenever the rows are emptied for a new fetch. [`Self::store`]
@@ -83,6 +91,7 @@ impl<T> BrowseList<T> {
             titles: Vec::new(),
             labels: Vec::new(),
             epoch: 0,
+            library_positions: None,
             loading,
             error: None,
             generation: Arc::new(AtomicU64::new(0)),
@@ -161,6 +170,7 @@ impl<T> BrowseList<T> {
     /// caches and [`Self::store_with_row_text`] rebuilds them.
     fn replace_rows(&mut self, items: Vec<T>) {
         self.items = items;
+        self.library_positions = None;
         self.epoch = self.epoch.wrapping_add(1);
         self.loading = false;
         self.error = None;
@@ -196,6 +206,13 @@ impl<T> BrowseList<T> {
             .collect();
         let mut order: Vec<usize> = (0..self.items.len()).collect();
         order.sort_by(|&left, &right| keys[left].cmp(&keys[right]));
+        // Keep the total permutation back to library order: a later Sort
+        // composes with it instead of overwriting it, so restoring after any
+        // number of sorts still yields the order the rows were stored in.
+        self.library_positions = Some(match self.library_positions.take() {
+            Some(positions) => order.iter().map(|&index| positions[index]).collect(),
+            None => order.clone(),
+        });
         self.items = order
             .iter()
             .map(|&index| self.items[index].clone())
@@ -208,6 +225,46 @@ impl<T> BrowseList<T> {
         }
         if !self.labels.is_empty() {
             self.labels = order
+                .iter()
+                .map(|&index| self.labels[index].clone())
+                .collect();
+        }
+        self.epoch = self.epoch.wrapping_add(1);
+    }
+
+    /// Undoes every [`Self::sort_rows_by`] since the rows were stored, putting
+    /// `items` (and the cached titles and labels) back in library order and
+    /// bumping the epoch because the indices a rendered row emits now name
+    /// other entries. A list that is not sorted — or whose rows have since
+    /// been replaced — is a no-op, so callers can restore unconditionally.
+    pub(super) fn restore_library_order(&mut self)
+    where
+        T: Clone,
+    {
+        let Some(positions) = self.library_positions.take() else {
+            return;
+        };
+        if positions.len() != self.items.len() {
+            return;
+        }
+        // `positions[i]` is the library index of the row at `i`; invert it to
+        // rebuild library order from the reordered buffers.
+        let mut inverse = vec![0; positions.len()];
+        for (current, &library) in positions.iter().enumerate() {
+            inverse[library] = current;
+        }
+        self.items = inverse
+            .iter()
+            .map(|&index| self.items[index].clone())
+            .collect();
+        if !self.titles.is_empty() {
+            self.titles = inverse
+                .iter()
+                .map(|&index| self.titles[index].clone())
+                .collect();
+        }
+        if !self.labels.is_empty() {
+            self.labels = inverse
                 .iter()
                 .map(|&index| self.labels[index].clone())
                 .collect();
@@ -228,6 +285,7 @@ impl<T> BrowseList<T> {
         self.items.clear();
         self.titles.clear();
         self.labels.clear();
+        self.library_positions = None;
         self.loading = true;
         self.error = None;
     }
@@ -240,6 +298,7 @@ impl<T> BrowseList<T> {
         self.items.clear();
         self.titles.clear();
         self.labels.clear();
+        self.library_positions = None;
         self.loading = false;
         self.error = Some(report);
     }

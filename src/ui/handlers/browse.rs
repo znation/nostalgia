@@ -155,6 +155,18 @@ pub(in crate::ui) fn back(player: &mut WinampPlayer) -> Task<Message> {
         };
     }
     if stepping_up {
+        // A parent list stays in memory while a child is open, so Back does
+        // not refetch it. Sort is one-shot, so returning to it undoes any
+        // sort and shows the library's order again.
+        match player.current_view {
+            CurrentView::Artists => player.artists.restore_library_order(),
+            CurrentView::Albums => player.albums.restore_library_order(),
+            CurrentView::AllAlbums => player.all_albums.restore_library_order(),
+            CurrentView::Playlists => player.playlists.restore_library_order(),
+            // Back never lands on a song list, and both are refetched when
+            // reopened, so neither can be the list being restored.
+            CurrentView::Songs | CurrentView::AllSongs => {}
+        }
         scroll_browse_to_top()
     } else {
         Task::none()

@@ -3007,6 +3007,95 @@ fn sort_with_an_empty_or_loading_list_is_a_noop() {
     assert_eq!(player.artists.epoch, epoch);
 }
 
+/// The names the artists list shows, in row order.
+fn artist_names(player: &WinampPlayer) -> Vec<&str> {
+    player
+        .artists
+        .items
+        .iter()
+        .map(|artist| artist.name.as_str())
+        .collect()
+}
+
+// The reorder is one-shot: leaving a sorted parent list and returning with
+// Back must show the library's order again (README, "reopening the list",
+// and the "Browse row order" invariant). Back does not refetch the parent, so
+// the list has to restore the order it had before Sort.
+#[test]
+fn back_restores_a_sorted_artists_list_to_library_order() {
+    let (mut player, _state) = test_player();
+    player.artists.items = vec![
+        Artist {
+            id: "zulu".to_string(),
+            name: "Zulu".to_string(),
+        },
+        Artist {
+            id: "alpha".to_string(),
+            name: "alpha".to_string(),
+        },
+        Artist {
+            id: "bravo".to_string(),
+            name: "bravo".to_string(),
+        },
+    ];
+    player.artists.loading = false;
+    player.current_view = CurrentView::Artists;
+
+    let _ = update(&mut player, Message::SortBrowse);
+    assert_eq!(artist_names(&player), ["alpha", "bravo", "Zulu"]);
+    // A second Sort must not lose the library order: the saved permutation
+    // composes with the second reorder instead of being overwritten.
+    let _ = update(&mut player, Message::SortBrowse);
+
+    // Opening an artist replaces the albums list, not the artists one.
+    player.current_view = CurrentView::Albums;
+    let epoch = player.artists.epoch;
+    let _ = update(&mut player, Message::Back);
+
+    assert_eq!(artist_names(&player), ["Zulu", "alpha", "bravo"]);
+    assert_eq!(player.artists.epoch, epoch.wrapping_add(1));
+}
+
+// The same one-shot rule holds for the other in-memory parent list: songs
+// opened from an album return to that album's list, whose library order Back
+// must restore after a Sort.
+#[test]
+fn back_from_songs_restores_a_sorted_albums_list_to_library_order() {
+    let mut player = player_in_albums();
+    let _ = update(
+        &mut player,
+        Message::AlbumsLoaded(vec![
+            Album {
+                id: "zulu".to_string(),
+                title: "Zulu".to_string(),
+                artist_id: "artist-1".to_string(),
+                artist: "Zulu".to_string(),
+            },
+            Album {
+                id: "alpha".to_string(),
+                title: "alpha".to_string(),
+                artist_id: "artist-1".to_string(),
+                artist: "alpha".to_string(),
+            },
+        ]),
+    );
+    let _ = update(&mut player, Message::SortBrowse);
+    assert_eq!(player.albums.items[0].id, "alpha");
+
+    let epoch = player.albums.epoch;
+    let _ = update(&mut player, Message::AlbumSelected { epoch, index: 0 });
+    assert_view(&player, CurrentView::Songs);
+    let _ = update(&mut player, Message::Back);
+
+    let ids: Vec<&str> = player
+        .albums
+        .items
+        .iter()
+        .map(|album| album.id.as_str())
+        .collect();
+    assert_eq!(ids, ["zulu", "alpha"]);
+}
+
 // Songs view draws from `all_songs`, so Next there moves through the flat
 // rows, not the browsed `songs` buffer. `songs` holds a single song while the
 // flat list holds the three-song stepping album, so a Next that stepped
