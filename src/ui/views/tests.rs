@@ -6,8 +6,9 @@ use super::browse::{
 use super::equalizer::eq_enabled_label;
 use super::now_playing::{
     KnownTrack, MARQUEE_WIDTH, TimeDisplay, display_len, format_lcd_elapsed, format_lcd_remaining,
-    format_track_time, marquee_text, needs_marquee, now_playing_artist, now_playing_elapsed,
-    now_playing_label, now_playing_row, now_playing_time,
+    format_playback_status, format_track_time, marquee_text, needs_marquee, now_playing_artist,
+    now_playing_elapsed, now_playing_label, now_playing_row, now_playing_status_row,
+    now_playing_time,
 };
 use super::transport::{play_pause_label, repeat_label, shuffle_label, transport_buttons};
 use super::{
@@ -17,6 +18,7 @@ use super::{
     view_now_playing, view_playlists, view_playlists_button, view_retry_button, view_search_box,
     view_songs, view_sort_button, view_top_button, view_transport_controls,
 };
+use crate::audio::PlaybackFormat;
 use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, clamp_gain};
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::sample_library::sample_library;
@@ -605,6 +607,73 @@ fn overlong_now_playing_line_renders_a_new_window_as_the_offset_advances() {
     assert!(still_a.iter().any(|text| text == "Opening"));
 }
 
+// The status row's text names the sample rate in whole kilohertz and the
+// channel mode: 44.1 kHz truncates to 44, 48 kHz reads 48, and one channel is
+// mono while any other count is stereo.
+#[test]
+fn format_playback_status_formats_khz_and_channel_mode() {
+    assert_eq!(
+        format_playback_status(PlaybackFormat {
+            sample_rate_hz: 44_100,
+            channels: 2,
+        }),
+        "44 KHZ  STEREO"
+    );
+    assert_eq!(
+        format_playback_status(PlaybackFormat {
+            sample_rate_hz: 44_100,
+            channels: 1,
+        }),
+        "44 KHZ  MONO"
+    );
+    assert_eq!(
+        format_playback_status(PlaybackFormat {
+            sample_rate_hz: 48_000,
+            channels: 2,
+        }),
+        "48 KHZ  STEREO"
+    );
+}
+
+/// Lays out the LCD status row for `format` and returns the text fragments it
+/// would draw and the height the row occupies.
+fn captured_status_row(format: Option<PlaybackFormat>) -> (Vec<String>, f32) {
+    let mut element: iced::Element<'_, Message, iced::Theme, ()> =
+        now_playing_status_row(format).into();
+    let mut tree = Tree::new(element.as_widget());
+    let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
+    let node = element.as_widget_mut().layout(&mut tree, &(), &limits);
+    let height = node.bounds().height;
+    let mut captured = CapturedText::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &(), &mut captured);
+    (captured.0, height)
+}
+
+// The status row draws the formatted format when the backend reports one, and
+// draws nothing when it does not, while keeping the same fixed height either
+// way so the bar does not jump when a preview loads.
+#[test]
+fn now_playing_status_row_draws_the_format_or_nothing() {
+    let (texts, height) = captured_status_row(Some(PlaybackFormat {
+        sample_rate_hz: 44_100,
+        channels: 2,
+    }));
+    assert_eq!(texts, vec!["44 KHZ  STEREO".to_string()]);
+
+    let (blank, blank_height) = captured_status_row(None);
+    assert!(
+        blank.is_empty(),
+        "no reported format must draw no status text"
+    );
+    assert_eq!(
+        height, blank_height,
+        "the status row must keep its height whether or not a format is reported"
+    );
+    assert_eq!(height, 16.0, "the status row's fixed height");
+}
+
 // A track the library supplied without an artist must read as `Now Playing:
 // <title>`: the row pushes the artist and its " - " separator only when the
 // artist is non-empty, so an artist-less track shows no dangling separator.
@@ -984,6 +1053,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         "The Sample Band".into(),
         "3:30".into(),
         0,
+        None,
     );
     let _bar = view_now_playing(
         "00:53".into(),
@@ -991,6 +1061,10 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         "".into(),
         "3:30".into(),
         4,
+        Some(PlaybackFormat {
+            sample_rate_hz: 44_100,
+            channels: 2,
+        }),
     );
     let _overlong = view_now_playing(
         "03:12".into(),
@@ -998,6 +1072,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         "The Sample Band".into(),
         "3:30".into(),
         7,
+        None,
     );
     let _back = view_back_button();
     let _retry = view_retry_button();

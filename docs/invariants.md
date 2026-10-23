@@ -154,6 +154,13 @@ its internal id, whenever the id is in the known-track index:
   position is past the total; a known track whose source supplied no length (`duration_ms == 0`)
   and any unknown or absent track read `--:--` at the left. The right edge keeps the plain total in
   both modes.
+- The LCD's small status row shows the loaded preview's sample rate and channel mode
+  (`44 KHZ  STEREO`, or `MONO` for one channel) only while the backend reports a format for a
+  loaded preview. The values come from the backend's own decoded source; the row is blank and
+  keeps its fixed height when no preview is loaded or the backend cannot answer. Pause keeps the
+  reported format; Stop and a new selection clear it. A format reply issued before a Stop or a
+  new selection, or landing while a transport transition is in flight, is dropped. Bitrate is not
+  shown: the preview download discards the body length, so it cannot be computed.
 - A combined artist/title longer than `MARQUEE_WIDTH` characters is windowed by
   `views::now_playing::marquee_text`, advanced one character per `Message::MarqueeTick`, and
   reset to the start by `TrackSelected`; a line that fits is shown whole and borrowed.
@@ -185,7 +192,14 @@ windows an overlong line, and `WinampPlayer::marquee_offset` carries the advance
 the `MouseArea` wrapping the readout in `now_playing_row`) flips it without touching playback
 state. `views::now_playing::display_len` and `views::now_playing::needs_marquee`
 measure the line, and `ui::timers::subscriptions` subscribes `marquee_ticks` only while that measure
-exceeds `MARQUEE_WIDTH`.
+exceeds `MARQUEE_WIDTH`. `audio::PlaybackFormat` carries the preview's sample rate and channel
+count, `audio::player::format_for_source` reads them from the decoded `rodio` source, and
+`views::now_playing::format_playback_status`/`views::now_playing::now_playing_status_row` render
+them in the LCD's status row built by `views::view_now_playing`. The `PlaybackFormat` handler in
+`src/ui/handlers/playback.rs` stores the reply beside the position under the same epoch and
+pending-transition guards, and `reset_position_readout` clears the format on Stop and a new
+selection;
+`position_tick` batches both backend queries.
 
 The scrolling timer's stream is built by `ui::ticks::tick_stream` in `src/ui/ticks.rs`, and its
 thread starts through `spawn_marquee_thread` in `src/ui/timers.rs`, which delegates
@@ -241,7 +255,20 @@ rather than the panic unwinding the event loop.
 - `play_track_without_a_preview_url_stops_the_previous_preview` (`src/apple_music/tests.rs`)
 - `position_query_reports_none_when_nothing_is_loaded`
 - `a_seek_is_reflected_by_the_next_position_query`
-- `a_pause_keeps_the_loaded_player_reporting_its_position` (`src/audio/tests.rs`)
+- `a_pause_keeps_the_loaded_player_reporting_its_position`
+- `format_for_source_reads_sample_rate_and_channels`
+- `playback_format_query_returns_the_loaded_players_format`
+- `playback_format_query_reports_none_when_nothing_is_loaded`
+- `rodio_output_asks_the_worker_for_its_format`
+- `silent_output_reports_no_playback_format` (`src/audio/tests.rs`)
+- `playback_format_forwards_the_audio_output_format` (`src/apple_music/tests.rs`)
+- `format_playback_status_formats_khz_and_channel_mode`
+- `now_playing_status_row_draws_the_format_or_nothing` (`src/ui/views/tests.rs`)
+- `playback_format_reply_stores_the_loaded_previews_format`
+- `playback_format_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped`
+- `stop_clears_the_playback_format_while_pause_keeps_it`
+- `track_selected_clears_the_playback_format`
+- `position_tick_queries_position_and_format` (`src/ui/tests.rs`)
 - `marquee_tick_advances_the_offset`
 - `marquee_ticks_keep_ticking_when_the_receiver_falls_behind`
 - `the_marquee_timer_runs_only_while_the_line_needs_to_scroll`

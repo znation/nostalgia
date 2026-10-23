@@ -2,6 +2,7 @@ use super::loading::{RequestGeneration, fetch_into, play_into};
 use super::timers::*;
 use super::views::{BROWSE_LIST_ID, BROWSE_VIEWS};
 use super::*;
+use crate::audio::PlaybackFormat;
 use crate::equalizer::{GAIN_MAX_DB, GAIN_MIN_DB};
 use crate::sample_library::sample_library;
 use crate::test_support::{
@@ -3718,6 +3719,20 @@ fn track_selected_clears_the_elapsed_readout() {
     assert_eq!(player.now_playing_time(Some("song-1")), "3:30");
 }
 
+#[test]
+fn track_selected_clears_the_playback_format() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    player.playback_format = Some(PlaybackFormat {
+        sample_rate_hz: 44_100,
+        channels: 2,
+    });
+
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+
+    assert_eq!(player.playback_format, None);
+}
+
 // Clicking the large readout switches it to the track's remaining time and
 // back. The mode is presentation-only: the right-edge total never changes,
 // Pause leaves the remaining value frozen, and a new selection counts down
@@ -3911,6 +3926,108 @@ fn position_replies_store_and_stale_ones_are_dropped() {
     assert_eq!(player.playback_position, Some(Duration::from_secs(10)));
 }
 
+// A format reply stores exactly what the backend reported, and a later
+// `None` reply clears the status row instead of keeping the old format.
+#[test]
+fn playback_format_reply_stores_the_loaded_previews_format() {
+    let (mut player, _state) = test_player();
+    let epoch = player.position_epoch;
+    let format = PlaybackFormat {
+        sample_rate_hz: 44_100,
+        channels: 2,
+    };
+
+    let _ = update(
+        &mut player,
+        Message::PlaybackFormat {
+            epoch,
+            format: Some(format),
+        },
+    );
+    assert_eq!(player.playback_format, Some(format));
+
+    let _ = update(
+        &mut player,
+        Message::PlaybackFormat {
+            epoch,
+            format: None,
+        },
+    );
+    assert_eq!(player.playback_format, None);
+}
+
+// A format reply is dropped when it was issued before a Stop, or when it
+// lands while a transport transition is still reaching the backend: either
+// way it could describe the previous player. A reply at the current epoch
+// with no transition pending is stored, so the drops above come from the
+// guards and not from the message being ignored entirely.
+#[test]
+fn playback_format_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped() {
+    let (mut player, _current_track) = play_song_1_then_browse_to_album_2();
+    let old_epoch = player.position_epoch;
+
+    let _ = update(&mut player, Message::Stop);
+    let _ = update(&mut player, Message::TransportSettled);
+    let stale = PlaybackFormat {
+        sample_rate_hz: 48_000,
+        channels: 2,
+    };
+    let _ = update(
+        &mut player,
+        Message::PlaybackFormat {
+            epoch: old_epoch,
+            format: Some(stale),
+        },
+    );
+    assert_eq!(player.playback_format, None);
+
+    // A pending transition drops even a reply at the current epoch.
+    let current_epoch = player.position_epoch;
+    let kept = PlaybackFormat {
+        sample_rate_hz: 44_100,
+        channels: 1,
+    };
+    player.playback_format = Some(kept);
+    let _ = update(&mut player, Message::Pause);
+    let _ = update(
+        &mut player,
+        Message::PlaybackFormat {
+            epoch: current_epoch,
+            format: Some(stale),
+        },
+    );
+    assert_eq!(player.playback_format, Some(kept));
+
+    // Once the transition settles, the same reply is stored.
+    let _ = update(&mut player, Message::TransportSettled);
+    let _ = update(
+        &mut player,
+        Message::PlaybackFormat {
+            epoch: current_epoch,
+            format: Some(stale),
+        },
+    );
+    assert_eq!(player.playback_format, Some(stale));
+}
+
+// Pause keeps the loaded preview's format on the status row, while Stop
+// clears it immediately, like the elapsed readout.
+#[test]
+fn stop_clears_the_playback_format_while_pause_keeps_it() {
+    let (mut player, _current_track) = play_song_1_then_browse_to_album_2();
+    let format = PlaybackFormat {
+        sample_rate_hz: 44_100,
+        channels: 2,
+    };
+    player.playback_format = Some(format);
+
+    let _ = update(&mut player, Message::Pause);
+    assert_eq!(player.playback_format, Some(format));
+
+    let _ = update(&mut player, Message::Stop);
+    assert_eq!(player.playback_format, None);
+}
+
 #[test]
 fn position_tick_schedules_a_query() {
     let (mut player, _state) = test_player();
@@ -3921,6 +4038,44 @@ fn position_tick_schedules_a_query() {
 // stream that never ticks (or yields a different message) would leave the
 // readout frozen even though `PositionTick` schedules the query correctly.
 // Reading two ticks also pins that the timer keeps running after the first.
+// The tick must ask the backend for both values: one query for the elapsed
+// position and one for the status row's format. Yield every output the
+// batched task emits and check both replies arrive.
+#[test]
+fn position_tick_queries_position_and_format() {
+    use futures::StreamExt;
+
+    let (mut player, _state) = test_player();
+    let epoch = player.position_epoch;
+    let mut stream = iced_runtime::task::into_stream(update(&mut player, Message::PositionTick))
+        .expect("the position tick must schedule a task");
+    let mut replies = Vec::new();
+    while let Some(action) = futures::executor::block_on(await_or_timeout(
+        "position tick",
+        TASK_TIMEOUT,
+        stream.next(),
+    )) {
+        if let iced_runtime::Action::Output(message) = action {
+            replies.push(message);
+        }
+    }
+
+    assert!(
+        replies.iter().any(|message| matches!(
+            message,
+            Message::PlaybackPosition { epoch: reply_epoch, .. } if *reply_epoch == epoch
+        )),
+        "the tick must query the position: {replies:?}"
+    );
+    assert!(
+        replies.iter().any(|message| matches!(
+            message,
+            Message::PlaybackFormat { epoch: reply_epoch, .. } if *reply_epoch == epoch
+        )),
+        "the tick must query the format: {replies:?}"
+    );
+}
+
 #[test]
 fn position_tick_stream_emits_position_ticks() {
     use futures::StreamExt;

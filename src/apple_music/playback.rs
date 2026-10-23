@@ -180,6 +180,18 @@ impl AppleMusicService {
         self.audio.position()
     }
 
+    /// Reports the loaded preview's sample rate and channel mode in the
+    /// backend's own format, or `None` when no preview is loaded or the
+    /// audio backend cannot answer.
+    ///
+    /// Synchronous and touches no shared state. The backend bounds the wait
+    /// (see [`crate::audio::AudioOutput::playback_format`]), so callers on
+    /// the UI thread should still run it as a task rather than blocking
+    /// `update`. The Now Playing LCD polls it beside the position.
+    pub(crate) fn playback_format(&self) -> Option<audio::PlaybackFormat> {
+        self.audio.playback_format()
+    }
+
     /// Forwards `equalizer` to the audio backend, so a preview starts at the
     /// curve the equalizer panel shows. Synchronous, and touches no shared
     /// state: the UI already stored the clamped curve under its own lock, and

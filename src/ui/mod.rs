@@ -36,6 +36,7 @@ use timers::{position_ticks, subscriptions};
 
 use crate::{
     apple_music::AppleMusicService,
+    audio::PlaybackFormat,
     equalizer::Preset,
     library::{Album, Artist, Playlist, Song},
     state::AppState,
@@ -105,6 +106,13 @@ enum Message {
     PlaybackPosition {
         epoch: u64,
         position: Option<Duration>,
+    },
+    // The format query's reply, also stamped with the `position_epoch` that
+    // issued it. A reply from before a Stop or a new selection is dropped so
+    // it cannot restore the previous track's sample rate and channel mode.
+    PlaybackFormat {
+        epoch: u64,
+        format: Option<PlaybackFormat>,
     },
     // The large left-hand LCD readout's mode toggle: flips between elapsed and
     // remaining time. It changes no playback state and leaves the right-edge
@@ -318,6 +326,12 @@ struct WinampPlayer {
     /// Pause leaves it alone, so the bar keeps showing the paused player's
     /// frozen position.
     playback_position: Option<Duration>,
+    /// The loaded preview's backend-reported sample rate and channel mode, or
+    /// `None` when no preview is loaded or the backend cannot answer.
+    /// `Message::PlaybackFormat` stores it; the LCD's small status row reads
+    /// it, and a missing value leaves that row blank. Pause keeps it, while
+    /// Stop and a new selection clear it through `reset_position_readout`.
+    playback_format: Option<PlaybackFormat>,
     /// Which time the large left-hand LCD readout shows: elapsed by default,
     /// or the track's remaining time after a click. Presentation-only: it
     /// changes no playback state, and the mode survives Pause, Stop,
@@ -402,6 +416,7 @@ impl WinampPlayer {
             play_history: transport::PlayHistory::default(),
             marquee_offset: 0,
             playback_position: None,
+            playback_format: None,
             time_display: views::TimeDisplay::Elapsed,
             position_epoch: 0,
             pending_position_transitions: 0,
@@ -531,6 +546,9 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::PlaybackPosition { epoch, position } => {
             handlers::playback::playback_position(player, epoch, position)
         }
+        Message::PlaybackFormat { epoch, format } => {
+            handlers::playback::playback_format(player, epoch, format)
+        }
         Message::ToggleTimeDisplay => handlers::playback::toggle_time_display(player),
         Message::TrackSelected { epoch, index } => {
             handlers::playback::track_selected(player, epoch, index)
@@ -616,6 +634,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
         now_playing_artist,
         now_playing_elapsed,
         now_playing_time,
+        playback_format,
         is_playing,
         volume,
         balance,
@@ -632,6 +651,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
             player.now_playing_artist(state.current_track.as_deref()),
             player.now_playing_elapsed(state.current_track.as_deref()),
             player.now_playing_time(state.current_track.as_deref()),
+            player.playback_format,
             state.is_playing,
             state.volume(),
             state.balance(),
@@ -713,6 +733,7 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
             now_playing_artist,
             now_playing_time,
             player.marquee_offset,
+            playback_format,
         ))
         .push(views::view_transport_controls(
             is_playing, volume, balance, repeat, shuffle,

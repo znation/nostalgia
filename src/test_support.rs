@@ -20,7 +20,7 @@ use std::time::{Duration, Instant};
 
 use crate::apple_music::AppleMusicError;
 use crate::apple_music::rest::HttpTransport;
-use crate::audio::{AudioOutput, EqSnapshot};
+use crate::audio::{AudioOutput, EqSnapshot, PlaybackFormat};
 use crate::equalizer::{PRESETS, Preset};
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::music_kit_auth::MusicKitSession;
@@ -483,6 +483,15 @@ impl AudioOutput for RecordingAudio {
     /// playback clock, so tests that need a known elapsed value use this one.
     fn position(&self) -> Option<Duration> {
         Some(Duration::from_secs(7))
+    }
+
+    /// Reports a fixed stub format, so a test can pin that the UI displays
+    /// what the backend's loaded preview reports.
+    fn playback_format(&self) -> Option<PlaybackFormat> {
+        Some(PlaybackFormat {
+            sample_rate_hz: 44_100,
+            channels: 2,
+        })
     }
 
     fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {

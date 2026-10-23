@@ -9,9 +9,10 @@ use std::time::Duration;
 use iced::{
     Element, Length,
     mouse::Interaction,
-    widget::{MouseArea, Row, Space, Text},
+    widget::{Column, MouseArea, Row, Space, Text},
 };
 
+use crate::audio::PlaybackFormat;
 use crate::library::display_title_for;
 use crate::ui::{Message, bevel, theme};
 
@@ -28,6 +29,15 @@ const MARQUEE_GAP: usize = 3;
 /// The LCD's large elapsed-readout size in pixels, matching the mockup's big
 /// left-hand time readout.
 const LCD_ELAPSED_SIZE: f32 = 34.0;
+
+/// The fixed height of the LCD's status row, in pixels. The row keeps this
+/// height whether or not a preview reports a format, so loading one does not
+/// make the bar jump.
+const LCD_STATUS_HEIGHT: f32 = 16.0;
+
+/// The status text's size in pixels: small enough to sit quietly beneath the
+/// title line.
+const LCD_STATUS_SIZE: f32 = 12.0;
 
 /// The number of characters the Now Playing line occupies: the label's
 /// characters, plus the artist's and the three characters of the `" - "`
@@ -274,6 +284,22 @@ pub fn format_track_time(duration_ms: u64) -> String {
     format_minutes_seconds(duration_ms)
 }
 
+/// Formats a loaded preview's [`PlaybackFormat`] as the LCD's status row,
+/// `"{khz} KHZ  {mode}"` (for example `44 KHZ  STEREO`). The rate is
+/// truncated to whole kilohertz (`44_100` reads `44`, `48_000` reads `48`),
+/// and previews are mono or stereo, so one channel reads `MONO` and any other
+/// count reads `STEREO`. Bitrate is deliberately absent: the preview
+/// download discards the body length, so it cannot be computed here. Pure so
+/// the formatting is testable without an iced renderer.
+pub fn format_playback_status(format: PlaybackFormat) -> String {
+    let mode = if format.channels == 1 {
+        "MONO"
+    } else {
+        "STEREO"
+    };
+    format!("{} KHZ  {mode}", format.sample_rate_hz / 1000)
+}
+
 /// The Now Playing bar: the large elapsed readout at the left, then the
 /// "Now Playing:" caption followed by the current track's resolved artist and
 /// title (or "Nothing" when nothing is current), with the track's plain total
@@ -298,14 +324,19 @@ pub fn view_now_playing<'a>(
     artist: Cow<'a, str>,
     time: Cow<'a, str>,
     marquee_offset: usize,
+    format: Option<PlaybackFormat>,
 ) -> Element<'a, Message> {
-    bevel::lcd_well(now_playing_row(
-        elapsed,
-        label,
-        artist,
-        time,
-        marquee_offset,
-    ))
+    bevel::lcd_well(
+        Column::new()
+            .push(now_playing_row(
+                elapsed,
+                label,
+                artist,
+                time,
+                marquee_offset,
+            ))
+            .push(now_playing_status_row(format)),
+    )
 }
 
 /// The LCD's large elapsed-readout text style: [`LCD_ELAPSED_SIZE`]px in
@@ -334,6 +365,33 @@ where
     Renderer: iced::advanced::text::Renderer,
 {
     Text::new(fragment).size(20).color(theme::LCD_GREEN)
+}
+
+/// Builds the LCD's status row: the loaded preview's sample rate and channel
+/// mode, right-aligned in a small green text beneath the title line. With no
+/// reported format it draws no text but keeps the row's fixed height, so the
+/// bar does not jump when a preview loads. Generic over the theme and
+/// renderer so the tests can lay it out with iced's null renderer and read
+/// back the text it would draw.
+pub(super) fn now_playing_status_row<'a, Theme, Renderer>(
+    format: Option<PlaybackFormat>,
+) -> Row<'a, Message, Theme, Renderer>
+where
+    Theme: iced::widget::text::Catalog + 'a,
+    Theme::Class<'a>: From<iced::widget::text::StyleFn<'a, Theme>>,
+    Renderer: iced::advanced::text::Renderer + 'a,
+{
+    let mut row = Row::new()
+        .height(Length::Fixed(LCD_STATUS_HEIGHT))
+        .push(Space::new().width(Length::Fill));
+    if let Some(format) = format {
+        row = row.push(
+            Text::new(format_playback_status(format))
+                .size(LCD_STATUS_SIZE)
+                .color(theme::LCD_GREEN),
+        );
+    }
+    row
 }
 
 /// Builds the LCD row before the bevel wraps it, generic over the theme and

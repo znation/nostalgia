@@ -874,6 +874,21 @@ async fn playback_position_forwards_the_audio_output_position() {
     assert_eq!(service.playback_position(), Some(Duration::from_secs(7)));
 }
 
+// `playback_format` reports exactly what the injected backend answers, so the
+// LCD's status row has one seam to the loaded preview's format.
+#[tokio::test]
+async fn playback_format_forwards_the_audio_output_format() {
+    let (service, _state) = service_with_audio(Arc::new(RecordingAudio::default()));
+
+    assert_eq!(
+        service.playback_format(),
+        Some(crate::audio::PlaybackFormat {
+            sample_rate_hz: 44_100,
+            channels: 2,
+        })
+    );
+}
+
 // `set_output_equalizer` forwards to the injected backend without touching the
 // shared state: the UI stores the clamped curve itself, so this method is only
 // the seam to the output's equalizer.

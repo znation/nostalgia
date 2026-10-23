@@ -5,17 +5,17 @@ use std::collections::VecDeque;
 use std::io::Cursor;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use rodio::source::SeekError;
 
 use crate::music_error::AppleMusicError;
 
-use super::AudioOutput;
 use super::balance::BalanceSource;
 use super::equalizer::{EqSettings, EqSnapshot, EqSource};
 use super::preview::{download_and_decode, preview_agent};
+use super::{AudioOutput, PlaybackFormat};
 
 /// The longest [`RodioOutput::new`] waits for the worker to report whether the
 /// default audio device opened.
@@ -29,14 +29,17 @@ use super::preview::{download_and_decode, preview_agent};
 /// enough that a wedged one is reported instead of hanging.
 pub(super) const DEVICE_OPEN_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// The longest [`RodioOutput::position`] waits for the worker to answer.
+/// The longest [`RodioOutput::position`] and [`RodioOutput::playback_format`]
+/// wait for the worker to answer.
 ///
-/// The worker handles commands in channel order, so a position query issued
-/// while the worker is downloading a preview is answered only after that
-/// download installs the new player. A download can hold the worker for up to
+/// The worker handles commands in channel order, so a query issued while the
+/// worker is downloading a preview is answered only after that download
+/// installs the new player. A download can hold the worker for up to
 /// [`super::preview::PREVIEW_TIMEOUT`], far longer than a UI poll should
 /// block, so this bound is short: a query that misses it reports `None`
-/// rather than stalling the caller, and the next poll asks again.
+/// rather than stalling the caller, and the next poll asks again. It bounds
+/// both queued backend queries — the position and the format — because the
+/// same download sits in front of either one.
 pub(super) const POSITION_QUERY_TIMEOUT: Duration = Duration::from_millis(100);
 
 /// A command sent from [`RodioOutput`] to its worker thread.
@@ -58,6 +61,9 @@ pub(super) enum Command {
     /// Report the current player's position on `reply` (`None` when none is
     /// loaded).
     Position(Sender<Option<Duration>>),
+    /// Report the loaded preview's sample rate and channel mode on `reply`
+    /// (`None` when none is loaded).
+    PlaybackFormat(Sender<Option<PlaybackFormat>>),
     /// Set the equalizer curve applied to the output.
     SetEqualizer(EqSnapshot),
 }
@@ -82,6 +88,11 @@ pub(super) trait WorkerPlayer {
     fn seek_by(&self, offset_secs: i64);
     /// Reports the player's current position.
     fn position(&self) -> Duration;
+    /// Reports the loaded preview's format, when the player has one. The
+    /// default answers `None`, so a fake without a format compiles.
+    fn playback_format(&self) -> Option<PlaybackFormat> {
+        None
+    }
     /// Sets the player's equalizer curve.
     fn set_equalizer(&self, equalizer: EqSnapshot);
     /// Appends `preview` to the player's queue.
@@ -92,6 +103,15 @@ pub(super) trait WorkerPlayer {
     fn play(&self);
     /// Stops playback and clears the queue.
     fn stop(&self);
+}
+
+/// Reads `source`'s sample rate and channel count into a [`PlaybackFormat`],
+/// the format the Now Playing LCD's status row shows.
+pub(super) fn format_for_source(source: &impl rodio::Source) -> PlaybackFormat {
+    PlaybackFormat {
+        sample_rate_hz: source.sample_rate().get(),
+        channels: source.channels().get(),
+    }
 }
 
 /// Returns `position` moved by `offset_secs`: backward for a negative offset
@@ -139,6 +159,9 @@ struct RodioPlayer {
     player: rodio::Player,
     balance: Arc<AtomicU32>,
     equalizer: Arc<EqSettings>,
+    /// The format of the preview appended to this player, set once because
+    /// each played track builds a fresh player.
+    format: OnceLock<PlaybackFormat>,
 }
 
 impl RodioPlayer {
@@ -147,6 +170,7 @@ impl RodioPlayer {
             player,
             balance: Arc::new(AtomicU32::new(0.0_f32.to_bits())),
             equalizer: Arc::new(EqSettings::default()),
+            format: OnceLock::new(),
         }
     }
 }
@@ -170,11 +194,18 @@ impl WorkerPlayer for RodioPlayer {
         self.player.get_pos()
     }
 
+    fn playback_format(&self) -> Option<PlaybackFormat> {
+        self.format.get().copied()
+    }
+
     fn set_equalizer(&self, equalizer: EqSnapshot) {
         self.equalizer.store(equalizer);
     }
 
     fn append(&self, preview: Self::Preview) {
+        // Read the format from the decoded source before moving it into the
+        // adapter chain; a fresh player per track sets the cell once.
+        let _ = self.format.set(format_for_source(&preview));
         let equalized = EqSource::new(preview, Arc::clone(&self.equalizer));
         self.player
             .append(BalanceSource::new(equalized, Arc::clone(&self.balance)));
@@ -279,6 +310,14 @@ impl AudioOutput for RodioOutput {
     fn position(&self) -> Option<Duration> {
         let (reply, replies) = mpsc::channel();
         if self.send(Command::Position(reply)).is_err() {
+            return None;
+        }
+        replies.recv_timeout(POSITION_QUERY_TIMEOUT).ok().flatten()
+    }
+
+    fn playback_format(&self) -> Option<PlaybackFormat> {
+        let (reply, replies) = mpsc::channel();
+        if self.send(Command::PlaybackFormat(reply)).is_err() {
             return None;
         }
         replies.recv_timeout(POSITION_QUERY_TIMEOUT).ok().flatten()
@@ -455,6 +494,9 @@ pub(super) fn serve_commands<P, D>(
             }
             Command::Position(reply) => {
                 let _ = reply.send(player.as_ref().map(WorkerPlayer::position));
+            }
+            Command::PlaybackFormat(reply) => {
+                let _ = reply.send(player.as_ref().and_then(WorkerPlayer::playback_format));
             }
             Command::SetEqualizer(new_equalizer) => {
                 settings.equalizer = new_equalizer;

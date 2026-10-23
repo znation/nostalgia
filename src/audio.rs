@@ -37,6 +37,22 @@ mod preview;
 pub use equalizer::EqSnapshot;
 pub use player::RodioOutput;
 
+/// The format of the loaded preview's audio, as the backend's own source
+/// reports it.
+///
+/// This is presentation data for the Now Playing LCD's status row: it names
+/// the sample rate and channel layout the decoded preview carries, and says
+/// nothing about playback state or the output device.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlaybackFormat {
+    /// The preview's sample rate in hertz, as the source reports it (for
+    /// example `44_100`).
+    pub sample_rate_hz: u32,
+    /// The number of audio channels in the preview: `1` is mono, `2` is
+    /// stereo.
+    pub channels: u16,
+}
+
 /// The audio-output seam: a backend that can play, pause, and stop a track
 /// and set its output gain.
 ///
@@ -130,6 +146,18 @@ pub trait AudioOutput: Send + Sync {
     /// that waits past the backend's bound). The default keeps every existing
     /// implementor compiling without a position of its own.
     fn position(&self) -> Option<Duration> {
+        None
+    }
+
+    /// Reports the loaded preview's sample rate and channel mode.
+    ///
+    /// Returns `Some` while a player is loaded and its source reports a
+    /// format, and `None` when no player is loaded (including after a Stop)
+    /// or the backend cannot answer (the silent fallback, a test fake without
+    /// a format, or a query that waits past the backend's bound). The default
+    /// keeps every existing implementor compiling without a format of its
+    /// own.
+    fn playback_format(&self) -> Option<PlaybackFormat> {
         None
     }
 

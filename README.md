@@ -47,8 +47,10 @@ The player on its own: [docs/screenshots/player.png](docs/screenshots/player.png
 Build and run with `cargo run`; the player opens an iced window showing the Now Playing bar (a
 large elapsed-time readout at the left for a loaded preview, the playing track's artist and title
 scrolled across the display when the line is longer than it, and the track's plain length at the
-right). Clicking the large elapsed readout switches it to the track's remaining time (`-02:37`)
-and back; the choice stays until clicked again. The bar sits above the Play/Pause/Stop/Previous/Next
+right). A loaded preview's sample rate and mono/stereo mode appear in a small status row
+beneath the title (`44 KHZ  STEREO`) when the backend reports them, and the row stays blank
+otherwise. Clicking the large elapsed readout switches it to the track's remaining time
+(`-02:37`) and back; the choice stays until clicked again. The bar sits above the Play/Pause/Stop/Previous/Next
 controls, Repeat and Shuffle toggles, volume and balance sliders, an equalizer panel (an EQ on/off
 button, a preset pick list, a preamp slider, and ten band sliders), and a browse list whose song
 rows read `artist - title` (or the title alone when the source supplies no artist) and show each

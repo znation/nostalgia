@@ -266,22 +266,28 @@ pub(in crate::ui) fn transport_settled(player: &mut WinampPlayer) -> Task<Messag
 }
 
 /// The position poll's tick: schedule a query of the loaded preview's
-/// position. The query runs in a task, so the UI thread never blocks on the
-/// audio backend, and the reply carries the epoch the query was issued under,
-/// so a transition that lands first invalidates it. While a transport
-/// transition is still reaching the backend, no query is issued: the backend
-/// would still report the previous preview, and the epoch no longer
-/// identifies it.
+/// position and of its sample rate and channel mode. Both queries run in
+/// tasks, so the UI thread never blocks on the audio backend, and each reply
+/// carries the epoch the query was issued under, so a transition that lands
+/// first invalidates it. While a transport transition is still reaching the
+/// backend, neither query is issued: the backend would still report the
+/// previous preview, and the epoch no longer identifies it.
 pub(in crate::ui) fn position_tick(player: &mut WinampPlayer) -> Task<Message> {
     if player.pending_position_transitions > 0 {
         return Task::none();
     }
     let epoch = player.position_epoch;
-    let service = player.apple_music_service.clone();
-    Task::perform(
-        async move { service.playback_position() },
+    let position_service = player.apple_music_service.clone();
+    let position = Task::perform(
+        async move { position_service.playback_position() },
         move |position| Message::PlaybackPosition { epoch, position },
-    )
+    );
+    let format_service = player.apple_music_service.clone();
+    let format = Task::perform(
+        async move { format_service.playback_format() },
+        move |format| Message::PlaybackFormat { epoch, format },
+    );
+    Task::batch([position, format])
 }
 
 /// The position query's reply: store the reported position, or clear the
@@ -301,15 +307,34 @@ pub(in crate::ui) fn playback_position(
     Task::none()
 }
 
-/// Clears the Now Playing elapsed readout and invalidates any position query
-/// already in flight, so a reply issued before the track changed cannot
-/// restore the previous elapsed value. Stop and a new selection call this; a
-/// Pause deliberately does not, so the paused player's frozen position stays
-/// on the bar. The caller pairs it with [`begin_position_transition`], so the
-/// poll also waits until the backend has stopped or replaced the player.
+/// The format query's reply: store the reported sample rate and channel mode,
+/// or clear the status row when the backend reports no format. A reply
+/// stamped with an older epoch is dropped, so a poll in flight across a Stop
+/// or a new selection cannot restore the previous preview's format. A reply
+/// that lands while a transport transition is still in flight is dropped too:
+/// the backend may still be holding the previous player.
+pub(in crate::ui) fn playback_format(
+    player: &mut WinampPlayer,
+    epoch: u64,
+    format: Option<crate::audio::PlaybackFormat>,
+) -> Task<Message> {
+    if player.pending_position_transitions == 0 && epoch == player.position_epoch {
+        player.playback_format = format;
+    }
+    Task::none()
+}
+
+/// Clears the Now Playing elapsed readout and the LCD's status row, and
+/// invalidates any position or format query already in flight, so a reply
+/// issued before the track changed cannot restore the previous values. Stop
+/// and a new selection call this; a Pause deliberately does not, so the
+/// paused player's frozen position and format stay on the bar. The caller
+/// pairs it with [`begin_position_transition`], so the poll also waits until
+/// the backend has stopped or replaced the player.
 fn reset_position_readout(player: &mut WinampPlayer) {
     player.position_epoch = player.position_epoch.wrapping_add(1);
     player.playback_position = None;
+    player.playback_format = None;
 }
 
 /// Marks a backend transport transition as in flight, so the position poll

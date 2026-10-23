@@ -5,7 +5,7 @@ use super::balance::BalanceSource;
 use super::equalizer::{EqSettings, EqSource};
 use super::player::{
     Command, DEVICE_OPEN_TIMEOUT, POSITION_QUERY_TIMEOUT, SeekablePlayer, WorkerPlayer,
-    await_device_ready, seek_player, seek_target, serve_commands,
+    await_device_ready, format_for_source, seek_player, seek_target, serve_commands,
 };
 use super::preview::{
     PREVIEW_TIMEOUT, PublicAddressResolver, download_and_decode, preview_agent,
@@ -63,6 +63,47 @@ fn silent_output_reports_no_playback_position() {
 
     let output = audio_with_fallback(|| Err(AppleMusicError::new("no device")));
     assert_eq!(output.position(), None);
+}
+
+// The silent fallback also has no preview format to report, so the LCD's
+// status row stays blank rather than inventing a sample rate.
+#[test]
+fn silent_output_reports_no_playback_format() {
+    assert_eq!(SilentOutput.playback_format(), None);
+
+    let output = audio_with_fallback(|| Err(AppleMusicError::new("no device")));
+    assert_eq!(output.playback_format(), None);
+}
+
+// The status row's values come from the decoded source itself: a mono and a
+// stereo preview must report their own channel counts and sample rates.
+#[test]
+fn format_for_source_reads_sample_rate_and_channels() {
+    let mono = rodio::buffer::SamplesBuffer::new(
+        ChannelCount::new(1).unwrap(),
+        SampleRate::new(44_100).unwrap(),
+        vec![0.0_f32; 4],
+    );
+    assert_eq!(
+        format_for_source(&mono),
+        PlaybackFormat {
+            sample_rate_hz: 44_100,
+            channels: 1,
+        }
+    );
+
+    let stereo = rodio::buffer::SamplesBuffer::new(
+        ChannelCount::new(2).unwrap(),
+        SampleRate::new(48_000).unwrap(),
+        vec![0.0_f32; 4],
+    );
+    assert_eq!(
+        format_for_source(&stereo),
+        PlaybackFormat {
+            sample_rate_hz: 48_000,
+            channels: 2,
+        }
+    );
 }
 
 #[test]
@@ -676,6 +717,29 @@ fn rodio_output_asks_the_worker_for_its_position() {
     worker.join().unwrap();
 }
 
+// A format query crosses to the worker and returns the reply it sends, just
+// like the position query.
+#[test]
+fn rodio_output_asks_the_worker_for_its_format() {
+    let (commands, receiver) = std::sync::mpsc::channel();
+    let output = RodioOutput {
+        commands: Mutex::new(commands),
+    };
+    let format = PlaybackFormat {
+        sample_rate_hz: 44_100,
+        channels: 2,
+    };
+    let worker = std::thread::spawn(move || match receiver.recv() {
+        Ok(Command::PlaybackFormat(reply)) => {
+            reply.send(Some(format)).unwrap();
+        }
+        _ => panic!("format did not send Command::PlaybackFormat"),
+    });
+
+    assert_eq!(output.playback_format(), Some(format));
+    worker.join().unwrap();
+}
+
 // A worker that accepts the query but does not answer must not hold the
 // caller past the seam's bound: the query reports `None` instead of waiting
 // for the reply.
@@ -740,6 +804,10 @@ fn rodio_output_reports_a_closed_worker_for_every_command() {
     assert!(
         output.position().is_none(),
         "a closed worker cannot answer a position query"
+    );
+    assert!(
+        output.playback_format().is_none(),
+        "a closed worker cannot answer a format query"
     );
 }
 
@@ -1041,6 +1109,13 @@ impl WorkerPlayer for RecordingPlayer {
             .fold(Duration::from_secs(42), |position, offset| {
                 seek_target(position, *offset)
             })
+    }
+
+    fn playback_format(&self) -> Option<PlaybackFormat> {
+        Some(PlaybackFormat {
+            sample_rate_hz: 44_100,
+            channels: 2,
+        })
     }
 
     fn set_equalizer(&self, equalizer: EqSnapshot) {
@@ -1398,6 +1473,54 @@ fn position_query_reports_none_when_nothing_is_loaded() {
     let (reply, replies) = mpsc::channel();
 
     sender.send(Command::Position(reply)).unwrap();
+    drop(sender);
+    serve_commands(receiver, create_player, fetch);
+
+    assert_eq!(replies.recv().unwrap(), None);
+}
+
+// A format query with a player installed must answer from that player, the
+// same way a position query does.
+#[test]
+fn playback_format_query_returns_the_loaded_players_format() {
+    let (sender, receiver) = mpsc::channel();
+    let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
+    let recorded = Arc::clone(&players);
+    let create_player = move || {
+        let player = RecordingPlayer::default();
+        recorded.lock().unwrap().push(player.clone());
+        player
+    };
+    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+    let (reply, replies) = mpsc::channel();
+
+    sender.send(Command::Play("first".to_string())).unwrap();
+    sender.send(Command::PlaybackFormat(reply)).unwrap();
+    drop(sender);
+    serve_commands(receiver, create_player, fetch);
+
+    assert_eq!(
+        replies.recv().unwrap(),
+        Some(PlaybackFormat {
+            sample_rate_hz: 44_100,
+            channels: 2,
+        }),
+        "the query must answer with the installed player's format"
+    );
+}
+
+// With no player installed, a format query reports `None` instead of
+// inventing a sample rate for a preview that is not loaded.
+#[test]
+fn playback_format_query_reports_none_when_nothing_is_loaded() {
+    let (sender, receiver) = mpsc::channel();
+    let create_player = || -> RecordingPlayer {
+        panic!("a format query must not create a player");
+    };
+    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+    let (reply, replies) = mpsc::channel();
+
+    sender.send(Command::PlaybackFormat(reply)).unwrap();
     drop(sender);
     serve_commands(receiver, create_player, fetch);
 
