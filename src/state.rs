@@ -21,6 +21,11 @@ pub struct AppState {
     /// reads it to choose its "Pause"/"Play" label, and [`AppState::stop`]
     /// clears it without clearing the current track.
     pub is_playing: bool,
+    /// Whether the loaded preview is paused: true only between Pause and the
+    /// next Play or Stop, and false while playing or stopped. Together with
+    /// [`AppState::is_playing`] it lets [`AppState::transport_mode`] tell
+    /// Pause from Stop, which both clear the playing flag.
+    pub paused: bool,
     /// Whether Previous/Next wrap around the ends of the loaded song list
     /// (Repeat on) or stop at the edge (Repeat off). Starts off, as in Winamp.
     pub repeat: bool,
@@ -61,6 +66,20 @@ pub struct AppState {
     eq_preset: Option<equalizer::Preset>,
 }
 
+/// The three states the transport can be in, resolved from [`AppState`] by
+/// [`AppState::transport_mode`]. `Paused` and `Stopped` are distinct even
+/// though both leave the player silent, because the Now Playing LCD shows a
+/// different glyph for each.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransportMode {
+    /// The loaded preview is sounding.
+    Playing,
+    /// The loaded preview is loaded but held at its position.
+    Paused,
+    /// Nothing is sounding and no preview is held paused.
+    Stopped,
+}
+
 /// The one production `AppState` is built in the app's entry point (`main`)
 /// and shared (as an `Arc<Mutex<_>>`) with both the UI and the Apple Music
 /// service; the test modules build their own. A single `Default` keeps every
@@ -68,14 +87,15 @@ pub struct AppState {
 /// place, instead of in a struct literal repeated at each site. The starting
 /// volume is 0.5, not the derived 0.0, so a manual impl is required.
 ///
-/// Initial state: nothing loaded, stopped, Repeat off, Shuffle off, at 50%
-/// volume with a centered balance, and the equalizer off with a flat
-/// (all-zero) curve and no preset selected.
+/// Initial state: nothing loaded, not playing and not paused (stopped),
+/// Repeat off, Shuffle off, at 50% volume with a centered balance, and the
+/// equalizer off with a flat (all-zero) curve and no preset selected.
 impl Default for AppState {
     fn default() -> Self {
         Self {
             current_track: None,
             is_playing: false,
+            paused: false,
             repeat: false,
             shuffle: false,
             volume: 0.5,
@@ -96,6 +116,7 @@ impl AppState {
     /// semantics next to the field they mutate.
     pub fn toggle_playing(&mut self) {
         self.is_playing = !self.is_playing;
+        self.paused = !self.is_playing;
     }
 
     /// Flip the Repeat flag in place. The UI's Repeat button and the
@@ -114,8 +135,8 @@ impl AppState {
         self.shuffle = !self.shuffle;
     }
 
-    /// Clear the playback flag in place, leaving `current_track` in place so
-    /// the Now Playing bar keeps showing the interrupted track's title
+    /// Clear the playback flag and the paused flag in place, leaving
+    /// `current_track` in place so the Now Playing bar keeps showing the interrupted track's title
     /// (matching Winamp, where Stop halts the music and the title stays in
     /// the display). The UI's Stop button and the keyboard's V key call this
     /// (through `Message::Stop`); keeping the semantics here (rather than
@@ -123,26 +144,44 @@ impl AppState {
     /// like `toggle_playing`.
     pub fn stop(&mut self) {
         self.is_playing = false;
+        self.paused = false;
     }
 
     /// Set the playback flag, leaving `current_track` in place so the Now
     /// Playing bar keeps naming the track. The keyboard's X key calls this
     /// (through `Message::Play`); unlike [`AppState::toggle_playing`] it is an
     /// explicit, idempotent set, so a second X press keeps playing rather
-    /// than pausing. Pause and [`AppState::stop`] are the same flag change
-    /// today; the seam is the distinction — once real playback lands, Pause
-    /// keeps the track position while Stop resets it.
+    /// than pausing. It also clears [`AppState::paused`], so Play after Pause
+    /// reports `Playing` rather than `Paused`.
     pub fn play(&mut self) {
         self.is_playing = true;
+        self.paused = false;
     }
 
-    /// Clear the playback flag, leaving `current_track` in place so the Now
-    /// Playing bar keeps showing the interrupted track's title (matching
-    /// Winamp). The keyboard's C key calls this (through `Message::Pause`);
-    /// unlike [`AppState::toggle_playing`] it is an explicit, idempotent set,
-    /// so a second C press keeps the player paused rather than resuming.
+    /// Clear the playback flag and set [`AppState::paused`], leaving
+    /// `current_track` in place so the Now Playing bar keeps showing the
+    /// interrupted track's title (matching Winamp). The keyboard's C key calls
+    /// this (through `Message::Pause`); unlike [`AppState::toggle_playing`] it
+    /// is an explicit, idempotent set, so a second C press keeps the player
+    /// paused rather than resuming.
     pub fn pause(&mut self) {
         self.is_playing = false;
+        self.paused = true;
+    }
+
+    /// Which of the three transport states the player is in. Pause and Stop
+    /// both clear [`AppState::is_playing`], so [paused](AppState::paused)
+    /// distinguishes them: the Now Playing LCD draws a paused glyph from this
+    /// rather than a stopped one.
+    #[must_use]
+    pub fn transport_mode(&self) -> TransportMode {
+        if self.is_playing {
+            TransportMode::Playing
+        } else if self.paused {
+            TransportMode::Paused
+        } else {
+            TransportMode::Stopped
+        }
     }
 
     /// Flip the equalizer's on/off flag in place. The UI's EQ button is the
@@ -307,7 +346,7 @@ pub fn clamp_balance(balance: f32) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{AppState, clamp_volume};
+    use super::{AppState, TransportMode, clamp_volume};
     use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB};
     use crate::test_support::rock_preset;
 
@@ -378,6 +417,8 @@ mod tests {
         let state = AppState::default();
         assert_eq!(state.current_track, None);
         assert!(!state.is_playing);
+        assert!(!state.paused);
+        assert_eq!(state.transport_mode(), TransportMode::Stopped);
         assert!(!state.repeat);
         assert!(!state.shuffle);
         assert_eq!(state.volume(), 0.5);
@@ -394,15 +435,47 @@ mod tests {
     }
 
     #[test]
-    fn toggle_playing_flips_only_the_playback_flag() {
+    fn toggle_playing_switches_between_playing_and_paused() {
         let mut state = AppState::default();
         assert!(!state.is_playing);
+        assert_eq!(state.transport_mode(), TransportMode::Stopped);
 
         assert_keeps_track_and_volume(&mut state, AppState::toggle_playing);
         assert!(state.is_playing);
+        assert!(!state.paused);
+        assert_eq!(state.transport_mode(), TransportMode::Playing);
 
         assert_keeps_track_and_volume(&mut state, AppState::toggle_playing);
         assert!(!state.is_playing);
+        assert!(state.paused);
+        assert_eq!(state.transport_mode(), TransportMode::Paused);
+
+        assert_keeps_track_and_volume(&mut state, AppState::toggle_playing);
+        assert!(state.is_playing);
+        assert!(!state.paused);
+        assert_eq!(state.transport_mode(), TransportMode::Playing);
+    }
+
+    #[test]
+    fn pause_sets_the_paused_mode_while_play_and_stop_clear_it() {
+        let mut state = playing_state();
+        assert_eq!(state.transport_mode(), TransportMode::Playing);
+
+        state.pause();
+        assert!(!state.is_playing);
+        assert!(state.paused);
+        assert_eq!(state.transport_mode(), TransportMode::Paused);
+
+        state.play();
+        assert!(state.is_playing);
+        assert!(!state.paused);
+        assert_eq!(state.transport_mode(), TransportMode::Playing);
+
+        state.pause();
+        state.stop();
+        assert!(!state.is_playing);
+        assert!(!state.paused);
+        assert_eq!(state.transport_mode(), TransportMode::Stopped);
     }
 
     #[test]

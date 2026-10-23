@@ -49,6 +49,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
         now_playing_time,
         playback_format,
         spectrum,
+        transport_mode,
         is_playing,
         volume,
         balance,
@@ -67,6 +68,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
             player.now_playing_time(state.current_track.as_deref()),
             player.playback_format,
             player.spectrum,
+            state.transport_mode(),
             state.is_playing,
             state.volume(),
             state.balance(),
@@ -150,6 +152,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
             player.marquee_offset,
             playback_format,
             spectrum,
+            transport_mode,
         ))
         .push(views::view_seek_bar(
             player.seek_preview.or(player.playback_position),

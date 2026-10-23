@@ -7,6 +7,7 @@ use super::*;
 use crate::audio::{AudioOutput, EqSnapshot};
 use crate::library::{Album, Playlist, Song};
 use crate::sample_library::sample_library;
+use crate::state::TransportMode;
 use crate::test_support::{
     AudioCall, FailingAudio, FailingCommand, PREVIEW_URL, RecordingAudio, StubTransport,
     assert_ids, assert_preview_calls, assert_single_call, rest_session, sample_album,
@@ -33,15 +34,18 @@ fn test_service_with_state() -> (AppleMusicService, Arc<Mutex<AppState>>) {
     (service, state)
 }
 
-/// A fresh service plus its shared state with `song-1` already playing.
-/// The tests whose subject is a *later* operation — replacing the track,
-/// pausing, rejecting a blank id, a control-character id, or a blank
+/// A fresh service plus its shared state with `song-1`'s preview already
+/// playing. The tests whose subject is a *later* operation — replacing the
+/// track, pausing, rejecting a blank id, a control-character id, or a blank
 /// preview URL mid-playback, and the transport stubs — all need that same
 /// starting point, so the ordinary play (guard reporting "not superseded")
 /// lives here once and each test names only the state it drives to.
 async fn service_with_song_1_playing() -> (AppleMusicService, Arc<Mutex<AppState>>) {
     let (service, state) = test_service_with_state();
-    service.play_track("song-1", None, || true).await.unwrap();
+    service
+        .play_track("song-1", Some(PREVIEW_URL), || true)
+        .await
+        .unwrap();
     (service, state)
 }
 
@@ -56,6 +60,13 @@ async fn assert_playback_state(
     let state = state.lock().await;
     assert_eq!(state.current_track.as_deref(), expected_track);
     assert_eq!(state.is_playing, expected_playing);
+}
+
+/// Locks the shared state and asserts its resolved [`TransportMode`], so a
+/// transport test can tell Pause from Stop even though both clear the playing
+/// flag.
+async fn assert_transport_mode(state: &Arc<Mutex<AppState>>, expected: TransportMode) {
+    assert_eq!(state.lock().await.transport_mode(), expected);
 }
 
 /// A service over `audio` and a stub transport, plus its shared state, so a
@@ -1428,10 +1439,13 @@ async fn play_track_does_not_start_the_preview_when_the_equalizer_cannot_be_set(
 async fn pause_pauses_the_audio_backend() {
     let (service, state, recording) = recording_service();
 
-    service.play_track("song-1", None, || true).await.unwrap();
+    service
+        .play_track("song-1", Some(PREVIEW_URL), || true)
+        .await
+        .unwrap();
     service.pause().await.unwrap();
 
-    assert_eq!(recording.calls(), vec![AudioCall::Stop, AudioCall::Pause]);
+    assert_preview_calls(&recording.calls(), &[AudioCall::Pause]);
     assert_playback_state(&state, Some("song-1"), false).await;
 }
 
@@ -1527,6 +1541,58 @@ async fn pause_stops_playing_but_keeps_current_track() {
     service.pause().await.unwrap();
 
     assert_playback_state(&state, Some("song-1"), false).await;
+    assert_transport_mode(&state, TransportMode::Paused).await;
+}
+
+// Pause forwards to the backend even when no preview is loaded, but the
+// transport must not claim Paused: the audio worker ignores Pause with no
+// player, and Play would have nothing to resume, leaving a Paused LCD state
+// that only Stop could leave. A current track whose source supplied no preview
+// is marked playing but has no backend player either, so pausing it stops the
+// transport too.
+#[tokio::test]
+async fn pause_without_a_loaded_preview_leaves_the_transport_stopped() {
+    let (service, state) = test_service_with_state();
+
+    service.pause().await.unwrap();
+
+    assert_playback_state(&state, None, false).await;
+    assert_transport_mode(&state, TransportMode::Stopped).await;
+
+    service.play_track("song-1", None, || true).await.unwrap();
+    assert_transport_mode(&state, TransportMode::Playing).await;
+
+    service.pause().await.unwrap();
+
+    assert_playback_state(&state, Some("song-1"), false).await;
+    assert_transport_mode(&state, TransportMode::Stopped).await;
+}
+
+// The Play/Pause toggle's pause half has the same no-preview case: a track
+// that cannot sound is stopped rather than left claiming a paused preview.
+#[tokio::test]
+async fn toggle_without_a_loaded_preview_stops_the_transport() {
+    let (service, state) = test_service_with_state();
+
+    service.play_track("song-1", None, || true).await.unwrap();
+    service.toggle_play_pause().await.unwrap();
+
+    assert_playback_state(&state, Some("song-1"), false).await;
+    assert_transport_mode(&state, TransportMode::Stopped).await;
+}
+
+// Stop discards the backend's player, so a Pause after it has nothing to hold
+// paused. The track stays named, but the transport remains stopped rather than
+// claiming a paused preview Play could not resume.
+#[tokio::test]
+async fn pause_after_stop_leaves_the_transport_stopped() {
+    let (service, state, _) = recording_service_with_preview().await;
+
+    service.stop().await.unwrap();
+    service.pause().await.unwrap();
+
+    assert_playback_state(&state, Some("song-1"), false).await;
+    assert_transport_mode(&state, TransportMode::Stopped).await;
 }
 
 // `resume` drives the injected backend and sets the shared playing flag, the
@@ -1542,6 +1608,7 @@ async fn resume_resumes_the_audio_backend() {
 
     assert_preview_calls(&recording.calls(), &[AudioCall::Pause, AudioCall::Resume]);
     assert_playback_state(&state, Some("song-1"), true).await;
+    assert_transport_mode(&state, TransportMode::Playing).await;
 }
 
 // `stop` drives the injected backend and clears the shared playing flag while
@@ -1554,6 +1621,7 @@ async fn stop_stops_the_audio_backend() {
 
     assert_preview_calls(&recording.calls(), &[AudioCall::Stop]);
     assert_playback_state(&state, Some("song-1"), false).await;
+    assert_transport_mode(&state, TransportMode::Stopped).await;
 }
 
 // `pause` documents a backend-first order: a backend that cannot accept the
@@ -1611,6 +1679,7 @@ async fn toggle_play_pause_pauses_while_playing() {
 
     assert_preview_calls(&recording.calls(), &[AudioCall::Pause]);
     assert_playback_state(&state, Some("song-1"), false).await;
+    assert_transport_mode(&state, TransportMode::Paused).await;
 }
 
 // `toggle_play_pause`'s pause arm keeps the same backend-first order as
@@ -1664,6 +1733,7 @@ async fn resume_after_stop_restarts_the_preview() {
         ],
     );
     assert_playback_state(&state, Some("song-1"), true).await;
+    assert_transport_mode(&state, TransportMode::Playing).await;
 }
 
 // A restart after Stop builds a fresh player from the backend's remembered

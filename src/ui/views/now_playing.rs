@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use iced::{
-    Element, Length,
+    Color, Element, Length,
     alignment::Vertical,
     mouse::Interaction,
     widget::{Column, Container, MouseArea, Row, Space, Text, container},
@@ -16,6 +16,7 @@ use iced::{
 use crate::audio::{PlaybackFormat, Spectrum};
 use crate::equalizer::BAND_COUNT;
 use crate::library::display_title_for;
+use crate::state::TransportMode;
 use crate::ui::{Message, bevel, theme};
 
 /// The LCD's character budget for the combined artist/title line: sized to
@@ -31,6 +32,15 @@ const MARQUEE_GAP: usize = 3;
 /// The LCD's large elapsed-readout size in pixels, matching the mockup's big
 /// left-hand time readout.
 const LCD_ELAPSED_SIZE: f32 = 34.0;
+
+/// The transport glyph's size in pixels, small enough to sit beside the large
+/// elapsed readout.
+const LCD_TRANSPORT_SIZE: f32 = 22.0;
+
+/// The fixed width of the transport glyph's slot in pixels. Keeping the slot
+/// fixed leaves the elapsed readout at the same x position as the glyph
+/// changes between `▶`, `II`, and `■`.
+const LCD_TRANSPORT_WIDTH: f32 = 16.0;
 
 /// The fixed height of the LCD's status row, in pixels. The row keeps this
 /// height whether or not a preview reports a format, so loading one does not
@@ -353,6 +363,9 @@ pub fn format_playback_status(format: PlaybackFormat) -> String {
 /// allocation), while the owned fallbacks are moved into the widget, so the
 /// built element never borrows a temporary; the scrolling branch allocates
 /// only its window, as the fitting branch allocates nothing.
+// The resolved LCD readouts and playback state; grouping them into a wrapper
+// would add a concept without making the call site clearer, as in `view_songs`.
+#[allow(clippy::too_many_arguments)]
 pub fn view_now_playing<'a>(
     elapsed: Cow<'a, str>,
     label: Cow<'a, str>,
@@ -361,6 +374,7 @@ pub fn view_now_playing<'a>(
     marquee_offset: usize,
     format: Option<PlaybackFormat>,
     spectrum: Option<Spectrum>,
+    mode: TransportMode,
 ) -> Element<'a, Message> {
     bevel::lcd_well(now_playing_content(
         elapsed,
@@ -370,6 +384,7 @@ pub fn view_now_playing<'a>(
         marquee_offset,
         format,
         spectrum,
+        mode,
     ))
 }
 
@@ -378,6 +393,9 @@ pub fn view_now_playing<'a>(
 /// filling column so the total stays at the right edge. Generic over the
 /// theme and renderer, unlike the concrete well wrapper, so the tests can lay
 /// it out with iced's null renderer and read back the text it would draw.
+// Mirrors `view_now_playing`'s arguments (without the well wrapper) so the
+// tests can lay out the same content headlessly.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn now_playing_content<'a, Theme, Renderer>(
     elapsed: Cow<'a, str>,
     label: Cow<'a, str>,
@@ -386,6 +404,7 @@ pub(super) fn now_playing_content<'a, Theme, Renderer>(
     marquee_offset: usize,
     format: Option<PlaybackFormat>,
     spectrum: Option<Spectrum>,
+    mode: TransportMode,
 ) -> Row<'a, Message, Theme, Renderer>
 where
     Theme: iced::widget::text::Catalog + iced::widget::container::Catalog + 'a,
@@ -403,6 +422,7 @@ where
                 artist,
                 time,
                 marquee_offset,
+                mode,
             ))
             .push(now_playing_visualizer_row(spectrum))
             .push(now_playing_status_row(format)),
@@ -543,23 +563,57 @@ where
     row
 }
 
+/// The transport glyph [`now_playing_row`] draws for `mode`: a green `▶`
+/// while playing, a green `II` while paused, and a red `■` while stopped.
+/// Pure so the exact glyphs are testable without a renderer.
+pub(super) fn transport_glyph(mode: TransportMode) -> &'static str {
+    match mode {
+        TransportMode::Playing => "▶",
+        TransportMode::Paused => "II",
+        TransportMode::Stopped => "■",
+    }
+}
+
+/// The transport glyph's color: [`theme::LCD_GREEN`] while playing or paused,
+/// and [`theme::LCD_RED`] while stopped. Pure so the exact colors are testable
+/// without a renderer.
+pub(super) fn transport_glyph_color(mode: TransportMode) -> Color {
+    match mode {
+        TransportMode::Playing | TransportMode::Paused => theme::LCD_GREEN,
+        TransportMode::Stopped => theme::LCD_RED,
+    }
+}
+
 /// Builds the LCD row before the bevel wraps it, generic over the theme and
 /// renderer so the tests can lay it out with iced's null renderer and read
-/// back the text it would draw.
+/// back the text it would draw. The transport glyph leads the row in a fixed
+/// [`LCD_TRANSPORT_WIDTH`] slot, so the elapsed readout does not move as the
+/// glyph changes.
 pub(super) fn now_playing_row<'a, Theme, Renderer>(
     elapsed: Cow<'a, str>,
     label: Cow<'a, str>,
     artist: Cow<'a, str>,
     time: Cow<'a, str>,
     marquee_offset: usize,
+    mode: TransportMode,
 ) -> Row<'a, Message, Theme, Renderer>
 where
-    Theme: iced::widget::text::Catalog + 'a,
-    Theme::Class<'a>: From<iced::widget::text::StyleFn<'a, Theme>>,
+    Theme: iced::widget::text::Catalog + iced::widget::container::Catalog + 'a,
+    <Theme as iced::widget::text::Catalog>::Class<'a>: From<iced::widget::text::StyleFn<'a, Theme>>,
+    <Theme as iced::widget::container::Catalog>::Class<'a>:
+        From<iced::widget::container::StyleFn<'a, Theme>>,
     Renderer: iced::advanced::text::Renderer + 'a,
 {
     let line_len = display_len(&label, &artist);
     let mut row = Row::new()
+        .push(
+            Container::new(
+                Text::new(transport_glyph(mode))
+                    .size(LCD_TRANSPORT_SIZE)
+                    .color(transport_glyph_color(mode)),
+            )
+            .width(Length::Fixed(LCD_TRANSPORT_WIDTH)),
+        )
         .push(
             MouseArea::new(lcd_elapsed_text(elapsed))
                 .on_press(Message::ToggleTimeDisplay)

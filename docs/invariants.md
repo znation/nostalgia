@@ -229,6 +229,25 @@ its internal id, whenever the id is in the known-track index:
 - The LCD's left edge always draws the five classic indicator letters `O`, `A`, `I`, `D`, `V`,
   in that order, at a fixed width, in every playback state including the empty `--:--` bar. The
   strip is decorative: it emits no message and changes nothing.
+- A transport glyph leads the row in a fixed `LCD_TRANSPORT_WIDTH` slot before the large elapsed
+  readout, so the readout keeps its x position as the glyph changes: green `▶` while playing,
+  green `II` while paused, and red `■` while stopped. Pause of a loaded preview sets the shared
+  paused mode while Play and Stop clear it; a pause with no loaded preview does not set it, so a
+  Paused readout always has a preview Play can resume. `AppState::is_playing` alone no longer
+  distinguishes Pause from Stop. `state::TransportMode` and `AppState::transport_mode` resolve the mode,
+  `views::now_playing::transport_glyph` and `transport_glyph_color` choose the glyph and color,
+  and `views::now_playing::now_playing_row` draws the slot. Pinned by
+  `transport_glyph_names_and_colors_each_mode`,
+  `now_playing_row_keeps_the_elapsed_readout_in_place_across_transport_modes`, and
+  `now_playing_content_draws_the_indicator_strip_beside_the_title` in `src/ui/views/tests.rs`;
+  `toggle_playing_switches_between_playing_and_paused` and
+  `pause_sets_the_paused_mode_while_play_and_stop_clear_it` in `src/state.rs`; and
+  `pause_stops_playing_but_keeps_current_track`,
+  `pause_without_a_loaded_preview_leaves_the_transport_stopped`,
+  `toggle_without_a_loaded_preview_stops_the_transport`,
+  `pause_after_stop_leaves_the_transport_stopped`, `resume_resumes_the_audio_backend`,
+  `stop_stops_the_audio_backend`, `toggle_play_pause_pauses_while_playing`, and
+  `resume_after_stop_restarts_the_preview` in `src/apple_music/tests.rs`.
 - The seek slider beneath the LCD measures the backend-reported preview length, not the catalog
   track's length at the LCD's right edge. Its thumb follows the stored position, or the drag in
   progress while one is held; only a release sends `AudioOutput::seek_to`, exactly once, with the

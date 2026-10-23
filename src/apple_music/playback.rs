@@ -22,28 +22,39 @@ pub(super) struct TransportState {
 /// Play/Pause, Play, Pause, and Stop arms call one method each, and each
 /// reuses the matching [`crate::state::AppState`] mutator so none of those goes dead.
 impl AppleMusicService {
-    /// Pauses the audio and clears the shared playing flag, keeping
-    /// `current_track` set so the Now Playing bar still names the track.
+    /// Pauses the audio, clears the shared playing flag, and sets the shared
+    /// paused flag when a preview is loaded, keeping `current_track` set so the
+    /// Now Playing bar still names the track. The paused flag is what tells
+    /// this state apart from a Stop, which clears both flags.
     ///
     /// The backend is called first: one that cannot accept the request reports
-    /// it before shared state claims playback stopped.
+    /// it before shared state claims playback stopped. A pause with no loaded
+    /// preview stops the shared transport instead: the backend has nothing to
+    /// pause, and claiming `Paused` would report a state Play could never
+    /// resume.
     ///
     /// # Errors
     ///
     /// Returns an [`AppleMusicError`] when the audio backend cannot accept the
     /// request.
     pub(crate) async fn pause(&self) -> Result<(), AppleMusicError> {
-        let _transport = self.transport.lock().await;
+        let transport = self.transport.lock().await;
         self.audio.pause()?;
-        self.state.lock().await.pause();
+        let mut state = self.state.lock().await;
+        if transport.loaded {
+            state.pause();
+        } else {
+            state.stop();
+        }
+        drop(state);
         println!("Paused playback");
         Ok(())
     }
 
     /// Resumes a paused preview, or restarts a stopped one from the last
-    /// preview URL, and sets the shared playing flag. Does nothing when no
-    /// preview has ever played, so Play cannot claim playback with nothing to
-    /// sound.
+    /// preview URL, sets the shared playing flag, and clears the shared paused
+    /// flag. Does nothing when no preview has ever played, so Play cannot
+    /// claim playback with nothing to sound.
     ///
     /// # Errors
     ///
@@ -54,9 +65,9 @@ impl AppleMusicService {
         self.resume_locked(&mut transport).await
     }
 
-    /// Stops and discards the audio and clears the shared playing flag,
-    /// keeping `current_track` set so the Now Playing bar still names the
-    /// track. The last preview URL is kept so Play can restart it.
+    /// Stops and discards the audio, clears the shared playing and paused
+    /// flags, and keeps `current_track` set so the Now Playing bar still names
+    /// the track. The last preview URL is kept so Play can restart it.
     ///
     /// # Errors
     ///
@@ -72,9 +83,12 @@ impl AppleMusicService {
     }
 
     /// Flips the transport: pauses when playing, and resumes (or restarts)
-    /// when not. The flag read, the backend call, and the flag write all
-    /// happen under the transport lock, so two toggles that arrive together
-    /// cannot both read the same flag and both pause.
+    /// when not. A track marked playing with no loaded preview (a source that
+    /// supplied no playable asset) has nothing to pause, so the toggle stops it
+    /// rather than claiming `Paused` for a preview Play could not resume. The
+    /// flag read, the backend call, and the flag write all happen under the
+    /// transport lock, so two toggles that arrive together cannot both read the
+    /// same flag and both pause.
     ///
     /// # Errors
     ///
@@ -85,7 +99,13 @@ impl AppleMusicService {
         let playing = self.state.lock().await.is_playing;
         if playing {
             self.audio.pause()?;
-            self.state.lock().await.toggle_playing();
+            let mut state = self.state.lock().await;
+            if transport.loaded {
+                state.toggle_playing();
+            } else {
+                state.stop();
+            }
+            drop(state);
             println!("Paused playback");
             Ok(())
         } else {
@@ -315,10 +335,10 @@ impl AppleMusicService {
     /// shared state is touched.
     ///
     /// When the audio backend rejects the preview, shared state must not keep
-    /// claiming playback: `is_playing` is cleared before the error is
-    /// returned, leaving `current_track` set as [`crate::state::AppState::stop`]
-    /// leaves it, so the Now Playing bar still names the track the user
-    /// selected. The rollback is itself guarded by `is_current` (see below),
+    /// claiming playback: [`crate::state::AppState::stop`] runs before the
+    /// error is returned, clearing the playing and paused flags and leaving
+    /// `current_track` set as that method leaves it, so the Now Playing bar
+    /// still names the track the user selected. The rollback is itself guarded by `is_current` (see below),
     /// so a play a newer one has superseded never clears the newer play's
     /// flag.
     ///
@@ -356,7 +376,7 @@ impl AppleMusicService {
             return Ok(());
         }
         state.current_track = Some(track_id.to_string());
-        state.is_playing = true;
+        state.play();
         // The gain, balance, and equalizer curve to start this preview at,
         // read before the lock drops. A preview starts at the sliders' values
         // and the panel's curve rather than rodio's defaults.
@@ -392,7 +412,7 @@ impl AppleMusicService {
             // bar still names the track the user selected.
             let mut state = self.state.lock().await;
             if is_current() {
-                state.is_playing = false;
+                state.stop();
             }
             transport.last_url = None;
             return Err(error);

@@ -47,7 +47,9 @@ The player on its own: [docs/screenshots/player.png](docs/screenshots/player.png
 Build and run with `cargo run`; the player opens an iced window showing the Now Playing bar (a
 small decorative `O A I D V` strip down the LCD's left edge, a large elapsed-time readout at the
 left for a loaded preview, the playing track's artist and title scrolled across the display when
-the line is longer than it, and the track's plain length at the right). A loaded preview's average
+the line is longer than it, and the track's plain length at the right); the transport glyph before
+the readout is a green `▶` while playing, a green `II` while paused, and a red `■` while stopped. A
+loaded preview's average
 bitrate, sample rate, and mono/stereo mode appear in a small status row beneath the title
 (`256 KBPS  44 KHZ  STEREO`) when the backend reports them, falling back to the sample rate and
 mode alone (`44 KHZ  STEREO`) when it cannot compute the bitrate, and the row stays blank

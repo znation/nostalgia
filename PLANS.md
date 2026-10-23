@@ -70,35 +70,6 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
-
-### Show the transport state on the Now Playing LCD (Transport glyph, part 1/2: planned 2026-10-23 by the plan role)
-
-**Goal.** Match `docs/screenshots/transport.png`'s three LCD states: a green `▶` beside the elapsed readout while playing, a green `II` while paused, and a red `■` while stopped. The app draws no such glyph today, and `AppState` cannot tell Pause from Stop — both leave `is_playing == false` — so the view has no way to choose between `II` and `■`. Add that distinction to shared state and draw the glyph in a fixed-width slot before the elapsed readout. The paused blink is deliberately left to part 2/2.
-
-**Approach.**
-
-- `src/state.rs`: add `pub paused: bool` beside `is_playing`, documented as true only while the loaded preview is paused and false while playing or stopped; its `Default` value is `false`. Set it in the existing mutators: `toggle_playing` flips `is_playing` and then sets `paused` to the new `!is_playing` (so the pause half pauses and the resume half resumes), `stop` and `play` clear it, and `pause` sets it. Update the `Default` doc's starting-state sentence. Add a public `#[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum TransportMode { Playing, Paused, Stopped }` and `pub fn transport_mode(&self) -> TransportMode`, returning `Playing` when `is_playing`, `Paused` when `paused`, and `Stopped` otherwise.
-- `src/apple_music/playback.rs`: in `play_track`, replace the direct `state.is_playing = true` commit with `state.play()`, and the direct `state.is_playing = false` backend-failure rollback with `state.stop()`; both keep `current_track` as the surrounding code expects, and routing through the setters keeps `paused` from going stale. Update the `pause`/`resume`/`stop` doc comments to name the paused flag.
-- `src/ui/theme.rs`: add `pub const LCD_RED: Color = Color::from_rgb(1.0, 0.1, 0.1);` beside `LCD_GREEN`, documented as the stopped-transport glyph color.
-- `src/ui/views/now_playing.rs`: import `crate::state::TransportMode` and add `LCD_TRANSPORT_SIZE: f32 = 22.0` and `LCD_TRANSPORT_WIDTH: f32 = 16.0`. Add pure `pub(super) fn transport_glyph(mode: TransportMode) -> &'static str` returning `▶`, `II`, and `■`, and `pub(super) fn transport_glyph_color(mode: TransportMode) -> Color` returning `theme::LCD_GREEN` for `Playing`/`Paused` and `theme::LCD_RED` for `Stopped`. In `now_playing_row`, prepend a `Container` of fixed `LCD_TRANSPORT_WIDTH` holding the glyph as a `Text` at `LCD_TRANSPORT_SIZE` in that color, before the elapsed `MouseArea`. The fixed slot keeps the elapsed readout at one x position as the glyph changes. Add a trailing `mode: TransportMode` parameter to `now_playing_row`, `now_playing_content`, and `view_now_playing`, threading it through unchanged.
-- `src/ui/view.rs`: resolve `state.transport_mode()` in the normal-mode state destructure and pass it to `views::view_now_playing`. Shade mode needs no change: its Play/Pause glyph keys off `is_playing`, so paused already shows `▶`, which is correct for a control that resumes.
-- `src/ui/views/tests.rs`: update every `now_playing_row`/`now_playing_content`/`view_now_playing` call for the new argument. Change `captured_now_playing_texts` to take a `TransportMode` and assert the glyph is the first drawn fragment, the elapsed readout the second. Add `transport_glyph_names_and_colors_each_mode` (exact strings and exact `LCD_GREEN`/`LCD_RED` colors), `now_playing_row_keeps_the_elapsed_readout_in_place_across_transport_modes` (the elapsed fragment's x is equal in all three modes while each glyph draws), and extend `now_playing_content_draws_the_indicator_strip_beside_the_title` to assert the glyph follows the `O A I D V` strip.
-- `src/state.rs` tests: extend `default_state_is_stopped_at_half_volume` with `!state.paused` and `TransportMode::Stopped`, rewrite `toggle_playing_flips_only_the_playback_flag` as `toggle_playing_switches_between_playing_and_paused` (playing → paused → playing), and add `pause_sets_the_paused_mode_while_play_and_stop_clear_it` driving `pause`, `play`, and `stop` and checking `transport_mode()`.
-- `src/apple_music/tests.rs`: assert the mode in `pause_stops_playing_but_keeps_current_track` (Paused), `resume_resumes_the_audio_backend` and `resume_after_stop_restarts_the_preview` (Playing), `stop_stops_the_audio_backend` (Stopped), and `toggle_play_pause_pauses_while_playing` (Paused).
-- `README.md`: in the Usage paragraph that describes the large elapsed readout, add one sentence naming the green `▶`, green `II`, and red `■` states. Do not touch the equalizer sentence the queued tint plan edits.
-- `docs/invariants.md`: in `## Now Playing label`, add a bullet stating the glyph rule, that Pause sets the paused mode while Play and Stop clear it, and that the glyph's fixed-width slot leaves the elapsed readout in place; name `state::TransportMode`/`AppState::transport_mode`, `views::now_playing::transport_glyph`/`transport_glyph_color`, and `now_playing_row` as the enforcers and the new tests as the pins.
-
-**Files touched.** `src/state.rs`, `src/apple_music/playback.rs`, `src/apple_music/tests.rs`, `src/ui/theme.rs`, `src/ui/views/now_playing.rs`, `src/ui/views/tests.rs`, `src/ui/view.rs`, `README.md`, `docs/invariants.md`.
-
-**Acceptance criteria.**
-
-- `AppState::pause` leaves `is_playing == false` and sets `paused == true`; `play` and `stop` clear both; `toggle_playing` alternates `Playing` and `Paused`; `transport_mode()` reports `Stopped` for the default state.
-- `transport_glyph` returns exactly `▶` for `Playing`, `II` for `Paused`, and `■` for `Stopped`; `transport_glyph_color` returns `theme::LCD_GREEN` for the first two and `theme::LCD_RED` for `Stopped`.
-- The LCD row draws the glyph before the elapsed readout in all three modes, and the elapsed readout keeps the same x across the three glyphs because the slot is fixed-width.
-- Pause and Stop remain distinguishable after a real Play/Pause/Stop sequence through `AppleMusicService`: Pause reports `Paused` and keeps the current track, while Stop reports `Stopped` and keeps it too.
-- `README.md` and `docs/invariants.md` describe the glyph, and `make check` passes with no new dependency.
-
 ### Show the transport state on the Now Playing LCD (Transport glyph, part 2/2: planned 2026-10-23 by the plan role, requires part 1/2 landed)
 
 **Goal.** Finish the paused state from `docs/screenshots/transport.png`: while the player is paused, the large elapsed readout blinks instead of sitting steady, while the position it shows stays frozen. Reuse the existing one-second position poll for the blink phase rather than adding a timer, and hide the readout by drawing it transparent rather than blanking it, so the row keeps its bounds and the title does not reflow.

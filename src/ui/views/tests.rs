@@ -12,7 +12,7 @@ use super::now_playing::{
     format_playback_status, format_track_time, lcd_indicator_strip, marquee_text, needs_marquee,
     now_playing_artist, now_playing_content, now_playing_elapsed, now_playing_label,
     now_playing_row, now_playing_status_row, now_playing_time, now_playing_visualizer_row,
-    visualizer_bar_heights,
+    transport_glyph, transport_glyph_color, visualizer_bar_heights,
 };
 use super::shade::{
     SHADE_STRIP_HEIGHT, SHADE_VOLUME_ID, SHADE_VOLUME_WIDTH, SHADED_HEIGHT, play_pause_glyph,
@@ -33,7 +33,7 @@ use crate::equalizer::{
 };
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::sample_library::sample_library;
-use crate::state::{clamp_balance, clamp_volume};
+use crate::state::{TransportMode, clamp_balance, clamp_volume};
 use crate::test_support::{sample_album, sample_artist, sample_playlist, sample_song};
 use crate::ui::layout_capture;
 use iced::advanced::{
@@ -519,16 +519,17 @@ impl Operation for CapturedContainers {
 }
 
 /// Lays out the Now Playing row for `elapsed`, `label`, and `artist` at
-/// `marquee_offset` and returns the text fragments it would draw.
+/// `marquee_offset` in `mode` and returns the text fragments it would draw.
 ///
 /// The total readout is fixed at `"3:30"`, which the row draws at the right
-/// edge of the LCD well. The first fragment is asserted to be `elapsed`: the
-/// large elapsed readout leads the row.
+/// edge of the LCD well. The transport glyph leads the row and the large
+/// elapsed readout follows it.
 fn captured_now_playing_texts(
     elapsed: &str,
     label: &str,
     artist: &str,
     offset: usize,
+    mode: TransportMode,
 ) -> Vec<String> {
     let mut element: iced::Element<'_, Message, iced::Theme, ()> = now_playing_row(
         Cow::Borrowed(elapsed),
@@ -536,13 +537,20 @@ fn captured_now_playing_texts(
         Cow::Borrowed(artist),
         Cow::Borrowed("3:30"),
         offset,
+        mode,
     )
     .into();
     let capture = layout_capture::capture_text(&mut element, &());
     assert_eq!(
         capture.texts().next(),
+        Some(transport_glyph(mode)),
+        "the transport glyph must lead the row: {:?}",
+        capture.fragments()
+    );
+    assert_eq!(
+        capture.texts().nth(1),
         Some(elapsed),
-        "the elapsed readout must lead the row: {:?}",
+        "the elapsed readout must follow the glyph: {:?}",
         capture.fragments()
     );
     capture
@@ -591,13 +599,21 @@ fn now_playing_content_draws_the_indicator_strip_beside_the_title() {
         0,
         None,
         None,
+        TransportMode::Playing,
     )
     .into();
     let capture = layout_capture::capture_text(&mut element, &());
 
     assert_eq!(
-        capture.texts().take(5).collect::<Vec<_>>(),
-        vec!["O", "A", "I", "D", "V"]
+        capture.texts().take(6).collect::<Vec<_>>(),
+        vec![
+            "O",
+            "A",
+            "I",
+            "D",
+            "V",
+            transport_glyph(TransportMode::Playing)
+        ]
     );
     let find = |text: &str| capture.find(text);
     let elapsed = find("00:53");
@@ -617,6 +633,65 @@ fn now_playing_content_draws_the_indicator_strip_beside_the_title() {
         "the total must stay at the right edge: {total:?} in {:?}",
         capture.size()
     );
+}
+
+// Each transport state draws its own glyph in its documented color: green for
+// playing and paused, red for stopped. Pin the exact strings and colors so a
+// swap cannot ship unnoticed.
+#[test]
+fn transport_glyph_names_and_colors_each_mode() {
+    assert_eq!(transport_glyph(TransportMode::Playing), "▶");
+    assert_eq!(transport_glyph(TransportMode::Paused), "II");
+    assert_eq!(transport_glyph(TransportMode::Stopped), "■");
+
+    assert_eq!(
+        transport_glyph_color(TransportMode::Playing),
+        theme::LCD_GREEN
+    );
+    assert_eq!(
+        transport_glyph_color(TransportMode::Paused),
+        theme::LCD_GREEN
+    );
+    assert_eq!(
+        transport_glyph_color(TransportMode::Stopped),
+        theme::LCD_RED
+    );
+}
+
+// The glyph sits in a fixed-width slot, so switching from `▶` to `II` or `■`
+// must not move the large elapsed readout (or, through it, the title line).
+#[test]
+fn now_playing_row_keeps_the_elapsed_readout_in_place_across_transport_modes() {
+    let mut elapsed_x: Option<f32> = None;
+    for mode in [
+        TransportMode::Playing,
+        TransportMode::Paused,
+        TransportMode::Stopped,
+    ] {
+        let mut element: iced::Element<'_, Message, iced::Theme, ()> = now_playing_row(
+            Cow::Borrowed("00:53"),
+            Cow::Borrowed("Opening"),
+            Cow::Borrowed("Band"),
+            Cow::Borrowed("3:30"),
+            0,
+            mode,
+        )
+        .into();
+        let capture = layout_capture::capture_text(&mut element, &());
+        let glyph = capture.find(transport_glyph(mode));
+        let elapsed = capture.find("00:53");
+        assert!(
+            glyph.x < elapsed.x,
+            "the glyph must draw before the elapsed readout in {mode:?}: {glyph:?} {elapsed:?}"
+        );
+        match elapsed_x {
+            Some(expected) => assert!(
+                (elapsed.x - expected).abs() < 0.5,
+                "the elapsed readout moved in {mode:?}: {elapsed:?} vs x={expected}"
+            ),
+            None => elapsed_x = Some(elapsed.x),
+        }
+    }
 }
 
 // The bar's own measure of the line: the label's characters plus the
@@ -662,8 +737,8 @@ fn overlong_now_playing_line_renders_a_new_window_as_the_offset_advances() {
     let second_window = marquee_text(&display, 1, MARQUEE_WIDTH);
     assert_ne!(first_window, second_window);
 
-    let first = captured_now_playing_texts("00:53", label, artist, 0);
-    let second = captured_now_playing_texts("00:53", label, artist, 1);
+    let first = captured_now_playing_texts("00:53", label, artist, 0, TransportMode::Playing);
+    let second = captured_now_playing_texts("00:53", label, artist, 1, TransportMode::Playing);
     assert!(first.iter().any(|text| text == &first_window), "{first:?}");
     assert!(
         second.iter().any(|text| text == &second_window),
@@ -674,8 +749,10 @@ fn overlong_now_playing_line_renders_a_new_window_as_the_offset_advances() {
     // offset: "Band" (4) plus the 3-character separator plus "Opening" (7)
     // is 14 characters, within the 22-character budget.
     let still_artist = "Band";
-    let still_a = captured_now_playing_texts("00:00", "Opening", still_artist, 0);
-    let still_b = captured_now_playing_texts("00:00", "Opening", still_artist, 5);
+    let still_a =
+        captured_now_playing_texts("00:00", "Opening", still_artist, 0, TransportMode::Playing);
+    let still_b =
+        captured_now_playing_texts("00:00", "Opening", still_artist, 5, TransportMode::Playing);
     assert_eq!(still_a, still_b);
     assert!(still_a.iter().any(|text| text == still_artist));
     assert!(still_a.iter().any(|text| text == "Opening"));
@@ -815,6 +892,7 @@ fn captured_content_with_spectrum(
             bitrate_kbps: Some(256),
         }),
         spectrum,
+        TransportMode::Playing,
     )
     .into();
     let capture = layout_capture::capture_text(&mut element, &());
@@ -1002,7 +1080,7 @@ fn view_seek_bar_constructs_with_and_without_a_length() {
 // empty-artist row was only constructed by the smoke test, never read back.
 #[test]
 fn now_playing_row_omits_the_artist_separator_when_the_track_has_no_artist() {
-    let texts = captured_now_playing_texts("00:00", "Opening", "", 0);
+    let texts = captured_now_playing_texts("00:00", "Opening", "", 0, TransportMode::Playing);
 
     assert!(
         texts.iter().any(|text| text == "Opening"),
@@ -1029,7 +1107,7 @@ fn an_overlong_title_without_an_artist_scrolls_the_title_alone() {
     let label = "A Title Much Longer Than The Display";
     let window = marquee_text(label, 0, MARQUEE_WIDTH);
 
-    let texts = captured_now_playing_texts("00:00", label, "", 0);
+    let texts = captured_now_playing_texts("00:00", label, "", 0, TransportMode::Playing);
 
     assert!(
         texts.iter().any(|text| text == &window),
@@ -1373,6 +1451,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         0,
         None,
         None,
+        TransportMode::Stopped,
     );
     let _bar = view_now_playing(
         "00:53".into(),
@@ -1388,6 +1467,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         Some(Spectrum {
             bands: [0.5; BAND_COUNT],
         }),
+        TransportMode::Paused,
     );
     let _overlong = view_now_playing(
         "03:12".into(),
@@ -1397,6 +1477,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         7,
         None,
         None,
+        TransportMode::Playing,
     );
     let _back = view_back_button();
     let _retry = view_retry_button();
