@@ -320,6 +320,42 @@ fn the_bootstrap_sweep_removes_only_old_bootstrap_directories() {
     std::fs::remove_dir_all(&root).expect("remove the sweep scratch root");
 }
 
+// A symlink carrying the bootstrap prefix must be skipped by its own type, not
+// followed to its target's metadata: an aged target would otherwise make the
+// sweep treat the link as a stale bootstrap directory and remove it.
+#[cfg(unix)]
+#[test]
+fn the_bootstrap_sweep_skips_a_symlink_instead_of_following_it() {
+    let root = std::env::temp_dir().join(format!("nostalgia-sweep-link-{}", random_nonce()));
+    std::fs::create_dir(&root).expect("create the sweep scratch root");
+    let target = root.join("victim");
+    std::fs::create_dir(&target).expect("create the symlink target");
+    std::fs::write(target.join("keep.txt"), b"keep").expect("plant the target's contents");
+    let link = root.join(format!("{BOOTSTRAP_DIR_PREFIX}link"));
+    std::os::unix::fs::symlink(&target, &link).expect("plant a symlink");
+
+    let now = std::time::SystemTime::now();
+    std::fs::File::open(&target)
+        .expect("open the link target")
+        .set_modified(now - Duration::from_secs(3600))
+        .expect("age the link target");
+
+    sweep_stale_bootstrap_dirs(&root, now, BOOTSTRAP_STALE_AFTER);
+
+    assert!(
+        std::fs::symlink_metadata(&link).is_ok(),
+        "a symlink must be skipped, not removed: {}",
+        link.display()
+    );
+    assert!(
+        target.join("keep.txt").exists(),
+        "the sweep must not follow the symlink into its target: {}",
+        target.display()
+    );
+
+    std::fs::remove_dir_all(&root).expect("remove the sweep scratch root");
+}
+
 // The guard cannot run when the process dies, so the sweep must actually be
 // wired into the next bootstrap write rather than only existing as a helper.
 #[cfg(unix)]

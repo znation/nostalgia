@@ -375,6 +375,7 @@ carry `BOOTSTRAP_DIR_PREFIX`, and reports a removal failure without failing the 
 - `one_pass_takes_on_a_bounded_number_of_connections`
 - `the_reader_reports_a_partial_request_as_incomplete`
 - `the_bootstrap_sweep_removes_only_old_bootstrap_directories`
+- `the_bootstrap_sweep_skips_a_symlink_instead_of_following_it`
 - `a_new_bootstrap_write_sweeps_a_stale_directory_from_a_crashed_flow`
   (all in `src/music_kit_auth/tests.rs`)
 
