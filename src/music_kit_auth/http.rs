@@ -3,8 +3,8 @@
 //!
 //! These helpers know nothing about `MusicKit` — they parse a request into its
 //! method, path, query, host, and body, and write a `Connection: close` response — so the
-//! sign-in flow's request routing (in the parent module) reads as application
-//! logic over a small protocol layer. The request buffer is capped at
+//! sign-in flow's request routing (in the sibling `server` module) reads as
+//! application logic over a small protocol layer. The request buffer is capped at
 //! [`MAX_REQUEST_BYTES`]: the cap is checked
 //! while reading headers *and* before the declared body is read, so a hostile
 //! client cannot make the server allocate without bound or panic it with an

@@ -373,12 +373,14 @@ browser's `POST /token` callback behind it:
   different name, and a non-directory entry are left alone; a symlink is not followed.
 
 **Enforced by.** `authorize_with_bounds` in `src/music_kit_auth.rs` keeps the accepted connections
-in a `Vec<PendingConnection>`. Every pass calls `serve_pending`, which polls each pending
+in a `Vec` of `PendingConnection`, which is defined in `src/music_kit_auth/server.rs`. The loop's helpers live in `src/music_kit_auth/server.rs`: every pass
+calls `serve_pending`, which polls each pending
 connection through `http::RequestReader::poll` and serves the ones whose request has arrived, and
 then `accept_pending`, which takes on the connections that are waiting. `http::RequestReader` owns a
 non-blocking socket and parses the request from the bytes received so far, so polling a silent peer
 reports "nothing yet" instead of waiting for it; `serve_pending` drops a connection whose budget is
-spent. `BootstrapPage::write` calls `sweep_stale_bootstrap_dirs` before creating the new owner-only
+spent. `BootstrapPage::write` in `src/music_kit_auth/bootstrap.rs` calls `sweep_stale_bootstrap_dirs`
+before creating the new owner-only
 directory; the sweep reads one level of the temp dir, removes only aged directories whose names
 carry `BOOTSTRAP_DIR_PREFIX`, and reports a removal failure without failing the new sign-in.
 

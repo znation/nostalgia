@@ -5,8 +5,8 @@
 //!
 //! The page is a static template; [`render_auth_page`] substitutes the
 //! developer token and the per-flow `state` nonce into it. Keeping the HTML
-//! here leaves the parent module's flow and protocol code free of embedded
-//! markup.
+//! here leaves the flow code in `music_kit_auth` and the protocol code in its
+//! `server` submodule free of embedded markup.
 
 /// Builds the sign-in page, substituting the developer token, nonce, and build
 /// version.
