@@ -125,10 +125,10 @@ stops the backend's previous preview when a selection has no preview URL.
 `views::now_playing::marquee_text`
 windows an overlong line, and `WinampPlayer::marquee_offset` carries the advance through
 `Message::MarqueeTick`. `views::now_playing::display_len` and `views::now_playing::needs_marquee`
-measure the line, and `ui::subscriptions` subscribes `marquee_ticks` only while that measure
+measure the line, and `ui::timers::subscriptions` subscribes `marquee_ticks` only while that measure
 exceeds `MARQUEE_WIDTH`.
 
-The scrolling timer itself starts through `spawn_marquee_thread` in `src/ui/mod.rs`, which delegates
+The scrolling timer itself starts through `spawn_marquee_thread` in `src/ui/timers.rs`, which delegates
 to `crate::threads::spawn_named`, the fallible `std::thread::Builder::spawn` every worker in the app
 uses. `std::thread::spawn` panics when
 the OS refuses a thread, and iced builds the subscription's stream on its main thread while it
