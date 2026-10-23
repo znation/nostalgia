@@ -62,7 +62,8 @@ track's length shown at the LCD's right edge. Clicking the large elapsed readout
 the track's remaining time
 (`-02:37`) and back; the choice stays until clicked again. The bar sits above the Play/Pause/Stop/Previous/Next
 controls, Repeat and Shuffle toggles, volume and balance sliders, an equalizer panel (an EQ on/off
-button, a preset pick list, a preamp slider, and ten band sliders), and a browse list whose song
+button, a preset pick list, a preamp slider, a response curve above ten band sliders), and a
+browse list whose song
 rows read `artist - title` (or the title alone when the source supplies no artist) and show each
 track's length, and whose album rows read `artist - title` (or the title alone when the source
 supplies no artist), with each song list showing its song count and total playing time

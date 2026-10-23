@@ -3,7 +3,10 @@ use super::browse::{
     BROWSE_VIEWS, album_row, artist_row, browse_placeholder, current_row_style, empty_list_label,
     list_count_summary, playlist_row, row_prefix, song_list_summary, song_row,
 };
-use super::equalizer::eq_enabled_label;
+use super::equalizer::{
+    RESPONSE_CURVE_COLUMNS, RESPONSE_CURVE_HEIGHT, RESPONSE_CURVE_LINE_HEIGHT, eq_enabled_label,
+    response_curve_offsets, response_curve_row,
+};
 use super::now_playing::{
     KnownTrack, MARQUEE_WIDTH, TimeDisplay, display_len, format_lcd_elapsed, format_lcd_remaining,
     format_playback_status, format_track_time, lcd_indicator_strip, marquee_text, needs_marquee,
@@ -1562,6 +1565,135 @@ fn equalizer_band_labels_leave_a_gap_between_frequencies() {
             capture.fragments()
         );
     }
+}
+
+// The response curve is the panel's only readout of the whole stored shape,
+// so its pure offset helper must trace the same gains the sliders show: flat
+// in the middle, the extremes at the plot's edges, and linear between the ten
+// bands. Pin the exact values, the endpoint correspondence, and the two
+// degenerate column counts.
+#[test]
+fn response_curve_offsets_follow_the_band_gains() {
+    assert!(
+        response_curve_offsets(&[0.0; BAND_COUNT], 0).is_empty(),
+        "no columns means no segments"
+    );
+    assert_eq!(
+        response_curve_offsets(&[0.0; BAND_COUNT], 1),
+        vec![0.5],
+        "one column sits on the first band instead of dividing by zero"
+    );
+
+    let flat = response_curve_offsets(&[0.0; BAND_COUNT], RESPONSE_CURVE_COLUMNS);
+    assert_eq!(flat.len(), RESPONSE_CURVE_COLUMNS);
+    assert!(
+        flat.iter().all(|offset| *offset == 0.5),
+        "a flat curve is centered: {flat:?}"
+    );
+    assert!(
+        response_curve_offsets(&[GAIN_MIN_DB; BAND_COUNT], RESPONSE_CURVE_COLUMNS)
+            .iter()
+            .all(|offset| *offset == 0.0),
+        "all-min gains sit on the plot's bottom edge"
+    );
+    assert!(
+        response_curve_offsets(&[GAIN_MAX_DB; BAND_COUNT], RESPONSE_CURVE_COLUMNS)
+            .iter()
+            .all(|offset| *offset == 1.0),
+        "all-max gains sit on the plot's top edge"
+    );
+
+    let mut ramp = [0.0; BAND_COUNT];
+    ramp[0] = GAIN_MIN_DB;
+    ramp[BAND_COUNT - 1] = GAIN_MAX_DB;
+    let endpoints = response_curve_offsets(&ramp, RESPONSE_CURVE_COLUMNS);
+    assert_eq!(
+        endpoints.first().copied(),
+        Some((clamp_gain(GAIN_MIN_DB) - GAIN_MIN_DB) / (GAIN_MAX_DB - GAIN_MIN_DB))
+    );
+    assert_eq!(
+        endpoints.last().copied(),
+        Some((clamp_gain(GAIN_MAX_DB) - GAIN_MIN_DB) / (GAIN_MAX_DB - GAIN_MIN_DB))
+    );
+
+    let three = response_curve_offsets(&ramp, 3);
+    assert_eq!(
+        three,
+        vec![0.0, 0.5, 1.0],
+        "columns interpolate between bands"
+    );
+}
+
+// Lay the curve row out under the null renderer: it must keep its fixed
+// height for any curve and draw exactly one green segment per column, first
+// column at the bottom and last at the top for a rising curve. The zero-offset
+// first column is the one iced would silently drop if it were `Fixed(0.0)`.
+#[test]
+fn response_curve_row_keeps_its_height_and_draws_one_segment_per_column() {
+    let mut bands = [0.0; BAND_COUNT];
+    bands[0] = GAIN_MIN_DB;
+    bands[BAND_COUNT - 1] = GAIN_MAX_DB;
+    let mut element: iced::Element<'_, Message, iced::Theme, ()> = response_curve_row(&bands);
+    let mut tree = Tree::new(element.as_widget());
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, &(), &layout_capture::limits());
+    assert_eq!(node.bounds().height, RESPONSE_CURVE_HEIGHT);
+
+    let mut captured = CapturedContainers::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &(), &mut captured);
+    let segments: Vec<Rectangle> = captured
+        .0
+        .iter()
+        .filter(|bounds| bounds.height == RESPONSE_CURVE_LINE_HEIGHT)
+        .copied()
+        .collect();
+    assert_eq!(
+        segments.len(),
+        RESPONSE_CURVE_COLUMNS,
+        "one segment per column, including the zero-offset first column"
+    );
+    let first = segments[0];
+    let last = segments[segments.len() - 1];
+    assert_eq!(
+        first.y + first.height,
+        RESPONSE_CURVE_HEIGHT,
+        "the first band's minimum gain draws on the bottom edge: {first:?}"
+    );
+    assert_eq!(
+        last.y, 0.0,
+        "the last band's maximum gain draws on the top edge: {last:?}"
+    );
+
+    // The mockup's flat preset: every segment stays on the plot's midline.
+    let mut flat_element: iced::Element<'_, Message, iced::Theme, ()> =
+        response_curve_row(&[0.0; BAND_COUNT]);
+    let mut flat_tree = Tree::new(flat_element.as_widget());
+    let flat_node =
+        flat_element
+            .as_widget_mut()
+            .layout(&mut flat_tree, &(), &layout_capture::limits());
+    let mut flat_captured = CapturedContainers::default();
+    flat_element.as_widget_mut().operate(
+        &mut flat_tree,
+        Layout::new(&flat_node),
+        &(),
+        &mut flat_captured,
+    );
+    let flat_segments: Vec<Rectangle> = flat_captured
+        .0
+        .iter()
+        .filter(|bounds| bounds.height == RESPONSE_CURVE_LINE_HEIGHT)
+        .copied()
+        .collect();
+    assert_eq!(flat_segments.len(), RESPONSE_CURVE_COLUMNS);
+    let midline = (RESPONSE_CURVE_HEIGHT - RESPONSE_CURVE_LINE_HEIGHT) / 2.0;
+    assert!(
+        flat_segments.iter().all(|segment| segment.y == midline),
+        "a flat curve draws a centered line: {flat_segments:?}"
+    );
 }
 
 // The shade strip's Play/Pause face is the compact twin of the transport
