@@ -125,6 +125,8 @@ child is open), and `views::view_browse_nav_buttons` in `src/ui/views/browse.rs`
 - `sort_with_an_empty_or_loading_list_is_a_noop`
 - `back_restores_a_sorted_artists_list_to_library_order`
 - `back_from_songs_restores_a_sorted_albums_list_to_library_order`
+- `back_from_all_albums_songs_restores_a_sorted_flat_list_to_library_order`
+- `back_from_a_playlists_songs_restores_a_sorted_list_to_library_order`
   (all in `src/ui/tests.rs`)
 
 ## Now Playing label

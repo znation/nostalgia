@@ -3156,6 +3156,99 @@ fn back_from_songs_restores_a_sorted_albums_list_to_library_order() {
     assert_eq!(ids, ["zulu", "alpha"]);
 }
 
+// The flat All Albums list is the other parent Back can return to after a
+// Sort: opening an album leaves it in memory, so Back must restore its
+// library order rather than leave the sorted order showing.
+#[test]
+fn back_from_all_albums_songs_restores_a_sorted_flat_list_to_library_order() {
+    let (mut player, _state) = test_player();
+    player.current_view = CurrentView::AllAlbums;
+    player.all_albums.loading = false;
+    player.all_albums.items = vec![
+        Album {
+            id: "zulu".to_string(),
+            title: "Zulu".to_string(),
+            artist_id: "artist-1".to_string(),
+            artist: "Zulu".to_string(),
+        },
+        Album {
+            id: "alpha".to_string(),
+            title: "alpha".to_string(),
+            artist_id: "artist-1".to_string(),
+            artist: "alpha".to_string(),
+        },
+    ];
+
+    let _ = update(&mut player, Message::SortBrowse);
+    let sorted: Vec<&str> = player
+        .all_albums
+        .items
+        .iter()
+        .map(|album| album.id.as_str())
+        .collect();
+    assert_eq!(sorted, ["alpha", "zulu"]);
+
+    let epoch = player.all_albums.epoch;
+    let _ = update(&mut player, Message::AlbumSelected { epoch, index: 0 });
+    assert_view(&player, CurrentView::Songs);
+    assert_eq!(player.songs_origin, SongsOrigin::AllAlbums);
+
+    let _ = update(&mut player, Message::Back);
+
+    let restored: Vec<&str> = player
+        .all_albums
+        .items
+        .iter()
+        .map(|album| album.id.as_str())
+        .collect();
+    assert_view(&player, CurrentView::AllAlbums);
+    assert_eq!(restored, ["zulu", "alpha"]);
+}
+
+// Playlists is the remaining in-memory parent Back restores: a sorted list
+// whose playlist was opened must come back in library order.
+#[test]
+fn back_from_a_playlists_songs_restores_a_sorted_list_to_library_order() {
+    let (mut player, _state) = test_player();
+    player.current_view = CurrentView::Playlists;
+    player.playlists.loading = false;
+    player.playlists.items = vec![
+        Playlist {
+            id: "zulu".to_string(),
+            name: "Zulu".to_string(),
+        },
+        Playlist {
+            id: "alpha".to_string(),
+            name: "alpha".to_string(),
+        },
+    ];
+
+    let _ = update(&mut player, Message::SortBrowse);
+    let sorted: Vec<&str> = player
+        .playlists
+        .items
+        .iter()
+        .map(|playlist| playlist.id.as_str())
+        .collect();
+    assert_eq!(sorted, ["alpha", "zulu"]);
+
+    let epoch = player.playlists.epoch;
+    let _ = update(&mut player, Message::PlaylistSelected { epoch, index: 0 });
+    assert_view(&player, CurrentView::Songs);
+    assert_eq!(player.songs_origin, SongsOrigin::Playlist);
+
+    let _ = update(&mut player, Message::Back);
+
+    let restored: Vec<&str> = player
+        .playlists
+        .items
+        .iter()
+        .map(|playlist| playlist.id.as_str())
+        .collect();
+    assert_view(&player, CurrentView::Playlists);
+    assert_eq!(restored, ["zulu", "alpha"]);
+}
+
 // Songs view draws from `all_songs`, so Next there moves through the flat
 // rows, not the browsed `songs` buffer. `songs` holds a single song while the
 // flat list holds the three-song stepping album, so a Next that stepped
