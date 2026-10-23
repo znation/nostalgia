@@ -20,7 +20,9 @@ use super::{
     view_transport_controls,
 };
 use crate::audio::PlaybackFormat;
-use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, clamp_gain};
+use crate::equalizer::{
+    BAND_COUNT, BAND_FREQUENCIES, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, clamp_gain,
+};
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::sample_library::sample_library;
 use crate::state::{clamp_balance, clamp_volume};
@@ -1365,4 +1367,66 @@ fn equalizer_slider_spec_matches_the_gain_clamp_and_steps_whole_decibels() {
     assert_slider_range_matches_clamp(clamp_gain, GAIN_MIN_DB, GAIN_MAX_DB, EQ_STEP);
 
     assert_eq!(EQ_STEP, 1.0);
+}
+
+// The ten band labels are the equalizer's only frequency readout: when a
+// pair touches, two frequencies read as one number (`1703106001K`). This was
+// confirmed only from a captured window, so lay the panel out with the
+// headless tiny-skia renderer — which measures text for real — and require a
+// visible gap between every pair of neighbouring labels.
+#[test]
+fn equalizer_band_labels_leave_a_gap_between_frequencies() {
+    use iced::advanced::renderer::Headless;
+    use iced::{Font, Pixels};
+
+    #[derive(Default)]
+    struct CapturedText(Vec<(String, Rectangle)>);
+    impl Operation for CapturedText {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+        fn text(&mut self, _id: Option<&Id>, bounds: Rectangle, text: &str) {
+            self.0.push((text.to_string(), bounds));
+        }
+    }
+
+    let renderer = futures::executor::block_on(<iced::Renderer as Headless>::new(
+        Font::default(),
+        Pixels(16.0),
+        Some("tiny-skia"),
+    ))
+    .expect("the headless tiny-skia renderer");
+    let bands = [0.0; BAND_COUNT];
+    let mut element = view_equalizer(false, 0.0, &bands, None);
+    let mut tree = Tree::new(element.as_widget());
+    let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &limits);
+    let mut captured = CapturedText::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &renderer, &mut captured);
+
+    let bounds: Vec<(&str, Rectangle)> = BAND_FREQUENCIES
+        .iter()
+        .map(|frequency| {
+            let bounds = captured
+                .0
+                .iter()
+                .find(|(text, _)| text == frequency)
+                .map(|(_, bounds)| *bounds)
+                .unwrap_or_else(|| panic!("missing {frequency} label: {:?}", captured.0));
+            (*frequency, bounds)
+        })
+        .collect();
+    for pair in bounds.windows(2) {
+        let (left_label, left) = pair[0];
+        let (right_label, right) = pair[1];
+        assert!(
+            left.x + left.width + 1.0 <= right.x,
+            "{left_label} and {right_label} labels touch: {:?}",
+            captured.0
+        );
+    }
 }

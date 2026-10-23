@@ -11,6 +11,11 @@ use crate::ui::{Message, bevel, style};
 
 use super::{EQ_STEP, chrome_slider, labeled_button, spacer};
 
+/// The horizontal gap between adjacent equalizer band columns. Without it the
+/// labels sit edge to edge, so `170`, `310`, `600`, and `1K` read as one
+/// number in the rendered panel.
+const BAND_ROW_SPACING: f32 = 6.0;
+
 /// The equalizer on/off button's label: "EQ: On" while the equalizer is
 /// engaged, "EQ: Off" when it is off. Pure so the label logic is testable
 /// without an iced `Element`, like
@@ -38,7 +43,7 @@ pub fn view_equalizer(
     bands: &[f32; BAND_COUNT],
     preset: Option<Preset>,
 ) -> Element<'static, Message> {
-    let mut band_row = Row::new();
+    let mut band_row = Row::new().spacing(BAND_ROW_SPACING);
     for (index, frequency) in BAND_FREQUENCIES.iter().enumerate() {
         band_row = band_row.push(
             Column::new()
