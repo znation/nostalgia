@@ -28,49 +28,25 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 > plays the selected preview through the audio seam. Risk: the Winamp chrome
 > arrived piecemeal, so later changes still need one consistent vocabulary.
 > The equalizer-audio and seek plans this note pointed at have since landed
-> (both 2026-10-20); the 2026-10-22 note below carries the current queue.
+> (both 2026-10-20); the 2026-10-22 note below records drift that has since
+> been resolved.
 
-> **Steward drift note (2026-10-22 by the steward role): the built Now
-> Playing bar and browse rows do not match the brief's mockups, and the two
-> queued plans settle that difference in opposite directions — the
-> playback-position plan adds a readout the mockup shows nowhere, while the
-> album-row plan matches the mockup's `<artist> - <title>` rows but leaves the
-> running time it draws out of scope.**
->
-> The brief promises a "very close if not pixel-perfect" Winamp, and the plan
-> role has been citing `docs/screenshots/` as the spec — the landed plans for
-> the scrolling title, the artist-prefixed rows, the `TOP` button and the list
-> counts each name a mockup feature. The main window's mockup
-> (`docs/screenshots/player.png`) draws the classic LCD: a vertical `O C I D V`
-> strip at the left, a large elapsed-time readout (`00:53`) over a green
-> visualizer, a song-title box reading `<ARTIST> - <TITLE> (<length>)`, and a
-> `256 KBPS 44 KHZ` / `MONO STEREO` status row. The build renders one row
-> instead: `now_playing_row` (`src/ui/views/now_playing.rs`) pushes a
-> `Now Playing: ` caption, the artist and title, a fill, and the track length
-> at the right edge of the LCD well, and `view` (`src/ui/view.rs`) stacks that
-> bar above the transport row — no elapsed-time readout, no `O C I D V` strip,
-> no status row.
->
-> The first entry under `## Planned`, "Add the playback-position readout to
-> the Now Playing bar (Playback position, part 3/3)", widens that right-edge
-> slot to `<elapsed>/<total>`, a value the mockup shows nowhere: its title
-> line carries the length in parentheses and the elapsed time in the big left
-> readout. Recommend the plan role schedule that elapsed-time display and
-> settle where part 3/3's readout belongs before the queue drains.
->
-> The browse rows drift the same way: `docs/screenshots/library.png` draws
-> each artist row with its album count at the right (`2 albums`) and each
-> album row with its running time (`12:38`), while the build shows the
-> `View Albums` and `View Songs` hints (`src/ui/views/browse.rs`) and the
-> total count beneath the rows. The queued album-row plan, "Show each album
-> row's artist beside its title", puts album running times out of scope
-> because an album query does not supply its songs' durations, so the
-> mockup's per-album time would need a songs fetch per row — a decision for
-> the plan role, not a detail to drop.
+> **Steward drift note (2026-10-22 by the steward role; resolved 2026-10-23
+> by the steward role).** That note recorded the built Now Playing bar and
+> browse rows drifting from the brief's mockups — no elapsed readout, no
+> `O A I D V` strip, no status row, album rows without running time, and a
+> queued playback-position plan that put an `<elapsed>/<total>` readout at the
+> LCD's right edge. Those drifts have since landed: "Add the classic elapsed
+> readout to the Now Playing LCD and restore the plain total at its right
+> edge", "Draw the classic O A I D V strip at the LCD's left edge", "Show the
+> loaded preview's bitrate in the LCD status row", "Show each album row's
+> running time", and "Show each artist row's album count" are done, and the
+> playback-position plan is no longer queued. No current brief-vs-build drift
+> is known; the only planned entry is the LCD `MONO`/`STEREO` pair below,
+> which brings the status row to `docs/screenshots/player.png` and
+> `docs/screenshots/transport.png`.
 
 ## Planned
-
-_None yet._
 
 ### Draw the LCD's MONO and STEREO indicators as a lit pair (planned 2026-10-23 by the plan role)
 
