@@ -45,14 +45,14 @@ The player on its own: [docs/screenshots/player.png](docs/screenshots/player.png
 ## Usage
 
 Build and run with `cargo run`; the player opens an iced window showing the Now Playing bar (a
-large elapsed-time readout at the left for a loaded preview, the playing track's artist and title
-scrolled across the display when the line is longer than it, and the track's plain length at the
-right). A loaded preview's sample rate and mono/stereo mode appear in a small status row
+small decorative `O A I D V` strip down the LCD's left edge, a large elapsed-time readout at the
+left for a loaded preview, the playing track's artist and title scrolled across the display when
+the line is longer than it, and the track's plain length at the right). A loaded preview's sample rate and mono/stereo mode appear in a small status row
 beneath the title (`44 KHZ  STEREO`) when the backend reports them, and the row stays blank
 otherwise. Beneath the LCD, a chrome slider spans the loaded preview's own length and tracks its
-playback position; dragging moves only the thumb, and releasing seeks to that position. The strip
-is blank (but keeps its height) until the backend reports both a playback position and a preview
-length, such as on the silent fallback; its scale is the preview's length, not the catalog
+playback position; dragging moves only the thumb, and releasing seeks to that position. The seek
+slider is blank (but keeps its height) until the backend reports both a playback position and a
+preview length, such as on the silent fallback; its scale is the preview's length, not the catalog
 track's length shown at the LCD's right edge. Clicking the large elapsed readout switches it to
 the track's remaining time
 (`-02:37`) and back; the choice stays until clicked again. The bar sits above the Play/Pause/Stop/Previous/Next

@@ -6,9 +6,9 @@ use super::browse::{
 use super::equalizer::eq_enabled_label;
 use super::now_playing::{
     KnownTrack, MARQUEE_WIDTH, TimeDisplay, display_len, format_lcd_elapsed, format_lcd_remaining,
-    format_playback_status, format_track_time, marquee_text, needs_marquee, now_playing_artist,
-    now_playing_elapsed, now_playing_label, now_playing_row, now_playing_status_row,
-    now_playing_time,
+    format_playback_status, format_track_time, lcd_indicator_strip, marquee_text, needs_marquee,
+    now_playing_artist, now_playing_content, now_playing_elapsed, now_playing_label,
+    now_playing_row, now_playing_status_row, now_playing_time,
 };
 use super::transport::{play_pause_label, repeat_label, shuffle_label, transport_buttons};
 use super::{
@@ -492,21 +492,23 @@ fn marquee_text_counts_characters_not_bytes() {
 }
 
 // The text fragments a built Now Playing row would draw, collected through a
-// widget operation.
+// widget operation, with each fragment's laid-out bounds in the same order.
 //
 // `iced`'s `Element` API gives no way to read the text a row carries, so the
 // row is laid out with the null renderer and every `text` operation it
-// performs is recorded.
+// performs is recorded. The bounds are absolute coordinates, so a test can
+// check where a fragment sits, not just that it was drawn.
 #[derive(Default)]
-struct CapturedText(Vec<String>);
+struct CapturedText(Vec<String>, Vec<Rectangle>);
 
 impl Operation for CapturedText {
     fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
         operate(self);
     }
 
-    fn text(&mut self, _id: Option<&Id>, _bounds: Rectangle, text: &str) {
+    fn text(&mut self, _id: Option<&Id>, bounds: Rectangle, text: &str) {
         self.0.push(text.to_string());
+        self.1.push(bounds);
     }
 }
 
@@ -544,6 +546,94 @@ fn captured_now_playing_texts(
         captured.0
     );
     captured.0
+}
+
+/// Lays out the decorative indicator strip and returns the text fragments it
+/// would draw and the width the column occupies.
+fn captured_indicator_texts() -> (Vec<String>, f32) {
+    let mut element: iced::Element<'_, Message, iced::Theme, ()> = lcd_indicator_strip().into();
+    let mut tree = Tree::new(element.as_widget());
+    let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
+    let node = element.as_widget_mut().layout(&mut tree, &(), &limits);
+    let width = node.bounds().width;
+    let mut captured = CapturedText::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &(), &mut captured);
+    (captured.0, width)
+}
+
+// The LCD's left edge draws the five classic indicator letters in the
+// mockup's order, one per line, at the fixed strip width so the content
+// beside it never shifts.
+#[test]
+fn lcd_indicator_strip_draws_each_label_in_order_at_a_fixed_width() {
+    let (texts, width) = captured_indicator_texts();
+    assert_eq!(texts, vec!["O", "A", "I", "D", "V"]);
+    assert_eq!(width, 12.0, "the strip's fixed width");
+}
+
+// The whole bar's content carries the strip as well as the elapsed, title,
+// and total readouts, so a refactor cannot drop the strip while its builder
+// alone stays tested. The content is laid out directly because the concrete
+// `lcd_well` wrapper ties `view_now_playing` to iced's fallback renderer.
+// Every letter sits left of the readouts, in order down the left edge, and
+// the total keeps its right-edge place beside them. The null renderer gives
+// text no size, so the letters' order is read from the draw sequence and
+// their `x` positions from the row layout, not from their zero-height bounds.
+#[test]
+fn now_playing_content_draws_the_indicator_strip_beside_the_title() {
+    let mut element: iced::Element<'_, Message, iced::Theme, ()> = now_playing_content(
+        Cow::Borrowed("00:53"),
+        Cow::Borrowed("Opening"),
+        Cow::Borrowed("Band"),
+        Cow::Borrowed("3:30"),
+        0,
+        None,
+    )
+    .into();
+    let mut tree = Tree::new(element.as_widget());
+    let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
+    let node = element.as_widget_mut().layout(&mut tree, &(), &limits);
+    let mut captured = CapturedText::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &(), &mut captured);
+
+    assert_eq!(
+        captured
+            .0
+            .iter()
+            .take(5)
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        vec!["O", "A", "I", "D", "V"]
+    );
+    let find = |text: &str| -> Rectangle {
+        let index = captured
+            .0
+            .iter()
+            .position(|drawn| drawn == text)
+            .unwrap_or_else(|| panic!("missing {text}: {:?}", captured.0));
+        captured.1[index]
+    };
+    let elapsed = find("00:53");
+    let title = find("Opening");
+    let total = find("3:30");
+
+    for label in ["O", "A", "I", "D", "V"] {
+        let letter = find(label);
+        assert!(
+            letter.x < elapsed.x && letter.x < title.x && letter.x < total.x,
+            "indicator {label} must sit left of the readouts: {letter:?}"
+        );
+    }
+
+    assert!(
+        (total.x + total.width - node.bounds().width).abs() < 0.5,
+        "the total must stay at the right edge: {total:?} in {:?}",
+        node.bounds()
+    );
 }
 
 // The bar's own measure of the line: the label's characters plus the

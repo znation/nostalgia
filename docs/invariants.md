@@ -162,6 +162,9 @@ its internal id, whenever the id is in the known-track index:
   reported format; Stop and a new selection clear it. A format reply issued before a Stop or a
   new selection, or landing while a transport transition is in flight, is dropped. Bitrate is not
   shown: the preview download discards the body length, so it cannot be computed.
+- The LCD's left edge always draws the five classic indicator letters `O`, `A`, `I`, `D`, `V`,
+  in that order, at a fixed width, in every playback state including the empty `--:--` bar. The
+  strip is decorative: it emits no message and changes nothing.
 - The seek slider beneath the LCD measures the backend-reported preview length, not the catalog
   track's length at the LCD's right edge. Its thumb follows the stored position, or the drag in
   progress while one is held; only a release sends `AudioOutput::seek_to`, exactly once, with the
@@ -200,6 +203,8 @@ schedules one begins a transition, and the completion that reports that same tra
 while the count is nonzero the `PositionTick` handler issues no query and the
 `PlaybackPosition` handler stores no reply. `AppleMusicService::play_track`
 stops the backend's previous preview when a selection has no preview URL.
+`views::now_playing::lcd_indicator_strip` draws `views::now_playing::LCD_INDICATOR_LABELS` down
+the LCD's left edge in a fixed-width column, with no message and no handler.
 `views::now_playing::marquee_text`
 windows an overlong line, and `WinampPlayer::marquee_offset` carries the advance through
 `Message::MarqueeTick`. The `WinampPlayer::time_display` field holds the readout's mode, and
@@ -292,6 +297,9 @@ rather than the panic unwinding the event loop.
 - `playback_format_forwards_the_audio_output_format` (`src/apple_music/tests.rs`)
 - `format_playback_status_formats_khz_and_channel_mode`
 - `now_playing_status_row_draws_the_format_or_nothing` (`src/ui/views/tests.rs`)
+- `lcd_indicator_strip_draws_each_label_in_order_at_a_fixed_width`
+- `now_playing_content_draws_the_indicator_strip_beside_the_title`
+  (`src/ui/views/tests.rs`)
 - `seek_bar_value_clamps_the_thumb_and_hides_without_a_length`
 - `view_seek_bar_constructs_with_and_without_a_length` (`src/ui/views/tests.rs`)
 - `playback_duration_reply_stores_the_loaded_previews_length`

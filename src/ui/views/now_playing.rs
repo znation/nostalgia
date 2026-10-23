@@ -39,6 +39,21 @@ const LCD_STATUS_HEIGHT: f32 = 16.0;
 /// title line.
 const LCD_STATUS_SIZE: f32 = 12.0;
 
+/// The classic indicator letters down the LCD's left edge, in the mockup's
+/// order. [`lcd_indicator_strip`] draws them; the strip is decorative and
+/// emits no message.
+pub(super) const LCD_INDICATOR_LABELS: [&str; 5] = ["O", "A", "I", "D", "V"];
+
+/// The fixed width of the decorative indicator strip, in pixels, so the
+/// content beside it keeps its bounds: the title starts one strip-width
+/// further right, while the right-edge total stays at the edge because the
+/// content column fills the remaining width.
+pub(super) const LCD_INDICATOR_WIDTH: f32 = 12.0;
+
+/// The indicator letters' size in pixels: small enough to read as a column
+/// beside the large elapsed readout.
+const LCD_INDICATOR_SIZE: f32 = 10.0;
+
 /// The number of characters the Now Playing line occupies: the label's
 /// characters, plus the artist's and the three characters of the `" - "`
 /// separator that joins them.
@@ -300,8 +315,9 @@ pub fn format_playback_status(format: PlaybackFormat) -> String {
     format!("{} KHZ  {mode}", format.sample_rate_hz / 1000)
 }
 
-/// The Now Playing bar: the large elapsed readout at the left, then the
-/// "Now Playing:" caption followed by the current track's resolved artist and
+/// The Now Playing bar: a small decorative `O A I D V` strip down the LCD's
+/// left edge, then the large elapsed readout, the "Now Playing:" caption
+/// followed by the current track's resolved artist and
 /// title (or "Nothing" when nothing is current), with the track's plain total
 /// length ([`format_track_time`]) laid at the right edge of the LCD well. The
 /// artist (from [`now_playing_artist`]) is pushed before the title with a
@@ -326,8 +342,37 @@ pub fn view_now_playing<'a>(
     marquee_offset: usize,
     format: Option<PlaybackFormat>,
 ) -> Element<'a, Message> {
-    bevel::lcd_well(
+    bevel::lcd_well(now_playing_content(
+        elapsed,
+        label,
+        artist,
+        time,
+        marquee_offset,
+        format,
+    ))
+}
+
+/// Builds the content [`view_now_playing`] wraps in the LCD well: the
+/// decorative indicator strip, then the elapsed/title row and status row in a
+/// filling column so the total stays at the right edge. Generic over the
+/// theme and renderer, unlike the concrete well wrapper, so the tests can lay
+/// it out with iced's null renderer and read back the text it would draw.
+pub(super) fn now_playing_content<'a, Theme, Renderer>(
+    elapsed: Cow<'a, str>,
+    label: Cow<'a, str>,
+    artist: Cow<'a, str>,
+    time: Cow<'a, str>,
+    marquee_offset: usize,
+    format: Option<PlaybackFormat>,
+) -> Row<'a, Message, Theme, Renderer>
+where
+    Theme: iced::widget::text::Catalog + 'a,
+    Theme::Class<'a>: From<iced::widget::text::StyleFn<'a, Theme>>,
+    Renderer: iced::advanced::text::Renderer + 'a,
+{
+    Row::new().push(lcd_indicator_strip()).push(
         Column::new()
+            .width(Length::Fill)
             .push(now_playing_row(
                 elapsed,
                 label,
@@ -336,6 +381,29 @@ pub fn view_now_playing<'a>(
                 marquee_offset,
             ))
             .push(now_playing_status_row(format)),
+    )
+}
+
+/// Builds the decorative indicator strip at the LCD's left edge: one small
+/// green letter per line, in [`LCD_INDICATOR_LABELS`] order, in a column of
+/// fixed [`LCD_INDICATOR_WIDTH`]. It emits no message and is drawn in every
+/// playback state, so it cannot toggle anything; its fixed width pushes the
+/// content beside it one strip-width right.
+pub(super) fn lcd_indicator_strip<'a, Theme, Renderer>() -> Column<'a, Message, Theme, Renderer>
+where
+    Theme: iced::widget::text::Catalog + 'a,
+    Theme::Class<'a>: From<iced::widget::text::StyleFn<'a, Theme>>,
+    Renderer: iced::advanced::text::Renderer + 'a,
+{
+    LCD_INDICATOR_LABELS.into_iter().fold(
+        Column::new().width(Length::Fixed(LCD_INDICATOR_WIDTH)),
+        |column, label| {
+            column.push(
+                Text::new(label)
+                    .size(LCD_INDICATOR_SIZE)
+                    .color(theme::LCD_GREEN),
+            )
+        },
     )
 }
 
