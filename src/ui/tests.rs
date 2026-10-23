@@ -5962,6 +5962,73 @@ fn root_view_draws_the_glyph_for_the_shared_transport_mode() {
     );
 }
 
+// The root `view` decides which chrome the current level offers: Back below
+// the top of the hierarchy, Retry only for a failed top-level artists fetch,
+// and the All Songs/All Albums/Playlists buttons only on Artists. The
+// `can_go_back` and `can_retry_artists` unit tests check the predicates, and
+// the per-level view tests build single panels, so a root mistake — the wrong
+// predicate, a missing `matches!`, or a stale error checked on every level —
+// would pass them. Lay out the whole root for each level and read what it
+// draws.
+#[test]
+fn root_view_offers_back_retry_and_flat_list_buttons_only_where_they_belong() {
+    let (mut player, _state) = test_player();
+    let shows = |player: &WinampPlayer, label: &str| {
+        captured_root_view_text_bounds(player)
+            .texts()
+            .any(|text| text == label)
+    };
+    let flat_list_buttons = ["All Songs", "All Albums", "Playlists"];
+
+    // Artists with a healthy fetch: the three flat-list entry points, but no
+    // Back (nothing above it) and no Retry (nothing failed).
+    for label in flat_list_buttons {
+        assert!(
+            shows(&player, label),
+            "Artists must draw the {label:?} button"
+        );
+    }
+    assert!(!shows(&player, "Back"), "Artists must not draw Back");
+    assert!(!shows(&player, "Retry"), "Artists must not draw Retry");
+
+    // A failed artists fetch adds Retry without adding Back, and keeps the
+    // flat-list entry points.
+    player.artists.error = Some("music-library fetch failed: boom".to_string());
+    assert!(
+        shows(&player, "Retry"),
+        "a failed artists fetch must draw Retry"
+    );
+    assert!(!shows(&player, "Back"), "Retry must not add Back");
+    for label in flat_list_buttons {
+        assert!(
+            shows(&player, label),
+            "a failed artists fetch must keep the {label:?} button"
+        );
+    }
+
+    // Every level below Artists offers Back and drops the flat-list entry
+    // points. The stale artists error stays set to prove Retry is gated on the
+    // level as well as the error, not on the error alone.
+    for view in [
+        CurrentView::Albums,
+        CurrentView::Songs,
+        CurrentView::AllSongs,
+        CurrentView::AllAlbums,
+        CurrentView::Playlists,
+    ] {
+        let level = format!("{view:?}");
+        player.current_view = view;
+        assert!(shows(&player, "Back"), "{level} must draw Back");
+        assert!(!shows(&player, "Retry"), "{level} must not draw Retry");
+        for label in flat_list_buttons {
+            assert!(
+                !shows(&player, label),
+                "{level} must not draw the {label:?} button"
+            );
+        }
+    }
+}
+
 // The root `view` chooses the browse list to draw from `current_view`, passing
 // each level its own buffer, cached row text, and current-track id. The
 // per-level view tests feed each builder directly, and every root-view test

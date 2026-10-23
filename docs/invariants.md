@@ -150,6 +150,8 @@ child is open), and `views::view_browse_nav_buttons` in `src/ui/views/browse.rs`
   above them starts at the first band, not over the preamp and scale.
 - The root `view` draws the browse level named by `CurrentView` from that level's own buffer and
   cached row text, and marks the playing row only in the Songs and All Songs lists.
+- The root `view` draws Back on every level below Artists, Retry only on Artists while its fetch
+  has failed, and the All Songs, All Albums, and Playlists buttons only on Artists.
 
 **Enforced by.** `views::view_browse_nav_buttons` in `src/ui/views/browse.rs` pushes the Top
 and Sort buttons into one `Row`. `views::view_transport_controls` and
@@ -160,11 +162,13 @@ from `fixed_width_button`s. `views::equalizer::preamp_column`,
 browse and transport layout tests lay out the whole root `view` through the test-only
 `src/ui/layout_capture.rs` harness; the equalizer layout test lays out `view_equalizer`
 directly. `view` in `src/ui/view.rs` matches on `CurrentView` and passes each arm that
-level's buffer, caches, and current-track id. The harness records each drawn text
-fragment's absolute bounds with iced's headless tiny-skia renderer.
+level's buffer, caches, and current-track id, and gates its Back, Retry, and flat-list buttons on
+`can_go_back`, `can_retry_artists`, and a `CurrentView::Artists` match. The harness records each
+drawn text fragment's absolute bounds with iced's headless tiny-skia renderer.
 
 **Pinned by.** `browse_nav_buttons_place_sort_beside_top`,
-`transport_row_does_not_reflow_when_the_play_label_changes`, and
+`transport_row_does_not_reflow_when_the_play_label_changes`,
+`root_view_offers_back_retry_and_flat_list_buttons_only_where_they_belong`, and
 `root_view_draws_the_current_browse_levels_own_rows` (`src/ui/tests.rs`), plus
 `transport_buttons_keep_a_fixed_width_across_label_changes` and
 `equalizer_preamp_and_db_scale_sit_left_of_the_band_sliders` (`src/ui/views/tests.rs`) for the
