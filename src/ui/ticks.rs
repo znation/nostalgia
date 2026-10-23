@@ -45,3 +45,55 @@ pub(super) fn tick_stream(
     }
     receiver
 }
+
+#[cfg(test)]
+mod tests {
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant};
+
+    use super::tick_stream;
+
+    // A full channel is not a reason to stop: the next poll drains it and the
+    // timer resumes. Only a disconnected receiver — the subscription ended —
+    // ends the thread, so dropping the stream must let it exit rather than
+    // leaving it sending to a closed channel for the life of the process. The
+    // injected spawner hands back the thread's handle so the exit is
+    // observable; without the disconnect check the join below never happens
+    // and the thread leaks one per dropped timer.
+    #[test]
+    fn dropping_the_receiver_ends_the_tick_thread() {
+        let (handle_sender, handle_receiver) = mpsc::channel();
+        let stream = tick_stream(
+            Duration::from_millis(1),
+            move |work| {
+                let handle = std::thread::Builder::new()
+                    .name("nostalgia-tick-stream-test".to_string())
+                    .spawn(work)?;
+                handle_sender
+                    .send(handle)
+                    .expect("the test should receive the tick thread's handle");
+                Ok(())
+            },
+            |_error| "the tick thread could not start".to_string(),
+        );
+
+        let handle = handle_receiver
+            .recv_timeout(Duration::from_secs(5))
+            .expect("the tick thread should start");
+
+        drop(stream);
+
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !handle.is_finished() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+
+        assert!(
+            handle.is_finished(),
+            "the tick thread must end once its receiver is dropped"
+        );
+        handle
+            .join()
+            .expect("the tick thread should finish cleanly");
+    }
+}

@@ -277,6 +277,7 @@ rather than the panic unwinding the event loop.
 - `a_refused_marquee_thread_ends_the_tick_stream_instead_of_panicking`
 - `a_refused_marquee_thread_reports_the_cause_and_the_loss`
 - `the_marquee_thread_is_named_nostalgia_marquee` (all in `src/ui/tests.rs`)
+- `dropping_the_receiver_ends_the_tick_thread` (`src/ui/ticks.rs`)
 
 **History.** Reconstructed from "Now Playing bar shows the track id instead of the song title" in
 `BUGS-FIXED.md`.
