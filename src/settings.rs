@@ -125,36 +125,12 @@ impl Settings {
             let key = key.trim();
             let value = value.trim();
             match key {
-                "volume" => {
-                    if let Ok(volume) = value.parse() {
-                        settings.volume = volume;
-                    }
-                }
-                "balance" => {
-                    if let Ok(balance) = value.parse() {
-                        settings.balance = balance;
-                    }
-                }
-                "repeat" => {
-                    if let Ok(repeat) = value.parse() {
-                        settings.repeat = repeat;
-                    }
-                }
-                "shuffle" => {
-                    if let Ok(shuffle) = value.parse() {
-                        settings.shuffle = shuffle;
-                    }
-                }
-                "eq_enabled" => {
-                    if let Ok(enabled) = value.parse() {
-                        settings.eq_enabled = enabled;
-                    }
-                }
-                "eq_preamp" => {
-                    if let Ok(preamp) = value.parse() {
-                        settings.eq_preamp = preamp;
-                    }
-                }
+                "volume" => parse_into(&mut settings.volume, value),
+                "balance" => parse_into(&mut settings.balance, value),
+                "repeat" => parse_into(&mut settings.repeat, value),
+                "shuffle" => parse_into(&mut settings.shuffle, value),
+                "eq_enabled" => parse_into(&mut settings.eq_enabled, value),
+                "eq_preamp" => parse_into(&mut settings.eq_preamp, value),
                 "eq_preset" => {
                     if value.is_empty() {
                         settings.eq_preset = None;
@@ -178,6 +154,17 @@ impl Settings {
             }
         }
         settings
+    }
+}
+
+/// Assign `value`'s parsed form to `slot`, or leave `slot` unchanged when the
+/// value is malformed. [`Settings::from_text`]'s scalar fields all follow this
+/// rule, so a bad line falls back to that field's default without failing the
+/// load; `eq_band_*` and `eq_preset` need their own handling for the index and
+/// preset lookup.
+fn parse_into<T: std::str::FromStr>(slot: &mut T, value: &str) {
+    if let Ok(parsed) = value.parse() {
+        *slot = parsed;
     }
 }
 
