@@ -21,8 +21,8 @@ use std::time::{Duration, Instant};
 /// Returns the [`std::io::Error`] from spawning the platform's opener command;
 /// the message names the command (e.g. `xdg-open`), so a missing opener is
 /// diagnosable rather than a bare "No such file or directory".
-// `AppleMusicService::authenticate` passes this to [`authorize`]; it is public
-// so the wiring in `apple_music` can supply the real opener.
+// `apple_music::threads::browser_sign_in` passes this to [`authorize`]; it is
+// public so the wiring in `apple_music` can supply the real opener.
 pub fn open_in_browser(path: &str) -> io::Result<()> {
     if cfg!(target_os = "macos") {
         spawn_opener("open", &[path])

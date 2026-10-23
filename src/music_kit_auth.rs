@@ -140,8 +140,8 @@ pub fn validate_developer_token(token: &str) -> Result<(), AppleMusicError> {
 /// `state` is answered with a `400` and ignored rather than aborting the flow,
 /// so a local client that can reach the loopback port but does not know the
 /// nonce cannot end a sign-in the user is completing.
-// `AppleMusicService::authenticate` is this function's caller; it is public so
-// the wiring in `apple_music` can obtain a session at startup.
+// `apple_music::threads::browser_sign_in` is this function's production caller;
+// it is public so the wiring in `apple_music` can obtain a session at startup.
 pub fn authorize(
     developer_token: &str,
     open_page: &dyn Fn(&str) -> io::Result<()>,
