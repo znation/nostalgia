@@ -10,6 +10,7 @@
 use iced::Task;
 
 use crate::library::{Album, Artist, Playlist, Song};
+use crate::ui::browse::BrowseList;
 use crate::ui::loading::fetch_level;
 use crate::ui::views;
 use crate::ui::{CurrentView, Message, SongsOrigin, WinampPlayer};
@@ -319,7 +320,7 @@ pub(in crate::ui) fn songs_loaded(player: &mut WinampPlayer, songs: Vec<Song>) -
 /// Store a loaded song list, caching each row's display title and formatted
 /// length once (see `BrowseList::store_with_row_text`). Shared by
 /// [`songs_loaded`] and [`all_songs_loaded`] so the two stay in sync.
-fn store_songs(list: &mut super::super::browse::BrowseList<Song>, songs: Vec<Song>) {
+fn store_songs(list: &mut BrowseList<Song>, songs: Vec<Song>) {
     list.store_with_row_text(
         songs,
         |song| song.display_title().into_owned(),
@@ -389,7 +390,7 @@ pub(in crate::ui) fn playlists_loaded(
 /// Record a fetch failure on one browse list and leave the UI task-free.
 /// The per-list handlers below differ only in which list they name, so the
 /// shared body — `BrowseList::fail` plus the empty task — lives here once.
-fn fail_list<T>(list: &mut super::super::browse::BrowseList<T>, report: String) -> Task<Message> {
+fn fail_list<T>(list: &mut BrowseList<T>, report: String) -> Task<Message> {
     list.fail(report);
     Task::none()
 }
