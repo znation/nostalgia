@@ -1550,6 +1550,46 @@ fn a_reaper_thread_spawn_failure_kills_the_opener_and_is_reported() {
     assert_child_is_reaped(pid, "the reaper spawn failed");
 }
 
+// A failed `try_wait` does not prove the child exited: the reaper used to log
+// the wait error and return, leaving a still-running opener (and its pid)
+// behind for the rest of the app's life. The injected fault is a poll that
+// always errors against a real long-running child; the fix must kill and reap
+// it before reporting, and the report must still carry the poll's cause.
+#[cfg(target_os = "linux")]
+#[test]
+fn a_failed_reap_poll_kills_the_opener_and_reports_the_cause() {
+    let mut child = Command::new("sleep")
+        .arg("30")
+        .spawn()
+        .expect("spawn a long-running child");
+    let pid = child.id();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    reap_child_with(
+        &mut child,
+        Duration::from_secs(30),
+        move |report| {
+            let _ = sender.send(report);
+        },
+        |_child| Err(io::Error::other("the wait failed")),
+    );
+    let report = receiver
+        .recv_timeout(Duration::from_secs(5))
+        .expect("a failed reap poll must be reported");
+    assert!(
+        report.contains("could not reap"),
+        "the report must name the failed reap, got: {report}"
+    );
+    assert!(
+        report.contains("the wait failed"),
+        "the report must carry the poll's cause, got: {report}"
+    );
+    assert!(
+        report.contains("killed and reaped it"),
+        "the failed poll must still kill and reap the child, got: {report}"
+    );
+    assert_child_is_reaped(pid, "the failed reap poll");
+}
+
 // The reaper runs on a named thread, so a panic in it is attributed to
 // `nostalgia-opener-reaper` rather than `<unnamed>`. Pin the name on the
 // production spawner, since the failure test above injects its own spawner

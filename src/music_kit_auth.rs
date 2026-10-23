@@ -653,9 +653,26 @@ fn reap_child(
     timeout: Duration,
     report: impl FnOnce(String) + Send + 'static,
 ) {
+    reap_child_with(child, timeout, report, |child| child.try_wait());
+}
+
+/// [`reap_child`] with an injectable poll, so a test can make `try_wait` fail
+/// and prove the failing poll still cleans up the child.
+///
+/// A poll error does not mean the child is gone: it can still be running. The
+/// reaper's job is to leave no process behind, so the error path kills and
+/// waits on the child too (reporting a cleanup failure if that wait also
+/// fails) instead of returning on the error and leaking the opener for the
+/// rest of the app's life.
+fn reap_child_with(
+    child: &mut std::process::Child,
+    timeout: Duration,
+    report: impl FnOnce(String) + Send + 'static,
+    mut try_wait: impl FnMut(&mut std::process::Child) -> io::Result<Option<std::process::ExitStatus>>,
+) {
     let deadline = Instant::now() + timeout;
     loop {
-        match child.try_wait() {
+        match try_wait(child) {
             Ok(Some(status)) => {
                 if !status.success() {
                     report(opener_exit_report(&status));
@@ -674,9 +691,18 @@ fn reap_child(
                 return;
             }
             Err(error) => {
-                report(format!(
-                    "could not reap the browser opener process: {error}"
-                ));
+                // A failed poll says nothing about the child's state: it may
+                // still be running. Kill and wait anyway so the error path
+                // cannot leave the opener (and its pid) behind.
+                let _ = child.kill();
+                match child.wait() {
+                    Ok(_) => report(format!(
+                        "could not reap the browser opener process: {error}; killed and reaped it"
+                    )),
+                    Err(cleanup) => report(format!(
+                        "could not reap the browser opener process: {error}; cleanup also failed: {cleanup}"
+                    )),
+                }
                 return;
             }
         }
