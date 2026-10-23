@@ -427,9 +427,10 @@ impl RodioOutput {
     /// [`WORKER_QUERY_TIMEOUT`] for its reply.
     ///
     /// Returns `None` when the worker is gone or misses the bound, matching
-    /// the three backend queries [`AudioOutput::position`],
-    /// [`AudioOutput::duration`], and [`AudioOutput::playback_format`], which
-    /// share this wait so a stalled worker cannot block the caller.
+    /// the four backend queries [`AudioOutput::position`],
+    /// [`AudioOutput::duration`], [`AudioOutput::playback_format`], and
+    /// [`AudioOutput::spectrum`], which all call this helper so a stalled
+    /// worker cannot block the caller.
     fn query<T>(&self, command: impl FnOnce(Sender<Option<T>>) -> Command) -> Option<T> {
         let (reply, replies) = mpsc::channel();
         if self.send(command(reply)).is_err() {
@@ -485,11 +486,7 @@ impl AudioOutput for RodioOutput {
     }
 
     fn spectrum(&self) -> Option<Spectrum> {
-        let (reply, replies) = mpsc::channel();
-        if self.send(Command::Spectrum(reply)).is_err() {
-            return None;
-        }
-        replies.recv_timeout(WORKER_QUERY_TIMEOUT).ok().flatten()
+        self.query(Command::Spectrum)
     }
 
     fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
