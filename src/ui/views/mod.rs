@@ -24,6 +24,7 @@ use crate::ui::{Message, style};
 mod browse;
 mod equalizer;
 mod now_playing;
+mod seek_bar;
 mod title_bar;
 mod transport;
 
@@ -38,11 +39,14 @@ pub use now_playing::{
     KnownTrack, TimeDisplay, format_track_time, needs_marquee, now_playing_artist,
     now_playing_elapsed, now_playing_label, now_playing_time, view_now_playing,
 };
+pub use seek_bar::view_seek_bar;
 pub use title_bar::view_title_bar;
 pub use transport::view_transport_controls;
 
 #[cfg(test)]
 pub(super) use browse::BROWSE_VIEWS;
+#[cfg(test)]
+pub(super) use seek_bar::seek_bar_value;
 pub(super) use title_bar::TITLE_BAR_HEIGHT;
 
 #[cfg(test)]

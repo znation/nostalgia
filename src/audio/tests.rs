@@ -5,7 +5,8 @@ use super::balance::BalanceSource;
 use super::equalizer::{EqSettings, EqSource};
 use super::player::{
     Command, DEVICE_OPEN_TIMEOUT, POSITION_QUERY_TIMEOUT, SeekablePlayer, WorkerPlayer,
-    await_device_ready, format_for_source, seek_player, seek_target, serve_commands,
+    await_device_ready, clamp_seek, duration_for_source, format_for_source, seek_player,
+    seek_target, serve_commands,
 };
 use super::preview::{
     MAX_PREVIEW_BYTES, PREVIEW_TIMEOUT, PublicAddressResolver, download_and_decode, preview_agent,
@@ -39,6 +40,7 @@ fn every_command(output: &dyn AudioOutput) -> Vec<(&'static str, Result<(), Appl
         ("set_volume", output.set_volume(0.4)),
         ("set_balance", output.set_balance(-0.4)),
         ("seek_by", output.seek_by(-5)),
+        ("seek_to", output.seek_to(Duration::from_secs(10))),
         ("set_equalizer", output.set_equalizer(EqSnapshot::default())),
     ]
 }
@@ -103,6 +105,46 @@ fn format_for_source_reads_sample_rate_and_channels() {
             sample_rate_hz: 48_000,
             channels: 2,
         }
+    );
+}
+
+// The silent fallback has no preview length to report, so the seek bar stays
+// blank rather than inventing a scale.
+#[test]
+fn silent_output_reports_no_playback_duration() {
+    assert_eq!(SilentOutput.duration(), None);
+
+    let output = audio_with_fallback(|| Err(AppleMusicError::new("no device")));
+    assert_eq!(output.duration(), None);
+}
+
+// The seek bar's scale is the decoded source's own length, which a
+// `SamplesBuffer` reports from its sample count, channel count, and rate.
+#[test]
+fn duration_for_source_reads_a_samples_buffers_length() {
+    let source = rodio::buffer::SamplesBuffer::new(
+        ChannelCount::new(2).unwrap(),
+        SampleRate::new(2).unwrap(),
+        vec![0.0_f32; 6],
+    );
+
+    assert_eq!(
+        duration_for_source(&source),
+        Some(Duration::from_millis(1500))
+    );
+}
+
+// An absolute seek is clamped to the loaded preview's own length, and passes
+// through unchanged when the backend reports no length to clamp against.
+#[test]
+fn clamp_seek_clamps_to_the_preview_length_and_passes_through_without_one() {
+    assert_eq!(
+        clamp_seek(Duration::from_secs(45), Some(Duration::from_secs(30))),
+        Duration::from_secs(30)
+    );
+    assert_eq!(
+        clamp_seek(Duration::from_secs(45), None),
+        Duration::from_secs(45)
     );
 }
 
@@ -861,6 +903,7 @@ fn rodio_output_maps_each_seam_method_to_its_worker_command() {
     assert!(matches!(receiver.try_recv(), Ok(Command::SetVolume(v)) if v == 0.4));
     assert!(matches!(receiver.try_recv(), Ok(Command::SetBalance(v)) if v == -0.4));
     assert!(matches!(receiver.try_recv(), Ok(Command::SeekBy(v)) if v == -5));
+    assert!(matches!(receiver.try_recv(), Ok(Command::SeekTo(v)) if v == Duration::from_secs(10)));
     assert!(
         matches!(receiver.try_recv(), Ok(Command::SetEqualizer(v)) if v == EqSnapshot::default())
     );
@@ -932,6 +975,50 @@ fn rodio_output_reports_none_when_the_position_reply_times_out() {
     assert!(
         started.elapsed() < POSITION_QUERY_TIMEOUT * 5,
         "a missing position reply must time out instead of blocking"
+    );
+    worker.join().unwrap();
+}
+
+// A duration query crosses to the worker and returns the reply it sends,
+// just like the position and format queries.
+#[test]
+fn rodio_output_asks_the_worker_for_its_duration() {
+    let (commands, receiver) = std::sync::mpsc::channel();
+    let output = RodioOutput {
+        commands: Mutex::new(commands),
+    };
+    let worker = std::thread::spawn(move || match receiver.recv() {
+        Ok(Command::Duration(reply)) => {
+            reply.send(Some(Duration::from_secs(30))).unwrap();
+        }
+        _ => panic!("duration did not send Command::Duration"),
+    });
+
+    assert_eq!(output.duration(), Some(Duration::from_secs(30)));
+    worker.join().unwrap();
+}
+
+// A worker that accepts the duration query but does not answer must not hold
+// the caller past the seam's bound: the query reports `None` instead.
+#[test]
+fn rodio_output_reports_none_when_the_duration_reply_times_out() {
+    let (commands, receiver) = std::sync::mpsc::channel();
+    let output = RodioOutput {
+        commands: Mutex::new(commands),
+    };
+    let worker = std::thread::spawn(move || match receiver.recv() {
+        Ok(Command::Duration(reply)) => {
+            std::thread::sleep(POSITION_QUERY_TIMEOUT * 10);
+            drop(reply);
+        }
+        _ => panic!("duration did not send Command::Duration"),
+    });
+
+    let started = Instant::now();
+    assert_eq!(output.duration(), None);
+    assert!(
+        started.elapsed() < POSITION_QUERY_TIMEOUT * 5,
+        "a missing duration reply must time out instead of blocking"
     );
     worker.join().unwrap();
 }
@@ -1240,7 +1327,7 @@ fn with_a_proxy_set_the_preview_agent_stays_direct() {
 /// calls, and whether it was stopped, and remembers its gain. Its position
 /// starts at 42 seconds and moves by every recorded seek, so a test can pin
 /// that a seek reaches the next position query.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct RecordingPlayer {
     appended: Arc<AtomicUsize>,
     calls: Arc<Mutex<Vec<&'static str>>>,
@@ -1250,7 +1337,29 @@ struct RecordingPlayer {
     volume: Arc<Mutex<f32>>,
     balance: Arc<Mutex<f32>>,
     seeks: Arc<Mutex<Vec<i64>>>,
+    absolute_seeks: Arc<Mutex<Vec<Duration>>>,
+    position: Arc<Mutex<Duration>>,
+    duration: Arc<Mutex<Option<Duration>>>,
     equalizer: Arc<Mutex<EqSnapshot>>,
+}
+
+impl Default for RecordingPlayer {
+    fn default() -> Self {
+        Self {
+            appended: Arc::default(),
+            calls: Arc::default(),
+            paused: Arc::default(),
+            resumed: Arc::default(),
+            stopped: Arc::default(),
+            volume: Arc::default(),
+            balance: Arc::default(),
+            seeks: Arc::default(),
+            absolute_seeks: Arc::default(),
+            position: Arc::new(Mutex::new(Duration::from_secs(42))),
+            duration: Arc::new(Mutex::new(Some(Duration::from_secs(30)))),
+            equalizer: Arc::default(),
+        }
+    }
 }
 
 impl WorkerPlayer for RecordingPlayer {
@@ -1267,16 +1376,21 @@ impl WorkerPlayer for RecordingPlayer {
 
     fn seek_by(&self, offset_secs: i64) {
         self.seeks.lock().unwrap().push(offset_secs);
+        let mut position = self.position.lock().unwrap();
+        *position = seek_target(*position, offset_secs);
+    }
+
+    fn seek_to(&self, position: Duration) {
+        self.absolute_seeks.lock().unwrap().push(position);
+        *self.position.lock().unwrap() = position;
     }
 
     fn position(&self) -> Duration {
-        self.seeks
-            .lock()
-            .unwrap()
-            .iter()
-            .fold(Duration::from_secs(42), |position, offset| {
-                seek_target(position, *offset)
-            })
+        *self.position.lock().unwrap()
+    }
+
+    fn duration(&self) -> Option<Duration> {
+        *self.duration.lock().unwrap()
     }
 
     fn playback_format(&self) -> Option<PlaybackFormat> {
@@ -1592,6 +1706,86 @@ fn a_seek_is_reflected_by_the_next_position_query() {
         Some(Duration::from_secs(47)),
         "the query must report the position the seek moved the player to"
     );
+}
+
+// An absolute seek must move the loaded player to that exact position, so the
+// next position query reports it. SeekTo follows the Play in the channel, and
+// the Position query follows the seek.
+#[test]
+fn seek_to_command_reaches_the_loaded_player() {
+    let (sender, receiver) = mpsc::channel();
+    let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
+    let recorded = Arc::clone(&players);
+    let create_player = move || {
+        let player = RecordingPlayer::default();
+        recorded.lock().unwrap().push(player.clone());
+        player
+    };
+    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+    let (reply, replies) = mpsc::channel();
+
+    sender.send(Command::Play("first".to_string())).unwrap();
+    sender
+        .send(Command::SeekTo(Duration::from_secs(10)))
+        .unwrap();
+    sender.send(Command::Position(reply)).unwrap();
+    drop(sender);
+    serve_commands(receiver, create_player, fetch);
+
+    assert_eq!(
+        *players.lock().unwrap()[0].absolute_seeks.lock().unwrap(),
+        vec![Duration::from_secs(10)]
+    );
+    assert_eq!(
+        replies.recv().unwrap(),
+        Some(Duration::from_secs(10)),
+        "the query must report the position the absolute seek moved to"
+    );
+}
+
+// A duration query with a player installed answers from that player's own
+// preview length.
+#[test]
+fn duration_query_returns_the_loaded_players_duration() {
+    let (sender, receiver) = mpsc::channel();
+    let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
+    let recorded = Arc::clone(&players);
+    let create_player = move || {
+        let player = RecordingPlayer::default();
+        recorded.lock().unwrap().push(player.clone());
+        player
+    };
+    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+    let (reply, replies) = mpsc::channel();
+
+    sender.send(Command::Play("first".to_string())).unwrap();
+    sender.send(Command::Duration(reply)).unwrap();
+    drop(sender);
+    serve_commands(receiver, create_player, fetch);
+
+    assert_eq!(
+        replies.recv().unwrap(),
+        Some(Duration::from_secs(30)),
+        "the query must answer with the installed player's duration"
+    );
+}
+
+// With no player installed, a duration query reports `None` instead of
+// creating a player or inventing a length.
+#[test]
+fn duration_query_reports_none_when_nothing_is_loaded() {
+    let (sender, receiver) = mpsc::channel();
+    let create_player = || -> RecordingPlayer {
+        panic!("a duration query must not create a player");
+    };
+    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+    let (reply, replies) = mpsc::channel();
+
+    sender.send(Command::Duration(reply)).unwrap();
+    drop(sender);
+    serve_commands(receiver, create_player, fetch);
+
+    assert_eq!(replies.recv().unwrap(), None);
 }
 
 // Pause must not unload the player: the worker keeps it installed and

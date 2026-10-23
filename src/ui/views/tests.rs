@@ -13,10 +13,11 @@ use super::now_playing::{
 use super::transport::{play_pause_label, repeat_label, shuffle_label, transport_buttons};
 use super::{
     BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, EQ_STEP, VOLUME_MAX, VOLUME_MIN, VOLUME_STEP,
-    can_go_back, can_retry_artists, view_albums, view_all_albums, view_all_albums_button,
-    view_all_songs, view_all_songs_button, view_artists, view_back_button, view_browse_nav_buttons,
-    view_equalizer, view_now_playing, view_playlists, view_playlists_button, view_retry_button,
-    view_search_box, view_songs, view_transport_controls,
+    can_go_back, can_retry_artists, seek_bar_value, view_albums, view_all_albums,
+    view_all_albums_button, view_all_songs, view_all_songs_button, view_artists, view_back_button,
+    view_browse_nav_buttons, view_equalizer, view_now_playing, view_playlists,
+    view_playlists_button, view_retry_button, view_search_box, view_seek_bar, view_songs,
+    view_transport_controls,
 };
 use crate::audio::PlaybackFormat;
 use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, clamp_gain};
@@ -672,6 +673,32 @@ fn now_playing_status_row_draws_the_format_or_nothing() {
         "the status row must keep its height whether or not a format is reported"
     );
     assert_eq!(height, 16.0, "the status row's fixed height");
+}
+
+// The seek bar's thumb never exceeds the preview's own length, and a missing
+// position, a missing length, or a zero length hides the bar entirely: the
+// bar only appears once both a position and a scale are reported.
+#[test]
+fn seek_bar_value_clamps_the_thumb_and_hides_without_a_length() {
+    assert_eq!(
+        seek_bar_value(Some(Duration::from_secs(45)), Some(Duration::from_secs(30))),
+        Some((30.0, 30.0))
+    );
+    assert_eq!(seek_bar_value(None, Some(Duration::from_secs(30))), None);
+    assert_eq!(seek_bar_value(Some(Duration::from_secs(5)), None), None);
+    assert_eq!(
+        seek_bar_value(Some(Duration::from_secs(5)), Some(Duration::ZERO)),
+        None
+    );
+    assert_eq!(seek_bar_value(None, None), None);
+}
+
+// Both shapes of the strip must construct: the slider when a preview length
+// is known and the empty fixed-height stand-in when it is not.
+#[test]
+fn view_seek_bar_constructs_with_and_without_a_length() {
+    let _known = view_seek_bar(Some(Duration::from_secs(10)), Some(Duration::from_secs(30)));
+    let _unknown = view_seek_bar(Some(Duration::from_secs(10)), None);
 }
 
 // A track the library supplied without an artist must read as `Now Playing:

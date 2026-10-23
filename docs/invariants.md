@@ -162,6 +162,14 @@ its internal id, whenever the id is in the known-track index:
   reported format; Stop and a new selection clear it. A format reply issued before a Stop or a
   new selection, or landing while a transport transition is in flight, is dropped. Bitrate is not
   shown: the preview download discards the body length, so it cannot be computed.
+- The seek slider beneath the LCD measures the backend-reported preview length, not the catalog
+  track's length at the LCD's right edge. Its thumb follows the stored position, or the drag in
+  progress while one is held; only a release sends `AudioOutput::seek_to`, exactly once, with the
+  dragged position. The backend clamps that absolute seek to the preview length. A successful
+  seek records the position optimistically and bumps `position_epoch`, so position and duration
+  replies already in flight are dropped; a failed seek is logged and lets the next poll correct
+  the thumb. Stop and a new selection clear the length and any drag, and the strip is blank and
+  keeps its fixed height until the backend reports both a position and a positive preview length.
 - A combined artist/title longer than `MARQUEE_WIDTH` characters is windowed by
   `views::now_playing::marquee_text`, advanced one character per `Message::MarqueeTick`, and
   reset to the start by `TrackSelected`; a line that fits is shown whole and borrowed.
@@ -207,7 +215,17 @@ them in the LCD's status row built by `views::view_now_playing`. The `PlaybackFo
 `src/ui/handlers/playback.rs` stores the reply beside the position under the same epoch and
 pending-transition guards, and `reset_position_readout` clears the format on Stop and a new
 selection;
-`position_tick` batches both backend queries.
+`position_tick` batches all three backend queries: the position, the format, and the preview's
+length. `views::seek_bar::seek_bar_value` resolves the thumb and scale from the position and the
+`playback_duration` field, and `views::view_seek_bar` builds the strip: a full-width
+`Message::SeekPreviewChanged`/`Message::SeekPreviewReleased` slider when that scale exists, or an
+empty fixed-height stand-in otherwise. The `PlaybackDuration` handler stores that reply under the
+same epoch and pending-transition guards as the position and format, `seek_preview_changed`
+stores the drag without reaching the backend, and `seek_preview_released` calls
+`AppleMusicService::seek_output_to`, which forwards to `AudioOutput::seek_to`; the `duration`
+query reaches it through `AudioOutput::duration`. `reset_position_readout` clears the duration and
+the drag on Stop and a new selection, and `RodioOutput::seek_to`/`duration` query the worker,
+whose `RodioPlayer` records the decoded source's length and clamps each absolute seek to it.
 
 The scrolling timer's stream is built by `ui::ticks::tick_stream` in `src/ui/ticks.rs`, and its
 thread starts through `spawn_marquee_thread` in `src/ui/timers.rs`, which delegates
@@ -274,6 +292,28 @@ rather than the panic unwinding the event loop.
 - `playback_format_forwards_the_audio_output_format` (`src/apple_music/tests.rs`)
 - `format_playback_status_formats_khz_and_channel_mode`
 - `now_playing_status_row_draws_the_format_or_nothing` (`src/ui/views/tests.rs`)
+- `seek_bar_value_clamps_the_thumb_and_hides_without_a_length`
+- `view_seek_bar_constructs_with_and_without_a_length` (`src/ui/views/tests.rs`)
+- `playback_duration_reply_stores_the_loaded_previews_length`
+- `playback_duration_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped`
+- `stop_and_track_selection_clear_the_playback_duration`
+- `seek_preview_changed_tracks_the_drag_without_touching_the_backend`
+- `seek_preview_released_seeks_once_to_the_dragged_position`
+- `seek_preview_released_without_a_drag_does_nothing`
+- `seek_preview_released_invalidates_an_in_flight_position_reply`
+- `seek_preview_released_backend_failure_leaves_the_position_alone`
+- `position_tick_queries_position_and_duration` (`src/ui/tests.rs`)
+- `playback_duration_forwards_the_audio_output_duration` (`src/apple_music/tests.rs`)
+- `seek_output_to_forwards_an_absolute_position`
+- `seek_output_to_propagates_an_audio_backend_failure` (`src/apple_music/tests.rs`)
+- `silent_output_reports_no_playback_duration`
+- `duration_for_source_reads_a_samples_buffers_length`
+- `clamp_seek_clamps_to_the_preview_length_and_passes_through_without_one`
+- `rodio_output_asks_the_worker_for_its_duration`
+- `rodio_output_reports_none_when_the_duration_reply_times_out`
+- `seek_to_command_reaches_the_loaded_player`
+- `duration_query_returns_the_loaded_players_duration`
+- `duration_query_reports_none_when_nothing_is_loaded` (`src/audio/tests.rs`)
 - `playback_format_reply_stores_the_loaded_previews_format`
 - `playback_format_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped`
 - `stop_clears_the_playback_format_while_pause_keeps_it`

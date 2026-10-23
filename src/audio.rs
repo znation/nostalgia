@@ -138,6 +138,33 @@ pub trait AudioOutput: Send + Sync {
     /// request (see [`AudioOutput::play`]).
     fn seek_by(&self, offset_secs: i64) -> Result<(), AppleMusicError>;
 
+    /// Seeks the current player to `position`.
+    ///
+    /// An absolute seek, unlike [`seek_by`](Self::seek_by): the backend clamps
+    /// the target to the loaded preview's own length, so a position past the
+    /// end lands at the end. Applies only to the current player, if one is
+    /// loaded: a seek while stopped does nothing, and the position is not
+    /// remembered for the next [`play`](Self::play).
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the backend cannot accept the
+    /// request (see [`AudioOutput::play`]).
+    fn seek_to(&self, position: Duration) -> Result<(), AppleMusicError>;
+
+    /// Reports the loaded preview's own length.
+    ///
+    /// This is the preview asset's length, not the catalog track's: a preview
+    /// can be shorter than the song, so the seek bar measures this value while
+    /// the Now Playing LCD's right edge keeps the catalog total. Returns
+    /// `None` when no player is loaded or the backend cannot answer (the
+    /// silent fallback, a test fake, or a query that waits past the backend's
+    /// bound). The default keeps every existing implementor compiling without
+    /// a length of its own.
+    fn duration(&self) -> Option<Duration> {
+        None
+    }
+
     /// Reports the loaded preview's playback position.
     ///
     /// Returns `Some` while a player is loaded — including [`Duration::ZERO`]
@@ -216,6 +243,11 @@ impl AudioOutput for SilentOutput {
 
     fn seek_by(&self, offset_secs: i64) -> Result<(), AppleMusicError> {
         println!("Audio output is silent; nothing to seek by {offset_secs}s");
+        Ok(())
+    }
+
+    fn seek_to(&self, position: Duration) -> Result<(), AppleMusicError> {
+        println!("Audio output is silent; nothing to seek to {position:?}");
         Ok(())
     }
 

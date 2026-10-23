@@ -115,6 +115,19 @@ enum Message {
         epoch: u64,
         format: Option<PlaybackFormat>,
     },
+    // The duration query's reply, also stamped with the `position_epoch` that
+    // issued it. It carries the loaded preview's own length, which the seek
+    // bar spans; a reply from before a Stop or a new selection is dropped so
+    // it cannot scale the bar to the previous preview.
+    PlaybackDuration {
+        epoch: u64,
+        duration: Option<Duration>,
+    },
+    // The seek bar's drag: the slider's value in seconds. It only stores the
+    // in-progress drag, so dragging never reaches the backend.
+    SeekPreviewChanged(f32),
+    // The seek bar's release: seeks to the stored drag and clears it.
+    SeekPreviewReleased,
     // The large left-hand LCD readout's mode toggle: flips between elapsed and
     // remaining time. It changes no playback state and leaves the right-edge
     // total alone.
@@ -333,6 +346,17 @@ struct WinampPlayer {
     /// it, and a missing value leaves that row blank. Pause keeps it, while
     /// Stop and a new selection clear it through `reset_position_readout`.
     playback_format: Option<PlaybackFormat>,
+    /// The loaded preview's own backend-reported length, or `None` when no
+    /// preview is loaded or the backend cannot answer. `Message::PlaybackDuration`
+    /// stores it; the seek bar spans this length, while the LCD's right edge
+    /// keeps the catalog track's total. Stop and a new selection clear it
+    /// through `reset_position_readout`.
+    playback_duration: Option<Duration>,
+    /// The seek bar's in-progress drag, or `None` while the thumb follows the
+    /// reported position. `Message::SeekPreviewChanged` stores the drag and
+    /// `Message::SeekPreviewReleased` seeks to and clears it, so only a release
+    /// touches the backend. Stop and a new selection clear it too.
+    seek_preview: Option<Duration>,
     /// Which time the large left-hand LCD readout shows: elapsed by default,
     /// or the track's remaining time after a click. Presentation-only: it
     /// changes no playback state, and the mode survives Pause, Stop,
@@ -418,6 +442,8 @@ impl WinampPlayer {
             marquee_offset: 0,
             playback_position: None,
             playback_format: None,
+            playback_duration: None,
+            seek_preview: None,
             time_display: views::TimeDisplay::Elapsed,
             position_epoch: 0,
             pending_position_transitions: 0,
@@ -564,6 +590,13 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::PlaybackFormat { epoch, format } => {
             handlers::playback::playback_format(player, epoch, format)
         }
+        Message::PlaybackDuration { epoch, duration } => {
+            handlers::playback::playback_duration(player, epoch, duration)
+        }
+        Message::SeekPreviewChanged(value) => {
+            handlers::playback::seek_preview_changed(player, value)
+        }
+        Message::SeekPreviewReleased => handlers::playback::seek_preview_released(player),
         Message::ToggleTimeDisplay => handlers::playback::toggle_time_display(player),
         Message::TrackSelected { epoch, index } => {
             handlers::playback::track_selected(player, epoch, index)
@@ -749,6 +782,10 @@ fn view(player: &WinampPlayer) -> Element<'_, Message> {
             now_playing_time,
             player.marquee_offset,
             playback_format,
+        ))
+        .push(views::view_seek_bar(
+            player.seek_preview.or(player.playback_position),
+            player.playback_duration,
         ))
         .push(views::view_transport_controls(
             is_playing, volume, balance, repeat, shuffle,

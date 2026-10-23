@@ -174,6 +174,11 @@ impl AudioOutput for GatedAudio {
         Ok(())
     }
 
+    fn seek_to(&self, position: Duration) -> Result<(), AppleMusicError> {
+        self.calls.lock().unwrap().push(AudioCall::SeekTo(position));
+        Ok(())
+    }
+
     fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
         self.calls
             .lock()
@@ -295,6 +300,11 @@ impl AudioOutput for RejectingAudio {
             .lock()
             .unwrap()
             .push(AudioCall::SeekBy(offset_secs));
+        Ok(())
+    }
+
+    fn seek_to(&self, position: Duration) -> Result<(), AppleMusicError> {
+        self.calls.lock().unwrap().push(AudioCall::SeekTo(position));
         Ok(())
     }
 
@@ -887,6 +897,47 @@ async fn playback_format_forwards_the_audio_output_format() {
             channels: 2,
         })
     );
+}
+
+// `seek_output_to` forwards an absolute seek to the injected backend without
+// touching the shared state: the position belongs to the playing preview, not
+// to `AppState`.
+#[tokio::test]
+async fn seek_output_to_forwards_an_absolute_position() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (service, state) = service_with_audio(Arc::clone(&recording) as Arc<dyn AudioOutput>);
+
+    service.seek_output_to(Duration::from_secs(12)).unwrap();
+
+    assert_eq!(
+        recording.calls(),
+        vec![AudioCall::SeekTo(Duration::from_secs(12))]
+    );
+    assert_eq!(*state.lock().await, AppState::default());
+}
+
+// A backend that cannot seek reports the failure through the absolute-seek
+// seam too, so the UI's release path logs it instead of claiming the preview
+// moved.
+#[tokio::test]
+async fn seek_output_to_propagates_an_audio_backend_failure() {
+    let audio = Arc::new(FailingAudio::failing_seek());
+    let (service, state) = service_with_audio(Arc::clone(&audio) as Arc<dyn AudioOutput>);
+
+    let error = service.seek_output_to(Duration::from_secs(12)).unwrap_err();
+
+    assert_eq!(error.to_string(), "the audio device is gone");
+    assert_eq!(audio.attempts(FailingCommand::Seek), 1);
+    assert_eq!(*state.lock().await, AppState::default());
+}
+
+// `playback_duration` reports exactly what the injected backend answers, so
+// the seek bar has one seam to the loaded preview's own length.
+#[tokio::test]
+async fn playback_duration_forwards_the_audio_output_duration() {
+    let (service, _state) = service_with_audio(Arc::new(RecordingAudio::default()));
+
+    assert_eq!(service.playback_duration(), Some(Duration::from_secs(30)));
 }
 
 // `set_output_equalizer` forwards to the injected backend without touching the

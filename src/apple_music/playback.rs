@@ -195,6 +195,31 @@ impl AppleMusicService {
         self.audio.position()
     }
 
+    /// Forwards an absolute seek to the audio backend, so releasing the seek
+    /// bar moves the playing preview to the dragged position. Synchronous, and
+    /// touches no shared state: the UI owns the position and
+    /// [`crate::audio::AudioOutput::seek_to`] is a non-blocking channel send.
+    /// The backend clamps the target to the loaded preview's length.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the audio backend cannot accept
+    /// the request.
+    pub(crate) fn seek_output_to(&self, position: Duration) -> Result<(), AppleMusicError> {
+        self.audio.seek_to(position)
+    }
+
+    /// Reports the loaded preview's own length, or `None` when no preview is
+    /// loaded or the audio backend cannot answer.
+    ///
+    /// Synchronous and touches no shared state. The backend bounds the wait
+    /// (see [`crate::audio::AudioOutput::duration`]), so callers on the UI
+    /// thread should still run it as a task rather than blocking `update`.
+    /// The Now Playing seek bar polls it beside the position.
+    pub(crate) fn playback_duration(&self) -> Option<Duration> {
+        self.audio.duration()
+    }
+
     /// Reports the loaded preview's sample rate and channel mode in the
     /// backend's own format, or `None` when no preview is loaded or the
     /// audio backend cannot answer.

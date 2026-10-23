@@ -266,12 +266,12 @@ pub(in crate::ui) fn transport_settled(player: &mut WinampPlayer) -> Task<Messag
 }
 
 /// The position poll's tick: schedule a query of the loaded preview's
-/// position and of its sample rate and channel mode. Both queries run in
-/// tasks, so the UI thread never blocks on the audio backend, and each reply
-/// carries the epoch the query was issued under, so a transition that lands
-/// first invalidates it. While a transport transition is still reaching the
-/// backend, neither query is issued: the backend would still report the
-/// previous preview, and the epoch no longer identifies it.
+/// position, of its sample rate and channel mode, and of its own length. All
+/// three queries run in tasks, so the UI thread never blocks on the audio
+/// backend, and each reply carries the epoch the query was issued under, so a
+/// transition that lands first invalidates it. While a transport transition is
+/// still reaching the backend, none is issued: the backend would still report
+/// the previous preview, and the epoch no longer identifies it.
 pub(in crate::ui) fn position_tick(player: &mut WinampPlayer) -> Task<Message> {
     if player.pending_position_transitions > 0 {
         return Task::none();
@@ -287,7 +287,12 @@ pub(in crate::ui) fn position_tick(player: &mut WinampPlayer) -> Task<Message> {
         async move { format_service.playback_format() },
         move |format| Message::PlaybackFormat { epoch, format },
     );
-    Task::batch([position, format])
+    let duration_service = player.apple_music_service.clone();
+    let duration = Task::perform(
+        async move { duration_service.playback_duration() },
+        move |duration| Message::PlaybackDuration { epoch, duration },
+    );
+    Task::batch([position, format, duration])
 }
 
 /// The position query's reply: store the reported position, or clear the
@@ -324,17 +329,64 @@ pub(in crate::ui) fn playback_format(
     Task::none()
 }
 
-/// Clears the Now Playing elapsed readout and the LCD's status row, and
-/// invalidates any position or format query already in flight, so a reply
-/// issued before the track changed cannot restore the previous values. Stop
-/// and a new selection call this; a Pause deliberately does not, so the
-/// paused player's frozen position and format stay on the bar. The caller
-/// pairs it with [`begin_position_transition`], so the poll also waits until
-/// the backend has stopped or replaced the player.
+/// The duration query's reply: store the loaded preview's own length, or
+/// clear the seek bar's scale when the backend reports none. A reply stamped
+/// with an older epoch is dropped, so a poll in flight across a Stop or a new
+/// selection cannot scale the bar to the previous preview. A reply that lands
+/// while a transport transition is still in flight is dropped too: the
+/// backend may still be holding the previous player.
+pub(in crate::ui) fn playback_duration(
+    player: &mut WinampPlayer,
+    epoch: u64,
+    duration: Option<Duration>,
+) -> Task<Message> {
+    if player.pending_position_transitions == 0 && epoch == player.position_epoch {
+        player.playback_duration = duration;
+    }
+    Task::none()
+}
+
+/// The seek bar's drag: store the slider value as the in-progress thumb
+/// position without touching the backend. Dragging must not seek on every
+/// step, so only [`seek_preview_released`] reaches the audio seam.
+pub(in crate::ui) fn seek_preview_changed(player: &mut WinampPlayer, value: f32) -> Task<Message> {
+    player.seek_preview = Some(Duration::from_secs_f32(value.max(0.0)));
+    Task::none()
+}
+
+/// The seek bar's release: seek once to the stored drag, record that position
+/// optimistically, and invalidate any position or duration reply already in
+/// flight. A backend failure is logged and the drag cleared, so the next poll
+/// restores the real position and length. A release with no drag stored only
+/// clears the field.
+pub(in crate::ui) fn seek_preview_released(player: &mut WinampPlayer) -> Task<Message> {
+    let Some(position) = player.seek_preview.take() else {
+        return Task::none();
+    };
+    match player.apple_music_service.seek_output_to(position) {
+        Ok(()) => {
+            player.position_epoch = player.position_epoch.wrapping_add(1);
+            player.playback_position = Some(position);
+        }
+        Err(error) => eprintln!("seeking the preview failed: {error}"),
+    }
+    Task::none()
+}
+
+/// Clears the Now Playing elapsed readout, the LCD's status row, and the seek
+/// bar's scale and drag, and invalidates any position, format, or duration
+/// query already in flight, so a reply issued before the track changed cannot
+/// restore the previous values. Stop and a new selection call this; a Pause
+/// deliberately does not, so the paused player's frozen position, format, and
+/// seek bar stay on screen. The caller pairs it with
+/// [`begin_position_transition`], so the poll also waits until the backend has
+/// stopped or replaced the player.
 fn reset_position_readout(player: &mut WinampPlayer) {
     player.position_epoch = player.position_epoch.wrapping_add(1);
     player.playback_position = None;
     player.playback_format = None;
+    player.playback_duration = None;
+    player.seek_preview = None;
 }
 
 /// Marks a backend transport transition as in flight, so the position poll

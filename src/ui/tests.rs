@@ -4066,6 +4066,208 @@ fn stop_clears_the_playback_format_while_pause_keeps_it() {
     assert_eq!(player.playback_format, None);
 }
 
+// A duration reply stores exactly what the backend reported, and a later
+// `None` reply clears the seek bar's scale instead of keeping the old length.
+#[test]
+fn playback_duration_reply_stores_the_loaded_previews_length() {
+    let (mut player, _state) = test_player();
+    let epoch = player.position_epoch;
+
+    let _ = update(
+        &mut player,
+        Message::PlaybackDuration {
+            epoch,
+            duration: Some(Duration::from_secs(30)),
+        },
+    );
+    assert_eq!(player.playback_duration, Some(Duration::from_secs(30)));
+
+    let _ = update(
+        &mut player,
+        Message::PlaybackDuration {
+            epoch,
+            duration: None,
+        },
+    );
+    assert_eq!(player.playback_duration, None);
+}
+
+// A duration reply is dropped when it was issued before a Stop, or when it
+// lands while a transport transition is still reaching the backend: either
+// way it could describe the previous player. A reply at the current epoch
+// with no transition pending is stored, so the drops above come from the
+// guards and not from the message being ignored entirely.
+#[test]
+fn playback_duration_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped() {
+    let (mut player, _current_track) = play_song_1_then_browse_to_album_2();
+    let old_epoch = player.position_epoch;
+
+    let _ = update(&mut player, Message::Stop);
+    let _ = update(&mut player, Message::TransportSettled);
+    let _ = update(
+        &mut player,
+        Message::PlaybackDuration {
+            epoch: old_epoch,
+            duration: Some(Duration::from_secs(5)),
+        },
+    );
+    assert_eq!(player.playback_duration, None);
+
+    // A pending transition drops even a reply at the current epoch.
+    let current_epoch = player.position_epoch;
+    player.playback_duration = Some(Duration::from_secs(30));
+    let _ = update(&mut player, Message::Pause);
+    let _ = update(
+        &mut player,
+        Message::PlaybackDuration {
+            epoch: current_epoch,
+            duration: Some(Duration::from_secs(5)),
+        },
+    );
+    assert_eq!(player.playback_duration, Some(Duration::from_secs(30)));
+
+    // Once the transition settles, the same reply is stored.
+    let _ = update(&mut player, Message::TransportSettled);
+    let _ = update(
+        &mut player,
+        Message::PlaybackDuration {
+            epoch: current_epoch,
+            duration: Some(Duration::from_secs(5)),
+        },
+    );
+    assert_eq!(player.playback_duration, Some(Duration::from_secs(5)));
+}
+
+// Stop and a new selection clear the seek bar's scale and any drag
+// immediately, along with the position and format.
+#[test]
+fn stop_and_track_selection_clear_the_playback_duration() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    player.playback_duration = Some(Duration::from_secs(30));
+    player.seek_preview = Some(Duration::from_secs(5));
+
+    let _ = update(&mut player, Message::Stop);
+
+    assert_eq!(player.playback_duration, None);
+    assert_eq!(player.seek_preview, None);
+
+    player.playback_duration = Some(Duration::from_secs(30));
+    player.seek_preview = Some(Duration::from_secs(5));
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+
+    assert_eq!(player.playback_duration, None);
+    assert_eq!(player.seek_preview, None);
+}
+
+// Dragging the seek bar stores the thumb value in seconds and sends nothing
+// to the backend: only a release seeks.
+#[test]
+fn seek_preview_changed_tracks_the_drag_without_touching_the_backend() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, _state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+
+    assert_no_task(update(&mut player, Message::SeekPreviewChanged(12.5)));
+
+    assert_eq!(player.seek_preview, Some(Duration::from_millis(12_500)));
+    assert_eq!(recording.calls(), vec![]);
+}
+
+// Releasing the seek bar sends exactly one absolute seek, records the dragged
+// position optimistically, and bumps the epoch so replies already in flight
+// cannot restore the old position.
+#[test]
+fn seek_preview_released_seeks_once_to_the_dragged_position() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, _state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    player.playback_position = Some(Duration::from_secs(3));
+    let epoch = player.position_epoch;
+    let _ = update(&mut player, Message::SeekPreviewChanged(12.0));
+
+    assert_message_schedules_no_work(&mut player, Message::SeekPreviewReleased);
+
+    assert_eq!(
+        recording.calls(),
+        vec![AudioCall::SeekTo(Duration::from_secs(12))]
+    );
+    assert_eq!(player.playback_position, Some(Duration::from_secs(12)));
+    assert_eq!(player.seek_preview, None);
+    assert_eq!(player.position_epoch, epoch.wrapping_add(1));
+}
+
+// A release with no stored drag does nothing: no backend call, no position
+// change, and no epoch bump.
+#[test]
+fn seek_preview_released_without_a_drag_does_nothing() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, _state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    player.playback_position = Some(Duration::from_secs(3));
+    let epoch = player.position_epoch;
+
+    assert_message_schedules_no_work(&mut player, Message::SeekPreviewReleased);
+
+    assert_eq!(recording.calls(), vec![]);
+    assert_eq!(player.playback_position, Some(Duration::from_secs(3)));
+    assert_eq!(player.position_epoch, epoch);
+}
+
+// A successful release bumps the epoch, so a position reply the poll issued
+// before the seek is dropped instead of restoring the old thumb position.
+#[test]
+fn seek_preview_released_invalidates_an_in_flight_position_reply() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, _state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    player.playback_position = Some(Duration::from_secs(3));
+    let old_epoch = player.position_epoch;
+    let _ = update(&mut player, Message::SeekPreviewChanged(12.0));
+    let _ = update(&mut player, Message::SeekPreviewReleased);
+
+    let _ = update(
+        &mut player,
+        Message::PlaybackPosition {
+            epoch: old_epoch,
+            position: Some(Duration::from_secs(2)),
+        },
+    );
+
+    assert_eq!(player.playback_position, Some(Duration::from_secs(12)));
+}
+
+// A rejected absolute seek is logged and leaves the optimistic state alone:
+// the drag is cleared, the position and epoch stay as they were, and the next
+// position poll's reply is still accepted, so it can put the thumb back on
+// the player's real position. The fake counts its rejection, proving the
+// release reached the failing backend instead of skipping the forward.
+#[test]
+fn seek_preview_released_backend_failure_leaves_the_position_alone() {
+    let audio = Arc::new(FailingAudio::failing_seek());
+    let (mut player, _state) =
+        player_with_audio(Arc::clone(&audio) as Arc<dyn crate::audio::AudioOutput>);
+    player.playback_position = Some(Duration::from_secs(3));
+    let epoch = player.position_epoch;
+    let _ = update(&mut player, Message::SeekPreviewChanged(12.0));
+
+    assert_message_schedules_no_work(&mut player, Message::SeekPreviewReleased);
+
+    assert_eq!(audio.attempts(FailingCommand::Seek), 1);
+    assert_eq!(player.seek_preview, None);
+    assert_eq!(player.playback_position, Some(Duration::from_secs(3)));
+    assert_eq!(player.position_epoch, epoch);
+
+    let _ = update(
+        &mut player,
+        Message::PlaybackPosition {
+            epoch,
+            position: Some(Duration::from_secs(4)),
+        },
+    );
+    assert_eq!(player.playback_position, Some(Duration::from_secs(4)));
+}
+
 #[test]
 fn position_tick_schedules_a_query() {
     let (mut player, _state) = test_player();
@@ -4111,6 +4313,47 @@ fn position_tick_queries_position_and_format() {
             Message::PlaybackFormat { epoch: reply_epoch, .. } if *reply_epoch == epoch
         )),
         "the tick must query the format: {replies:?}"
+    );
+}
+
+// The tick must also ask the backend for the preview's own length, so the
+// seek bar has a scale. Drive the batched task's stream to its end and check
+// the duration reply arrives beside the position.
+#[test]
+fn position_tick_queries_position_and_duration() {
+    use futures::StreamExt;
+
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, _state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    let epoch = player.position_epoch;
+    let mut stream = iced_runtime::task::into_stream(update(&mut player, Message::PositionTick))
+        .expect("the position tick must schedule a task");
+    let mut replies = Vec::new();
+    while let Some(action) = futures::executor::block_on(await_or_timeout(
+        "position tick",
+        TASK_TIMEOUT,
+        stream.next(),
+    )) {
+        if let iced_runtime::Action::Output(message) = action {
+            replies.push(message);
+        }
+    }
+
+    assert!(
+        replies.iter().any(|message| matches!(
+            message,
+            Message::PlaybackPosition { epoch: reply_epoch, .. } if *reply_epoch == epoch
+        )),
+        "the tick must query the position: {replies:?}"
+    );
+    assert!(
+        replies.iter().any(|message| matches!(
+            message,
+            Message::PlaybackDuration { epoch: reply_epoch, duration: Some(duration) }
+                if *reply_epoch == epoch && *duration == Duration::from_secs(30)
+        )),
+        "the tick must query the duration: {replies:?}"
     );
 }
 

@@ -395,6 +395,8 @@ pub(crate) enum AudioCall {
     SetBalance(f32),
     /// `seek_by` was called with this signed offset in seconds.
     SeekBy(i64),
+    /// `seek_to` was called with this absolute position.
+    SeekTo(Duration),
     /// `set_equalizer` was called with this curve.
     SetEqualizer(EqSnapshot),
 }
@@ -479,6 +481,11 @@ impl AudioOutput for RecordingAudio {
         Ok(())
     }
 
+    fn seek_to(&self, position: Duration) -> Result<(), AppleMusicError> {
+        self.calls.lock().unwrap().push(AudioCall::SeekTo(position));
+        Ok(())
+    }
+
     /// Reports a fixed stub position; the recording fake models no real
     /// playback clock, so tests that need a known elapsed value use this one.
     fn position(&self) -> Option<Duration> {
@@ -492,6 +499,12 @@ impl AudioOutput for RecordingAudio {
             sample_rate_hz: 44_100,
             channels: 2,
         })
+    }
+
+    /// Reports a fixed stub preview length, so the seek bar has a scale and a
+    /// test can pin what the backend's loaded preview reports.
+    fn duration(&self) -> Option<Duration> {
+        Some(Duration::from_secs(30))
     }
 
     fn set_equalizer(&self, equalizer: EqSnapshot) -> Result<(), AppleMusicError> {
@@ -648,6 +661,10 @@ impl AudioOutput for FailingAudio {
     }
 
     fn seek_by(&self, _offset_secs: i64) -> Result<(), AppleMusicError> {
+        self.attempt(FailingCommand::Seek)
+    }
+
+    fn seek_to(&self, _position: Duration) -> Result<(), AppleMusicError> {
         self.attempt(FailingCommand::Seek)
     }
 

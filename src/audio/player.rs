@@ -29,8 +29,8 @@ use super::{AudioOutput, PlaybackFormat};
 /// enough that a wedged one is reported instead of hanging.
 pub(super) const DEVICE_OPEN_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// The longest [`RodioOutput::position`] and [`RodioOutput::playback_format`]
-/// wait for the worker to answer.
+/// The longest [`RodioOutput::position`], [`RodioOutput::playback_format`],
+/// and [`RodioOutput::duration`] wait for the worker to answer.
 ///
 /// The worker handles commands in channel order, so a query issued while the
 /// worker is downloading a preview is answered only after that download
@@ -58,9 +58,14 @@ pub(super) enum Command {
     SetBalance(f32),
     /// Seek the current player by this many seconds (negative moves backward).
     SeekBy(i64),
+    /// Seek the current player to this absolute position.
+    SeekTo(Duration),
     /// Report the current player's position on `reply` (`None` when none is
     /// loaded).
     Position(Sender<Option<Duration>>),
+    /// Report the loaded preview's own length on `reply` (`None` when none is
+    /// loaded).
+    Duration(Sender<Option<Duration>>),
     /// Report the loaded preview's sample rate and channel mode on `reply`
     /// (`None` when none is loaded).
     PlaybackFormat(Sender<Option<PlaybackFormat>>),
@@ -86,8 +91,15 @@ pub(super) trait WorkerPlayer {
     fn set_balance(&self, balance: f32);
     /// Seeks the player relative to its current position.
     fn seek_by(&self, offset_secs: i64);
+    /// Seeks the player to an absolute position.
+    fn seek_to(&self, position: Duration);
     /// Reports the player's current position.
     fn position(&self) -> Duration;
+    /// Reports the loaded preview's own length, when the player has one. The
+    /// default answers `None`, so a fake without a length compiles.
+    fn duration(&self) -> Option<Duration> {
+        None
+    }
     /// Reports the loaded preview's format, when the player has one. The
     /// default answers `None`, so a fake without a format compiles.
     fn playback_format(&self) -> Option<PlaybackFormat> {
@@ -126,6 +138,20 @@ pub(super) fn seek_target(position: Duration, offset_secs: i64) -> Duration {
     }
 }
 
+/// Clamps `position` to the loaded preview's `duration`, or passes it through
+/// when the backend reports no length.
+pub(super) fn clamp_seek(position: Duration, duration: Option<Duration>) -> Duration {
+    match duration {
+        Some(duration) => position.min(duration),
+        None => position,
+    }
+}
+
+/// Reads `source`'s own length, the span the seek bar draws.
+pub(super) fn duration_for_source(source: &impl rodio::Source) -> Option<Duration> {
+    source.total_duration()
+}
+
 /// The two player operations a relative seek needs, split from
 /// [`RodioPlayer`] so the composition of reading the position and seeking to
 /// [`seek_target`] from it is testable without an output device.
@@ -162,6 +188,9 @@ struct RodioPlayer {
     /// The format of the preview appended to this player, set once because
     /// each played track builds a fresh player.
     format: OnceLock<PlaybackFormat>,
+    /// The appended preview's own length, set once beside the format. It can
+    /// be absent even with a player loaded when the source cannot report it.
+    duration: OnceLock<Option<Duration>>,
 }
 
 impl RodioPlayer {
@@ -171,6 +200,7 @@ impl RodioPlayer {
             balance: Arc::new(AtomicU32::new(0.0_f32.to_bits())),
             equalizer: Arc::new(EqSettings::default()),
             format: OnceLock::new(),
+            duration: OnceLock::new(),
         }
     }
 }
@@ -190,8 +220,19 @@ impl WorkerPlayer for RodioPlayer {
         seek_player(&self.player, offset_secs);
     }
 
+    fn seek_to(&self, position: Duration) {
+        let target = clamp_seek(position, self.duration());
+        if let Err(error) = self.player.try_seek(target) {
+            eprintln!("seeking the preview failed: {error}");
+        }
+    }
+
     fn position(&self) -> Duration {
         self.player.get_pos()
+    }
+
+    fn duration(&self) -> Option<Duration> {
+        self.duration.get().copied().flatten()
     }
 
     fn playback_format(&self) -> Option<PlaybackFormat> {
@@ -203,9 +244,10 @@ impl WorkerPlayer for RodioPlayer {
     }
 
     fn append(&self, preview: Self::Preview) {
-        // Read the format from the decoded source before moving it into the
-        // adapter chain; a fresh player per track sets the cell once.
+        // Read the format and length from the decoded source before moving it
+        // into the adapter chain; a fresh player per track sets each cell once.
         let _ = self.format.set(format_for_source(&preview));
+        let _ = self.duration.set(duration_for_source(&preview));
         let equalized = EqSource::new(preview, Arc::clone(&self.equalizer));
         self.player
             .append(BalanceSource::new(equalized, Arc::clone(&self.balance)));
@@ -307,9 +349,21 @@ impl AudioOutput for RodioOutput {
         self.send(Command::SeekBy(offset_secs))
     }
 
+    fn seek_to(&self, position: Duration) -> Result<(), AppleMusicError> {
+        self.send(Command::SeekTo(position))
+    }
+
     fn position(&self) -> Option<Duration> {
         let (reply, replies) = mpsc::channel();
         if self.send(Command::Position(reply)).is_err() {
+            return None;
+        }
+        replies.recv_timeout(POSITION_QUERY_TIMEOUT).ok().flatten()
+    }
+
+    fn duration(&self) -> Option<Duration> {
+        let (reply, replies) = mpsc::channel();
+        if self.send(Command::Duration(reply)).is_err() {
             return None;
         }
         replies.recv_timeout(POSITION_QUERY_TIMEOUT).ok().flatten()
@@ -492,8 +546,16 @@ pub(super) fn serve_commands<P, D>(
                     player.seek_by(offset_secs);
                 }
             }
+            Command::SeekTo(position) => {
+                if let Some(player) = &player {
+                    player.seek_to(position);
+                }
+            }
             Command::Position(reply) => {
                 let _ = reply.send(player.as_ref().map(WorkerPlayer::position));
+            }
+            Command::Duration(reply) => {
+                let _ = reply.send(player.as_ref().and_then(WorkerPlayer::duration));
             }
             Command::PlaybackFormat(reply) => {
                 let _ = reply.send(player.as_ref().and_then(WorkerPlayer::playback_format));
