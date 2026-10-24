@@ -1050,6 +1050,34 @@ reports a removal failure without failing the new sign-in.
 **History.** Reconstructed from "A stalled connection is served for its whole budget before the next
 one, so repeated stalls starve the sign-in callback" in `BUGS-FIXED.md`.
 
+## REST transport
+
+**Guarantee.** The REST transport buffers at most `MAX_RESPONSE_BYTES + 1` bytes from either the
+wire reader or the decoded stream, and accepts a body only when its decoded length is at most
+`MAX_RESPONSE_BYTES` (8 MiB). `ureq`'s reader limit is set one byte above the cap so a body of
+exactly the cap reaches EOF instead of tripping the limit on the read past it. Reading the reader
+through `std::io::Read::take(MAX_RESPONSE_BYTES + 1)` bounds the decoded buffer and stops a
+`Content-Encoding: gzip` response smaller than the cap from expanding the buffered body past it; a
+decoded length above the cap is rejected with a message naming the cap before the body becomes a
+`String`. A read that hits the wire limit keeps the `reading the response body failed:` prefix.
+`text/*` responses keep `ureq`'s lossy UTF-8 replacement, as `Body::read_to_string()` had.
+
+**Enforced by.** `UreqTransport::request` in `src/apple_music/rest/transport.rs` calls
+`response.body_mut().with_config().limit(MAX_RESPONSE_BYTES + 1).lossy_utf8(true).reader()`, then
+reads it through `take(MAX_RESPONSE_BYTES + 1)` and checks the decoded length before
+`String::from_utf8`.
+
+**Pinned by.**
+
+- `a_response_of_exactly_the_cap_is_accepted` (`src/apple_music/rest/tests.rs`)
+- `a_compressed_response_larger_than_the_cap_is_rejected` (`src/apple_music/rest/tests.rs`)
+- `a_response_with_more_wire_bytes_than_the_cap_is_rejected` (`src/apple_music/rest/tests.rs`)
+- `a_text_response_with_invalid_utf8_keeps_the_lossy_replacement` (`src/apple_music/rest/tests.rs`)
+
+**History.** Added 2026-10-23 after `Body::read_to_string()` was found to limit only wire bytes
+(its 10 MiB `MAX_BODY_SIZE` sits under `ureq`'s gzip decoder), leaving a compressed REST reply
+unbounded after decoding — the same exposure the preview downloader had closed.
+
 ## Preview download
 
 **Guarantee.** The preview downloader bounds both the *wire* body and the *decoded* body at

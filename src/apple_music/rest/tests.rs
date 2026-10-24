@@ -1,11 +1,12 @@
-use super::transport::shared_agent;
+use super::transport::{MAX_RESPONSE_BYTES, shared_agent};
 use super::wire::api_error_cause;
 use super::*;
 
 use crate::test_support::{
-    PREVIEW_URL, StubTransport, assert_ids, assert_single_call, loopback_listener,
-    record_first_request, rest_session, sample_album, sample_artist, sample_playlist, sample_song,
-    serve_one_response, serve_one_response_capturing_request,
+    PREVIEW_URL, StubTransport, assert_ids, assert_single_call, gzip_empty_stored_blocks,
+    gzip_zeros, loopback_listener, record_first_request, rest_session, sample_album, sample_artist,
+    sample_playlist, sample_song, serve_one_response, serve_one_response_bytes,
+    serve_one_response_capturing_request,
 };
 
 /// A [`RestLibrary`] over `stub`, plus the handle to inspect its calls.
@@ -1222,6 +1223,120 @@ fn a_truncated_response_body_reports_a_read_error() {
         error.starts_with("reading the response body failed:"),
         "{error}"
     );
+}
+
+// A REST reply is server-controlled data, and the REST agent deliberately
+// honors the environment proxy, so a hostile or compromised endpoint or proxy
+// can answer a query. `ureq`'s reader limit sits under its gzip decoder, so a
+// small `Content-Encoding: gzip` body can expand past the wire cap. This body
+// is a fixed-Huffman stream that decodes to just over `MAX_RESPONSE_BYTES`; a
+// wire-only cap reads the small compressed body whole and yields a decoded
+// body over the cap, while the decoded-byte take rejects it before it becomes
+// a `String`.
+#[test]
+fn a_compressed_response_larger_than_the_cap_is_rejected() {
+    let cap = usize::try_from(MAX_RESPONSE_BYTES).expect("the cap fits a usize");
+    let body = gzip_zeros(cap / 258 + 1);
+    assert!(
+        body.len() < cap,
+        "the compressed body must stay under the wire cap, got {}",
+        body.len()
+    );
+    let mut response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
+    )
+    .into_bytes();
+    response.extend_from_slice(&body);
+    let address = serve_one_response_bytes(&response);
+    let transport = UreqTransport::with_timeout(Duration::from_secs(10));
+    let url = format!("http://{address}/me/library/artists");
+
+    let error = transport
+        .get(&url, &rest_session())
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains("larger than the 8 MiB cap"),
+        "unexpected error: {error}"
+    );
+}
+
+// The decoded-byte cap alone would leave the transport willing to read an
+// arbitrarily large compressed body that decodes to little: an empty stored
+// block costs five wire bytes and produces no output. This body puts more than
+// the cap on the wire while decoding to zero bytes, so only `ureq`'s wire-byte
+// limit can reject it; without that limit the read succeeds and the transport
+// returns an empty body for a truncated download.
+#[test]
+fn a_response_with_more_wire_bytes_than_the_cap_is_rejected() {
+    let cap = usize::try_from(MAX_RESPONSE_BYTES).expect("the cap fits a usize");
+    let body = gzip_empty_stored_blocks(cap / 5 + 1);
+    assert!(
+        body.len() > cap,
+        "the compressed body must exceed the wire cap, got {}",
+        body.len()
+    );
+    let mut response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
+    )
+    .into_bytes();
+    response.extend_from_slice(&body);
+    let address = serve_one_response_bytes(&response);
+    let transport = UreqTransport::with_timeout(Duration::from_secs(10));
+    let url = format!("http://{address}/me/library/artists");
+
+    let error = transport
+        .get(&url, &rest_session())
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains("reading the response body failed"),
+        "unexpected error: {error}"
+    );
+}
+
+// A body of exactly the cap is legal: the reader limit sits one byte above the
+// cap precisely so the read past an exactly-at-cap body reaches EOF instead of
+// `ureq`'s limit error. A limit of `MAX_RESPONSE_BYTES` would reject this body
+// even though nothing exceeds the cap.
+#[test]
+fn a_response_of_exactly_the_cap_is_accepted() {
+    let cap = usize::try_from(MAX_RESPONSE_BYTES).expect("the cap fits a usize");
+    let mut response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {cap}\r\nConnection: close\r\n\r\n"
+    )
+    .into_bytes();
+    response.resize(response.len() + cap, b' ');
+    let address = serve_one_response_bytes(&response);
+    let transport = UreqTransport::with_timeout(Duration::from_secs(10));
+    let url = format!("http://{address}/me/library/artists");
+
+    let body = transport
+        .get(&url, &rest_session())
+        .expect("a body of exactly the cap must be accepted");
+    assert_eq!(body.len(), cap);
+}
+
+// The old `Body::read_to_string()` configured ureq's lossy UTF-8 replacement
+// for `text/*` responses; the transport reads through `.reader()` instead, so
+// it must keep that setting. Without `lossy_utf8(true)`, this lone invalid
+// byte fails `String::from_utf8` and turns the reply into a read error.
+#[test]
+fn a_text_response_with_invalid_utf8_keeps_the_lossy_replacement() {
+    let mut response =
+        b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 1\r\nConnection: close\r\n\r\n"
+            .to_vec();
+    response.push(0xff);
+    let address = serve_one_response_bytes(&response);
+    let transport = UreqTransport::with_timeout(Duration::from_secs(10));
+    let url = format!("http://{address}/me/library/artists");
+
+    let body = transport
+        .get(&url, &rest_session())
+        .expect("a text body with invalid UTF-8 must keep the lossy replacement");
+    assert_eq!(body, "?");
 }
 
 // The transport's success arm. Every other `UreqTransport::get` test pins a

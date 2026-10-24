@@ -3,6 +3,7 @@
 //! [`HttpTransport`] is the narrow seam the REST client's tests replace with an
 //! in-memory stub; [`UreqTransport`] is the production implementation.
 
+use std::io::Read;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
@@ -11,6 +12,19 @@ use super::REQUEST_TIMEOUT;
 use super::wire::api_error_cause;
 use crate::http::agent_with_timeout;
 use crate::music_kit_auth::MusicKitSession;
+
+/// The largest response body, in both wire and decoded bytes, the REST
+/// transport accepts.
+///
+/// A REST reply is server-controlled data, and the shared agent deliberately
+/// honors the environment proxy, so a hostile or compromised endpoint or proxy
+/// can answer a query. `ureq`'s reader limit is set one byte above this so an
+/// exactly-at-cap body reaches EOF rather than tripping the limit on the probe
+/// past it; that limit counts wire bytes and sits under the gzip decoder, so
+/// the body is also read through a decoded-byte `take`, exactly as the preview
+/// downloader does. Eight mebibytes is far above one 100-item Apple Music page
+/// and keeps `MAX_PAGES` pages from accumulating into an unbounded buffer.
+pub(super) const MAX_RESPONSE_BYTES: u64 = 8 * 1024 * 1024;
 
 /// The narrow seam over the blocking HTTP client, so [`RestLibrary`](super::RestLibrary)'s tests
 /// run without a network.
@@ -134,7 +148,25 @@ impl UreqTransport {
             .map_err(|error| AppleMusicError::new(error.to_string()))?;
 
         let status = response.status();
-        let body = response.body_mut().read_to_string().map_err(|error| {
+        let mut bytes = Vec::new();
+        response
+            .body_mut()
+            .with_config()
+            .limit(MAX_RESPONSE_BYTES + 1)
+            .lossy_utf8(true)
+            .reader()
+            .take(MAX_RESPONSE_BYTES + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|error| {
+                AppleMusicError::new(format!("reading the response body failed: {error}"))
+            })?;
+        if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_RESPONSE_BYTES {
+            return Err(AppleMusicError::new(format!(
+                "the response body is larger than the {} MiB cap",
+                MAX_RESPONSE_BYTES / (1024 * 1024)
+            )));
+        }
+        let body = String::from_utf8(bytes).map_err(|error| {
             AppleMusicError::new(format!("reading the response body failed: {error}"))
         })?;
 

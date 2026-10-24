@@ -17,8 +17,9 @@ use super::*;
 use crate::equalizer::BAND_COUNT;
 use crate::http::{agent_with_timeout, config_with_timeout};
 use crate::test_support::{
-    AudioCall, PREVIEW_URL, RecordingAudio, loopback_listener, read_some_request,
-    record_first_request, serve_one_response, serve_one_response_bytes,
+    AudioCall, PREVIEW_URL, RecordingAudio, gzip_empty_stored_blocks, gzip_zeros,
+    loopback_listener, read_some_request, record_first_request, serve_one_response,
+    serve_one_response_bytes,
 };
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Sender};
@@ -856,103 +857,6 @@ fn a_preview_with_more_wire_bytes_than_the_cap_is_rejected() {
         error.to_string().contains("reading the preview failed"),
         "unexpected error: {error}"
     );
-}
-
-/// Builds a gzip stream with `blocks` non-final empty stored blocks and a
-/// final empty one, decoding to no bytes while occupying five wire bytes per
-/// block. The wire-only expansion that a decoded-byte cap misses.
-fn gzip_empty_stored_blocks(blocks: usize) -> Vec<u8> {
-    // gzip header: magic, deflate, no flags, no mtime, OS = unknown.
-    let mut bytes = vec![0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0, 0, 0xff];
-    // BFINAL = 0, BTYPE = 00, padded to a byte, then LEN = 0, NLEN = 0xffff.
-    for _ in 0..blocks {
-        bytes.extend_from_slice(&[0x00, 0x00, 0x00, 0xff, 0xff]);
-    }
-    // The final block sets BFINAL = 1; empty output has CRC 0 and size 0.
-    bytes.extend_from_slice(&[0x01, 0x00, 0x00, 0xff, 0xff]);
-    bytes.extend_from_slice(&[0; 8]);
-    bytes
-}
-
-/// Builds a gzip stream that decodes to `1 + 258 * matches` zero bytes: one
-/// literal zero, then `matches` DEFLATE fixed-Huffman length-258/distance-1
-/// matches. A body much smaller than its decoded output is the shape that
-/// defeats a cap applied to the wire bytes; the suite has no compression
-/// crate, and fixed Huffman is the least code that writes such a stream.
-fn gzip_zeros(matches: usize) -> Vec<u8> {
-    struct BitWriter {
-        bytes: Vec<u8>,
-        current: u8,
-        used: u8,
-    }
-    impl BitWriter {
-        fn new() -> Self {
-            // gzip header: magic, deflate, no flags, no mtime, OS = unknown.
-            Self {
-                bytes: vec![0x1f, 0x8b, 0x08, 0, 0, 0, 0, 0, 0, 0xff],
-                current: 0,
-                used: 0,
-            }
-        }
-        fn bit(&mut self, bit: u8) {
-            self.current |= (bit & 1) << self.used;
-            self.used += 1;
-            if self.used == 8 {
-                self.bytes.push(self.current);
-                self.current = 0;
-                self.used = 0;
-            }
-        }
-        fn code(&mut self, code: u32, bits: u8) {
-            for shift in (0..bits).rev() {
-                self.bit(((code >> shift) & 1) as u8);
-            }
-        }
-        fn finish(mut self) -> Vec<u8> {
-            if self.used > 0 {
-                self.bytes.push(self.current);
-            }
-            self.bytes
-        }
-    }
-
-    let mut writer = BitWriter::new();
-    writer.bit(1); // BFINAL
-    writer.bit(1); // BTYPE = 01 (fixed), least-significant bit first
-    writer.bit(0);
-    writer.code(0x30, 8); // literal 0x00
-    for _ in 0..matches {
-        writer.code(0xC5, 8); // length 258, no extra bits
-        writer.code(0, 5); // distance 1
-    }
-    writer.code(0, 7); // end of block
-    let decoded = 1 + 258 * matches;
-    let mut bytes = writer.finish();
-    bytes.extend_from_slice(&crc32_of_zeros(decoded).to_le_bytes());
-    bytes.extend_from_slice(&(decoded as u32).to_le_bytes());
-    bytes
-}
-
-/// CRC-32 (IEEE, reflected) of `count` zero bytes, the gzip trailer's check
-/// value for [`gzip_zeros`]. Built from a runtime table so the test is fast.
-fn crc32_of_zeros(count: usize) -> u32 {
-    let mut table = [0u32; 256];
-    for (index, slot) in table.iter_mut().enumerate() {
-        let mut value = index as u32;
-        for _ in 0..8 {
-            value = if value & 1 == 0 {
-                value >> 1
-            } else {
-                0xedb8_8320 ^ (value >> 1)
-            };
-        }
-        *slot = value;
-    }
-    let mut crc = 0xffff_ffffu32;
-    for _ in 0..count {
-        crc = table[(crc & 0xff) as usize] ^ (crc >> 8);
-    }
-    crc ^ 0xffff_ffff
 }
 
 #[test]
