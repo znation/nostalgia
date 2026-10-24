@@ -2505,6 +2505,21 @@ async fn get_all_songs_uses_the_rest_library_when_signed_in() {
     assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/songs");
 }
 
+// A signed-in All Songs load has no sample-library fallback: it answers from
+// the sample library only when no session is stored, so a failed collection
+// request must surface the error for the UI's Retry path. The sample library
+// has songs, so a fallback on failure would return them instead of the error.
+#[tokio::test]
+async fn get_all_songs_fails_when_the_songs_request_fails() {
+    let stub = StubTransport::failing("songs down");
+    let service = signed_in_service(&stub);
+
+    let error = service.get_all_songs().await.unwrap_err();
+
+    assert_eq!(error.to_string(), "songs down");
+    assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/songs");
+}
+
 // The All Albums view routes through the REST client when a session is
 // stored, so a signed-in user sees the real library rather than the sample
 // one. The stub returns an album whose id is not a sample id, so the result
