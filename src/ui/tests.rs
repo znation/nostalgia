@@ -3980,6 +3980,46 @@ fn sort_reorders_artists_and_keeps_their_cached_labels_aligned() {
     );
 }
 
+// Back restores the artists list from its saved permutation, and it must move
+// the cached album-count labels with the rows just as Sort does. A restore
+// that reordered only `items` would leave every artist showing a neighbour's
+// count, the failure mode the cache's own risk note names.
+#[test]
+fn back_restores_sorted_artists_and_their_cached_album_labels() {
+    let (mut player, _state) = test_player();
+    let artist = |id: &str, name: &str, album_count: usize| Artist {
+        id: id.to_string(),
+        name: name.to_string(),
+        album_count,
+    };
+    // Load through the real `ArtistsLoaded` arm so the labels come from
+    // `store_with_labels`, in this library order.
+    let _ = update(
+        &mut player,
+        Message::ArtistsLoaded(vec![
+            artist("banana", "banana", 0),
+            artist("apple", "Apple", 2),
+            artist("cherry", "cherry", 1),
+        ]),
+    );
+    assert_eq!(player.artists.labels, ["", "2 albums", "1 album"]);
+
+    let _ = update(&mut player, Message::SortBrowse);
+    assert_eq!(artist_names(&player), ["Apple", "banana", "cherry"]);
+    // A second Sort must still let Back undo both reorders, labels included.
+    let _ = update(&mut player, Message::SortBrowse);
+
+    player.current_view = CurrentView::Albums;
+    let _ = update(&mut player, Message::Back);
+
+    assert_eq!(artist_names(&player), ["banana", "Apple", "cherry"]);
+    assert_eq!(
+        player.artists.labels,
+        ["", "2 albums", "1 album"],
+        "each restored artist row keeps its own cached album count"
+    );
+}
+
 // The documented sort is stable: rows whose rendered text compares equal
 // (ignoring case) keep the library order. Every other sort test uses distinct
 // keys, so a regression to an unstable sort could reorder these equal-key rows

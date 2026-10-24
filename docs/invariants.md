@@ -298,6 +298,7 @@ draw beside Top.
 - `sort_with_an_empty_or_loading_list_is_a_noop`
 - `sort_leaves_other_lists_view_search_and_playback_untouched`
 - `back_restores_a_sorted_artists_list_to_library_order`
+- `back_restores_sorted_artists_and_their_cached_album_labels`
 - `a_fresh_artists_reply_drops_the_saved_sort_permutation`
 - `back_from_songs_restores_a_sorted_albums_list_to_library_order`
 - `back_from_all_albums_songs_restores_a_sorted_flat_list_to_library_order`
@@ -412,7 +413,8 @@ those labels through `BrowseList::store_with_labels`, so `artist_row` can borrow
   (all in `src/ui/views/tests.rs`)
 - `artists_loaded_populates_list`
 - `sort_reorders_artists_and_keeps_their_cached_labels_aligned`
-  (both in `src/ui/tests.rs`)
+- `back_restores_sorted_artists_and_their_cached_album_labels`
+  (all three in `src/ui/tests.rs`)
 - `sample_library_artists_carry_their_album_counts`
   (in `src/sample_library.rs`)
 - `get_favorite_artists_uses_the_rest_library_when_signed_in`
