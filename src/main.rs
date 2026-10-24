@@ -73,6 +73,7 @@ pub mod state;
 #[cfg(test)]
 mod test_support;
 pub mod threads;
+pub mod timeout;
 pub mod ui;
 
 use crate::state::AppState;

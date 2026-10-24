@@ -2,10 +2,10 @@
 //!
 //! Every background worker the player starts — the audio worker, the sign-in
 //! and REST threads, the marquee, position, and spectrum timers, the request
-//! timeout timer, and the browser-opener reaper — goes through [`spawn_named`], so
-//! each gets a name for panic attribution and each takes the fallible
-//! [`std::thread::Builder`] form rather than [`std::thread::spawn`], which
-//! panics when the OS refuses a thread.
+//! timeout timer in [`crate::timeout`], and the browser-opener reaper — goes
+//! through [`spawn_named`], so each gets a name for panic attribution and each
+//! takes the fallible [`std::thread::Builder`] form rather than
+//! [`std::thread::spawn`], which panics when the OS refuses a thread.
 
 /// Spawns `work` on a new detached thread named `name`.
 ///

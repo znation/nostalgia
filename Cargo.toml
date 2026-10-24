@@ -27,7 +27,7 @@ iced = { version = "0.14.0", features = ["advanced"] }
 serde = { version = "1.0.228", features = ["derive"] }
 # `sync` supplies the `Mutex` and `oneshot` channels the service and UI use;
 # `macros` supplies the `#[tokio::test]` attributes (in `apple_music` and
-# `ui`) and `ui::loading`'s `tokio::select!`; `rt` is the runtime those tests
+# `ui`) and `timeout`'s `tokio::select!`; `rt` is the runtime those tests
 # need.
 tokio = { version = "1.48.0", features = ["sync", "macros", "rt"] }
 # The blocking HTTP client for the Apple Music REST integration (the choice
