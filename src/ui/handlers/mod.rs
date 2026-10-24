@@ -7,7 +7,7 @@
 //! tick in `playback`; the seek drag and release and the backend polls in
 //! `playback::preview`; the volume, balance, seek nudges, the equalizer, and
 //! the equalizer panel's show/hide toggle in `mixer`; the browse hierarchy,
-//! the Back, Open, Top, and Sort navigation, and the library search in
+//! the Back, Open, Top, Sort, and Reload navigation, and the library search in
 //! `browse`; the initial load and the fetch results in `browse::fetch`; and
 //! the custom title bar's window actions in `window`.
 //! Each handler owns its message's whole behavior, so a change to one concern
