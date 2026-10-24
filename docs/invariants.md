@@ -379,6 +379,7 @@ target the stable `views::BROWSE_LIST_ID` that every `views::browse::scrollable_
 
 - `scroll_browse_to_bottom_schedules_a_scroll_task` (`src/ui/tests.rs`)
 - `scroll_browse_page_keys_schedule_page_sized_scrolls` (`src/ui/tests.rs`)
+- `shade_mode_builds_no_browse_scroll_target` (`src/ui/tests.rs`)
 - `message_for_maps_home_and_end_to_browse_scroll` (`src/ui/shortcuts.rs`)
 - `message_for_maps_page_keys_to_browse_paging` (`src/ui/shortcuts.rs`)
 - `shortcut_ignores_chord_modifiers` (`src/ui/shortcuts.rs`)

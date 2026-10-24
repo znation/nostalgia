@@ -2201,6 +2201,68 @@ fn ctrl_f_is_a_noop_in_shade_mode() {
     );
 }
 
+// The Home, End, Page Up, and Page Down keys all target the stable
+// `BROWSE_LIST_ID` (pinned by the message tests above), but shade mode builds
+// no browse list. This lays out the real root view in both modes and records
+// every scrollable's id: the normal tree carries the browse target and the
+// shaded tree carries none, so the same key press has nothing to move.
+#[test]
+fn shade_mode_builds_no_browse_scroll_target() {
+    use iced::Rectangle;
+    use iced::advanced::Layout;
+    use iced::advanced::widget::{
+        Id, Tree,
+        operation::{Operation, Scrollable},
+    };
+
+    fn scrollable_ids(player: &WinampPlayer) -> Vec<Option<Id>> {
+        let renderer = layout_capture::headless_renderer();
+        let mut element = view(player);
+        let mut tree = Tree::new(element.as_widget());
+        let node = element
+            .as_widget_mut()
+            .layout(&mut tree, &renderer, &layout_capture::limits());
+
+        #[derive(Default)]
+        struct ScrollCapture(Vec<Option<Id>>);
+        impl Operation for ScrollCapture {
+            fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+                operate(self);
+            }
+            fn scrollable(
+                &mut self,
+                id: Option<&Id>,
+                _bounds: Rectangle,
+                _content_bounds: Rectangle,
+                _translation: iced::Vector,
+                _state: &mut dyn Scrollable,
+            ) {
+                self.0.push(id.cloned());
+            }
+        }
+
+        let mut capture = ScrollCapture::default();
+        element
+            .as_widget_mut()
+            .operate(&mut tree, Layout::new(&node), &renderer, &mut capture);
+        capture.0
+    }
+
+    let (mut player, _state) = test_player();
+    let browse_target = Some(Id::new(BROWSE_LIST_ID));
+    assert!(
+        scrollable_ids(&player).contains(&browse_target),
+        "the open library must build the browse scroll target"
+    );
+
+    player.shaded = true;
+    let shaded = scrollable_ids(&player);
+    assert!(
+        !shaded.contains(&browse_target),
+        "shade mode must build no browse scroll target: {shaded:?}"
+    );
+}
+
 // Submitting a query replaces the songs buffer with the library matches and
 // shows them under the Songs view — the same buffer the browse hierarchy
 // uses, so the playing-row marker and the empty/failure wording keep working.
