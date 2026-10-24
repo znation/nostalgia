@@ -5500,12 +5500,24 @@ fn marquee_tick_advances_the_offset() {
 // Every message makes iced rebuild the whole screen, browse list included, so
 // the marquee timer must not run for a line that fits the LCD whole: it would
 // rebuild the UI four times a second to redraw a bar that cannot change. The
-// keyboard listener always runs, so the subscription set is the listener alone
+// keyboard listener always runs, so the subscription set is the two listeners
 // until the line needs to scroll.
 #[test]
 fn the_marquee_timer_runs_only_while_the_line_needs_to_scroll() {
-    assert_eq!(subscriptions(false, false, false).len(), 1);
-    assert_eq!(subscriptions(true, false, false).len(), 2);
+    assert_eq!(subscriptions(false, false, false, false).len(), 2);
+    assert_eq!(subscriptions(true, false, false, false).len(), 3);
+    assert_eq!(subscriptions(false, false, false, true).len(), 3);
+}
+
+// The key listener that clears a mixer readout is always subscribed: a slider's
+// arrow-key change sets the readout during the very event the listener must
+// then see. The wheel listener joins only while a readout shows, so plain list
+// scrolling rebuilds no screen.
+#[test]
+fn the_mixer_nudge_listener_is_always_subscribed() {
+    assert_eq!(subscriptions(false, false, false, false).len(), 2);
+    assert_eq!(subscriptions(true, true, true, false).len(), 5);
+    assert_eq!(subscriptions(false, false, false, true).len(), 3);
 }
 
 // The position poll has the same cost as the marquee: every tick and reply
@@ -5516,8 +5528,8 @@ fn the_marquee_timer_runs_only_while_the_line_needs_to_scroll() {
 // seek can move.
 #[test]
 fn the_position_timer_runs_only_while_there_is_a_position_to_refresh() {
-    assert_eq!(subscriptions(false, true, false).len(), 2);
-    assert_eq!(subscriptions(true, true, false).len(), 3);
+    assert_eq!(subscriptions(false, true, false, false).len(), 3);
+    assert_eq!(subscriptions(true, true, false, false).len(), 4);
 
     let (mut player, state) = test_player();
     assert!(!player.needs_position_poll());
@@ -5539,9 +5551,9 @@ fn the_position_timer_runs_only_while_there_is_a_position_to_refresh() {
 // already stored.
 #[test]
 fn the_spectrum_timer_runs_only_while_playback_runs() {
-    assert_eq!(subscriptions(false, false, false).len(), 1);
-    assert_eq!(subscriptions(false, false, true).len(), 2);
-    assert_eq!(subscriptions(true, true, true).len(), 4);
+    assert_eq!(subscriptions(false, false, false, false).len(), 2);
+    assert_eq!(subscriptions(false, false, true, false).len(), 3);
+    assert_eq!(subscriptions(true, true, true, false).len(), 5);
 
     let (player, state) = test_player();
     assert!(!player.needs_spectrum_poll());
@@ -9084,4 +9096,125 @@ fn wheel_over_a_blank_seek_strip_still_nudges_the_volume() {
             .any(|m| matches!(m, Message::SeekForward | Message::SeekBackward)),
         "a blank strip must not seek: {messages:?}"
     );
+}
+
+/// Seeds a known current track titled `title` into `player` and `state`.
+fn seed_current_title(player: &mut WinampPlayer, state: &Arc<Mutex<AppState>>, title: &str) {
+    player.known_tracks.insert(
+        "song-1".to_string(),
+        views::KnownTrack {
+            title: title.to_string(),
+            artist: String::new(),
+            number: String::new(),
+            time: "3:30".to_string(),
+            duration_ms: 210_000,
+        },
+    );
+    state.blocking_lock().current_track = Some("song-1".to_string());
+}
+
+fn root_view_draws(player: &WinampPlayer, fragment: &str) -> bool {
+    captured_root_view_text_bounds(player)
+        .texts()
+        .any(|text| text.contains(fragment))
+}
+
+// Dragging the volume slider swaps the LCD title for the live level, and the
+// release brings the title back.
+#[test]
+fn dragging_volume_shows_the_level_until_release() {
+    let (mut player, state) = test_player();
+    seed_current_title(&mut player, &state, "Tune");
+    assert!(root_view_draws(&player, "Tune"));
+
+    let _ = update(&mut player, Message::VolumeChange(0.4));
+    assert_eq!(player.mixer_drag, Some(views::MixerDrag::Volume));
+    assert!(root_view_draws(&player, "Volume: 40%"));
+    assert!(!root_view_draws(&player, "Tune"));
+
+    let _ = update(&mut player, Message::MixerReleased);
+    assert_eq!(player.mixer_drag, None);
+    assert!(root_view_draws(&player, "Tune"));
+    assert!(!root_view_draws(&player, "Volume: 40%"));
+}
+
+#[test]
+fn dragging_balance_shows_the_side() {
+    let (mut player, state) = test_player();
+    seed_current_title(&mut player, &state, "Tune");
+    let _ = update(&mut player, Message::BalanceChange(-0.25));
+    assert_eq!(player.mixer_drag, Some(views::MixerDrag::Balance));
+    assert!(root_view_draws(&player, "Balance: 25% Left"));
+}
+
+// Keys and the wheel change the volume without showing the readout.
+#[test]
+fn volume_keys_and_wheel_do_not_show_the_readout() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::VolumeUp);
+    assert_eq!(player.mixer_drag, None);
+    let _ = update(&mut player, Message::VolumeWheel(1.0));
+    assert_eq!(player.mixer_drag, None);
+}
+
+// A slider's own arrow-key or Ctrl+wheel change message arrives with no drag
+// and no release; the key or wheel event that caused it ends the readout.
+#[test]
+fn a_key_or_wheel_event_ends_a_mixer_readout() {
+    use iced::{Event, event::Status, keyboard, mouse, window};
+    let (mut player, _state) = test_player();
+    let wheel = Event::Mouse(mouse::Event::WheelScrolled {
+        delta: mouse::ScrollDelta::Lines { x: 0.0, y: 1.0 },
+    });
+    let key = Event::Keyboard(keyboard::Event::KeyPressed {
+        key: keyboard::Key::Named(keyboard::key::Named::ArrowUp),
+        modified_key: keyboard::Key::Named(keyboard::key::Named::ArrowUp),
+        physical_key: keyboard::key::Physical::Unidentified(
+            keyboard::key::NativeCode::Unidentified,
+        ),
+        location: keyboard::Location::Standard,
+        modifiers: keyboard::Modifiers::empty(),
+        text: None,
+        repeat: false,
+    });
+    let _ = update(&mut player, Message::VolumeChange(0.4));
+    assert!(player.mixer_drag.is_some());
+    let message = mixer_key_message(key, Status::Captured, window::Id::unique())
+        .expect("a navigation key maps to a message");
+    let _ = update(&mut player, message);
+    assert_eq!(player.mixer_drag, None);
+    let _ = update(&mut player, Message::VolumeChange(0.4));
+    let message = mixer_wheel_message(wheel.clone(), Status::Captured, window::Id::unique())
+        .expect("a wheel event maps to a message");
+    let _ = update(&mut player, message);
+    assert_eq!(player.mixer_drag, None);
+    // Plain scrolling and typing send nothing, so they rebuild no screen.
+    assert!(mixer_key_message(wheel, Status::Ignored, window::Id::unique()).is_none());
+    let letter = Event::Keyboard(keyboard::Event::KeyPressed {
+        key: keyboard::Key::Character("a".into()),
+        modified_key: keyboard::Key::Character("a".into()),
+        physical_key: keyboard::key::Physical::Unidentified(
+            keyboard::key::NativeCode::Unidentified,
+        ),
+        location: keyboard::Location::Standard,
+        modifiers: keyboard::Modifiers::empty(),
+        text: None,
+        repeat: false,
+    });
+    assert!(mixer_key_message(letter, Status::Ignored, window::Id::unique()).is_none());
+    let moved = Event::Mouse(mouse::Event::CursorMoved {
+        position: iced::Point::ORIGIN,
+    });
+    assert!(mixer_wheel_message(moved, Status::Ignored, window::Id::unique()).is_none());
+}
+
+#[test]
+fn the_marquee_pauses_during_a_mixer_drag() {
+    let (mut player, state) = test_player();
+    seed_current_title(&mut player, &state, "A Title Too Long For The LCD Bar");
+    assert!(player.needs_marquee());
+    let _ = update(&mut player, Message::VolumeChange(0.5));
+    assert!(!player.needs_marquee());
+    let _ = update(&mut player, Message::MixerReleased);
+    assert!(player.needs_marquee());
 }

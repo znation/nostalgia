@@ -647,6 +647,7 @@ fn captured_now_playing_texts(
         offset,
         mode,
         true,
+        None,
     )
     .into();
     let capture = layout_capture::capture_text(&mut element, &());
@@ -782,6 +783,7 @@ fn now_playing_content_draws_the_indicator_strip_beside_the_title() {
         None,
         TransportMode::Playing,
         true,
+        None,
     )
     .into();
     let capture = layout_capture::capture_text(&mut element, &());
@@ -927,6 +929,7 @@ fn elapsed_readout_toggles_only_while_not_stopped() {
             0,
             mode,
             true,
+            None,
         )
         .into();
         let capture = layout_capture::capture_text(&mut element, &renderer);
@@ -973,6 +976,7 @@ fn now_playing_row_keeps_the_elapsed_bounds_when_the_blink_hides_it() {
             0,
             TransportMode::Paused,
             visible,
+            None,
         )
         .into();
         layout_capture::capture_text(&mut element, &())
@@ -1010,6 +1014,7 @@ fn now_playing_row_keeps_the_elapsed_readout_in_place_across_transport_modes() {
             0,
             mode,
             true,
+            None,
         )
         .into();
         let capture = layout_capture::capture_text(&mut element, &());
@@ -1335,6 +1340,7 @@ fn captured_content_with_spectrum(
         spectrum,
         TransportMode::Playing,
         true,
+        None,
     )
     .into();
     let capture = layout_capture::capture_text(&mut element, &());
@@ -2058,6 +2064,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         None,
         TransportMode::Stopped,
         true,
+        None,
     );
     let _bar = view_now_playing(
         "00:53".into(),
@@ -2076,6 +2083,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         }),
         TransportMode::Paused,
         true,
+        None,
     );
     let _overlong = view_now_playing(
         "03:12".into(),
@@ -2088,6 +2096,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         None,
         TransportMode::Playing,
         true,
+        None,
     );
     let _back = view_back_button();
     let _retry = view_retry_button();
@@ -3610,4 +3619,34 @@ fn wheel_over_the_shade_seek_slider_seeks() {
             "the roll must not nudge the volume: {messages:?}"
         );
     }
+}
+
+// A mixer readout replaces the caption and the title, even a marquee-length
+// one, while the glyph, elapsed readout, and total stay.
+#[test]
+fn now_playing_row_with_a_readout_replaces_the_title() {
+    let long = "A Title Too Long For The LCD Bar Indeed";
+    let mut element: iced::Element<'_, Message, iced::Theme, ()> = now_playing_row(
+        Cow::Borrowed("00:53"),
+        Cow::Borrowed(long),
+        Cow::Borrowed("Band"),
+        Cow::Borrowed("1. "),
+        Cow::Borrowed("3:30"),
+        3,
+        TransportMode::Playing,
+        true,
+        Some("Volume: 72%".to_string()),
+    )
+    .into();
+    let capture = layout_capture::capture_text(&mut element, &());
+    let texts: Vec<&str> = capture.texts().collect();
+    assert_eq!(
+        texts,
+        vec![
+            transport_glyph(TransportMode::Playing),
+            "00:53",
+            "Volume: 72%",
+            "3:30"
+        ]
+    );
 }

@@ -18,6 +18,7 @@ use crate::ui::{Message, WinampPlayer};
 
 /// The volume slider's drag: sets the playback level.
 pub(in crate::ui) fn volume_change(player: &mut WinampPlayer, volume: f32) -> Task<Message> {
+    player.mixer_drag = Some(views::MixerDrag::Volume);
     mutate_volume(player, |state| state.set_volume(volume))
 }
 
@@ -49,7 +50,15 @@ pub(in crate::ui) fn volume_wheel(player: &mut WinampPlayer, direction: f32) -> 
 
 /// The balance slider's drag: sets the stereo balance.
 pub(in crate::ui) fn balance_change(player: &mut WinampPlayer, balance: f32) -> Task<Message> {
+    player.mixer_drag = Some(views::MixerDrag::Balance);
     mutate_balance(player, |state| state.set_balance(balance))
+}
+
+/// The release of a volume or balance slider drag: the LCD shows the title
+/// again. Harmless when no drag is shown.
+pub(in crate::ui) fn mixer_released(player: &mut WinampPlayer) -> Task<Message> {
+    player.mixer_drag = None;
+    Task::none()
 }
 
 /// The left arrow: moves the playing preview back by Winamp's five-second

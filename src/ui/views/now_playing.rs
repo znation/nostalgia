@@ -19,7 +19,10 @@ use crate::library::display_title_for;
 use crate::state::TransportMode;
 use crate::ui::{Message, bevel, theme};
 
+pub(super) mod mixer_readout;
 pub(super) mod text;
+
+pub use mixer_readout::{MixerDrag, mixer_readout_text};
 
 pub use text::{
     KnownTrack, TimeDisplay, channel_mode_label, format_playback_prefix, needs_marquee,
@@ -114,6 +117,7 @@ pub fn view_now_playing<'a>(
     spectrum: Option<Spectrum>,
     mode: TransportMode,
     elapsed_visible: bool,
+    mixer_readout: Option<String>,
 ) -> Element<'a, Message> {
     bevel::lcd_well(now_playing_content(
         elapsed,
@@ -126,6 +130,7 @@ pub fn view_now_playing<'a>(
         spectrum,
         mode,
         elapsed_visible,
+        mixer_readout,
     ))
 }
 
@@ -148,6 +153,7 @@ pub(super) fn now_playing_content<'a, Theme, Renderer>(
     spectrum: Option<Spectrum>,
     mode: TransportMode,
     elapsed_visible: bool,
+    mixer_readout: Option<String>,
 ) -> Row<'a, Message, Theme, Renderer>
 where
     Theme: iced::widget::text::Catalog + iced::widget::container::Catalog + 'a,
@@ -168,6 +174,7 @@ where
                 marquee_offset,
                 mode,
                 elapsed_visible,
+                mixer_readout,
             ))
             .push(now_playing_visualizer_row(spectrum))
             .push(now_playing_status_row(format)),
@@ -427,6 +434,7 @@ pub(super) fn now_playing_row<'a, Theme, Renderer>(
     marquee_offset: usize,
     mode: TransportMode,
     elapsed_visible: bool,
+    mixer_readout: Option<String>,
 ) -> Row<'a, Message, Theme, Renderer>
 where
     Theme: iced::widget::text::Catalog + iced::widget::container::Catalog + 'a,
@@ -456,8 +464,32 @@ where
                 readout.interaction(Interaction::None)
             }
         })
-        .push(Space::new().width(Length::Fixed(12.0)))
-        .push(Text::new("Now Playing: ").size(20));
+        .push(Space::new().width(Length::Fixed(12.0)));
+    if let Some(text) = mixer_readout {
+        row = row.push(lcd_text(text));
+    } else {
+        row = row.push(Text::new("Now Playing: ").size(20));
+        row = push_title(row, label, artist, number, marquee_offset, line_len);
+    }
+    row.push(Space::new().width(Length::Fill))
+        .push(lcd_text(time))
+}
+
+/// Pushes the title portion of the LCD row: the whole number, artist, and
+/// label when they fit, else the marquee window at `marquee_offset`.
+fn push_title<'a, Theme, Renderer>(
+    mut row: Row<'a, Message, Theme, Renderer>,
+    label: Cow<'a, str>,
+    artist: Cow<'a, str>,
+    number: Cow<'a, str>,
+    marquee_offset: usize,
+    line_len: usize,
+) -> Row<'a, Message, Theme, Renderer>
+where
+    Theme: iced::widget::text::Catalog + 'a,
+    <Theme as iced::widget::text::Catalog>::Class<'a>: From<iced::widget::text::StyleFn<'a, Theme>>,
+    Renderer: iced::advanced::text::Renderer + 'a,
+{
     if line_len <= MARQUEE_WIDTH {
         if !number.is_empty() {
             row = row.push(lcd_text(number));
@@ -474,6 +506,5 @@ where
             MARQUEE_WIDTH,
         )));
     }
-    row.push(Space::new().width(Length::Fill))
-        .push(lcd_text(time))
+    row
 }

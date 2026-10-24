@@ -215,6 +215,9 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
                 views::visible_spectrum(spectrum, player.visualizer_visible),
                 transport_mode,
                 player.blink_visible,
+                player
+                    .mixer_drag
+                    .map(|drag| views::mixer_readout_text(drag, volume, balance)),
             ))
             .push(views::view_seek_bar(
                 player.readout_position(),

@@ -87,6 +87,7 @@ pub fn init_ui(
             player.needs_marquee(),
             player.needs_position_poll(),
             player.needs_spectrum_poll(),
+            player.mixer_drag.is_some(),
         ))
     })
     .run()
@@ -136,6 +137,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::Stop => handlers::playback::stop(player),
         Message::ToggleRepeat => handlers::playback::toggle_repeat(player),
         Message::ToggleShuffle => handlers::playback::toggle_shuffle(player),
+        Message::MixerReleased => handlers::mixer::mixer_released(player),
         Message::VolumeChange(volume) => handlers::mixer::volume_change(player, volume),
         Message::BalanceChange(balance) => handlers::mixer::balance_change(player, balance),
         Message::VolumeUp => handlers::mixer::volume_up(player),

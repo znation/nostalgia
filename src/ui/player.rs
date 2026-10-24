@@ -177,6 +177,9 @@ pub(in crate::ui) struct WinampPlayer {
     /// changes no playback state, and the mode survives Pause, Stop,
     /// Next/Previous, and a new selection until clicked again.
     pub(in crate::ui) time_display: views::TimeDisplay,
+    /// The mixer slider being dragged, whose live level the LCD shows in place
+    /// of the title; transient, never saved to settings.
+    pub(in crate::ui) mixer_drag: Option<views::MixerDrag>,
     /// The playback transition counter. Each backend query carries its value;
     /// `reset_position_readout` bumps it on a Stop or a new selection, so a
     /// reply that was already in flight is dropped rather than restoring the
@@ -274,6 +277,7 @@ impl WinampPlayer {
             about_visible: false,
             seek_preview: None,
             time_display: views::TimeDisplay::Elapsed,
+            mixer_drag: None,
             position_epoch: 0,
             pending_position_transitions: 0,
             plays_generation: Arc::new(AtomicU64::new(0)),
@@ -338,6 +342,9 @@ impl WinampPlayer {
     /// as `view` resolves them, so the timer scrolls precisely the lines the
     /// bar windows.
     pub(in crate::ui) fn needs_marquee(&self) -> bool {
+        if self.mixer_drag.is_some() {
+            return false;
+        }
         let state = self.state.blocking_lock();
         let label = self.now_playing_label(state.current_track.as_deref());
         let artist = self.now_playing_artist(state.current_track.as_deref());

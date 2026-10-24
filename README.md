@@ -164,8 +164,10 @@ set the audio backend's playback level, and rolling the mouse wheel over the pla
 the volume by one slider step in the roll's vertical direction, except that a roll over the drawn
 seek slider, in the Now Playing bar or the shade strip, seeks five seconds forward or back instead;
 over the browse list the wheel keeps scrolling the list instead. The balance slider sets its stereo
-balance, and the equalizer panel's on/off button, sliders, and presets change the playing preview's
-curve live; the volume and balance are remembered for the next track. Setting
+balance. While a volume or balance slider is dragged, the LCD shows its level (`Volume: 72%`,
+`Balance: 31% Left`) in place of the title until release. The equalizer panel's on/off button,
+sliders, and presets change the playing preview's curve live; the volume and balance are
+remembered for the next track. Setting
 `APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a browser-based MusicKit sign-in: browse and search
 queries then read your Apple Music library through the REST API, and fall back to the built-in
 sample library when it is unset. Playback plays the selected song's Apple Music preview through

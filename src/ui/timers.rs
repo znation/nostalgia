@@ -122,8 +122,15 @@ pub(super) fn subscriptions(
     marquee_needed: bool,
     position_needed: bool,
     spectrum_needed: bool,
+    mixer_readout_showing: bool,
 ) -> Vec<iced::Subscription<Message>> {
-    let mut subscriptions = vec![keyboard::listen().filter_map(message_for)];
+    let mut subscriptions = vec![
+        keyboard::listen().filter_map(message_for),
+        iced::event::listen_with(mixer_key_message),
+    ];
+    if mixer_readout_showing {
+        subscriptions.push(iced::event::listen_with(mixer_wheel_message));
+    }
     if marquee_needed {
         subscriptions.push(marquee_ticks());
     }
@@ -134,6 +141,52 @@ pub(super) fn subscriptions(
         subscriptions.push(spectrum_ticks());
     }
     subscriptions
+}
+
+/// Always subscribed, since a slider's own change message sets the readout
+/// during the same event this must then see. Ends the readout on an arrow,
+/// Home/End, or Page key press, which a focused slider turns into a change
+/// message with no drag and so no release. Other keys and every wheel roll
+/// send nothing, so typing and list scrolling rebuild no screen.
+pub(super) fn mixer_key_message(
+    event: iced::Event,
+    _status: iced::event::Status,
+    _window: iced::window::Id,
+) -> Option<Message> {
+    use keyboard::key::Named;
+    match event {
+        iced::Event::Keyboard(keyboard::Event::KeyPressed {
+            key:
+                keyboard::Key::Named(
+                    Named::ArrowUp
+                    | Named::ArrowDown
+                    | Named::ArrowLeft
+                    | Named::ArrowRight
+                    | Named::Home
+                    | Named::End
+                    | Named::PageUp
+                    | Named::PageDown,
+                ),
+            ..
+        }) => Some(Message::MixerReleased),
+        _ => None,
+    }
+}
+
+/// Subscribed only while a readout is showing, so wheel rolls rebuild the
+/// screen only then. The Ctrl+wheel change that sets a readout arrives while
+/// this is absent; the next wheel roll or navigation key clears it.
+pub(super) fn mixer_wheel_message(
+    event: iced::Event,
+    _status: iced::event::Status,
+    _window: iced::window::Id,
+) -> Option<Message> {
+    match event {
+        iced::Event::Mouse(iced::mouse::Event::WheelScrolled { .. }) => {
+            Some(Message::MixerReleased)
+        }
+        _ => None,
+    }
 }
 
 /// A subscription that emits [`Message::PositionTick`] once per
