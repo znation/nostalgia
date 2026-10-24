@@ -2225,13 +2225,9 @@ fn ctrl_f_is_a_noop_in_shade_mode() {
     );
 }
 
-// The Home, End, Page Up, and Page Down keys all target the stable
-// `BROWSE_LIST_ID` (pinned by the message tests above), but shade mode builds
-// no browse list. This lays out the real root view in both modes and records
-// every scrollable's id: the normal tree carries the browse target and the
-// shaded tree carries none, so the same key press has nothing to move.
-#[test]
-fn shade_mode_builds_no_browse_scroll_target() {
+/// Lays out the real root `view` and records every scrollable's id, so a test
+/// can tell whether the stable `BROWSE_LIST_ID` scroll target is present.
+fn root_scrollable_ids(player: &WinampPlayer) -> Vec<Option<iced::advanced::widget::Id>> {
     use iced::Rectangle;
     use iced::advanced::Layout;
     use iced::advanced::widget::{
@@ -2239,48 +2235,56 @@ fn shade_mode_builds_no_browse_scroll_target() {
         operation::{Operation, Scrollable},
     };
 
-    fn scrollable_ids(player: &WinampPlayer) -> Vec<Option<Id>> {
-        let renderer = layout_capture::headless_renderer();
-        let mut element = view(player);
-        let mut tree = Tree::new(element.as_widget());
-        let node = element
-            .as_widget_mut()
-            .layout(&mut tree, &renderer, &layout_capture::limits());
+    let renderer = layout_capture::headless_renderer();
+    let mut element = view(player);
+    let mut tree = Tree::new(element.as_widget());
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &layout_capture::limits());
 
-        #[derive(Default)]
-        struct ScrollCapture(Vec<Option<Id>>);
-        impl Operation for ScrollCapture {
-            fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
-                operate(self);
-            }
-            fn scrollable(
-                &mut self,
-                id: Option<&Id>,
-                _bounds: Rectangle,
-                _content_bounds: Rectangle,
-                _translation: iced::Vector,
-                _state: &mut dyn Scrollable,
-            ) {
-                self.0.push(id.cloned());
-            }
+    #[derive(Default)]
+    struct ScrollCapture(Vec<Option<Id>>);
+    impl Operation for ScrollCapture {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
         }
-
-        let mut capture = ScrollCapture::default();
-        element
-            .as_widget_mut()
-            .operate(&mut tree, Layout::new(&node), &renderer, &mut capture);
-        capture.0
+        fn scrollable(
+            &mut self,
+            id: Option<&Id>,
+            _bounds: Rectangle,
+            _content_bounds: Rectangle,
+            _translation: iced::Vector,
+            _state: &mut dyn Scrollable,
+        ) {
+            self.0.push(id.cloned());
+        }
     }
+
+    let mut capture = ScrollCapture::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &renderer, &mut capture);
+    capture.0
+}
+
+// The Home, End, Page Up, and Page Down keys all target the stable
+// `BROWSE_LIST_ID` (pinned by the message tests above), but shade mode builds
+// no browse list. This lays out the real root view in both modes and records
+// every scrollable's id: the normal tree carries the browse target and the
+// shaded tree carries none, so the same key press has nothing to move.
+#[test]
+fn shade_mode_builds_no_browse_scroll_target() {
+    use iced::advanced::widget::Id;
 
     let (mut player, _state) = test_player();
     let browse_target = Some(Id::new(BROWSE_LIST_ID));
     assert!(
-        scrollable_ids(&player).contains(&browse_target),
+        root_scrollable_ids(&player).contains(&browse_target),
         "the open library must build the browse scroll target"
     );
 
     player.shaded = true;
-    let shaded = scrollable_ids(&player);
+    let shaded = root_scrollable_ids(&player);
     assert!(
         !shaded.contains(&browse_target),
         "shade mode must build no browse scroll target: {shaded:?}"
@@ -6312,6 +6316,11 @@ fn toggle_library_panel_hides_and_restores_the_library_section() {
     };
     assert_eq!(player.current_view, CurrentView::Artists);
     assert!(player.library_panel_visible);
+    let browse_target = Some(iced::advanced::widget::Id::new(BROWSE_LIST_ID));
+    assert!(
+        root_scrollable_ids(&player).contains(&browse_target),
+        "the open library must build the browse scroll target"
+    );
 
     let open = captured_root_view_text_bounds(&player);
     let open_band = open.find("NOSTALGIA LIBRARY");
@@ -6328,6 +6337,11 @@ fn toggle_library_panel_hides_and_restores_the_library_section() {
 
     assert_message_schedules_no_work(&mut player, Message::ToggleLibraryPanel);
     assert!(!player.library_panel_visible);
+    let hidden_scrollables = root_scrollable_ids(&player);
+    assert!(
+        !hidden_scrollables.contains(&browse_target),
+        "hiding the library must build no browse scroll target: {hidden_scrollables:?}"
+    );
 
     let hidden = captured_root_view_text_bounds(&player);
     let hidden_texts: Vec<&str> = hidden.texts().collect();

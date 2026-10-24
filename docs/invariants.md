@@ -359,8 +359,9 @@ row, exactly like the `Top` button, and `End` snaps it to its last row. `Page Up
 `BROWSE_ROW_HEIGHT` rows — in the matching direction, relative to the list's current offset.
 Every one of these keys is a view-scroll operation only: they change no current view, rows or row
 order, selection, typed query, search-active flag, or playback state, and they schedule no fetch
-or playback task. In shade mode no browse list is built, so the scroll operation has no target
-and nothing moves; iced clamps the offset at the list's bounds, so paging past either end leaves
+or playback task. In shade mode, and while the `PL` button has hidden the library section, no
+browse list is built, so the scroll operation has no target and nothing moves; iced clamps the
+offset at the list's bounds, so paging past either end leaves
 the list at that end and a short list stays put. While the `Search library` box is focused, its
 `TextInput` captures Home and End for editing the query rather than scrolling the list, as it
 captures Backspace. Ctrl/Alt/Logo chords with Home, End, Page Up, or Page Down stay unbound.
@@ -380,6 +381,7 @@ target the stable `views::BROWSE_LIST_ID` that every `views::browse::scrollable_
 - `scroll_browse_to_bottom_schedules_a_scroll_task` (`src/ui/tests.rs`)
 - `scroll_browse_page_keys_schedule_page_sized_scrolls` (`src/ui/tests.rs`)
 - `shade_mode_builds_no_browse_scroll_target` (`src/ui/tests.rs`)
+- `toggle_library_panel_hides_and_restores_the_library_section` (`src/ui/tests.rs`)
 - `message_for_maps_home_and_end_to_browse_scroll` (`src/ui/shortcuts.rs`)
 - `message_for_maps_page_keys_to_browse_paging` (`src/ui/shortcuts.rs`)
 - `shortcut_ignores_chord_modifiers` (`src/ui/shortcuts.rs`)
