@@ -75,7 +75,7 @@ clears the search flag and view and calls `fetch_at_top(fetch::load_artists(play
 - `message_for_maps_backspace_to_back` (`src/ui/shortcuts.rs`)
 - `message_for_maps_f5_to_reload` (`src/ui/shortcuts.rs`)
 - `shortcut_ignores_chord_modifiers` (`src/ui/shortcuts.rs`)
-- `back_button_is_available_only_below_the_artist_list` (`src/ui/views/tests.rs`)
+- `back_button_is_available_only_below_the_artist_list` (`src/ui/views/tests/browse.rs`)
 
 **History.** Reconstructed from "Browse view can only move forward — no way back from
 Albums/Songs, a dead end" in `BUGS-FIXED.md`. The All Songs, All Albums, and Playlists levels
@@ -105,7 +105,7 @@ Control/Alt/Logo chord guard, while leaving Alt+F and Logo+F to the window manag
 - `ctrl_f_focuses_the_search_box_and_changes_no_browse_state` (`src/ui/tests.rs`)
 - `ctrl_f_is_a_noop_in_shade_mode` (`src/ui/tests.rs`)
 - `message_for_maps_ctrl_f_to_focus_search` (`src/ui/shortcuts.rs`)
-- `view_search_box_registers_its_focus_id` (`src/ui/views/tests.rs`)
+- `view_search_box_registers_its_focus_id` (`src/ui/views/tests/browse.rs`)
 
 **History.** Added with the Ctrl+F keyboard affordance for the library search box.
 
@@ -134,8 +134,8 @@ re-exported by `src/ui/views/mod.rs`, and the view tests import the button and b
 - `clear_search_with_an_empty_query_schedules_no_work` (`src/ui/tests.rs`)
 - `clear_search_while_a_search_is_active_returns_to_artists_and_clears_the_query`
   (`src/ui/tests.rs`)
-- `view_clear_search_button_constructs` (`src/ui/views/tests.rs`)
-- `view_search_row_draws_clear_after_the_search_box` (`src/ui/views/tests.rs`)
+- `view_clear_search_button_constructs` (`src/ui/views/tests/browse.rs`)
+- `view_search_row_draws_clear_after_the_search_box` (`src/ui/views/tests/browse.rs`)
 
 **History.** Added the one-press way to empty the library search box, reusing Back for the
 active-search case so the two affordances cannot drift apart.
@@ -215,12 +215,12 @@ and applies that style to each one, and `views::view_open_button` (re-exported b
   (in `src/ui/shortcuts.rs`)
 - `browse_row_style_keeps_playing_rows_unbarred_with_white_text`
 - `browse_row_style_paints_only_the_selected_row_blue`
-  (all in `src/ui/views/tests.rs`)
+  (all in `src/ui/views/tests/`)
 - `now_playing_bar_and_browse_action_buttons_construct`
 - `browse_open_button_constructs`
 - `browse_views_construct_over_the_loaded_library`
 - `browse_views_construct_over_an_empty_list`
-  (all in `src/ui/views/tests.rs`)
+  (all in `src/ui/views/tests/`)
 
 ## Browse reply freshness
 
@@ -343,7 +343,7 @@ so Next, Previous, a shuffled retrace, and a natural preview end all follow the 
 
 - `browse_row_height_matches_the_laid_out_row_pitch`
 - `scrollable_list_clips_an_overlong_title_to_its_column`
-  (`src/ui/views/tests.rs`)
+  (`src/ui/views/tests/browse.rs`)
 - `a_hard_line_break_in_a_title_does_not_change_the_row_pitch`
 - `a_carriage_return_in_a_title_does_not_change_the_row_pitch`
 - `next_and_previous_scroll_the_showing_song_list_to_the_landed_row`
@@ -442,7 +442,7 @@ those labels through `BrowseList::store_with_labels`, so `artist_row` can borrow
 - `artist_row_prefers_the_lists_cached_album_count`
 - `album_count_label_singular_plural_and_none`
 - `artist_row_puts_its_album_count_at_the_right_edge`
-  (all in `src/ui/views/tests.rs`)
+  (all in `src/ui/views/tests/`)
 - `artists_loaded_populates_list`
 - `sort_reorders_artists_and_keeps_their_cached_labels_aligned`
 - `back_restores_sorted_artists_and_their_cached_album_labels`
@@ -489,7 +489,7 @@ refresh does not re-join and reformat every row.
 - `album_row_prefers_the_lists_cached_title_and_running_time`
 - `album_row_shows_the_title_alone_when_the_artist_is_empty`
 - `album_row_shows_a_placeholder_when_the_duration_is_unknown`
-  (all in `src/ui/views/tests.rs`)
+  (all in `src/ui/views/tests/`)
 - `albums_loaded_populates_list`
 - `all_albums_loaded_stores_the_flat_list`
   (both in `src/ui/tests.rs`)
@@ -593,14 +593,14 @@ tiny-skia renderer.
 `e_in_shade_mode_leaves_the_equalizer_panel_alone`, and
 `shaded_root_view_draws_no_section_title_bands` (`src/ui/tests.rs`), plus
 `title_band_centers_its_label_at_the_title_bar_height` and
-`title_bar_centers_its_name_between_its_edge_controls` (`src/ui/views/tests.rs`) for the title
+`title_bar_centers_its_name_between_its_edge_controls` (`src/ui/views/tests/chrome.rs`) for the title
 bands and app bar, `transport_glyphs_match_the_mockup_order_and_widths`,
 `transport_buttons_keep_a_fixed_width_across_label_changes`,
 `transport_buttons_keep_their_measured_face_widths`,
-`main_transport_and_shade_strip_share_glyphs_order_and_widths`,
-`eq_panel_toggle_targets_the_visibility_flag`,
-`library_panel_toggle_targets_the_visibility_flag`, and
-`equalizer_preamp_and_db_scale_sit_left_of_the_band_sliders` (`src/ui/views/tests.rs`),
+`eq_panel_toggle_targets_the_visibility_flag`, and
+`library_panel_toggle_targets_the_visibility_flag` (`src/ui/views/tests/transport.rs`),
+`main_transport_and_shade_strip_share_glyphs_order_and_widths` (`src/ui/views/tests/shade.rs`),
+`equalizer_preamp_and_db_scale_sit_left_of_the_band_sliders` (`src/ui/views/tests/equalizer.rs`),
 and `toggle_button_style_sinks_while_on` (`src/ui/style.rs`) for the A, EQ,
 and PL toggles.
 
@@ -702,7 +702,7 @@ used by `views::view_equalizer` and `views::equalizer::preamp_slider_style` in
 `src/ui/views/equalizer.rs`.
 
 **Pinned by.** `preamp_slider_style_matches_the_band_tint_for_its_gain` in
-`src/ui/views/tests.rs`, `band_gain_color_runs_green_through_yellow_to_red`,
+`src/ui/views/tests/equalizer.rs`, `band_gain_color_runs_green_through_yellow_to_red`,
 `band_gain_color_clamps_and_maps_nan_to_flat`, and
 `band_slider_style_paints_both_rail_halves_and_keeps_the_chrome_thumb` in `src/ui/style.rs`.
 
@@ -756,7 +756,7 @@ exception: it seeks instead (see `## Seek wheel`).
 `src/ui/view.rs` (the normal and shaded trees).
 
 **Pinned by.** `volume_wheel_message_maps_a_vertical_roll_to_a_direction` and
-`volume_wheel_message_zeroes_a_horizontal_only_roll` in `src/ui/views/tests.rs`, plus
+`volume_wheel_message_zeroes_a_horizontal_only_roll` in `src/ui/views/tests/transport.rs`, plus
 `volume_wheel_nudges_by_one_slider_step_and_ignores_zero` and `volume_wheel_clamps_at_the_ends`
 in `src/ui/tests.rs`.
 
@@ -774,8 +774,8 @@ position or no preview length) and every other player panel keep the volume nudg
 `mini_transport_row_with_seek` (`src/ui/views/mini_transport.rs`).
 
 **Pinned by.** `seek_wheel_message_maps_a_vertical_roll_to_a_direction`,
-`seek_wheel_message_ignores_a_horizontal_only_roll`, and `wheel_over_the_shade_seek_slider_seeks`
-in `src/ui/views/tests.rs`, plus `wheel_over_the_root_seek_slider_seeks_without_nudging_the_volume`
+`seek_wheel_message_ignores_a_horizontal_only_roll` in `src/ui/views/tests/seek_wheel.rs`, and
+`wheel_over_the_shade_seek_slider_seeks` (also in `seek_wheel.rs`), plus `wheel_over_the_root_seek_slider_seeks_without_nudging_the_volume`
 and `wheel_over_a_blank_seek_strip_still_nudges_the_volume` in `src/ui/tests.rs`.
 
 ## Now Playing label
@@ -882,10 +882,10 @@ its internal id, whenever the id is in the known-track index:
   `elapsed_readout_color_keeps_the_placeholder_visible_while_stopped`,
   `elapsed_readout_is_clickable_only_while_not_stopped`,
   `elapsed_readout_toggles_only_while_not_stopped`,
-  `compact_readout_toggles_time_display_only_while_not_stopped`, and
-  `now_playing_row_keeps_the_elapsed_bounds_when_the_blink_hides_it` in `src/ui/views/tests.rs`;
+  and `now_playing_row_keeps_the_elapsed_bounds_when_the_blink_hides_it` in `src/ui/views/tests/now_playing.rs`,
+  and `compact_readout_toggles_time_display_only_while_not_stopped` in `src/ui/views/tests/shade.rs`;
   `lcd_indicator_message_arms_a_and_v_and_leaves_o_i_d_inert` and
-  `lcd_indicator_strip_publishes_always_on_top_on_a_and_visualizer_on_v` in `src/ui/views/tests.rs`;
+  `lcd_indicator_strip_publishes_always_on_top_on_a_and_visualizer_on_v` in `src/ui/views/tests/now_playing.rs`;
   `toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum` in `src/ui/tests.rs`;
   `position_tick_blinks_the_elapsed_readout_only_while_paused` in `src/ui/tests.rs`; and
   `toggle_playing_switches_between_playing_and_paused` and
@@ -1014,7 +1014,7 @@ rather than the panic unwinding the event loop.
 - `now_playing_elapsed_remaining_counts_down_from_the_total`
 - `format_lcd_elapsed_pads_minutes_and_seconds`
 - `format_lcd_remaining_prefixes_a_minus_and_pads`
-  (all in `src/ui/views/tests.rs`)
+  (all in `src/ui/views/tests/`)
 - `toggle_time_display_switches_to_remaining_and_persists`
 - `toggle_time_display_with_no_track_keeps_the_placeholder`
 - `t_toggles_the_time_display_from_the_keyboard`
@@ -1029,7 +1029,7 @@ rather than the panic unwinding the event loop.
 - `now_playing_row_draws_the_number_between_the_caption_and_the_artist`
 - `an_overlong_now_playing_line_windows_the_number_with_the_title`
 - `now_playing_row_draws_no_number_when_none_is_known`
-  (all in `src/ui/views/tests.rs`)
+  (all in `src/ui/views/tests/`)
 - `now_playing_label_keeps_the_track_name_after_browsing_to_another_album` (`src/ui/tests.rs`)
 - `window_title_names_the_current_track` (`src/ui/tests.rs`)
 - `now_playing_number_survives_browsing_to_another_album` (`src/ui/tests.rs`)
@@ -1069,15 +1069,15 @@ rather than the panic unwinding the event loop.
 - `rodio_output_asks_the_worker_for_its_format`
 - `silent_output_reports_no_playback_format` (`src/audio/tests/rodio_output.rs`)
 - `playback_format_forwards_the_audio_output_format` (`src/apple_music/tests/audio_forwarding.rs`)
-- `format_playback_prefix_formats_khz_and_bitrate`
+- `format_playback_prefix_formats_khz_and_bitrate` (`src/ui/views/tests/now_playing.rs`)
 - `channel_mode_label_names_the_reported_channels`
 - `channel_label_color_lights_only_the_reported_mode`
-- `now_playing_status_row_lights_the_reported_channel_mode` (`src/ui/views/tests.rs`)
+- `now_playing_status_row_lights_the_reported_channel_mode` (`src/ui/views/tests/lcd_display.rs`)
 - `lcd_indicator_strip_draws_each_label_in_order_at_a_fixed_width`
 - `now_playing_content_draws_the_indicator_strip_beside_the_title`
-  (`src/ui/views/tests.rs`)
+  (`src/ui/views/tests/now_playing.rs`)
 - `seek_bar_value_clamps_the_thumb_and_hides_without_a_length`
-- `view_seek_bar_constructs_with_and_without_a_length` (`src/ui/views/tests.rs`)
+- `view_seek_bar_constructs_with_and_without_a_length` (`src/ui/views/tests/lcd_display.rs`)
 - `playback_duration_reply_stores_the_loaded_previews_length`
 - `playback_duration_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped`
 - `stop_and_track_selection_clear_the_playback_duration`
@@ -1212,7 +1212,7 @@ bar; the shaded branch of `ui::view::view` stacks the bar and strip; and
 `shade_strip_double_clicks_on_controls_do_not_restore_the_window`,
 `mini_transport_readout_appends_the_known_total`,
 `compact_readout_toggles_time_display_only_while_not_stopped`, and
-`view_shade_strip_keeps_its_fixed_height_for_both_playback_states` (`src/ui/views/tests.rs`);
+`view_shade_strip_keeps_its_fixed_height_for_both_playback_states` (`src/ui/views/tests/shade.rs`);
 `shaded_root_view_is_the_title_bar_plus_the_strip`, `shade_strip_draws_only_while_shaded`,
 `shade_root_readout_previews_the_seek_drag`,
 `shade_target_size_is_the_title_bar_plus_the_strip`,
@@ -1248,7 +1248,7 @@ normal-mode branch of `ui::view::view` in `src/ui/view.rs`, which wraps the base
 
 **Pinned by.** `title_bar_m_button_publishes_toggle_about`,
 `about_overlay_draws_the_name_version_and_tagline`, and
-`about_overlay_closes_from_close_and_backdrop_but_ignores_its_chrome` (`src/ui/views/tests.rs`);
+`about_overlay_closes_from_close_and_backdrop_but_ignores_its_chrome` (`src/ui/views/tests/chrome.rs`);
 `toggle_about_shows_and_hides_the_panel_without_touching_playback`,
 `toggle_about_while_shaded_restores_the_window_first`, `view_constructs_over_the_apps_full_input_space`,
 `view_constructs_when_the_window_is_shaded`, and `title_bar_constructs_for_both_about_states`
@@ -1301,7 +1301,7 @@ its shaded branch returns before that push.
 `library_strip_draws_the_four_controls_time_and_right_edge_volume`,
 `mini_transport_readout_appends_the_known_total`,
 `compact_readout_toggles_time_display_only_while_not_stopped`, and
-`main_transport_and_shade_strip_share_glyphs_order_and_widths` (`src/ui/views/tests.rs`);
+`main_transport_and_shade_strip_share_glyphs_order_and_widths` (`src/ui/views/tests/shade.rs`);
 `normal_root_view_draws_the_library_strip_beneath_the_browse_list`,
 `toggle_library_panel_hides_and_restores_the_library_section`,
 `shade_strip_draws_only_while_shaded`, and `root_view_footer_shows_elapsed_over_total`
@@ -1531,13 +1531,13 @@ backend queries. On the UI side, `views::now_playing::visualizer_bar_heights` an
 - `rodio_output_reports_a_closed_worker_for_every_command` (`src/audio/tests/rodio_output.rs`)
 - `playback_spectrum_forwards_the_audio_output_spectrum` (`src/apple_music/tests/audio_forwarding.rs`)
 - `visualizer_bar_heights_scale_and_clamp_the_reported_bands`
-- `visualizer_bar_heights_maps_a_nan_band_to_empty` (`src/ui/views/tests.rs`)
+- `visualizer_bar_heights_maps_a_nan_band_to_empty` (`src/ui/views/tests/lcd_display.rs`)
 - `now_playing_content_keeps_the_visualizer_height_with_and_without_a_spectrum`
-- `now_playing_visualizer_row_keeps_its_height_without_a_spectrum` (`src/ui/views/tests.rs`)
-- `now_playing_visualizer_row_draws_one_fixed_width_bar_per_band` (`src/ui/views/tests.rs`)
-- `visible_spectrum_hides_the_stored_bars_while_the_visualizer_is_off` (`src/ui/views/tests.rs`)
+- `now_playing_visualizer_row_keeps_its_height_without_a_spectrum` (`src/ui/views/tests/lcd_display.rs`)
+- `now_playing_visualizer_row_draws_one_fixed_width_bar_per_band` (`src/ui/views/tests/lcd_display.rs`)
+- `visible_spectrum_hides_the_stored_bars_while_the_visualizer_is_off` (`src/ui/views/tests/now_playing.rs`)
 - `lcd_indicator_strip_publishes_always_on_top_on_a_and_visualizer_on_v`
-  (`src/ui/views/tests.rs`)
+  (`src/ui/views/tests/now_playing.rs`)
 - `toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum` (`src/ui/tests.rs`)
 - `hidden_visualizer_draws_no_bars_in_the_root_view` (`src/ui/tests.rs`)
 - `spectrum_tick_stream_emits_spectrum_ticks` (`src/ui/tests.rs`)
@@ -1683,7 +1683,7 @@ the readout would then stay until the next mixer-slider release.
 - `volume_readout_rounds_to_whole_percent`, `balance_readout_names_the_side`,
   `eq_readouts_show_the_band_label_and_signed_gain`
   (`src/ui/views/now_playing/mixer_readout.rs`)
-- `now_playing_row_with_a_readout_replaces_the_title` (`src/ui/views/tests.rs`)
+- `now_playing_row_with_a_readout_replaces_the_title` (`src/ui/views/tests/now_playing.rs`)
 - `a_key_or_wheel_event_ends_a_mixer_readout` (`src/ui/tests.rs`)
 - `dragging_volume_shows_the_level_until_release`, `dragging_balance_shows_the_side`,
   `volume_keys_and_wheel_do_not_show_the_readout`, `the_marquee_pauses_during_a_mixer_drag`,

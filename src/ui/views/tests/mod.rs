@@ -1,0 +1,170 @@
+use super::super::{CurrentView, Message, style, theme};
+use super::browse::rows::text::{
+    album_count_label, album_row, artist_row, browse_placeholder, empty_list_label,
+    list_count_summary, playlist_row, row_prefix, song_list_summary, song_row,
+};
+use super::browse::rows::{browse_row_style, scrollable_list};
+use super::browse::{
+    BROWSE_SEARCH_ID, BROWSE_VIEWS, view_clear_search_button, view_reload_button, view_search_box,
+    view_search_row,
+};
+use super::equalizer::{
+    EQ_SLIDER_HEIGHT, RESPONSE_CURVE_COLUMNS, RESPONSE_CURVE_HEIGHT, RESPONSE_CURVE_LINE_HEIGHT,
+    eq_enabled_label, preamp_slider_style, response_curve_offsets, response_curve_row,
+};
+use super::mini_transport::{
+    MINI_SEEK_ID, MINI_TRANSPORT_HEIGHT, MINI_VOLUME_ID, MINI_VOLUME_WIDTH,
+    mini_transport_controls, mini_transport_readout, mini_volume_spec, view_library_strip,
+};
+use super::now_playing::text::{format_lcd_elapsed, format_lcd_remaining};
+use super::now_playing::{
+    CHANNEL_LABELS, KnownTrack, MARQUEE_WIDTH, TimeDisplay, channel_label_color,
+    channel_mode_label, display_len, elapsed_readout_clickable, elapsed_readout_color,
+    format_playback_prefix, lcd_indicator_message, lcd_indicator_strip, marquee_text,
+    needs_marquee, now_playing_artist, now_playing_content, now_playing_elapsed, now_playing_label,
+    now_playing_number, now_playing_row, now_playing_status_row, now_playing_time,
+    now_playing_visualizer_row, transport_glyph, transport_glyph_color, visible_spectrum,
+    visualizer_bar_heights,
+};
+use super::seek_bar::seek_wheel_message;
+use super::shade::{SHADE_STRIP_HEIGHT, SHADED_HEIGHT, view_shade_strip};
+use super::title_bar::{TITLE_BAR_BUTTON_WIDTH, TITLE_BAR_LEFT_BUTTON_WIDTH};
+use super::transport::{
+    EQ_PANEL_BUTTON_WIDTH, LIBRARY_PANEL_BUTTON_WIDTH, eq_panel_toggle, library_panel_toggle,
+    play_pause_glyph, play_pause_word, repeat_label, shuffle_label, transport_buttons,
+    transport_glyphs,
+};
+use super::{
+    BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, EQ_STEP, TITLE_BAR_HEIGHT, VOLUME_MAX, VOLUME_MIN,
+    VOLUME_STEP, can_go_back, can_retry_artists, format_track_time, seek_bar_value, view_albums,
+    view_all_albums, view_all_albums_button, view_all_songs, view_all_songs_button, view_artists,
+    view_back_button, view_browse_nav_buttons, view_equalizer, view_now_playing, view_open_button,
+    view_playlists, view_playlists_button, view_retry_button, view_seek_bar, view_songs,
+    view_title_band, view_title_bar, view_transport_controls, volume_wheel_message,
+};
+use crate::audio::{PlaybackFormat, Spectrum};
+use crate::equalizer::{
+    BAND_COUNT, BAND_FREQUENCIES, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, clamp_gain,
+};
+use crate::library::{Album, Artist, Playlist, Song};
+use crate::sample_library::sample_library;
+use crate::state::{TransportMode, clamp_balance, clamp_volume};
+use crate::test_support::{
+    recording_spectrum, sample_album, sample_artist, sample_playlist, sample_song,
+};
+use crate::ui::layout_capture;
+use iced::advanced::{
+    Layout,
+    layout::Limits,
+    widget::{Id, Tree, operation::Operation},
+};
+use iced::{Color, Element, Length, Rectangle, Size};
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::time::Duration;
+
+/// The bounds of every container a built widget draws, collected through a
+/// widget operation. The visualizer's bars are borderless containers with no
+/// text, so counting their containers is how a test pins the bar count.
+#[derive(Default)]
+struct CapturedContainers(Vec<Rectangle>);
+
+impl Operation for CapturedContainers {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+        operate(self);
+    }
+
+    fn container(&mut self, _id: Option<&Id>, bounds: Rectangle) {
+        self.0.push(bounds);
+    }
+}
+
+/// Lays out the Now Playing row for `elapsed`, `label`, `artist`, and the
+/// `number` prefix at `marquee_offset` in `mode` and returns the text fragments
+/// it would draw.
+///
+/// The total readout is fixed at `"3:30"`, which the row draws at the right
+/// edge of the LCD well. The transport glyph leads the row and the large
+/// elapsed readout follows it.
+fn captured_now_playing_texts(
+    elapsed: &str,
+    label: &str,
+    artist: &str,
+    number: &str,
+    offset: usize,
+    mode: TransportMode,
+) -> Vec<String> {
+    let mut element: iced::Element<'_, Message, iced::Theme, ()> = now_playing_row(
+        Cow::Borrowed(elapsed),
+        Cow::Borrowed(label),
+        Cow::Borrowed(artist),
+        Cow::Borrowed(number),
+        Cow::Borrowed("3:30"),
+        offset,
+        mode,
+        true,
+        None,
+    )
+    .into();
+    let capture = layout_capture::capture_text(&mut element, &());
+    assert_eq!(
+        capture.texts().next(),
+        Some(transport_glyph(mode)),
+        "the transport glyph must lead the row: {:?}",
+        capture.fragments()
+    );
+    assert_eq!(
+        capture.texts().nth(1),
+        Some(elapsed),
+        "the elapsed readout must follow the glyph: {:?}",
+        capture.fragments()
+    );
+    capture
+        .fragments()
+        .iter()
+        .map(|(text, _)| text.clone())
+        .collect()
+}
+
+/// Builds the id→track index the player maintains for the Now Playing
+/// bar, from `(id, artist, title)` triples — the shape `now_playing_label`
+/// and `now_playing_artist` resolve against. Durations are `0` here, so the
+/// cached time is the `--:--` placeholder; the length formatting is pinned
+/// separately through `format_track_time` and the time-resolution test sets a
+/// known label of its own.
+fn known_tracks(entries: &[(&str, &str, &str)]) -> HashMap<String, KnownTrack> {
+    entries
+        .iter()
+        .map(|(id, artist, title)| {
+            (
+                id.to_string(),
+                KnownTrack {
+                    title: title.to_string(),
+                    artist: artist.to_string(),
+                    number: String::new(),
+                    time: "--:--".to_string(),
+                    duration_ms: 0,
+                },
+            )
+        })
+        .collect()
+}
+
+/// Asserts that `clamp` stores exactly `min..=max`: both endpoints survive
+/// unchanged and a step beyond each is clamped back. This pins a slider's
+/// range equal to its shared-state range without reading the iced widget.
+fn assert_slider_range_matches_clamp(clamp: fn(f32) -> f32, min: f32, max: f32, step: f32) {
+    assert_eq!(clamp(min), min);
+    assert_eq!(clamp(max), max);
+    assert_eq!(clamp(min - step), min);
+    assert_eq!(clamp(max + step), max);
+}
+
+mod browse;
+mod chrome;
+mod equalizer;
+mod lcd_display;
+mod now_playing;
+mod seek_wheel;
+mod shade;
+mod transport;

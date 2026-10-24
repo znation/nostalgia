@@ -8577,7 +8577,7 @@ fn root_view_draws_the_transport_glyph_row() {
 
 // The root `view` resolves the LCD's transport mode from the shared state, so
 // the glyph the user sees follows Play, Pause, and Stop. The unit tests in
-// `src/ui/views/tests.rs` pass a mode straight to the row and cannot catch the
+// `src/ui/views/tests/` pass a mode straight to the row and cannot catch the
 // root handing it a stale or hard-coded mode. Lay out the whole root `view`
 // after each state change and read the glyphs it would draw.
 #[test]
