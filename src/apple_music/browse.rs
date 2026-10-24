@@ -210,8 +210,8 @@ impl AppleMusicService {
         .await
     }
 
-    /// Songs in the library matching `query`: every song whose title or artist
-    /// contains `query` case-insensitively, in library order.
+    /// Songs in the library matching `query`: every song whose title, artist,
+    /// or album title contains `query` case-insensitively, in library order.
     ///
     /// A signed-in service answers from the signed-in user's Apple Music
     /// library through [`rest::RestLibrary::search_library`]; a signed-out one

@@ -63,18 +63,31 @@ pub(super) fn sample_all_songs() -> Vec<Song> {
     sample_songs_in_library_order().cloned().collect()
 }
 
-/// Every sample-library song whose title or artist contains `query`
-/// case-insensitively, in library order.
+/// Every sample-library album title, keyed by album id and case-folded, for
+/// the search's album-title match. Walks [`sample_albums_in_library_order`],
+/// so a song's album is looked up by the id the browse lists already carry.
+fn sample_album_titles_by_id() -> HashMap<&'static str, String> {
+    sample_albums_in_library_order()
+        .map(|album| (album.id.as_str(), album.title.to_lowercase()))
+        .collect()
+}
+
+/// Every sample-library song whose title, artist, or album title contains
+/// `query` case-insensitively, in library order.
 ///
 /// Walks [`sample_songs_in_library_order`], so the matches keep the same
 /// stable order the Songs view shows a browsed album. Pure, so the filter is
 /// testable without a service.
 pub(super) fn sample_songs_matching(query: &str) -> Vec<Song> {
     let needle = query.to_lowercase();
+    let album_titles = sample_album_titles_by_id();
     sample_songs_in_library_order()
         .filter(|song| {
             song.title.to_lowercase().contains(&needle)
                 || song.artist.to_lowercase().contains(&needle)
+                || album_titles
+                    .get(song.album_id.as_str())
+                    .is_some_and(|title| title.contains(&needle))
         })
         .cloned()
         .collect()

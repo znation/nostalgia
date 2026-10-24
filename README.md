@@ -105,7 +105,9 @@ click selects a row and paints its blue bar with white text, without opening it;
 on the selected row (a double-click), Enter, or the `Open` button
 opens it — drilling into an artist, album, or playlist, or playing a song — while Back still
 climbs out. A `Search library` box above the browse list searches the library when you
-press Enter, replacing the list with the matching songs; Back leaves a search for the artists
+press Enter, replacing the list with the matching songs (with no Apple Music session, matching
+the query case-insensitively against each song's title, artist, and album title); Back leaves a
+search for the artists
 list. A `Clear` button beside the search box empties the typed query; when a search is showing it
 also returns to the artists list exactly as Back does, and otherwise it changes only the box's
 text. The Artists list also has `All Songs`, `All Albums`, and `Playlists` buttons: the first

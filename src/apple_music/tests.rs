@@ -723,6 +723,7 @@ async fn get_songs_from_playlist_fails_when_the_tracks_request_fails() {
 // The library search is the UI search box's backend: it answers with the
 // sample songs whose title or artist contains the query, case-insensitively,
 // so a user can find a track by either field without matching the exact case.
+// The album-title match has its own test below.
 #[tokio::test]
 async fn search_songs_matches_the_sample_library_by_title_or_artist() {
     let service = test_service();
@@ -748,6 +749,26 @@ async fn search_songs_matches_the_sample_library_by_title_or_artist() {
     // A query matching nothing is an empty list, not an error.
     let none = service.search_songs("no such track").await.unwrap();
     assert!(none.is_empty());
+}
+
+// The search also finds a song by the title of the album it belongs to, so
+// typing an album name the browse lists show returns that album's songs.
+#[tokio::test]
+async fn search_songs_matches_the_sample_library_by_album_title() {
+    let service = test_service();
+
+    // "song-4" is the only track on "Second Record"; the case and surrounding
+    // whitespace are folded and trimmed like the other matches.
+    let by_album = service.search_songs("  SECOND RECORD  ").await.unwrap();
+    assert_ids(&by_album, |song| song.id.as_str(), &["song-4"]);
+
+    // Every song on "First Record" comes back in library order.
+    let first = service.search_songs("first record").await.unwrap();
+    assert_ids(
+        &first,
+        |song| song.id.as_str(),
+        &["song-1", "song-2", "song-3"],
+    );
 }
 
 // The All Songs backend returns the whole sample library, flat and in
