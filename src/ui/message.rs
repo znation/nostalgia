@@ -110,6 +110,11 @@ pub(in crate::ui) enum Message {
     // section. It flips only the panel-visibility flag — not the EQ's on/off
     // state, curve, or preset — and schedules no work.
     ToggleEqualizerPanel,
+    // The player row's PL button: shows or hides the normal-mode library
+    // section (its title band, browse controls, search row, list, and footer).
+    // It flips only the panel-visibility flag, changes no playback, equalizer,
+    // browse, search, or selection state, and schedules no work.
+    ToggleLibraryPanel,
     ToggleEqualizer,
     EqPreampChange(f32),
     EqBandChange(usize, f32),

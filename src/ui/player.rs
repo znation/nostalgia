@@ -153,6 +153,13 @@ pub(in crate::ui) struct WinampPlayer {
     /// audio they forward, are untouched, and hiding the section hands its
     /// height to the browse list without resizing the window.
     pub(in crate::ui) eq_panel_visible: bool,
+    /// Whether the normal-mode library section — its `NOSTALGIA LIBRARY` band,
+    /// browse buttons, search row, list, and footer — is drawn.
+    /// `Message::ToggleLibraryPanel` flips it; it is open at launch and is
+    /// deliberately not persisted, like [`Self::eq_panel_visible`]. It is a
+    /// layout flag only: no playback, equalizer, browse, search, or selection
+    /// state changes, and hiding the section does not resize the window.
+    pub(in crate::ui) library_panel_visible: bool,
     /// The seek bar's in-progress drag, or `None` while the thumb follows the
     /// reported position. `Message::SeekPreviewChanged` stores the drag and
     /// `Message::SeekPreviewReleased` seeks to and clears it, so only a release
@@ -258,6 +265,7 @@ impl WinampPlayer {
             spectrum: None,
             visualizer_visible: true,
             eq_panel_visible: true,
+            library_panel_visible: true,
             seek_preview: None,
             time_display: views::TimeDisplay::Elapsed,
             position_epoch: 0,

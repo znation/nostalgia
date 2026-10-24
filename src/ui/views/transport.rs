@@ -1,6 +1,7 @@
 //! The transport row's widgets: the Play/Pause, Stop, Previous, Next, Repeat,
-//! and Shuffle buttons, the volume slider, the balance slider, and the EQ
-//! panel toggle, plus the pure glyph, word, and button-label helpers they use.
+//! and Shuffle buttons, the volume slider, the balance slider, and the EQ and
+//! PL panel toggles, plus the pure glyph, word, and button-label helpers they
+//! use.
 
 use iced::{
     Element, Length,
@@ -140,15 +141,43 @@ pub(super) fn eq_panel_button_style(open: bool, status: button::Status) -> butto
     }
 }
 
+/// The library-section toggle's fixed width, in pixels: enough for its `PL`
+/// label, pinned so the section's visibility cannot reflow the row.
+pub(super) const LIBRARY_PANEL_BUTTON_WIDTH: f32 = 30.0;
+
+/// The player row's PL toggle spec: `(label, fixed width, message)`. Pressing
+/// it shows or hides the normal-mode library section without changing any
+/// playback, equalizer, browse, search, or selection state.
+pub(super) fn library_panel_toggle() -> (&'static str, f32, Message) {
+    (
+        "PL",
+        LIBRARY_PANEL_BUTTON_WIDTH,
+        Message::ToggleLibraryPanel,
+    )
+}
+
+/// The PL toggle's chrome: sunken while the library section is shown, so the
+/// button reads as on, and the ordinary chrome for `status` while it is
+/// hidden. That is the EQ toggle's and the title bar's A toggle rule.
+pub(super) fn library_panel_button_style(open: bool, status: button::Status) -> button::Style {
+    if open {
+        style::chrome_button_style(button::Status::Pressed)
+    } else {
+        style::chrome_button_style(status)
+    }
+}
+
 /// The transport row: the Previous, Play/Pause, Stop, Next, Repeat, and
 /// Shuffle buttons, the volume slider, the balance slider, and the fixed-width
-/// `EQ` panel toggle. `volume` and `balance` are the sliders' current values;
-/// dragging them emits `Message::VolumeChange` and `Message::BalanceChange`
-/// respectively. `repeat` is the shared Repeat flag and `shuffle` the shared
-/// Shuffle flag, each shown on its button and toggled by pressing it. The four
-/// glyph buttons carry word tooltips; Repeat and Shuffle stay text toggles.
-/// `eq_panel_visible` sinks the EQ button while the equalizer section is drawn
-/// and leaves its chrome raised while the section is hidden.
+/// `EQ` and `PL` panel toggles. `volume` and `balance` are the sliders' current
+/// values; dragging them emits `Message::VolumeChange` and
+/// `Message::BalanceChange` respectively. `repeat` is the shared Repeat flag
+/// and `shuffle` the shared Shuffle flag, each shown on its button and toggled
+/// by pressing it. The four glyph buttons carry word tooltips; Repeat and
+/// Shuffle stay text toggles. `eq_panel_visible` sinks the EQ button while the
+/// equalizer section is drawn and leaves its chrome raised while the section
+/// is hidden; `library_panel_visible` does the same for the PL button and the
+/// library section.
 pub fn view_transport_controls(
     is_playing: bool,
     volume: f32,
@@ -156,6 +185,7 @@ pub fn view_transport_controls(
     repeat: bool,
     shuffle: bool,
     eq_panel_visible: bool,
+    library_panel_visible: bool,
 ) -> Element<'static, Message> {
     let mut row = Row::new();
     for button in transport_buttons(is_playing, repeat, shuffle) {
@@ -186,6 +216,13 @@ pub fn view_transport_controls(
             .on_press(message)
             .width(Length::Fixed(width))
             .style(move |_theme, status| eq_panel_button_style(eq_panel_visible, status))
+    })
+    .push({
+        let (label, width, message) = library_panel_toggle();
+        Button::new(Text::new(label))
+            .on_press(message)
+            .width(Length::Fixed(width))
+            .style(move |_theme, status| library_panel_button_style(library_panel_visible, status))
     })
     .into()
 }

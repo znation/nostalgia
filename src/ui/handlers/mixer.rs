@@ -1,11 +1,12 @@
 //! The mixer message handlers: the volume, the balance, the seek nudges, the
-//! equalizer, and the equalizer panel's show/hide toggle.
+//! equalizer, and both panel-visibility toggles (the equalizer panel's and the
+//! library section's).
 //!
 //! The volume, balance, and equalizer handlers write a clamped value into the
 //! shared state and forward the result to the audio backend, so a slider drag
 //! reaches the playing preview without restarting it. The seek nudge forwards
-//! a relative seek without touching shared state, and the panel toggle flips
-//! only the player's layout flag; neither schedules work.
+//! a relative seek without touching shared state, and each panel toggle flips
+//! only its player layout flag; neither schedules work.
 
 use iced::Task;
 
@@ -74,6 +75,14 @@ pub(in crate::ui) fn toggle_equalizer_panel(player: &mut WinampPlayer) -> Task<M
         return Task::none();
     }
     player.eq_panel_visible = !player.eq_panel_visible;
+    Task::none()
+}
+
+/// The player row's PL button: shows or hides the normal-mode library section.
+/// This is a layout-only toggle that changes no playback, equalizer, browse,
+/// search, or selection state and schedules no work.
+pub(in crate::ui) fn toggle_library_panel(player: &mut WinampPlayer) -> Task<Message> {
+    player.library_panel_visible = !player.library_panel_visible;
     Task::none()
 }
 

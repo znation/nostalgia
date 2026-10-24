@@ -29,8 +29,9 @@ use super::now_playing::{
 use super::shade::{SHADE_STRIP_HEIGHT, SHADED_HEIGHT, view_shade_strip};
 use super::title_bar::{CLUTTER_BUTTON_WIDTH, TITLE_BAR_BUTTON_WIDTH};
 use super::transport::{
-    EQ_PANEL_BUTTON_WIDTH, eq_panel_button_style, eq_panel_toggle, play_pause_glyph,
-    play_pause_word, repeat_label, shuffle_label, transport_buttons, transport_glyphs,
+    EQ_PANEL_BUTTON_WIDTH, LIBRARY_PANEL_BUTTON_WIDTH, eq_panel_button_style, eq_panel_toggle,
+    library_panel_button_style, library_panel_toggle, play_pause_glyph, play_pause_word,
+    repeat_label, shuffle_label, transport_buttons, transport_glyphs,
 };
 use super::{
     BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, EQ_STEP, TITLE_BAR_HEIGHT, VOLUME_MAX, VOLUME_MIN,
@@ -2316,24 +2317,27 @@ fn transport_glyphs_match_the_mockup_order_and_widths() {
 #[test]
 fn transport_controls_construct_for_both_play_states_volume_endpoints_and_repeat_states() {
     // `view()` passes the shared state's `is_playing`, clamped `volume`,
-    // `balance`, `repeat`, and `shuffle`, plus the player's EQ-panel
-    // visibility, straight through, so build the transport row for every
-    // value the update arms can store, in every play, repeat, shuffle, and
-    // panel-visibility state.
+    // `balance`, `repeat`, and `shuffle`, plus the player's EQ-panel and
+    // library-panel visibility, straight through, so build the transport row
+    // for every value the update arms can store, in every play, repeat,
+    // shuffle, and panel-visibility state.
     for volume in [0.0, 0.5, 1.0] {
         for balance in [-1.0, 0.0, 1.0] {
             for is_playing in [false, true] {
                 for repeat in [false, true] {
                     for shuffle in [false, true] {
                         for eq_panel_visible in [false, true] {
-                            let _controls = view_transport_controls(
-                                is_playing,
-                                volume,
-                                balance,
-                                repeat,
-                                shuffle,
-                                eq_panel_visible,
-                            );
+                            for library_panel_visible in [false, true] {
+                                let _controls = view_transport_controls(
+                                    is_playing,
+                                    volume,
+                                    balance,
+                                    repeat,
+                                    shuffle,
+                                    eq_panel_visible,
+                                    library_panel_visible,
+                                );
+                            }
                         }
                     }
                 }
@@ -2374,6 +2378,44 @@ fn eq_panel_button_style_sinks_while_the_panel_is_open() {
         assert_eq!(open.shadow, pressed.shadow);
 
         let closed = eq_panel_button_style(false, status);
+        let ordinary = style::chrome_button_style(status);
+        assert_eq!(closed.background, ordinary.background);
+        assert_eq!(closed.text_color, ordinary.text_color);
+        assert_eq!(closed.border, ordinary.border);
+        assert_eq!(closed.shadow, ordinary.shadow);
+    }
+}
+
+#[test]
+fn library_panel_toggle_targets_the_visibility_flag() {
+    let (label, width, message) = library_panel_toggle();
+
+    assert_eq!(label, "PL");
+    assert_eq!(width, LIBRARY_PANEL_BUTTON_WIDTH);
+    assert_eq!(width, 30.0);
+    assert!(
+        matches!(message, Message::ToggleLibraryPanel),
+        "the PL button must toggle the library section, not any playback or browse state"
+    );
+}
+
+// The PL button follows the EQ button's and the title bar's A toggle rule:
+// sunken while the thing it controls is on, ordinary chrome while it is off.
+#[test]
+fn library_panel_button_style_sinks_while_the_panel_is_open() {
+    for status in [
+        iced::widget::button::Status::Active,
+        iced::widget::button::Status::Hovered,
+        iced::widget::button::Status::Disabled,
+    ] {
+        let open = library_panel_button_style(true, status);
+        let pressed = style::chrome_button_style(iced::widget::button::Status::Pressed);
+        assert_eq!(open.background, pressed.background);
+        assert_eq!(open.text_color, pressed.text_color);
+        assert_eq!(open.border, pressed.border);
+        assert_eq!(open.shadow, pressed.shadow);
+
+        let closed = library_panel_button_style(false, status);
         let ordinary = style::chrome_button_style(status);
         assert_eq!(closed.background, ordinary.background);
         assert_eq!(closed.text_color, ordinary.text_color);

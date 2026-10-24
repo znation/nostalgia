@@ -527,6 +527,14 @@ refresh does not re-join and reformat every row.
   `WinampPlayer::eq_panel_visible` holds. Hiding them moves the `NOSTALGIA LIBRARY` band and the
   browse list up into the freed height without resizing the window, and leaves the equalizer's
   on/off state, preamp, band gains, preset, and audio forwarding untouched.
+- The main transport row's fixed-width `PL` toggle follows `EQ` directly in every playback state
+  and is sunken while the library section is shown, ordinary chrome while it is hidden. The root
+  `view` draws the whole normal-mode library column — the `NOSTALGIA LIBRARY` band, the
+  Back/Retry/Open/Top/Sort/Reload and flat-list buttons, the search row, the browse list, and
+  the library footer — exactly when `WinampPlayer::library_panel_visible` holds. The library
+  section is open at launch, the flag is not persisted, and hiding it keeps the title bar, Now
+  Playing bar, seek bar, transport row, and equalizer section drawn without changing any
+  playback, equalizer, browse, search, selection, or window-size state.
 - The equalizer band row puts the vertical preamp slider leftmost, then the `+12 DB` / `0 DB` /
   `-12 DB` scale, then the ten band sliders. The scale reads top to bottom beside the rail's top,
   middle, and bottom, and the preamp label shares the band labels' text row. The response curve
@@ -546,8 +554,11 @@ and Reload buttons into one `Row`. `views::view_transport_controls`,
 `views::transport::transport_buttons`, and `views::transport::transport_glyphs` in
 `src/ui/views/transport.rs` build the glyph row from `fixed_width_button`s and
 `iced::widget::Tooltip`s; `views::transport::eq_panel_toggle` and
-`views::transport::eq_panel_button_style` build and style the EQ toggle, and
-`handlers::mixer::toggle_equalizer_panel` flips the layout flag; `shortcuts::shortcut` in
+`views::transport::eq_panel_button_style` build and style the EQ toggle,
+`views::transport::library_panel_toggle` and
+`views::transport::library_panel_button_style` build and style the PL toggle,
+`handlers::mixer::toggle_equalizer_panel` and `handlers::mixer::toggle_library_panel` flip the
+layout flags; `shortcuts::shortcut` in
 `src/ui/shortcuts.rs` maps plain and Shift-held E to that same message; `view` pushes the
 equalizer section only while that flag holds; `views::mini_transport::mini_transport_controls` projects the same glyph
 spec for the shade strip and the library footer. `views::equalizer::preamp_column`,
@@ -571,6 +582,7 @@ tiny-skia renderer.
 `root_view_draws_the_current_browse_levels_own_rows`,
 `root_view_draws_the_equalizer_and_library_title_bands_in_order`,
 `toggle_equalizer_panel_hides_and_restores_the_section`,
+`toggle_library_panel_hides_and_restores_the_library_section`,
 `e_toggles_the_equalizer_panel_from_the_keyboard`,
 `e_in_shade_mode_leaves_the_equalizer_panel_alone`, and
 `shaded_root_view_draws_no_section_title_bands` (`src/ui/tests.rs`), plus
@@ -581,7 +593,9 @@ bands and app bar, `transport_glyphs_match_the_mockup_order_and_widths`,
 `transport_buttons_keep_their_measured_face_widths`,
 `main_transport_and_shade_strip_share_glyphs_order_and_widths`,
 `eq_panel_toggle_targets_the_visibility_flag`,
-`eq_panel_button_style_sinks_while_the_panel_is_open`, and
+`eq_panel_button_style_sinks_while_the_panel_is_open`,
+`library_panel_toggle_targets_the_visibility_flag`,
+`library_panel_button_style_sinks_while_the_panel_is_open`, and
 `equalizer_preamp_and_db_scale_sit_left_of_the_band_sliders` (`src/ui/views/tests.rs`) for the
 glyph row, the Repeat and Shuffle faces, and the equalizer band row.
 
@@ -589,7 +603,8 @@ glyph row, the Repeat and Shuffle faces, and the equalizer band row.
 documented layout" and "Transport buttons resize to their label text, so pressing Play/Pause
 reflows the whole control row" in `BUGS-FIXED.md`. Both carried a `real-run-needed` validation
 gap; the shared harness closes it. The E key joined the `EQ` toggle as the same message
-(2026-10-24).
+(2026-10-24). The `PL` toggle joined the row beside `EQ` as a layout-only gate on the whole
+library column (2026-10-24).
 
 ## Settings persistence
 
@@ -1158,7 +1173,9 @@ shade strip additionally draws the Now Playing bar's seek slider from `seek_bar:
 
 ## Library footer
 
-**Guarantee.** Normal mode draws exactly one compact transport row beneath the browse list:
+**Guarantee.** While the library panel is shown in normal mode, it draws exactly one compact
+transport row beneath the browse list; the transport row's `PL` toggle gates the whole library
+column, so hiding it drops this footer with the rest of the section. The footer itself:
 
 - The row is exactly `MINI_TRANSPORT_HEIGHT` tall and sits on the window face's raised chrome
   below the browse list.
@@ -1191,9 +1208,10 @@ single time string when the total is unknown;
 `views::now_playing::elapsed_readout_clickable` holds for the strip's mode, and leaves it a plain
 `Text` while stopped;
 `views::mini_transport::MINI_TRANSPORT_HEIGHT`, `MINI_VOLUME_WIDTH`, and
-`MINI_VOLUME_ID` own the geometry and test seam. The normal branch of `ui::view::view` pushes the
-footer after the browse content with clones of the LCD's elapsed and total strings, while its
-shaded branch returns before that push.
+`MINI_VOLUME_ID` own the geometry and test seam. The normal branch of `ui::view::view` builds the
+footer into the library column and pushes that column only while
+`WinampPlayer::library_panel_visible` holds, with clones of the LCD's elapsed and total strings;
+its shaded branch returns before that push.
 
 **Pinned by.** `view_library_strip_keeps_its_fixed_height`,
 `library_strip_draws_the_four_controls_time_and_right_edge_volume`,
@@ -1201,6 +1219,7 @@ shaded branch returns before that push.
 `compact_readout_toggles_time_display_only_while_not_stopped`, and
 `main_transport_and_shade_strip_share_glyphs_order_and_widths` (`src/ui/views/tests.rs`);
 `normal_root_view_draws_the_library_strip_beneath_the_browse_list`,
+`toggle_library_panel_hides_and_restores_the_library_section`,
 `shade_strip_draws_only_while_shaded`, and `root_view_footer_shows_elapsed_over_total`
 (`src/ui/tests.rs`).
 

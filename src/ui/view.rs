@@ -15,10 +15,12 @@ use super::views;
 /// Assembles the app screen: the title bar, Now Playing bar, seek strip,
 /// transport row, and — while [`WinampPlayer::eq_panel_visible`] holds — the
 /// equalizer band and panel, all built in `views` from the resolved title and
-/// the shared playback, volume, Repeat, Shuffle, and EQ state — above the
-/// current browse list, with the compact library transport footer beneath it.
-/// Hiding the equalizer section moves the library band and browse list up into
-/// the freed height; nothing resizes the window. When the window is shaded,
+/// the shared playback, volume, Repeat, Shuffle, and EQ state — above, while
+/// [`WinampPlayer::library_panel_visible`] holds, the current browse list and
+/// the compact library transport footer beneath it. The transport row's `EQ`
+/// and `PL` buttons toggle the two sections independently. Hiding the
+/// equalizer section or the library section moves the rest up into the freed
+/// height; nothing resizes the window. When the window is shaded,
 /// the tree is the title bar over the compact transport strip and the rest of
 /// the screen is dropped. The strip's time readout publishes the same
 /// [`Message::ToggleTimeDisplay`] as the hidden LCD's, so the elapsed/remaining
@@ -223,6 +225,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
             repeat,
             shuffle,
             player.eq_panel_visible,
+            player.library_panel_visible,
         ));
     // The EQ button on the transport row is layout-only: it shows or hides this
     // band and panel, while the shared EQ state keeps driving the audio. The
@@ -236,47 +239,53 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
             ));
     }
 
-    let mut column = Column::new()
-        .push(MouseArea::new(player_panels).on_scroll(views::volume_wheel_message))
-        .push(views::view_title_band("NOSTALGIA LIBRARY"));
+    // The PL button on the transport row is layout-only too: it shows or
+    // hides the whole library column below, while the shared browse, search,
+    // selection, playback, and player state keep their values. The player
+    // panels above stay drawn, and nothing resizes the window.
+    let mut library = Column::new().push(views::view_title_band("NOSTALGIA LIBRARY"));
     // The Back button sits above the list it navigates and exists only where
     // the hierarchy has a level above to return to (see `views::can_go_back`).
     if views::can_go_back(&player.current_view) {
-        column = column.push(views::view_back_button());
+        library = library.push(views::view_back_button());
     }
     // A failed top-level artists fetch is a dead end: no navigation re-issues
     // it, so the Artists view offers a Retry that re-runs `LoadArtists`.
     // Every other browse level recovers by navigating back into it, so those
     // failures need no button.
     if views::can_retry_artists(&player.current_view, player.artists.error.as_deref()) {
-        column = column.push(views::view_retry_button());
+        library = library.push(views::view_retry_button());
     }
     // The Top, Sort, and Reload buttons share one row, Reload beside Sort, so
     // the current list can always be returned to its first row, reordered in
     // place, or replaced with a freshly fetched artists list. Open sits above
     // them, on every browse level, and opens the row a first click selected;
     // with nothing selected it does nothing.
-    column = column.push(views::view_open_button());
-    column = column.push(views::view_browse_nav_buttons());
+    library = library.push(views::view_open_button());
+    library = library.push(views::view_browse_nav_buttons());
     // The All Songs, All Albums, and Playlists buttons open the flat lists;
     // they live on the Artists view, beside Back/Retry, so each list is one
     // press from the top of the hierarchy.
     if matches!(player.current_view, CurrentView::Artists) {
-        column = column
+        library = library
             .push(views::view_all_songs_button())
             .push(views::view_all_albums_button())
             .push(views::view_playlists_button());
     }
     // The search box and its Clear button sit on every browse screen, so a
     // query can be typed from (and cleared at) any level of the hierarchy.
-    column = column.push(views::view_search_row(&player.search_query));
-    column
-        .push(main_content)
-        .push(views::view_library_strip(
-            transport_mode,
-            volume,
-            library_elapsed,
-            library_total,
-        ))
-        .into()
+    library = library.push(views::view_search_row(&player.search_query));
+    library = library.push(main_content).push(views::view_library_strip(
+        transport_mode,
+        volume,
+        library_elapsed,
+        library_total,
+    ));
+
+    let mut column =
+        Column::new().push(MouseArea::new(player_panels).on_scroll(views::volume_wheel_message));
+    if player.library_panel_visible {
+        column = column.push(library);
+    }
+    column.into()
 }

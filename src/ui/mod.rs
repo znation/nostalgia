@@ -144,6 +144,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::SeekBackward => handlers::mixer::seek_backward(player),
         Message::SeekForward => handlers::mixer::seek_forward(player),
         Message::ToggleEqualizerPanel => handlers::mixer::toggle_equalizer_panel(player),
+        Message::ToggleLibraryPanel => handlers::mixer::toggle_library_panel(player),
         Message::ToggleEqualizer => handlers::mixer::toggle_equalizer(player),
         Message::EqPreampChange(gain) => handlers::mixer::eq_preamp_change(player, gain),
         Message::EqBandChange(band, gain) => handlers::mixer::eq_band_change(player, band, gain),

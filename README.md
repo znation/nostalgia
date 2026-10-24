@@ -88,7 +88,11 @@ artist rows show their album count at the right (`2 albums`, `1 album`, and no c
 artist with none), with each song list showing its song count and total playing time beneath
 the rows and artist, album, and playlist lists showing their item count beneath theirs. An `EQ`
 button beside the balance slider shows and hides the equalizer panel, which is open at launch;
-hiding it gives its height to the browse list without changing EQ processing. A
+hiding it gives its height to the browse list without changing EQ processing. A `PL` button
+directly beside `EQ` shows and hides the whole library section — its `NOSTALGIA LIBRARY` band,
+browse controls, search box, list, and footer — while the title bar, Now Playing bar, seek bar,
+transport row, and equalizer stay drawn; the library is open at launch, the toggle changes no
+playback, equalizer, browse, or search state, and it does not resize the window. A
 compact transport strip sits beneath the browse list with Previous, Play/Pause, Stop, Next,
 an elapsed-over-total time readout, and a volume slider — the window-shade strip's controls
 without its seek slider. The readout shows the elapsed (or remaining) time over the track's total (`00:53/3:30`)

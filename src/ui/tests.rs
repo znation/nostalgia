@@ -6102,6 +6102,110 @@ fn toggle_equalizer_panel_hides_and_restores_the_section() {
     );
 }
 
+// The player row's PL button shows and hides the whole library section. Like
+// the EQ toggle it is layout-only: the player panels stay drawn, the shared
+// playback and equalizer state and the browse level survive it, and toggling
+// back restores every removed element at its original bounds.
+#[test]
+fn toggle_library_panel_hides_and_restores_the_library_section() {
+    let (mut player, state) = test_player();
+    let mut artist = sample_artist();
+    artist.name = "Library Toggle Artist".to_string();
+    player.artists.items = vec![artist];
+    let before = {
+        let state = state.blocking_lock();
+        (
+            state.transport_mode(),
+            state.current_track.clone(),
+            state.volume(),
+            state.balance(),
+            state.eq_enabled,
+            state.eq_preamp(),
+            state.eq_bands(),
+            state.eq_preset(),
+            state.repeat,
+            state.shuffle,
+        )
+    };
+    assert_eq!(player.current_view, CurrentView::Artists);
+    assert!(player.library_panel_visible);
+
+    let open = captured_root_view_text_bounds(&player);
+    let open_band = open.find("NOSTALGIA LIBRARY");
+    let open_artist = open.find("Library Toggle Artist");
+    let open_footer = captured_root_view_volume_slider(&player)
+        .expect("the library footer's volume slider must be drawn while the library shows");
+    let eq = open.find("EQ");
+    let pl = open.find("PL");
+    assert_eq!(pl.y, eq.y, "PL must share the transport row's EQ row");
+    assert!(
+        pl.x >= eq.x + eq.width,
+        "PL must start at or after EQ's right edge: {pl:?} vs {eq:?}"
+    );
+
+    assert_message_schedules_no_work(&mut player, Message::ToggleLibraryPanel);
+    assert!(!player.library_panel_visible);
+
+    let hidden = captured_root_view_text_bounds(&player);
+    let hidden_texts: Vec<&str> = hidden.texts().collect();
+    for gone in [
+        "NOSTALGIA LIBRARY",
+        "Library Toggle Artist",
+        "Open",
+        "Top",
+        "Clear",
+    ] {
+        assert!(
+            !hidden_texts.contains(&gone),
+            "hiding the library must drop {gone}: {hidden_texts:?}"
+        );
+    }
+    for kept in ["PL", "EQ", "NOSTALGIA EQUALIZER", "◀◀", "■", "▶▶"] {
+        assert!(
+            hidden_texts.contains(&kept),
+            "the player panels must keep drawing {kept}: {hidden_texts:?}"
+        );
+    }
+    assert_eq!(
+        captured_root_view_volume_slider(&player),
+        None,
+        "hiding the library must drop its footer"
+    );
+
+    assert_message_schedules_no_work(&mut player, Message::ToggleLibraryPanel);
+    assert!(player.library_panel_visible);
+
+    let restored = captured_root_view_text_bounds(&player);
+    assert_eq!(restored.find("NOSTALGIA LIBRARY"), open_band);
+    assert_eq!(restored.find("Library Toggle Artist"), open_artist);
+    assert_eq!(captured_root_view_volume_slider(&player), Some(open_footer));
+
+    let after = {
+        let state = state.blocking_lock();
+        (
+            state.transport_mode(),
+            state.current_track.clone(),
+            state.volume(),
+            state.balance(),
+            state.eq_enabled,
+            state.eq_preamp(),
+            state.eq_bands(),
+            state.eq_preset(),
+            state.repeat,
+            state.shuffle,
+        )
+    };
+    assert_eq!(
+        after, before,
+        "the library panel toggle must leave playback, volume, and equalizer state untouched"
+    );
+    assert_eq!(
+        player.current_view,
+        CurrentView::Artists,
+        "the library panel toggle must not change the browse level"
+    );
+}
+
 #[test]
 fn stop_clears_the_elapsed_readout() {
     let (mut player, current_track) = play_song_1_then_browse_to_album_2();
