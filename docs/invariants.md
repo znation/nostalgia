@@ -1187,16 +1187,18 @@ unbounded after decoding — the same exposure the preview downloader had closed
 
 ## Preview download
 
-**Guarantee.** The preview downloader bounds both the *wire* body and the *decoded* body at
-`MAX_PREVIEW_BYTES` (10 MiB). `ureq`'s reader limit stops a hostile server from streaming more
-than the cap on the wire, and reading that reader through `std::io::Read::take(MAX_PREVIEW_BYTES +
+**Guarantee.** The preview download buffers at most `MAX_PREVIEW_BYTES + 1` bytes from either the
+wire reader or the decoded stream, and accepts a body only when its decoded length is at most
+`MAX_PREVIEW_BYTES` (10 MiB). `ureq`'s reader limit is set one byte above the cap so a body of
+exactly the cap reaches EOF instead of tripping the limit on its last byte, while a larger wire
+body still fails the read. Reading that reader through `std::io::Read::take(MAX_PREVIEW_BYTES +
 1)` stops a `Content-Encoding: gzip` response smaller than the cap from expanding the buffered
 preview past it; the decoded take rejects before the decoder when its extra byte is present. The
-decoded over-cap failure names the cap; other read failures, including the wire limit, keep the
-`reading the preview failed:` prefix.
+decoded over-cap failure names the cap; other read failures, including one past the wire limit,
+keep the `reading the preview failed:` prefix.
 
 **Enforced by.** `download_and_decode` in `src/audio/preview.rs` calls
-`response.body_mut().with_config().limit(MAX_PREVIEW_BYTES).reader()` for the wire limit, then
+`response.body_mut().with_config().limit(MAX_PREVIEW_BYTES + 1).reader()` for the wire limit, then
 reads it through `take(MAX_PREVIEW_BYTES + 1)` and checks the decoded length before
 `rodio::Decoder::new_mp4`. It does not use `Body::read_to_vec`, whose limiter sits under `ureq`'s
 gzip decoder and so counts compressed bytes.
@@ -1205,9 +1207,12 @@ gzip decoder and so counts compressed bytes.
 
 - `a_compressed_preview_larger_than_the_cap_is_rejected` (`src/audio/tests.rs`)
 - `a_preview_with_more_wire_bytes_than_the_cap_is_rejected` (`src/audio/tests.rs`)
+- `a_preview_of_exactly_the_cap_reaches_the_decoder` (`src/audio/tests.rs`)
 
 **History.** Added 2026-10-23 after the wire-byte cap was found to let a small gzip body expand
-past 10 MiB before decoding; the decoded-byte fix keeps the original wire cap alongside it.
+past 10 MiB before decoding; the decoded-byte fix keeps the original wire cap alongside it. The
+wire limit was later raised one byte above the cap so an exactly-at-cap preview is read instead
+of failing the limit on its last byte, the same boundary the REST transport raised.
 
 ## Preview host guard
 

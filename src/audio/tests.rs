@@ -884,6 +884,33 @@ fn a_preview_with_more_wire_bytes_than_the_cap_is_rejected() {
     );
 }
 
+// A preview body of exactly the cap is legal: `ureq`'s wire limit must sit
+// one byte above the cap so the read past an exactly-at-cap body reaches EOF
+// instead of tripping the limit on its last byte. A limit of exactly the cap
+// rejects this body even though nothing exceeds the cap. The bytes are not a
+// valid MP4, so an accepted read surfaces as a decode failure; before the fix
+// it surfaced as a read failure from the wire limit.
+#[test]
+fn a_preview_of_exactly_the_cap_reaches_the_decoder() {
+    let cap = usize::try_from(MAX_PREVIEW_BYTES).expect("the cap fits a usize");
+    let mut response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: audio/mp4\r\nContent-Length: {cap}\r\nConnection: close\r\n\r\n"
+    )
+    .into_bytes();
+    response.resize(response.len() + cap, 0);
+    let address = serve_one_response_bytes(&response);
+    let agent = agent_with_timeout(Duration::from_secs(10));
+    let url = format!("http://{address}/preview.m4a");
+
+    let error = download_and_decode(&agent, &url)
+        .err()
+        .expect("zero bytes are not a decodable preview");
+    assert!(
+        error.to_string().contains("decoding the preview failed"),
+        "an exactly-at-cap preview must be read whole before decoding, got: {error}"
+    );
+}
+
 #[test]
 fn audio_with_fallback_falls_back_to_silence_when_open_fails() {
     let output = audio_with_fallback(|| Err(AppleMusicError::new("no device")));

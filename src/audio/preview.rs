@@ -31,7 +31,9 @@ pub(super) const PREVIEW_TIMEOUT: Duration = Duration::from_secs(30);
 /// additionally reads the decoded stream through this cap (see
 /// [`download_and_decode`]). Ten mebibytes matches `ureq`'s wire cap and is
 /// well above an Apple Music preview (about a mebibyte for 30 seconds of
-/// AAC).
+/// AAC). The download's wire limit sits one byte above this cap so a body of
+/// exactly the cap reaches EOF instead of tripping the limit on its last byte;
+/// the decoded length check still rejects anything above the cap.
 pub(super) const MAX_PREVIEW_BYTES: u64 = 10 * 1024 * 1024;
 
 /// The process-wide [`ureq::Agent`] the audio worker downloads previews
@@ -114,9 +116,11 @@ pub(super) struct DecodedPreview {
 /// The Apple Music preview is an `M4A` (AAC in an `MP4` container), so the
 /// decoder is hinted with that format. The whole asset is buffered in memory
 /// before decoding because the preview is short and the decoder needs a
-/// `Seek` source. The download keeps `ureq`'s wire-byte limit and also reads
-/// the *decoded* body through [`MAX_PREVIEW_BYTES`], so neither a large wire
-/// body nor a compressed response can expand past the cap (see that constant).
+/// `Seek` source. The download keeps `ureq`'s wire-byte limit (one byte above
+/// the cap, so an exactly-at-cap body reaches EOF rather than failing that
+/// limit) and also reads the *decoded* body through [`MAX_PREVIEW_BYTES`], so
+/// neither a large wire body nor a compressed response can expand past the cap
+/// (see that constant).
 ///
 /// # Errors
 ///
@@ -144,7 +148,7 @@ pub(super) fn download_and_decode(
     response
         .body_mut()
         .with_config()
-        .limit(MAX_PREVIEW_BYTES)
+        .limit(MAX_PREVIEW_BYTES + 1)
         .reader()
         .take(MAX_PREVIEW_BYTES + 1)
         .read_to_end(&mut bytes)

@@ -5,6 +5,26 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### Preview download rejects a body of exactly the 10 MiB cap (found by the bugfix role 2026-10-23) — fixed 2026-10-23 by the bugfix role
+
+Symptom: a preview response whose body is exactly `MAX_PREVIEW_BYTES` (10 MiB) fails with
+`reading the preview failed: the response body is larger than request limit: 10485760`, even
+though the download's documented cap accepts a body of the cap.
+
+How to reproduce: `a_preview_of_exactly_the_cap_reaches_the_decoder` in `src/audio/tests.rs`
+serves a `Content-Length: 10485760` body and calls `download_and_decode`; before the fix it
+returned that read error instead of reaching the decoder.
+
+Suspected cause: `download_and_decode` set `ureq`'s wire limit to exactly `MAX_PREVIEW_BYTES`,
+so reading the last byte of an exactly-at-cap body tripped the limiter. The REST transport had
+the same boundary and was fixed to `MAX_PREVIEW_BYTES + 1`; this preview call kept the old
+limit. The wire limit now sits one byte above the cap, and the decoded-length check still
+rejects anything over the cap.
+
+**Validation gap:** unclear-invariant — the preview section stated a cap but not whether a body
+of exactly the cap is legal; that accepted boundary was carried over from the REST transport's
+reconstructed section and is now stated in `docs/invariants.md` under "Preview download".
+
 ### Preview URL guard accepts IPv4 multicast and reserved ranges (found by the bugfix role 2026-10-23) — fixed 2026-10-23 by the bugfix role
 
 Symptom: `ip_is_internal` — the preview fetch's SSRF guard — returned `false` for IPv4
