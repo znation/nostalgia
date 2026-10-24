@@ -263,11 +263,11 @@ where
 
 /// Asserts that `items` yield exactly the expected ids, in order.
 ///
-/// The browse-query tests in the `apple_music` and `ui` suites each fetch a
-/// list and pin its exact contents by mapping the list to its ids and
-/// comparing; only the id projection and the expected ids differ, so the
-/// map-to-ids-then-compare chain lives here once and each call site only
-/// names its list and expectation. Comparing the ids *in order* is what
+/// The browse-query tests in the `apple_music`, `apple_music::rest` client,
+/// and `ui` suites each fetch a list and pin its exact contents by mapping the
+/// list to its ids and comparing; only the id projection and the expected ids
+/// differ, so the map-to-ids-then-compare chain lives here once and each call
+/// site only names its list and expectation. Comparing the ids *in order* is what
 /// catches a dropped or reordered element that a bare non-empty assertion
 /// would miss. The `sample_library` suite's `assert_id_label_pairs` is a
 /// distinct helper — it pins each item's secondary label alongside its id,
@@ -277,14 +277,15 @@ pub(crate) fn assert_ids<T>(items: &[T], id: impl Fn(&T) -> &str, expected: &[&s
     assert_eq!(ids, expected);
 }
 
-/// A transport stub shared by the `apple_music` service tests and the
-/// `apple_music::rest` client tests: it records every `(url, session)` it is
-/// handed and answers with its canned result. Cloning it shares the recording
-/// and the queued responses, so a test keeps a handle after the service or
+/// A transport stub shared by the `apple_music` service tests, the
+/// `apple_music::rest` client tests, and the `ui` player-construction helpers:
+/// it records every `(url, session)` it is handed and answers with its canned
+/// result. Cloning it shares the recording and the queued responses, so a test
+/// keeps a handle after the service or
 /// [`RestLibrary`](crate::apple_music::rest::RestLibrary) boxes the clone.
-/// Both suites need this stub; defining it independently would put the
-/// recording contract in two places, so it lives here once and is compiled
-/// only for tests.
+/// All three suites need this stub; defining it independently would put the
+/// recording contract in more than one place, so it lives here once and is
+/// compiled only for tests.
 #[derive(Clone)]
 pub(crate) struct StubTransport {
     /// The response repeated once [`Self::queue`] is exhausted.
@@ -700,8 +701,8 @@ impl AudioOutput for FailingAudio {
 
 /// Binds a loopback listener, returning it with the address it bound, so a
 /// test can stand up a loopback server on an ephemeral port without repeating
-/// the bind. [`serve_one_response`] and the `apple_music::rest` suite's
-/// redirect and request-capture tests call it.
+/// the bind. [`serve_one_response`], the `apple_music::rest` redirect and
+/// request-capture tests, and the `audio` preview-download tests call it.
 pub(crate) fn loopback_listener() -> (TcpListener, SocketAddr) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let address = listener.local_addr().unwrap();
