@@ -2432,6 +2432,38 @@ async fn get_all_albums_returns_no_albums_for_an_empty_signed_in_library() {
     );
 }
 
+// The per-artist Albums view reads its albums and then the whole-library
+// songs collection for the running times. An empty signed-in album result is
+// an ordinary empty result, not the sample fallback: `artist-1` has two sample
+// albums, so a regression that fell back on an empty result would return them.
+// The second call pins that the durations request still runs for an empty
+// album list, matching the documented load.
+#[tokio::test]
+async fn get_albums_by_artist_returns_no_albums_for_an_empty_signed_in_result() {
+    let stub = StubTransport::returning_bodies(&[
+        r#"{"data":[]}"#,
+        r#"{"data":[{"id":"song-1","attributes":{"name":"Opening","artistName":"The Sample Band","albumName":"First Record","durationInMillis":210000}}]}"#,
+    ]);
+    let service = signed_in_service(&stub);
+
+    let albums = service.get_albums_by_artist("artist-1").await.unwrap();
+
+    assert!(
+        albums.is_empty(),
+        "an empty signed-in album result must not fall back to the sample albums: {albums:?}"
+    );
+    let calls = stub.calls();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(
+        calls[0].0,
+        "https://api.music.apple.com/v1/me/library/artists/artist-1/albums"
+    );
+    assert_eq!(
+        calls[1].0,
+        "https://api.music.apple.com/v1/me/library/songs"
+    );
+}
+
 #[tokio::test]
 async fn get_albums_by_artist_uses_the_rest_library_when_signed_in() {
     let stub = StubTransport::returning_bodies(&[
