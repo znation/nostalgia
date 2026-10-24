@@ -1,5 +1,5 @@
 //! The browse message handlers: the artist → album → song hierarchy, the flat
-//! whole-library lists, and the Back, Top, and Sort navigation over every
+//! whole-library lists, and the Back, Open, Top, and Sort navigation over every
 //! level, plus the library search. The initial load and the fetch results that
 //! fill the lists live in the [`fetch`] submodule.
 //!

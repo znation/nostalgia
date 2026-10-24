@@ -1,8 +1,8 @@
 //! The browse views — the artist → album → song drill-down, the flat All
 //! Songs and All Albums lists, and the Playlists list: the per-level view
-//! builders, the search box, and the Back, Top, Sort, All Songs, All Albums,
-//! Playlists, and Retry buttons above them. The scrollable list, its row
-//! mappings, and the footer summaries live in the [`rows`] submodule.
+//! builders, the search box, and the Back, Open, Top, Sort, All Songs, All
+//! Albums, Playlists, and Retry buttons above them. The scrollable list, its
+//! row mappings, and the footer summaries live in the [`rows`] submodule.
 //!
 //! Every builder is pure — it turns `&[Artist]` / `&[Album]` / `&[Song]` /
 //! `&[Playlist]` (or the rows they map to) into an `Element` and knows nothing
