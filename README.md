@@ -73,7 +73,9 @@ time), and releasing seeks to it. The seek slider is blank (but keeps its height
 backend reports both a playback position and a preview length, such as on the silent fallback;
 its scale is the preview's length, not the catalog track's length shown at the LCD's right edge.
 Clicking the large elapsed readout while playing or paused switches it to the track's remaining
-time (`-02:37`) and back; the choice stays until clicked again. The bar sits above Previous,
+time (`-02:37`) and back; the choice stays until clicked again. The compact readouts in the library
+footer and the shade strip are click targets too while playing or paused, switching the same mode;
+a stopped readout ignores the click. The bar sits above Previous,
 Play/Pause, Stop, and Next glyph controls with word tooltips, then the Repeat and Shuffle
 toggles, a volume slider over an orange groove and a balance slider over a green groove,
 an equalizer panel (an EQ on/off button, a preset pick list, a response curve above ten band

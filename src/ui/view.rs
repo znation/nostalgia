@@ -20,7 +20,9 @@ use super::views;
 /// Hiding the equalizer section moves the library band and browse list up into
 /// the freed height; nothing resizes the window. When the window is shaded,
 /// the tree is the title bar over the compact transport strip and the rest of
-/// the screen is dropped.
+/// the screen is dropped. The strip's time readout publishes the same
+/// [`Message::ToggleTimeDisplay`] as the hidden LCD's, so the elapsed/remaining
+/// choice stays switchable in shade mode.
 pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // Shade mode builds only the title bar and its compact transport strip —
     // the Now Playing bar, seek strip, transport row, equalizer, and browse
@@ -28,10 +30,10 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // pair. The short state lock resolves only what the strip draws, so the
     // rolled-up frame stays cheap.
     if player.shaded {
-        let (is_playing, volume, elapsed, total) = {
+        let (transport_mode, volume, elapsed, total) = {
             let state = player.state.blocking_lock();
             (
-                state.is_playing,
+                state.transport_mode(),
                 state.volume(),
                 player.now_playing_elapsed(state.current_track.as_deref()),
                 player.now_playing_time(state.current_track.as_deref()),
@@ -42,7 +44,12 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
                 MouseArea::new(
                     Column::new()
                         .push(views::view_title_bar(player.always_on_top))
-                        .push(views::view_shade_strip(is_playing, volume, elapsed, total)),
+                        .push(views::view_shade_strip(
+                            transport_mode,
+                            volume,
+                            elapsed,
+                            total,
+                        )),
                 )
                 .on_scroll(views::volume_wheel_message),
             )
@@ -253,7 +260,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
     column
         .push(main_content)
         .push(views::view_library_strip(
-            is_playing,
+            transport_mode,
             volume,
             library_elapsed,
             library_total,

@@ -530,7 +530,9 @@ its internal id, whenever the id is in the known-track index:
   from its own length, treating a missing position as zero and saturating at `-00:00` when the
   position is past the total; a known track whose source supplied no length (`duration_ms == 0`)
   and any unknown or absent track read `--:--` at the left. The right edge keeps the plain total in
-  both modes.
+  both modes. The compact readouts in the library footer and the shade strip share this mode and
+  its `views::now_playing::elapsed_readout_clickable` stopped guard, so clicking either can flip
+  elapsed and remaining while playing or paused.
 - The LCD's small status row always draws both `MONO` and `STEREO` labels side by side in that
   order at its right edge and keeps its fixed height. A loaded preview whose backend reports a
   format draws the average bitrate and sample-rate prefix (`256 KBPS  44 KHZ`) at the row's left
@@ -582,7 +584,8 @@ its internal id, whenever the id is in the known-track index:
   `elapsed_readout_color_blinks_when_paused_and_clears_when_stopped`,
   `elapsed_readout_color_keeps_the_placeholder_visible_while_stopped`,
   `elapsed_readout_is_clickable_only_while_not_stopped`,
-  `elapsed_readout_toggles_only_while_not_stopped`, and
+  `elapsed_readout_toggles_only_while_not_stopped`,
+  `compact_readout_toggles_time_display_only_while_not_stopped`, and
   `now_playing_row_keeps_the_elapsed_bounds_when_the_blink_hides_it` in `src/ui/views/tests.rs`;
   `lcd_indicator_message_arms_a_and_v_and_leaves_o_i_d_inert` and
   `lcd_indicator_strip_publishes_always_on_top_on_a_and_visualizer_on_v` in
@@ -845,6 +848,12 @@ rather than the panic unwinding the event loop.
   the elapsed/remaining choice and the track's total carry into shade mode. When the total is the
   `--:--` placeholder the readout is just the elapsed string, never `--:--/--:--`. The volume
   slider writes `Message::VolumeChange` and reads the shared volume.
+- While playing or paused, the time readout is a click target that publishes
+  `Message::ToggleTimeDisplay`, flipping the same `WinampPlayer::time_display` mode the LCD uses;
+  while stopped it publishes nothing, so a stopped press cannot silently switch the persisted
+  mode. Because shade mode builds no LCD, this is the only time toggle available there. The
+  shared row applies the LCD's own `views::now_playing::elapsed_readout_clickable` guard rather
+  than a second rule.
 
 **Enforced by.** `views::shade::view_shade_strip` wraps
 `views::mini_transport::mini_transport_row` on the title bar's blue chrome;
@@ -852,8 +861,11 @@ rather than the panic unwinding the event loop.
 `views::transport::transport_glyphs` (including `views::transport::play_pause_glyph`) into the
 compact buttons; `views::mini_transport::mini_transport_readout` joins the elapsed and total
 strings and keeps a single time string when the total is unknown;
-`views::mini_transport::mini_volume_spec` fixes the slider's shared range and
-`Message::VolumeChange`; `views::mini_transport::MINI_TRANSPORT_HEIGHT` owns the height, and
+`views::mini_transport::mini_transport_row` wraps the readout in a
+`MouseArea::on_press(Message::ToggleTimeDisplay)` only when
+`views::now_playing::elapsed_readout_clickable` holds for the strip's mode, and leaves it a plain
+`Text` while stopped; `views::mini_transport::mini_volume_spec` fixes the slider's shared range
+and `Message::VolumeChange`; `views::mini_transport::MINI_TRANSPORT_HEIGHT` owns the height, and
 `views::shade::SHADE_STRIP_HEIGHT` aliases it while `views::shade::SHADED_HEIGHT` adds the title
 bar; the shaded branch of `ui::view::view` stacks the bar and strip; and
 `handlers::window::resize_to_shade` resizes to `handlers::window::shade_target_size`, which reads
@@ -865,7 +877,8 @@ bar; the shaded branch of `ui::view::view` stacks the bar and strip; and
 `shade_height_pins_the_rolled_up_window`,
 `shade_volume_slider_spec_matches_the_shared_volume_range_and_message`,
 `shade_strip_draws_the_time_readout_and_puts_the_volume_slider_at_the_right_edge`,
-`mini_transport_readout_appends_the_known_total`, and
+`mini_transport_readout_appends_the_known_total`,
+`compact_readout_toggles_time_display_only_while_not_stopped`, and
 `view_shade_strip_keeps_its_fixed_height_for_both_playback_states` (`src/ui/views/tests.rs`);
 `shaded_root_view_is_the_title_bar_plus_the_strip`, `shade_strip_draws_only_while_shaded`,
 `shade_target_size_is_the_title_bar_plus_the_strip`,
@@ -893,6 +906,10 @@ bar alone. The strip's controls now come from the shared compact row the library
 - The footer and the shade strip build from the same row builder, so a glyph, order, width,
   message, or slider change shows up in both. Normal mode draws no shade strip, and shade mode
   draws no library footer.
+- While playing or paused, the footer's time readout is a click target that publishes
+  `Message::ToggleTimeDisplay`, flipping the same `WinampPlayer::time_display` mode the LCD uses;
+  while stopped it publishes nothing. The shared row applies the LCD's own
+  `views::now_playing::elapsed_readout_clickable` guard rather than a second rule.
 
 **Enforced by.** `views::mini_transport::view_library_strip` wraps
 `views::mini_transport::mini_transport_row` for normal mode;
@@ -900,6 +917,10 @@ bar alone. The strip's controls now come from the shared compact row the library
 `views::mini_transport::mini_volume_spec` are the shared control and slider specs;
 `views::mini_transport::mini_transport_readout` joins the elapsed and total strings and keeps a
 single time string when the total is unknown;
+`views::mini_transport::mini_transport_row` wraps the readout in a
+`MouseArea::on_press(Message::ToggleTimeDisplay)` only when
+`views::now_playing::elapsed_readout_clickable` holds for the strip's mode, and leaves it a plain
+`Text` while stopped;
 `views::mini_transport::MINI_TRANSPORT_HEIGHT`, `MINI_VOLUME_WIDTH`, and
 `MINI_VOLUME_ID` own the geometry and test seam. The normal branch of `ui::view::view` pushes the
 footer after the browse content with clones of the LCD's elapsed and total strings, while its
@@ -907,7 +928,8 @@ shaded branch returns before that push.
 
 **Pinned by.** `view_library_strip_keeps_its_fixed_height`,
 `library_strip_draws_the_four_controls_time_and_right_edge_volume`,
-`mini_transport_readout_appends_the_known_total`, and
+`mini_transport_readout_appends_the_known_total`,
+`compact_readout_toggles_time_display_only_while_not_stopped`, and
 `main_transport_and_shade_strip_share_glyphs_order_and_widths` (`src/ui/views/tests.rs`);
 `normal_root_view_draws_the_library_strip_beneath_the_browse_list`,
 `shade_strip_draws_only_while_shaded`, and `root_view_footer_shows_elapsed_over_total`

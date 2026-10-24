@@ -2668,13 +2668,13 @@ fn shade_height_pins_the_rolled_up_window() {
 fn view_shade_strip_keeps_its_fixed_height_for_both_playback_states() {
     let renderer = layout_capture::headless_renderer();
 
-    for is_playing in [false, true] {
-        let mut element = view_shade_strip(
-            is_playing,
-            0.5,
-            Cow::Borrowed("00:53"),
-            Cow::Borrowed("3:30"),
-        );
+    for mode in [
+        TransportMode::Stopped,
+        TransportMode::Paused,
+        TransportMode::Playing,
+    ] {
+        let mut element =
+            view_shade_strip(mode, 0.5, Cow::Borrowed("00:53"), Cow::Borrowed("3:30"));
         let mut tree = Tree::new(element.as_widget());
         let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
         let node = element
@@ -2683,7 +2683,7 @@ fn view_shade_strip_keeps_its_fixed_height_for_both_playback_states() {
         assert_eq!(
             node.size().height,
             SHADE_STRIP_HEIGHT,
-            "the strip must keep its fixed height while is_playing = {is_playing}"
+            "the strip must keep its fixed height in {mode:?} mode"
         );
     }
 }
@@ -2728,7 +2728,7 @@ fn captured_mini_strip(
 
 fn captured_shade_strip(elapsed: &str, total: &str) -> (Vec<String>, Option<Rectangle>, Size) {
     captured_mini_strip(view_shade_strip(
-        false,
+        TransportMode::Stopped,
         0.5,
         Cow::Borrowed(elapsed),
         Cow::Borrowed(total),
@@ -2737,7 +2737,7 @@ fn captured_shade_strip(elapsed: &str, total: &str) -> (Vec<String>, Option<Rect
 
 fn captured_library_strip(elapsed: &str, total: &str) -> (Vec<String>, Option<Rectangle>, Size) {
     captured_mini_strip(view_library_strip(
-        false,
+        TransportMode::Stopped,
         0.5,
         Cow::Borrowed(elapsed),
         Cow::Borrowed(total),
@@ -2756,6 +2756,67 @@ fn mini_transport_readout_appends_the_known_total() {
     ] {
         let readout = mini_transport_readout(Cow::Borrowed(elapsed), Cow::Borrowed(total));
         assert_eq!(readout, expected, "{elapsed:?} over {total:?}");
+    }
+}
+
+// Both compact strips must wire the shared guard up, not just expose it: a
+// real left press at the readout's bounds publishes exactly one
+// `ToggleTimeDisplay` while playing or paused, and none while stopped.
+#[test]
+fn compact_readout_toggles_time_display_only_while_not_stopped() {
+    let mut renderer = layout_capture::headless_renderer();
+    for mode in [
+        TransportMode::Playing,
+        TransportMode::Paused,
+        TransportMode::Stopped,
+    ] {
+        for strip in ["shade", "library"] {
+            let mut element: iced::Element<'_, Message, iced::Theme, iced::Renderer> = match strip {
+                "shade" => {
+                    view_shade_strip(mode, 0.5, Cow::Borrowed("00:53"), Cow::Borrowed("3:30"))
+                }
+                _ => view_library_strip(mode, 0.5, Cow::Borrowed("00:53"), Cow::Borrowed("3:30")),
+            };
+            let capture = layout_capture::capture_text(&mut element, &renderer);
+            let readout = capture.find("00:53/3:30");
+            let mut user_interface = iced_runtime::user_interface::UserInterface::build(
+                element,
+                layout_capture::limits().max(),
+                iced_runtime::user_interface::Cache::new(),
+                &mut renderer,
+            );
+            let mut messages = Vec::new();
+            let mut clipboard = iced::advanced::clipboard::Null;
+            let _ = user_interface.update(
+                &[iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
+                    iced::mouse::Button::Left,
+                ))],
+                iced::mouse::Cursor::Available(iced::Point::new(
+                    readout.center_x(),
+                    readout.center_y(),
+                )),
+                &mut renderer,
+                &mut clipboard,
+                &mut messages,
+            );
+            let expected = mode != TransportMode::Stopped;
+            let toggles = messages
+                .iter()
+                .filter(|message| matches!(message, Message::ToggleTimeDisplay))
+                .count();
+            assert_eq!(
+                toggles,
+                usize::from(expected),
+                "a press on the {mode:?} {strip} readout must {} publish ToggleTimeDisplay",
+                if expected { "still" } else { "not" }
+            );
+            if !expected {
+                assert!(
+                    messages.is_empty(),
+                    "the stopped {strip} readout published {messages:?}"
+                );
+            }
+        }
     }
 }
 
@@ -2802,13 +2863,13 @@ fn shade_volume_slider_spec_matches_the_shared_volume_range_and_message() {
 fn view_library_strip_keeps_its_fixed_height() {
     let renderer = layout_capture::headless_renderer();
 
-    for is_playing in [false, true] {
-        let mut element = view_library_strip(
-            is_playing,
-            0.5,
-            Cow::Borrowed("00:53"),
-            Cow::Borrowed("3:30"),
-        );
+    for mode in [
+        TransportMode::Stopped,
+        TransportMode::Paused,
+        TransportMode::Playing,
+    ] {
+        let mut element =
+            view_library_strip(mode, 0.5, Cow::Borrowed("00:53"), Cow::Borrowed("3:30"));
         let mut tree = Tree::new(element.as_widget());
         let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
         let node = element
@@ -2817,7 +2878,7 @@ fn view_library_strip_keeps_its_fixed_height() {
         assert_eq!(
             node.size().height,
             MINI_TRANSPORT_HEIGHT,
-            "the library footer must keep its fixed height while is_playing = {is_playing}"
+            "the library footer must keep its fixed height in {mode:?} mode"
         );
     }
 }
