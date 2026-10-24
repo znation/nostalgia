@@ -4,7 +4,7 @@
 
 use iced::{
     Element, Length,
-    widget::{Column, Container, PickList, Row, Space, Text, VerticalSlider, container},
+    widget::{Column, Container, PickList, Row, Space, Text, VerticalSlider, container, slider},
 };
 
 use crate::equalizer::{
@@ -100,20 +100,41 @@ pub(super) fn db_scale_column() -> Column<'static, Message> {
         .push(Text::new("-12 DB").size(12))
 }
 
+/// Builds one equalizer slider column: a [`VerticalSlider`] over a gain, sized
+/// to [`EQ_SLIDER_HEIGHT`] and stepped by [`EQ_STEP`], with its `label`
+/// beneath it at the band labels' text size. The preamp column and each of the
+/// ten band columns share this shape; only the slider's value, change
+/// message, and paint style differ, so the construction lives here once.
+///
+/// `style` receives the slider's interaction status and returns the chrome
+/// style to paint, so the preamp keeps the neutral [`style::chrome_slider_style`]
+/// while each band passes its own gain tint through
+/// [`style::band_slider_style`].
+fn eq_slider_column<'a>(
+    value: f32,
+    label: &'a str,
+    on_change: impl Fn(f32) -> Message + 'a,
+    style: impl Fn(slider::Status) -> slider::Style + 'a,
+) -> Column<'a, Message> {
+    Column::new()
+        .push(
+            VerticalSlider::new(GAIN_MIN_DB..=GAIN_MAX_DB, value, on_change)
+                .step(EQ_STEP)
+                .height(Length::Fixed(EQ_SLIDER_HEIGHT))
+                .style(move |_theme, status| style(status)),
+        )
+        .push(Text::new(label).size(12))
+}
+
 /// Builds the equalizer's preamp column: a [`VerticalSlider`] over the
 /// `Preamp` label, matching a band column's shape so it sits in the band row.
 /// The slider spans `GAIN_MIN_DB..=GAIN_MAX_DB` in [`EQ_STEP`] increments and
 /// keeps the uniform gray [`style::chrome_slider_style`], not the band gain
 /// tint.
 pub(super) fn preamp_column(preamp: f32) -> Column<'static, Message> {
-    Column::new()
-        .push(
-            VerticalSlider::new(GAIN_MIN_DB..=GAIN_MAX_DB, preamp, Message::EqPreampChange)
-                .step(EQ_STEP)
-                .height(Length::Fixed(EQ_SLIDER_HEIGHT))
-                .style(|_theme, status| style::chrome_slider_style(status)),
-        )
-        .push(Text::new("Preamp").size(12))
+    eq_slider_column(preamp, "Preamp", Message::EqPreampChange, |status| {
+        style::chrome_slider_style(status)
+    })
 }
 
 /// Builds the response curve row: one green line segment per
@@ -193,18 +214,12 @@ pub fn view_equalizer(
     let mut bands_row = Row::new().spacing(BAND_ROW_SPACING);
     for (index, frequency) in BAND_FREQUENCIES.iter().enumerate() {
         let gain = bands[index];
-        bands_row = bands_row.push(
-            Column::new()
-                .push(
-                    VerticalSlider::new(GAIN_MIN_DB..=GAIN_MAX_DB, gain, move |gain| {
-                        Message::EqBandChange(index, gain)
-                    })
-                    .step(EQ_STEP)
-                    .height(Length::Fixed(EQ_SLIDER_HEIGHT))
-                    .style(move |_theme, status| style::band_slider_style(gain, status)),
-                )
-                .push(Text::new(*frequency).size(12)),
-        );
+        bands_row = bands_row.push(eq_slider_column(
+            gain,
+            frequency,
+            move |gain| Message::EqBandChange(index, gain),
+            move |status| style::band_slider_style(gain, status),
+        ));
     }
 
     let preamp_and_scale = Row::new()
