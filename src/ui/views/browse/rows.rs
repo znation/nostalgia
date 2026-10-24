@@ -118,10 +118,10 @@ fn one_line_title<'a>(title: Cow<'a, str>) -> Cow<'a, str> {
 /// album row's title and label are borrowed from the loaded list's caches in
 /// the common case and only composed on the fallback path, while a playlist
 /// row borrows its name and static hint. This builder runs on every view
-/// refresh, so borrowing avoids a `String` allocation per row per frame. The row prefix is one owned `String` per row per refresh,
-/// since it depends on the row's position; it is not cached in `BrowseList`
-/// because that would need invalidating on every store for no correctness
-/// gain.
+/// refresh, so borrowing avoids a `String` allocation per row per frame. The
+/// row prefix is one owned `String` per row per refresh, since it depends on
+/// the row's position; it is not cached in `BrowseList` because that would
+/// need invalidating on every store for no correctness gain.
 pub(in crate::ui::views) fn scrollable_list<'a>(
     items: impl IntoIterator<Item = (Cow<'a, str>, Cow<'a, str>, bool)>,
     epoch: u64,

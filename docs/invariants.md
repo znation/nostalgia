@@ -86,12 +86,13 @@ unbound, and every other Control chord remains the window manager's. Shade mode 
 box, so Ctrl+F there is a no-op.
 
 **Enforced by.** `views::browse::BROWSE_SEARCH_ID` in `src/ui/views/browse.rs`, applied with
-`.id(BROWSE_SEARCH_ID)` by `views::browse::view_search_box` (used by the
-re-exported `views::browse::view_search_row`), gives the text input a stable focus target. `Message::FocusSearch` in
-`src/ui/message.rs` is routed by `src/ui/mod.rs` to `browse::focus_search` in
-`src/ui/handlers/browse.rs`, which returns `iced::widget::operation::focus(BROWSE_SEARCH_ID)` and
-mutates no player state. `shortcuts::shortcut` in `src/ui/shortcuts.rs` claims a Control-held `f`
-before its Control/Alt/Logo chord guard, while leaving Alt+F and Logo+F to the window manager.
+`.id(BROWSE_SEARCH_ID)` by `views::browse::view_search_box` (used by the re-exported
+`views::browse::view_search_row`), gives the text input a stable focus target.
+`Message::FocusSearch` in `src/ui/message.rs` is routed by `src/ui/mod.rs` to
+`browse::focus_search` in `src/ui/handlers/browse.rs`, which returns
+`iced::widget::operation::focus(BROWSE_SEARCH_ID)` and mutates no player state.
+`shortcuts::shortcut` in `src/ui/shortcuts.rs` claims a Control-held `f` before its
+Control/Alt/Logo chord guard, while leaving Alt+F and Logo+F to the window manager.
 
 **Pinned by.**
 
@@ -234,13 +235,13 @@ navigation shows the previous level's rows" in `BUGS-FIXED.md`.
 row's rendered text compared case-insensitively: Artists and Playlists by name, Albums and All
 Albums by `artist - title`, and Songs and All Songs by `artist - title`. Rows whose keys compare
 equal keep their library order. The song and album lists reorder their cached titles and labels
-by the same permutation as their rows, so each row keeps its own title and duration. The reorder is one-shot:
-it bumps only that list's epoch, so a selection press rendered before the sort is rejected while
-the post-sort indices resolve to the sorted rows, and it leaves the other lists, the current
-view, the search state, and playback unchanged. Navigating away and back restores the library's
-order; no sort flag persists. A fresh reply that replaces the rows drops any saved permutation, so
-a sort cannot reorder data stored after it. Sorting an empty, loading, or failed list is a no-op:
-it neither reorders rows nor bumps the epoch.
+by the same permutation as their rows, so each row keeps its own title and duration. The reorder
+is one-shot: it bumps only that list's epoch, so a selection press rendered before the sort is
+rejected while the post-sort indices resolve to the sorted rows, and it leaves the other lists,
+the current view, the search state, and playback unchanged. Navigating away and back restores the
+library's order; no sort flag persists. A fresh reply that replaces the rows drops any saved
+permutation, so a sort cannot reorder data stored after it. Sorting an empty, loading, or failed
+list is a no-op: it neither reorders rows nor bumps the epoch.
 
 **Enforced by.** `BrowseList::sort_rows_by` in `src/ui/browse.rs` builds a stable index permutation
 from the lowercased row keys and rebuilds `items`, `titles`, and `labels` by it, bumping the epoch
@@ -357,9 +358,9 @@ is skipped by serde and deserializes to `0`.
 `library::album_counts_by_artist` counts non-empty `Album::artist` names;
 `AppleMusicService::get_favorite_artists` in `src/apple_music/browse.rs` fills the counts from
 the sample library or from the two signed-in requests; and
-`views::browse::rows::text::album_count_label` in `src/ui/views/browse/rows/text.rs` renders the singular,
-plural, and empty labels that `artist_row` uses as its secondary text, and `scrollable_list`
-pins every row's secondary label to the right edge.
+`views::browse::rows::text::album_count_label` in `src/ui/views/browse/rows/text.rs` renders the
+singular, plural, and empty labels that `artist_row` uses as its secondary text, and
+`scrollable_list` pins every row's secondary label to the right edge.
 
 **Pinned by.**
 
@@ -395,12 +396,12 @@ Apple Music album field: it is skipped by serde and deserializes to `0`.
 `src/sample_library.rs` derives each sample album's total from its indexed songs;
 `RestLibrary::get_album_durations` in `src/apple_music/rest.rs` groups and sums the library songs;
 `browse::apply_album_durations` in `src/apple_music/browse.rs` fills the signed-in album lists;
-and `views::browse::rows::text::album_row` in `src/ui/views/browse/rows/text.rs` renders the formatted time
-or placeholder as the row's secondary text. The loaded album lists cache each row's display
-title and formatted running time through `BrowseList::store_with_row_text` (`store_albums` in
-`src/ui/handlers/browse/fetch.rs`), and `album_row` borrows them, falling back to composing the
-title and formatting the duration for an index without a cached value, so a view refresh does
-not re-join and reformat every row.
+and `views::browse::rows::text::album_row` in `src/ui/views/browse/rows/text.rs` renders the
+formatted time or placeholder as the row's secondary text. The loaded album lists cache each
+row's display title and formatted running time through `BrowseList::store_with_row_text`
+(`store_albums` in `src/ui/handlers/browse/fetch.rs`), and `album_row` borrows them, falling back
+to composing the title and formatting the duration for an index without a cached value, so a view
+refresh does not re-join and reformat every row.
 
 **Pinned by.**
 

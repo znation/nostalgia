@@ -2,9 +2,9 @@
 //! Songs and All Albums lists, and the Playlists list: the per-level view
 //! builders, the search box (tagged with [`BROWSE_SEARCH_ID`] so Ctrl+F can
 //! focus it), the Clear button beside it, and the Back, Open, Top, Sort,
-//! Reload, All Songs, All Albums, Playlists, and Retry buttons above them. The scrollable list and list
-//! builders live in the [`rows`] submodule; the pure wording, row-label, and
-//! summary helpers live in [`rows::text`].
+//! Reload, All Songs, All Albums, Playlists, and Retry buttons above them. The
+//! scrollable list and list builders live in the [`rows`] submodule; the pure
+//! wording, row-label, and summary helpers live in [`rows::text`].
 //!
 //! Every builder is pure — it turns `&[Artist]` / `&[Album]` / `&[Song]` /
 //! `&[Playlist]` (or the rows they map to) into an `Element` and knows nothing
