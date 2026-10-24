@@ -961,6 +961,42 @@ gzip decoder and so counts compressed bytes.
 **History.** Added 2026-10-23 after the wire-byte cap was found to let a small gzip body expand
 past 10 MiB before decoding; the decoded-byte fix keeps the original wire cap alongside it.
 
+## Preview host guard
+
+**Guarantee.** A preview URL handed to the audio backend may reach only an address
+`ip_is_internal` does not classify as internal. The URL must be absolute `https` and carry no
+control character, its host must not be the local host name or a legacy numeric address form
+(`2130706433`, `0x7f000001`, `0177.0.0.1`, `127.1`), and every address a hostname resolves to —
+or an address literal the URL spells — must pass `ip_is_internal`. For IPv4 it refuses private,
+loopback, link-local, unspecified, broadcast, documentation, multicast, `0.0.0.0/8`, shared
+(CGNAT), benchmarking (`198.18.0.0/15`), reserved (`240.0.0.0/4`), IETF protocol-assignment
+(`192.0.0.0/24`, the whole block, including the globally reachable `.9` and `.10` anycast
+addresses), and 6to4 relay (`192.88.99.0/24`) ranges. For IPv6 it refuses loopback, unspecified,
+multicast, unique-local, link-local, and the IPv4 address embedded in an IPv6 transition prefix
+(6to4, NAT64 `/96` and `/48`, and Teredo); it does not refuse IPv6 documentation
+(`2001:db8::/32`) or benchmarking (`2001:2::/48`) addresses. Redirects are not followed, and a
+proxy cannot take over resolution.
+
+**Enforced by.** `preview_url_problem`, `is_numeric_host_form`, and `ip_is_internal` in
+`src/apple_music/validation.rs` (the last re-exported by `src/apple_music.rs`), applied at the
+seam by `ensure_preview_url_is_valid`; `audio::preview::PublicAddressResolver` applies
+`ip_is_internal` to every resolved address before connecting, and `preview_agent` follows no
+redirects and disables the proxy.
+
+**Pinned by.**
+
+- `ip_is_internal_refuses_every_internal_range_and_allows_public_addresses`
+- `preview_url_problem_unwraps_a_disguised_internal_host`
+- `preview_url_problem_rejects_a_url_without_a_usable_https_host`
+- `is_numeric_host_form_recognizes_legacy_spellings_and_leaves_names_alone`
+  (all in `src/apple_music/tests.rs`)
+- `the_preview_agent_refuses_a_hostname_that_resolves_to_loopback`
+- `the_preview_resolver_allows_a_public_address_literal`
+  (both in `src/audio/tests.rs`)
+
+**History.** Reconstructed from "Preview URL guard accepts IPv4 multicast and reserved ranges"
+in `BUGS-FIXED.md` (2026-10-23); the v6 branch already refused multicast while the v4 branch did not.
+
 ## Preview spectrum
 
 **Guarantee.** The backend reports ten normalized amplitude bands in

@@ -96,7 +96,8 @@ pub(super) fn ensure_preview_url_is_valid(
 /// (`attributes.previews[].url`) and is handed to a network fetch, so it is
 /// untrusted input at a network sink. The guard requires the absolute
 /// `https` scheme and rejects a host that is the local machine or a private,
-/// loopback, link-local, or unspecified address literal, as well as the
+/// loopback, link-local, unspecified, multicast, or reserved address literal,
+/// as well as the
 /// legacy numeric address forms (`2130706433`, `0x7f000001`, `0177.0.0.1`,
 /// `127.1`) that `getaddrinfo` resolves as an address instead of a name. This
 /// closes the address-literal SSRF shapes a hostile or compromised API reply
@@ -180,10 +181,15 @@ fn is_numeric_component(part: &str) -> bool {
     !part.is_empty() && part.chars().all(|c| c.is_ascii_digit())
 }
 
-/// Whether `ip` is an address the preview fetch must not reach: one that names
-/// the local machine or a private, loopback, link-local, or unspecified
-/// network, including an internal IPv4 address embedded in an IPv6 transition
-/// prefix. Public addresses are allowed.
+/// Whether `ip` is an address the preview fetch must not reach.
+///
+/// IPv4: the local machine, private, loopback, link-local, unspecified,
+/// broadcast, documentation, multicast, `0.0.0.0/8`, shared (CGNAT),
+/// benchmarking, IETF protocol-assignment, 6to4 relay, and `240.0.0.0/4`
+/// reserved networks. IPv6: loopback, unspecified, multicast, unique-local,
+/// link-local, and a transition address embedding an internal IPv4 address.
+/// IPv6 documentation (`2001:db8::/32`) and benchmarking (`2001:2::/48`)
+/// addresses are allowed.
 ///
 /// Shared with [`crate::audio`], whose preview agent resolves a preview URL's
 /// hostname and rejects any internal address it resolves to — the check that
@@ -191,14 +197,20 @@ fn is_numeric_component(part: &str) -> bool {
 pub(crate) fn ip_is_internal(ip: std::net::IpAddr) -> bool {
     match ip {
         std::net::IpAddr::V4(v4) => {
+            let octets = v4.octets();
             v4.is_private()
                 || v4.is_loopback()
                 || v4.is_link_local()
                 || v4.is_unspecified()
                 || v4.is_broadcast()
                 || v4.is_documentation()
-                || v4.octets()[0] == 0
-                || (v4.octets()[0] == 100 && (v4.octets()[1] & 0xc0) == 64)
+                || v4.is_multicast()
+                || octets[0] == 0
+                || octets[0] >= 240
+                || (octets[0] == 100 && (octets[1] & 0xc0) == 64)
+                || (octets[0] == 198 && (octets[1] & 0xfe) == 18)
+                || (octets[0] == 192 && octets[1] == 0 && octets[2] == 0)
+                || (octets[0] == 192 && octets[1] == 88 && octets[2] == 99)
         }
         std::net::IpAddr::V6(v6) => {
             v6.is_loopback()

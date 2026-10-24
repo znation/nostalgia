@@ -2793,16 +2793,22 @@ async fn off_thread_reports_a_thread_spawn_failure_as_a_seam_error() {
 // to an address literal a preview URL spells, and `audio::preview::PublicAddressResolver`
 // applies it to every address a preview hostname resolves to. The URL-level
 // tests above only reach the branches their sample literals happen to hit, so
-// a dropped range check (broadcast, documentation, CGNAT, a v6 form) would be
+// a dropped range check (broadcast, documentation, CGNAT, multicast, a
+// reserved block, a v6 form) would be
 // invisible. This table pins each branch on both sides: every internal form
 // must report `true`, and public v4/v6 addresses — including the addresses
-// bordering `100.64.0.0/10` and a public v4-mapped v6 address — must report
+// bordering `100.64.0.0/10`, `198.18.0.0/15`, the IETF protocol-assignment
+// and 6to4 relay blocks, the multicast range, and a public v4-mapped v6
+// address — must report
 // `false`, so the guard cannot pass by rejecting everything.
 #[test]
 fn ip_is_internal_refuses_every_internal_range_and_allows_public_addresses() {
     for (text, expected) in [
         // IPv4 internal: private, loopback, link-local, unspecified,
-        // broadcast, documentation, 0.0.0.0/8, and 100.64.0.0/10.
+        // broadcast, documentation, 0.0.0.0/8, 100.64.0.0/10, multicast,
+        // reserved 240.0.0.0/4, benchmarking 198.18.0.0/15, the IETF
+        // protocol-assignment block, and the deprecated 6to4 relay anycast
+        // block.
         ("10.0.0.1", true),
         ("172.16.0.1", true),
         ("192.168.0.1", true),
@@ -2816,10 +2822,24 @@ fn ip_is_internal_refuses_every_internal_range_and_allows_public_addresses() {
         ("0.1.2.3", true),
         ("100.64.0.1", true),
         ("100.127.255.255", true),
-        // IPv4 public: the addresses bordering the CGNAT range and ordinary
-        // public hosts.
+        ("224.0.0.1", true),
+        ("239.255.255.250", true),
+        ("240.0.0.1", true),
+        ("198.18.0.1", true),
+        ("198.19.255.255", true),
+        ("192.0.0.1", true),
+        ("192.88.99.1", true),
+        // IPv4 public: the addresses bordering the CGNAT, benchmarking,
+        // IETF protocol-assignment, and 6to4 relay blocks, the top of the
+        // unicast space below multicast, and ordinary public hosts.
         ("100.63.255.255", false),
         ("100.128.0.0", false),
+        ("198.17.255.255", false),
+        ("198.20.0.0", false),
+        ("192.0.1.1", false),
+        ("192.88.98.255", false),
+        ("192.88.100.0", false),
+        ("223.255.255.255", false),
         ("8.8.8.8", false),
         ("93.184.216.34", false),
         // IPv6 internal: loopback, unspecified, multicast, unique-local

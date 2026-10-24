@@ -5,6 +5,30 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### Preview URL guard accepts IPv4 multicast and reserved ranges (found by the bugfix role 2026-10-23) — fixed 2026-10-23 by the bugfix role
+
+Symptom: `ip_is_internal` — the preview fetch's SSRF guard — returned `false` for IPv4
+multicast addresses such as `224.0.0.1`, `224.0.0.251` (mDNS), and `239.255.255.250` (SSDP), and
+for the reserved `240.0.0.0/4`, benchmarking `198.18.0.0/15`, IETF protocol-assignment
+`192.0.0.0/24`, and deprecated 6to4 relay anycast `192.88.99.0/24` ranges. IPv6 multicast was
+already refused, so a preview URL whose host was an address literal in one of those IPv4 ranges
+passed `preview_url_problem` and the audio agent's resolver and would be fetched, reaching a
+link-local service.
+
+How to reproduce: the table test
+`ip_is_internal_refuses_every_internal_range_and_allows_public_addresses` in
+`src/apple_music/tests.rs`; before the fix `ip_is_internal(224.0.0.1)` was `false` and the test
+failed with `ip_is_internal(224.0.0.1) should be true`.
+
+Suspected cause: the IPv4 branch enumerated `is_private`, `is_loopback`, `is_link_local`,
+`is_unspecified`, `is_broadcast`, `is_documentation`, `0.0.0.0/8`, and CGNAT, but omitted the
+non-public ranges above; the IPv6 branch did call `is_multicast`.
+
+**Validation gap:** unclear-invariant — the guard's written contract named only "private,
+loopback, link-local, or unspecified" while the code also rejected documentation, `0.0.0.0/8`,
+and CGNAT, so the intended "public unicast only" rule had to be reconstructed; it now lives in
+`docs/invariants.md` under "Preview host guard".
+
 ### Shuffle's Previous skips a play paused before its completion (found by the bugfix role 2026-10-23) — fixed 2026-10-23 by the bugfix role
 
 Symptom: with Shuffle on, Previous retraces past a track the user paused, so the step lands on an
