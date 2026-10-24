@@ -1132,8 +1132,8 @@ rather than the panic unwinding the event loop.
   than a second rule.
 
 **Enforced by.** `views::shade::view_shade_strip` wraps
-`views::mini_transport::mini_transport_row_with_seek` on the title bar's blue chrome (the library
-footer keeps `mini_transport_row`, which builds no seek slider);
+`views::mini_transport::mini_transport_strip_with_seek` on the title bar's blue chrome (the library
+footer keeps `mini_transport_strip`, which builds no seek slider);
 `views::mini_transport::mini_transport_controls` projects
 `views::transport::transport_glyphs` (including `views::transport::play_pause_glyph`) into the
 compact buttons; `views::mini_transport::mini_transport_readout` joins the elapsed and total
@@ -1141,8 +1141,9 @@ strings and keeps a single time string when the total is unknown;
 `views::mini_transport::mini_transport_row_with_seek` tags its seek container
 `views::mini_transport::MINI_SEEK_ID` and builds the slider from
 `views::seek_bar::seek_slider`, which returns `None` unless `views::seek_bar::seek_bar_value`
-resolves a position and non-zero length; `views::mini_transport::mini_transport_row` wraps the
-readout in a `MouseArea::on_press(Message::ToggleTimeDisplay)` only when
+resolves a position and non-zero length; the shared
+`views::mini_transport::mini_transport_row_with_optional_seek` wraps the readout
+in a `MouseArea::on_press(Message::ToggleTimeDisplay)` only when
 `views::now_playing::elapsed_readout_clickable` holds for the strip's mode, and leaves it a plain
 `Text` while stopped; `views::mini_transport::mini_volume_spec` fixes the slider's shared range
 and `Message::VolumeChange`; `views::mini_transport::MINI_TRANSPORT_HEIGHT` owns the height, and
@@ -1198,12 +1199,12 @@ column, so hiding it drops this footer with the rest of the section. The footer 
   `views::now_playing::elapsed_readout_clickable` guard rather than a second rule.
 
 **Enforced by.** `views::mini_transport::view_library_strip` wraps
-`views::mini_transport::mini_transport_row` for normal mode;
+`views::mini_transport::mini_transport_strip` for normal mode;
 `views::mini_transport::mini_transport_controls` and
 `views::mini_transport::mini_volume_spec` are the shared control and slider specs;
 `views::mini_transport::mini_transport_readout` joins the elapsed and total strings and keeps a
 single time string when the total is unknown;
-`views::mini_transport::mini_transport_row` wraps the readout in a
+`views::mini_transport::mini_transport_row_with_optional_seek` wraps the readout in a
 `MouseArea::on_press(Message::ToggleTimeDisplay)` only when
 `views::now_playing::elapsed_readout_clickable` holds for the strip's mode, and leaves it a plain
 `Text` while stopped;
