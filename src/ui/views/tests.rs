@@ -13,10 +13,11 @@ use super::now_playing::text::{format_lcd_elapsed, format_lcd_remaining};
 use super::now_playing::{
     CHANNEL_LABELS, KnownTrack, MARQUEE_WIDTH, TimeDisplay, channel_label_color,
     channel_mode_label, display_len, elapsed_readout_clickable, elapsed_readout_color,
-    format_playback_prefix, lcd_indicator_strip, marquee_text, needs_marquee, now_playing_artist,
-    now_playing_content, now_playing_elapsed, now_playing_label, now_playing_number,
-    now_playing_row, now_playing_status_row, now_playing_time, now_playing_visualizer_row,
-    transport_glyph, transport_glyph_color, visualizer_bar_heights,
+    format_playback_prefix, lcd_indicator_message, lcd_indicator_strip, marquee_text,
+    needs_marquee, now_playing_artist, now_playing_content, now_playing_elapsed, now_playing_label,
+    now_playing_number, now_playing_row, now_playing_status_row, now_playing_time,
+    now_playing_visualizer_row, transport_glyph, transport_glyph_color, visible_spectrum,
+    visualizer_bar_heights,
 };
 use super::shade::{
     SHADE_STRIP_HEIGHT, SHADE_VOLUME_ID, SHADE_VOLUME_WIDTH, SHADED_HEIGHT, shade_controls,
@@ -42,7 +43,9 @@ use crate::equalizer::{
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::sample_library::sample_library;
 use crate::state::{TransportMode, clamp_balance, clamp_volume};
-use crate::test_support::{sample_album, sample_artist, sample_playlist, sample_song};
+use crate::test_support::{
+    recording_spectrum, sample_album, sample_artist, sample_playlist, sample_song,
+};
 use crate::ui::layout_capture;
 use iced::advanced::{
     Layout,
@@ -674,8 +677,8 @@ fn captured_now_playing_texts(
         .collect()
 }
 
-/// Lays out the decorative indicator strip and returns the text fragments it
-/// would draw and the width the column occupies.
+/// Lays out the indicator strip (with its live `A` and `V` controls) and
+/// returns the text fragments it would draw and the width the column occupies.
 fn captured_indicator_texts() -> (Vec<String>, f32) {
     let mut element: iced::Element<'_, Message, iced::Theme, ()> = lcd_indicator_strip().into();
     let capture = layout_capture::capture_text(&mut element, &());
@@ -693,6 +696,86 @@ fn lcd_indicator_strip_draws_each_label_in_order_at_a_fixed_width() {
     let (texts, width) = captured_indicator_texts();
     assert_eq!(texts, vec!["O", "A", "I", "D", "V"]);
     assert_eq!(width, 12.0, "the strip's fixed width");
+}
+
+// Only A and V are live: A reuses the title bar's always-on-top toggle, V
+// toggles the LCD visualizer, and O, I, and D publish nothing.
+#[test]
+fn lcd_indicator_message_arms_a_and_v_and_leaves_o_i_d_inert() {
+    assert!(matches!(
+        lcd_indicator_message("A"),
+        Some(Message::ToggleAlwaysOnTop)
+    ));
+    assert!(matches!(
+        lcd_indicator_message("V"),
+        Some(Message::ToggleVisualizer)
+    ));
+    for label in ["O", "I", "D"] {
+        assert!(
+            lcd_indicator_message(label).is_none(),
+            "{label} must stay decorative"
+        );
+    }
+}
+
+// The strip must wire the mapping up, not just expose it: drive a real left
+// press at each letter's bounds. A publishes the title bar's always-on-top
+// toggle, V publishes the visualizer toggle, and O publishes nothing.
+#[test]
+fn lcd_indicator_strip_publishes_always_on_top_on_a_and_visualizer_on_v() {
+    let mut renderer = layout_capture::headless_renderer();
+    for label in ["A", "V", "O"] {
+        let mut element: iced::Element<'_, Message, iced::Theme, iced::Renderer> =
+            lcd_indicator_strip().into();
+        let capture = layout_capture::capture_text(&mut element, &renderer);
+        let letter = capture.find(label);
+        let mut user_interface = iced_runtime::user_interface::UserInterface::build(
+            element,
+            layout_capture::limits().max(),
+            iced_runtime::user_interface::Cache::new(),
+            &mut renderer,
+        );
+        let mut messages = Vec::new();
+        let mut clipboard = iced::advanced::clipboard::Null;
+        let _ = user_interface.update(
+            &[iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
+                iced::mouse::Button::Left,
+            ))],
+            iced::mouse::Cursor::Available(iced::Point::new(letter.center_x(), letter.center_y())),
+            &mut renderer,
+            &mut clipboard,
+            &mut messages,
+        );
+        match label {
+            "A" => assert!(
+                messages
+                    .iter()
+                    .any(|message| matches!(message, Message::ToggleAlwaysOnTop)),
+                "a press on A must publish ToggleAlwaysOnTop: {messages:?}"
+            ),
+            "V" => assert!(
+                messages
+                    .iter()
+                    .any(|message| matches!(message, Message::ToggleVisualizer)),
+                "a press on V must publish ToggleVisualizer: {messages:?}"
+            ),
+            _ => assert!(
+                messages.is_empty(),
+                "a press on {label} must publish nothing: {messages:?}"
+            ),
+        }
+    }
+}
+
+// Hiding the visualizer drops the bars from the LCD without clearing the
+// stored spectrum, so showing them again draws the current ones.
+#[test]
+fn visible_spectrum_hides_the_stored_bars_while_the_visualizer_is_off() {
+    let spectrum = recording_spectrum();
+    assert_eq!(visible_spectrum(Some(spectrum), true), Some(spectrum));
+    assert_eq!(visible_spectrum(Some(spectrum), false), None);
+    assert_eq!(visible_spectrum(None, true), None);
+    assert_eq!(visible_spectrum(None, false), None);
 }
 
 // The whole bar's content carries the strip as well as the elapsed, title,

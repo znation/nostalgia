@@ -475,13 +475,18 @@ its internal id, whenever the id is in the known-track index:
   bottom-aligned inside a fixed-height strip between the title and the status row. The bar heights
   come from the loaded preview's stored spectrum, each band clamped to `0.0..=1.0`; no reported
   spectrum, including the silent fallback, draws zero-height bars while keeping the row's height,
-  so loading a preview does not move the title or status text. Pause keeps the last bars frozen,
-  while Stop and a new selection clear them. A spectrum reply issued before a Stop or a new
-  selection, or landing while a transport transition is in flight, is dropped. The spectrum poll
-  is subscribed only while playback is running.
+  so loading a preview does not move the title or status text. The bars are drawn only while
+  `WinampPlayer::visualizer_visible` holds; hiding them changes only what the LCD draws, keeping
+  both the stored spectrum and the poll, so showing them again draws the current bars. Pause
+  keeps the last bars frozen, while Stop and a new selection clear them. A spectrum reply issued
+  before a Stop or a new selection, or landing while a transport transition is in flight, is
+  dropped. The spectrum poll is subscribed only while playback is running.
 - The LCD's left edge always draws the five classic indicator letters `O`, `A`, `I`, `D`, `V`,
-  in that order, at a fixed width, in every playback state including the empty `--:--` bar. The
-  strip is decorative: it emits no message and changes nothing.
+  in that order, at a fixed width, in every playback state including the empty `--:--` bar. `A`
+  and `V` are mouse areas: pressing `A` publishes `Message::ToggleAlwaysOnTop` (the title bar's
+  always-on-top toggle) and pressing `V` publishes `Message::ToggleVisualizer`, which flips only
+  the LCD's display flag. `O`, `I`, and `D` stay decorative and publish nothing. The strip keeps
+  its fixed width and letter order, so the content beside it does not move.
 - A transport glyph leads the row in a fixed `LCD_TRANSPORT_WIDTH` slot before the large elapsed
   readout, so the readout keeps its x position as the glyph changes: green `▶` while playing,
   green `II` while paused, and red `■` while stopped. Pause of a loaded preview sets the shared
@@ -508,6 +513,10 @@ its internal id, whenever the id is in the known-track index:
   `elapsed_readout_is_clickable_only_while_not_stopped`,
   `elapsed_readout_toggles_only_while_not_stopped`, and
   `now_playing_row_keeps_the_elapsed_bounds_when_the_blink_hides_it` in `src/ui/views/tests.rs`;
+  `lcd_indicator_message_arms_a_and_v_and_leaves_o_i_d_inert` and
+  `lcd_indicator_strip_publishes_always_on_top_on_a_and_visualizer_on_v` in
+  `src/ui/views/tests.rs`; `toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum`
+  in `src/ui/tests.rs`;
   `position_tick_blinks_the_elapsed_readout_only_while_paused` in `src/ui/tests.rs`; and
   `toggle_playing_switches_between_playing_and_paused` and
   `pause_sets_the_paused_mode_while_play_and_stop_clear_it` in `src/state.rs`; and
@@ -564,7 +573,9 @@ it; while the count is nonzero the `handlers::playback::preview` poll handlers i
 its reply handlers store no reply. `AppleMusicService::play_track`
 stops the backend's previous preview when a selection has no preview URL.
 `views::now_playing::lcd_indicator_strip` draws `views::now_playing::LCD_INDICATOR_LABELS` down
-the LCD's left edge in a fixed-width column, with no message and no handler.
+the LCD's left edge in a fixed-width column; its `A` and `V` cells publish
+`Message::ToggleAlwaysOnTop` and `Message::ToggleVisualizer` through
+`views::now_playing::lcd_indicator_message`, while `O`, `I`, and `D` publish nothing.
 `views::now_playing::visualizer_bar_heights` scales and clamps the stored spectrum, and
 `views::now_playing::now_playing_visualizer_row` draws its `BAND_COUNT` bars at fixed width inside
 the row `views::view_now_playing` places between the title and status rows. The `Spectrum` handler
@@ -866,9 +877,11 @@ window. A seek clears the recorded window without resetting the partial downmix 
 sample rodio leaves on the same channel stays in phase; a player that has not appended a preview
 reports nothing, so Stop and a new selection cannot report the previous preview's spectrum. The
 silent fallback and a closed worker report `None`. The UI half stores that reply in
-`WinampPlayer::spectrum` and draws exactly `BAND_COUNT` bars from it: their heights clamp to the
-fixed visualizer row, Pause freezes them, Stop and a new selection clear them, stale or
-pre-transition replies are dropped, and the poll runs only while playing.
+`WinampPlayer::spectrum` and draws exactly `BAND_COUNT` bars from it while
+`WinampPlayer::visualizer_visible` holds; the indicator strip's `V` hides and shows them without
+clearing the stored spectrum or stopping the poll. Their heights clamp to the fixed visualizer
+row, Pause freezes them, Stop and a new selection clear them, stale or pre-transition replies
+are dropped, and the poll runs only while playing.
 
 **Enforced by.** `audio::meter::spectrum_bands` (the pure ten-band Goertzel analysis) and
 `audio::meter::SpectrumMeter` (`push` downmixes and fills the fixed ring, `take` copies it and
@@ -880,6 +893,8 @@ in `src/audio.rs` defaults to `None`, and `RodioPlayer::spectrum` in `src/audio/
 handled beside `Command::PlaybackFormat`; `RodioOutput::spectrum` bounds the query like the other
 backend queries. On the UI side, `views::now_playing::visualizer_bar_heights` and
 `views::now_playing::now_playing_visualizer_row` scale and draw the bands,
+`views::visible_spectrum` applies `WinampPlayer::visualizer_visible`,
+`Message::ToggleVisualizer` and `handlers::playback::toggle_visualizer` flip that flag,
 `WinampPlayer::needs_spectrum_poll` gates the poll, `ui::timers::spectrum_ticks` feeds it, and
 `handlers::playback::preview::spectrum_tick`/`spectrum` issue and guard the query while
 `reset_position_readout` clears the stored value.
@@ -905,6 +920,11 @@ backend queries. On the UI side, `views::now_playing::visualizer_bar_heights` an
 - `now_playing_content_keeps_the_visualizer_height_with_and_without_a_spectrum`
 - `now_playing_visualizer_row_keeps_its_height_without_a_spectrum` (`src/ui/views/tests.rs`)
 - `now_playing_visualizer_row_draws_one_fixed_width_bar_per_band` (`src/ui/views/tests.rs`)
+- `visible_spectrum_hides_the_stored_bars_while_the_visualizer_is_off` (`src/ui/views/tests.rs`)
+- `lcd_indicator_strip_publishes_always_on_top_on_a_and_visualizer_on_v`
+  (`src/ui/views/tests.rs`)
+- `toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum` (`src/ui/tests.rs`)
+- `hidden_visualizer_draws_no_bars_in_the_root_view` (`src/ui/tests.rs`)
 - `spectrum_tick_stream_emits_spectrum_ticks` (`src/ui/tests.rs`)
 - `a_refused_spectrum_thread_ends_the_tick_stream_instead_of_panicking` (`src/ui/tests.rs`)
 - `a_refused_spectrum_thread_reports_the_cause_and_the_loss` (`src/ui/tests.rs`)

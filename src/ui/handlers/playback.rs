@@ -83,6 +83,15 @@ pub(in crate::ui) fn toggle_time_display(player: &mut WinampPlayer) -> Task<Mess
     Task::none()
 }
 
+/// The indicator strip's V control: flips whether the LCD draws the stored
+/// spectrum. It touches no playback state, clears no stored spectrum, and
+/// schedules no work, so the poll keeps updating the bars while they are
+/// hidden and the next show draws the current ones.
+pub(in crate::ui) fn toggle_visualizer(player: &mut WinampPlayer) -> Task<Message> {
+    player.visualizer_visible = !player.visualizer_visible;
+    Task::none()
+}
+
 /// The song list the current view draws from, with the epoch that rendered it:
 /// the flat All Songs view's `all_songs`, otherwise the browsed `songs`. The
 /// preview-end advance resolves its chosen id against this same buffer, so the

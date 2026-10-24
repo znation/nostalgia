@@ -131,6 +131,11 @@ pub(in crate::ui) struct WinampPlayer {
     /// the bars freeze at their last levels, while Stop and a new selection
     /// clear it through `reset_position_readout`.
     pub(in crate::ui) spectrum: Option<Spectrum>,
+    /// Whether the LCD's indicator strip's V control lets the visualizer row
+    /// draw the stored spectrum. `Message::ToggleVisualizer` flips it; hiding
+    /// leaves [`Self::spectrum`] and the spectrum poll untouched, so showing
+    /// the bars again draws the current ones.
+    pub(in crate::ui) visualizer_visible: bool,
     /// The seek bar's in-progress drag, or `None` while the thumb follows the
     /// reported position. `Message::SeekPreviewChanged` stores the drag and
     /// `Message::SeekPreviewReleased` seeks to and clears it, so only a release
@@ -234,6 +239,7 @@ impl WinampPlayer {
             playback_duration: None,
             blink_visible: true,
             spectrum: None,
+            visualizer_visible: true,
             seek_preview: None,
             time_display: views::TimeDisplay::Elapsed,
             position_epoch: 0,

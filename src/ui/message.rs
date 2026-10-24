@@ -96,6 +96,10 @@ pub(in crate::ui) enum Message {
     // remaining time. It changes no playback state and leaves the right-edge
     // total alone.
     ToggleTimeDisplay,
+    // The indicator strip's V control: hides the LCD visualizer, or shows it
+    // again. It flips only the LCD's display flag, changes no playback state,
+    // and schedules no work; the stored spectrum and its poll keep running.
+    ToggleVisualizer,
     ToggleEqualizer,
     EqPreampChange(f32),
     EqBandChange(usize, f32),

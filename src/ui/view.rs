@@ -171,7 +171,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
             now_playing_time,
             player.marquee_offset,
             playback_format,
-            spectrum,
+            views::visible_spectrum(spectrum, player.visualizer_visible),
             transport_mode,
             player.blink_visible,
         ))

@@ -171,6 +171,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         }
         Message::SeekPreviewReleased => handlers::playback::preview::seek_preview_released(player),
         Message::ToggleTimeDisplay => handlers::playback::toggle_time_display(player),
+        Message::ToggleVisualizer => handlers::playback::toggle_visualizer(player),
         Message::TrackSelected { epoch, index } => {
             handlers::playback::track_selected(player, epoch, index)
         }

@@ -4727,6 +4727,108 @@ fn toggle_time_display_with_no_track_keeps_the_placeholder() {
     assert_eq!(player.now_playing_elapsed(None), "--:--");
 }
 
+// The indicator strip's V control hides and shows the LCD bars. It is
+// presentation-only: the stored spectrum stays, so showing the bars again
+// draws the current ones, the spectrum poll keeps running while they are
+// hidden, and no transport or mixer state moves.
+#[test]
+fn toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum() {
+    let (mut player, state) = test_player();
+    let spectrum = recording_spectrum();
+    player.spectrum = Some(spectrum);
+    state.blocking_lock().play();
+    let before = {
+        let state = state.blocking_lock();
+        (
+            state.transport_mode(),
+            state.is_playing,
+            state.volume(),
+            state.balance(),
+            state.repeat,
+            state.shuffle,
+        )
+    };
+    assert!(player.visualizer_visible);
+    assert!(player.needs_spectrum_poll());
+
+    assert_message_schedules_no_work(&mut player, Message::ToggleVisualizer);
+    assert!(!player.visualizer_visible);
+    assert_eq!(player.spectrum, Some(spectrum));
+    assert!(
+        player.needs_spectrum_poll(),
+        "hiding the bars must leave the spectrum poll running"
+    );
+
+    assert_message_schedules_no_work(&mut player, Message::ToggleVisualizer);
+    assert!(player.visualizer_visible);
+    assert_eq!(player.spectrum, Some(spectrum));
+    assert!(player.needs_spectrum_poll());
+
+    let after = {
+        let state = state.blocking_lock();
+        (
+            state.transport_mode(),
+            state.is_playing,
+            state.volume(),
+            state.balance(),
+            state.repeat,
+            state.shuffle,
+        )
+    };
+    assert_eq!(
+        after, before,
+        "the visualizer toggle must leave transport and mixer state alone"
+    );
+}
+
+// The root view must apply the stored flag, not just expose `visible_spectrum`:
+// lay the real `view` out with a loaded spectrum and read the pixels in the
+// LCD's visualizer row. Showing it paints a bright green bar; hiding it leaves
+// that row empty. Passing the raw spectrum through instead of the gated one
+// would keep the bars green here.
+#[test]
+fn hidden_visualizer_draws_no_bars_in_the_root_view() {
+    let (mut player, _state) = test_player();
+    player.spectrum = Some(recording_spectrum());
+    let mut renderer = layout_capture::headless_renderer();
+
+    player.visualizer_visible = true;
+    let (shown_text, shown_pixels) = {
+        let mut shown = view(&player);
+        layout_capture::capture_text_and_pixels(&mut shown, &mut renderer, &iced::Theme::Dark)
+    };
+
+    player.visualizer_visible = false;
+    let hidden_pixels = {
+        let mut hidden = view(&player);
+        let (_hidden_text, hidden_pixels) =
+            layout_capture::capture_text_and_pixels(&mut hidden, &mut renderer, &iced::Theme::Dark);
+        hidden_pixels
+    };
+
+    // `MONO` starts just below the 24px visualizer row, and the strip's `O`
+    // locates its left edge (the strip itself is 12px wide). Stop 4px above the
+    // status text so only the bar row's pixels are read.
+    let status = shown_text.find("MONO");
+    let strip_left = shown_text.find("O").x;
+    let bars = iced::Rectangle {
+        x: strip_left + 12.0,
+        y: status.y - 24.0,
+        width: 200.0,
+        height: 20.0,
+    };
+    let shown_green = shown_pixels.max_green_in(bars);
+    let hidden_green = hidden_pixels.max_green_in(bars);
+    assert!(
+        shown_green > 200,
+        "the visible visualizer must draw its green bars: {bars:?} has green {shown_green}"
+    );
+    assert!(
+        hidden_green < 50,
+        "hiding the visualizer must leave its row without bars: {bars:?} has green {hidden_green}"
+    );
+}
+
 #[test]
 fn stop_clears_the_elapsed_readout() {
     let (mut player, current_track) = play_song_1_then_browse_to_album_2();

@@ -1,7 +1,7 @@
-//! The Now Playing bar's LCD widget construction: the decorative indicator
-//! strip, the transport glyph and elapsed readout, the marquee line, and the
-//! status and visualizer rows. The strings they draw are resolved in [`text`];
-//! this module only lays them out.
+//! The Now Playing bar's LCD widget construction: the indicator strip (with its
+//! live `A` and `V` controls), the transport glyph and elapsed readout, the
+//! marquee line, and the status and visualizer rows. The strings they draw are
+//! resolved in [`text`]; this module only lays them out.
 
 use std::borrow::Cow;
 
@@ -63,22 +63,24 @@ const LCD_VISUALIZER_BAR_WIDTH: f32 = 8.0;
 const LCD_VISUALIZER_BAR_GAP: f32 = 3.0;
 
 /// The classic indicator letters down the LCD's left edge, in the mockup's
-/// order. [`lcd_indicator_strip`] draws them; the strip is decorative and
-/// emits no message.
+/// order. [`lcd_indicator_strip`] draws them; `A` and `V` are live controls,
+/// while `O`, `I`, and `D` stay decorative (an options menu, a file-info
+/// panel, and pixel-doubled window mode have no implementation here).
 pub(super) const LCD_INDICATOR_LABELS: [&str; 5] = ["O", "A", "I", "D", "V"];
 
-/// The fixed width of the decorative indicator strip, in pixels, so the
-/// content beside it keeps its bounds: the title starts one strip-width
-/// further right, while the right-edge total stays at the edge because the
-/// content column fills the remaining width.
+/// The fixed width of the indicator strip, in pixels, so the content beside
+/// it keeps its bounds: the title starts one strip-width further right, while
+/// the right-edge total stays at the edge because the content column fills
+/// the remaining width.
 pub(super) const LCD_INDICATOR_WIDTH: f32 = 12.0;
 
 /// The indicator letters' size in pixels: small enough to read as a column
 /// beside the large elapsed readout.
 const LCD_INDICATOR_SIZE: f32 = 10.0;
 
-/// The Now Playing bar: a small decorative `O A I D V` strip down the LCD's
-/// left edge, then the large elapsed readout, the "Now Playing:" caption
+/// The Now Playing bar: a small `O A I D V` strip down the LCD's left edge
+/// (with `A` toggling always-on-top and `V` the visualizer), then the large
+/// elapsed readout, the "Now Playing:" caption
 /// followed by the current track's playlist number prefix, resolved artist,
 /// and title (or "Nothing" when nothing is current), with the track's plain
 /// total length ([`super::format_track_time`]) laid at the right edge of the
@@ -128,7 +130,7 @@ pub fn view_now_playing<'a>(
 }
 
 /// Builds the content [`view_now_playing`] wraps in the LCD well: the
-/// decorative indicator strip, then the elapsed/title row and status row in a
+/// indicator strip, then the elapsed/title row and status row in a
 /// filling column so the total stays at the right edge. Generic over the
 /// theme and renderer, unlike the concrete well wrapper, so the tests can lay
 /// it out with iced's null renderer and read back the text it would draw.
@@ -172,11 +174,25 @@ where
     )
 }
 
-/// Builds the decorative indicator strip at the LCD's left edge: one small
-/// green letter per line, in [`LCD_INDICATOR_LABELS`] order, in a column of
-/// fixed [`LCD_INDICATOR_WIDTH`]. It emits no message and is drawn in every
-/// playback state, so it cannot toggle anything; its fixed width pushes the
-/// content beside it one strip-width right.
+/// The message an indicator letter publishes when pressed: `A` toggles
+/// always-on-top through the same [`Message::ToggleAlwaysOnTop`] the title bar
+/// uses, `V` toggles the LCD visualizer, and `O`, `I`, and `D` are decorative
+/// and publish nothing. Pure so the mapping is testable without a renderer.
+pub fn lcd_indicator_message(label: &str) -> Option<Message> {
+    match label {
+        "A" => Some(Message::ToggleAlwaysOnTop),
+        "V" => Some(Message::ToggleVisualizer),
+        _ => None,
+    }
+}
+
+/// Builds the indicator strip at the LCD's left edge: one small green letter
+/// per line, in [`LCD_INDICATOR_LABELS`] order, in a column of fixed
+/// [`LCD_INDICATOR_WIDTH`]. `A` and `V` are mouse areas that publish
+/// [`Message::ToggleAlwaysOnTop`] and [`Message::ToggleVisualizer`]; `O`, `I`,
+/// and `D` stay plain, decorative text. The strip is drawn in every playback
+/// state, and its fixed width pushes the content beside it one strip-width
+/// right.
 pub(super) fn lcd_indicator_strip<'a, Theme, Renderer>() -> Column<'a, Message, Theme, Renderer>
 where
     Theme: iced::widget::text::Catalog + 'a,
@@ -186,13 +202,28 @@ where
     LCD_INDICATOR_LABELS.into_iter().fold(
         Column::new().width(Length::Fixed(LCD_INDICATOR_WIDTH)),
         |column, label| {
-            column.push(
-                Text::new(label)
-                    .size(LCD_INDICATOR_SIZE)
-                    .color(theme::LCD_GREEN),
-            )
+            let text = Text::new(label)
+                .size(LCD_INDICATOR_SIZE)
+                .color(theme::LCD_GREEN);
+            match lcd_indicator_message(label) {
+                Some(message) => column.push(
+                    MouseArea::new(text)
+                        .on_press(message)
+                        .interaction(Interaction::Pointer),
+                ),
+                None => column.push(text),
+            }
         },
     )
+}
+
+/// The spectrum the LCD should draw: the stored bars only while the visualizer
+/// is visible, otherwise nothing. Hiding changes only what the LCD draws —
+/// `WinampPlayer::spectrum` and the spectrum poll keep running, so turning the
+/// visualizer back on shows the current bars instead of waiting for a new
+/// reply.
+pub fn visible_spectrum(spectrum: Option<Spectrum>, visualizer_visible: bool) -> Option<Spectrum> {
+    if visualizer_visible { spectrum } else { None }
 }
 
 /// The LCD's large elapsed-readout text style: [`LCD_ELAPSED_SIZE`]px in

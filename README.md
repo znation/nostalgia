@@ -45,8 +45,10 @@ The player on its own: [docs/screenshots/player.png](docs/screenshots/player.png
 ## Usage
 
 Build and run with `cargo run`; the player opens an iced window showing the Now Playing bar (a
-small decorative `O A I D V` strip down the LCD's left edge, a large elapsed-time readout at the
-left for a loaded preview, shown while playing or paused and blank (though it keeps its space)
+small `O A I D V` strip down the LCD's left edge, whose `A` toggles always-on-top and whose `V`
+hides and restores the visualizer while `O`, `I`, and `D` stay decorative; then a large
+elapsed-time readout at the left for a loaded preview, shown while playing or paused and blank
+(though it keeps its space)
 while stopped, except that the `--:--` placeholder stays visible when stopped with no current
 track or no known time, the playing track's 1-based position in the list it was played from
 (`1. The Sample Band - Opening`) followed by its artist and title, scrolled across the
@@ -62,8 +64,10 @@ when it cannot compute the bitrate; with no reported format both labels stay dim
 absent. A loaded preview also drives a small green ten-bar spectrum visualizer beneath the
 title, updating about four times a second while playback runs; Pause freezes the bars at their
 last levels, Stop and a new selection clear them, and the strip stays blank (with its height)
-when no preview reports a spectrum. Beneath the LCD, a chrome slider spans the loaded preview's
-own length and tracks its playback position; dragging moves the thumb and previews that
+when no preview reports a spectrum. The strip's `V` hides the bars and shows them again from the
+still-stored spectrum, so the poll keeps running while they are hidden. Beneath the LCD, a chrome
+slider spans the loaded preview's own length and tracks its playback position; dragging moves
+the thumb and previews that
 position in the large elapsed readout (counting down from it when the readout shows remaining
 time), and releasing seeks to it. The seek slider is blank (but keeps its height) until the
 backend reports both a playback position and a preview length, such as on the silent fallback;

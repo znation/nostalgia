@@ -41,7 +41,7 @@ pub use browse::{
 pub use equalizer::view_equalizer;
 pub use now_playing::{
     KnownTrack, TimeDisplay, needs_marquee, now_playing_artist, now_playing_elapsed,
-    now_playing_label, now_playing_number, now_playing_time, view_now_playing,
+    now_playing_label, now_playing_number, now_playing_time, view_now_playing, visible_spectrum,
 };
 pub use seek_bar::view_seek_bar;
 pub use shade::view_shade_strip;
