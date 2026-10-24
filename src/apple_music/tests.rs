@@ -2667,6 +2667,36 @@ async fn get_favorite_artists_fails_when_the_albums_request_fails() {
     );
 }
 
+// The documented guarantee is that a failure in either signed-in request
+// fails the whole artists load. The albums request is pinned above; this
+// covers the artist collection itself. The albums body is left successful, so
+// a regression that swallowed the artist error (say with `unwrap_or_default`)
+// would attempt it and return an empty artist list instead of an error. The
+// single recorded call also pins that the albums request is not attempted
+// after the first failure.
+#[tokio::test]
+async fn get_favorite_artists_fails_when_the_artists_request_fails() {
+    let stub = StubTransport::returning_results(&[
+        Err(AppleMusicError::new("artists down")),
+        Ok(r#"{"data":[]}"#.to_string()),
+    ]);
+    let service = signed_in_service(&stub);
+
+    let error = service.get_favorite_artists().await.unwrap_err();
+
+    assert_eq!(error.to_string(), "artists down");
+    let calls = stub.calls();
+    assert_eq!(
+        calls.len(),
+        1,
+        "the albums request must not follow a failed artists request"
+    );
+    assert_eq!(
+        calls[0].0,
+        "https://api.music.apple.com/v1/me/library/artists"
+    );
+}
+
 #[tokio::test]
 async fn a_signed_out_service_ignores_the_transport_and_returns_sample_data() {
     let stub = StubTransport::failing("must not be called");
