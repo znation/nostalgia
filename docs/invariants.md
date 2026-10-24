@@ -927,6 +927,7 @@ rather than the panic unwinding the event loop.
 - `a_pause_keeps_the_loaded_player_reporting_its_position`
 - `format_for_source_reads_sample_rate_and_channels`
 - `preview_bitrate_kbps_computes_encoded_bits_over_the_preview_length`
+- `preview_bitrate_kbps_rounds_to_the_nearest_kilobit_and_rejects_overflow`
 - `playback_format_query_returns_the_loaded_players_format`
 - `playback_format_query_reports_none_when_nothing_is_loaded`
 - `rodio_output_asks_the_worker_for_its_format`

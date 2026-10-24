@@ -295,6 +295,31 @@ fn preview_bitrate_kbps_computes_encoded_bits_over_the_preview_length() {
     assert_eq!(preview_bitrate_kbps(960_000, Duration::ZERO), None);
 }
 
+// The doc comment promises the nearest kilobit, not a truncation: 1000 bytes
+// (8000 bits) over 3 ms is 2666.67 kbit/s and over 6 ms is 1333.33. A result
+// wider than a u32 is reported as unknown rather than wrapped or truncated.
+#[test]
+fn preview_bitrate_kbps_rounds_to_the_nearest_kilobit_and_rejects_overflow() {
+    assert_eq!(
+        preview_bitrate_kbps(1_000, Duration::from_millis(3)),
+        Some(2_667)
+    );
+    assert_eq!(
+        preview_bitrate_kbps(1_000, Duration::from_millis(6)),
+        Some(1_333)
+    );
+    // 536,870,911 bytes is 4,294,967,288 bits over 1 ms: still a u32.
+    assert_eq!(
+        preview_bitrate_kbps(536_870_911, Duration::from_millis(1)),
+        Some(4_294_967_288)
+    );
+    // One more byte crosses u32::MAX, so the guard reports no bitrate.
+    assert_eq!(
+        preview_bitrate_kbps(536_870_912, Duration::from_millis(1)),
+        None
+    );
+}
+
 // The silent fallback has no preview length to report, so the seek bar stays
 // blank rather than inventing a scale.
 #[test]
