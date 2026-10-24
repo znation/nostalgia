@@ -411,7 +411,9 @@ passes the loaded snapshot through to `WinampPlayer::adopt_saved_settings` (whic
 before the first view), and `persist_settings_if_changed` copies them into the snapshot before
 comparing and saving. A missing
 or malformed `time_display` line falls back to elapsed, and a missing or malformed
-`always_on_top` line falls back to unpinned. The saved always-on-top level waits for the window id
+`always_on_top` line falls back to unpinned. The classic `A` key reaches the same
+`Message::ToggleAlwaysOnTop` arm through `shortcuts::message_for`, so it flips the flag and
+schedules the same window-level call as the on-screen A controls. The saved always-on-top level waits for the window id
 every other window action uses: `window_id_resolved` stores the id, then schedules
 `iced::window::set_level` when the restored flag holds. It is still not window placement: the
 window's size, position, and shade state are not persisted. Playback position, the browse level, the
@@ -434,7 +436,8 @@ last one before calling `settings::SettingsWriter::save`. Boot's `WindowIdResolv
 `window_level` once the id exists.
 `FileStore`'s `SettingsWriter` impl creates the parent directory and logs a failed create or write.
 With no store attached the method returns before taking the state lock, so tests keep the default
-no-op behavior.
+no-op behavior. `shortcuts::message_for` maps `A` to `Message::ToggleAlwaysOnTop`, the arm those
+controls press.
 
 **Pinned by.** `to_text_round_trips_every_field`,
 `time_display_round_trips_both_words_and_ignores_unknown_values`,
@@ -451,7 +454,8 @@ no-op behavior.
 `toggle_always_on_top_reaches_the_saved_snapshot`,
 `saved_always_on_top_is_restored_on_boot`,
 `window_level_selects_always_on_top`, and
-`window_id_resolved_applies_a_saved_always_on_top_level` (`src/ui/tests.rs`).
+`window_id_resolved_applies_a_saved_always_on_top_level` (`src/ui/tests.rs`). The classic `A` key
+reaching the same arm is pinned by `a_toggles_always_on_top_from_the_keyboard` (`src/ui/tests.rs`).
 
 **History.** Added with the settings-persistence plan on 2026-10-23; the player previously kept
 these values in memory only and started every launch at `AppState::default()`. The readout's
@@ -566,7 +570,9 @@ its internal id, whenever the id is in the known-track index:
   and any unknown or absent track read `--:--` at the left. The right edge keeps the plain total in
   both modes. The compact readouts in the library footer and the shade strip share this mode and
   its `views::now_playing::elapsed_readout_clickable` stopped guard, so clicking either can flip
-  elapsed and remaining while playing or paused.
+  elapsed and remaining while playing or paused. The classic `T` key reaches the same
+  `Message::ToggleTimeDisplay` through `shortcuts::message_for` in every transport state; the
+  stopped readout's click guard makes only the readout inert, not the key.
 - The LCD's small status row always draws both `MONO` and `STEREO` labels side by side in that
   order at its right edge and keeps its fixed height. A loaded preview whose backend reports a
   format draws the average bitrate and sample-rate prefix (`256 KBPS  44 KHZ`) at the row's left
@@ -696,7 +702,8 @@ when it scrolls). `views::now_playing::marquee_text` windows an overlong line, a
 `WinampPlayer::marquee_offset` carries the advance through `Message::MarqueeTick`. The
 `WinampPlayer::time_display` field holds the readout's mode, and
 `handlers::playback::toggle_time_display` (routed from `Message::ToggleTimeDisplay`, pressed by the
-`MouseArea` wrapping the readout in `now_playing_row`) flips it without touching playback state.
+`MouseArea` wrapping the readout in `now_playing_row` and mapped from the classic `T` key by
+`shortcuts::message_for`) flips it without touching playback state.
 `views::now_playing::display_len` and `views::now_playing::needs_marquee` measure the line, and
 `ui::timers::subscriptions` subscribes `marquee_ticks` only while that measure exceeds
 `MARQUEE_WIDTH`, and `position_ticks` only while `WinampPlayer::needs_position_poll` reports a
@@ -751,7 +758,8 @@ rather than the panic unwinding the event loop.
   (all in `src/ui/views/tests.rs`)
 - `toggle_time_display_switches_to_remaining_and_persists`
 - `toggle_time_display_with_no_track_keeps_the_placeholder`
-  (both in `src/ui/tests.rs`)
+- `t_toggles_the_time_display_from_the_keyboard`
+  (all in `src/ui/tests.rs`)
 - `marquee_text_keeps_a_line_that_fits`
 - `marquee_text_windows_from_the_offset`
 - `marquee_text_wraps_through_the_gap_to_the_start`

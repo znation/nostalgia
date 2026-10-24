@@ -1223,6 +1223,64 @@ fn backspace_steps_back_from_albums() {
     assert_view(&player, CurrentView::Artists);
 }
 
+// The classic A and T keys dispatch the same window and readout toggles the
+// title bar's and LCD strip's A and a readout click already press, so they pin
+// both the shortcut table and the handler wiring.
+#[test]
+fn a_toggles_always_on_top_from_the_keyboard() {
+    use iced::keyboard::{Event, Key, Modifiers, key};
+
+    let (mut player, _state) = player_with_window_id();
+    assert!(!player.always_on_top);
+
+    for (index, modifiers) in [Modifiers::NONE, Modifiers::SHIFT].into_iter().enumerate() {
+        let a = Event::KeyPressed {
+            key: Key::Character("a".into()),
+            modified_key: Key::Character("a".into()),
+            physical_key: key::Physical::Code(key::Code::KeyA),
+            location: iced::keyboard::Location::Standard,
+            modifiers,
+            text: None,
+            repeat: false,
+        };
+        let message = super::shortcuts::message_for(a).expect("A must map to a message");
+        assert!(matches!(message, Message::ToggleAlwaysOnTop));
+
+        assert_message_schedules_work(&mut player, message);
+        assert_eq!(player.always_on_top, index == 0);
+    }
+}
+
+#[test]
+fn t_toggles_the_time_display_from_the_keyboard() {
+    use iced::keyboard::{Event, Key, Modifiers, key};
+
+    let (mut player, _state) = test_player();
+    assert_eq!(player.time_display, views::TimeDisplay::Elapsed);
+
+    for (index, modifiers) in [Modifiers::NONE, Modifiers::SHIFT].into_iter().enumerate() {
+        let t = Event::KeyPressed {
+            key: Key::Character("t".into()),
+            modified_key: Key::Character("t".into()),
+            physical_key: key::Physical::Code(key::Code::KeyT),
+            location: iced::keyboard::Location::Standard,
+            modifiers,
+            text: None,
+            repeat: false,
+        };
+        let message = super::shortcuts::message_for(t).expect("T must map to a message");
+        assert!(matches!(message, Message::ToggleTimeDisplay));
+
+        let _ = update(&mut player, message);
+        let expected = if index == 0 {
+            views::TimeDisplay::Remaining
+        } else {
+            views::TimeDisplay::Elapsed
+        };
+        assert_eq!(player.time_display, expected);
+    }
+}
+
 #[test]
 fn back_from_songs_returns_to_albums() {
     let mut player = player_in_albums();

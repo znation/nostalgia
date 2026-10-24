@@ -14,8 +14,9 @@ use super::Message;
 /// Maps a keyboard event to the classic Winamp transport shortcut, or `None`
 /// for every event that binds nothing: a key release, a modifier-only change,
 /// an unbound key, or a key pressed with a chord modifier. The bound keys
-/// include R for Repeat, S for Shuffle, Enter to open the selected browse row,
-/// and Backspace to step the browse list back one level. `init_ui` installs
+/// include R for Repeat, S for Shuffle, A for always-on-top, T for the
+/// elapsed/remaining readout, Enter to open the selected browse row, and
+/// Backspace to step the browse list back one level. `init_ui` installs
 /// this as the window subscription's mapper, so the key-to-message table
 /// lives here once and the subscription stays a plain `filter_map`.
 pub(super) fn message_for(event: Event) -> Option<Message> {
@@ -26,8 +27,9 @@ pub(super) fn message_for(event: Event) -> Option<Message> {
 }
 
 /// The classic Winamp main-window bindings: Z previous, X play, C pause, V
-/// stop, B next, R repeat, S shuffle, Enter opens the selected browse row,
-/// Backspace steps the browse list back one level, the up/down arrows nudge
+/// stop, B next, R repeat, S shuffle, A toggles always-on-top, T switches the
+/// large readout between elapsed and remaining time, Enter opens the selected
+/// browse row, Backspace steps the browse list back one level, the up/down arrows nudge
 /// the volume, and the left/right arrows seek five seconds
 /// back or forward. A Control, Alt, or
 /// Logo chord is left to the OS and window manager, so those modifiers yield
@@ -53,6 +55,12 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
         }
         Key::Character(character) if character.eq_ignore_ascii_case("s") => {
             Some(Message::ToggleShuffle)
+        }
+        Key::Character(character) if character.eq_ignore_ascii_case("a") => {
+            Some(Message::ToggleAlwaysOnTop)
+        }
+        Key::Character(character) if character.eq_ignore_ascii_case("t") => {
+            Some(Message::ToggleTimeDisplay)
         }
         Key::Named(key::Named::Enter) => Some(Message::OpenSelected),
         Key::Named(key::Named::Backspace) => Some(Message::Back),
@@ -158,6 +166,20 @@ mod tests {
     }
 
     #[test]
+    fn message_for_maps_a_and_t_to_the_classic_toggles() {
+        for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
+            assert!(matches!(
+                message_for(key_pressed(Key::Character("a".into()), modifiers)),
+                Some(Message::ToggleAlwaysOnTop)
+            ));
+            assert!(matches!(
+                message_for(key_pressed(Key::Character("t".into()), modifiers)),
+                Some(Message::ToggleTimeDisplay)
+            ));
+        }
+    }
+
+    #[test]
     fn shortcut_matches_letters_case_insensitively() {
         // Uppercase characters map the same as lowercase, whether the case comes
         // from the character itself or the Shift modifier held over a lowercase
@@ -168,6 +190,14 @@ mod tests {
                 Modifiers::SHIFT,
             )
         });
+        assert!(matches!(
+            shortcut(&Key::Character("A".into()), Modifiers::SHIFT),
+            Some(Message::ToggleAlwaysOnTop)
+        ));
+        assert!(matches!(
+            shortcut(&Key::Character("T".into()), Modifiers::SHIFT),
+            Some(Message::ToggleTimeDisplay)
+        ));
     }
 
     #[test]
@@ -179,6 +209,8 @@ mod tests {
                 Key::Character("x".into()),
                 Key::Character("r".into()),
                 Key::Character("s".into()),
+                Key::Character("a".into()),
+                Key::Character("t".into()),
                 Key::Named(key::Named::Enter),
                 Key::Named(key::Named::Backspace),
                 Key::Named(key::Named::ArrowUp),
