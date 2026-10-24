@@ -3,7 +3,11 @@
 //! writes the line-based settings file.
 
 use std::ffi::OsString;
+use std::fs::File;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, SystemTime};
 
 use super::Settings;
 
@@ -85,6 +89,7 @@ impl FileStore {
     #[must_use]
     pub fn load(&self) -> Option<Settings> {
         let path = self.path.as_ref()?;
+        sweep_stale_temporaries(path);
         match std::fs::read_to_string(path) {
             Ok(text) => Some(Settings::from_text(&text)),
             Err(error) => {
@@ -124,13 +129,120 @@ impl SettingsWriter for FileStore {
             );
             return;
         }
-        if let Err(error) = std::fs::write(path, settings.to_text()) {
+        if let Err(error) = write_atomically(path, &settings.to_text()) {
             eprintln!(
                 "failed to write the settings file {}: {error}",
                 path.display()
             );
         }
     }
+}
+
+/// The hidden-sibling name prefix [`temporary_sibling`] stages under.
+fn temporary_prefix(path: &Path) -> Option<String> {
+    let file_name = path.file_name()?;
+    Some(format!(".{}.tmp-", file_name.to_string_lossy()))
+}
+
+/// How long a temp file must sit untouched before a load treats it as debris
+/// from a killed save rather than a save still in progress.
+const STALE_TEMP_AGE: Duration = Duration::from_secs(600);
+
+/// Remove sibling temp files left by a save whose process died before it could
+/// rename or clean up. A fresh temp may belong to an in-flight save in another
+/// process, so only files older than [`STALE_TEMP_AGE`] are removed.
+fn sweep_stale_temporaries(path: &Path) {
+    sweep_temporaries_older_than(path, STALE_TEMP_AGE);
+}
+
+fn sweep_temporaries_older_than(path: &Path, max_age: Duration) {
+    // A bare file name such as `settings.ini` lives in the current directory.
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let Some(prefix) = temporary_prefix(path) else {
+        return;
+    };
+    let Ok(entries) = std::fs::read_dir(parent) else {
+        return;
+    };
+    let now = SystemTime::now();
+    for entry in entries.flatten() {
+        if !entry.file_name().to_string_lossy().starts_with(&prefix) {
+            continue;
+        }
+        let Ok(metadata) = entry.metadata() else {
+            continue;
+        };
+        if !metadata.is_file() {
+            continue;
+        }
+        let Ok(modified) = metadata.modified() else {
+            continue;
+        };
+        let Ok(age) = now.duration_since(modified) else {
+            continue;
+        };
+        if age >= max_age {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
+/// A sibling of `path` to stage a replacement in. The process id and a
+/// per-process counter keep concurrent saves (and concurrent processes) from
+/// staging into the same file.
+fn temporary_sibling(path: &Path) -> PathBuf {
+    static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
+    let mut name = OsString::from(".");
+    if let Some(file_name) = path.file_name() {
+        name.push(file_name);
+    }
+    name.push(format!(
+        ".tmp-{}-{}",
+        std::process::id(),
+        NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+    ));
+    path.with_file_name(name)
+}
+
+/// Replace `path` with `text` by writing a sibling temp file, syncing it, and
+/// renaming it over the target, so a process killed mid-write leaves the
+/// previous file intact instead of a truncated one. A failed write, sync, or
+/// rename removes the temp file and reports the error.
+fn write_atomically(path: &Path, text: &str) -> io::Result<()> {
+    write_atomically_syncing(path, text, File::sync_all)
+}
+
+/// [`write_atomically`] with the flush step injected. The sync runs after the
+/// bytes are written and before the rename: without it a delayed-allocation
+/// filesystem could report ENOSPC during writeback after the rename already
+/// replaced the previous file, and a crash could persist the rename without
+/// the new contents.
+fn write_atomically_syncing(
+    path: &Path,
+    text: &str,
+    sync: impl FnOnce(&File) -> io::Result<()>,
+) -> io::Result<()> {
+    write_atomically_with(path, |temporary| {
+        let mut file = File::create(temporary)?;
+        file.write_all(text.as_bytes())?;
+        sync(&file)
+    })
+}
+
+fn write_atomically_with(
+    path: &Path,
+    write_temporary: impl FnOnce(&Path) -> io::Result<()>,
+) -> io::Result<()> {
+    let temporary = temporary_sibling(path);
+    let result = write_temporary(&temporary).and_then(|()| std::fs::rename(&temporary, path));
+    if result.is_err() {
+        // Best effort: do not mask the write error with a cleanup error.
+        let _ = std::fs::remove_file(&temporary);
+    }
+    result
 }
 
 #[cfg(test)]
@@ -254,6 +366,142 @@ mod tests {
         assert!(path.is_dir());
         assert_eq!(store.load(), None);
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    // A save killed mid-write must not truncate the previous file: the
+    // replacement is staged aside, and a failure removes the staging file.
+    #[test]
+    fn a_failed_half_write_leaves_the_previous_settings_file_intact() {
+        let root = temporary_root("half-write");
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("settings.ini");
+        std::fs::write(&path, "volume=0.25\n").unwrap();
+
+        let error = write_atomically_with(&path, |temporary| {
+            // Model a disk filling up after the first few bytes.
+            std::fs::write(temporary, "volume=0.9\nre")?;
+            Err(io::Error::other("disk full"))
+        })
+        .unwrap_err();
+
+        assert_eq!(error.to_string(), "disk full");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "volume=0.25\n");
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    // The staged bytes are synced before the rename replaces the old file, and
+    // a failing sync (a delayed-allocation ENOSPC) keeps the old file intact.
+    #[test]
+    fn staged_settings_are_synced_before_the_rename_and_a_failed_sync_keeps_the_old_file() {
+        let root = temporary_root("sync-first");
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("settings.ini");
+        std::fs::write(&path, "volume=0.25\n").unwrap();
+
+        let mut synced_with_old_target = false;
+        write_atomically_syncing(&path, "volume=0.9\n", |file| {
+            synced_with_old_target = std::fs::read_to_string(&path).unwrap() == "volume=0.25\n";
+            file.sync_all()
+        })
+        .unwrap();
+        assert!(synced_with_old_target);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "volume=0.9\n");
+
+        let error = write_atomically_syncing(&path, "volume=0.1\n", |_| {
+            Err(io::Error::other("no space left"))
+        })
+        .unwrap_err();
+        assert_eq!(error.to_string(), "no space left");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "volume=0.9\n");
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    // Through the store: when the temp file cannot be staged (here because the
+    // directory is read-only), an existing settings file must stay untouched
+    // rather than being rewritten in place.
+    #[cfg(unix)]
+    #[test]
+    fn file_store_keeps_the_previous_file_when_the_replacement_cannot_be_staged() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = temporary_root("read-only-dir");
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("settings.ini");
+        std::fs::write(&path, "volume=0.25\n").unwrap();
+        let set_mode = |mode: u32| {
+            let mut permissions = std::fs::metadata(&root).unwrap().permissions();
+            permissions.set_mode(mode);
+            std::fs::set_permissions(&root, permissions).unwrap();
+        };
+        set_mode(0o555);
+        if std::fs::write(root.join("probe"), b"").is_ok() {
+            // Elevated privileges ignore the directory mode; nothing to test.
+            std::fs::remove_file(root.join("probe")).ok();
+            set_mode(0o755);
+            std::fs::remove_dir_all(&root).unwrap();
+            return;
+        }
+
+        let store = FileStore::at(path.clone());
+        store.save(&varied_settings());
+
+        set_mode(0o755);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "volume=0.25\n");
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    fn age_file(path: &Path, seconds: u64) {
+        let file = File::options().write(true).open(path).unwrap();
+        file.set_modified(SystemTime::now() - Duration::from_secs(seconds))
+            .unwrap();
+    }
+
+    // A save killed between staging and rename leaves its hidden sibling
+    // behind. The next load sweeps that debris once it is old enough, while
+    // leaving a fresh temp alone because it may belong to a save in progress.
+    #[test]
+    fn file_store_sweeps_a_stale_temp_file_left_by_a_killed_save() {
+        let root = temporary_root("stale-temp");
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("settings.ini");
+        std::fs::write(&path, "volume=0.25\n").unwrap();
+        let stale = root.join(".settings.ini.tmp-999-0");
+        std::fs::write(&stale, "volume=0.9\nre").unwrap();
+        age_file(&stale, 1200);
+        let fresh = root.join(".settings.ini.tmp-999-1");
+        std::fs::write(&fresh, "volume=0.9\n").unwrap();
+
+        let store = FileStore::at(path);
+        assert_eq!(store.load(), Some(Settings::from_text("volume=0.25\n")));
+
+        assert!(!stale.exists());
+        assert!(fresh.exists());
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 2);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    // `NOSTALGIA_SETTINGS_PATH=settings.ini` has an empty parent: the sibling
+    // temp lives in the current directory, so the sweep must look there too.
+    #[test]
+    fn the_sweep_covers_a_bare_file_name_in_the_current_directory() {
+        let name = format!("nostalgia-bare-{}.ini", std::process::id());
+        let stale = PathBuf::from(format!(".{name}.tmp-999-0"));
+        let fresh = PathBuf::from(format!(".{name}.tmp-999-1"));
+        std::fs::write(&stale, "x").unwrap();
+        age_file(&stale, 1200);
+        std::fs::write(&fresh, "x").unwrap();
+
+        sweep_stale_temporaries(Path::new(&name));
+
+        let stale_gone = !stale.exists();
+        let fresh_kept = fresh.exists();
+        std::fs::remove_file(&stale).ok();
+        std::fs::remove_file(&fresh).ok();
+        assert!(stale_gone);
+        assert!(fresh_kept);
     }
 
     // A parent that is an existing regular file cannot be turned into a

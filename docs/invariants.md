@@ -621,9 +621,13 @@ first view is drawn and rewritten after any update that changes their snapshot. 
 leaves the snapshot unchanged writes nothing. Reads and writes go through the state's clamped
 setters, so out-of-range values from a file cannot push shared state outside its documented ranges.
 A missing or unreadable file, or a malformed line, falls back per key without failing startup; an
-unwritable file is logged rather than crashing the player. The readout mode, the visualizer's
-shown/hidden choice, the two panel choices, and the always-on-top choice are the five persisted values not held in
-`AppState`: they live on `WinampPlayer::time_display`, `WinampPlayer::visualizer_visible`,
+unwritable file is logged rather than crashing the player. Each save stages the whole snapshot in
+a sibling temp file, flushes it to disk, and renames it over the target, so a failed, interrupted,
+or crashed write leaves the previous file intact instead of a truncated one; a failed write or
+rename removes the temp file, and a load sweeps temp files a killed save left behind once they are
+old enough not to belong to an in-flight save. The readout mode, the visualizer's shown/hidden
+choice, the two panel choices, and the always-on-top choice are the five persisted values not held
+in `AppState`: they live on `WinampPlayer::time_display`, `WinampPlayer::visualizer_visible`,
 `WinampPlayer::eq_panel_visible`, `WinampPlayer::library_panel_visible`, and
 `WinampPlayer::always_on_top`, `main` passes the loaded snapshot through to
 `WinampPlayer::adopt_saved_settings` (which restores all five before the first view), and
@@ -656,8 +660,8 @@ last one before calling `settings::file_store::SettingsWriter::save`. Boot's `Wi
 handled by
 `handlers::window::window_id_resolved`, which applies the restored level through
 `window_level` once the id exists.
-`settings::file_store::FileStore`'s `SettingsWriter` impl creates the parent directory and logs a
-failed create or write.
+`settings::file_store::FileStore`'s `SettingsWriter` impl creates the parent directory, stages the
+text with `write_atomically`, and logs a failed create or write.
 With no store attached the method returns before taking the state lock, so tests keep the default
 no-op behavior. `shortcuts::message_for` maps `A` to `Message::ToggleAlwaysOnTop`, the arm those
 controls press.
@@ -670,8 +674,13 @@ controls press.
 `from_text_ignores_malformed_and_unknown_lines`,
 `apply_to_clamps_out_of_range_values_through_the_state_setters`,
 `apply_to_restores_a_saved_preset`,
-`settings_path_resolves_override_then_xdg_then_home_then_none`, and
-`file_store_save_then_load_returns_the_same_settings` (`src/settings/file_store.rs`), plus
+`settings_path_resolves_override_then_xdg_then_home_then_none`,
+`file_store_save_then_load_returns_the_same_settings`,
+`a_failed_half_write_leaves_the_previous_settings_file_intact`,
+`staged_settings_are_synced_before_the_rename_and_a_failed_sync_keeps_the_old_file`,
+`file_store_keeps_the_previous_file_when_the_replacement_cannot_be_staged`,
+`file_store_sweeps_a_stale_temp_file_left_by_a_killed_save`, and
+`the_sweep_covers_a_bare_file_name_in_the_current_directory` (`src/settings/file_store.rs`), plus
 `a_changed_setting_is_saved_once_and_unchanged_updates_are_not`,
 `repeat_and_equalizer_changes_reach_the_saved_snapshot`,
 `toggle_time_display_reaches_the_saved_snapshot`,
@@ -691,7 +700,8 @@ these values in memory only and started every launch at `AppState::default()`. T
 elapsed/remaining mode and the always-on-top choice joined the file later the same day. The
 visualizer's shown/hidden choice joined it with the same plan, restoring before the first view
 while the stored spectrum and its poll stay transient. The equalizer and library panels'
-shown/hidden choices joined it on 2026-10-24; both previously reopened on every launch.
+shown/hidden choices joined it on 2026-10-24; both previously reopened on every launch. Saves
+became temp-then-rename the same day, after a failed write could truncate the only copy.
 
 ## Equalizer band tint
 
