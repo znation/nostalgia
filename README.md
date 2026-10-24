@@ -95,9 +95,9 @@ transport row, and equalizer stay drawn; the library is open at launch, the togg
 playback, equalizer, browse, or search state, and it does not resize the window. A
 compact transport strip sits beneath the browse list with Previous, Play/Pause, Stop, Next,
 an elapsed-over-total time readout, and a volume slider — the window-shade strip's controls
-without its seek slider. The readout shows the elapsed (or remaining) time over the track's total (`00:53/3:30`)
-and shows just the elapsed string when no total is known, so the empty state reads the plain
-`--:--`.
+without its seek slider. The readout shows the elapsed (or remaining) time over the track's
+total (`00:53/3:30`) and shows just the elapsed string when no total is known, so the empty
+state reads the plain `--:--`.
 Each
 equalizer band slider's groove is tinted by that band's own gain, from green at `-12 dB` through
 yellow at `0 dB` to red at `+12 dB`. The app bar sets `NOSTALGIA` between gold tape strips, and
