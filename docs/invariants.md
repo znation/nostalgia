@@ -96,6 +96,7 @@ before its Control/Alt/Logo chord guard, while leaving Alt+F and Logo+F to the w
 **Pinned by.**
 
 - `ctrl_f_focuses_the_search_box_and_changes_no_browse_state` (`src/ui/tests.rs`)
+- `ctrl_f_is_a_noop_in_shade_mode` (`src/ui/tests.rs`)
 - `message_for_maps_ctrl_f_to_focus_search` (`src/ui/shortcuts.rs`)
 - `view_search_box_registers_its_focus_id` (`src/ui/views/tests.rs`)
 

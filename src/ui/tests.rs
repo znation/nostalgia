@@ -1925,6 +1925,68 @@ fn ctrl_f_focuses_the_search_box_and_changes_no_browse_state() {
     );
 }
 
+// Shade mode builds no browse tree, so Ctrl+F there must be a no-op: the focus
+// operation finds no `BROWSE_SEARCH_ID` focusable and leaves every focusable
+// unfocused. If the rolled-up view ever kept the browse/search widgets (hidden
+// or not), the key would move focus to an input the user cannot see and typed
+// keys would edit a hidden query instead of doing nothing.
+#[test]
+fn ctrl_f_is_a_noop_in_shade_mode() {
+    use iced::Rectangle;
+    use iced::advanced::Layout;
+    use iced::advanced::widget::{Id, Tree, operation::Focusable, operation::Operation};
+
+    let (mut player, _state) = test_player();
+    player.shaded = true;
+
+    let mut operation = futures::executor::block_on(widget_operation(
+        update(&mut player, Message::FocusSearch),
+        "focus search in shade mode",
+    ));
+
+    let renderer = layout_capture::headless_renderer();
+    let mut element = view(&player);
+    let mut tree = Tree::new(element.as_widget());
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &layout_capture::limits());
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &renderer, operation.as_mut());
+
+    #[derive(Default)]
+    struct FocusCapture {
+        ids: Vec<Option<Id>>,
+        focused: Vec<Option<Id>>,
+    }
+    impl Operation for FocusCapture {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+        fn focusable(&mut self, id: Option<&Id>, _bounds: Rectangle, state: &mut dyn Focusable) {
+            self.ids.push(id.cloned());
+            if state.is_focused() {
+                self.focused.push(id.cloned());
+            }
+        }
+    }
+
+    let mut capture = FocusCapture::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &renderer, &mut capture);
+    assert!(
+        !capture.ids.contains(&Some(Id::new(BROWSE_SEARCH_ID))),
+        "the shade view must build no search box: {:?}",
+        capture.ids
+    );
+    assert!(
+        capture.focused.is_empty(),
+        "Ctrl+F in shade mode must leave every focusable unfocused: {:?}",
+        capture.focused
+    );
+}
+
 // Submitting a query replaces the songs buffer with the library matches and
 // shows them under the Songs view — the same buffer the browse hierarchy
 // uses, so the playing-row marker and the empty/failure wording keep working.
