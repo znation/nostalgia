@@ -406,30 +406,29 @@ gap; the shared harness closes it.
 
 ## Settings persistence
 
-**Guarantee.** The values the user sets that outlive a track — volume, balance, Repeat, Shuffle,
-the equalizer's on/off state, preamp, ten band gains, and selected preset, the large readout's
+**Guarantee.** The values the user sets that outlive a track — volume, balance, Repeat, Shuffle, the
+equalizer's on/off state, preamp, ten band gains, and selected preset, the large readout's
 elapsed/remaining choice, the visualizer's shown/hidden choice, and the title bar's always-on-top
 choice — are loaded once before the
 first view is drawn and rewritten after any update that changes their snapshot. An update that
-leaves the snapshot unchanged writes nothing.
-Reads and writes go through the state's clamped setters, so out-of-range values from a file cannot
-push shared state outside its documented ranges. A missing or unreadable file, or a malformed line,
-falls back per key without failing startup; an unwritable file is logged rather than crashing the
-player. The readout mode, the visualizer's shown/hidden choice, and the always-on-top choice are
-the three persisted values not held in `AppState`: they live on `WinampPlayer::time_display`,
-`WinampPlayer::visualizer_visible`, and `WinampPlayer::always_on_top`, `main`
-passes the loaded snapshot through to `WinampPlayer::adopt_saved_settings` (which restores all
-three before the first view), and `persist_settings_if_changed` copies them into the snapshot
-before comparing and saving. A missing
-or malformed `time_display` line falls back to elapsed, a missing or malformed
-`always_on_top` line falls back to unpinned, and a missing or malformed `visualizer_visible` line
-falls back to shown. The classic `A` key reaches the same
-`Message::ToggleAlwaysOnTop` arm through `shortcuts::message_for`, so it flips the flag and
-schedules the same window-level call as the on-screen A controls. The saved always-on-top level waits for the window id
-every other window action uses: `window_id_resolved` stores the id, then schedules
-`iced::window::set_level` when the restored flag holds. It is still not window placement: the
-window's size, position, and shade state are not persisted. Playback position, the browse level, the
-search box, the current track, and window placement are deliberately not persisted.
+leaves the snapshot unchanged writes nothing. Reads and writes go through the state's clamped
+setters, so out-of-range values from a file cannot push shared state outside its documented ranges.
+A missing or unreadable file, or a malformed line, falls back per key without failing startup; an
+unwritable file is logged rather than crashing the player. The readout mode, the visualizer's
+shown/hidden choice, and the always-on-top choice are the three persisted values not held in
+`AppState`: they live on `WinampPlayer::time_display`, `WinampPlayer::visualizer_visible`, and
+`WinampPlayer::always_on_top`, `main` passes the loaded snapshot through to
+`WinampPlayer::adopt_saved_settings` (which restores all three before the first view), and
+`persist_settings_if_changed` copies them into the snapshot before comparing and saving. A missing
+or malformed `time_display` line falls back to elapsed, a missing or malformed `always_on_top` line
+falls back to unpinned, and a missing or malformed `visualizer_visible` line falls back to shown.
+The classic `A` key reaches the same `Message::ToggleAlwaysOnTop` arm through
+`shortcuts::message_for`, so it flips the flag and schedules the same window-level call as the
+on-screen A controls. The saved always-on-top level waits for the window id every other window
+action uses: `window_id_resolved` stores the id, then schedules `iced::window::set_level` when the
+restored flag holds. It is still not window placement: the window's size, position, and shade state
+are not persisted. Playback position, the browse level, the search box, the current track, and
+window placement are deliberately not persisted.
 
 **Enforced by.** `src/main.rs` resolves the path with `settings::FileStore::from_environment`,
 loads it once with `FileStore::load`, applies the result with `settings::Settings::apply_to`, and
@@ -735,9 +734,10 @@ source's own total duration, and
 the LCD's status row built by `views::view_now_playing`. The `PlaybackFormat` handler in
 `src/ui/handlers/playback/preview.rs` stores the reply beside the position under the same epoch and
 pending-transition guards, and `reset_position_readout` clears the format on Stop and a new
-selection; `position_tick` queries the position and the finished state on every tick, and the
-format and the preview's length only while each is still unknown. `views::seek_bar::seek_bar_value` resolves the thumb and scale from the position
-and the `playback_duration` field, and `views::view_seek_bar` builds the strip: a full-width
+selection; `position_tick` queries the position and the finished state on every tick, and the format
+and the preview's length only while each is still unknown. `views::seek_bar::seek_bar_value`
+resolves the thumb and scale from the position and the `playback_duration` field, and
+`views::view_seek_bar` builds the strip: a full-width
 `Message::SeekPreviewChanged`/`Message::SeekPreviewReleased` slider when that scale exists, or an
 empty fixed-height stand-in otherwise. The `PlaybackDuration` handler stores that reply under the
 same epoch and pending-transition guards as the position and format, `seek_preview_changed` stores

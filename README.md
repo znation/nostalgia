@@ -122,41 +122,37 @@ and a volume slider, and back. Its `–` and `✕` buttons minimize and close. T
 (the name the desktop environment shows for the app) names the current track as
 `<number>Artist - Title - nostalgia` (omitting the number or artist when empty), keeping the
 interrupted track's name across Stop and reading just `nostalgia` when no known track is current.
-With the window
-focused, the classic Winamp keys drive playback: Z
-and B step back and forward, X plays, C pauses, V stops, R toggles Repeat and S toggles Shuffle,
-A toggles always-on-top and T switches the large readout between elapsed and remaining time (the
-same actions as the on-screen A controls and a readout click), and the up/down arrows nudge the
-volume while the left/right arrows seek five seconds back or
-forward. Backspace steps the browse list back one level exactly like the `Back` button, and does
-nothing at the Artists list; while the `Search library` box is focused it keeps Backspace for
-editing its query instead of navigating. With Shuffle on, Previous retraces the tracks actually played before the current one
-instead of stepping one row backward in the list. While a song list is showing, Next, Previous
-(including a shuffled retrace), and the preview-end advance scroll that list so the landed row
-stays in view. The volume slider and the up/down arrows set
-the audio backend's playback level, and rolling the mouse wheel over the player panels nudges
-the volume by one slider step in the roll's vertical direction; over the browse list the wheel
-keeps scrolling the list instead. The balance slider sets its stereo balance, and the
-equalizer panel's on/off button, sliders, and presets change the playing preview's curve live; the
-volume and balance are remembered for the next track. Setting `APPLE_MUSIC_DEVELOPER_TOKEN` at
-launch starts a browser-based MusicKit sign-in: browse and search queries then read your Apple
-Music library through the REST API, and fall back to the built-in sample library when it is
-unset. Playback plays the selected song's Apple Music preview through `rodio` when the library
-supplies one, and updates the UI state either way. Pause and Stop silence the preview through
-the audio backend; a pause with no loaded preview stops the transport instead, since there is
-nothing to pause. Play resumes a paused preview or restarts a stopped one from the beginning.
-When a loaded preview reaches its end while playing, the player steps forward through the
-showing list: to the next song, to the first song with Repeat on at the end, or, with Shuffle
-on, to a shuffled song when another exists. With Repeat off on the last song it stops instead
-and keeps that song queued for Play.
-The volume, balance, Repeat and Shuffle flags, the equalizer's on/off state, curve, and preset,
-the large readout's elapsed/remaining choice, the visualizer's shown/hidden choice, and the
-title bar's always-on-top choice are saved
-to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or `$HOME/.config/nostalgia/settings.ini`) and
-restored at the next launch;
+With the window focused, the classic Winamp keys drive playback: Z and B step back and forward, X
+plays, C pauses, V stops, R toggles Repeat and S toggles Shuffle, A toggles always-on-top and T
+switches the large readout between elapsed and remaining time (the same actions as the on-screen A
+controls and a readout click), and the up/down arrows nudge the volume while the left/right arrows
+seek five seconds back or forward. Backspace steps the browse list back one level exactly like the
+`Back` button, and does nothing at the Artists list; while the `Search library` box is focused it
+keeps Backspace for editing its query instead of navigating. With Shuffle on, Previous retraces the
+tracks actually played before the current one instead of stepping one row backward in the list.
+While a song list is showing, Next, Previous (including a shuffled retrace), and the preview-end
+advance scroll that list so the landed row stays in view. The volume slider and the up/down arrows
+set the audio backend's playback level, and rolling the mouse wheel over the player panels nudges
+the volume by one slider step in the roll's vertical direction; over the browse list the wheel keeps
+scrolling the list instead. The balance slider sets its stereo balance, and the equalizer panel's
+on/off button, sliders, and presets change the playing preview's curve live; the volume and balance
+are remembered for the next track. Setting `APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a
+browser-based MusicKit sign-in: browse and search queries then read your Apple Music library through
+the REST API, and fall back to the built-in sample library when it is unset. Playback plays the
+selected song's Apple Music preview through `rodio` when the library supplies one, and updates the
+UI state either way. Pause and Stop silence the preview through the audio backend; a pause with no
+loaded preview stops the transport instead, since there is nothing to pause. Play resumes a paused
+preview or restarts a stopped one from the beginning. When a loaded preview reaches its end while
+playing, the player steps forward through the showing list: to the next song, to the first song with
+Repeat on at the end, or, with Shuffle on, to a shuffled song when another exists. With Repeat off
+on the last song it stops instead and keeps that song queued for Play. The volume, balance, Repeat
+and Shuffle flags, the equalizer's on/off state, curve, and preset, the large readout's
+elapsed/remaining choice, the visualizer's shown/hidden choice, and the title bar's always-on-top
+choice are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or
+`$HOME/.config/nostalgia/settings.ini`) and restored at the next launch;
 `NOSTALGIA_SETTINGS_PATH` overrides the path. A missing or malformed entry falls back to its
-default. The title bar's `A` choice is remembered for the next launch, and a saved-on launch
-starts with the window pinned once boot resolves its window id. There are no CLI flags yet.
+default. The title bar's `A` choice is remembered for the next launch, and a saved-on launch starts
+with the window pinned once boot resolves its window id. There are no CLI flags yet.
 
 ## Development
 
