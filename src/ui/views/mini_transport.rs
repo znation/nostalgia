@@ -143,7 +143,7 @@ pub(super) fn mini_transport_row_with_seek<'a>(
 ) -> Row<'a, Message> {
     let seek: Option<Element<'a, Message>> =
         super::seek_bar::seek_slider(position, duration).map(|slider| {
-            Container::new(slider)
+            Container::new(MouseArea::new(slider).on_scroll(super::seek_bar::seek_wheel_message))
                 .id(MINI_SEEK_ID)
                 .width(Length::Fill)
                 .into()

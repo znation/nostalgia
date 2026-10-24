@@ -736,7 +736,8 @@ through `handlers::mixer::volume_down`, and both go through `AppState::nudge_vol
 audio-backend forward as the arrow keys, so the clamp and the step cannot drift from them. Only
 the sign of the delta matters, so one line or pixel event is one step. The browse list is outside
 that area, so its `Scrollable` keeps the wheel and the volume is unchanged; a horizontal-only
-roll or a zero direction changes no volume and schedules no work.
+roll or a zero direction changes no volume and schedules no work. A drawn seek slider is the
+exception: it seeks instead (see `## Seek wheel`).
 
 **Enforced by.** `views::volume_wheel_message` in `src/ui/views/mod.rs` (the sign mapping),
 `Message::VolumeWheel` in `src/ui/message.rs`, `handlers::mixer::volume_wheel` in
@@ -747,6 +748,24 @@ roll or a zero direction changes no volume and schedules no work.
 `volume_wheel_message_zeroes_a_horizontal_only_roll` in `src/ui/views/tests.rs`, plus
 `volume_wheel_nudges_by_one_slider_step_and_ignores_zero` and `volume_wheel_clamps_at_the_ends`
 in `src/ui/tests.rs`.
+
+## Seek wheel
+
+**Guarantee.** A wheel roll over a *drawn* seek slider, in the Now Playing seek strip or the shade
+strip, seeks instead of nudging the volume: a positive `y` publishes `Message::SeekForward` and a
+negative `y` publishes `Message::SeekBackward` (the arrow keys' five-second step), and the roll
+does not also reach the volume area around it. A horizontal-only, zero, or non-finite roll
+publishes `Message::Ignored`. Only a drawn slider captures the wheel: a blank seek strip (no
+position or no preview length) and every other player panel keep the volume nudge.
+
+**Enforced by.** `seek_wheel_message` and the `MouseArea::on_scroll` around the slider in
+`view_seek_bar` (`src/ui/views/seek_bar.rs`), and the same wrapper inside `MINI_SEEK_ID` in
+`mini_transport_row_with_seek` (`src/ui/views/mini_transport.rs`).
+
+**Pinned by.** `seek_wheel_message_maps_a_vertical_roll_to_a_direction`,
+`seek_wheel_message_ignores_a_horizontal_only_roll`, and `wheel_over_the_shade_seek_slider_seeks`
+in `src/ui/views/tests.rs`, plus `wheel_over_the_root_seek_slider_seeks_without_nudging_the_volume`
+and `wheel_over_a_blank_seek_strip_still_nudges_the_volume` in `src/ui/tests.rs`.
 
 ## Now Playing label
 

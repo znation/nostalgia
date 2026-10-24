@@ -62,7 +62,7 @@ pub(super) use browse::BROWSE_VIEWS;
 #[cfg(test)]
 pub(crate) use mini_transport::{MINI_SEEK_ID, MINI_VOLUME_ID};
 #[cfg(test)]
-pub(super) use seek_bar::seek_bar_value;
+pub(super) use seek_bar::{SEEK_BAR_ID, SEEK_STRIP_ID, seek_bar_value};
 pub(super) use shade::SHADED_HEIGHT;
 #[cfg(test)]
 pub(super) use title_bar::TITLE_BAR_HEIGHT;

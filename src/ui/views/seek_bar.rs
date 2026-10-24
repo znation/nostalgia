@@ -6,7 +6,8 @@ use std::time::Duration;
 
 use iced::{
     Element, Length,
-    widget::{Container, Slider, Space},
+    mouse::ScrollDelta,
+    widget::{Container, MouseArea, Slider, Space},
 };
 
 use crate::ui::{Message, style};
@@ -14,6 +15,33 @@ use crate::ui::{Message, style};
 /// The seek strip's fixed height. The slider and the blank stand-in both fill
 /// it, so loading a preview does not jump the layout below.
 pub(super) const SEEK_BAR_HEIGHT: f32 = 16.0;
+
+/// The id of the Now Playing seek strip's outer container. A test finds the
+/// strip's laid-out bounds through it, drawn slider or not.
+#[cfg(test)]
+pub(crate) const SEEK_STRIP_ID: &str = "now-playing-seek-strip";
+
+/// The id of the container around the Now Playing seek strip's drawn slider.
+/// Absent while the strip is blank.
+#[cfg(test)]
+pub(crate) const SEEK_BAR_ID: &str = "now-playing-seek";
+
+/// Maps a wheel roll over a drawn seek slider to a seek: a positive `y`
+/// (iced's wheel-up direction, as in `volume_wheel_message`) seeks forward by
+/// [`SEEK_STEP_SECS`], a negative `y` seeks back, and a horizontal-only, zero,
+/// or non-finite roll is [`Message::Ignored`].
+///
+/// [`SEEK_STEP_SECS`]: super::SEEK_STEP_SECS
+pub(super) fn seek_wheel_message(delta: ScrollDelta) -> Message {
+    let (ScrollDelta::Lines { y, .. } | ScrollDelta::Pixels { y, .. }) = delta;
+    if y > 0.0 {
+        Message::SeekForward
+    } else if y < 0.0 {
+        Message::SeekBackward
+    } else {
+        Message::Ignored
+    }
+}
 
 /// Resolves the seek bar's `(thumb seconds, length seconds)` from the
 /// backend-reported position and preview length.
@@ -62,15 +90,24 @@ pub(super) fn seek_slider(
 ///
 /// Dragging emits [`Message::SeekPreviewChanged`] and releasing emits
 /// [`Message::SeekPreviewReleased`], so only the release reaches the backend.
+/// A wheel roll over the drawn slider seeks (see [`seek_wheel_message`]); the
+/// blank strip leaves the wheel to the volume area around it.
 pub fn view_seek_bar(
     position: Option<Duration>,
     duration: Option<Duration>,
 ) -> Element<'static, Message> {
     let content: Element<'static, Message> = match seek_slider(position, duration) {
-        Some(slider) => slider.into(),
+        Some(slider) => {
+            let bar = Container::new(MouseArea::new(slider).on_scroll(seek_wheel_message))
+                .width(Length::Fill);
+            #[cfg(test)]
+            let bar = bar.id(SEEK_BAR_ID);
+            bar.into()
+        }
         None => Space::new().into(),
     };
-    Container::new(content)
-        .height(Length::Fixed(SEEK_BAR_HEIGHT))
-        .into()
+    let strip = Container::new(content).height(Length::Fixed(SEEK_BAR_HEIGHT));
+    #[cfg(test)]
+    let strip = strip.id(SEEK_STRIP_ID);
+    strip.into()
 }

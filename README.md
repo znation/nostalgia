@@ -161,8 +161,9 @@ tracks actually played before the current one instead of stepping one row backwa
 While a song list is showing, Next, Previous (including a shuffled retrace), and the preview-end
 advance scroll that list so the landed row stays in view. The volume slider and the up/down arrows
 set the audio backend's playback level, and rolling the mouse wheel over the player panels nudges
-the volume by one slider step in the roll's vertical direction; over the browse list the wheel keeps
-scrolling the list instead. The balance slider sets its stereo balance, and the equalizer panel's
+the volume by one slider step in the roll's vertical direction, except that a roll over the drawn
+seek slider, in the Now Playing bar or the shade strip, seeks five seconds forward or back instead;
+over the browse list the wheel keeps scrolling the list instead. The balance slider sets its stereo balance, and the equalizer panel's
 on/off button, sliders, and presets change the playing preview's curve live; the volume and balance
 are remembered for the next track. Setting `APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a
 browser-based MusicKit sign-in: browse and search queries then read your Apple Music library through
