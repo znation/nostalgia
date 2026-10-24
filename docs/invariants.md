@@ -629,7 +629,7 @@ its internal id, whenever the id is in the known-track index:
   `<number>Artist - Title - nostalgia` and omits an empty number or artist. It keeps the
   interrupted track across Stop and falls back to the plain `nostalgia` for no current track or
   an unknown id.
-- The number prefix counts towards the marquee character budget alongside the artist and title,
+- The number prefix counts toward the marquee character budget alongside the artist and title,
   and an overlong line's scrolling window includes it, so it neither overflows the LCD nor stays
   fixed while the rest of the line scrolls.
 - The LCD splits its time readouts: by default the large left-hand readout shows the backend's

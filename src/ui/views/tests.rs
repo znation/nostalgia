@@ -2492,7 +2492,7 @@ fn equalizer_preamp_and_db_scale_sit_left_of_the_band_sliders() {
 // pair touches, two frequencies read as one number (`1703106001K`). This was
 // confirmed only from a captured window, so lay the panel out with the
 // headless tiny-skia renderer — which measures text for real — and require a
-// visible gap between every pair of neighbouring labels.
+// visible gap between every pair of neighboring labels.
 #[test]
 fn equalizer_band_labels_leave_a_gap_between_frequencies() {
     let bands = [0.0; BAND_COUNT];

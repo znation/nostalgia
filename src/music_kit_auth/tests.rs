@@ -1706,7 +1706,7 @@ fn a_failed_reap_poll_kills_the_opener_and_reports_the_cause() {
 
 // A kill that fails must not hide the reason behind an unbounded wait: the
 // reaper used to discard the kill error and then call `wait`, so a child that
-// could not be signalled kept the thread — and the report — blocked until the
+// could not be signaled kept the thread — and the report — blocked until the
 // child happened to exit. The injected fault is a refused kill against a real
 // child that outlives the assertion; the report must arrive while that child
 // is still running, then the follow-up wait reaps it once it exits on its own.

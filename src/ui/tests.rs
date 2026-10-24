@@ -4861,7 +4861,7 @@ async fn a_paused_preview_needs_the_position_poll_before_its_first_reply() {
 // The timer is subscribed from the player's own view of the bar: the same
 // number, label, and artist the view renders, measured the same way. A line
 // that fits leaves the timer unsubscribed; a line past the LCD's character
-// budget needs it, and the playlist number prefix counts towards that budget.
+// budget needs it, and the playlist number prefix counts toward that budget.
 #[test]
 fn the_player_knows_when_the_now_playing_line_needs_the_marquee() {
     let (mut player, state) = test_player();

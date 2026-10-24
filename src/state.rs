@@ -590,7 +590,7 @@ mod tests {
 
     // The `set_eq_band` tests above use only out-of-range gains and assert
     // only the addressed slot, so neither the in-range pass-through nor the
-    // untouched neighbours are pinned. A regression that stored the gain into
+    // untouched neighbors are pinned. A regression that stored the gain into
     // every band (or wrote the preamp field instead) would clear those tests
     // while corrupting the whole curve, so pin the single-slot write: band 3
     // takes the in-range gain and the other nine bands and the preamp stay
