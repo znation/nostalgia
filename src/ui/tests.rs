@@ -1,7 +1,7 @@
 use super::browse::BrowseList;
 use super::loading::{RequestGeneration, fetch_into, play_into};
 use super::timers::*;
-use super::views::{BROWSE_LIST_ID, BROWSE_VIEWS};
+use super::views::{BROWSE_LIST_ID, BROWSE_SEARCH_ID, BROWSE_VIEWS};
 use super::*;
 use crate::audio::{PlaybackFormat, Spectrum};
 use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB};
@@ -600,6 +600,26 @@ async fn assert_task_scrolls_browse_list_to(task: Task<Message>, what: &str, exp
         effects.snapped, None,
         "{what} must not snap the browse list to the top"
     );
+}
+
+/// Drives `task` until it runs an iced widget operation and returns it, so a
+/// test can apply the operation to a laid-out widget tree.
+async fn widget_operation(
+    task: Task<Message>,
+    what: &str,
+) -> Box<dyn iced::advanced::widget::Operation> {
+    use futures::StreamExt;
+
+    let mut stream = iced_runtime::task::into_stream(task)
+        .unwrap_or_else(|| panic!("{what} must schedule a task"));
+    loop {
+        let Some(action) = await_or_timeout(what, TASK_TIMEOUT, stream.next()).await else {
+            panic!("{what} task ended without a widget operation");
+        };
+        if let iced_runtime::Action::Widget(operation) = action {
+            return operation;
+        }
+    }
 }
 
 /// Drives `task` to its end and asserts it never scrolls the browse list,
@@ -1792,6 +1812,83 @@ fn search_changed_stores_the_box_text() {
 
     assert_eq!(player.search_query, "echo");
     assert!(!player.search_active);
+}
+
+// Ctrl+F is a pure focus affordance: it moves keyboard focus to the Search
+// library box and leaves the browse view, list order, selection, typed query,
+// search-active flag, and playback alone. The focus operation is applied to
+// the real laid-out root view, then a focusable capture confirms the search
+// input is the one widget focused.
+#[test]
+fn ctrl_f_focuses_the_search_box_and_changes_no_browse_state() {
+    use iced::Rectangle;
+    use iced::advanced::Layout;
+    use iced::advanced::widget::{Id, Tree, operation::Focusable, operation::Operation};
+
+    let (mut player, state) = test_player();
+    player.current_view = CurrentView::Albums;
+    player.albums.items = vec![sample_album()];
+    let _ = update(&mut player, Message::SelectRow { epoch: 0, index: 0 });
+    player.search_query = "echo".to_string();
+    {
+        let mut shared = state.blocking_lock();
+        shared.current_track = Some("song-1".to_string());
+        shared.is_playing = true;
+    }
+    let before_rows = player.albums.items.clone();
+
+    let mut operation = futures::executor::block_on(widget_operation(
+        update(&mut player, Message::FocusSearch),
+        "focus search",
+    ));
+
+    assert_view(&player, CurrentView::Albums);
+    assert_eq!(player.albums.items, before_rows);
+    assert_eq!(player.albums.selected(), Some(0));
+    assert_eq!(player.search_query, "echo");
+    assert!(!player.search_active);
+    {
+        let shared = state.blocking_lock();
+        assert_eq!(shared.current_track.as_deref(), Some("song-1"));
+        assert!(shared.is_playing);
+    }
+
+    let renderer = layout_capture::headless_renderer();
+    let mut element = view(&player);
+    let mut tree = Tree::new(element.as_widget());
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &layout_capture::limits());
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &renderer, operation.as_mut());
+
+    #[derive(Default)]
+    struct FocusCapture(Vec<(Option<Id>, bool)>);
+    impl Operation for FocusCapture {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+        fn focusable(&mut self, id: Option<&Id>, _bounds: Rectangle, state: &mut dyn Focusable) {
+            self.0.push((id.cloned(), state.is_focused()));
+        }
+    }
+
+    let mut capture = FocusCapture::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &renderer, &mut capture);
+    let focused: Vec<Option<Id>> = capture
+        .0
+        .iter()
+        .filter(|(_, is_focused)| *is_focused)
+        .map(|(id, _)| id.clone())
+        .collect();
+    assert_eq!(
+        focused,
+        vec![Some(Id::new(BROWSE_SEARCH_ID))],
+        "Ctrl+F must focus exactly the search box"
+    );
 }
 
 // Submitting a query replaces the songs buffer with the library matches and

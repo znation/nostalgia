@@ -15,10 +15,12 @@ use super::Message;
 /// for every event that binds nothing: a key release, a modifier-only change,
 /// an unbound key, or a key pressed with a chord modifier. The bound keys
 /// include R for Repeat, S for Shuffle, A for always-on-top, T for the
-/// elapsed/remaining readout, Enter to open the selected browse row, and
-/// Backspace to step the browse list back one level. `init_ui` installs
-/// this as the window subscription's mapper, so the key-to-message table
-/// lives here once and the subscription stays a plain `filter_map`.
+/// elapsed/remaining readout, Enter to open the selected browse row,
+/// Backspace to step the browse list back one level, and Ctrl+F to focus the
+/// `Search library` box (the one Control chord Winamp-style play uses).
+/// `init_ui` installs this as the window subscription's mapper, so the
+/// key-to-message table lives here once and the subscription stays a plain
+/// `filter_map`.
 pub(super) fn message_for(event: Event) -> Option<Message> {
     match event {
         Event::KeyPressed { key, modifiers, .. } => shortcut(&key, modifiers),
@@ -29,13 +31,27 @@ pub(super) fn message_for(event: Event) -> Option<Message> {
 /// The classic Winamp main-window bindings: Z previous, X play, C pause, V
 /// stop, B next, R repeat, S shuffle, A toggles always-on-top, T switches the
 /// large readout between elapsed and remaining time, Enter opens the selected
-/// browse row, Backspace steps the browse list back one level, the up/down arrows nudge
+/// browse row, Backspace steps the browse list back one level, Ctrl+F focuses
+/// the `Search library` box, the up/down arrows nudge
 /// the volume, and the left/right arrows seek five seconds
-/// back or forward. A Control, Alt, or
+/// back or forward. Apart from Ctrl+F, a Control, Alt, or
 /// Logo chord is left to the OS and window manager, so those modifiers yield
 /// `None`; Shift is allowed, and the letter match ignores ASCII case, so
-/// Shift+Z steps back exactly like Z.
+/// Shift+Z steps back exactly like Z and Ctrl+Shift+F focuses the box too.
+/// Alt+F and Logo+F stay unbound because they are chords for the window
+/// manager, not the player.
 fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
+    // Ctrl+F is the one Control chord the player claims. Alt or Logo held with
+    // it stays a window-manager chord, so only plain Control (plus optional
+    // Shift) reaches the search box.
+    if modifiers.control()
+        && !modifiers.alt()
+        && !modifiers.logo()
+        && matches!(key, Key::Character(character) if character.eq_ignore_ascii_case("f"))
+    {
+        return Some(Message::FocusSearch);
+    }
+
     if modifiers.control() || modifiers.alt() || modifiers.logo() {
         return None;
     }
@@ -182,6 +198,38 @@ mod tests {
     }
 
     #[test]
+    fn message_for_maps_ctrl_f_to_focus_search() {
+        // Control plus F focuses the search box, with or without Shift and
+        // regardless of the character's case.
+        for modifiers in [Modifiers::CTRL, Modifiers::CTRL | Modifiers::SHIFT] {
+            for character in ["f", "F"] {
+                assert!(
+                    matches!(
+                        message_for(key_pressed(Key::Character(character.into()), modifiers)),
+                        Some(Message::FocusSearch)
+                    ),
+                    "Ctrl+F ({character}) must focus the search box"
+                );
+            }
+        }
+
+        // Plain F and the Alt/Logo chords keep their old behavior: unbound.
+        for modifiers in [
+            Modifiers::NONE,
+            Modifiers::SHIFT,
+            Modifiers::ALT,
+            Modifiers::LOGO,
+            Modifiers::CTRL | Modifiers::ALT,
+            Modifiers::CTRL | Modifiers::LOGO,
+        ] {
+            assert!(
+                message_for(key_pressed(Key::Character("f".into()), modifiers)).is_none(),
+                "{modifiers:?}+F must stay unbound"
+            );
+        }
+    }
+
+    #[test]
     fn shortcut_matches_letters_case_insensitively() {
         // Uppercase characters map the same as lowercase, whether the case comes
         // from the character itself or the Shift modifier held over a lowercase
@@ -196,7 +244,8 @@ mod tests {
 
     #[test]
     fn shortcut_ignores_chord_modifiers() {
-        // Control, Alt, and Logo chords belong to the OS and window manager.
+        // Control, Alt, and Logo chords belong to the OS and window manager;
+        // Ctrl+F is the one Control exception, pinned by its own test above.
         for modifiers in [Modifiers::CTRL, Modifiers::ALT, Modifiers::LOGO] {
             for key in [
                 Key::Character("z".into()),

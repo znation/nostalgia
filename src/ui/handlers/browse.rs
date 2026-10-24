@@ -360,6 +360,15 @@ pub(in crate::ui) fn search_changed(player: &mut WinampPlayer, text: String) -> 
     Task::none()
 }
 
+/// Ctrl+F was pressed: move keyboard focus to the library search box through
+/// its `views::BROWSE_SEARCH_ID` widget id. The handler mutates no state and
+/// submits nothing; typing into the focused box then edits the query exactly
+/// as a click does. In shade mode the box is not in the widget tree, so the
+/// focus operation finds no matching focusable and the key is a no-op.
+pub(in crate::ui) fn focus_search() -> Task<Message> {
+    iced::widget::operation::focus(views::BROWSE_SEARCH_ID)
+}
+
 /// The library search box submitted: take the stored text when Enter is
 /// pressed and replace the songs list with the search results.
 pub(in crate::ui) fn search_submitted(player: &mut WinampPlayer) -> Task<Message> {

@@ -1,11 +1,11 @@
 use super::super::{CurrentView, Message, style, theme};
-use super::browse::BROWSE_VIEWS;
 use super::browse::rows::text::{
     album_count_label, album_row, artist_row, browse_placeholder, empty_list_label,
     list_count_summary, playlist_row, row_prefix, song_list_summary, song_row,
 };
 use super::browse::rows::{browse_row_style, scrollable_list};
 use super::browse::view_reload_button;
+use super::browse::{BROWSE_SEARCH_ID, BROWSE_VIEWS};
 use super::equalizer::{
     EQ_SLIDER_HEIGHT, RESPONSE_CURVE_COLUMNS, RESPONSE_CURVE_HEIGHT, RESPONSE_CURVE_LINE_HEIGHT,
     eq_enabled_label, response_curve_offsets, response_curve_row,
@@ -2116,6 +2116,44 @@ fn browse_open_button_constructs() {
 fn view_search_box_constructs() {
     let _empty = view_search_box("");
     let _filled = view_search_box("Opening");
+}
+
+// Ctrl+F targets the search box by widget id, so the laid-out text input must
+// register `BROWSE_SEARCH_ID` as a focusable; without it the key would do
+// nothing.
+#[test]
+fn view_search_box_registers_its_focus_id() {
+    use iced::advanced::widget::operation::Focusable;
+
+    #[derive(Default)]
+    struct CapturedIds(Vec<Option<Id>>);
+    impl Operation for CapturedIds {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+        fn focusable(&mut self, id: Option<&Id>, _bounds: Rectangle, _state: &mut dyn Focusable) {
+            self.0.push(id.cloned());
+        }
+    }
+
+    let renderer = layout_capture::headless_renderer();
+    let mut element = view_search_box("Opening");
+    let mut tree = Tree::new(element.as_widget());
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &layout_capture::limits());
+    let mut captured = CapturedIds::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &renderer, &mut captured);
+
+    assert!(
+        captured
+            .0
+            .iter()
+            .any(|id| id.as_ref() == Some(&Id::new(BROWSE_SEARCH_ID))),
+        "the search box must register {BROWSE_SEARCH_ID} as a focusable"
+    );
 }
 
 // The transport row is rebuilt every frame, and the Play/Pause, Repeat,

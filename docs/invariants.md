@@ -76,6 +76,31 @@ Albums/Songs, a dead end" in `BUGS-FIXED.md`. The All Songs, All Albums, and Pla
 were added later and are covered here too. Reload was added to refresh the artists list without
 restarting the app.
 
+## Search focus
+
+**Guarantee.** Ctrl+F, with or without Shift, from any normal-mode browse level moves keyboard
+focus to the `Search library` box without submitting a search. Focusing changes no browse view,
+list rows or order, selection, typed query, search-active flag, or playback state; typing into the
+focused box edits the query exactly as a click does. Plain F and the Alt+F and Logo+F chords stay
+unbound, and every other Control chord remains the window manager's. Shade mode builds no search
+box, so Ctrl+F there is a no-op.
+
+**Enforced by.** `views::browse::BROWSE_SEARCH_ID` in `src/ui/views/browse.rs`, applied with
+`.id(BROWSE_SEARCH_ID)` by `views::browse::view_search_box` (re-exported by
+`src/ui/views/mod.rs`), gives the text input a stable focus target. `Message::FocusSearch` in
+`src/ui/message.rs` is routed by `src/ui/mod.rs` to `browse::focus_search` in
+`src/ui/handlers/browse.rs`, which returns `iced::widget::operation::focus(BROWSE_SEARCH_ID)` and
+mutates no player state. `shortcuts::shortcut` in `src/ui/shortcuts.rs` claims a Control-held `f`
+before its Control/Alt/Logo chord guard, while leaving Alt+F and Logo+F to the window manager.
+
+**Pinned by.**
+
+- `ctrl_f_focuses_the_search_box_and_changes_no_browse_state` (`src/ui/tests.rs`)
+- `message_for_maps_ctrl_f_to_focus_search` (`src/ui/shortcuts.rs`)
+- `view_search_box_registers_its_focus_id` (`src/ui/views/tests.rs`)
+
+**History.** Added with the Ctrl+F keyboard affordance for the library search box.
+
 ## Browse selection
 
 **Guarantee.** Each browse list owns at most one selected row, and only the selected row draws the

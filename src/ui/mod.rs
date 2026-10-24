@@ -200,6 +200,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::ShowPlaylists => handlers::browse::show_playlists(player),
         Message::SearchChanged(text) => handlers::browse::search_changed(player, text),
         Message::SearchSubmitted => handlers::browse::search_submitted(player),
+        Message::FocusSearch => handlers::browse::focus_search(),
         Message::LoadArtists => handlers::browse::fetch::load_artists(player),
         Message::ArtistsLoaded(artists) => handlers::browse::fetch::artists_loaded(player, artists),
         Message::AlbumsLoaded(albums) => handlers::browse::fetch::albums_loaded(player, albums),

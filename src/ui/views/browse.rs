@@ -1,9 +1,10 @@
 //! The browse views — the artist → album → song drill-down, the flat All
 //! Songs and All Albums lists, and the Playlists list: the per-level view
-//! builders, the search box, and the Back, Open, Top, Sort, Reload, All Songs,
-//! All Albums, Playlists, and Retry buttons above them. The scrollable list and
-//! list builders live in the [`rows`] submodule; the pure wording, row-label,
-//! and summary helpers live in [`rows::text`].
+//! builders, the search box (tagged with [`BROWSE_SEARCH_ID`] so Ctrl+F can
+//! focus it), and the Back, Open, Top, Sort, Reload, All Songs, All Albums,
+//! Playlists, and Retry buttons above them. The scrollable list and list
+//! builders live in the [`rows`] submodule; the pure wording, row-label, and
+//! summary helpers live in [`rows::text`].
 //!
 //! Every builder is pure — it turns `&[Artist]` / `&[Album]` / `&[Song]` /
 //! `&[Playlist]` (or the rows they map to) into an `Element` and knows nothing
@@ -311,16 +312,24 @@ pub fn view_retry_button() -> Element<'static, Message> {
     labeled_button("Retry", Message::LoadArtists).into()
 }
 
+/// The stable id of the library search box's text input, so
+/// [`Message::FocusSearch`] can move keyboard focus there with iced's focus
+/// operation without the box being rebuilt.
+pub const BROWSE_SEARCH_ID: &str = "nostalgia-search-box";
+
 /// The library search box shown above the browse list: an iced text input with
-/// the `Search library` placeholder. Typing emits [`Message::SearchChanged`]
-/// so the player stores the box's text; pressing Enter emits the payload-free
-/// [`Message::SearchSubmitted`], which the update loop resolves against that
-/// stored text into a library search. Rendered on every browse screen, so a
-/// search can be started from any level of the hierarchy. The submit message
-/// owns no copy of the query, so this per-view builder allocates nothing for
-/// the submit path; the text input itself still builds its own value.
+/// the `Search library` placeholder and the [`BROWSE_SEARCH_ID`] widget id.
+/// Typing emits [`Message::SearchChanged`] so the player stores the box's text;
+/// pressing Enter emits the payload-free [`Message::SearchSubmitted`], which the
+/// update loop resolves against that stored text into a library search.
+/// Rendered on every browse screen in normal mode, so a search can be started
+/// from any level of the hierarchy and Ctrl+F can focus it there (shade mode
+/// has no search box, so the key is a no-op). The submit message owns no copy
+/// of the query, so this per-view builder allocates nothing for the submit
+/// path; the text input itself still builds its own value.
 pub fn view_search_box(query: &str) -> Element<'_, Message> {
     TextInput::new("Search library", query)
+        .id(BROWSE_SEARCH_ID)
         .on_input(Message::SearchChanged)
         .on_submit(Message::SearchSubmitted)
         .style(|_theme, status| style::chrome_text_input_style(status))

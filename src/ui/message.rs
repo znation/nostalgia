@@ -179,9 +179,12 @@ pub(in crate::ui) enum Message {
     // `search_query`; `SearchSubmitted` takes that stored text when Enter is
     // pressed and replaces the songs list with the search results. The submit
     // carries no payload so the per-view widget build does not clone the
-    // query String just to have a message ready for a press.
+    // query String just to have a message ready for a press. `FocusSearch`
+    // moves keyboard focus to the box via its `BROWSE_SEARCH_ID` widget id,
+    // changing no browse or playback state and submitting nothing.
     SearchChanged(String),
     SearchSubmitted,
+    FocusSearch,
     LoadArtists,
     ArtistsLoaded(Vec<Artist>),
     AlbumsLoaded(Vec<Album>),
