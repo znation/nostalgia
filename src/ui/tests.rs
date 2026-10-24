@@ -8268,6 +8268,36 @@ fn a_carriage_return_in_a_title_does_not_change_the_row_pitch() {
     );
 }
 
+// Windows-style CRLF is the line ending cosmic-text splits on most directly,
+// so the flattener must replace both bytes. A `\r\n` title keeps the row
+// pitch and reads as two spaces between the words rather than keeping a
+// control character or starting a second `BufferLine`.
+#[test]
+fn a_crlf_in_a_title_does_not_change_the_row_pitch() {
+    let (mut player, _state) = player_stepping_from(None);
+    player.current_view = CurrentView::Songs;
+    player.songs.items[0].title = "One\r\nTwo".to_string();
+
+    let capture = captured_root_view_text_bounds(&player);
+    let first = capture.find("1. ");
+    let second = capture.find("2. ");
+    let pitch = second.y - first.y;
+
+    assert!(
+        (pitch - views::BROWSE_ROW_HEIGHT).abs() < 0.01,
+        "row pitch {pitch} must equal BROWSE_ROW_HEIGHT {} despite the title's CRLF; rows at {first:?} and {second:?}",
+        views::BROWSE_ROW_HEIGHT
+    );
+    assert!(
+        capture
+            .fragments()
+            .iter()
+            .any(|(text, _)| text.contains("One  Two")),
+        "both bytes of the CRLF must be flattened to spaces: {:?}",
+        capture.fragments()
+    );
+}
+
 // The transport row is rebuilt every frame and the Play/Pause glyph changes
 // with playback. A text-sized Play button once widened to Pause and moved
 // every control after it; this lays out the whole root `view` in both states
