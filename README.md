@@ -145,10 +145,10 @@ When a loaded preview reaches its end while playing, the player steps forward th
 showing list: to the next song, to the first song with Repeat on at the end, or, with Shuffle
 on, to a shuffled song when another exists. With Repeat off on the last song it stops instead
 and keeps that song queued for Play.
-The volume, balance, Repeat and Shuffle flags, the equalizer's on/off state, curve, and
-preset, the large readout's elapsed/remaining choice, and the title bar's always-on-top choice
-are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or
-`$HOME/.config/nostalgia/settings.ini`) and restored at the next launch;
+The volume, balance, Repeat and Shuffle flags, the equalizer's on/off state, curve, and preset,
+the large readout's elapsed/remaining choice, and the title bar's always-on-top choice are saved
+to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or `$HOME/.config/nostalgia/settings.ini`) and
+restored at the next launch;
 `NOSTALGIA_SETTINGS_PATH` overrides the path. A missing or malformed entry falls back to its
 default. The title bar's `A` choice is remembered for the next launch, and a saved-on launch
 starts with the window pinned once boot resolves its window id. There are no CLI flags yet.
