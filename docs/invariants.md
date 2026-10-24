@@ -56,22 +56,21 @@ were added later and are covered here too.
 
 ## Browse selection
 
-**Guarantee.** Each browse list owns at most one selected row, and only the selected row draws
-the blue `theme::ROW_HIGHLIGHT` bar; a single press on any artist, album, song, or
-playlist row selects it without changing the view, playing a song, or scheduling a fetch. Ordinary
-rows draw green text and keep the hover/press faces of the flat playlist row. The playing track's
-row draws white text, keeps its `▶` marker, and draws no bar unless it is also selected; a row
-that is both playing and selected keeps the bar and stays identifiable by its `▶` prefix. Only a
-matching epoch and an in-range index can select, so a press rendered from a replaced list is a
-no-op. A second press on the row that is already selected, the `Open` button, or a plain or
-Shift-held Enter key press dispatches the
-existing artist/album/track/playlist open action, so a double-click reaches the same drill-in or
-playback on its second press; with no selected row, Enter is a no-op that schedules no fetch or
-playback task. The search box's own Enter is captured by its `TextInput::on_submit` and remains
-`Message::SearchSubmitted` (the keyboard subscription receives only ignored events), so Enter in
-the box searches rather than opening a row. The selection is cleared whenever the rows are replaced, cleared,
-failed, sorted, or restored to library order, because the stored index then names a different
-row.
+**Guarantee.** Each browse list owns at most one selected row, and only the selected row draws the
+blue `theme::ROW_HIGHLIGHT` bar; a single press on any artist, album, song, or playlist row selects
+it without changing the view, playing a song, or scheduling a fetch. Ordinary rows draw green text
+and keep the hover/press faces of the flat playlist row. The playing track's row draws white text,
+keeps its `▶` marker, and draws no bar unless it is also selected; a row that is both playing and
+selected keeps the bar and stays identifiable by its `▶` prefix. Only a matching epoch and an
+in-range index can select, so a press rendered from a replaced list is a no-op. A second press on
+the row that is already selected, the `Open` button, or a plain or Shift-held Enter key press
+dispatches the existing artist/album/track/playlist open action, so a double-click reaches the same
+drill-in or playback on its second press; with no selected row, Enter is a no-op that schedules no
+fetch or playback task. The search box's own Enter is captured by its `TextInput::on_submit` and
+remains `Message::SearchSubmitted` (the keyboard subscription receives only ignored events), so
+Enter in the box searches rather than opening a row. The selection is cleared whenever the rows are
+replaced, cleared, failed, sorted, or restored to library order, because the stored index then names
+a different row.
 
 **Enforced by.** `BrowseList::select_row` in `src/ui/browse.rs` validates the press through
 `BrowseList::select` and records it, returning `Some(true)` only for the second press on the
@@ -198,20 +197,19 @@ child is open), and `views::view_browse_nav_buttons` in `src/ui/views/browse.rs`
 
 ## Browse playing-row visibility
 
-**Guarantee.** When Next, Previous (including Shuffle's retrace of the tracks actually played),
-or the preview-end advance lands on a song while a song list (`CurrentView::Songs` or
-`CurrentView::AllSongs`) is showing, the update loop scrolls the browse list to that row's
-offset, `BROWSE_LIST_PADDING + index * BROWSE_ROW_HEIGHT`, in addition to scheduling the
-existing `TrackSelected`. `BROWSE_ROW_HEIGHT` is the laid-out vertical pitch between
-consecutive browse rows: every shared row title stays on one line — hard line breaks are
-flattened to spaces and a title wider than its column is clipped there — so no title can
-make its row taller or draw under the right-aligned label. `BROWSE_LIST_PADDING` is the list's top padding, which the offset
-includes. A later row therefore cannot drift out of view from a stale constant; iced clamps
-the absolute offset to the list's content. A direct row press does not scroll — the pressed row is already in view —
-and stepping while another browse level is showing does not scroll, since only a song list
-carries the `▶` playing marker. Top, Back, and every list-opening navigation keep their
-existing snap-to-top behavior, and playback, selection, sorting, row text, and audio behavior
-are unchanged.
+**Guarantee.** When Next, Previous (including Shuffle's retrace of the tracks actually played), or
+the preview-end advance lands on a song while a song list (`CurrentView::Songs` or
+`CurrentView::AllSongs`) is showing, the update loop scrolls the browse list to that row's offset,
+`BROWSE_LIST_PADDING + index * BROWSE_ROW_HEIGHT`, in addition to scheduling the existing
+`TrackSelected`. `BROWSE_ROW_HEIGHT` is the laid-out vertical pitch between consecutive browse rows:
+every shared row title stays on one line — hard line breaks are flattened to spaces and a title
+wider than its column is clipped there — so no title can make its row taller or draw under the
+right-aligned label. `BROWSE_LIST_PADDING` is the list's top padding, which the offset includes. A
+later row therefore cannot drift out of view from a stale constant; iced clamps the absolute offset
+to the list's content. A direct row press does not scroll — the pressed row is already in view — and
+stepping while another browse level is showing does not scroll, since only a song list carries the
+`▶` playing marker. Top, Back, and every list-opening navigation keep their existing snap-to-top
+behavior, and playback, selection, sorting, row text, and audio behavior are unchanged.
 
 **Enforced by.** `views::BROWSE_ROW_HEIGHT` and `views::BROWSE_LIST_PADDING` in
 `src/ui/views/browse/rows.rs` are the one pitch and padding `scrollable_list` lays its rows
@@ -346,26 +344,26 @@ or placeholder as the row's secondary text.
   `NOSTALGIA LIBRARY` immediately above the browse controls; the section bands emit no messages
   and are absent in shade mode.
 
-**Enforced by.** `views::view_browse_nav_buttons` in `src/ui/views/browse.rs` pushes the Top
-and Sort buttons into one `Row`. `views::view_transport_controls`,
+**Enforced by.** `views::view_browse_nav_buttons` in `src/ui/views/browse.rs` pushes the Top and
+Sort buttons into one `Row`. `views::view_transport_controls`,
 `views::transport::transport_buttons`, and `views::transport::transport_glyphs` in
 `src/ui/views/transport.rs` build the glyph row from `fixed_width_button`s and
 `iced::widget::Tooltip`s; `views::transport::eq_panel_toggle` and
 `views::transport::eq_panel_button_style` build and style the EQ toggle, and
-`handlers::mixer::toggle_equalizer_panel` flips the layout flag; `view` pushes the equalizer
-section only while that flag holds; `views::mini_transport::mini_transport_controls` projects the same
-glyph spec for the shade strip and the library footer. `views::equalizer::preamp_column`,
-`views::equalizer::db_scale_column`, and `views::view_equalizer` in
-`src/ui/views/equalizer.rs` build the equalizer band row and align the curve with it. The
-browse and transport layout tests lay out the whole root `view` through the test-only
-`src/ui/layout_capture.rs` harness; the equalizer layout test lays out `view_equalizer`
-directly. `view` in `src/ui/view.rs` matches on `CurrentView` and passes each arm that
-level's buffer, caches, and current-track id, and gates its Back, Retry, and flat-list buttons on
-`can_go_back`, `can_retry_artists`, and a `CurrentView::Artists` match. `views::view_title_band`
-and `views::title_bar::title_tape` in `src/ui/views/title_bar.rs` build the section bands and the
-app bar's tape/label row from `theme::TITLE_TAPE` and `theme::TITLE_TAPE_SHADOW`; `view` in
-`src/ui/view.rs` pushes the two bands into the normal-mode column only. The harness records each
-drawn text fragment's absolute bounds with iced's headless tiny-skia renderer.
+`handlers::mixer::toggle_equalizer_panel` flips the layout flag; `view` pushes the equalizer section
+only while that flag holds; `views::mini_transport::mini_transport_controls` projects the same glyph
+spec for the shade strip and the library footer. `views::equalizer::preamp_column`,
+`views::equalizer::db_scale_column`, and `views::view_equalizer` in `src/ui/views/equalizer.rs`
+build the equalizer band row and align the curve with it. The browse and transport layout tests lay
+out the whole root `view` through the test-only `src/ui/layout_capture.rs` harness; the equalizer
+layout test lays out `view_equalizer` directly. `view` in `src/ui/view.rs` matches on `CurrentView`
+and passes each arm that level's buffer, caches, and current-track id, and gates its Back, Retry,
+and flat-list buttons on `can_go_back`, `can_retry_artists`, and a `CurrentView::Artists` match.
+`views::view_title_band` and `views::title_bar::title_tape` in `src/ui/views/title_bar.rs` build the
+section bands and the app bar's tape/label row from `theme::TITLE_TAPE` and
+`theme::TITLE_TAPE_SHADOW`; `view` in `src/ui/view.rs` pushes the two bands into the normal-mode
+column only. The harness records each drawn text fragment's absolute bounds with iced's headless
+tiny-skia renderer.
 
 **Pinned by.** `browse_nav_buttons_place_sort_beside_top`,
 `transport_row_does_not_reflow_when_the_play_glyph_changes`,
@@ -507,24 +505,23 @@ its internal id, whenever the id is in the known-track index:
   fixed while the rest of the line scrolls.
 - The LCD splits its time readouts: by default the large left-hand readout shows the backend's
   reported position as zero-padded `MM:SS` (for example `00:53`), and the right edge always shows
-  the plain cached total (for example `3:30`). Clicking the large readout switches it to the
-  track's remaining time as `-MM:SS` (for example `-02:37`) and clicking again returns to elapsed.
-  A known track with no reported position (no preview
-  loaded, a failed start, or a backend that cannot answer) reads `00:00` at the left and the
-  cached total at the right; no current track, or an unknown id, reads `--:--` at both edges.
-  Pause keeps the stored position, so the paused player's frozen elapsed value stays on the bar;
-  Stop and a new selection clear it immediately to `00:00`. While the transport is stopped the
-  large readout for the current track draws transparent in both time modes and both blink phases
-  whenever its text is not the `--:--` placeholder, keeping its bounds and its clickability off,
-  so a stopped player shows no elapsed or remaining time other than the placeholder; the stored
-  value is still the `00:00` Stop clears it to, and Play draws it again. The `--:--`
-  placeholder still shows while stopped when no track is current, the id is unknown, or a known
-  track in `Remaining` mode has no length, since it reports that there is no time to clear. A position reply issued before a Stop
-  or a new selection is dropped rather than restoring the previous elapsed value, and the poll
-  stays suspended while any backend transport transition is in flight, so it cannot read the
-  previous player under the new epoch. A selection whose song has no preview stops the previous
-  preview, so the backend reports no position for the new track and the elapsed readout reads
-  `00:00` while the right edge keeps the cached total.
+  the plain cached total (for example `3:30`). Clicking the large readout switches it to the track's
+  remaining time as `-MM:SS` (for example `-02:37`) and clicking again returns to elapsed. A known
+  track with no reported position (no preview loaded, a failed start, or a backend that cannot
+  answer) reads `00:00` at the left and the cached total at the right; no current track, or an
+  unknown id, reads `--:--` at both edges. Pause keeps the stored position, so the paused player's
+  frozen elapsed value stays on the bar; Stop and a new selection clear it immediately to `00:00`.
+  While the transport is stopped the large readout for the current track draws transparent in both
+  time modes and both blink phases whenever its text is not the `--:--` placeholder, keeping its
+  bounds and its clickability off, so a stopped player shows no elapsed or remaining time other than
+  the placeholder; the stored value is still the `00:00` Stop clears it to, and Play draws it again.
+  The `--:--` placeholder still shows while stopped when no track is current, the id is unknown, or
+  a known track in `Remaining` mode has no length, since it reports that there is no time to clear.
+  A position reply issued before a Stop or a new selection is dropped rather than restoring the
+  previous elapsed value, and the poll stays suspended while any backend transport transition is in
+  flight, so it cannot read the previous player under the new epoch. A selection whose song has no
+  preview stops the previous preview, so the backend reports no position for the new track and the
+  elapsed readout reads `00:00` while the right edge keeps the cached total.
 - The chosen time mode is presentation-only and persists across Pause, Stop, Next/Previous, and a
   new selection until the readout is clicked again. In remaining mode a known track counts down
   from its own length, treating a missing position as zero and saturating at `-00:00` when the
@@ -561,24 +558,22 @@ its internal id, whenever the id is in the known-track index:
   the LCD's display flag. `O`, `I`, and `D` stay decorative and publish nothing. The strip keeps
   its fixed width and letter order, so the content beside it does not move.
 - A transport glyph leads the row in a fixed `LCD_TRANSPORT_WIDTH` slot before the large elapsed
-  readout, so the readout keeps its x position as the glyph changes: green `▶` while playing,
-  green `II` while paused, and red `■` while stopped. Pause of a loaded preview sets the shared
-  paused mode while Play and Stop clear it; a pause with no loaded preview does not set it, so a
-  Paused readout always has a preview Play can resume. `AppState::is_playing` alone no longer
-  distinguishes Pause from Stop. `state::TransportMode` and `AppState::transport_mode` resolve the mode,
-  `views::now_playing::transport_glyph` and `transport_glyph_color` choose the glyph and color,
-  and `views::now_playing::now_playing_row` draws the slot. While the mode is `Paused`, the large
+  readout, so the readout keeps its x position as the glyph changes: green `▶` while playing, green
+  `II` while paused, and red `■` while stopped. Pause of a loaded preview sets the shared paused
+  mode while Play and Stop clear it; a pause with no loaded preview does not set it, so a Paused
+  readout always has a preview Play can resume. `AppState::is_playing` alone no longer distinguishes
+  Pause from Stop. `state::TransportMode` and `AppState::transport_mode` resolve the mode,
+  `views::now_playing::transport_glyph` and `transport_glyph_color` choose the glyph and color, and
+  `views::now_playing::now_playing_row` draws the slot. While the mode is `Paused`, the large
   elapsed readout blinks at the frozen position: `handlers::playback::preview::position_tick` flips
   `WinampPlayer::blink_visible` on each one-second position poll, and
-  `views::now_playing::elapsed_readout_color` draws the text transparent when the phase is hidden
-  or the transport is stopped and the text is not the `--:--` placeholder instead of removing it,
-  and
+  `views::now_playing::elapsed_readout_color` draws the text transparent when the phase is hidden or
+  the transport is stopped and the text is not the `--:--` placeholder instead of removing it, and
   `views::now_playing::elapsed_readout_clickable` turns off its click while stopped, so the text
-  keeps its bounds and the title, total, and status row do not move. A poll after Play or Stop
-  holds the phase visible, so playing always shows the readout and the stopped view clears it
-  unless it is the `--:--` placeholder, which still shows while stopped. The blink adds no
-  timer or subscription. Pinned by
-  `transport_glyph_names_and_colors_each_mode`,
+  keeps its bounds and the title, total, and status row do not move. A poll after Play or Stop holds
+  the phase visible, so playing always shows the readout and the stopped view clears it unless it is
+  the `--:--` placeholder, which still shows while stopped. The blink adds no timer or subscription.
+  Pinned by `transport_glyph_names_and_colors_each_mode`,
   `now_playing_row_keeps_the_elapsed_readout_in_place_across_transport_modes`,
   `now_playing_content_draws_the_indicator_strip_beside_the_title`,
   `elapsed_readout_color_blinks_when_paused_and_clears_when_stopped`,
@@ -588,9 +583,8 @@ its internal id, whenever the id is in the known-track index:
   `compact_readout_toggles_time_display_only_while_not_stopped`, and
   `now_playing_row_keeps_the_elapsed_bounds_when_the_blink_hides_it` in `src/ui/views/tests.rs`;
   `lcd_indicator_message_arms_a_and_v_and_leaves_o_i_d_inert` and
-  `lcd_indicator_strip_publishes_always_on_top_on_a_and_visualizer_on_v` in
-  `src/ui/views/tests.rs`; `toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum`
-  in `src/ui/tests.rs`;
+  `lcd_indicator_strip_publishes_always_on_top_on_a_and_visualizer_on_v` in `src/ui/views/tests.rs`;
+  `toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum` in `src/ui/tests.rs`;
   `position_tick_blinks_the_elapsed_readout_only_while_paused` in `src/ui/tests.rs`; and
   `toggle_playing_switches_between_playing_and_paused` and
   `pause_sets_the_paused_mode_while_play_and_stop_clear_it` in `src/state.rs`; and
@@ -618,8 +612,8 @@ its internal id, whenever the id is in the known-track index:
   `views::now_playing::marquee_text`, advanced one character per `Message::MarqueeTick`, and
   reset to the start by `TrackSelected`; a line that fits is shown whole and borrowed.
 - The marquee timer is subscribed only while the line needs to scroll: `WinampPlayer::needs_marquee`
-  measures the same number, label, and artist the bar renders, so a line that fits leaves the timer out
-  (every message makes iced rebuild the whole screen, browse list included).
+  measures the same number, label, and artist the bar renders, so a line that fits leaves the timer
+  out (every message makes iced rebuild the whole screen, browse list included).
 - The position poll is subscribed only while there is a position to refresh:
   `WinampPlayer::needs_position_poll` includes it while playback is running, the backend still holds
   a preview (paused, even before its first position reply, so a seek can still move it), or a stored
@@ -635,62 +629,59 @@ browsing to another album replaced the visible song list. `views::now_playing::n
 (through `format_lcd_elapsed` for elapsed mode and `format_lcd_remaining` for remaining mode)
 formats the left-hand readout as chosen by `views::now_playing::TimeDisplay`, while
 `views::now_playing::now_playing_time` returns the plain cached total for the right edge; the
-`playback_position` field on `WinampPlayer` stores the reply the
-`PlaybackPosition` handler received, which is stamped with `position_epoch`, and
-`WinampPlayer::readout_position` prefers an in-progress seek drag over that value so the large
-readout and the seek thumb share one position source;
-`reset_position_readout` bumps that epoch and clears the value
-on Stop and on a new selection. `pending_position_transitions` counts the backend transport
-transitions that are still in flight: every transport handler in `src/ui/handlers/playback.rs`
-that schedules one begins a transition, and the completion that reports that same transition ends
-it; while the count is nonzero the `handlers::playback::preview` poll handlers issue no query and
-its reply handlers store no reply. `AppleMusicService::play_track`
-stops the backend's previous preview when a selection has no preview URL.
-`views::now_playing::lcd_indicator_strip` draws `views::now_playing::LCD_INDICATOR_LABELS` down
-the LCD's left edge in a fixed-width column; its `A` and `V` cells publish
-`Message::ToggleAlwaysOnTop` and `Message::ToggleVisualizer` through
+`playback_position` field on `WinampPlayer` stores the reply the `PlaybackPosition` handler
+received, which is stamped with `position_epoch`, and `WinampPlayer::readout_position` prefers an
+in-progress seek drag over that value so the large readout and the seek thumb share one position
+source; `reset_position_readout` bumps that epoch and clears the value on Stop and on a new
+selection. `pending_position_transitions` counts the backend transport transitions that are still in
+flight: every transport handler in `src/ui/handlers/playback.rs` that schedules one begins a
+transition, and the completion that reports that same transition ends it; while the count is nonzero
+the `handlers::playback::preview` poll handlers issue no query and its reply handlers store no
+reply. `AppleMusicService::play_track` stops the backend's previous preview when a selection has no
+preview URL. `views::now_playing::lcd_indicator_strip` draws
+`views::now_playing::LCD_INDICATOR_LABELS` down the LCD's left edge in a fixed-width column; its `A`
+and `V` cells publish `Message::ToggleAlwaysOnTop` and `Message::ToggleVisualizer` through
 `views::now_playing::lcd_indicator_message`, while `O`, `I`, and `D` publish nothing.
 `views::now_playing::visualizer_bar_heights` scales and clamps the stored spectrum, and
 `views::now_playing::now_playing_visualizer_row` draws its `BAND_COUNT` bars at fixed width inside
 the row `views::view_now_playing` places between the title and status rows. The `Spectrum` handler
-in `src/ui/handlers/playback/preview.rs` stores the reply under the same epoch and pending-transition
-guards as the position, format, and duration, `spectrum_tick` schedules the backend query, and
-`reset_position_readout` clears the bars on Stop and a new selection. `ui::timers::subscriptions`
-subscribes `spectrum_ticks` only while `WinampPlayer::needs_spectrum_poll` reports that playback is
-running.
+in `src/ui/handlers/playback/preview.rs` stores the reply under the same epoch and
+pending-transition guards as the position, format, and duration, `spectrum_tick` schedules the
+backend query, and `reset_position_readout` clears the bars on Stop and a new selection.
+`ui::timers::subscriptions` subscribes `spectrum_ticks` only while
+`WinampPlayer::needs_spectrum_poll` reports that playback is running.
 `views::now_playing::now_playing_number` resolves `KnownTrack::number`,
 `handlers::playback::track_selected` records the selecting row's 1-based number, and
 `views::now_playing::now_playing_row` draws it (separately when the line fits, inside the window
-when it scrolls). `views::now_playing::marquee_text`
-windows an overlong line, and `WinampPlayer::marquee_offset` carries the advance through
-`Message::MarqueeTick`. The `WinampPlayer::time_display` field holds the readout's mode, and
-`handlers::playback::toggle_time_display` (routed from `Message::ToggleTimeDisplay`, pressed by
-the `MouseArea` wrapping the readout in `now_playing_row`) flips it without touching playback
-state. `views::now_playing::display_len` and `views::now_playing::needs_marquee`
-measure the line, and `ui::timers::subscriptions` subscribes `marquee_ticks` only while that measure
-exceeds `MARQUEE_WIDTH`, and `position_ticks` only while `WinampPlayer::needs_position_poll` reports
-a preview whose position can still change. `audio::PlaybackFormat` carries the preview's sample rate,
+when it scrolls). `views::now_playing::marquee_text` windows an overlong line, and
+`WinampPlayer::marquee_offset` carries the advance through `Message::MarqueeTick`. The
+`WinampPlayer::time_display` field holds the readout's mode, and
+`handlers::playback::toggle_time_display` (routed from `Message::ToggleTimeDisplay`, pressed by the
+`MouseArea` wrapping the readout in `now_playing_row`) flips it without touching playback state.
+`views::now_playing::display_len` and `views::now_playing::needs_marquee` measure the line, and
+`ui::timers::subscriptions` subscribes `marquee_ticks` only while that measure exceeds
+`MARQUEE_WIDTH`, and `position_ticks` only while `WinampPlayer::needs_position_poll` reports a
+preview whose position can still change. `audio::PlaybackFormat` carries the preview's sample rate,
 channel count, and average bitrate; `audio::preview::DecodedPreview` hands the download's encoded
-byte count to `format_for_source` in `src/audio/player/format.rs`, which reads the rate and
-channels from the decoded `rodio` source and computes the bitrate through
-`preview_bitrate_kbps` from the source's own total duration, and
+byte count to `format_for_source` in `src/audio/player/format.rs`, which reads the rate and channels
+from the decoded `rodio` source and computes the bitrate through `preview_bitrate_kbps` from the
+source's own total duration, and
 `views::now_playing::text::format_playback_prefix`/`text::channel_mode_label` format them, and
 `views::now_playing::CHANNEL_LABELS`/`channel_label_color`/`now_playing_status_row` render them in
 the LCD's status row built by `views::view_now_playing`. The `PlaybackFormat` handler in
 `src/ui/handlers/playback/preview.rs` stores the reply beside the position under the same epoch and
 pending-transition guards, and `reset_position_readout` clears the format on Stop and a new
-selection;
-`position_tick` batches all three backend queries: the position, the format, and the preview's
-length. `views::seek_bar::seek_bar_value` resolves the thumb and scale from the position and the
-`playback_duration` field, and `views::view_seek_bar` builds the strip: a full-width
+selection; `position_tick` batches all three backend queries: the position, the format, and the
+preview's length. `views::seek_bar::seek_bar_value` resolves the thumb and scale from the position
+and the `playback_duration` field, and `views::view_seek_bar` builds the strip: a full-width
 `Message::SeekPreviewChanged`/`Message::SeekPreviewReleased` slider when that scale exists, or an
 empty fixed-height stand-in otherwise. The `PlaybackDuration` handler stores that reply under the
-same epoch and pending-transition guards as the position and format, `seek_preview_changed`
-stores the drag without reaching the backend, and `seek_preview_released` calls
-`AppleMusicService::seek_output_to`, which forwards to `AudioOutput::seek_to`; the `duration`
-query reaches it through `AudioOutput::duration`. `reset_position_readout` clears the duration and
-the drag on Stop and a new selection, and `RodioOutput::seek_to`/`duration` query the worker,
-whose `RodioPlayer` records the decoded source's length and clamps each absolute seek to it.
+same epoch and pending-transition guards as the position and format, `seek_preview_changed` stores
+the drag without reaching the backend, and `seek_preview_released` calls
+`AppleMusicService::seek_output_to`, which forwards to `AudioOutput::seek_to`; the `duration` query
+reaches it through `AudioOutput::duration`. `reset_position_readout` clears the duration and the
+drag on Stop and a new selection, and `RodioOutput::seek_to`/`duration` query the worker, whose
+`RodioPlayer` records the decoded source's length and clamps each absolute seek to it.
 
 The scrolling timer's stream is built by `ui::ticks::tick_stream` in `src/ui/ticks.rs`, and its
 thread starts through `spawn_marquee_thread` in `src/ui/timers.rs`, which delegates
@@ -738,7 +729,8 @@ rather than the panic unwinding the event loop.
 - `track_selected_records_the_selected_rows_number`
 - `replaying_a_track_from_another_row_updates_its_number`
 - `the_player_knows_when_the_now_playing_line_needs_the_marquee`
-- `now_playing_time_shows_the_played_tracks_duration_after_browsing_to_another_album` (`src/ui/tests.rs`)
+- `now_playing_time_shows_the_played_tracks_duration_after_browsing_to_another_album`
+  (`src/ui/tests.rs`)
 - `now_playing_elapsed_shows_the_position_while_it_is_known`
 - `now_playing_elapsed_previews_the_seek_drag`
 - `pause_keeps_the_stored_elapsed_readout`
@@ -963,16 +955,16 @@ browser's `POST /token` callback behind it:
   different name, and a non-directory entry are left alone; a symlink is not followed.
 
 **Enforced by.** `authorize_with_bounds` in `src/music_kit_auth.rs` keeps the accepted connections
-in a `Vec` of `PendingConnection`, which is defined in `src/music_kit_auth/server.rs`. The loop's helpers live in `src/music_kit_auth/server.rs`: every pass
-calls `serve_pending`, which polls each pending
-connection through `http::RequestReader::poll` and serves the ones whose request has arrived, and
-then `accept_pending`, which takes on the connections that are waiting. `http::RequestReader` owns a
-non-blocking socket and parses the request from the bytes received so far, so polling a silent peer
-reports "nothing yet" instead of waiting for it; `serve_pending` drops a connection whose budget is
-spent. `BootstrapPage::write` in `src/music_kit_auth/bootstrap.rs` calls `sweep_stale_bootstrap_dirs`
-before creating the new owner-only
-directory; the sweep reads one level of the temp dir, removes only aged directories whose names
-carry `BOOTSTRAP_DIR_PREFIX`, and reports a removal failure without failing the new sign-in.
+in a `Vec` of `PendingConnection`, which is defined in `src/music_kit_auth/server.rs`. The loop's
+helpers live in `src/music_kit_auth/server.rs`: every pass calls `serve_pending`, which polls each
+pending connection through `http::RequestReader::poll` and serves the ones whose request has
+arrived, and then `accept_pending`, which takes on the connections that are waiting.
+`http::RequestReader` owns a non-blocking socket and parses the request from the bytes received so
+far, so polling a silent peer reports "nothing yet" instead of waiting for it; `serve_pending` drops
+a connection whose budget is spent. `BootstrapPage::write` in `src/music_kit_auth/bootstrap.rs`
+calls `sweep_stale_bootstrap_dirs` before creating the new owner-only directory; the sweep reads one
+level of the temp dir, removes only aged directories whose names carry `BOOTSTRAP_DIR_PREFIX`, and
+reports a removal failure without failing the new sign-in.
 
 **Pinned by.**
 
@@ -1047,8 +1039,8 @@ redirects and disables the proxy.
 - `the_preview_resolver_allows_a_public_address_literal`
   (both in `src/audio/tests.rs`)
 
-**History.** Reconstructed from "Preview URL guard accepts IPv4 multicast and reserved ranges"
-in `BUGS-FIXED.md` (2026-10-23); the v6 branch already refused multicast while the v4 branch did not.
+**History.** Reconstructed from "Preview URL guard accepts IPv4 multicast and reserved ranges" in
+`BUGS-FIXED.md` (2026-10-23); the v6 branch already refused multicast while the v4 branch did not.
 
 ## Preview spectrum
 
@@ -1136,14 +1128,14 @@ readout, status row's reported format, visualizer, and seek bar clear together. 
 stale epoch, a pending transition, and a not-finished reply never advance.
 
 **Enforced by.** `audio::AudioOutput::is_finished` in `src/audio.rs` defaults to false, and
-`audio::player::rodio_player::RodioPlayer::is_finished` in `src/audio/player/rodio_player.rs` answers true only
-once the player holds a preview's format and `rodio::Player::empty` reports the queued source has
-drained;
-`RodioOutput::is_finished` bounds the worker's `Command::Finished` reply like the other backend
-queries, mapping a missing reply to false. `AppleMusicService::preview_finished` in
-`src/apple_music/playback/output.rs` forwards the backend's answer without touching shared state.
-`handlers::playback::preview::position_tick` schedules the finished query, `Message::PlaybackFinished`
-carries its reply, and `handlers::playback::preview::playback_finished` advances the transport;
+`audio::player::rodio_player::RodioPlayer::is_finished` in `src/audio/player/rodio_player.rs`
+answers true only once the player holds a preview's format and `rodio::Player::empty` reports the
+queued source has drained; `RodioOutput::is_finished` bounds the worker's `Command::Finished` reply
+like the other backend queries, mapping a missing reply to false.
+`AppleMusicService::preview_finished` in `src/apple_music/playback/output.rs` forwards the backend's
+answer without touching shared state. `handlers::playback::preview::position_tick` schedules the
+finished query, `Message::PlaybackFinished` carries its reply, and
+`handlers::playback::preview::playback_finished` advances the transport;
 `handlers::playback::forward_track_id` (shared with `handlers::playback::step_track`) applies the
 same list/Shuffle/Repeat rules as Next, and the no-next-song case reuses `handlers::playback::stop`.
 
