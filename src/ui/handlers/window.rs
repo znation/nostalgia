@@ -13,13 +13,19 @@ use crate::ui::{Message, WinampPlayer};
 /// The app window's id, resolved once at boot by `iced::window::latest()`:
 /// store it, so the title bar's window actions can act on the window. Until
 /// it lands (or if the query fails) those actions are no-ops (see
-/// `with_window_id`).
+/// `with_window_id`). A saved always-on-top choice waits for the same id, so
+/// its level is applied once the window exists instead of before boot.
 pub(in crate::ui) fn window_id_resolved(
     player: &mut WinampPlayer,
     id: Option<iced::window::Id>,
 ) -> Task<Message> {
     player.window_id = id;
-    Task::none()
+    match id {
+        Some(id) if player.always_on_top => {
+            iced::window::set_level(id, window_level(player.always_on_top))
+        }
+        _ => Task::none(),
+    }
 }
 
 /// The title bar's drag region: drag the window with the pointer.
@@ -87,12 +93,20 @@ pub(in crate::ui) fn window_shade_measured(
 /// flips so the view redraws the toggle.
 pub(in crate::ui) fn toggle_always_on_top(player: &mut WinampPlayer) -> Task<Message> {
     player.always_on_top = !player.always_on_top;
-    let level = if player.always_on_top {
+    let level = window_level(player.always_on_top);
+    with_window_id(player, move |id| iced::window::set_level(id, level))
+}
+
+/// The window level for `always_on_top`: pinned above other windows when set,
+/// otherwise the normal level. Both the title bar's toggle and boot's saved
+/// choice schedule `iced::window::set_level` with it, so the mapping lives here
+/// once.
+pub(in crate::ui) fn window_level(always_on_top: bool) -> iced::window::Level {
+    if always_on_top {
         iced::window::Level::AlwaysOnTop
     } else {
         iced::window::Level::Normal
-    };
-    with_window_id(player, move |id| iced::window::set_level(id, level))
+    }
 }
 
 /// Runs `action` with the resolved window id, or returns no task when it has

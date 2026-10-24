@@ -323,6 +323,41 @@ fn saved_time_display_mode_is_restored_on_boot() {
     assert_eq!(player.saved_settings, Settings::default());
 }
 
+#[test]
+fn toggle_always_on_top_reaches_the_saved_snapshot() {
+    let (mut player, _state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+
+    let _ = update(&mut player, Message::ToggleAlwaysOnTop);
+    let snapshots = store.snapshots();
+    assert_eq!(snapshots.len(), 1);
+    assert!(snapshots[0].always_on_top());
+
+    let _ = update(&mut player, Message::Ignored);
+    assert_eq!(store.snapshots().len(), 1);
+
+    let _ = update(&mut player, Message::ToggleAlwaysOnTop);
+    let snapshots = store.snapshots();
+    assert_eq!(snapshots.len(), 2);
+    assert!(!snapshots[1].always_on_top());
+}
+
+#[test]
+fn saved_always_on_top_is_restored_on_boot() {
+    let (mut player, _state) = test_player();
+    let mut pinned = Settings::default();
+    pinned.set_always_on_top(true);
+
+    player.adopt_saved_settings(pinned.clone());
+    assert!(player.always_on_top);
+    assert_eq!(player.saved_settings, pinned);
+
+    player.adopt_saved_settings(Settings::default());
+    assert!(!player.always_on_top);
+    assert_eq!(player.saved_settings, Settings::default());
+}
+
 /// The longest a driven `Task` is allowed to take before its test fails.
 ///
 /// A task that never yields its completion message — a hung service future,
@@ -2582,6 +2617,34 @@ fn toggle_always_on_top_without_a_window_id_still_flips_the_flag() {
 
     assert_message_schedules_no_work(&mut player, Message::ToggleAlwaysOnTop);
     assert!(player.always_on_top);
+}
+
+#[test]
+fn window_level_selects_always_on_top() {
+    assert_eq!(
+        handlers::window::window_level(true),
+        iced::window::Level::AlwaysOnTop
+    );
+    assert_eq!(
+        handlers::window::window_level(false),
+        iced::window::Level::Normal
+    );
+}
+
+#[test]
+fn window_id_resolved_applies_a_saved_always_on_top_level() {
+    let (mut player, _state) = test_player();
+    player.always_on_top = true;
+    let id = iced::window::Id::unique();
+
+    assert_message_schedules_work(&mut player, Message::WindowIdResolved(Some(id)));
+    assert_eq!(player.window_id, Some(id));
+
+    player.always_on_top = false;
+    let id = iced::window::Id::unique();
+
+    assert_message_schedules_no_work(&mut player, Message::WindowIdResolved(Some(id)));
+    assert_eq!(player.window_id, Some(id));
 }
 
 #[test]
