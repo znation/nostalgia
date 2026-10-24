@@ -4731,6 +4731,70 @@ fn now_playing_label_keeps_the_track_name_after_browsing_to_another_album() {
     assert_eq!(player.now_playing_label(current_track.as_deref()), "One");
 }
 
+// The iced window's title follows the Now Playing bar's known track: the same
+// `known_tracks` entry the LCD names, with the row number and artist included
+// only when they exist. Nothing current, or an id the index does not know,
+// falls back to the plain app name, and Stop keeps the interrupted track.
+#[test]
+fn window_title_names_the_current_track() {
+    let (mut player, state) = test_player();
+    player.known_tracks.insert(
+        "song-1".to_string(),
+        views::KnownTrack {
+            title: "Opening".to_string(),
+            artist: "The Sample Band".to_string(),
+            number: "1. ".to_string(),
+            time: "3:30".to_string(),
+            duration_ms: 210_000,
+        },
+    );
+    state.blocking_lock().current_track = Some("song-1".to_string());
+    assert_eq!(
+        player.window_title(),
+        "1. The Sample Band - Opening - nostalgia"
+    );
+
+    player
+        .known_tracks
+        .get_mut("song-1")
+        .expect("seeded")
+        .number = String::new();
+    assert_eq!(
+        player.window_title(),
+        "The Sample Band - Opening - nostalgia"
+    );
+
+    player
+        .known_tracks
+        .get_mut("song-1")
+        .expect("seeded")
+        .artist = String::new();
+    assert_eq!(player.window_title(), "Opening - nostalgia");
+
+    state.blocking_lock().current_track = Some("no-such-song".to_string());
+    assert_eq!(player.window_title(), "nostalgia");
+
+    state.blocking_lock().current_track = None;
+    assert_eq!(player.window_title(), "nostalgia");
+
+    player
+        .known_tracks
+        .get_mut("song-1")
+        .expect("seeded")
+        .number = "1. ".to_string();
+    player
+        .known_tracks
+        .get_mut("song-1")
+        .expect("seeded")
+        .artist = "The Sample Band".to_string();
+    state.blocking_lock().current_track = Some("song-1".to_string());
+    state.blocking_lock().stop();
+    assert_eq!(
+        player.window_title(),
+        "1. The Sample Band - Opening - nostalgia"
+    );
+}
+
 // The Now Playing bar's time readout comes from the same `known_tracks` entry
 // as its label: a played track's duration must reach
 // `WinampPlayer::now_playing_time`, and — like the title — survive a later

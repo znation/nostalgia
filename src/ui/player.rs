@@ -18,6 +18,9 @@ use crate::state::AppState;
 use super::browse::BrowseList;
 use super::{transport, views};
 
+/// The title `init_ui` gives iced when no known track is current.
+const APP_TITLE: &str = "nostalgia";
+
 /// The app model the iced loop owns: the shared playback state, the Apple
 /// Music service, the browse lists and their view state, the Now Playing
 /// readouts and drag state, and the window flags and settings writer.
@@ -302,6 +305,34 @@ impl WinampPlayer {
             views::TimeDisplay::Elapsed
         };
         self.saved_settings = saved;
+    }
+
+    /// The title iced gives the application window. It follows the Now Playing
+    /// bar: the current track's number, artist, and title, resolved against
+    /// [`Self::known_tracks`], then ` - nostalgia`. With no current track or an
+    /// unknown id it is the plain [`APP_TITLE`]. This names the iced window
+    /// (what the desktop environment shows), not the custom title bar, whose
+    /// label is the fixed `NOSTALGIA`. Stop leaves `current_track` in place, so
+    /// the interrupted track's name stays in the title as it does on the LCD.
+    pub(in crate::ui) fn window_title(&self) -> String {
+        let state = self.state.blocking_lock();
+        let Some(track) = state
+            .current_track
+            .as_deref()
+            .and_then(|id| self.known_tracks.get(id))
+        else {
+            return APP_TITLE.to_string();
+        };
+        let mut title = String::with_capacity(track.number.len() + track.artist.len() + 32);
+        title.push_str(&track.number);
+        if !track.artist.is_empty() {
+            title.push_str(&track.artist);
+            title.push_str(" - ");
+        }
+        title.push_str(&track.title);
+        title.push_str(" - ");
+        title.push_str(APP_TITLE);
+        title
     }
 
     /// The Now Playing bar's label for `current_track`, resolved against the

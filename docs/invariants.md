@@ -513,6 +513,11 @@ its internal id, whenever the id is in the known-track index:
   number prefix.
 - No current track renders the label "Nothing", an empty artist, and no number prefix.
 - Stop keeps the interrupted track's title and number (the current track is not cleared by Stop).
+- The iced application window's title mirrors a known current track through
+  `WinampPlayer::window_title`, using the same index and number prefix as the LCD, so it reads
+  `<number>Artist - Title - nostalgia` and omits an empty number or artist. It keeps the
+  interrupted track across Stop and falls back to the plain `nostalgia` for no current track or
+  an unknown id.
 - The number prefix counts towards the marquee character budget alongside the artist and title,
   and an overlong line's scrolling window includes it, so it neither overflows the LCD nor stays
   fixed while the rest of the line scrolls.
@@ -738,6 +743,7 @@ rather than the panic unwinding the event loop.
 - `now_playing_row_draws_no_number_when_none_is_known`
   (all in `src/ui/views/tests.rs`)
 - `now_playing_label_keeps_the_track_name_after_browsing_to_another_album` (`src/ui/tests.rs`)
+- `window_title_names_the_current_track` (`src/ui/tests.rs`)
 - `now_playing_number_survives_browsing_to_another_album` (`src/ui/tests.rs`)
 - `track_selected_records_the_selected_rows_number`
 - `replaying_a_track_from_another_row_updates_its_number`

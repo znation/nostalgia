@@ -50,7 +50,9 @@ use crate::{apple_music::AppleMusicService, state::AppState};
 /// writer and the snapshot `main` already restored into `state`; the player
 /// keeps both so `update` can save every later change, and
 /// `adopt_saved_settings` also restores the player-owned elapsed/remaining
-/// readout mode from the snapshot. `main` must call this
+/// readout mode from the snapshot. The iced window's title follows the current
+/// track: `WinampPlayer::window_title` names it, falling back to `nostalgia`
+/// when none is known. `main` must call this
 /// from a plain (non-async) context: iced drives its event loop synchronously
 /// on the calling thread, and `update`/`view` use `blocking_lock` on the shared
 /// state, which panics inside a runtime.
@@ -75,7 +77,7 @@ pub fn init_ui(
         update,
         view,
     )
-    .title("nostalgia")
+    .title(|player: &WinampPlayer| player.window_title())
     .theme(|_: &WinampPlayer| theme::winamp_theme())
     .decorations(false)
     .resizable(false)
