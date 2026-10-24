@@ -301,6 +301,9 @@ impl AppleMusicService {
 /// still triggers the compiler's `dead_code` warning.
 #[allow(dead_code)]
 impl AppleMusicService {
+    /// A stub for advancing to the next library track: it prints and leaves
+    /// the transport state untouched. Kept as the seam a real Apple Music
+    /// implementation will fill.
     pub(super) async fn next_track(&self) -> Result<(), AppleMusicError> {
         // In a real implementation, this would:
         // 1. Get current track position
@@ -310,6 +313,9 @@ impl AppleMusicService {
         Ok(())
     }
 
+    /// A stub for stepping back to the previous library track: it prints and
+    /// leaves the transport state untouched. Kept as the seam a real Apple
+    /// Music implementation will fill.
     pub(super) async fn previous_track(&self) -> Result<(), AppleMusicError> {
         // In a real implementation, this would:
         // 1. Get current track position

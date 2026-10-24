@@ -51,6 +51,9 @@ pub(in crate::audio) struct RodioPlayer {
 }
 
 impl RodioPlayer {
+    /// Builds a player around an already opened `rodio::Player`, with a
+    /// neutral balance, the default equalizer settings, empty format and
+    /// length cells, and a fresh spectrum meter.
     pub(in crate::audio) fn new(player: rodio::Player) -> Self {
         Self {
             player,

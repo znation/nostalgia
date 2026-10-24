@@ -18,6 +18,11 @@ use crate::state::AppState;
 use super::browse::BrowseList;
 use super::{transport, views};
 
+/// The app model the iced loop owns: the shared playback state, the Apple
+/// Music service, the browse lists and their view state, the Now Playing
+/// readouts and drag state, and the window flags and settings writer.
+/// Handlers mutate it and the views read it; `update` dispatches each
+/// `Message` to one of them.
 pub(in crate::ui) struct WinampPlayer {
     pub(in crate::ui) state: Arc<Mutex<AppState>>,
     pub(in crate::ui) apple_music_service: AppleMusicService,

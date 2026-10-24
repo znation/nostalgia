@@ -8,6 +8,11 @@ use crate::audio::{PlaybackFormat, Spectrum};
 use crate::equalizer::Preset;
 use crate::library::{Album, Artist, Playlist, Song};
 
+/// Every event the iced loop routes to `update`: transport and playback
+/// controls, LCD and equalizer changes, browse navigation, search, sort, and
+/// fetch replies, track-completion reports, and window actions. Each variant
+/// carries its handler's input; the comments on individual variants name the
+/// state they change.
 #[derive(Debug, Clone)]
 pub(in crate::ui) enum Message {
     PlayPause,
