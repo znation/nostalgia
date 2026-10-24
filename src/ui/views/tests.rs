@@ -1,10 +1,10 @@
 use super::super::{CurrentView, Message, style, theme};
 use super::browse::BROWSE_VIEWS;
-use super::browse::rows::{
-    album_count_label, album_row, artist_row, browse_placeholder, browse_row_style,
-    empty_list_label, list_count_summary, playlist_row, row_prefix, scrollable_list,
-    song_list_summary, song_row,
+use super::browse::rows::text::{
+    album_count_label, album_row, artist_row, browse_placeholder, empty_list_label,
+    list_count_summary, playlist_row, row_prefix, song_list_summary, song_row,
 };
+use super::browse::rows::{browse_row_style, scrollable_list};
 use super::equalizer::{
     EQ_SLIDER_HEIGHT, RESPONSE_CURVE_COLUMNS, RESPONSE_CURVE_HEIGHT, RESPONSE_CURVE_LINE_HEIGHT,
     eq_enabled_label, response_curve_offsets, response_curve_row,

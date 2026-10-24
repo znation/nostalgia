@@ -257,7 +257,7 @@ is skipped by serde and deserializes to `0`.
 `library::album_counts_by_artist` counts non-empty `Album::artist` names;
 `AppleMusicService::get_favorite_artists` in `src/apple_music/browse.rs` fills the counts from
 the sample library or from the two signed-in requests; and
-`views::browse::rows::album_count_label` in `src/ui/views/browse/rows.rs` renders the singular,
+`views::browse::rows::text::album_count_label` in `src/ui/views/browse/rows/text.rs` renders the singular,
 plural, and empty labels that `artist_row` uses as its secondary text, and `scrollable_list`
 pins every row's secondary label to the right edge.
 
@@ -295,7 +295,7 @@ Apple Music album field: it is skipped by serde and deserializes to `0`.
 `src/sample_library.rs` derives each sample album's total from its indexed songs;
 `RestLibrary::get_album_durations` in `src/apple_music/rest.rs` groups and sums the library songs;
 `browse::apply_album_durations` in `src/apple_music/browse.rs` fills the signed-in album lists;
-and `views::browse::rows::album_row` in `src/ui/views/browse/rows.rs` renders the formatted time
+and `views::browse::rows::text::album_row` in `src/ui/views/browse/rows/text.rs` renders the formatted time
 or placeholder as the row's secondary text. The loaded album lists cache each row's display
 title and formatted running time through `BrowseList::store_with_row_text` (`store_albums` in
 `src/ui/handlers/browse/fetch.rs`), and `album_row` borrows them, falling back to composing the

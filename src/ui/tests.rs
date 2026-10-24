@@ -3282,7 +3282,7 @@ fn track_played_ignores_a_superseded_completion() {
 /// Feeds a `*Loaded` message built from `items` back through `update` and
 /// asserts the list lands in `buffer` unchanged and that the matching
 /// `loading` flag is cleared — a `*Loaded` reply reaches `BrowseList::store`,
-/// which clears the flag (see `views::browse::rows::browse_placeholder`), so the reply must
+/// which clears the flag (see `views::browse::rows::text::browse_placeholder`), so the reply must
 /// leave that list not-loading. The six store-a-reply tests — artists,
 /// albums, songs, all songs, all albums, and playlists — exercise the same
 /// update-then-compare flow, differing only in the fixture, the `*Loaded`
@@ -6906,7 +6906,7 @@ fn new_player_starts_at_artists_with_nothing_selected() {
     assert_browse_lists_empty(&player);
     // The artists fetch `boot` schedules is in flight, so the panel shows
     // "Loading…" rather than claiming an empty library (see
-    // `views::browse::rows::browse_placeholder`); the lists below Artists are not
+    // `views::browse::rows::text::browse_placeholder`); the lists below Artists are not
     // loading, including the two flat lists.
     assert!(player.artists.loading);
     assert!(!player.albums.loading);

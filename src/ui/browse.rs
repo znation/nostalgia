@@ -76,13 +76,13 @@ pub(super) struct BrowseList<T> {
     /// true for the artists fetch `boot` schedules, and [`Self::clear`] sets
     /// it whenever the rows are emptied for a new fetch. [`Self::store`]
     /// clears it. The view reads it to show "Loading…" instead of the
-    /// list's empty wording (see `views::browse::rows::browse_placeholder`).
+    /// list's empty wording (see `views::browse::rows::text::browse_placeholder`).
     pub(super) loading: bool,
     /// The formatted report of this level's most recent failed fetch, or
     /// `None` when it has not failed. [`Self::fail`] sets it (and clears
     /// `loading`); [`Self::clear`] drops it before a retry, and a successful
     /// reply clears it. The view shows it in place of the empty-list wording
-    /// (see `views::browse::rows::browse_placeholder`), so a backend failure is not
+    /// (see `views::browse::rows::text::browse_placeholder`), so a backend failure is not
     /// mistaken for an empty library.
     pub(super) error: Option<String>,
     /// This level's browse-request counter, shared (`Arc`) with its fetch
@@ -313,7 +313,7 @@ impl<T> BrowseList<T> {
     /// level is issued, so the view never shows — or lets the user press — the
     /// previous selection's rows while the new fetch is in flight. `loading`
     /// makes the view show "Loading…" instead of the list's empty wording (see
-    /// `views::browse::rows::browse_placeholder`); the epoch is deliberately left alone, so
+    /// `views::browse::rows::text::browse_placeholder`); the epoch is deliberately left alone, so
     /// the reply that replaces the rows still gets a bumped epoch that differs
     /// from the cleared list's and a press rendered from the old rows cannot
     /// match the new list. Any earlier failure is cleared too, so the retry
@@ -331,7 +331,7 @@ impl<T> BrowseList<T> {
     /// Records a failed fetch's report: clears the rows (a navigation already
     /// emptied them via [`Self::clear`], but a failure must never leave stale
     /// rows behind), marks the list not-loading, and stores the report so the
-    /// view can show it (see `views::browse::rows::browse_placeholder`).
+    /// view can show it (see `views::browse::rows::text::browse_placeholder`).
     pub(super) fn fail(&mut self, report: String) {
         self.items.clear();
         self.titles.clear();

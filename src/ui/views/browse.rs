@@ -1,8 +1,9 @@
 //! The browse views — the artist → album → song drill-down, the flat All
 //! Songs and All Albums lists, and the Playlists list: the per-level view
 //! builders, the search box, and the Back, Open, Top, Sort, All Songs, All
-//! Albums, Playlists, and Retry buttons above them. The scrollable list, its
-//! row mappings, and the footer summaries live in the [`rows`] submodule.
+//! Albums, Playlists, and Retry buttons above them. The scrollable list and
+//! list builders live in the [`rows`] submodule; the pure wording, row-label,
+//! and summary helpers live in [`rows::text`].
 //!
 //! Every builder is pure — it turns `&[Artist]` / `&[Album]` / `&[Song]` /
 //! `&[Playlist]` (or the rows they map to) into an `Element` and knows nothing
@@ -21,10 +22,8 @@ use super::labeled_button;
 
 pub(super) mod rows;
 
-use rows::{
-    album_list, artist_row, browse_placeholder, list_with_count, playlist_row, scrollable_list,
-    song_list,
-};
+use rows::text::{artist_row, browse_placeholder, playlist_row};
+use rows::{album_list, list_with_count, scrollable_list, song_list};
 
 pub use rows::{BROWSE_LIST_ID, BROWSE_LIST_PADDING, BROWSE_ROW_HEIGHT};
 
@@ -64,7 +63,7 @@ pub fn view_artists<'a>(
 /// label falls back to composing that album's title or formatting its
 /// duration. `selected` paints that row's blue bar. `loading` and `error`
 /// select the placeholder wording (see [`browse_placeholder`]); a fetch
-/// failure wins. Built by [`album_list`] from the [`rows::album_row`] mapping.
+/// failure wins. Built by [`album_list`] from the [`rows::text::album_row`] mapping.
 pub fn view_albums<'a>(
     albums: &'a [Album],
     titles: &'a [String],
@@ -94,7 +93,7 @@ pub fn view_albums<'a>(
 /// duration. `loading`, `error`, and `search_active` select the placeholder
 /// wording (see [`browse_placeholder`]); a fetch failure wins, and a
 /// loaded-empty search reads as "no matches" rather than as an empty album.
-/// Built by [`song_list`] from the [`rows::song_row`] mapping.
+/// Built by [`song_list`] from the [`rows::text::song_row`] mapping.
 #[allow(clippy::too_many_arguments)]
 pub fn view_songs<'a>(
     songs: &'a [Song],
@@ -125,7 +124,7 @@ pub fn view_songs<'a>(
 /// are the same cached display-title and formatted-length slices
 /// [`view_songs`] takes. It mirrors [`view_songs`] but never shows the search
 /// wording, because the flat list is not a search's result. Built by
-/// [`song_list`] from the [`rows::song_row`] mapping.
+/// [`song_list`] from the [`rows::text::song_row`] mapping.
 #[allow(clippy::too_many_arguments)]
 pub fn view_all_songs<'a>(
     songs: &'a [Song],
@@ -156,7 +155,7 @@ pub fn view_all_songs<'a>(
 /// current-track marker — but is its own view so its presses resolve against
 /// `all_albums` and Back from the songs it opens returns to this list. It
 /// never shows the search wording, because the flat list is not a search's
-/// result. Built by [`album_list`] from the [`rows::album_row`] mapping.
+/// result. Built by [`album_list`] from the [`rows::text::album_row`] mapping.
 pub fn view_all_albums<'a>(
     albums: &'a [Album],
     titles: &'a [String],

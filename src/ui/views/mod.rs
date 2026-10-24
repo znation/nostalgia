@@ -8,8 +8,9 @@
 //! can be reworked (or tested) independently of how the app is booted.
 //!
 //! Each panel lives in its own submodule — `browse` (the artist → album →
-//! song drill-down, the flat lists, and Playlists, with their rows and list
-//! scaffolding in `browse::rows`), `title_bar`, `shade` (the rolled-up
+//! song drill-down, the flat lists, and Playlists, with their list scaffolding
+//! in `browse::rows` and pure row wording and labels in `browse::rows::text`),
+//! `title_bar`, `shade` (the rolled-up
 //! transport strip), `mini_transport` (the compact row the shade strip and the
 //! library footer share), `now_playing` (the LCD widgets, with its pure label, time,
 //! and marquee resolution in `now_playing::text`), `seek_bar`, `transport`, and `equalizer`
