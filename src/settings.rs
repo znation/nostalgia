@@ -426,4 +426,64 @@ mod tests {
 
         std::fs::remove_dir_all(&root).unwrap();
     }
+
+    fn temporary_root(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "nostalgia-settings-{label}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ))
+    }
+
+    // With no resolvable location, persistence is disabled: loading yields
+    // nothing and saving is a no-op rather than an error or a panic.
+    #[test]
+    fn file_store_without_a_path_disables_load_and_save() {
+        let store = FileStore { path: None };
+
+        assert_eq!(store.load(), None);
+        store.save(&Settings::from_state(&state_with_every_field_set()));
+        assert_eq!(store.load(), None);
+    }
+
+    // A failed write is logged rather than panicking, so the UI's update loop
+    // (which saves on every settings change) survives an unwritable location.
+    // The path is a directory, which `fs::write` cannot replace.
+    #[test]
+    fn file_store_recovers_from_a_failed_save() {
+        let root = temporary_root("failed-save");
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("settings.ini");
+        std::fs::create_dir(&path).unwrap();
+        let store = FileStore::at(path.clone());
+
+        store.save(&Settings::from_state(&state_with_every_field_set()));
+
+        assert!(path.is_dir());
+        assert_eq!(store.load(), None);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    // A parent that is an existing regular file cannot be turned into a
+    // directory, so the creation attempt is reported and the file it blocked
+    // is left untouched.
+    #[test]
+    fn file_store_recovers_when_the_settings_directory_cannot_be_created() {
+        let root = temporary_root("failed-parent");
+        std::fs::create_dir_all(&root).unwrap();
+        let parent = root.join("blocked");
+        std::fs::write(&parent, "not a directory").unwrap();
+        let path = parent.join("settings.ini");
+        let store = FileStore::at(path.clone());
+
+        store.save(&Settings::from_state(&state_with_every_field_set()));
+
+        assert!(!path.exists());
+        assert_eq!(std::fs::read_to_string(&parent).unwrap(), "not a directory");
+        assert_eq!(store.load(), None);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
 }
