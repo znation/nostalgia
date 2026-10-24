@@ -15,7 +15,8 @@ use super::Message;
 /// for every event that binds nothing: a key release, a modifier-only change,
 /// an unbound key, or a key pressed with a chord modifier. The bound keys
 /// include R for Repeat, S for Shuffle, A for always-on-top, T for the
-/// elapsed/remaining readout, Enter to open the selected browse row,
+/// elapsed/remaining readout, E for the equalizer panel's show/hide, Enter to
+/// open the selected browse row,
 /// Backspace to step the browse list back one level, Home and End to snap it
 /// to its first and last rows, Page Up and Page Down to scroll it one page at
 /// a time, F5 to refetch the library and return to the Artists list, and Ctrl+F
@@ -33,8 +34,9 @@ pub(super) fn message_for(event: Event) -> Option<Message> {
 
 /// The classic Winamp main-window bindings: Z previous, X play, C pause, V
 /// stop, B next, R repeat, S shuffle, A toggles always-on-top, T switches the
-/// large readout between elapsed and remaining time, Enter opens the selected
-/// browse row, Backspace steps the browse list back one level, Home and End
+/// large readout between elapsed and remaining time, E shows or hides the
+/// equalizer panel, Enter opens the selected browse row, Backspace steps the
+/// browse list back one level, Home and End
 /// snap it to its first and last rows, Page Up and Page Down scroll it one page
 /// at a time, F5 refetches the library and returns to the Artists list, Ctrl+F
 /// focuses
@@ -83,6 +85,9 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
         }
         Key::Character(character) if character.eq_ignore_ascii_case("t") => {
             Some(Message::ToggleTimeDisplay)
+        }
+        Key::Character(character) if character.eq_ignore_ascii_case("e") => {
+            Some(Message::ToggleEqualizerPanel)
         }
         Key::Named(key::Named::Enter) => Some(Message::OpenSelected),
         Key::Named(key::Named::Backspace) => Some(Message::Back),
@@ -133,6 +138,7 @@ mod tests {
         assert!(matches!(map("s"), Some(Message::ToggleShuffle)));
         assert!(matches!(map("a"), Some(Message::ToggleAlwaysOnTop)));
         assert!(matches!(map("t"), Some(Message::ToggleTimeDisplay)));
+        assert!(matches!(map("e"), Some(Message::ToggleEqualizerPanel)));
     }
 
     #[test]
@@ -303,6 +309,7 @@ mod tests {
                 Key::Character("s".into()),
                 Key::Character("a".into()),
                 Key::Character("t".into()),
+                Key::Character("e".into()),
                 Key::Named(key::Named::Enter),
                 Key::Named(key::Named::Backspace),
                 Key::Named(key::Named::Home),

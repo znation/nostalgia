@@ -1450,6 +1450,57 @@ fn t_toggles_the_time_display_from_the_keyboard() {
     }
 }
 
+// The classic E key dispatches the same equalizer-panel show/hide message the
+// EQ button beside the balance slider presses, for plain and Shift-held E.
+#[test]
+fn e_toggles_the_equalizer_panel_from_the_keyboard() {
+    use iced::keyboard::{Event, Key, Modifiers, key};
+
+    let (mut player, _state) = test_player();
+    assert!(player.eq_panel_visible);
+
+    for (index, modifiers) in [Modifiers::NONE, Modifiers::SHIFT].into_iter().enumerate() {
+        let e = Event::KeyPressed {
+            key: Key::Character("e".into()),
+            modified_key: Key::Character("e".into()),
+            physical_key: key::Physical::Code(key::Code::KeyE),
+            location: iced::keyboard::Location::Standard,
+            modifiers,
+            text: None,
+            repeat: false,
+        };
+        let message = super::shortcuts::message_for(e).expect("E must map to a message");
+        assert!(matches!(message, Message::ToggleEqualizerPanel));
+
+        assert_message_schedules_no_work(&mut player, message);
+        assert_eq!(player.eq_panel_visible, index == 1);
+    }
+}
+
+#[test]
+fn e_in_shade_mode_leaves_the_equalizer_panel_alone() {
+    use iced::keyboard::{Event, Key, Modifiers, key};
+
+    let (mut player, _state) = test_player();
+    player.shaded = true;
+    assert!(player.eq_panel_visible);
+
+    let e = Event::KeyPressed {
+        key: Key::Character("e".into()),
+        modified_key: Key::Character("e".into()),
+        physical_key: key::Physical::Code(key::Code::KeyE),
+        location: iced::keyboard::Location::Standard,
+        modifiers: Modifiers::NONE,
+        text: None,
+        repeat: false,
+    };
+    let message = super::shortcuts::message_for(e).expect("E must map to a message");
+    assert!(matches!(message, Message::ToggleEqualizerPanel));
+
+    assert_message_schedules_no_work(&mut player, message);
+    assert!(player.eq_panel_visible);
+}
+
 #[test]
 fn back_from_songs_returns_to_albums() {
     let mut player = player_in_albums();

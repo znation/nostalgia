@@ -63,11 +63,16 @@ pub(in crate::ui) fn seek_forward(player: &mut WinampPlayer) -> Task<Message> {
     seek_preview(player, views::SEEK_STEP_SECS)
 }
 
-/// The player row's EQ button: shows or hides the normal-mode equalizer
-/// section. This is a layout-only toggle, distinct from
+/// The player row's EQ button and the E key: shows or hides the normal-mode
+/// equalizer section. This is a layout-only toggle, distinct from
 /// [`toggle_equalizer`], which flips the audio equalizer's on/off state; it
-/// changes no shared EQ value and schedules no work.
+/// changes no shared EQ value and schedules no work. Shade mode builds no
+/// equalizer panel, so there the toggle leaves the flag alone instead of
+/// flipping a hidden setting.
 pub(in crate::ui) fn toggle_equalizer_panel(player: &mut WinampPlayer) -> Task<Message> {
+    if player.shaded {
+        return Task::none();
+    }
     player.eq_panel_visible = !player.eq_panel_visible;
     Task::none()
 }

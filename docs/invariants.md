@@ -498,7 +498,10 @@ refresh does not re-join and reformat every row.
   cannot reflow it either. The shade strip builds its four buttons from the same glyph spec.
 - The main transport row's fixed-width `EQ` toggle follows the balance slider in every playback
   state and is sunken while the equalizer panel is shown, ordinary chrome while it is hidden.
-  The root `view` draws the `NOSTALGIA EQUALIZER` band and `view_equalizer` exactly when
+  Plain or Shift-held `E` dispatches the same `Message::ToggleEqualizerPanel` from the keyboard;
+  Ctrl, Alt, and Logo chords with E stay unbound, and shade mode changes nothing because the
+  toggle leaves the flag alone while `WinampPlayer::shaded` holds. The root `view` draws the
+  `NOSTALGIA EQUALIZER` band and `view_equalizer` exactly when
   `WinampPlayer::eq_panel_visible` holds. Hiding them moves the `NOSTALGIA LIBRARY` band and the
   browse list up into the freed height without resizing the window, and leaves the equalizer's
   on/off state, preamp, band gains, preset, and audio forwarding untouched.
@@ -522,8 +525,9 @@ and Reload buttons into one `Row`. `views::view_transport_controls`,
 `src/ui/views/transport.rs` build the glyph row from `fixed_width_button`s and
 `iced::widget::Tooltip`s; `views::transport::eq_panel_toggle` and
 `views::transport::eq_panel_button_style` build and style the EQ toggle, and
-`handlers::mixer::toggle_equalizer_panel` flips the layout flag; `view` pushes the equalizer section
-only while that flag holds; `views::mini_transport::mini_transport_controls` projects the same glyph
+`handlers::mixer::toggle_equalizer_panel` flips the layout flag; `shortcuts::shortcut` in
+`src/ui/shortcuts.rs` maps plain and Shift-held E to that same message; `view` pushes the
+equalizer section only while that flag holds; `views::mini_transport::mini_transport_controls` projects the same glyph
 spec for the shade strip and the library footer. `views::equalizer::preamp_column`,
 `views::equalizer::db_scale_column`, and `views::view_equalizer` in `src/ui/views/equalizer.rs`
 build the equalizer band row and align the curve with it. The browse and transport layout tests lay
@@ -544,7 +548,9 @@ tiny-skia renderer.
 `root_view_offers_back_retry_and_flat_list_buttons_only_where_they_belong`,
 `root_view_draws_the_current_browse_levels_own_rows`,
 `root_view_draws_the_equalizer_and_library_title_bands_in_order`,
-`toggle_equalizer_panel_hides_and_restores_the_section`, and
+`toggle_equalizer_panel_hides_and_restores_the_section`,
+`e_toggles_the_equalizer_panel_from_the_keyboard`,
+`e_in_shade_mode_leaves_the_equalizer_panel_alone`, and
 `shaded_root_view_draws_no_section_title_bands` (`src/ui/tests.rs`), plus
 `title_band_centers_its_label_at_the_title_bar_height` and
 `title_bar_centers_its_name_between_its_edge_controls` (`src/ui/views/tests.rs`) for the title
@@ -560,7 +566,8 @@ glyph row, the Repeat and Shuffle faces, and the equalizer band row.
 **History.** Reconstructed from "Sort renders below Top instead of beside it, contradicting the
 documented layout" and "Transport buttons resize to their label text, so pressing Play/Pause
 reflows the whole control row" in `BUGS-FIXED.md`. Both carried a `real-run-needed` validation
-gap; the shared harness closes it.
+gap; the shared harness closes it. The E key joined the `EQ` toggle as the same message
+(2026-10-24).
 
 ## Settings persistence
 
