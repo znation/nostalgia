@@ -13,13 +13,13 @@
 
 use std::borrow::Cow;
 
-use iced::{Element, Length, alignment::Vertical, widget::Container};
+use iced::Element;
 
 use crate::state::TransportMode;
 use crate::ui::{Message, bevel, style};
 
 use super::{
-    mini_transport::{MINI_TRANSPORT_HEIGHT, mini_transport_row},
+    mini_transport::{MINI_TRANSPORT_HEIGHT, mini_transport_strip},
     title_bar::TITLE_BAR_HEIGHT,
 };
 
@@ -55,11 +55,7 @@ pub fn view_shade_strip<'a>(
     total: Cow<'a, str>,
 ) -> Element<'a, Message> {
     bevel::raised_panel(
-        Container::new(mini_transport_row(mode, volume, elapsed, total))
-            .width(Length::Fill)
-            .height(Length::Fixed(SHADE_STRIP_HEIGHT))
-            .align_y(Vertical::Center)
-            .padding([0, 6])
+        mini_transport_strip(mode, volume, elapsed, total, SHADE_STRIP_HEIGHT)
             .style(|_theme| style::title_bar_style()),
     )
 }

@@ -150,6 +150,26 @@ fn mini_volume_slider(volume: f32) -> Element<'static, Message> {
     )
 }
 
+/// The compact row in its shared strip geometry: full width, `height` tall,
+/// vertically centered, and padded 6px horizontally so the volume slider lands
+/// at the same right edge in both places it appears. The caller supplies the
+/// height (the library footer's [`MINI_TRANSPORT_HEIGHT`] or the shade strip's
+/// own) and wraps the result in its chrome, so the two strips cannot drift
+/// apart.
+pub(super) fn mini_transport_strip<'a>(
+    mode: TransportMode,
+    volume: f32,
+    elapsed: Cow<'a, str>,
+    total: Cow<'a, str>,
+    height: f32,
+) -> Container<'a, Message> {
+    Container::new(mini_transport_row(mode, volume, elapsed, total))
+        .width(Length::Fill)
+        .height(Length::Fixed(height))
+        .align_y(Vertical::Center)
+        .padding([0, 6])
+}
+
 /// The normal-mode library footer: the shared compact row beneath the browse
 /// list, on the window face's raised chrome.
 ///
@@ -165,11 +185,11 @@ pub fn view_library_strip<'a>(
     elapsed: Cow<'a, str>,
     total: Cow<'a, str>,
 ) -> Element<'a, Message> {
-    bevel::raised_panel(
-        Container::new(mini_transport_row(mode, volume, elapsed, total))
-            .width(Length::Fill)
-            .height(Length::Fixed(MINI_TRANSPORT_HEIGHT))
-            .align_y(Vertical::Center)
-            .padding([0, 6]),
-    )
+    bevel::raised_panel(mini_transport_strip(
+        mode,
+        volume,
+        elapsed,
+        total,
+        MINI_TRANSPORT_HEIGHT,
+    ))
 }
