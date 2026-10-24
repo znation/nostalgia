@@ -1,8 +1,8 @@
 use super::super::{CurrentView, Message, style, theme};
 use super::browse::BROWSE_VIEWS;
 use super::browse::rows::{
-    album_count_label, album_row, artist_row, browse_placeholder, empty_list_label,
-    highlighted_row_style, list_count_summary, playlist_row, row_prefix, scrollable_list,
+    album_count_label, album_row, artist_row, browse_placeholder, browse_row_style,
+    empty_list_label, list_count_summary, playlist_row, row_prefix, scrollable_list,
     song_list_summary, song_row,
 };
 use super::equalizer::{
@@ -63,7 +63,7 @@ use std::time::Duration;
 // label text would silently break the browse UI, so the mapping is the
 // contract these tests pin down. The press message is the list's, built from
 // the row position and list epoch (see `scrollable_list`), and the flag is
-// pinned too, since it drives the `▶`/highlight marker.
+// pinned too, since it drives the `▶` prefix and white playing text.
 
 #[test]
 fn artist_row_uses_name_and_album_count() {
@@ -244,7 +244,7 @@ fn song_row_shows_an_unknown_duration_as_blank_time() {
 fn song_row_marks_the_current_track() {
     // The flag is true only when `current_track` names exactly this
     // song; a different id — or no track at all — leaves the row
-    // unmarked, so the `▶`/highlight marker follows the playback state.
+    // unmarked, so the `▶` prefix and white text follow the playback state.
     let (_, _, is_current) = song_row(&sample_song(), None, None, Some("song-1"));
     assert!(is_current);
 
@@ -1779,7 +1779,8 @@ fn browse_views_construct_over_the_loaded_library() {
     // The populated branch of `scrollable_list`, built from the real
     // sample library so each row maps actual titles and selection
     // messages into buttons. Rendered both with no current track (no
-    // marker) and with one set (the `▶`/highlight marker builds).
+    // playing row) and with one set (the `▶` prefix and white-text style
+    // build).
     let library = sample_library();
     construct_every_browse_view(
         &library.artists,
@@ -1889,15 +1890,16 @@ fn song_list_summary_truncates_a_sub_second_total() {
     assert_eq!(song_list_summary(&[summary_song(1_999)]), "1 song - 0:01");
 }
 
-// The playing and selected rows share a selection-bar highlight. iced's
-// `Element` API exposes no way to read a built `Button`'s style, and the
-// row-style closure only runs at render time, so building the marked row
-// (above) never executes the override. `highlighted_row_style` is the pure
-// seam that pins it: every hover/press state keeps the highlight background
-// rather than the unmarked row's face ladder, and the row's light text is
-// kept so the title stays legible on the bar.
+// The playing row is marked by its white text, not a selection bar; the
+// selected row draws the row highlight. iced's `Element` API exposes no way
+// to read a built `Button`'s style, and the row-style closure only runs at
+// render time, so building the row never executes the override.
+// `browse_row_style` is the pure seam that pins it: every hover/press state
+// keeps the unmarked row's face ladder, so a resting playing row has no bar
+// and the cursor still lifts and sinks it, while the selected row keeps the
+// highlight background instead.
 #[test]
-fn highlighted_row_style_paints_the_selection_bar_over_every_row_state() {
+fn browse_row_style_keeps_playing_rows_unbarred_with_white_text() {
     use iced::widget::button::Status;
 
     for status in [
@@ -1906,22 +1908,55 @@ fn highlighted_row_style_paints_the_selection_bar_over_every_row_state() {
         Status::Pressed,
         Status::Disabled,
     ] {
-        let marked = highlighted_row_style(status);
+        let playing = browse_row_style(status, true, false);
         assert_eq!(
-            marked.background,
-            Some(iced::Background::Color(theme::ROW_HIGHLIGHT))
+            playing.background,
+            style::playlist_row_style(status).background
         );
-        assert_eq!(
-            marked.text_color,
+        assert_eq!(playing.text_color, theme::PLAYING_ROW_TEXT);
+        assert_ne!(
+            playing.text_color,
             style::playlist_row_style(status).text_color
         );
     }
+}
 
-    // The bar must differ from the unmarked resting row, or the marker
-    // would be invisible against the well.
+// Only the selected row gets the blue bar, in every hover/press state and
+// whether or not it is also playing; its text is white. An ordinary row keeps
+// the base background and green text, so the bar cannot bleed onto its
+// neighbors.
+#[test]
+fn browse_row_style_paints_only_the_selected_row_blue() {
+    use iced::widget::button::Status;
+
+    for status in [
+        Status::Active,
+        Status::Hovered,
+        Status::Pressed,
+        Status::Disabled,
+    ] {
+        for is_current in [false, true] {
+            let selected = browse_row_style(status, is_current, true);
+            assert_eq!(
+                selected.background,
+                Some(iced::Background::Color(theme::ROW_HIGHLIGHT))
+            );
+            assert_eq!(selected.text_color, theme::PLAYING_ROW_TEXT);
+        }
+
+        let plain = browse_row_style(status, false, false);
+        assert_eq!(
+            plain.background,
+            style::playlist_row_style(status).background
+        );
+        assert_eq!(plain.text_color, theme::LCD_GREEN);
+    }
+
+    // The bar must differ from the unmarked resting row, or the marker would
+    // be invisible against the well.
     assert_ne!(
-        highlighted_row_style(Status::Active).background,
-        style::playlist_row_style(Status::Active).background
+        browse_row_style(Status::Active, false, true).background,
+        browse_row_style(Status::Active, false, false).background
     );
 }
 

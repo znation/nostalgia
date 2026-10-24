@@ -95,9 +95,10 @@ equalizer band slider's groove is tinted by that band's own gain, from green at 
 yellow at `0 dB` to red at `+12 dB`. The app bar sets `NOSTALGIA` between gold tape strips, and
 the equalizer and browse sections are each introduced by a matching title band — `NOSTALGIA
 EQUALIZER` above the equalizer panel and `NOSTALGIA LIBRARY` above the browse list.
-Every browse list numbers its rows from 1 like a Winamp playlist, with the playing song marked by
-`▶` before its number. A click selects a row and paints it with the same blue bar as the playing
-row, without opening it; a second click on the selected row (a double-click) or the `Open` button
+Every browse list numbers its rows from 1 like a Winamp playlist and draws ordinary rows in green
+text, with the playing song marked by `▶` before its number and drawn in white without a bar. A
+click selects a row and paints its blue bar with white text, without opening it; a second click on
+the selected row (a double-click) or the `Open` button
 opens it — drilling into an artist, album, or playlist, or playing a song — while Back still
 climbs out. A `Search library` box above the browse list searches the library when you
 press Enter, replacing the list with the matching songs; Back leaves a search for the artists

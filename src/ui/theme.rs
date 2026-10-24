@@ -39,9 +39,13 @@ pub const LCD_GREEN_DIM: Color = Color::from_rgb(0.0, 0.35, 0.0);
 /// that tells Stop apart from the green playing and paused glyphs.
 pub const LCD_RED: Color = Color::from_rgb(1.0, 0.1, 0.1);
 
-/// The highlight color behind the playing row and the selected row in a browse
-/// list, echoing Winamp's playlist selection bar (a saturated blue).
+/// The highlight color behind the selected row in a browse list, echoing
+/// Winamp's playlist selection bar (a saturated blue).
 pub const ROW_HIGHLIGHT: Color = Color::from_rgb(0.25, 0.5, 1.0);
+
+/// The white text of the playing browse row, which stands out from the green
+/// text of an ordinary row without a selection bar.
+pub const PLAYING_ROW_TEXT: Color = Color::from_rgb(1.0, 1.0, 1.0);
 
 /// The light top/left edge of a raised panel bevel, and the dark bottom/right
 /// edge of a sunken one.
@@ -153,20 +157,24 @@ mod tests {
         assert_ne!(palette.danger, palette.success);
     }
 
-    // The palette tests above read the six palette slots. The row highlight
-    // and the LCD well's recess are the two base-skin colors
-    // painted from constants no test reads at all: `views::browse::rows::scrollable_list`
-    // and `bevel::lcd_well` apply them inside inline style closures, which
-    // iced's `Element` API exposes no way to introspect. Their RGB values are
-    // the skin contract — a regression could turn the playlist selection bar
-    // or the recess into any other color and clear the whole suite. Pin
-    // both, and that they keep their documented roles: the well is darker
-    // than the window face it recesses into, and the highlight stands apart
-    // from both.
+    // The palette tests above read the six palette slots. The row highlight,
+    // the playing row's white text, and the LCD well's recess are base-skin
+    // colors that inline style closures apply: `views::browse::rows::scrollable_list`
+    // and `bevel::lcd_well` read them where iced's `Element` API exposes no
+    // way to introspect. Their RGB values are the skin contract — a
+    // regression could turn the playlist selection bar or the recess into
+    // any other color and clear the whole suite. Pin all three, and that they
+    // keep their documented roles: the well is darker than the window face it
+    // recesses into, the selection bar stands apart from both, and the
+    // playing text stands apart from an ordinary row's green.
     #[test]
     fn panel_recess_and_row_highlight_keep_their_base_skin_colors() {
         assert_eq!(LCD_BACKGROUND, Color::from_rgb(0.05, 0.05, 0.05));
         assert_eq!(ROW_HIGHLIGHT, Color::from_rgb(0.25, 0.5, 1.0));
+        assert_eq!(PLAYING_ROW_TEXT, Color::from_rgb(1.0, 1.0, 1.0));
+        // The playing row relies on white text alone, so it must not look like
+        // an ordinary green row.
+        assert_ne!(PLAYING_ROW_TEXT, LCD_GREEN);
 
         // The recess reads as sunken only if it is darker than the face it
         // sits in. Bound to locals so the comparison is a runtime check rather

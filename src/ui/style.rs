@@ -282,7 +282,7 @@ pub fn level_slider_style(fill: Color, status: slider::Status) -> slider::Style 
 
 /// The flat playlist-entry style for a browse row.
 ///
-/// The base skin's playlist rows are flat light text on the near-black well:
+/// The base skin's playlist rows are flat green text on the near-black well:
 /// no bevel, so the resting and disabled faces are transparent and let the
 /// well show through, while hover lifts the row to [`theme::BUTTON_FACE`] and
 /// press sinks it to [`theme::BUTTON_FACE_PRESSED`] — the same face ladder
@@ -297,7 +297,7 @@ pub fn playlist_row_style(status: button::Status) -> button::Style {
 
     button::Style {
         background,
-        text_color: theme::TEXT,
+        text_color: theme::LCD_GREEN,
         ..button::Style::default()
     }
 }
@@ -690,7 +690,7 @@ mod tests {
             button::Status::Pressed,
             button::Status::Disabled,
         ] {
-            assert_eq!(playlist_row_style(status).text_color, theme::TEXT);
+            assert_eq!(playlist_row_style(status).text_color, theme::LCD_GREEN);
         }
     }
 

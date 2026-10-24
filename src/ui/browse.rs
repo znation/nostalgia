@@ -60,8 +60,8 @@ pub(super) struct BrowseList<T> {
     /// [`Self::fail`]) or their order ([`Self::sort_rows_by`],
     /// [`Self::restore_library_order`]) drops it, because the index it stores
     /// names a row in the previous list or order. The view paints the
-    /// selected row with the playing row's blue bar; the `▶` marker stays
-    /// tied to the playing track.
+    /// selected row with the blue `ROW_HIGHLIGHT` bar and white
+    /// text; the `▶` marker stays tied to the playing track.
     selected: Option<usize>,
     /// The permutation [`Self::sort_rows_by`] has applied to the rows, or
     /// `None` while they are in library order. Entry `i` is the library index
@@ -155,7 +155,7 @@ impl<T> BrowseList<T> {
     }
 
     /// The selected row, or `None` when nothing is selected. The view paints
-    /// this row with the playing row's blue bar.
+    /// this row with the blue selection bar and white text.
     pub(super) fn selected(&self) -> Option<usize> {
         self.selected
     }

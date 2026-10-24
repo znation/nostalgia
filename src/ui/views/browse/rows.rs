@@ -1,5 +1,5 @@
 //! Browse row mapping and list construction: the placeholder wording, the row
-//! prefix and highlight, the scrollable list, the per-level row
+//! prefix and row coloring, the scrollable list, the per-level row
 //! mappings, and the count and playing-time footers.
 //!
 //! These are the pure pieces the public browse views in the parent module
@@ -73,16 +73,28 @@ pub(in crate::ui::views) fn browse_placeholder<'a>(
     }
 }
 
-/// The style for a highlighted browse row — the currently playing row or the
-/// selected row: the flat [`style::playlist_row_style`] with its background
-/// forced to [`theme::ROW_HIGHLIGHT`], so a highlighted row reads as a
-/// selection bar in every hover/press state instead of following the row's
-/// face ladder under the cursor. Pure, so the highlight — which iced's
-/// `Element` API gives no way to read back from the built `Button`, and whose
-/// closure runs only at render time — is testable.
-pub(in crate::ui::views) fn highlighted_row_style(status: button::Status) -> button::Style {
+/// The style for a browse row, colored by whether it is playing or selected.
+///
+/// Starts from the flat [`style::playlist_row_style`], so an ordinary row is
+/// green on the near-black well and still lifts and sinks under the cursor.
+/// A selected row draws the blue [`theme::ROW_HIGHLIGHT`] bar in every
+/// hover/press state; a playing or selected row draws white
+/// [`theme::PLAYING_ROW_TEXT`]. A row that is both playing and selected keeps
+/// the bar and stays identifiable by its `▶` prefix. Pure, so the colors —
+/// which iced's `Element` API gives no way to read back from the built
+/// `Button`, and whose closure runs only at render time — are testable.
+pub(in crate::ui::views) fn browse_row_style(
+    status: button::Status,
+    is_current: bool,
+    is_selected: bool,
+) -> button::Style {
     let mut row = style::playlist_row_style(status);
-    row.background = Some(Background::Color(theme::ROW_HIGHLIGHT));
+    if is_selected {
+        row.background = Some(Background::Color(theme::ROW_HIGHLIGHT));
+    }
+    if is_current || is_selected {
+        row.text_color = theme::PLAYING_ROW_TEXT;
+    }
     row
 }
 
@@ -144,15 +156,17 @@ fn one_line_title<'a>(title: Cow<'a, str>) -> Cow<'a, str> {
 /// Builds a scrollable list where each item is a button showing its 1-based
 /// position, a title, and a secondary label pinned to the row's right edge.
 /// The tuple's final element marks the currently playing row: its prefix
-/// carries a `▶` marker first and it gets a highlighted background so the
-/// list reads as a playlist. Only `song_row` ever sets the flag to true.
+/// carries a `▶` marker first and its text is white, without a background bar
+/// of its own, so the list reads as a playlist. Only `song_row` ever sets the
+/// flag to true.
 ///
 /// Every row button emits [`Message::SelectRow`] with the list's `epoch` and
-/// the row's position: a single press only selects the row (drawing the same
-/// blue bar as the playing row when `selected` names it), and a second press
-/// on the selected row or the Open button dispatches the existing open
-/// action. The `▶` prefix stays tied to `is_current`, so a selected row is
-/// highlighted without being mistaken for the playing one.
+/// the row's position: a single press only selects the row (drawing the blue
+/// [`theme::ROW_HIGHLIGHT`] bar with white text when `selected` names
+/// it), and a second press on the selected row or the Open button dispatches
+/// the existing open action. The `▶` prefix stays tied to `is_current`, so a
+/// row that is both playing and selected keeps the bar and is still
+/// identifiable as the playing one.
 ///
 /// A title carrying a line break is flattened to one line, and a title too
 /// long for its column is clipped there, so it can neither grow the row past
@@ -183,6 +197,7 @@ pub(in crate::ui::views) fn scrollable_list<'a>(
 
     for (position, (title, label, is_current)) in items.into_iter().enumerate() {
         is_empty = false;
+        let is_selected = selected == Some(position);
         let button = Button::new(
             Row::new()
                 .width(Length::Fill)
@@ -208,15 +223,11 @@ pub(in crate::ui::views) fn scrollable_list<'a>(
             epoch,
             index: position,
         })
-        .style(|_theme, status| style::playlist_row_style(status));
-        // The selected and current rows keep the playlist row's text and
-        // hover/press face and only swap the background for the highlight
-        // color; the prefix already distinguishes the current track.
-        column = column.push(if is_current || selected == Some(position) {
-            button.style(|_theme, status| highlighted_row_style(status))
-        } else {
-            button
-        });
+        .style(move |_theme, status| browse_row_style(status, is_current, is_selected));
+        // Unselected rows are green, the playing row is white without a bar,
+        // and the selected row draws the blue bar with white text; the prefix
+        // already distinguishes the current track.
+        column = column.push(button);
     }
 
     if is_empty {
@@ -293,7 +304,7 @@ pub(in crate::ui::views) fn playlist_row<'a>(
 /// the track's formatted length ([`format_track_time`]) as the secondary
 /// label, and whether it is the currently playing track (true only when
 /// `current_track` names this song). The flag feeds [`scrollable_list`]'s `▶`
-/// and highlight marker, so the song list reads as a playlist; the press message
+/// prefix and white text, so the song list reads as a playlist; the press message
 /// is that builder's [`Message::SelectRow`], not this row's.
 ///
 /// `cached_title` and `cached_label` are the title and length the loaded list
