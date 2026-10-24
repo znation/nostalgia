@@ -186,18 +186,46 @@ fn rodio_output_maps_each_seam_method_to_its_worker_command() {
     );
 }
 
-// A position query crosses to the worker and returns the reply it sends,
-// rather than reading anything on the caller's thread.
-#[test]
-fn rodio_output_asks_the_worker_for_its_position() {
+/// A `RodioOutput` wired to a stand-in worker thread that receives the first
+/// command and hands it to `handle`. Join the returned handle after the query.
+fn output_with_worker(
+    handle: impl FnOnce(Command) + Send + 'static,
+) -> (RodioOutput, std::thread::JoinHandle<()>) {
     let (commands, receiver) = std::sync::mpsc::channel();
     let output = RodioOutput {
         commands: Mutex::new(commands),
     };
-    let worker = std::thread::spawn(move || match receiver.recv() {
-        Ok(Command::Position(reply)) => {
-            reply.send(Some(Duration::from_secs(3))).unwrap();
-        }
+    let worker = std::thread::spawn(move || {
+        handle(receiver.recv().expect("the query sent no command"));
+    });
+    (output, worker)
+}
+
+/// Run a query against a worker that accepts it (via `handle`) but never
+/// answers, and assert it returns within the seam's bound. `what` names the
+/// query in the failure message.
+fn assert_unanswered_query_times_out<T: std::fmt::Debug + PartialEq>(
+    what: &str,
+    handle: impl FnOnce(Command) + Send + 'static,
+    query: impl FnOnce(&RodioOutput) -> T,
+    expected: T,
+) {
+    let (output, worker) = output_with_worker(handle);
+    let started = Instant::now();
+    assert_eq!(query(&output), expected);
+    assert!(
+        started.elapsed() < WORKER_QUERY_TIMEOUT * 5,
+        "a missing {what} reply must time out instead of blocking"
+    );
+    worker.join().unwrap();
+}
+
+// A position query crosses to the worker and returns the reply it sends,
+// rather than reading anything on the caller's thread.
+#[test]
+fn rodio_output_asks_the_worker_for_its_position() {
+    let (output, worker) = output_with_worker(|command| match command {
+        Command::Position(reply) => reply.send(Some(Duration::from_secs(3))).unwrap(),
         _ => panic!("position did not send Command::Position"),
     });
 
@@ -209,19 +237,13 @@ fn rodio_output_asks_the_worker_for_its_position() {
 // like the position query.
 #[test]
 fn rodio_output_asks_the_worker_for_its_format() {
-    let (commands, receiver) = std::sync::mpsc::channel();
-    let output = RodioOutput {
-        commands: Mutex::new(commands),
-    };
     let format = PlaybackFormat {
         sample_rate_hz: 44_100,
         channels: 2,
         bitrate_kbps: Some(256),
     };
-    let worker = std::thread::spawn(move || match receiver.recv() {
-        Ok(Command::PlaybackFormat(reply)) => {
-            reply.send(Some(format)).unwrap();
-        }
+    let (output, worker) = output_with_worker(move |command| match command {
+        Command::PlaybackFormat(reply) => reply.send(Some(format)).unwrap(),
         _ => panic!("format did not send Command::PlaybackFormat"),
     });
 
@@ -233,15 +255,9 @@ fn rodio_output_asks_the_worker_for_its_format() {
 // like the position, format, and duration queries.
 #[test]
 fn rodio_output_asks_the_worker_for_its_spectrum() {
-    let (commands, receiver) = std::sync::mpsc::channel();
-    let output = RodioOutput {
-        commands: Mutex::new(commands),
-    };
     let spectrum = test_spectrum();
-    let worker = std::thread::spawn(move || match receiver.recv() {
-        Ok(Command::Spectrum(reply)) => {
-            reply.send(Some(spectrum)).unwrap();
-        }
+    let (output, worker) = output_with_worker(move |command| match command {
+        Command::Spectrum(reply) => reply.send(Some(spectrum)).unwrap(),
         _ => panic!("spectrum did not send Command::Spectrum"),
     });
 
@@ -253,14 +269,8 @@ fn rodio_output_asks_the_worker_for_its_spectrum() {
 // like the position, format, spectrum, and duration queries.
 #[test]
 fn rodio_output_asks_the_worker_for_its_finished_state() {
-    let (commands, receiver) = std::sync::mpsc::channel();
-    let output = RodioOutput {
-        commands: Mutex::new(commands),
-    };
-    let worker = std::thread::spawn(move || match receiver.recv() {
-        Ok(Command::Finished(reply)) => {
-            reply.send(Some(true)).unwrap();
-        }
+    let (output, worker) = output_with_worker(|command| match command {
+        Command::Finished(reply) => reply.send(Some(true)).unwrap(),
         _ => panic!("finished did not send Command::Finished"),
     });
 
@@ -273,27 +283,20 @@ fn rodio_output_asks_the_worker_for_its_finished_state() {
 // waiting for the reply.
 #[test]
 fn rodio_output_reports_none_when_the_finished_reply_times_out() {
-    let (commands, receiver) = std::sync::mpsc::channel();
-    let output = RodioOutput {
-        commands: Mutex::new(commands),
-    };
-    let worker = std::thread::spawn(move || match receiver.recv() {
-        Ok(Command::Finished(reply)) => {
-            // Keep the reply channel alive well past the seam's bound, as a
-            // worker busy installing a preview would.
-            std::thread::sleep(WORKER_QUERY_TIMEOUT * 10);
-            drop(reply);
-        }
-        _ => panic!("finished did not send Command::Finished"),
-    });
-
-    let started = Instant::now();
-    assert!(!output.is_finished());
-    assert!(
-        started.elapsed() < WORKER_QUERY_TIMEOUT * 5,
-        "a missing finished reply must time out instead of blocking"
+    assert_unanswered_query_times_out(
+        "finished",
+        |command| match command {
+            Command::Finished(reply) => {
+                // Keep the reply channel alive well past the seam's bound, as
+                // a worker busy installing a preview would.
+                std::thread::sleep(WORKER_QUERY_TIMEOUT * 10);
+                drop(reply);
+            }
+            _ => panic!("finished did not send Command::Finished"),
+        },
+        RodioOutput::is_finished,
+        false,
     );
-    worker.join().unwrap();
 }
 
 // A worker that accepts the query but does not answer must not hold the
@@ -301,41 +304,26 @@ fn rodio_output_reports_none_when_the_finished_reply_times_out() {
 // for the reply.
 #[test]
 fn rodio_output_reports_none_when_the_position_reply_times_out() {
-    let (commands, receiver) = std::sync::mpsc::channel();
-    let output = RodioOutput {
-        commands: Mutex::new(commands),
-    };
-    let worker = std::thread::spawn(move || match receiver.recv() {
-        Ok(Command::Position(reply)) => {
-            // Keep the reply channel alive well past the seam's bound, as a
-            // worker busy installing a preview would.
-            std::thread::sleep(WORKER_QUERY_TIMEOUT * 10);
-            drop(reply);
-        }
-        _ => panic!("position did not send Command::Position"),
-    });
-
-    let started = Instant::now();
-    assert_eq!(output.position(), None);
-    assert!(
-        started.elapsed() < WORKER_QUERY_TIMEOUT * 5,
-        "a missing position reply must time out instead of blocking"
+    assert_unanswered_query_times_out(
+        "position",
+        |command| match command {
+            Command::Position(reply) => {
+                std::thread::sleep(WORKER_QUERY_TIMEOUT * 10);
+                drop(reply);
+            }
+            _ => panic!("position did not send Command::Position"),
+        },
+        RodioOutput::position,
+        None,
     );
-    worker.join().unwrap();
 }
 
 // A duration query crosses to the worker and returns the reply it sends,
 // just like the position and format queries.
 #[test]
 fn rodio_output_asks_the_worker_for_its_duration() {
-    let (commands, receiver) = std::sync::mpsc::channel();
-    let output = RodioOutput {
-        commands: Mutex::new(commands),
-    };
-    let worker = std::thread::spawn(move || match receiver.recv() {
-        Ok(Command::Duration(reply)) => {
-            reply.send(Some(Duration::from_secs(30))).unwrap();
-        }
+    let (output, worker) = output_with_worker(|command| match command {
+        Command::Duration(reply) => reply.send(Some(Duration::from_secs(30))).unwrap(),
         _ => panic!("duration did not send Command::Duration"),
     });
 
@@ -347,25 +335,18 @@ fn rodio_output_asks_the_worker_for_its_duration() {
 // the caller past the seam's bound: the query reports `None` instead.
 #[test]
 fn rodio_output_reports_none_when_the_duration_reply_times_out() {
-    let (commands, receiver) = std::sync::mpsc::channel();
-    let output = RodioOutput {
-        commands: Mutex::new(commands),
-    };
-    let worker = std::thread::spawn(move || match receiver.recv() {
-        Ok(Command::Duration(reply)) => {
-            std::thread::sleep(WORKER_QUERY_TIMEOUT * 10);
-            drop(reply);
-        }
-        _ => panic!("duration did not send Command::Duration"),
-    });
-
-    let started = Instant::now();
-    assert_eq!(output.duration(), None);
-    assert!(
-        started.elapsed() < WORKER_QUERY_TIMEOUT * 5,
-        "a missing duration reply must time out instead of blocking"
+    assert_unanswered_query_times_out(
+        "duration",
+        |command| match command {
+            Command::Duration(reply) => {
+                std::thread::sleep(WORKER_QUERY_TIMEOUT * 10);
+                drop(reply);
+            }
+            _ => panic!("duration did not send Command::Duration"),
+        },
+        RodioOutput::duration,
+        None,
     );
-    worker.join().unwrap();
 }
 
 // Both bounds above are production behavior, but every test that exercises
