@@ -6357,6 +6357,41 @@ fn captured_root_view_text_bounds(player: &WinampPlayer) -> layout_capture::Text
     layout_capture::capture_text(&mut element, &renderer)
 }
 
+/// Lays the root `view` out and returns the bounds of the container tagged
+/// `views::MINI_VOLUME_ID`, so a test can find the library footer's volume
+/// slider in the real laid-out tree.
+fn captured_root_view_volume_slider(player: &WinampPlayer) -> Option<iced::Rectangle> {
+    use iced::advanced::{
+        Layout,
+        widget::{Id, Tree, operation::Operation},
+    };
+
+    #[derive(Default)]
+    struct CapturedSlider(Option<iced::Rectangle>);
+    impl Operation for CapturedSlider {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+        fn container(&mut self, id: Option<&Id>, bounds: iced::Rectangle) {
+            if id == Some(&Id::new(views::MINI_VOLUME_ID)) {
+                self.0 = Some(bounds);
+            }
+        }
+    }
+
+    let renderer = layout_capture::headless_renderer();
+    let mut element = view(player);
+    let mut tree = Tree::new(element.as_widget());
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &layout_capture::limits());
+    let mut captured = CapturedSlider::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &renderer, &mut captured);
+    captured.0
+}
+
 // In shade mode the root view is the title bar over the compact strip, so the
 // whole laid-out tree must resolve to `SHADED_HEIGHT` — the same height
 // `resize_to_shade` gives the window. A title-bar-only tree would leave the
@@ -6371,28 +6406,106 @@ fn shaded_root_view_is_the_title_bar_plus_the_strip() {
 }
 
 // The strip is shade-mode-only. Both modes now draw a Previous glyph — the
-// full transport row has one too — so pin where it lands: in normal mode it
-// sits below the rolled-up band, and in shade mode it sits inside the strip
-// between the title bar and `SHADED_HEIGHT`.
+// full transport row has one too — so pin where they land: in normal mode the
+// first belongs to the full transport row and a second to the library footer,
+// and in shade mode exactly one sits inside the strip between the title bar
+// and `SHADED_HEIGHT`.
 #[test]
 fn shade_strip_draws_only_while_shaded() {
     let (mut player, _state) = test_player();
 
     let normal = captured_root_view_text_bounds(&player);
-    let normal_previous = normal.find("◀◀");
+    let normal_previous: Vec<iced::Rectangle> = normal
+        .fragments()
+        .iter()
+        .filter(|(text, _)| text == "◀◀")
+        .map(|(_, bounds)| *bounds)
+        .collect();
+    assert_eq!(
+        normal_previous.len(),
+        2,
+        "normal mode must draw the full transport row and the library footer: {:?}",
+        normal.fragments()
+    );
     assert!(
-        normal_previous.y >= views::SHADED_HEIGHT,
-        "normal mode's Previous glyph belongs to the full transport row, not the strip: {:?}",
+        normal_previous[0].y >= views::SHADED_HEIGHT,
+        "normal mode's first Previous glyph belongs to the full transport row, not the strip: {:?}",
+        normal.fragments()
+    );
+    assert!(
+        normal_previous[1].y > normal_previous[0].y,
+        "the library footer's Previous glyph must sit below the full transport row: {:?}",
         normal.fragments()
     );
 
     player.shaded = true;
     let shaded = captured_root_view_text_bounds(&player);
-    let shaded_previous = shaded.find("◀◀");
+    let shaded_previous: Vec<iced::Rectangle> = shaded
+        .fragments()
+        .iter()
+        .filter(|(text, _)| text == "◀◀")
+        .map(|(_, bounds)| *bounds)
+        .collect();
+    assert_eq!(
+        shaded_previous.len(),
+        1,
+        "shade mode must draw exactly the shade strip: {:?}",
+        shaded.fragments()
+    );
     assert!(
-        shaded_previous.y >= views::TITLE_BAR_HEIGHT && shaded_previous.y < views::SHADED_HEIGHT,
+        shaded_previous[0].y >= views::TITLE_BAR_HEIGHT
+            && shaded_previous[0].y < views::SHADED_HEIGHT,
         "shade mode's Previous glyph must sit inside the strip: {:?}",
         shaded.fragments()
+    );
+}
+
+// In normal mode the library footer sits beneath the browse list, with the
+// same four glyphs, time readout, and right-edge volume slider as the shade
+// strip. A builder-only test cannot catch the root dropping the footer, so
+// lay out the whole window and measure it.
+#[test]
+fn normal_root_view_draws_the_library_strip_beneath_the_browse_list() {
+    let (player, _state) = test_player();
+    let capture = captured_root_view_text_bounds(&player);
+
+    let previous: Vec<iced::Rectangle> = capture
+        .fragments()
+        .iter()
+        .filter(|(text, _)| text == "◀◀")
+        .map(|(_, bounds)| *bounds)
+        .collect();
+    assert_eq!(
+        previous.len(),
+        2,
+        "normal mode must draw the full transport row and the library footer: {:?}",
+        capture.fragments()
+    );
+    let footer = previous[1];
+    let top = capture.find("Top");
+    assert!(
+        footer.y > top.y,
+        "the library footer must sit below the browse list's Top button: footer {footer:?}, Top {top:?}"
+    );
+    assert!(
+        footer.y + footer.height <= capture.size().height,
+        "the library footer must stay inside the window: footer {footer:?} in {:?}",
+        capture.size()
+    );
+
+    let elapsed = player.now_playing_elapsed(None);
+    assert!(
+        capture
+            .fragments()
+            .iter()
+            .any(|(text, bounds)| text == elapsed.as_ref() && (bounds.y - footer.y).abs() < 5.0),
+        "missing the footer's {elapsed:?} time readout: {:?}",
+        capture.fragments()
+    );
+    assert!(
+        captured_root_view_volume_slider(&player).is_some(),
+        "the library footer's volume slider must be laid out: {:?}",
+        capture.fragments()
     );
 }
 

@@ -14,8 +14,9 @@ use super::views;
 /// Assembles the app screen: the title bar, Now Playing bar, seek strip,
 /// transport row, and equalizer panel — all built in `views` from the resolved
 /// title and the shared playback, volume, Repeat, Shuffle, and EQ state — above
-/// the current browse list. When the window is shaded, the tree is the title
-/// bar over the compact transport strip and the rest of the screen is dropped.
+/// the current browse list, with the compact library transport footer beneath
+/// it. When the window is shaded, the tree is the title bar over the compact
+/// transport strip and the rest of the screen is dropped.
 pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // Shade mode builds only the title bar and its compact transport strip —
     // the Now Playing bar, seek strip, transport row, equalizer, and browse
@@ -161,6 +162,10 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // The library band and everything below stay outside the area, leaving
     // the browse list's own `Scrollable` to take the wheel without touching
     // the volume.
+    //
+    // The footer gets its own clone of the elapsed string before the LCD takes
+    // it, so the two can never disagree about elapsed versus remaining mode.
+    let library_elapsed = now_playing_elapsed.clone();
     let player_panels = Column::new()
         .push(views::view_title_bar(player.always_on_top))
         .push(views::view_now_playing(
@@ -218,5 +223,12 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // The search box sits on every browse screen, so a query can be typed
     // from any level of the hierarchy.
     column = column.push(views::view_search_box(&player.search_query));
-    column.push(main_content).into()
+    column
+        .push(main_content)
+        .push(views::view_library_strip(
+            is_playing,
+            volume,
+            library_elapsed,
+        ))
+        .into()
 }

@@ -285,8 +285,8 @@ or placeholder as the row's secondary text.
 and Sort buttons into one `Row`. `views::view_transport_controls`,
 `views::transport::transport_buttons`, and `views::transport::transport_glyphs` in
 `src/ui/views/transport.rs` build the glyph row from `fixed_width_button`s and
-`iced::widget::Tooltip`s; `views::shade::shade_controls` projects the same glyph spec for the
-shade strip. `views::equalizer::preamp_column`,
+`iced::widget::Tooltip`s; `views::mini_transport::mini_transport_controls` projects the same
+glyph spec for the shade strip and the library footer. `views::equalizer::preamp_column`,
 `views::equalizer::db_scale_column`, and `views::view_equalizer` in
 `src/ui/views/equalizer.rs` build the equalizer band row and align the curve with it. The
 browse and transport layout tests lay out the whole root `view` through the test-only
@@ -756,26 +756,31 @@ rather than the panic unwinding the event loop.
 
 - Shade mode builds exactly the title bar over the compact transport strip, and the window is
   resized to that same height (`SHADED_HEIGHT = TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT`). The
-  strip keeps a fixed `SHADE_STRIP_HEIGHT`, and normal mode builds no strip at all.
+  strip keeps a fixed `SHADE_STRIP_HEIGHT`, which aliases the shared
+  `MINI_TRANSPORT_HEIGHT`, and normal mode builds no shade strip.
 - The strip shows Previous, Play/Pause, Stop, Next, the current time readout, and a volume
   slider. Its four buttons emit the same messages as their full transport-row twins
   (`Message::PreviousTrack`, `Message::PlayPause`, `Message::Stop`, `Message::NextTrack`), each
   pinned to a fixed width so the glyph swap cannot reflow the strip. The strip builds them from
-  the full row's `transport_glyphs` spec, so both rows share the same glyphs, order, widths, and
-  messages; the Play/Pause glyph is `"▶"` while stopped and `"II"` while playing. A fill spacer
-  pushes the slider to the right edge, after the left-aligned buttons and time readout.
+  the shared compact row's `mini_transport_controls`, which projects the full row's
+  `transport_glyphs` spec, so the shade strip, the library footer, and the full row share the
+  same glyphs, order, widths, and messages; the Play/Pause glyph is `"▶"` while stopped and
+  `"II"` while playing. A fill spacer pushes the slider to the right edge, after the
+  left-aligned buttons and time readout.
 - The time readout is the same `WinampPlayer::now_playing_elapsed` string the Now Playing bar
   draws, so the elapsed/remaining choice carries into shade mode. The volume slider writes
   `Message::VolumeChange` and reads the shared volume.
 
-**Enforced by.** `views::shade::view_shade_strip` builds the strip and
-`views::shade::shade_controls` projects `views::transport::transport_glyphs` (including
-`views::transport::play_pause_glyph`) into its buttons;
-`views::shade::shade_volume_spec` fixes the slider's shared range and `Message::VolumeChange`;
-`views::shade::SHADE_STRIP_HEIGHT` and `views::shade::SHADED_HEIGHT` own the heights; the shaded
-branch of `ui::view::view` stacks the bar and strip; and `handlers::window::resize_to_shade` resizes to
-`handlers::window::shade_target_size`, which reads `SHADED_HEIGHT`. `views::view_shade_strip` is
-re-exported by `src/ui/views/mod.rs`.
+**Enforced by.** `views::shade::view_shade_strip` wraps
+`views::mini_transport::mini_transport_row` on the title bar's blue chrome;
+`views::mini_transport::mini_transport_controls` projects
+`views::transport::transport_glyphs` (including `views::transport::play_pause_glyph`) into the
+compact buttons; `views::mini_transport::mini_volume_spec` fixes the slider's shared range and
+`Message::VolumeChange`; `views::mini_transport::MINI_TRANSPORT_HEIGHT` owns the height, and
+`views::shade::SHADE_STRIP_HEIGHT` aliases it while `views::shade::SHADED_HEIGHT` adds the title
+bar; the shaded branch of `ui::view::view` stacks the bar and strip; and
+`handlers::window::resize_to_shade` resizes to `handlers::window::shade_target_size`, which reads
+`SHADED_HEIGHT`. `views::view_shade_strip` is re-exported by `src/ui/views/mod.rs`.
 
 **Pinned by.** `shade_play_pause_glyph_switches_with_playback_state`,
 `shade_controls_map_to_transport_messages_and_keep_fixed_widths`,
@@ -789,7 +794,42 @@ re-exported by `src/ui/views/mod.rs`.
 `title_bar_height_pins_the_shade_strip` (`src/ui/tests.rs`).
 
 **History.** Added with the window-shade transport strip; the earlier shade mode built the title
-bar alone.
+bar alone. The strip's controls now come from the shared compact row the library footer uses.
+
+## Library footer
+
+**Guarantee.** Normal mode draws exactly one compact transport row beneath the browse list:
+
+- The row is exactly `MINI_TRANSPORT_HEIGHT` tall and sits on the window face's raised chrome
+  below the browse list.
+- It shows Previous, Play/Pause, Stop, Next, the current time readout, and a volume slider. The
+  four buttons emit `Message::PreviousTrack`, `Message::PlayPause`, `Message::Stop`, and
+  `Message::NextTrack`, the Play/Pause glyph follows `is_playing`, and the time label is the same
+  `WinampPlayer::now_playing_elapsed` string the LCD shows, so the elapsed/remaining choice
+  cannot disagree between the two.
+- The volume slider is tagged `MINI_VOLUME_ID`, pinned to `MINI_VOLUME_WIDTH` at the row's right
+  edge, and writes `Message::VolumeChange`. No new message, handler, or playback path exists.
+- The footer and the shade strip build from the same row builder, so a glyph, order, width,
+  message, or slider change shows up in both. Normal mode draws no shade strip, and shade mode
+  draws no library footer.
+
+**Enforced by.** `views::mini_transport::view_library_strip` wraps
+`views::mini_transport::mini_transport_row` for normal mode;
+`views::mini_transport::mini_transport_controls` and
+`views::mini_transport::mini_volume_spec` are the shared control and slider specs;
+`views::mini_transport::MINI_TRANSPORT_HEIGHT`, `MINI_VOLUME_WIDTH`, and `MINI_VOLUME_ID` own the
+geometry and test seam. The normal branch of `ui::view::view` pushes the footer after the browse
+content with a clone of the LCD's elapsed string, while its shaded branch returns before that
+push.
+
+**Pinned by.** `view_library_strip_keeps_its_fixed_height`,
+`library_strip_draws_the_four_controls_time_and_right_edge_volume`, and
+`main_transport_and_shade_strip_share_glyphs_order_and_widths` (`src/ui/views/tests.rs`);
+`normal_root_view_draws_the_library_strip_beneath_the_browse_list` and
+`shade_strip_draws_only_while_shaded` (`src/ui/tests.rs`).
+
+**History.** Added 2026-10-23 with the mockups' library-panel transport row; the shade strip was
+refactored onto the same shared row in the same change.
 
 ## Sign-in server
 

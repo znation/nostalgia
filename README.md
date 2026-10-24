@@ -84,7 +84,10 @@ supplies no artist) and show each track's length at the right, whose album rows 
 total running time at the right (`10:30`, or `--:--` when the source supplied none), and whose
 artist rows show their album count at the right (`2 albums`, `1 album`, and no count for an
 artist with none), with each song list showing its song count and total playing time beneath
-the rows and artist, album, and playlist lists showing their item count beneath theirs. Each
+the rows and artist, album, and playlist lists showing their item count beneath theirs. A
+compact transport strip sits beneath the browse list with Previous, Play/Pause, Stop, Next,
+the current time readout, and a volume slider, the same controls as the window-shade strip.
+Each
 equalizer band slider's groove is tinted by that band's own gain, from green at `-12 dB` through
 yellow at `0 dB` to red at `+12 dB`. The app bar sets `NOSTALGIA` between gold tape strips, and
 the equalizer and browse sections are each introduced by a matching title band — `NOSTALGIA

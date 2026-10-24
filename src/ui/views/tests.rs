@@ -9,6 +9,10 @@ use super::equalizer::{
     EQ_SLIDER_HEIGHT, RESPONSE_CURVE_COLUMNS, RESPONSE_CURVE_HEIGHT, RESPONSE_CURVE_LINE_HEIGHT,
     eq_enabled_label, response_curve_offsets, response_curve_row,
 };
+use super::mini_transport::{
+    MINI_TRANSPORT_HEIGHT, MINI_VOLUME_ID, MINI_VOLUME_WIDTH, mini_transport_controls,
+    mini_volume_spec, view_library_strip,
+};
 use super::now_playing::text::{format_lcd_elapsed, format_lcd_remaining};
 use super::now_playing::{
     CHANNEL_LABELS, KnownTrack, MARQUEE_WIDTH, TimeDisplay, channel_label_color,
@@ -19,10 +23,7 @@ use super::now_playing::{
     now_playing_visualizer_row, transport_glyph, transport_glyph_color, visible_spectrum,
     visualizer_bar_heights,
 };
-use super::shade::{
-    SHADE_STRIP_HEIGHT, SHADE_VOLUME_ID, SHADE_VOLUME_WIDTH, SHADED_HEIGHT, shade_controls,
-    shade_volume_spec, view_shade_strip,
-};
+use super::shade::{SHADE_STRIP_HEIGHT, SHADED_HEIGHT, view_shade_strip};
 use super::title_bar::{CLUTTER_BUTTON_WIDTH, TITLE_BAR_BUTTON_WIDTH};
 use super::transport::{
     play_pause_glyph, play_pause_word, repeat_label, shuffle_label, transport_buttons,
@@ -52,7 +53,7 @@ use iced::advanced::{
     layout::Limits,
     widget::{Id, Tree, operation::Operation},
 };
-use iced::{Color, Length, Rectangle, Size};
+use iced::{Color, Element, Length, Rectangle, Size};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -2536,14 +2537,14 @@ fn shade_play_pause_glyph_switches_with_playback_state() {
     assert_eq!(play_pause_glyph(true), "II");
 }
 
-// The main row and the shade strip must share one spec: same glyphs in the
-// same order, same fixed widths, same messages. Pin the shade projection
+// The main row and both compact strips must share one spec: same glyphs in the
+// same order, same fixed widths, same messages. Pin the compact projection
 // against `transport_glyphs` in both playback states.
 #[test]
 fn main_transport_and_shade_strip_share_glyphs_order_and_widths() {
     for is_playing in [false, true] {
         let full = transport_glyphs(is_playing);
-        let shade = shade_controls(is_playing);
+        let shade = mini_transport_controls(is_playing);
         let full_spec: Vec<(&str, f32)> = full
             .iter()
             .map(|(glyph, _, width, _)| (*glyph, *width))
@@ -2567,8 +2568,8 @@ fn main_transport_and_shade_strip_share_glyphs_order_and_widths() {
 // reflow the strip. Pin both, in row order.
 #[test]
 fn shade_controls_map_to_transport_messages_and_keep_fixed_widths() {
-    let stopped = shade_controls(false);
-    let playing = shade_controls(true);
+    let stopped = mini_transport_controls(false);
+    let playing = mini_transport_controls(true);
 
     let labels: Vec<&str> = stopped.iter().map(|(label, _, _)| *label).collect();
     assert_eq!(labels, vec!["◀◀", "▶", "■", "▶▶"]);
@@ -2620,11 +2621,13 @@ fn view_shade_strip_keeps_its_fixed_height_for_both_playback_states() {
     }
 }
 
-/// Lays the shade strip out with the headless tiny-skia renderer and records
+/// Lays a compact strip out with the headless tiny-skia renderer and records
 /// every text fragment plus the bounds of the container tagged
-/// [`SHADE_VOLUME_ID`], so a test can see the time readout and the volume
+/// [`MINI_VOLUME_ID`], so a test can see the time readout and the volume
 /// slider's place in the real laid-out row.
-fn captured_shade_strip(elapsed: &str) -> (Vec<String>, Option<Rectangle>, Size) {
+fn captured_mini_strip(
+    mut element: Element<'_, Message>,
+) -> (Vec<String>, Option<Rectangle>, Size) {
     #[derive(Default)]
     struct CapturedContainer {
         slider: Option<Rectangle>,
@@ -2634,14 +2637,13 @@ fn captured_shade_strip(elapsed: &str) -> (Vec<String>, Option<Rectangle>, Size)
             operate(self);
         }
         fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
-            if id == Some(&Id::new(SHADE_VOLUME_ID)) {
+            if id == Some(&Id::new(MINI_VOLUME_ID)) {
                 self.slider = Some(bounds);
             }
         }
     }
 
     let renderer = layout_capture::headless_renderer();
-    let mut element = view_shade_strip(false, 0.5, Cow::Borrowed(elapsed));
     let capture = layout_capture::capture_text(&mut element, &renderer);
     let texts = capture.texts().map(str::to_string).collect();
 
@@ -2657,6 +2659,14 @@ fn captured_shade_strip(elapsed: &str) -> (Vec<String>, Option<Rectangle>, Size)
     (texts, captured.slider, capture.size())
 }
 
+fn captured_shade_strip(elapsed: &str) -> (Vec<String>, Option<Rectangle>, Size) {
+    captured_mini_strip(view_shade_strip(false, 0.5, Cow::Borrowed(elapsed)))
+}
+
+fn captured_library_strip(elapsed: &str) -> (Vec<String>, Option<Rectangle>, Size) {
+    captured_mini_strip(view_library_strip(false, 0.5, Cow::Borrowed(elapsed)))
+}
+
 // The strip's two non-button controls must actually reach the laid-out row:
 // the time readout the caller gives it (elapsed or remaining) and the volume
 // slider. The fill spacer pushes the slider to the right edge, so it does not
@@ -2670,7 +2680,7 @@ fn shade_strip_draws_the_time_readout_and_puts_the_volume_slider_at_the_right_ed
             "missing {time} readout: {texts:?}"
         );
         let slider = slider.unwrap_or_else(|| panic!("missing volume slider: {texts:?}"));
-        assert_eq!(slider.width, SHADE_VOLUME_WIDTH);
+        assert_eq!(slider.width, MINI_VOLUME_WIDTH);
         assert!(
             (slider.x + slider.width - (size.width - 6.0)).abs() < 0.5,
             "slider must sit at the strip's right edge: {slider:?} in {size:?}"
@@ -2683,14 +2693,61 @@ fn shade_strip_draws_the_time_readout_and_puts_the_volume_slider_at_the_right_ed
 // volume slider.
 #[test]
 fn shade_volume_slider_spec_matches_the_shared_volume_range_and_message() {
-    let (min, max, step, width, on_change) = shade_volume_spec();
+    let (min, max, step, width, on_change) = mini_volume_spec();
     assert_eq!((min, max, step), (VOLUME_MIN, VOLUME_MAX, VOLUME_STEP));
-    assert_eq!(width, SHADE_VOLUME_WIDTH);
-    assert_eq!(SHADE_VOLUME_WIDTH, 80.0);
+    assert_eq!(width, MINI_VOLUME_WIDTH);
+    assert_eq!(MINI_VOLUME_WIDTH, 80.0);
     assert!(matches!(
         on_change(0.5),
         Message::VolumeChange(value) if value == 0.5
     ));
+}
+
+// The library footer is a fixed-height strip, so adding it to the normal root
+// column cannot let the browse content squeeze it or stretch it.
+#[test]
+fn view_library_strip_keeps_its_fixed_height() {
+    let renderer = layout_capture::headless_renderer();
+
+    for is_playing in [false, true] {
+        let mut element = view_library_strip(is_playing, 0.5, Cow::Borrowed("00:53"));
+        let mut tree = Tree::new(element.as_widget());
+        let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
+        let node = element
+            .as_widget_mut()
+            .layout(&mut tree, &renderer, &limits);
+        assert_eq!(
+            node.size().height,
+            MINI_TRANSPORT_HEIGHT,
+            "the library footer must keep its fixed height while is_playing = {is_playing}"
+        );
+    }
+}
+
+// The footer's four glyphs, time readout, and right-edge volume slider must
+// actually reach the laid-out row, in the same order and geometry as the
+// shade strip's.
+#[test]
+fn library_strip_draws_the_four_controls_time_and_right_edge_volume() {
+    for time in ["00:53", "-02:37"] {
+        let (texts, slider, size) = captured_library_strip(time);
+        let glyphs: Vec<&str> = texts
+            .iter()
+            .map(String::as_str)
+            .filter(|text| ["◀◀", "▶", "■", "▶▶"].contains(text))
+            .collect();
+        assert_eq!(glyphs, vec!["◀◀", "▶", "■", "▶▶"]);
+        assert!(
+            texts.iter().any(|text| text == time),
+            "missing {time} readout: {texts:?}"
+        );
+        let slider = slider.unwrap_or_else(|| panic!("missing volume slider: {texts:?}"));
+        assert_eq!(slider.width, MINI_VOLUME_WIDTH);
+        assert!(
+            (slider.x + slider.width - (size.width - 6.0)).abs() < 0.5,
+            "slider must sit at the footer's right edge: {slider:?} in {size:?}"
+        );
+    }
 }
 
 // A section band must be exactly the title bar's height and carry only its

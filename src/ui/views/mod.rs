@@ -10,7 +10,8 @@
 //! Each panel lives in its own submodule — `browse` (the artist → album →
 //! song drill-down, the flat lists, and Playlists, with their rows and list
 //! scaffolding in `browse::rows`), `title_bar`, `shade` (the rolled-up
-//! transport strip), `now_playing` (the LCD widgets, with its pure label, time,
+//! transport strip), `mini_transport` (the compact row the shade strip and the
+//! library footer share), `now_playing` (the LCD widgets, with its pure label, time,
 //! and marquee resolution in `now_playing::text`), `seek_bar`, `transport`, and `equalizer`
 //! — while the chrome helpers, slider specs, and track-length formatting the
 //! panels share ([`spacer`], [`labeled_button`], [`fixed_width_button`],
@@ -26,6 +27,7 @@ use crate::ui::{Message, style};
 
 mod browse;
 mod equalizer;
+mod mini_transport;
 mod now_playing;
 mod seek_bar;
 mod shade;
@@ -39,6 +41,7 @@ pub use browse::{
     view_retry_button, view_search_box, view_songs,
 };
 pub use equalizer::view_equalizer;
+pub use mini_transport::view_library_strip;
 pub use now_playing::{
     KnownTrack, TimeDisplay, needs_marquee, now_playing_artist, now_playing_elapsed,
     now_playing_label, now_playing_number, now_playing_time, view_now_playing, visible_spectrum,
@@ -50,6 +53,8 @@ pub use transport::view_transport_controls;
 
 #[cfg(test)]
 pub(super) use browse::BROWSE_VIEWS;
+#[cfg(test)]
+pub(crate) use mini_transport::MINI_VOLUME_ID;
 #[cfg(test)]
 pub(super) use seek_bar::seek_bar_value;
 pub(super) use shade::SHADED_HEIGHT;
@@ -192,8 +197,8 @@ const EQ_STEP: f32 = 1.0;
 /// its rail `fill` with the shared [`style::level_slider_style`]. Dragging it
 /// emits `on_change`.
 ///
-/// The transport row's volume and balance sliders and the shade strip's volume
-/// slider differ only in those values and their fill, so the construction lives
+/// The transport row's volume and balance sliders and the compact strips'
+/// volume slider differ only in those values and their fill, so the construction lives
 /// here once. The seek bar and the equalizer's preamp build their own sliders
 /// and keep the neutral chrome groove, while the equalizer's band sliders carry
 /// the per-band gain tint from [`style::band_slider_style`].
