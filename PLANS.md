@@ -19,58 +19,6 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Open the selected browse row with Enter (planned 2026-10-23 by the plan role)
-
-**Goal.** Complete the browse selection flow with the keyboard: after a click selects a row,
-pressing Enter should open it exactly as a second click or the `Open` button does. The
-select-then-open plan already added `Message::OpenSelected` and
-`handlers::browse::open_selected`, which resolves the showing list's selected row and dispatches
-the existing artist/album/song/playlist action, but `shortcuts::shortcut` binds only the letters
-and arrow keys, so Enter currently does nothing. This adds that one binding. It adds no message,
-handler, fetch, or playback path, and it leaves the search box's Enter behavior alone.
-
-**Approach.**
-
-- `src/ui/shortcuts.rs`: in `shortcut`, add
-`Key::Named(key::Named::Enter) => Some(Message::OpenSelected)` beside the arrow-key arms. Update
-the `message_for` and `shortcut` docs to list Enter as the browse-row activation key. Enter
-shares the existing Control/Alt/Logo rejection, so a chord still maps to nothing; a plain or
-Shift-held Enter maps.
-- `src/ui/shortcuts.rs` tests: add `message_for_maps_enter_to_open_selected`, using the existing
-`key_pressed` helper and asserting `Message::OpenSelected`. Add `Key::Named(key::Named::Enter)`
-to the key list in `shortcut_ignores_chord_modifiers`. The existing release/non-press test already
-proves a key release maps to nothing.
-- `src/ui/tests.rs`: add `enter_opens_the_selected_song`, building on
-`open_selected_opens_the_selected_song`'s fixture. Seed the browse lists, show `CurrentView::Songs`,
-select index 0 through `Message::SelectRow`, map a plain Enter key press through
-`shortcuts::message_for`, and assert it is `Message::OpenSelected`; drive that message through
-`update` and assert the same `TrackSelected` output and committed `song-1` playback the Open
-button test asserts. This pins the key-to-action wiring end to end without introducing another
-open path.
-- `README.md`: in the Usage sentence describing browse selection, add Enter alongside the
-second click and the `Open` button as a way to open the selected row. Do not edit the
-`<!-- tumwater:status:start -->` block.
-- `docs/invariants.md`: in `## Browse selection`, add Enter as another activation route for the
-selected row, with no selection being a no-op, and note that the search box's own Enter is
-captured by `TextInput::on_submit` and remains `Message::SearchSubmitted` (the keyboard
-subscription receives only ignored events). Name `shortcuts::message_for`, `Message::OpenSelected`,
-and `handlers::browse::open_selected` as the enforcers, and add
-`message_for_maps_enter_to_open_selected` and `enter_opens_the_selected_song` to `Pinned by`.
-
-**Files touched.** `src/ui/shortcuts.rs`, `src/ui/tests.rs`, `README.md`,
-`docs/invariants.md`.
-
-**Acceptance criteria.**
-
-- A plain or Shift-held Enter key press maps to `Message::OpenSelected`; a key release,
-modifier-only event, or Control/Alt/Logo chord still maps to nothing.
-- With a row selected on any browse level, Enter opens it through the existing `open_selected`
-path, producing the same action as the `Open` button; with no selected row it is a no-op that
-schedules no fetch or playback task.
-- Enter while the search box is focused remains a search submit, and the search box's widget and
-message wiring are unchanged.
-- README and `docs/invariants.md` describe Enter as an activation route, and `make check` passes.
-
 ### Toggle elapsed and remaining time from the compact transport readout (planned 2026-10-23 by the plan role)
 
 **Goal.** The compact transport row shared by the library footer and the shade strip shows the

@@ -99,8 +99,8 @@ the equalizer and browse sections are each introduced by a matching title band �
 EQUALIZER` above the equalizer panel and `NOSTALGIA LIBRARY` above the browse list.
 Every browse list numbers its rows from 1 like a Winamp playlist and draws ordinary rows in green
 text, with the playing song marked by `▶` before its number and drawn in white without a bar. A
-click selects a row and paints its blue bar with white text, without opening it; a second click on
-the selected row (a double-click) or the `Open` button
+click selects a row and paints its blue bar with white text, without opening it; a second click
+on the selected row (a double-click), Enter, or the `Open` button
 opens it — drilling into an artist, album, or playlist, or playing a song — while Back still
 climbs out. A `Search library` box above the browse list searches the library when you
 press Enter, replacing the list with the matching songs; Back leaves a search for the artists

@@ -1031,6 +1031,53 @@ async fn open_selected_opens_the_selected_song() {
     assert!(state.is_playing);
 }
 
+// Enter is the keyboard activation route for a selected browse row: the
+// shortcut table maps a plain press to OpenSelected, whose update arm dispatches
+// the same TrackSelected playback the Open button does.
+#[tokio::test]
+async fn enter_opens_the_selected_song() {
+    use iced::keyboard::{Event, Key, Modifiers, key};
+
+    let (mut player, state) = test_player();
+    seed_browse_lists(&mut player);
+    player.current_view = CurrentView::Songs;
+    player.songs.loading = false;
+    let epoch = player.songs.epoch;
+    assert_message_schedules_no_work(&mut player, Message::SelectRow { epoch, index: 0 });
+
+    let enter = Event::KeyPressed {
+        key: Key::Named(key::Named::Enter),
+        modified_key: Key::Named(key::Named::Enter),
+        physical_key: key::Physical::Code(key::Code::Enter),
+        location: iced::keyboard::Location::Standard,
+        modifiers: Modifiers::NONE,
+        text: None,
+        repeat: false,
+    };
+    let message = super::shortcuts::message_for(enter).expect("Enter must map to a message");
+    assert!(matches!(message, Message::OpenSelected));
+
+    let task = update(&mut player, message);
+    let opened = futures::executor::block_on(task_output(task, "Enter on selected song"));
+    match &opened {
+        Message::TrackSelected { epoch: e, index: 0 } if *e == epoch => {}
+        other => panic!("Enter must dispatch the selected song: {other:?}"),
+    }
+    drive_task(
+        update(&mut player, opened),
+        "playback",
+        |message| match message {
+            Message::TrackPlayed { committed, .. } => assert!(committed),
+            other => panic!("unexpected playback task output: {other:?}"),
+        },
+    )
+    .await;
+
+    let state = state.lock().await;
+    assert_eq!(state.current_track.as_deref(), Some("song-1"));
+    assert!(state.is_playing);
+}
+
 #[test]
 fn open_selected_with_nothing_selected_is_a_noop() {
     let (mut player, _state) = test_player();

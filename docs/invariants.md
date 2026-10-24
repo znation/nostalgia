@@ -63,9 +63,13 @@ rows draw green text and keep the hover/press faces of the flat playlist row. Th
 row draws white text, keeps its `▶` marker, and draws no bar unless it is also selected; a row
 that is both playing and selected keeps the bar and stays identifiable by its `▶` prefix. Only a
 matching epoch and an in-range index can select, so a press rendered from a replaced list is a
-no-op. A second press on the row that is already selected, or the `Open` button, dispatches the
+no-op. A second press on the row that is already selected, the `Open` button, or a plain or
+Shift-held Enter key press dispatches the
 existing artist/album/track/playlist open action, so a double-click reaches the same drill-in or
-playback on its second press. The selection is cleared whenever the rows are replaced, cleared,
+playback on its second press; with no selected row, Enter is a no-op that schedules no fetch or
+playback task. The search box's own Enter is captured by its `TextInput::on_submit` and remains
+`Message::SearchSubmitted` (the keyboard subscription receives only ignored events), so Enter in
+the box searches rather than opening a row. The selection is cleared whenever the rows are replaced, cleared,
 failed, sorted, or restored to library order, because the stored index then names a different
 row.
 
@@ -75,7 +79,8 @@ selected row; `BrowseList::selected` exposes it to the view, and `replace_rows`,
 `sort_rows_by`, and `restore_library_order` clear it with the rows or order they change.
 `browse::select_row` and `browse::open_selected` in `src/ui/handlers/browse.rs` route the two
 messages and share `browse::open_row`, which emits the existing `ArtistSelected`,
-`AlbumSelected`, `TrackSelected`, or `PlaylistSelected` message. `style::playlist_row_style` in
+`AlbumSelected`, `TrackSelected`, or `PlaylistSelected` message; `shortcuts::message_for` maps a
+plain or Shift-held Enter key press to `Message::OpenSelected`. `style::playlist_row_style` in
 `src/ui/style.rs` paints an ordinary row's green text over the flat hover/press face ladder, and
 `views::browse::rows::browse_row_style` adds the selected bar and white playing/selected text.
 `views::browse::rows::scrollable_list` puts `Message::SelectRow { epoch, index }` on every row
@@ -93,9 +98,12 @@ and applies that style to each one, and `views::view_open_button` (re-exported b
 - `a_second_press_on_the_selected_row_opens_it`
 - `open_selected_opens_the_selected_song`
 - `open_selected_with_nothing_selected_is_a_noop`
+- `enter_opens_the_selected_song`
 - `replacing_or_sorting_rows_clears_the_selection`
 - `browse_open_button_sits_above_the_browse_list`
   (all in `src/ui/tests.rs`)
+- `message_for_maps_enter_to_open_selected`
+  (in `src/ui/shortcuts.rs`)
 - `browse_row_style_keeps_playing_rows_unbarred_with_white_text`
 - `browse_row_style_paints_only_the_selected_row_blue`
   (all in `src/ui/views/tests.rs`)

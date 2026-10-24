@@ -14,7 +14,8 @@ use super::Message;
 /// Maps a keyboard event to the classic Winamp transport shortcut, or `None`
 /// for every event that binds nothing: a key release, a modifier-only change,
 /// an unbound key, or a key pressed with a chord modifier. The bound keys
-/// include R for Repeat and S for Shuffle. `init_ui` installs
+/// include R for Repeat, S for Shuffle, and Enter to open the selected browse
+/// row. `init_ui` installs
 /// this as the window subscription's mapper, so the key-to-message table
 /// lives here once and the subscription stays a plain `filter_map`.
 pub(super) fn message_for(event: Event) -> Option<Message> {
@@ -25,8 +26,9 @@ pub(super) fn message_for(event: Event) -> Option<Message> {
 }
 
 /// The classic Winamp main-window bindings: Z previous, X play, C pause, V
-/// stop, B next, R repeat, S shuffle, the up/down arrows nudge the volume, and
-/// the left/right arrows seek five seconds back or forward. A Control, Alt, or
+/// stop, B next, R repeat, S shuffle, Enter opens the selected browse row, the
+/// up/down arrows nudge the volume, and the left/right arrows seek five seconds
+/// back or forward. A Control, Alt, or
 /// Logo chord is left to the OS and window manager, so those modifiers yield
 /// `None`; Shift is allowed, and the letter match ignores ASCII case, so
 /// Shift+Z steps back exactly like Z.
@@ -51,6 +53,7 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
         Key::Character(character) if character.eq_ignore_ascii_case("s") => {
             Some(Message::ToggleShuffle)
         }
+        Key::Named(key::Named::Enter) => Some(Message::OpenSelected),
         Key::Named(key::Named::ArrowUp) => Some(Message::VolumeUp),
         Key::Named(key::Named::ArrowDown) => Some(Message::VolumeDown),
         Key::Named(key::Named::ArrowLeft) => Some(Message::SeekBackward),
@@ -133,6 +136,16 @@ mod tests {
     }
 
     #[test]
+    fn message_for_maps_enter_to_open_selected() {
+        for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
+            assert!(matches!(
+                message_for(key_pressed(Key::Named(key::Named::Enter), modifiers)),
+                Some(Message::OpenSelected)
+            ));
+        }
+    }
+
+    #[test]
     fn shortcut_matches_letters_case_insensitively() {
         // Uppercase characters map the same as lowercase, whether the case comes
         // from the character itself or the Shift modifier held over a lowercase
@@ -154,6 +167,7 @@ mod tests {
                 Key::Character("x".into()),
                 Key::Character("r".into()),
                 Key::Character("s".into()),
+                Key::Named(key::Named::Enter),
                 Key::Named(key::Named::ArrowUp),
                 Key::Named(key::Named::ArrowDown),
                 Key::Named(key::Named::ArrowLeft),
