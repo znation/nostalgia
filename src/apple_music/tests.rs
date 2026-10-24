@@ -2464,6 +2464,48 @@ async fn get_albums_by_artist_returns_no_albums_for_an_empty_signed_in_result() 
     );
 }
 
+// The per-album Songs view's empty signed-in result is an ordinary empty
+// result, not the sample fallback: `album-1` has three sample songs, so a
+// regression that treated "no tracks came back" as "fall back to the samples"
+// would show a signed-in user music they do not own. The pinned URL proves the
+// answer came from the album's tracks endpoint.
+#[tokio::test]
+async fn get_songs_from_album_returns_no_songs_for_an_empty_signed_in_result() {
+    let stub = StubTransport::returning(r#"{"data":[]}"#);
+    let service = signed_in_service(&stub);
+
+    let songs = service.get_songs_from_album("album-1").await.unwrap();
+
+    assert!(
+        songs.is_empty(),
+        "an empty signed-in album result must not fall back to the sample songs: {songs:?}"
+    );
+    assert_single_call(
+        &stub,
+        "https://api.music.apple.com/v1/me/library/albums/album-1/tracks",
+    );
+}
+
+// The per-playlist twin of the album test above: `playlist-1` has two sample
+// songs, so an empty signed-in playlist result that fell back would return
+// them. The URL pins the playlist's tracks endpoint as the source.
+#[tokio::test]
+async fn get_songs_from_playlist_returns_no_songs_for_an_empty_signed_in_result() {
+    let stub = StubTransport::returning(r#"{"data":[]}"#);
+    let service = signed_in_service(&stub);
+
+    let songs = service.get_songs_from_playlist("playlist-1").await.unwrap();
+
+    assert!(
+        songs.is_empty(),
+        "an empty signed-in playlist result must not fall back to the sample songs: {songs:?}"
+    );
+    assert_single_call(
+        &stub,
+        "https://api.music.apple.com/v1/me/library/playlists/playlist-1/tracks",
+    );
+}
+
 #[tokio::test]
 async fn get_albums_by_artist_uses_the_rest_library_when_signed_in() {
     let stub = StubTransport::returning_bodies(&[
