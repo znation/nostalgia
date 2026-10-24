@@ -14,8 +14,9 @@
 //! Albums, and All Albums `*Loaded` arms call `store_with_row_text` so each
 //! row's display title and formatted length or running time are composed once
 //! per load, every `*LoadFailed` arm calls `fail`, and
-//! the navigation arms, `LoadArtists`, the flat-list/Playlists buttons, and
-//! `SearchSubmitted` start their fetch through the event loop's `fetch_level`,
+//! the navigation arms, `LoadArtists`, `ReloadLibrary`, the flat-list/Playlists
+//! buttons, and `SearchSubmitted` start their fetch through the event loop's
+//! `fetch_level`,
 //! which calls `clear` before `begin_fetch`. `select` resolves all four
 //! selection arms' presses (track, artist, album, and playlist).
 

@@ -7312,8 +7312,8 @@ fn construct_view_in_every_browse_view(player: &mut WinampPlayer) {
 // the now-playing label, matches the current browse view onto its list
 // buffer, and stacks the title bar, the Now Playing bar, the seek strip, the
 // transport row, the equalizer panel, and the browse controls (Back, Retry,
-// Open, Top, Sort, Reload, the flat-list buttons, and the search box) above the browse
-// list. No other
+// Open, Top, Sort, Reload, the flat-list buttons, and the search box with its
+// Clear button) above the browse list. No other
 // test reaches this assembly — the shade test stops at `view`'s title-bar
 // early return, the `views` tests stop at the individual builders, and
 // the `update` tests stop before the view layer — so a regression
