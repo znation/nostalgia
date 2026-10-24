@@ -1,7 +1,7 @@
 use super::browse::BrowseList;
 use super::loading::{RequestGeneration, fetch_into, play_into};
 use super::timers::*;
-use super::views::{BROWSE_LIST_ID, BROWSE_SEARCH_ID, BROWSE_VIEWS};
+use super::views::{BROWSE_LIST_ID, BROWSE_PAGE_HEIGHT, BROWSE_SEARCH_ID, BROWSE_VIEWS};
 use super::*;
 use crate::audio::{PlaybackFormat, Spectrum};
 use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB};
@@ -472,18 +472,20 @@ async fn task_output(task: Task<Message>, what: &str) -> Message {
     output.expect("drive_task must pass the output to its callback")
 }
 
-/// The browse-list scroll operations a task emitted: a relative snap-to-top
-/// and an absolute scroll-to-row are captured separately, so a test pins
-/// which one an arm schedules (and that it schedules no other).
+/// The browse-list scroll operations a task emitted: a relative snap-to-top,
+/// an absolute scroll-to-row, and a relative page scroll are captured
+/// separately, so a test pins which one an arm schedules (and that it
+/// schedules no other).
 #[derive(Default)]
 struct BrowseScrollEffects {
     snapped: Option<iced::advanced::widget::operation::scrollable::RelativeOffset<Option<f32>>>,
     scrolled: Option<iced::advanced::widget::operation::scrollable::AbsoluteOffset<Option<f32>>>,
+    scrolled_by: Option<iced::advanced::widget::operation::scrollable::AbsoluteOffset>,
 }
 
 impl BrowseScrollEffects {
     fn any(&self) -> bool {
-        self.snapped.is_some() || self.scrolled.is_some()
+        self.snapped.is_some() || self.scrolled.is_some() || self.scrolled_by.is_some()
     }
 }
 
@@ -514,10 +516,11 @@ fn browse_scroll_effects_by(
 
         fn scroll_by(
             &mut self,
-            _offset: AbsoluteOffset,
+            offset: AbsoluteOffset,
             _bounds: iced::Rectangle,
             _content_bounds: iced::Rectangle,
         ) {
+            self.effects.scrolled_by = Some(offset);
         }
     }
 
@@ -583,6 +586,10 @@ async fn assert_task_snaps_browse_list_to(
         effects.scrolled, None,
         "{what} must not scroll the browse list to a row"
     );
+    assert_eq!(
+        effects.scrolled_by, None,
+        "{what} must not scroll the browse list by a page"
+    );
 }
 
 /// Drives `task` until it runs an iced scroll operation and asserts that
@@ -619,6 +626,35 @@ async fn assert_task_scrolls_browse_list_to(task: Task<Message>, what: &str, exp
         effects.snapped, None,
         "{what} must not snap the browse list to the top"
     );
+    assert_eq!(
+        effects.scrolled_by, None,
+        "{what} must not scroll the browse list by a page"
+    );
+}
+
+/// Drives `task` until it runs an iced scroll operation and asserts that
+/// operation scrolls the browse list by `expected_y` pixels from its current
+/// offset, without snapping or scrolling to an absolute row.
+async fn assert_task_scrolls_browse_list_by(task: Task<Message>, what: &str, expected_y: f32) {
+    use iced::advanced::widget::operation::scrollable::AbsoluteOffset;
+
+    let effects = browse_scroll_effects(task, what).await;
+    assert_eq!(
+        effects.scrolled_by,
+        Some(AbsoluteOffset {
+            x: 0.0,
+            y: expected_y,
+        }),
+        "{what} must scroll the browse list by {expected_y} pixels"
+    );
+    assert_eq!(
+        effects.snapped, None,
+        "{what} must not snap the browse list to the top"
+    );
+    assert_eq!(
+        effects.scrolled, None,
+        "{what} must not scroll the browse list to a row"
+    );
 }
 
 /// Drives `task` until it runs an iced widget operation and returns it, so a
@@ -652,6 +688,10 @@ async fn assert_task_scrolls_nothing(task: Task<Message>, what: &str) {
     assert_eq!(
         effects.snapped, None,
         "{what} must not snap the browse list to the top"
+    );
+    assert_eq!(
+        effects.scrolled_by, None,
+        "{what} must not scroll the browse list by a page"
     );
 }
 
@@ -1524,6 +1564,32 @@ fn scroll_browse_to_bottom_schedules_a_scroll_task() {
         "bottom",
     ));
 
+    assert_view(&player, CurrentView::Artists);
+    assert!(state.blocking_lock().current_track.is_none());
+    assert!(!state.blocking_lock().is_playing);
+}
+
+// The Page Up and Page Down keys only ask iced to scroll the browse list by
+// one fixed page, relative to its current offset; they must leave the view and
+// the shared playback state alone.
+#[test]
+fn scroll_browse_page_keys_schedule_page_sized_scrolls() {
+    let (mut player, state) = test_player();
+
+    futures::executor::block_on(assert_task_scrolls_browse_list_by(
+        update(&mut player, Message::ScrollBrowsePageDown),
+        "page down",
+        BROWSE_PAGE_HEIGHT,
+    ));
+    assert_view(&player, CurrentView::Artists);
+    assert!(state.blocking_lock().current_track.is_none());
+    assert!(!state.blocking_lock().is_playing);
+
+    futures::executor::block_on(assert_task_scrolls_browse_list_by(
+        update(&mut player, Message::ScrollBrowsePageUp),
+        "page up",
+        -BROWSE_PAGE_HEIGHT,
+    ));
     assert_view(&player, CurrentView::Artists);
     assert!(state.blocking_lock().current_track.is_none());
     assert!(!state.blocking_lock().is_playing);

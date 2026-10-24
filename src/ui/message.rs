@@ -161,6 +161,14 @@ pub(in crate::ui) enum Message {
     // its last row. The arm schedules an iced scroll operation on the browse
     // list's stable widget id and changes no state.
     ScrollBrowseToBottom,
+    // The Page Up key: scroll the showing browse list back by one page.
+    // Like the Top and End keys it schedules only a one-page `scroll_by` on
+    // the browse list's stable widget id and changes no state.
+    ScrollBrowsePageUp,
+    // The Page Down key: scroll the showing browse list forward by one page.
+    // Like the Top and End keys it schedules only a one-page `scroll_by` on
+    // the browse list's stable widget id and changes no state.
+    ScrollBrowsePageDown,
     // The browse view's Sort button: reorder the showing list alphabetically
     // by its rows' rendered text. The handler bumps that list's epoch so a
     // press rendered before the sort is rejected, and leaves every other list

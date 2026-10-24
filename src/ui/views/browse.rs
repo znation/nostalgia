@@ -28,7 +28,7 @@ pub(super) mod rows;
 use rows::text::{album_count_label, artist_row, browse_placeholder, playlist_row};
 use rows::{album_list, list_with_count, scrollable_list, song_list};
 
-pub use rows::{BROWSE_LIST_ID, BROWSE_LIST_PADDING, BROWSE_ROW_HEIGHT};
+pub use rows::{BROWSE_LIST_ID, BROWSE_LIST_PADDING, BROWSE_PAGE_HEIGHT, BROWSE_ROW_HEIGHT};
 
 /// The secondary label an artist row caches at load time: the same
 /// [`album_count_label`] text the row falls back to composing, exposed so the

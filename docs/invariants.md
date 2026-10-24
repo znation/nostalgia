@@ -346,28 +346,36 @@ so Next, Previous, a shuffled retrace, and a natural preview end all follow the 
 ## Browse keyboard scrolling
 
 **Guarantee.** A plain or Shift-held `Home` key press snaps the showing browse list to its first
-row, exactly like the `Top` button, and `End` snaps it to its last row. Both are view-scroll
-operations only: they change no current view, rows or row order, selection, typed query,
-search-active flag, or playback state, and they schedule no fetch or playback task. In shade mode
-no browse list is built, so the scroll operation has no target and nothing moves. While the
-`Search library` box is focused, its `TextInput` captures Home and End for editing the query
-rather than scrolling the list, as it captures Backspace. Ctrl/Alt/Logo chords with Home or End
-stay unbound.
+row, exactly like the `Top` button, and `End` snaps it to its last row. `Page Up` and `Page Down`
+(plain or Shift-held) instead scroll that list one page of `BROWSE_PAGE_HEIGHT` — eight
+`BROWSE_ROW_HEIGHT` rows — in the matching direction, relative to the list's current offset.
+Every one of these keys is a view-scroll operation only: they change no current view, rows or row
+order, selection, typed query, search-active flag, or playback state, and they schedule no fetch
+or playback task. In shade mode no browse list is built, so the scroll operation has no target
+and nothing moves; iced clamps the offset at the list's bounds, so paging past either end leaves
+the list at that end and a short list stays put. While the `Search library` box is focused, its
+`TextInput` captures Home and End for editing the query rather than scrolling the list, as it
+captures Backspace. Ctrl/Alt/Logo chords with Home, End, Page Up, or Page Down stay unbound.
 
 **Enforced by.** `shortcuts::shortcut` in `src/ui/shortcuts.rs` maps `Home` to
-`Message::ScrollBrowseToTop` and `End` to `Message::ScrollBrowseToBottom` after its
-Control/Alt/Logo chord guard. `src/ui/mod.rs` routes `Message::ScrollBrowseToBottom` to
-`handlers::browse::scroll_browse_to_bottom`, and both handlers in `src/ui/handlers/browse.rs`
-share a `snap_to` call on the stable `views::BROWSE_LIST_ID` that every
-`views::browse::scrollable_list` carries.
+`Message::ScrollBrowseToTop`, `End` to `Message::ScrollBrowseToBottom`, `Page Down` to
+`Message::ScrollBrowsePageDown`, and `Page Up` to `Message::ScrollBrowsePageUp` after its
+Control/Alt/Logo chord guard. `src/ui/mod.rs` routes the four messages to
+`handlers::browse::scroll_browse_to_top`/`_bottom` and `scroll_browse_page_up`/`_down`. The snap
+handlers in `src/ui/handlers/browse.rs` share a `snap_to` call, while the page handlers share
+`scroll_browse_by`, which calls iced's `scroll_by` with `y = ±views::BROWSE_PAGE_HEIGHT`; both
+target the stable `views::BROWSE_LIST_ID` that every `views::browse::scrollable_list` carries.
 
 **Pinned by.**
 
 - `scroll_browse_to_bottom_schedules_a_scroll_task` (`src/ui/tests.rs`)
+- `scroll_browse_page_keys_schedule_page_sized_scrolls` (`src/ui/tests.rs`)
 - `message_for_maps_home_and_end_to_browse_scroll` (`src/ui/shortcuts.rs`)
+- `message_for_maps_page_keys_to_browse_paging` (`src/ui/shortcuts.rs`)
 - `shortcut_ignores_chord_modifiers` (`src/ui/shortcuts.rs`)
 
-**History.** Added with the Home and End keyboard scrolling alongside the existing Top button.
+**History.** Added with the Home and End keyboard scrolling alongside the existing Top button;
+extended with the Page Up and Page Down one-page scrolling.
 
 ## Browse row labels
 

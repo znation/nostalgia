@@ -50,8 +50,9 @@ pub(in crate::ui::views) fn browse_row_style(
 
 /// The one browse [`Scrollable`]'s widget id: the update loop's snap-to-top
 /// operation targets it, so every view assembled by [`scrollable_list`] can be
-/// returned to its first row by [`Message::ScrollBrowseToTop`], and its
-/// scroll-to-row operation targets it to bring a stepped-to row into view.
+/// returned to its first row by [`Message::ScrollBrowseToTop`], its
+/// scroll-to-row operation targets it to bring a stepped-to row into view, and
+/// its page-scroll operation targets it to move one keyboard page at a time.
 pub const BROWSE_LIST_ID: &str = "nostalgia-browse-list";
 
 /// The padding [`scrollable_list`] puts around its rows. Row `i`'s top sits
@@ -69,6 +70,12 @@ pub const BROWSE_LIST_PADDING: f32 = 20.0;
 /// exactly this far apart, so a styling change cannot leave a stale constant
 /// behind.
 pub const BROWSE_ROW_HEIGHT: f32 = 33.4;
+
+/// The distance one keyboard page scrolls the browse list: eight rows of the
+/// same pitch as [`BROWSE_ROW_HEIGHT`]. `Page Up` and `Page Down` scroll by
+/// this amount rather than by the viewport height, so a page step is stable
+/// across window sizes; iced clamps the result to the list's bounds.
+pub const BROWSE_PAGE_HEIGHT: f32 = 8.0 * BROWSE_ROW_HEIGHT;
 
 /// Flattens the line breaks in a browse row's `title` to spaces. cosmic-text
 /// starts a new `BufferLine` at `\n`, `\r\n`, or a lone `\r` even with

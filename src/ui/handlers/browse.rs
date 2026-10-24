@@ -277,6 +277,33 @@ pub(in crate::ui) fn scroll_browse_to_bottom() -> Task<Message> {
     snap_browse_list(iced::widget::scrollable::RelativeOffset::END)
 }
 
+/// Scroll the showing browse list by `delta` vertical pixels through its
+/// stable widget id. Unlike the absolute [`scroll_browse_to_row`], the step is
+/// relative to the list's current offset. It touches only the scroll offset
+/// and has no target in shade mode, where no browse list is built.
+fn scroll_browse_by(delta: f32) -> Task<Message> {
+    iced::widget::operation::scroll_by(
+        views::BROWSE_LIST_ID,
+        iced::widget::scrollable::AbsoluteOffset { x: 0.0, y: delta },
+    )
+}
+
+/// The Page Up key: scroll the current list back by one
+/// [`views::BROWSE_PAGE_HEIGHT`], relative to where it sits now. Like Home and
+/// End it changes no rows, selection, view, search state, or playback, and
+/// iced clamps a page that would pass the list's top.
+pub(in crate::ui) fn scroll_browse_page_up() -> Task<Message> {
+    scroll_browse_by(-views::BROWSE_PAGE_HEIGHT)
+}
+
+/// The Page Down key's counterpart to [`scroll_browse_page_up`]: scroll the
+/// current list forward by one [`views::BROWSE_PAGE_HEIGHT`], relative to
+/// where it sits now. It likewise touches only the scroll offset, and iced
+/// clamps a page that would pass the list's end.
+pub(in crate::ui) fn scroll_browse_page_down() -> Task<Message> {
+    scroll_browse_by(views::BROWSE_PAGE_HEIGHT)
+}
+
 /// Scroll the browse list so its row `index` starts at the viewport's top
 /// edge. The absolute offset is the list's top padding plus the row's
 /// laid-out pitch times its position; iced clamps it to the list's content,

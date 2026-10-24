@@ -134,7 +134,8 @@ switches the large readout between elapsed and remaining time (the same actions 
 controls and a readout click), and the up/down arrows nudge the volume while the left/right arrows
 seek five seconds back or forward. Backspace steps the browse list back one level exactly like the
 `Back` button, and does nothing at the Artists list; Home snaps the browse list to its first row
-and End to its last, like `Top`; while the `Search library` box is focused it keeps Backspace,
+and End to its last, like `Top`, and Page Up and Page Down scroll it one page at a time in the
+matching direction; while the `Search library` box is focused it keeps Backspace,
 Home, and End for editing its query instead of navigating. Ctrl+F moves keyboard focus to the
 `Search library` box from any normal-mode browse level without searching or changing the current
 view, list, selection, or typed query, and the box then takes typed keys as usual; in window-shade

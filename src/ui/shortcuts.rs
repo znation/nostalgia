@@ -17,7 +17,8 @@ use super::Message;
 /// include R for Repeat, S for Shuffle, A for always-on-top, T for the
 /// elapsed/remaining readout, Enter to open the selected browse row,
 /// Backspace to step the browse list back one level, Home and End to snap it
-/// to its first and last rows, and Ctrl+F to focus the `Search library` box
+/// to its first and last rows, Page Up and Page Down to scroll it one page at
+/// a time, and Ctrl+F to focus the `Search library` box
 /// (the one Control chord Winamp-style play uses).
 /// `init_ui` installs this as the window subscription's mapper, so the
 /// key-to-message table lives here once and the subscription stays a plain
@@ -33,7 +34,8 @@ pub(super) fn message_for(event: Event) -> Option<Message> {
 /// stop, B next, R repeat, S shuffle, A toggles always-on-top, T switches the
 /// large readout between elapsed and remaining time, Enter opens the selected
 /// browse row, Backspace steps the browse list back one level, Home and End
-/// snap it to its first and last rows, Ctrl+F focuses
+/// snap it to its first and last rows, Page Up and Page Down scroll it one page
+/// at a time, Ctrl+F focuses
 /// the `Search library` box, the up/down arrows nudge
 /// the volume, and the left/right arrows seek five seconds
 /// back or forward. Apart from Ctrl+F, a Control, Alt, or
@@ -84,6 +86,8 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
         Key::Named(key::Named::Backspace) => Some(Message::Back),
         Key::Named(key::Named::Home) => Some(Message::ScrollBrowseToTop),
         Key::Named(key::Named::End) => Some(Message::ScrollBrowseToBottom),
+        Key::Named(key::Named::PageDown) => Some(Message::ScrollBrowsePageDown),
+        Key::Named(key::Named::PageUp) => Some(Message::ScrollBrowsePageUp),
         Key::Named(key::Named::ArrowUp) => Some(Message::VolumeUp),
         Key::Named(key::Named::ArrowDown) => Some(Message::VolumeDown),
         Key::Named(key::Named::ArrowLeft) => Some(Message::SeekBackward),
@@ -202,6 +206,20 @@ mod tests {
     }
 
     #[test]
+    fn message_for_maps_page_keys_to_browse_paging() {
+        for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
+            assert!(matches!(
+                message_for(key_pressed(Key::Named(key::Named::PageDown), modifiers)),
+                Some(Message::ScrollBrowsePageDown)
+            ));
+            assert!(matches!(
+                message_for(key_pressed(Key::Named(key::Named::PageUp), modifiers)),
+                Some(Message::ScrollBrowsePageUp)
+            ));
+        }
+    }
+
+    #[test]
     fn message_for_maps_a_and_t_to_the_classic_toggles() {
         for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
             assert!(matches!(
@@ -276,6 +294,8 @@ mod tests {
                 Key::Named(key::Named::Backspace),
                 Key::Named(key::Named::Home),
                 Key::Named(key::Named::End),
+                Key::Named(key::Named::PageUp),
+                Key::Named(key::Named::PageDown),
                 Key::Named(key::Named::ArrowUp),
                 Key::Named(key::Named::ArrowDown),
                 Key::Named(key::Named::ArrowLeft),
