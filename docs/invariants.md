@@ -890,7 +890,8 @@ its internal id, whenever the id is in the known-track index:
 **Enforced by.** `views::now_playing_label` and `views::now_playing_artist` in
 `src/ui/views/now_playing/text.rs` (re-exported by `src/ui/views/mod.rs`), pure functions over the
 known-track index. `WinampPlayer::now_playing_label` and `WinampPlayer::now_playing_artist` in
-`src/ui/player.rs` resolve against `known_tracks`, so the bar keeps naming a playing track after
+`src/ui/player/presentation.rs` resolve against `known_tracks`, so the bar keeps naming a playing
+track after
 browsing to another album replaced the visible song list. `views::now_playing::now_playing_elapsed`
 (through `format_lcd_elapsed` for elapsed mode and `format_lcd_remaining` for remaining mode)
 formats the left-hand readout as chosen by `views::now_playing::TimeDisplay`, while
