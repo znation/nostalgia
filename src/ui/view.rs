@@ -244,10 +244,11 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
     if views::can_retry_artists(&player.current_view, player.artists.error.as_deref()) {
         column = column.push(views::view_retry_button());
     }
-    // The Top and Sort buttons share one row, Sort beside Top, so the
-    // current list can always be returned to its first row and reordered
-    // in place. Open sits above them, on every browse level, and opens the
-    // row a first click selected; with nothing selected it does nothing.
+    // The Top, Sort, and Reload buttons share one row, Reload beside Sort, so
+    // the current list can always be returned to its first row, reordered in
+    // place, or replaced with a freshly fetched artists list. Open sits above
+    // them, on every browse level, and opens the row a first click selected;
+    // with nothing selected it does nothing.
     column = column.push(views::view_open_button());
     column = column.push(views::view_browse_nav_buttons());
     // The All Songs, All Albums, and Playlists buttons open the flat lists;

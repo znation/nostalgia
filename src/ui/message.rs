@@ -162,6 +162,10 @@ pub(in crate::ui) enum Message {
     // press rendered before the sort is rejected, and leaves every other list
     // and the playback state alone.
     SortBrowse,
+    // The browse view's Reload button: refetch the top-level artists list and
+    // return to the Artists view, clearing an active search but not the search
+    // box's typed text. It leaves playback and the other browse lists alone.
+    ReloadLibrary,
     // The Artists view's All Songs button: fetch the whole library flat and
     // show it under the All Songs view.
     ShowAllSongs,

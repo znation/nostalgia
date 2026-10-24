@@ -1,7 +1,7 @@
 //! The browse message handlers: the artist → album → song hierarchy, the flat
-//! whole-library lists, and the Back, Open, Top, and Sort navigation over every
-//! level, plus the library search. The initial load and the fetch results that
-//! fill the lists live in the [`fetch`] submodule.
+//! whole-library lists, and the Back, Open, Top, Sort, and Reload navigation
+//! over every level, plus the library search. The initial load and the fetch
+//! results that fill the lists live in the [`fetch`] submodule.
 //!
 //! Every fetch clears the list it refills before it goes out, so a press
 //! during the fetch cannot resolve against the previous level's rows, and
@@ -414,6 +414,19 @@ pub(in crate::ui) fn sort_browse(player: &mut WinampPlayer) -> Task<Message> {
             .sort_rows_by(|playlist| playlist.name.clone()),
     }
     Task::none()
+}
+
+/// The Reload button was pressed: refetch the top-level artists list and show
+/// it under the Artists view. Clearing an active search and returning to
+/// Artists make the reloaded list the one the user sees; the search box's
+/// typed query, playback, and the other browse buffers stay as they were.
+/// The fetch itself is the same clear-then-issue path Retry and boot use, so
+/// any previous artists failure is dropped while the new request is in
+/// flight. Snap the reloaded list to its first row like any replaced list.
+pub(in crate::ui) fn reload_library(player: &mut WinampPlayer) -> Task<Message> {
+    player.search_active = false;
+    player.current_view = CurrentView::Artists;
+    fetch_at_top(fetch::load_artists(player))
 }
 
 /// Runs a browse fetch and then snaps the list it fills to the top.

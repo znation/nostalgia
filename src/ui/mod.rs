@@ -194,6 +194,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::Back => handlers::browse::back(player),
         Message::ScrollBrowseToTop => handlers::browse::scroll_browse_to_top(),
         Message::SortBrowse => handlers::browse::sort_browse(player),
+        Message::ReloadLibrary => handlers::browse::reload_library(player),
         Message::ShowAllSongs => handlers::browse::show_all_songs(player),
         Message::ShowAllAlbums => handlers::browse::show_all_albums(player),
         Message::ShowPlaylists => handlers::browse::show_playlists(player),

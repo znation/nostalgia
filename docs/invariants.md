@@ -33,12 +33,24 @@ A plain or Shift-held Backspace key press is the keyboard route to the same sing
 action, and is likewise a no-op at Artists; the focused `Search library` box's `TextInput`
 captures it for editing, as it does Enter for `SearchSubmitted`.
 
+Every level also offers Reload. Reload clears an active search, returns the browse view to
+Artists, and refetches the artists list through the same clear-then-issue fetch path Retry uses,
+so previous artists rows and any previous failure are dropped and the loading placeholder shows
+until the reply lands; the reloaded list snaps to its first row. It leaves playback, the search
+box's typed text, and the other browse buffers (Songs, All Songs, All Albums, Playlists) alone.
+`Message::LoadArtists` keeps its boot, sign-in, and Retry behavior and does not change the
+current browse level.
+
 **Enforced by.** The `Message::Back` handler — `browse::back` in `src/ui/handlers/browse.rs`,
 routed from the `update` dispatch table in `src/ui/mod.rs` — checks `search_active` first, then
 matches on `current_view` and `songs_origin` to pick the one level up. `views::can_go_back` in
 `src/ui/views/browse.rs` (re-exported by `src/ui/views/mod.rs`) decides whether the Back button is
 shown; it returns false only for `CurrentView::Artists`. `shortcuts::message_for` in
 `src/ui/shortcuts.rs` maps Backspace to `Message::Back`, after its Control/Alt/Logo chord guard.
+`browse::reload_library` in `src/ui/handlers/browse.rs`, routed from `Message::ReloadLibrary`,
+clears the search flag and view and calls `fetch_at_top(fetch::load_artists(player))`;
+`views::browse::view_reload_button` in `src/ui/views/browse.rs` is pushed into the nav row by
+`views::view_browse_nav_buttons`.
 
 **Pinned by.**
 
@@ -52,13 +64,17 @@ shown; it returns false only for `CurrentView::Artists`. `shortcuts::message_for
 - `album_selected_in_all_albums_loads_its_songs_and_back_returns_to_all_albums`
 - `back_leaves_an_active_search_for_the_artists_list`
 - `backspace_steps_back_from_albums`
+- `reload_library_returns_to_artists_and_refetches_them`
+- `reload_button_is_shown_on_every_browse_level`
+- `browse_nav_buttons_place_reload_beside_sort`
   (all in `src/ui/tests.rs`)
 - `message_for_maps_backspace_to_back` (`src/ui/shortcuts.rs`)
 - `back_button_is_available_only_below_the_artist_list` (`src/ui/views/tests.rs`)
 
 **History.** Reconstructed from "Browse view can only move forward — no way back from
 Albums/Songs, a dead end" in `BUGS-FIXED.md`. The All Songs, All Albums, and Playlists levels
-were added later and are covered here too.
+were added later and are covered here too. Reload was added to refresh the artists list without
+restarting the app.
 
 ## Browse selection
 
@@ -179,11 +195,13 @@ change must. `browse::sort_browse` in `src/ui/handlers/browse.rs` matches the cu
 its list and key, routed from `Message::SortBrowse` in the `update` dispatch table;
 `browse::back` restores that order on the list Back returns to (those lists stay in memory while a
 child is open), and `views::view_browse_nav_buttons` in `src/ui/views/browse.rs` pushes
-`view_top_button` and `view_sort_button` into one `Row`, so Sort draws beside Top.
+`view_top_button`, `view_sort_button`, and `view_reload_button` into one `Row`, so Sort and Reload
+draw beside Top.
 
 **Pinned by.**
 
 - `browse_nav_buttons_place_sort_beside_top`
+- `browse_nav_buttons_place_reload_beside_sort`
 - `sort_reorders_artists_case_insensitively`
 - `sort_is_stable_for_equal_keys_and_back_restores_them`
 - `sort_reorders_albums_by_their_display_title`
@@ -331,8 +349,9 @@ not re-join and reformat every row.
 
 **Guarantee.** The root `view`'s layout keeps these geometry guarantees:
 
-- The browse navigation row lays Sort beside Top, not stacked below it: both share the same
-  `y`, and Sort starts at or after Top's right edge.
+- The browse navigation row lays Sort and Reload beside Top, not stacked below them: all three
+  share the same `y`, Sort starts at or after Top's right edge, and Reload starts at or after
+  Sort's right edge.
 - The transport row draws, in order, Previous, Play/Pause, Stop, and Next as the compact glyphs
   `◀◀`, `▶`/`II`, `■`, and `▶▶`, each with a word hover tooltip (`Previous`, `Play`/`Pause`,
   `Stop`, `Next`). The four glyph buttons are pinned to fixed widths 34, 30, 30, and 34 px, so
@@ -359,8 +378,8 @@ not re-join and reformat every row.
   `NOSTALGIA LIBRARY` immediately above the browse controls; the section bands emit no messages
   and are absent in shade mode.
 
-**Enforced by.** `views::view_browse_nav_buttons` in `src/ui/views/browse.rs` pushes the Top and
-Sort buttons into one `Row`. `views::view_transport_controls`,
+**Enforced by.** `views::view_browse_nav_buttons` in `src/ui/views/browse.rs` pushes the Top, Sort,
+and Reload buttons into one `Row`. `views::view_transport_controls`,
 `views::transport::transport_buttons`, and `views::transport::transport_glyphs` in
 `src/ui/views/transport.rs` build the glyph row from `fixed_width_button`s and
 `iced::widget::Tooltip`s; `views::transport::eq_panel_toggle` and
@@ -381,6 +400,7 @@ column only. The harness records each drawn text fragment's absolute bounds with
 tiny-skia renderer.
 
 **Pinned by.** `browse_nav_buttons_place_sort_beside_top`,
+`browse_nav_buttons_place_reload_beside_sort`,
 `transport_row_does_not_reflow_when_the_play_glyph_changes`,
 `root_view_draws_the_transport_glyph_row`,
 `root_view_offers_back_retry_and_flat_list_buttons_only_where_they_belong`,

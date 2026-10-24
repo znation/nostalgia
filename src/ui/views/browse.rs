@@ -1,7 +1,7 @@
 //! The browse views — the artist → album → song drill-down, the flat All
 //! Songs and All Albums lists, and the Playlists list: the per-level view
-//! builders, the search box, and the Back, Open, Top, Sort, All Songs, All
-//! Albums, Playlists, and Retry buttons above them. The scrollable list and
+//! builders, the search box, and the Back, Open, Top, Sort, Reload, All Songs,
+//! All Albums, Playlists, and Retry buttons above them. The scrollable list and
 //! list builders live in the [`rows`] submodule; the pure wording, row-label,
 //! and summary helpers live in [`rows::text`].
 //!
@@ -249,6 +249,16 @@ pub fn view_sort_button() -> Element<'static, Message> {
     labeled_button("Sort", Message::SortBrowse).into()
 }
 
+/// The browse view's Reload button, refetching the library's top-level
+/// artists list and returning to the Artists view. Rendered above every browse
+/// level beside Top and Sort; the update loop's `ReloadLibrary` arm clears an
+/// active search, switches the view, and re-issues the artists fetch through
+/// the same path Retry uses, leaving the typed search text, playback, and the
+/// other browse lists alone.
+pub fn view_reload_button() -> Element<'static, Message> {
+    labeled_button("Reload", Message::ReloadLibrary).into()
+}
+
 /// The browse view's Open button: open the row selected in the showing list
 /// through the same artist/album/track/playlist action a second press
 /// dispatches. Rendered above every browse level; with nothing selected the
@@ -257,13 +267,15 @@ pub fn view_open_button() -> Element<'static, Message> {
     labeled_button("Open", Message::OpenSelected).into()
 }
 
-/// The Top and Sort buttons as one row, so Sort renders beside Top rather than
-/// on the row below it, as the README and the Browse row order invariant
-/// promise. Rendered above every browse level.
+/// The Top, Sort, and Reload buttons as one row, so Sort and Reload render
+/// beside Top rather than on the row below it, as the README and the Browse
+/// row order invariant promise. Rendered above every browse level; Reload
+/// refetches the artists list and returns to Artists.
 pub fn view_browse_nav_buttons() -> Element<'static, Message> {
     Row::new()
         .push(view_top_button())
         .push(view_sort_button())
+        .push(view_reload_button())
         .into()
 }
 

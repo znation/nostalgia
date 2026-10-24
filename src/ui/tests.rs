@@ -1349,7 +1349,7 @@ async fn back_schedules_the_restored_list_to_the_top() {
     assert_view(&player, CurrentView::Artists);
 }
 
-// The seven arms that open a fresh browse list must each batch the
+// The eight arms that open a fresh browse list must each batch the
 // snap-to-top scroll with their fetch; dropping one leaves that navigation
 // (or search) showing the previous list's scroll offset.
 #[tokio::test]
@@ -1396,6 +1396,10 @@ async fn every_browse_navigation_batches_a_snap_to_top_task() {
     let (mut player, _state) = test_player();
     let _ = update(&mut player, Message::SearchChanged("echo".to_string()));
     assert_task_snaps_browse_list_to_top(update(&mut player, Message::SearchSubmitted), "search")
+        .await;
+
+    let (mut player, _state) = test_player();
+    assert_task_snaps_browse_list_to_top(update(&mut player, Message::ReloadLibrary), "reload")
         .await;
 }
 
@@ -1453,6 +1457,55 @@ fn show_all_songs_clears_an_active_search() {
 
     assert!(!player.search_active);
     assert_view(&player, CurrentView::AllSongs);
+}
+
+// Reload replaces the artists list with a fresh fetch and returns there, but
+// it is a library refresh rather than a reset: the typed search text, the
+// other browse buffers, and playback must survive it. The fetch is the same
+// clear-then-issue path Retry uses, so the stale rows and error go away and
+// the loading placeholder shows until the reply lands.
+#[tokio::test]
+async fn reload_library_returns_to_artists_and_refetches_them() {
+    let (mut player, state) = test_player();
+    player.current_view = CurrentView::AllSongs;
+    player.search_active = true;
+    player.search_query = "echo".to_string();
+    player.artists.items = vec![sample_artist()];
+    player.artists.error = Some("music-library fetch failed: boom".to_string());
+    player.artists.loading = false;
+    player.all_songs.items = vec![sample_song()];
+    let flat_song_id = player.all_songs.items[0].id.clone();
+    {
+        let mut shared = state.lock().await;
+        shared.current_track = Some("song-1".to_string());
+        shared.is_playing = true;
+    }
+
+    let task = update(&mut player, Message::ReloadLibrary);
+
+    assert_view(&player, CurrentView::Artists);
+    assert!(!player.search_active);
+    assert_eq!(player.search_query, "echo");
+    assert!(player.artists.items.is_empty());
+    assert!(player.artists.loading);
+    assert_eq!(player.artists.error, None);
+    assert_eq!(player.all_songs.items.len(), 1);
+    assert_eq!(player.all_songs.items[0].id, flat_song_id);
+    {
+        let shared = state.lock().await;
+        assert_eq!(shared.current_track.as_deref(), Some("song-1"));
+        assert!(shared.is_playing);
+    }
+
+    drive_fetch_and_assert_loaded(
+        &mut player,
+        task,
+        "reload the library's artists",
+        |player| &mut player.artists.items,
+        |artist| artist.id.as_str(),
+        &["artist-1", "artist-2", "artist-3"],
+    )
+    .await;
 }
 
 #[test]
@@ -7265,6 +7318,54 @@ fn browse_nav_buttons_place_sort_beside_top() {
     assert!(
         sort.x >= top.x + top.width,
         "Sort must render to the right of Top: {:?}",
+        capture.fragments()
+    );
+}
+
+// Reload is a browse-list control too: it must render on every level so a
+// stale library can be refreshed without restarting or losing the current
+// task's playback. Lay out the root view for each level and find its label.
+#[test]
+fn reload_button_is_shown_on_every_browse_level() {
+    let (mut player, _state) = test_player();
+
+    for current_view in BROWSE_VIEWS {
+        let view_name = format!("{current_view:?}");
+        player.current_view = current_view;
+        let capture = captured_root_view_text_bounds(&player);
+        let reload = capture.find("Reload");
+        assert!(
+            reload.width > 0.0,
+            "the Reload button must lay out on {view_name}: {reload:?}"
+        );
+    }
+}
+
+// Reload joins the same nav row as Top and Sort, after Sort, so the three
+// buttons line up rather than stacking or pushing the list down another row.
+#[test]
+fn browse_nav_buttons_place_reload_beside_sort() {
+    let (player, _state) = test_player();
+    let capture = captured_root_view_text_bounds(&player);
+    let top = capture.find("Top");
+    let sort = capture.find("Sort");
+    let reload = capture.find("Reload");
+
+    assert_eq!(
+        reload.y,
+        top.y,
+        "Reload must share Top's and Sort's row: {:?}",
+        capture.fragments()
+    );
+    assert_eq!(
+        sort.y,
+        reload.y,
+        "Reload must share Sort's row: {:?}",
+        capture.fragments()
+    );
+    assert!(
+        reload.x >= sort.x + sort.width,
+        "Reload must render to the right of Sort: {:?}",
         capture.fragments()
     );
 }

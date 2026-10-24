@@ -5,6 +5,7 @@ use super::browse::rows::text::{
     list_count_summary, playlist_row, row_prefix, song_list_summary, song_row,
 };
 use super::browse::rows::{browse_row_style, scrollable_list};
+use super::browse::view_reload_button;
 use super::equalizer::{
     EQ_SLIDER_HEIGHT, RESPONSE_CURVE_COLUMNS, RESPONSE_CURVE_HEIGHT, RESPONSE_CURVE_LINE_HEIGHT,
     eq_enabled_label, response_curve_offsets, response_curve_row,
@@ -2096,6 +2097,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
     let _retry = view_retry_button();
     let _open = view_open_button();
     let _nav = view_browse_nav_buttons();
+    let _reload = view_reload_button();
     let _all_songs = view_all_songs_button();
     let _all_albums = view_all_albums_button();
     let _playlists = view_playlists_button();
