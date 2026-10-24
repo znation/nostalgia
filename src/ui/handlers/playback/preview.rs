@@ -60,18 +60,28 @@ pub(in crate::ui) fn position_tick(player: &mut WinampPlayer) -> Task<Message> {
     Task::batch([position, format, duration, finished])
 }
 
+/// Whether a poll reply stamped `epoch` still answers the current preview and
+/// may be stored: its epoch is the current one, so a reply in flight across a
+/// Stop or a new selection cannot restore the previous preview's data, and no
+/// transport transition is in flight, since the backend may still be holding
+/// the previous player. Shared by every preview reply handler so the rule is
+/// named once rather than repeated per field.
+fn reply_is_current(player: &WinampPlayer, epoch: u64) -> bool {
+    player.pending_position_transitions == 0 && epoch == player.position_epoch
+}
+
 /// The position query's reply: store the reported position, or clear the
-/// readout when the backend reports no position. A reply stamped with an
-/// older epoch is dropped, so a poll in flight across a Stop or a new
-/// selection cannot restore the previous track's elapsed value. A reply that
-/// lands while a transport transition is still in flight is dropped too: the
-/// backend may still be holding the previous player.
+/// readout when the backend reports no position. A reply that
+/// [`reply_is_current`] rejects is dropped, so a poll in flight across a Stop
+/// or a new selection cannot restore the previous track's elapsed value, and
+/// neither can one that lands while a transport transition is still in
+/// flight.
 pub(in crate::ui) fn playback_position(
     player: &mut WinampPlayer,
     epoch: u64,
     position: Option<Duration>,
 ) -> Task<Message> {
-    if player.pending_position_transitions == 0 && epoch == player.position_epoch {
+    if reply_is_current(player, epoch) {
         player.playback_position = position;
     }
     Task::none()
@@ -79,34 +89,32 @@ pub(in crate::ui) fn playback_position(
 
 /// The format query's reply: store the reported sample rate and channel mode,
 /// or clear them so the status row drops its prefix and dims both channel
-/// labels when the backend reports no format. A reply
-/// stamped with an older epoch is dropped, so a poll in flight across a Stop
-/// or a new selection cannot restore the previous preview's format. A reply
-/// that lands while a transport transition is still in flight is dropped too:
-/// the backend may still be holding the previous player.
+/// labels when the backend reports no format. A reply that
+/// [`reply_is_current`] rejects is dropped, so a poll in flight across a Stop
+/// or a new selection cannot restore the previous preview's format, and
+/// neither can one that lands while a transport transition is still in flight.
 pub(in crate::ui) fn playback_format(
     player: &mut WinampPlayer,
     epoch: u64,
     format: Option<crate::audio::PlaybackFormat>,
 ) -> Task<Message> {
-    if player.pending_position_transitions == 0 && epoch == player.position_epoch {
+    if reply_is_current(player, epoch) {
         player.playback_format = format;
     }
     Task::none()
 }
 
 /// The duration query's reply: store the loaded preview's own length, or
-/// clear the seek bar's scale when the backend reports none. A reply stamped
-/// with an older epoch is dropped, so a poll in flight across a Stop or a new
-/// selection cannot scale the bar to the previous preview. A reply that lands
-/// while a transport transition is still in flight is dropped too: the
-/// backend may still be holding the previous player.
+/// clear the seek bar's scale when the backend reports none. A reply that
+/// [`reply_is_current`] rejects is dropped, so a poll in flight across a Stop
+/// or a new selection cannot scale the bar to the previous preview, and
+/// neither can one that lands while a transport transition is still in flight.
 pub(in crate::ui) fn playback_duration(
     player: &mut WinampPlayer,
     epoch: u64,
     duration: Option<Duration>,
 ) -> Task<Message> {
-    if player.pending_position_transitions == 0 && epoch == player.position_epoch {
+    if reply_is_current(player, epoch) {
         player.playback_duration = duration;
     }
     Task::none()
@@ -134,7 +142,7 @@ pub(in crate::ui) fn playback_finished(
     epoch: u64,
     finished: bool,
 ) -> Task<Message> {
-    if !finished || player.pending_position_transitions > 0 || epoch != player.position_epoch {
+    if !finished || !reply_is_current(player, epoch) {
         return Task::none();
     }
     let (stepped, list_epoch) = {
@@ -188,17 +196,16 @@ pub(in crate::ui) fn spectrum_tick(player: &mut WinampPlayer) -> Task<Message> {
 }
 
 /// The spectrum query's reply: store the reported bars, or clear the
-/// visualizer when the backend reports no spectrum. A reply stamped with an
-/// older epoch is dropped, so a poll in flight across a Stop or a new
-/// selection cannot restore the previous preview's bars. A reply that lands
-/// while a transport transition is still in flight is dropped too: the backend
-/// may still be holding the previous player.
+/// visualizer when the backend reports no spectrum. A reply that
+/// [`reply_is_current`] rejects is dropped, so a poll in flight across a Stop
+/// or a new selection cannot restore the previous preview's bars, and neither
+/// can one that lands while a transport transition is still in flight.
 pub(in crate::ui) fn spectrum(
     player: &mut WinampPlayer,
     epoch: u64,
     spectrum: Option<crate::audio::Spectrum>,
 ) -> Task<Message> {
-    if player.pending_position_transitions == 0 && epoch == player.position_epoch {
+    if reply_is_current(player, epoch) {
         player.spectrum = spectrum;
     }
     Task::none()
