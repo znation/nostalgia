@@ -18,7 +18,7 @@
 use std::borrow::Cow;
 use std::time::Duration;
 
-use iced::Element;
+use iced::{Element, widget::MouseArea};
 
 use crate::state::TransportMode;
 use crate::ui::{Message, bevel, style};
@@ -40,6 +40,18 @@ pub(crate) const SHADED_HEIGHT: f32 = TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT;
 
 /// The shade-mode strip: the shared compact transport row on the title bar's
 /// blue chrome.
+///
+/// A double-click on the strip's blank chrome publishes
+/// [`Message::ToggleWindowShade`], restoring the window exactly as the title
+/// bar's double-click and the shade button do, so the rolled-up window
+/// restores from a double-click on either its title bar or its blank strip
+/// chrome. `MouseArea` forwards events to its content
+/// first and stops when that content captures them, so the strip's buttons,
+/// time readout, seek slider, and volume slider keep their own presses,
+/// drags, toggles, and wheel behavior, and a double-click on them does not
+/// unshade. The stopped readout is inert but still swallows the double-click
+/// through its own no-op handler, so it too cannot restore by accident. The
+/// chrome and [`SHADE_STRIP_HEIGHT`] geometry are unchanged.
 ///
 /// `mode` chooses the Play/Pause glyph and, while playing or paused, makes the
 /// time readout publish [`Message::ToggleTimeDisplay`], so the shade strip is
@@ -66,7 +78,7 @@ pub fn view_shade_strip<'a>(
     position: Option<Duration>,
     duration: Option<Duration>,
 ) -> Element<'a, Message> {
-    bevel::raised_panel(
+    MouseArea::new(bevel::raised_panel(
         mini_transport_strip_with_seek(
             mode,
             volume,
@@ -77,5 +89,7 @@ pub fn view_shade_strip<'a>(
             SHADE_STRIP_HEIGHT,
         )
         .style(|_theme| style::title_bar_style()),
-    )
+    ))
+    .on_double_click(Message::ToggleWindowShade)
+    .into()
 }

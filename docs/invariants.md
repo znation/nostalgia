@@ -1128,14 +1128,23 @@ rather than the panic unwinding the event loop.
   the volume slider to the right edge. The library footer builds no seek slider.
 - While playing or paused, the time readout is a click target that publishes
   `Message::ToggleTimeDisplay`, flipping the same `WinampPlayer::time_display` mode the LCD uses;
-  while stopped it publishes nothing, so a stopped press cannot silently switch the persisted
-  mode. Because shade mode builds no LCD, this is the only time toggle available there. The
-  shared row applies the LCD's own `views::now_playing::elapsed_readout_clickable` guard rather
-  than a second rule.
+  while stopped a single press publishes nothing and a double-click publishes only the no-op
+  `Message::Ignored`, so a stopped press cannot silently switch the persisted mode. Because shade
+  mode builds no LCD, this is the only time toggle available there. The shared row applies the
+  LCD's own `views::now_playing::elapsed_readout_clickable` guard rather than a second rule.
+- A double-click on the strip's blank chrome publishes the same
+  `Message::ToggleWindowShade` as the title bar's double-click and the shade button, restoring the
+  window through `handlers::window::toggle_window_shade`; a single click publishes nothing. The
+  strip's four buttons, time readout, seek slider, and volume slider keep their own presses,
+  drags, toggles, and wheel behavior because `MouseArea` forwards events to its content first and
+  stops when the content captures them; the inert stopped readout swallows the double-click
+  through its own no-op handler instead of restoring, and the strip keeps `SHADE_STRIP_HEIGHT` and
+  its blue chrome.
 
 **Enforced by.** `views::shade::view_shade_strip` wraps
-`views::mini_transport::mini_transport_strip_with_seek` on the title bar's blue chrome (the library
-footer keeps `mini_transport_strip`, which builds no seek slider);
+`views::mini_transport::mini_transport_strip_with_seek` on the title bar's blue chrome in a
+`MouseArea::on_double_click(Message::ToggleWindowShade)` (the library footer keeps
+`mini_transport_strip`, which builds no seek slider);
 `views::mini_transport::mini_transport_controls` projects
 `views::transport::transport_glyphs` (including `views::transport::play_pause_glyph`) into the
 compact buttons; `views::mini_transport::mini_transport_readout` joins the elapsed and total
@@ -1146,8 +1155,9 @@ strings and keeps a single time string when the total is unknown;
 resolves a position and non-zero length; the shared
 `views::mini_transport::mini_transport_row_with_optional_seek` wraps the readout
 in a `MouseArea::on_press(Message::ToggleTimeDisplay)` only when
-`views::now_playing::elapsed_readout_clickable` holds for the strip's mode, and leaves it a plain
-`Text` while stopped; `views::mini_transport::mini_volume_spec` fixes the slider's shared range
+`views::now_playing::elapsed_readout_clickable` holds for the strip's mode, and wraps a stopped
+readout in `MouseArea::on_double_click(Message::Ignored)` so it captures the strip's restore press
+with a no-op; `views::mini_transport::mini_volume_spec` fixes the slider's shared range
 and `Message::VolumeChange`; `views::mini_transport::MINI_TRANSPORT_HEIGHT` owns the height, and
 `views::shade::SHADE_STRIP_HEIGHT` aliases it while `views::shade::SHADED_HEIGHT` adds the title
 bar; the shaded branch of `ui::view::view` stacks the bar and strip; and
@@ -1161,6 +1171,8 @@ bar; the shaded branch of `ui::view::view` stacks the bar and strip; and
 `shade_volume_slider_spec_matches_the_shared_volume_range_and_message`,
 `shade_strip_draws_the_time_readout_and_puts_the_volume_slider_at_the_right_edge`,
 `shade_strip_shows_a_seek_slider_only_when_position_and_length_are_known`,
+`shade_strip_double_click_restores_the_window`,
+`shade_strip_double_clicks_on_controls_do_not_restore_the_window`,
 `mini_transport_readout_appends_the_known_total`,
 `compact_readout_toggles_time_display_only_while_not_stopped`, and
 `view_shade_strip_keeps_its_fixed_height_for_both_playback_states` (`src/ui/views/tests.rs`);
@@ -1173,6 +1185,7 @@ bar; the shaded branch of `ui::view::view` stacks the bar and strip; and
 **History.** Added with the window-shade transport strip; the earlier shade mode built the title
 bar alone. The strip's controls now come from the shared compact row the library footer uses; the
 shade strip additionally draws the Now Playing bar's seek slider from `seek_bar::seek_slider`.
+A double-click on the strip now restores the window, matching the title bar's double-click.
 
 ## Library footer
 
@@ -1197,7 +1210,8 @@ column, so hiding it drops this footer with the rest of the section. The footer 
   library footer.
 - While playing or paused, the footer's time readout is a click target that publishes
   `Message::ToggleTimeDisplay`, flipping the same `WinampPlayer::time_display` mode the LCD uses;
-  while stopped it publishes nothing. The shared row applies the LCD's own
+  while stopped a single press publishes nothing and a double-click publishes only the no-op
+  `Message::Ignored`. The shared row applies the LCD's own
   `views::now_playing::elapsed_readout_clickable` guard rather than a second rule.
 
 **Enforced by.** `views::mini_transport::view_library_strip` wraps
@@ -1208,8 +1222,8 @@ column, so hiding it drops this footer with the rest of the section. The footer 
 single time string when the total is unknown;
 `views::mini_transport::mini_transport_row_with_optional_seek` wraps the readout in a
 `MouseArea::on_press(Message::ToggleTimeDisplay)` only when
-`views::now_playing::elapsed_readout_clickable` holds for the strip's mode, and leaves it a plain
-`Text` while stopped;
+`views::now_playing::elapsed_readout_clickable` holds for the strip's mode, and wraps a stopped
+readout in `MouseArea::on_double_click(Message::Ignored)` so it captures a press with a no-op;
 `views::mini_transport::MINI_TRANSPORT_HEIGHT`, `MINI_VOLUME_WIDTH`, and
 `MINI_VOLUME_ID` own the geometry and test seam. The normal branch of `ui::view::view` builds the
 footer into the library column and pushes that column only while

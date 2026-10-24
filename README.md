@@ -125,8 +125,9 @@ and opening a list starts it at the top. A `Sort` button beside `Top` reorders t
 alphabetically by its rows' rendered text, ignoring case; the reorder is one-shot, so reopening
 the list restores the library's order. A `Reload` button beside `Sort` refetches the library's
 artists list and returns to the Artists list, clearing any active search while leaving the typed
-query in the search box. The title bar's `A` button toggles always-on-top, its
-shade button (or a double-click on the bar) rolls the window up to the title bar plus a compact
+query in the search box. The title bar's `A` button toggles always-on-top; its
+shade button, a double-click on the bar, or a double-click on the rolled-up strip rolls the window
+up to the title bar plus a compact
 transport strip with Previous, Play/Pause, Stop, Next, the same elapsed-over-total time readout, a
 seek slider over the preview's own length, and a volume slider, and back. Its `–` and `✕`
 buttons minimize and close. The window title

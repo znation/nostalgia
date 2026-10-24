@@ -99,7 +99,9 @@ pub(super) fn mini_transport_readout<'a>(
 ///
 /// `mode` chooses the Play/Pause glyph and, while playing or paused, makes the
 /// readout a click target that publishes [`Message::ToggleTimeDisplay`]; a
-/// stopped readout stays inert. `volume` is the slider's value; `elapsed` and
+/// stopped readout stays inert but still captures the press, so an ancestor
+/// double-click target (the shade strip's restore) never sees one. `volume` is
+/// the slider's value; `elapsed` and
 /// `total` are the same strings [`WinampPlayer::now_playing_elapsed`] and
 /// [`WinampPlayer::now_playing_time`] give the Now Playing bar, so the
 /// elapsed/remaining choice and the track's total are shown here too. When the
@@ -177,7 +179,14 @@ fn mini_transport_row_with_optional_seek<'a>(
             .interaction(Interaction::Pointer)
             .into()
     } else {
-        readout.into()
+        // The stopped readout publishes nothing, but `MouseArea` only
+        // captures a press when it has a handler, and the shade strip wraps
+        // this row in its own double-click restore. A no-op double-click
+        // handler swallows the press here so a double-click on the readout
+        // cannot reach that restore.
+        MouseArea::new(readout)
+            .on_double_click(Message::Ignored)
+            .into()
     };
     row = row.push(readout);
     match seek {

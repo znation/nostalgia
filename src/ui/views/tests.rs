@@ -2808,6 +2808,202 @@ fn view_shade_strip_keeps_its_fixed_height_for_both_playback_states() {
     }
 }
 
+// The rolled-up window restores like the classic Winamp shade: a double-click
+// anywhere on the strip's blank chrome publishes one `ToggleWindowShade`, while
+// a single click stays inert. The center point lands in the fill spacer between
+// the readout and the right-edge volume slider, so the press does not hit a
+// control.
+#[test]
+fn shade_strip_double_click_restores_the_window() {
+    let mut renderer = layout_capture::headless_renderer();
+    let mut element = view_shade_strip(
+        TransportMode::Stopped,
+        0.5,
+        Cow::Borrowed("00:53"),
+        Cow::Borrowed("3:30"),
+        None,
+        None,
+    );
+    let capture = layout_capture::capture_text(&mut element, &renderer);
+    let center = iced::Point::new(capture.size().width / 2.0, capture.size().height / 2.0);
+    let mut user_interface = iced_runtime::user_interface::UserInterface::build(
+        element,
+        layout_capture::limits().max(),
+        iced_runtime::user_interface::Cache::new(),
+        &mut renderer,
+    );
+    let mut clipboard = iced::advanced::clipboard::Null;
+    let mut messages = Vec::new();
+
+    let _ = user_interface.update(
+        &[
+            iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
+            iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                iced::mouse::Button::Left,
+            )),
+        ],
+        iced::mouse::Cursor::Available(center),
+        &mut renderer,
+        &mut clipboard,
+        &mut messages,
+    );
+    assert!(
+        !messages
+            .iter()
+            .any(|message| matches!(message, Message::ToggleWindowShade)),
+        "a single click on the strip must not unshade: {messages:?}"
+    );
+
+    messages.clear();
+    let _ = user_interface.update(
+        &[iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
+            iced::mouse::Button::Left,
+        ))],
+        iced::mouse::Cursor::Available(center),
+        &mut renderer,
+        &mut clipboard,
+        &mut messages,
+    );
+    let toggles = messages
+        .iter()
+        .filter(|message| matches!(message, Message::ToggleWindowShade))
+        .count();
+    assert_eq!(
+        toggles, 1,
+        "a double-click on the strip must publish exactly one ToggleWindowShade: {messages:?}"
+    );
+}
+
+// The strip's own controls keep the presses that a double-click would
+// otherwise turn into a restore: the stopped readout, whose time toggle is
+// inert, the Play/Pause button, and both sliders. Each double-click publishes
+// its control's message and none publishes `ToggleWindowShade`.
+#[test]
+fn shade_strip_double_clicks_on_controls_do_not_restore_the_window() {
+    #[derive(Default)]
+    struct CapturedControls {
+        seek: Option<Rectangle>,
+        volume: Option<Rectangle>,
+    }
+    impl Operation for CapturedControls {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+        fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
+            if id == Some(&Id::new(MINI_SEEK_ID)) {
+                self.seek = Some(bounds);
+            } else if id == Some(&Id::new(MINI_VOLUME_ID)) {
+                self.volume = Some(bounds);
+            }
+        }
+    }
+
+    fn double_click_at(
+        element: iced::Element<'_, Message>,
+        point: iced::Point,
+        renderer: &mut iced::Renderer,
+    ) -> Vec<Message> {
+        let mut user_interface = iced_runtime::user_interface::UserInterface::build(
+            element,
+            layout_capture::limits().max(),
+            iced_runtime::user_interface::Cache::new(),
+            renderer,
+        );
+        let mut messages = Vec::new();
+        let mut clipboard = iced::advanced::clipboard::Null;
+        let _ = user_interface.update(
+            &[
+                iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
+                iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                    iced::mouse::Button::Left,
+                )),
+                iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
+                iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                    iced::mouse::Button::Left,
+                )),
+            ],
+            iced::mouse::Cursor::Available(point),
+            renderer,
+            &mut clipboard,
+            &mut messages,
+        );
+        messages
+    }
+
+    let strip = || {
+        view_shade_strip(
+            TransportMode::Stopped,
+            0.5,
+            Cow::Borrowed("00:53"),
+            Cow::Borrowed("3:30"),
+            Some(Duration::from_secs(10)),
+            Some(Duration::from_secs(30)),
+        )
+    };
+    let mut renderer = layout_capture::headless_renderer();
+    let mut element = strip();
+    let capture = layout_capture::capture_text(&mut element, &renderer);
+    let readout = capture.find("00:53/3:30");
+    let play = capture.find("▶");
+    let mut tree = Tree::new(element.as_widget());
+    let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &limits);
+    let mut controls = CapturedControls::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &renderer, &mut controls);
+    let seek = controls.seek.expect("the seek slider is drawn");
+    let volume = controls.volume.expect("the volume slider is drawn");
+
+    for (control, point) in [
+        (
+            "stopped readout",
+            iced::Point::new(readout.center_x(), readout.center_y()),
+        ),
+        (
+            "play button",
+            iced::Point::new(play.center_x(), play.center_y()),
+        ),
+        (
+            "seek slider",
+            iced::Point::new(seek.x + seek.width * 0.6, seek.center_y()),
+        ),
+        (
+            "volume slider",
+            iced::Point::new(volume.x + volume.width * 0.25, volume.center_y()),
+        ),
+    ] {
+        let messages = double_click_at(strip(), point, &mut renderer);
+        assert!(
+            !messages
+                .iter()
+                .any(|message| matches!(message, Message::ToggleWindowShade)),
+            "a double-click on the {control} must not unshade: {messages:?}"
+        );
+        let keeps_its_behavior = match control {
+            "stopped readout" => messages
+                .iter()
+                .all(|message| matches!(message, Message::Ignored)),
+            "play button" => messages
+                .iter()
+                .any(|message| matches!(message, Message::PlayPause)),
+            "seek slider" => messages
+                .iter()
+                .any(|message| matches!(message, Message::SeekPreviewChanged(_))),
+            "volume slider" => messages
+                .iter()
+                .any(|message| matches!(message, Message::VolumeChange(_))),
+            _ => unreachable!(),
+        };
+        assert!(
+            keeps_its_behavior,
+            "the {control} must keep its own press behavior: {messages:?}"
+        );
+    }
+}
+
 // The rolled-up strip's seek slider is the Now Playing bar's own control: it
 // appears only when the backend reports both a position and a non-zero
 // preview length, sits between the readout and the right-edge volume slider,
