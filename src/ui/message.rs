@@ -16,7 +16,8 @@ use crate::library::{Album, Artist, Playlist, Song};
 #[derive(Debug, Clone)]
 pub(in crate::ui) enum Message {
     PlayPause,
-    // The explicit Play and Pause key bindings (X and C). Unlike `PlayPause`
+    // The explicit Play and Pause bindings (X and C, and the system media
+    // Play and Pause keys). Unlike `PlayPause`
     // they are idempotent: pressing X always plays, while C pauses a loaded
     // preview and stops a track whose source supplied none.
     Play,

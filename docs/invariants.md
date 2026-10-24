@@ -386,6 +386,27 @@ target the stable `views::BROWSE_LIST_ID` that every `views::browse::scrollable_
 **History.** Added with the Home and End keyboard scrolling alongside the existing Top button;
 extended with the Page Up and Page Down one-page scrolling.
 
+## Media keys
+
+**Guarantee.** A plain or Shift-held system media Play/Pause key press maps to
+`Message::PlayPause`, Play to `Message::Play`, Pause to `Message::Pause`, Stop to
+`Message::Stop`, Next track to `Message::NextTrack`, and Previous track to
+`Message::PreviousTrack` — the same messages the on-screen controls and the classic letters send,
+so each key obeys that control's existing Shuffle, Repeat, and end-of-list rules and changes no
+browse, search, or LCD state beyond what the control already changes. Ctrl/Alt/Logo chords with
+these keys stay unbound, and a key release binds nothing.
+
+**Enforced by.** `shortcuts::shortcut` in `src/ui/shortcuts.rs` maps the six `key::Named::Media…`
+variants to those messages after its Control/Alt/Logo chord guard.
+
+**Pinned by.**
+
+- `message_for_maps_media_keys_to_the_transport` (`src/ui/shortcuts.rs`)
+- `media_play_pause_key_toggles_playback` (`src/ui/tests.rs`)
+- `shortcut_ignores_chord_modifiers` (`src/ui/shortcuts.rs`)
+
+**History.** Added with the system media-key transport bindings.
+
 ## Browse row labels
 
 **Guarantee.** Each artist row shows the number of albums the loaded library holds for that

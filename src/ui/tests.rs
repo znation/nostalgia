@@ -781,6 +781,36 @@ async fn play_pause_toggles_is_playing() {
     assert!(state.lock().await.is_playing);
 }
 
+// The system media Play/Pause key dispatches the same toggle as the on-screen
+// button and the X/C pair: it pauses a playing preview and resumes it. The
+// second press holds Shift, pinning that the media keys ignore that modifier.
+#[tokio::test]
+async fn media_play_pause_key_toggles_playback() {
+    use iced::keyboard::{Event, Key, Modifiers, key};
+
+    let (mut player, state) = player_playing_preview(Arc::new(RecordingAudio::default())).await;
+    assert!(state.lock().await.is_playing);
+
+    for (index, modifiers) in [Modifiers::NONE, Modifiers::SHIFT].into_iter().enumerate() {
+        let media_play_pause = Event::KeyPressed {
+            key: Key::Named(key::Named::MediaPlayPause),
+            modified_key: Key::Named(key::Named::MediaPlayPause),
+            physical_key: key::Physical::Code(key::Code::KeyA),
+            location: iced::keyboard::Location::Standard,
+            modifiers,
+            text: None,
+            repeat: false,
+        };
+        let message = super::shortcuts::message_for(media_play_pause)
+            .expect("MediaPlayPause must map to a message");
+        assert!(matches!(message, Message::PlayPause));
+
+        let task = update(&mut player, message);
+        assert_transport_settled(task, "media play/pause toggle").await;
+        assert_eq!(state.lock().await.is_playing, index == 1);
+    }
+}
+
 #[test]
 fn toggle_repeat_flips_shared_state() {
     assert_toggles_shared_state(Message::ToggleRepeat, |state| state.repeat);

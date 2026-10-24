@@ -19,8 +19,10 @@ use super::Message;
 /// open the selected browse row,
 /// Backspace to step the browse list back one level, Home and End to snap it
 /// to its first and last rows, Page Up and Page Down to scroll it one page at
-/// a time, F5 to refetch the library and return to the Artists list, and Ctrl+F
-/// to focus the `Search library` box
+/// a time, F5 to refetch the library and return to the Artists list, Ctrl+F
+/// to focus the `Search library` box, and the system media keys
+/// (Play/Pause, Play, Pause, Stop, Next track, and Previous track) to the same
+/// transport messages as the on-screen controls
 /// (the one Control chord Winamp-style play uses).
 /// `init_ui` installs this as the window subscription's mapper, so the
 /// key-to-message table lives here once and the subscription stays a plain
@@ -41,8 +43,10 @@ pub(super) fn message_for(event: Event) -> Option<Message> {
 /// at a time, F5 refetches the library and returns to the Artists list, Ctrl+F
 /// focuses
 /// the `Search library` box, the up/down arrows nudge
-/// the volume, and the left/right arrows seek five seconds
-/// back or forward. Apart from Ctrl+F, a Control, Alt, or
+/// the volume, the left/right arrows seek five seconds
+/// back or forward, and the system media keys (Play/Pause, Play, Pause, Stop,
+/// Next track, and Previous track) drive the transport. Apart from Ctrl+F, a
+/// Control, Alt, or
 /// Logo chord is left to the OS and window manager, so those modifiers yield
 /// `None`; Shift is allowed, and the letter match ignores ASCII case, so
 /// Shift+Z steps back exactly like Z and Ctrl+Shift+F focuses the box too.
@@ -100,6 +104,12 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
         Key::Named(key::Named::ArrowDown) => Some(Message::VolumeDown),
         Key::Named(key::Named::ArrowLeft) => Some(Message::SeekBackward),
         Key::Named(key::Named::ArrowRight) => Some(Message::SeekForward),
+        Key::Named(key::Named::MediaPlayPause) => Some(Message::PlayPause),
+        Key::Named(key::Named::MediaPlay) => Some(Message::Play),
+        Key::Named(key::Named::MediaPause) => Some(Message::Pause),
+        Key::Named(key::Named::MediaStop) => Some(Message::Stop),
+        Key::Named(key::Named::MediaTrackNext) => Some(Message::NextTrack),
+        Key::Named(key::Named::MediaTrackPrevious) => Some(Message::PreviousTrack),
         _ => None,
     }
 }
@@ -239,6 +249,47 @@ mod tests {
     }
 
     #[test]
+    fn message_for_maps_media_keys_to_the_transport() {
+        // The system media keys drive the same transport messages as the
+        // on-screen controls and classic letters, plain or with Shift held.
+        for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
+            assert!(matches!(
+                message_for(key_pressed(
+                    Key::Named(key::Named::MediaPlayPause),
+                    modifiers
+                )),
+                Some(Message::PlayPause)
+            ));
+            assert!(matches!(
+                message_for(key_pressed(Key::Named(key::Named::MediaPlay), modifiers)),
+                Some(Message::Play)
+            ));
+            assert!(matches!(
+                message_for(key_pressed(Key::Named(key::Named::MediaPause), modifiers)),
+                Some(Message::Pause)
+            ));
+            assert!(matches!(
+                message_for(key_pressed(Key::Named(key::Named::MediaStop), modifiers)),
+                Some(Message::Stop)
+            ));
+            assert!(matches!(
+                message_for(key_pressed(
+                    Key::Named(key::Named::MediaTrackNext),
+                    modifiers
+                )),
+                Some(Message::NextTrack)
+            ));
+            assert!(matches!(
+                message_for(key_pressed(
+                    Key::Named(key::Named::MediaTrackPrevious),
+                    modifiers
+                )),
+                Some(Message::PreviousTrack)
+            ));
+        }
+    }
+
+    #[test]
     fn message_for_maps_a_and_t_to_the_classic_toggles() {
         for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
             assert!(matches!(
@@ -321,6 +372,12 @@ mod tests {
                 Key::Named(key::Named::ArrowDown),
                 Key::Named(key::Named::ArrowLeft),
                 Key::Named(key::Named::ArrowRight),
+                Key::Named(key::Named::MediaPlayPause),
+                Key::Named(key::Named::MediaPlay),
+                Key::Named(key::Named::MediaPause),
+                Key::Named(key::Named::MediaStop),
+                Key::Named(key::Named::MediaTrackNext),
+                Key::Named(key::Named::MediaTrackPrevious),
             ] {
                 assert!(
                     shortcut(&key, modifiers).is_none(),
