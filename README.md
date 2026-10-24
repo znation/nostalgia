@@ -139,7 +139,8 @@ matching direction; while the `Search library` box is focused it keeps Backspace
 Home, and End for editing its query instead of navigating. Ctrl+F moves keyboard focus to the
 `Search library` box from any normal-mode browse level without searching or changing the current
 view, list, selection, or typed query, and the box then takes typed keys as usual; in window-shade
-mode there is no search box, so Ctrl+F does nothing. With Shuffle on, Previous retraces the
+mode there is no search box, so Ctrl+F does nothing. F5 refetches the library and returns to the
+Artists list, exactly like the `Reload` button. With Shuffle on, Previous retraces the
 tracks actually played before the current one instead of stepping one row backward in the list.
 While a song list is showing, Next, Previous (including a shuffled retrace), and the preview-end
 advance scroll that list so the landed row stays in view. The volume slider and the up/down arrows

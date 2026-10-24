@@ -18,7 +18,8 @@ use super::Message;
 /// elapsed/remaining readout, Enter to open the selected browse row,
 /// Backspace to step the browse list back one level, Home and End to snap it
 /// to its first and last rows, Page Up and Page Down to scroll it one page at
-/// a time, and Ctrl+F to focus the `Search library` box
+/// a time, F5 to refetch the library and return to the Artists list, and Ctrl+F
+/// to focus the `Search library` box
 /// (the one Control chord Winamp-style play uses).
 /// `init_ui` installs this as the window subscription's mapper, so the
 /// key-to-message table lives here once and the subscription stays a plain
@@ -35,7 +36,8 @@ pub(super) fn message_for(event: Event) -> Option<Message> {
 /// large readout between elapsed and remaining time, Enter opens the selected
 /// browse row, Backspace steps the browse list back one level, Home and End
 /// snap it to its first and last rows, Page Up and Page Down scroll it one page
-/// at a time, Ctrl+F focuses
+/// at a time, F5 refetches the library and returns to the Artists list, Ctrl+F
+/// focuses
 /// the `Search library` box, the up/down arrows nudge
 /// the volume, and the left/right arrows seek five seconds
 /// back or forward. Apart from Ctrl+F, a Control, Alt, or
@@ -88,6 +90,7 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
         Key::Named(key::Named::End) => Some(Message::ScrollBrowseToBottom),
         Key::Named(key::Named::PageDown) => Some(Message::ScrollBrowsePageDown),
         Key::Named(key::Named::PageUp) => Some(Message::ScrollBrowsePageUp),
+        Key::Named(key::Named::F5) => Some(Message::ReloadLibrary),
         Key::Named(key::Named::ArrowUp) => Some(Message::VolumeUp),
         Key::Named(key::Named::ArrowDown) => Some(Message::VolumeDown),
         Key::Named(key::Named::ArrowLeft) => Some(Message::SeekBackward),
@@ -220,6 +223,16 @@ mod tests {
     }
 
     #[test]
+    fn message_for_maps_f5_to_reload() {
+        for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
+            assert!(matches!(
+                message_for(key_pressed(Key::Named(key::Named::F5), modifiers)),
+                Some(Message::ReloadLibrary)
+            ));
+        }
+    }
+
+    #[test]
     fn message_for_maps_a_and_t_to_the_classic_toggles() {
         for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
             assert!(matches!(
@@ -296,6 +309,7 @@ mod tests {
                 Key::Named(key::Named::End),
                 Key::Named(key::Named::PageUp),
                 Key::Named(key::Named::PageDown),
+                Key::Named(key::Named::F5),
                 Key::Named(key::Named::ArrowUp),
                 Key::Named(key::Named::ArrowDown),
                 Key::Named(key::Named::ArrowLeft),

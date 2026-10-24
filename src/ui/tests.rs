@@ -1684,6 +1684,72 @@ async fn reload_library_returns_to_artists_and_refetches_them() {
     .await;
 }
 
+// F5 is the keyboard route to the Reload button's library refresh, so it pins
+// both the shortcut table and the handler wiring: the mapped message must
+// clear an active search, return to Artists, drop the stale rows and error,
+// show the loading placeholder, refetch the artists, and leave the typed
+// query, the other browse buffers, and playback alone.
+#[tokio::test]
+async fn f5_reloads_the_library_from_the_keyboard() {
+    use iced::keyboard::{Event, Key, Modifiers, key};
+
+    let (mut player, state) = test_player();
+    player.current_view = CurrentView::AllSongs;
+    player.search_active = true;
+    player.search_query = "echo".to_string();
+    player.artists.items = vec![sample_artist()];
+    player.artists.error = Some("music-library fetch failed: boom".to_string());
+    player.artists.loading = false;
+    player.all_songs.items = vec![sample_song()];
+    let flat_song_id = player.all_songs.items[0].id.clone();
+    {
+        let mut shared = state.lock().await;
+        shared.current_track = Some("song-1".to_string());
+        shared.is_playing = true;
+    }
+
+    let f5 = Event::KeyPressed {
+        key: Key::Named(key::Named::F5),
+        modified_key: Key::Named(key::Named::F5),
+        physical_key: key::Physical::Code(key::Code::F5),
+        location: iced::keyboard::Location::Standard,
+        modifiers: Modifiers::NONE,
+        text: None,
+        repeat: false,
+    };
+    let message = super::shortcuts::message_for(f5).expect("F5 must map to a message");
+    assert!(matches!(message, Message::ReloadLibrary));
+
+    let task = update(&mut player, message);
+
+    assert_view(&player, CurrentView::Artists);
+    assert!(!player.search_active);
+    assert_eq!(player.search_query, "echo");
+    assert!(player.artists.items.is_empty());
+    assert!(player.artists.loading);
+    assert_eq!(player.artists.error, None);
+    assert_eq!(player.all_songs.items.len(), 1);
+    assert_eq!(player.all_songs.items[0].id, flat_song_id);
+
+    drive_fetch_and_assert_loaded(
+        &mut player,
+        task,
+        "reload the library's artists with F5",
+        |player| &mut player.artists.items,
+        |artist| artist.id.as_str(),
+        &["artist-1", "artist-2", "artist-3"],
+    )
+    .await;
+
+    assert_eq!(player.all_songs.items.len(), 1);
+    assert_eq!(player.all_songs.items[0].id, flat_song_id);
+    {
+        let shared = state.lock().await;
+        assert_eq!(shared.current_track.as_deref(), Some("song-1"));
+        assert!(shared.is_playing);
+    }
+}
+
 #[test]
 fn back_from_all_songs_returns_to_the_artists_list() {
     let (mut player, _state) = test_player();

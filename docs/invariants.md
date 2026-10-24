@@ -39,7 +39,9 @@ so previous artists rows and any previous failure are dropped and the loading pl
 until the reply lands; the reloaded list snaps to its first row. It leaves playback, the search
 box's typed text, and the other browse buffers (Songs, All Songs, All Albums, Playlists) alone.
 `Message::LoadArtists` keeps its boot, sign-in, and Retry behavior and does not change the
-current browse level.
+current browse level. A plain or Shift-held F5 key press takes the same `Message::ReloadLibrary`
+path as the Reload button, so it performs the same refresh; Ctrl/Alt/Logo chords with F5 stay
+unbound.
 
 **Enforced by.** The `Message::Back` handler — `browse::back` in `src/ui/handlers/browse.rs`,
 routed from the `update` dispatch table in `src/ui/mod.rs` — checks `search_active` first, then
@@ -50,7 +52,8 @@ shown; it returns false only for `CurrentView::Artists`. `shortcuts::message_for
 `browse::reload_library` in `src/ui/handlers/browse.rs`, routed from `Message::ReloadLibrary`,
 clears the search flag and view and calls `fetch_at_top(fetch::load_artists(player))`;
 `views::browse::view_reload_button` in `src/ui/views/browse.rs` is pushed into the nav row by
-`views::view_browse_nav_buttons`.
+`views::view_browse_nav_buttons`. `shortcuts::shortcut` in `src/ui/shortcuts.rs` maps F5 to
+`Message::ReloadLibrary` after its Control/Alt/Logo chord guard.
 
 **Pinned by.**
 
@@ -65,16 +68,19 @@ clears the search flag and view and calls `fetch_at_top(fetch::load_artists(play
 - `back_leaves_an_active_search_for_the_artists_list`
 - `backspace_steps_back_from_albums`
 - `reload_library_returns_to_artists_and_refetches_them`
+- `f5_reloads_the_library_from_the_keyboard`
 - `reload_button_is_shown_on_every_browse_level`
 - `browse_nav_buttons_place_reload_beside_sort`
   (all in `src/ui/tests.rs`)
 - `message_for_maps_backspace_to_back` (`src/ui/shortcuts.rs`)
+- `message_for_maps_f5_to_reload` (`src/ui/shortcuts.rs`)
+- `shortcut_ignores_chord_modifiers` (`src/ui/shortcuts.rs`)
 - `back_button_is_available_only_below_the_artist_list` (`src/ui/views/tests.rs`)
 
 **History.** Reconstructed from "Browse view can only move forward — no way back from
 Albums/Songs, a dead end" in `BUGS-FIXED.md`. The All Songs, All Albums, and Playlists levels
 were added later and are covered here too. Reload was added to refresh the artists list without
-restarting the app.
+restarting the app; F5 later became its keyboard route.
 
 ## Search focus
 
