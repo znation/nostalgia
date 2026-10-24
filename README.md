@@ -166,7 +166,8 @@ the volume by one slider step in the roll's vertical direction, except that a ro
 seek slider, in the Now Playing bar or the shade strip, seeks five seconds forward or back instead;
 over the browse list the wheel keeps scrolling the list instead. The balance slider sets its stereo
 balance. While a volume or balance slider is dragged, the LCD shows its level (`Volume: 72%`,
-`Balance: 31% Left`) in place of the title until release. The equalizer panel's on/off button,
+`Balance: 31% Left`) in place of the title until release; an equalizer band or preamp drag does the same
+(`EQ: 60HZ +3 DB`, `Preamp: -12 DB`). The equalizer panel's on/off button,
 sliders, and presets change the playing preview's curve live; the volume and balance are
 remembered for the next track. Setting
 `APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a browser-based MusicKit sign-in: browse and search

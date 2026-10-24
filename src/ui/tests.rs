@@ -9139,6 +9139,47 @@ fn dragging_volume_shows_the_level_until_release() {
 }
 
 #[test]
+fn dragging_an_eq_band_shows_its_gain_until_release() {
+    let (mut player, state) = test_player();
+    seed_current_title(&mut player, &state, "Tune");
+    let _ = update(&mut player, Message::EqBandChange(0, 5.0));
+    assert_eq!(player.mixer_drag, Some(views::MixerDrag::EqBand(0)));
+    assert!(root_view_draws(&player, "EQ: 60HZ +5 DB"));
+    assert!(!root_view_draws(&player, "Tune"));
+    let _ = update(&mut player, Message::MixerReleased);
+    assert_eq!(player.mixer_drag, None);
+    assert!(root_view_draws(&player, "Tune"));
+}
+
+#[test]
+fn dragging_the_preamp_shows_its_gain() {
+    let (mut player, state) = test_player();
+    seed_current_title(&mut player, &state, "Tune");
+    let _ = update(&mut player, Message::EqPreampChange(-3.0));
+    assert_eq!(player.mixer_drag, Some(views::MixerDrag::EqPreamp));
+    assert!(root_view_draws(&player, "Preamp: -3 DB"));
+}
+
+#[test]
+fn eq_toggle_and_preset_do_not_show_the_readout() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::ToggleEqualizer);
+    assert_eq!(player.mixer_drag, None);
+    let _ = update(&mut player, Message::EqPresetSelected(rock_preset()));
+    assert_eq!(player.mixer_drag, None);
+}
+
+#[test]
+fn an_out_of_range_eq_band_shows_no_readout() {
+    let (mut player, _state) = test_player();
+    let _ = update(
+        &mut player,
+        Message::EqBandChange(crate::equalizer::BAND_COUNT, 5.0),
+    );
+    assert_eq!(player.mixer_drag, None);
+}
+
+#[test]
 fn dragging_balance_shows_the_side() {
     let (mut player, state) = test_player();
     seed_current_title(&mut player, &state, "Tune");

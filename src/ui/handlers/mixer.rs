@@ -11,7 +11,7 @@
 use iced::Task;
 
 use crate::apple_music::{AppleMusicError, AppleMusicService};
-use crate::equalizer::Preset;
+use crate::equalizer::{BAND_COUNT, Preset};
 use crate::state::AppState;
 use crate::ui::views;
 use crate::ui::{Message, WinampPlayer};
@@ -54,7 +54,7 @@ pub(in crate::ui) fn balance_change(player: &mut WinampPlayer, balance: f32) -> 
     mutate_balance(player, |state| state.set_balance(balance))
 }
 
-/// The release of a volume or balance slider drag: the LCD shows the title
+/// The release of a mixer or equalizer slider drag: the LCD shows the title
 /// again. Harmless when no drag is shown.
 pub(in crate::ui) fn mixer_released(player: &mut WinampPlayer) -> Task<Message> {
     player.mixer_drag = None;
@@ -102,6 +102,7 @@ pub(in crate::ui) fn toggle_equalizer(player: &mut WinampPlayer) -> Task<Message
 
 /// The preamp slider's drag.
 pub(in crate::ui) fn eq_preamp_change(player: &mut WinampPlayer, gain: f32) -> Task<Message> {
+    player.mixer_drag = Some(views::MixerDrag::EqPreamp);
     mutate_equalizer(player, |state| state.set_eq_preamp(gain))
 }
 
@@ -111,6 +112,9 @@ pub(in crate::ui) fn eq_band_change(
     band: usize,
     gain: f32,
 ) -> Task<Message> {
+    if band < BAND_COUNT {
+        player.mixer_drag = Some(views::MixerDrag::EqBand(band));
+    }
     mutate_equalizer(player, |state| state.set_eq_band(band, gain))
 }
 

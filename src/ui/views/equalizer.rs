@@ -105,6 +105,8 @@ pub(super) fn db_scale_column() -> Column<'static, Message> {
 /// beneath it at the band labels' text size. The preamp column and each of the
 /// ten band columns share this shape; only the slider's value, change
 /// message, and paint style differ, so the construction lives here once.
+/// Releasing the slider sends [`Message::MixerReleased`], ending the LCD's
+/// gain readout.
 ///
 /// `style` receives the slider's interaction status and returns the chrome
 /// style to paint, so the preamp and each band pass their own gain tint
@@ -119,6 +121,7 @@ fn eq_slider_column<'a>(
         .push(
             VerticalSlider::new(GAIN_MIN_DB..=GAIN_MAX_DB, value, on_change)
                 .step(EQ_STEP)
+                .on_release(Message::MixerReleased)
                 .height(Length::Fixed(EQ_SLIDER_HEIGHT))
                 .style(move |_theme, status| style(status)),
         )

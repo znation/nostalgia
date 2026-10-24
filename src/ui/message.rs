@@ -28,7 +28,7 @@ pub(in crate::ui) enum Message {
     // non-current song from the loaded song list instead of the next in order.
     ToggleShuffle,
     VolumeChange(f32),
-    /// The release of any `chrome_slider` drag: the LCD shows the title again.
+    /// The release of any `chrome_slider` or equalizer slider drag: the LCD shows the title again.
     MixerReleased,
     // The balance slider's change message, clamped by `AppState::set_balance`.
     BalanceChange(f32),
