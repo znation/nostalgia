@@ -472,6 +472,30 @@ async fn task_output(task: Task<Message>, what: &str) -> Message {
     output.expect("drive_task must pass the output to its callback")
 }
 
+/// Drives `task` to its end on the current thread and returns every output
+/// message it emitted.
+///
+/// [`task_output`] stops at the task's single output; the tick tests instead
+/// need all of a batched task's replies — a position query plus whichever of
+/// the format, length, and finished queries still apply — so the
+/// drain-and-collect loop lives here once. A task that schedules no stream
+/// fails by name, and each wait is bounded by [`TASK_TIMEOUT`].
+fn task_outputs(task: Task<Message>, what: &str) -> Vec<Message> {
+    use futures::StreamExt;
+
+    let mut stream = iced_runtime::task::into_stream(task)
+        .unwrap_or_else(|| panic!("{what} must schedule a task"));
+    let mut replies = Vec::new();
+    while let Some(action) =
+        futures::executor::block_on(await_or_timeout(what, TASK_TIMEOUT, stream.next()))
+    {
+        if let iced_runtime::Action::Output(message) = action {
+            replies.push(message);
+        }
+    }
+    replies
+}
+
 /// The browse-list scroll operations a task emitted: a relative snap-to-top,
 /// an absolute scroll-to-row, and a relative page scroll are captured
 /// separately, so a test pins which one an arm schedules (and that it
@@ -6842,22 +6866,9 @@ fn position_tick_schedules_a_query() {
 // batched task emits and check both replies arrive.
 #[test]
 fn position_tick_queries_position_and_format() {
-    use futures::StreamExt;
-
     let (mut player, _state) = test_player();
     let epoch = player.position_epoch;
-    let mut stream = iced_runtime::task::into_stream(update(&mut player, Message::PositionTick))
-        .expect("the position tick must schedule a task");
-    let mut replies = Vec::new();
-    while let Some(action) = futures::executor::block_on(await_or_timeout(
-        "position tick",
-        TASK_TIMEOUT,
-        stream.next(),
-    )) {
-        if let iced_runtime::Action::Output(message) = action {
-            replies.push(message);
-        }
-    }
+    let replies = task_outputs(update(&mut player, Message::PositionTick), "position tick");
 
     assert!(
         replies.iter().any(|message| matches!(
@@ -6880,24 +6891,11 @@ fn position_tick_queries_position_and_format() {
 // the duration reply arrives beside the position.
 #[test]
 fn position_tick_queries_position_and_duration() {
-    use futures::StreamExt;
-
     let recording = Arc::new(RecordingAudio::default());
     let (mut player, _state) =
         player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
     let epoch = player.position_epoch;
-    let mut stream = iced_runtime::task::into_stream(update(&mut player, Message::PositionTick))
-        .expect("the position tick must schedule a task");
-    let mut replies = Vec::new();
-    while let Some(action) = futures::executor::block_on(await_or_timeout(
-        "position tick",
-        TASK_TIMEOUT,
-        stream.next(),
-    )) {
-        if let iced_runtime::Action::Output(message) = action {
-            replies.push(message);
-        }
-    }
+    let replies = task_outputs(update(&mut player, Message::PositionTick), "position tick");
 
     assert!(
         replies.iter().any(|message| matches!(
@@ -6922,27 +6920,13 @@ fn position_tick_queries_position_and_duration() {
 // reply carries the tick's epoch and the backend's state.
 #[test]
 fn position_tick_queries_preview_finished() {
-    use futures::StreamExt;
-
     let recording = Arc::new(RecordingAudio::default());
     let (mut player, _state) =
         player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
     for finished in [true, false] {
         recording.set_finished(finished);
         let epoch = player.position_epoch;
-        let mut stream =
-            iced_runtime::task::into_stream(update(&mut player, Message::PositionTick))
-                .expect("the position tick must schedule a task");
-        let mut replies = Vec::new();
-        while let Some(action) = futures::executor::block_on(await_or_timeout(
-            "position tick",
-            TASK_TIMEOUT,
-            stream.next(),
-        )) {
-            if let iced_runtime::Action::Output(message) = action {
-                replies.push(message);
-            }
-        }
+        let replies = task_outputs(update(&mut player, Message::PositionTick), "position tick");
 
         assert!(
             replies.iter().any(|message| matches!(
@@ -7271,8 +7255,6 @@ fn position_tick_blinks_the_elapsed_readout_only_while_paused() {
 
 #[test]
 fn position_tick_skips_the_format_and_length_once_both_are_known() {
-    use futures::StreamExt;
-
     let recording = Arc::new(RecordingAudio::default());
     let (mut player, _state) =
         player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
@@ -7283,18 +7265,7 @@ fn position_tick_skips_the_format_and_length_once_both_are_known() {
     });
     player.playback_duration = Some(Duration::from_secs(30));
     let epoch = player.position_epoch;
-    let mut stream = iced_runtime::task::into_stream(update(&mut player, Message::PositionTick))
-        .expect("the position tick must schedule a task");
-    let mut replies = Vec::new();
-    while let Some(action) = futures::executor::block_on(await_or_timeout(
-        "position tick",
-        TASK_TIMEOUT,
-        stream.next(),
-    )) {
-        if let iced_runtime::Action::Output(message) = action {
-            replies.push(message);
-        }
-    }
+    let replies = task_outputs(update(&mut player, Message::PositionTick), "position tick");
 
     assert!(
         replies.iter().any(|message| matches!(
@@ -7317,8 +7288,6 @@ fn position_tick_skips_the_format_and_length_once_both_are_known() {
 // known one.
 #[test]
 fn position_tick_queries_only_the_missing_value() {
-    use futures::StreamExt;
-
     let recording = Arc::new(RecordingAudio::default());
     let (mut player, _state) =
         player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
@@ -7328,18 +7297,7 @@ fn position_tick_queries_only_the_missing_value() {
         bitrate_kbps: Some(256),
     });
     let epoch = player.position_epoch;
-    let mut replies = Vec::new();
-    let mut stream = iced_runtime::task::into_stream(update(&mut player, Message::PositionTick))
-        .expect("the position tick must schedule a task");
-    while let Some(action) = futures::executor::block_on(await_or_timeout(
-        "position tick",
-        TASK_TIMEOUT,
-        stream.next(),
-    )) {
-        if let iced_runtime::Action::Output(message) = action {
-            replies.push(message);
-        }
-    }
+    let replies = task_outputs(update(&mut player, Message::PositionTick), "position tick");
     assert!(
         replies.iter().any(|message| matches!(
             message,
@@ -7358,18 +7316,7 @@ fn position_tick_queries_only_the_missing_value() {
     player.playback_format = None;
     player.playback_duration = Some(Duration::from_secs(30));
     let epoch = player.position_epoch;
-    let mut replies = Vec::new();
-    let mut stream = iced_runtime::task::into_stream(update(&mut player, Message::PositionTick))
-        .expect("the position tick must schedule a task");
-    while let Some(action) = futures::executor::block_on(await_or_timeout(
-        "position tick",
-        TASK_TIMEOUT,
-        stream.next(),
-    )) {
-        if let iced_runtime::Action::Output(message) = action {
-            replies.push(message);
-        }
-    }
+    let replies = task_outputs(update(&mut player, Message::PositionTick), "position tick");
     assert!(
         replies.iter().any(|message| matches!(
             message,
@@ -7387,24 +7334,11 @@ fn position_tick_queries_only_the_missing_value() {
 
 #[test]
 fn spectrum_tick_queries_spectrum_and_carries_the_epoch() {
-    use futures::StreamExt;
-
     let recording = Arc::new(RecordingAudio::default());
     let (mut player, _state) =
         player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
     let epoch = player.position_epoch;
-    let mut stream = iced_runtime::task::into_stream(update(&mut player, Message::SpectrumTick))
-        .expect("the spectrum tick must schedule a task");
-    let mut replies = Vec::new();
-    while let Some(action) = futures::executor::block_on(await_or_timeout(
-        "spectrum tick",
-        TASK_TIMEOUT,
-        stream.next(),
-    )) {
-        if let iced_runtime::Action::Output(message) = action {
-            replies.push(message);
-        }
-    }
+    let replies = task_outputs(update(&mut player, Message::SpectrumTick), "spectrum tick");
 
     assert!(
         replies.iter().any(|message| matches!(
