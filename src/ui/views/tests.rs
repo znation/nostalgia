@@ -10,7 +10,7 @@ use super::browse::{
 };
 use super::equalizer::{
     EQ_SLIDER_HEIGHT, RESPONSE_CURVE_COLUMNS, RESPONSE_CURVE_HEIGHT, RESPONSE_CURVE_LINE_HEIGHT,
-    eq_enabled_label, response_curve_offsets, response_curve_row,
+    eq_enabled_label, preamp_slider_style, response_curve_offsets, response_curve_row,
 };
 use super::mini_transport::{
     MINI_SEEK_ID, MINI_TRANSPORT_HEIGHT, MINI_VOLUME_ID, MINI_VOLUME_WIDTH,
@@ -2470,6 +2470,38 @@ fn equalizer_slider_spec_matches_the_gain_clamp_and_steps_whole_decibels() {
     assert_slider_range_matches_clamp(clamp_gain, GAIN_MIN_DB, GAIN_MAX_DB, EQ_STEP);
 
     assert_eq!(EQ_STEP, 1.0);
+}
+
+#[test]
+fn preamp_slider_style_matches_the_band_tint_for_its_gain() {
+    use iced::Background;
+    use iced::widget::slider;
+    for gain in [-12.0, -6.0, 0.0, 6.0, 12.0, 20.0, f32::NAN] {
+        for status in [
+            slider::Status::Active,
+            slider::Status::Hovered,
+            slider::Status::Dragged,
+        ] {
+            let preamp = preamp_slider_style(gain, status);
+            let band = style::band_slider_style(gain, status);
+            assert_eq!(preamp.rail.backgrounds, band.rail.backgrounds);
+            assert_eq!(preamp.rail.width, band.rail.width);
+            assert_eq!(preamp.rail.border, band.rail.border);
+            assert_eq!(preamp.handle, band.handle);
+        }
+    }
+    let low = preamp_slider_style(-12.0, slider::Status::Active);
+    assert_eq!(
+        low.rail.backgrounds.0,
+        Background::Color(style::band_gain_color(-12.0))
+    );
+    assert_ne!(
+        low.rail.backgrounds.0,
+        style::chrome_slider_style(slider::Status::Active)
+            .rail
+            .backgrounds
+            .0
+    );
 }
 
 // The mockup draws the preamp as a vertical slider in the band row with a dB

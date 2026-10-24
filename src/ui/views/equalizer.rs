@@ -107,9 +107,8 @@ pub(super) fn db_scale_column() -> Column<'static, Message> {
 /// message, and paint style differ, so the construction lives here once.
 ///
 /// `style` receives the slider's interaction status and returns the chrome
-/// style to paint, so the preamp keeps the neutral [`style::chrome_slider_style`]
-/// while each band passes its own gain tint through
-/// [`style::band_slider_style`].
+/// style to paint, so the preamp and each band pass their own gain tint
+/// through [`style::band_slider_style`].
 fn eq_slider_column<'a>(
     value: f32,
     label: &'a str,
@@ -129,12 +128,17 @@ fn eq_slider_column<'a>(
 /// Builds the equalizer's preamp column: a [`VerticalSlider`] over the
 /// `Preamp` label, matching a band column's shape so it sits in the band row.
 /// The slider spans `GAIN_MIN_DB..=GAIN_MAX_DB` in [`EQ_STEP`] increments and
-/// keeps the uniform gray [`style::chrome_slider_style`], not the band gain
-/// tint.
+/// takes the same gain tint as every band slider, from the stored preamp.
 pub(super) fn preamp_column(preamp: f32) -> Column<'static, Message> {
-    eq_slider_column(preamp, "Preamp", Message::EqPreampChange, |status| {
-        style::chrome_slider_style(status)
+    eq_slider_column(preamp, "Preamp", Message::EqPreampChange, move |status| {
+        preamp_slider_style(preamp, status)
     })
+}
+
+/// The preamp slider's paint style: exactly the band tint for the preamp's
+/// gain, so the preamp groove matches a band slider at the same gain.
+pub(super) fn preamp_slider_style(preamp: f32, status: slider::Status) -> slider::Style {
+    style::band_slider_style(preamp, status)
 }
 
 /// Builds the response curve row: one green line segment per

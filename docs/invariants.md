@@ -694,13 +694,15 @@ while the stored spectrum and its poll stay transient.
 `GAIN_MIN_DB` (`-12 dB`), yellow at `0 dB`, and red at `GAIN_MAX_DB` (`+12 dB`), interpolating
 between adjacent stops. Both rail halves carry the tint, so no gray segment remains on either
 side of the thumb. A gain outside the range clamps to the matching end stop, and a NaN gain
-renders the flat yellow instead of an invalid color. The vertical preamp slider in the band row
-keeps its uniform gray groove.
+renders the flat yellow instead of an invalid color. The vertical preamp slider's groove in the band
+row takes the same tint from the stored preamp gain.
 
 **Enforced by.** `style::band_gain_color` and `style::band_slider_style` in `src/ui/style.rs`,
-used by `views::view_equalizer` in `src/ui/views/equalizer.rs`.
+used by `views::view_equalizer` and `views::equalizer::preamp_slider_style` in
+`src/ui/views/equalizer.rs`.
 
-**Pinned by.** `band_gain_color_runs_green_through_yellow_to_red`,
+**Pinned by.** `preamp_slider_style_matches_the_band_tint_for_its_gain` in
+`src/ui/views/tests.rs`, `band_gain_color_runs_green_through_yellow_to_red`,
 `band_gain_color_clamps_and_maps_nan_to_flat`, and
 `band_slider_style_paints_both_rail_halves_and_keeps_the_chrome_thumb` in `src/ui/style.rs`.
 
@@ -718,7 +720,7 @@ either extreme, symmetric left and right. Both rail halves carry
 the fill in every interaction status, so no gray segment remains on either side of the thumb.
 The chrome thumb, the 4px rail width, the 1px dark rail border, and the square geometry are
 unchanged from `chrome_slider_style`, and hover and drag still change only the handle face. The
-seek bar and the equalizer preamp keep the neutral `theme::LCD_BACKGROUND` groove.
+seek bar keeps the neutral `theme::LCD_BACKGROUND` groove.
 
 **Enforced by.** `style::level_slider_style` in `src/ui/style.rs`, used by `views::chrome_slider`
 in `src/ui/views/mod.rs` (the transport row and shade strip pass their fills there), with the

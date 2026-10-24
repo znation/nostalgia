@@ -100,7 +100,8 @@ total (`00:53/3:30`) and shows just the elapsed string when no total is known, s
 state reads the plain `--:--`.
 Each
 equalizer band slider's groove is tinted by that band's own gain, from green at `-12 dB` through
-yellow at `0 dB` to red at `+12 dB`. The app bar sets `NOSTALGIA` between gold tape strips, and
+yellow at `0 dB` to red at `+12 dB`; the preamp slider's groove is tinted the same way by the
+preamp gain. The app bar sets `NOSTALGIA` between gold tape strips, and
 the equalizer and browse sections are each introduced by a matching title band — `NOSTALGIA
 EQUALIZER` above the equalizer panel and `NOSTALGIA LIBRARY` above the browse list.
 Every browse list numbers its rows from 1 like a Winamp playlist and draws ordinary rows in green
