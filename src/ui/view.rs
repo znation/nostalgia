@@ -24,12 +24,13 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // pair. The short state lock resolves only what the strip draws, so the
     // rolled-up frame stays cheap.
     if player.shaded {
-        let (is_playing, volume, elapsed) = {
+        let (is_playing, volume, elapsed, total) = {
             let state = player.state.blocking_lock();
             (
                 state.is_playing,
                 state.volume(),
                 player.now_playing_elapsed(state.current_track.as_deref()),
+                player.now_playing_time(state.current_track.as_deref()),
             )
         };
         return Column::new()
@@ -37,7 +38,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
                 MouseArea::new(
                     Column::new()
                         .push(views::view_title_bar(player.always_on_top))
-                        .push(views::view_shade_strip(is_playing, volume, elapsed)),
+                        .push(views::view_shade_strip(is_playing, volume, elapsed, total)),
                 )
                 .on_scroll(views::volume_wheel_message),
             )
@@ -169,9 +170,11 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // the browse list's own `Scrollable` to take the wheel without touching
     // the volume.
     //
-    // The footer gets its own clone of the elapsed string before the LCD takes
-    // it, so the two can never disagree about elapsed versus remaining mode.
+    // The footer gets its own clones of the elapsed and total strings before
+    // the LCD takes them, so the two can never disagree about elapsed versus
+    // remaining mode or about the track's total.
     let library_elapsed = now_playing_elapsed.clone();
+    let library_total = now_playing_time.clone();
     let player_panels = Column::new()
         .push(views::view_title_bar(player.always_on_top))
         .push(views::view_now_playing(
@@ -237,6 +240,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
             is_playing,
             volume,
             library_elapsed,
+            library_total,
         ))
         .into()
 }

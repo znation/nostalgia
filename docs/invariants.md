@@ -800,8 +800,8 @@ rather than the panic unwinding the event loop.
   resized to that same height (`SHADED_HEIGHT = TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT`). The
   strip keeps a fixed `SHADE_STRIP_HEIGHT`, which aliases the shared
   `MINI_TRANSPORT_HEIGHT`, and normal mode builds no shade strip.
-- The strip shows Previous, Play/Pause, Stop, Next, the current time readout, and a volume
-  slider. Its four buttons emit the same messages as their full transport-row twins
+- The strip shows Previous, Play/Pause, Stop, Next, the elapsed-over-total time readout, and a
+  volume slider. Its four buttons emit the same messages as their full transport-row twins
   (`Message::PreviousTrack`, `Message::PlayPause`, `Message::Stop`, `Message::NextTrack`), each
   pinned to a fixed width so the glyph swap cannot reflow the strip. The strip builds them from
   the shared compact row's `mini_transport_controls`, which projects the full row's
@@ -809,15 +809,19 @@ rather than the panic unwinding the event loop.
   same glyphs, order, widths, and messages; the Play/Pause glyph is `"▶"` while stopped and
   `"II"` while playing. A fill spacer pushes the slider to the right edge, after the
   left-aligned buttons and time readout.
-- The time readout is the same `WinampPlayer::now_playing_elapsed` string the Now Playing bar
-  draws, so the elapsed/remaining choice carries into shade mode. The volume slider writes
-  `Message::VolumeChange` and reads the shared volume.
+- The time readout joins the same `WinampPlayer::now_playing_elapsed` and
+  `WinampPlayer::now_playing_time` strings the Now Playing bar draws as `<elapsed>/<total>`, so
+  the elapsed/remaining choice and the track's total carry into shade mode. When the total is the
+  `--:--` placeholder the readout is just the elapsed string, never `--:--/--:--`. The volume
+  slider writes `Message::VolumeChange` and reads the shared volume.
 
 **Enforced by.** `views::shade::view_shade_strip` wraps
 `views::mini_transport::mini_transport_row` on the title bar's blue chrome;
 `views::mini_transport::mini_transport_controls` projects
 `views::transport::transport_glyphs` (including `views::transport::play_pause_glyph`) into the
-compact buttons; `views::mini_transport::mini_volume_spec` fixes the slider's shared range and
+compact buttons; `views::mini_transport::mini_transport_readout` joins the elapsed and total
+strings and keeps a single time string when the total is unknown;
+`views::mini_transport::mini_volume_spec` fixes the slider's shared range and
 `Message::VolumeChange`; `views::mini_transport::MINI_TRANSPORT_HEIGHT` owns the height, and
 `views::shade::SHADE_STRIP_HEIGHT` aliases it while `views::shade::SHADED_HEIGHT` adds the title
 bar; the shaded branch of `ui::view::view` stacks the bar and strip; and
@@ -829,11 +833,13 @@ bar; the shaded branch of `ui::view::view` stacks the bar and strip; and
 `main_transport_and_shade_strip_share_glyphs_order_and_widths`,
 `shade_height_pins_the_rolled_up_window`,
 `shade_volume_slider_spec_matches_the_shared_volume_range_and_message`,
-`shade_strip_draws_the_time_readout_and_puts_the_volume_slider_at_the_right_edge`, and
+`shade_strip_draws_the_time_readout_and_puts_the_volume_slider_at_the_right_edge`,
+`mini_transport_readout_appends_the_known_total`, and
 `view_shade_strip_keeps_its_fixed_height_for_both_playback_states` (`src/ui/views/tests.rs`);
 `shaded_root_view_is_the_title_bar_plus_the_strip`, `shade_strip_draws_only_while_shaded`,
-`shade_target_size_is_the_title_bar_plus_the_strip`, and
-`title_bar_height_pins_the_shade_strip` (`src/ui/tests.rs`).
+`shade_target_size_is_the_title_bar_plus_the_strip`,
+`title_bar_height_pins_the_shade_strip`, and `root_view_footer_shows_elapsed_over_total`
+(`src/ui/tests.rs`).
 
 **History.** Added with the window-shade transport strip; the earlier shade mode built the title
 bar alone. The strip's controls now come from the shared compact row the library footer uses.
@@ -844,11 +850,13 @@ bar alone. The strip's controls now come from the shared compact row the library
 
 - The row is exactly `MINI_TRANSPORT_HEIGHT` tall and sits on the window face's raised chrome
   below the browse list.
-- It shows Previous, Play/Pause, Stop, Next, the current time readout, and a volume slider. The
-  four buttons emit `Message::PreviousTrack`, `Message::PlayPause`, `Message::Stop`, and
-  `Message::NextTrack`, the Play/Pause glyph follows `is_playing`, and the time label is the same
-  `WinampPlayer::now_playing_elapsed` string the LCD shows, so the elapsed/remaining choice
-  cannot disagree between the two.
+- It shows Previous, Play/Pause, Stop, Next, the elapsed-over-total time readout, and a volume
+  slider. The four buttons emit `Message::PreviousTrack`, `Message::PlayPause`, `Message::Stop`,
+  and `Message::NextTrack`, and the Play/Pause glyph follows `is_playing`. The time label joins
+  the same `WinampPlayer::now_playing_elapsed` and `WinampPlayer::now_playing_time` strings the
+  LCD shows as `<elapsed>/<total>`, so the elapsed/remaining choice and the total cannot disagree
+  between the two; when the total is the `--:--` placeholder the readout is just the elapsed
+  string, never `<elapsed>/--:--`.
 - The volume slider is tagged `MINI_VOLUME_ID`, pinned to `MINI_VOLUME_WIDTH` at the row's right
   edge, and writes `Message::VolumeChange`. No new message, handler, or playback path exists.
 - The footer and the shade strip build from the same row builder, so a glyph, order, width,
@@ -859,16 +867,20 @@ bar alone. The strip's controls now come from the shared compact row the library
 `views::mini_transport::mini_transport_row` for normal mode;
 `views::mini_transport::mini_transport_controls` and
 `views::mini_transport::mini_volume_spec` are the shared control and slider specs;
-`views::mini_transport::MINI_TRANSPORT_HEIGHT`, `MINI_VOLUME_WIDTH`, and `MINI_VOLUME_ID` own the
-geometry and test seam. The normal branch of `ui::view::view` pushes the footer after the browse
-content with a clone of the LCD's elapsed string, while its shaded branch returns before that
-push.
+`views::mini_transport::mini_transport_readout` joins the elapsed and total strings and keeps a
+single time string when the total is unknown;
+`views::mini_transport::MINI_TRANSPORT_HEIGHT`, `MINI_VOLUME_WIDTH`, and
+`MINI_VOLUME_ID` own the geometry and test seam. The normal branch of `ui::view::view` pushes the
+footer after the browse content with clones of the LCD's elapsed and total strings, while its
+shaded branch returns before that push.
 
 **Pinned by.** `view_library_strip_keeps_its_fixed_height`,
-`library_strip_draws_the_four_controls_time_and_right_edge_volume`, and
+`library_strip_draws_the_four_controls_time_and_right_edge_volume`,
+`mini_transport_readout_appends_the_known_total`, and
 `main_transport_and_shade_strip_share_glyphs_order_and_widths` (`src/ui/views/tests.rs`);
-`normal_root_view_draws_the_library_strip_beneath_the_browse_list` and
-`shade_strip_draws_only_while_shaded` (`src/ui/tests.rs`).
+`normal_root_view_draws_the_library_strip_beneath_the_browse_list`,
+`shade_strip_draws_only_while_shaded`, and `root_view_footer_shows_elapsed_over_total`
+(`src/ui/tests.rs`).
 
 **History.** Added 2026-10-23 with the mockups' library-panel transport row; the shade strip was
 refactored onto the same shared row in the same change.

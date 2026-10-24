@@ -5,6 +5,73 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
+### Show the compact transport readout as elapsed over the track's total (planned 2026-10-23 by the plan role) — done 2026-10-23 by the feature role
+
+**Goal.** Match `docs/screenshots/library.png` and `docs/screenshots/hero.png`, whose compact
+footer readout reads `4:05/12:33`: show the current time over the playing track's total in the
+shared compact row used by the library footer and the window-shade strip. The left value stays
+the same `WinampPlayer::now_playing_elapsed` string (so the elapsed/remaining toggle still applies,
+and remaining mode reads `-02:37/3:30`), the right value is the same
+`WinampPlayer::now_playing_time` total the LCD's right edge shows, and when that total is the
+`--:--` placeholder the readout stays that single string rather than `--:--/--:--`. This changes
+only the compact row's text: the LCD, playback, messages, glyphs, volume slider, heights, and
+layout are unchanged.
+
+**Approach.**
+
+- `src/ui/views/mini_transport.rs`: add `pub(super) fn mini_transport_readout<'a>(elapsed:
+  Cow<'a, str>, total: Cow<'a, str>) -> Cow<'a, str>`. It returns `elapsed` unchanged when
+  `total` is `"--:--"` (so a missing or unknown track keeps its current placeholder) and
+  otherwise returns `Cow::Owned(format!("{elapsed}/{total}"))`. Give `mini_transport_row` a
+  `total: Cow<'a, str>` parameter beside `elapsed`, build the drawn `Text` from this helper, and
+  give `view_library_strip` the same parameter. Update the module and function docs to name both
+  time strings and the placeholder rule.
+- `src/ui/views/shade.rs`: give `view_shade_strip` a `total: Cow<'a, str>` parameter beside
+  `elapsed` and pass it to `mini_transport_row`; update its docs to say the readout is
+  elapsed-over-total and keeps the shared toggle.
+- `src/ui/view.rs`: in the shaded branch, resolve `now_playing_time` from the same state lock
+  tuple (using `state.current_track.as_deref()`), and pass it to `view_shade_strip`. In the normal
+  branch, clone the already-resolved `now_playing_time` before it moves into `view_now_playing`
+  (the way `library_elapsed` is cloned) and pass the clone to `view_library_strip`, so the footer
+  and the LCD's right edge read the same total.
+- `src/ui/views/tests.rs`: add `mini_transport_readout_appends_the_known_total` covering
+  `00:53`/`3:30` → `00:53/3:30`, `-02:37`/`3:30` → `-02:37/3:30`, `00:53`/`--:--` → `00:53`, and
+  `--:--`/`--:--` → `--:--`. Update `captured_shade_strip`, `captured_library_strip`, and the
+  existing height and geometry tests to pass a total (for example `Cow::Borrowed("3:30")`) and
+  assert the combined readout reaches the laid-out row. Keep the glyph order, fixed height, and
+  right-edge volume assertions unchanged.
+- `src/ui/tests.rs`: add `root_view_footer_shows_elapsed_over_total`, using
+  `play_song_1_then_browse_to_album_2` and `captured_root_view_text_bounds` with `shaded = false`
+  and then `true`, asserting both trees draw `00:00/3:30` (the known song's cached total) and
+  that neither draws `--:--/--:--`. This pins the two `view` call sites, not just the builders.
+- `README.md`: in the Usage prose, extend the library-footer and shade-strip sentences to say the
+  compact readout shows the elapsed (or remaining) time over the track's total, and shows just
+  the elapsed string (the plain `--:--` placeholder when no track is current) when no total is
+  known. Do not edit the `<!-- tumwater:status:start -->` block.
+- `docs/invariants.md`: in `## Library footer` and `## Window shade`, replace the bullet that
+  calls the compact label "the current time readout" / the same elapsed string with the
+  elapsed-over-total rule and its single-time-string fallback. Name
+  `views::mini_transport::mini_transport_readout` as the enforcer, note that both strips take the
+  same `now_playing_elapsed` and `now_playing_time` strings the LCD resolves, and add the new
+  tests to both `Pinned by` lists.
+
+**Files touched.** `src/ui/views/mini_transport.rs`, `src/ui/views/shade.rs`, `src/ui/view.rs`,
+`src/ui/views/tests.rs`, `src/ui/tests.rs`, `README.md`, `docs/invariants.md`.
+
+**Acceptance criteria.**
+
+- Both the library footer and the shade strip draw `<elapsed>/<total>`, such as `00:53/3:30`, when
+  the current track's total is known; remaining mode still prefixes the elapsed value with `-`
+  (`-02:37/3:30`), and a known total with no reported position reads `00:00/3:30`.
+- When `now_playing_time` returns `--:--` (no current track, or an unknown one), the readout is
+  just the elapsed string, so the empty state still reads `--:--` and never `--:--/--:--`.
+- The compact row's four glyphs, messages, heights, right-edge `MINI_VOLUME_ID` slider, and
+  elapsed/remaining toggle behavior are unchanged, and the LCD's large left readout and
+  right-edge total are unchanged.
+- The root `view` passes the same total string to the strip that it passes to the LCD, in both
+  normal and shaded modes; README and `docs/invariants.md` describe the combined readout, and
+  `make check` passes.
+
 ### Select a browse row, then open it with Open or a second click (planned 2026-10-23 by the plan role) — done 2026-10-23 by the feature role
 
 **Goal.** Match `docs/screenshots/library.png`'s interaction caption — "Click selects,

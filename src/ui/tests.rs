@@ -6613,6 +6613,33 @@ fn normal_root_view_draws_the_library_strip_beneath_the_browse_list() {
     );
 }
 
+// Both strips pin the two `view` call sites, not just the builders: after a
+// song with a cached total is playing, the normal footer and the shade strip
+// must draw the elapsed time over that total, and never the double placeholder.
+#[test]
+fn root_view_footer_shows_elapsed_over_total() {
+    let (mut player, _state) = play_song_1_then_browse_to_album_2();
+
+    for shaded in [false, true] {
+        player.shaded = shaded;
+        let capture = captured_root_view_text_bounds(&player);
+        let expected = "00:00/3:30";
+        assert!(
+            capture.fragments().iter().any(|(text, _)| text == expected),
+            "the shaded={shaded} strip must draw {expected}: {:?}",
+            capture.fragments()
+        );
+        assert!(
+            !capture
+                .fragments()
+                .iter()
+                .any(|(text, _)| text == "--:--/--:--"),
+            "the shaded={shaded} strip must not double the placeholder: {:?}",
+            capture.fragments()
+        );
+    }
+}
+
 // The README and the Browse row order invariant both say Sort renders beside
 // Top. This lays out the whole root `view` — the same column whose separate
 // `.push()` calls once stacked the buttons — and reads the text bounds it

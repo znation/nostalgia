@@ -86,7 +86,10 @@ artist rows show their album count at the right (`2 albums`, `1 album`, and no c
 artist with none), with each song list showing its song count and total playing time beneath
 the rows and artist, album, and playlist lists showing their item count beneath theirs. A
 compact transport strip sits beneath the browse list with Previous, Play/Pause, Stop, Next,
-the current time readout, and a volume slider, the same controls as the window-shade strip.
+an elapsed-over-total time readout, and a volume slider, the same controls as the window-shade
+strip. The readout shows the elapsed (or remaining) time over the track's total (`00:53/3:30`)
+and shows just the elapsed string when no total is known, so the empty state reads the plain
+`--:--`.
 Each
 equalizer band slider's groove is tinted by that band's own gain, from green at `-12 dB` through
 yellow at `0 dB` to red at `+12 dB`. The app bar sets `NOSTALGIA` between gold tape strips, and
@@ -109,9 +112,9 @@ and opening a list starts it at the top. A `Sort` button beside `Top` reorders t
 alphabetically by its rows' rendered text, ignoring case; the reorder is one-shot, so reopening
 the list restores the library's order. The title bar's `A` button toggles always-on-top, its
 shade button (or a double-click on the bar) rolls the window up to the title bar plus a compact
-transport strip with Previous, Play/Pause, Stop, Next, the current time readout, and a volume
-slider, and back. Its `–` and `✕` buttons minimize and close. With the window focused, the
-classic Winamp keys drive playback: Z
+transport strip with Previous, Play/Pause, Stop, Next, the same elapsed-over-total time readout,
+and a volume slider, and back. Its `–` and `✕` buttons minimize and close. With the window
+focused, the classic Winamp keys drive playback: Z
 and B step back and forward, X plays, C pauses, V stops, R toggles Repeat and S toggles Shuffle,
 and the up/down arrows nudge the volume while the left/right arrows seek five seconds back or
 forward. With Shuffle on, Previous retraces the tracks actually played before the current one

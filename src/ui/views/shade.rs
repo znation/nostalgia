@@ -1,6 +1,6 @@
 //! The compact transport strip shown while the window is rolled up in shade
-//! mode: Previous, Play/Pause, Stop, Next, the current time readout, and a
-//! volume slider.
+//! mode: Previous, Play/Pause, Stop, Next, the elapsed-over-total readout, and
+//! a volume slider.
 //!
 //! The strip draws the shared [`super::mini_transport::mini_transport_row`] on its
 //! blue title-bar chrome, so it is a twin of the library footer and the full
@@ -35,20 +35,23 @@ pub(crate) const SHADED_HEIGHT: f32 = TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT;
 /// blue chrome.
 ///
 /// `is_playing` chooses the Play/Pause glyph; `volume` is the slider's value,
-/// and dragging it emits [`Message::VolumeChange`]. `elapsed` is the same
-/// string [`WinampPlayer::now_playing_elapsed`] gives the Now Playing bar, so
-/// its elapsed/remaining choice is shown here too. The shared row's fill
-/// spacer pushes the slider to the right edge, keeping the buttons and time
-/// readout left-aligned.
+/// and dragging it emits [`Message::VolumeChange`]. `elapsed` and `total` are
+/// the same strings [`WinampPlayer::now_playing_elapsed`] and
+/// [`WinampPlayer::now_playing_time`] give the Now Playing bar, so its
+/// elapsed/remaining choice and the track's total are shown here too. The
+/// shared row's fill spacer pushes the slider to the right edge, keeping the
+/// buttons and time readout left-aligned.
 ///
 /// [`WinampPlayer::now_playing_elapsed`]: crate::ui::WinampPlayer::now_playing_elapsed
+/// [`WinampPlayer::now_playing_time`]: crate::ui::WinampPlayer::now_playing_time
 pub fn view_shade_strip<'a>(
     is_playing: bool,
     volume: f32,
     elapsed: Cow<'a, str>,
+    total: Cow<'a, str>,
 ) -> Element<'a, Message> {
     bevel::raised_panel(
-        Container::new(mini_transport_row(is_playing, volume, elapsed))
+        Container::new(mini_transport_row(is_playing, volume, elapsed, total))
             .width(Length::Fill)
             .height(Length::Fixed(SHADE_STRIP_HEIGHT))
             .align_y(Vertical::Center)

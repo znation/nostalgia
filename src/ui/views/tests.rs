@@ -11,7 +11,7 @@ use super::equalizer::{
 };
 use super::mini_transport::{
     MINI_TRANSPORT_HEIGHT, MINI_VOLUME_ID, MINI_VOLUME_WIDTH, mini_transport_controls,
-    mini_volume_spec, view_library_strip,
+    mini_transport_readout, mini_volume_spec, view_library_strip,
 };
 use super::now_playing::text::{format_lcd_elapsed, format_lcd_remaining};
 use super::now_playing::{
@@ -2585,7 +2585,12 @@ fn view_shade_strip_keeps_its_fixed_height_for_both_playback_states() {
     let renderer = layout_capture::headless_renderer();
 
     for is_playing in [false, true] {
-        let mut element = view_shade_strip(is_playing, 0.5, Cow::Borrowed("00:53"));
+        let mut element = view_shade_strip(
+            is_playing,
+            0.5,
+            Cow::Borrowed("00:53"),
+            Cow::Borrowed("3:30"),
+        );
         let mut tree = Tree::new(element.as_widget());
         let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
         let node = element
@@ -2637,12 +2642,37 @@ fn captured_mini_strip(
     (texts, captured.slider, capture.size())
 }
 
-fn captured_shade_strip(elapsed: &str) -> (Vec<String>, Option<Rectangle>, Size) {
-    captured_mini_strip(view_shade_strip(false, 0.5, Cow::Borrowed(elapsed)))
+fn captured_shade_strip(elapsed: &str, total: &str) -> (Vec<String>, Option<Rectangle>, Size) {
+    captured_mini_strip(view_shade_strip(
+        false,
+        0.5,
+        Cow::Borrowed(elapsed),
+        Cow::Borrowed(total),
+    ))
 }
 
-fn captured_library_strip(elapsed: &str) -> (Vec<String>, Option<Rectangle>, Size) {
-    captured_mini_strip(view_library_strip(false, 0.5, Cow::Borrowed(elapsed)))
+fn captured_library_strip(elapsed: &str, total: &str) -> (Vec<String>, Option<Rectangle>, Size) {
+    captured_mini_strip(view_library_strip(
+        false,
+        0.5,
+        Cow::Borrowed(elapsed),
+        Cow::Borrowed(total),
+    ))
+}
+
+// The compact readout joins the elapsed (or remaining) value to the track's
+// total, and keeps the single plain placeholder when no total is known.
+#[test]
+fn mini_transport_readout_appends_the_known_total() {
+    for (elapsed, total, expected) in [
+        ("00:53", "3:30", "00:53/3:30"),
+        ("-02:37", "3:30", "-02:37/3:30"),
+        ("00:53", "--:--", "00:53"),
+        ("--:--", "--:--", "--:--"),
+    ] {
+        let readout = mini_transport_readout(Cow::Borrowed(elapsed), Cow::Borrowed(total));
+        assert_eq!(readout, expected, "{elapsed:?} over {total:?}");
+    }
 }
 
 // The strip's two non-button controls must actually reach the laid-out row:
@@ -2652,10 +2682,11 @@ fn captured_library_strip(elapsed: &str) -> (Vec<String>, Option<Rectangle>, Siz
 #[test]
 fn shade_strip_draws_the_time_readout_and_puts_the_volume_slider_at_the_right_edge() {
     for time in ["00:53", "-02:37"] {
-        let (texts, slider, size) = captured_shade_strip(time);
+        let (texts, slider, size) = captured_shade_strip(time, "3:30");
+        let expected = format!("{time}/3:30");
         assert!(
-            texts.iter().any(|text| text == time),
-            "missing {time} readout: {texts:?}"
+            texts.iter().any(|text| text == &expected),
+            "missing {expected} readout: {texts:?}"
         );
         let slider = slider.unwrap_or_else(|| panic!("missing volume slider: {texts:?}"));
         assert_eq!(slider.width, MINI_VOLUME_WIDTH);
@@ -2688,7 +2719,12 @@ fn view_library_strip_keeps_its_fixed_height() {
     let renderer = layout_capture::headless_renderer();
 
     for is_playing in [false, true] {
-        let mut element = view_library_strip(is_playing, 0.5, Cow::Borrowed("00:53"));
+        let mut element = view_library_strip(
+            is_playing,
+            0.5,
+            Cow::Borrowed("00:53"),
+            Cow::Borrowed("3:30"),
+        );
         let mut tree = Tree::new(element.as_widget());
         let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
         let node = element
@@ -2708,7 +2744,8 @@ fn view_library_strip_keeps_its_fixed_height() {
 #[test]
 fn library_strip_draws_the_four_controls_time_and_right_edge_volume() {
     for time in ["00:53", "-02:37"] {
-        let (texts, slider, size) = captured_library_strip(time);
+        let (texts, slider, size) = captured_library_strip(time, "3:30");
+        let expected = format!("{time}/3:30");
         let glyphs: Vec<&str> = texts
             .iter()
             .map(String::as_str)
@@ -2716,8 +2753,8 @@ fn library_strip_draws_the_four_controls_time_and_right_edge_volume() {
             .collect();
         assert_eq!(glyphs, vec!["◀◀", "▶", "■", "▶▶"]);
         assert!(
-            texts.iter().any(|text| text == time),
-            "missing {time} readout: {texts:?}"
+            texts.iter().any(|text| text == &expected),
+            "missing {expected} readout: {texts:?}"
         );
         let slider = slider.unwrap_or_else(|| panic!("missing volume slider: {texts:?}"));
         assert_eq!(slider.width, MINI_VOLUME_WIDTH);

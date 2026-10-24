@@ -1,5 +1,5 @@
 //! The shared compact transport row: Previous, Play/Pause, Stop, Next, the
-//! current time readout, and a volume slider.
+//! elapsed-over-total time readout, and a volume slider.
 //!
 //! The window-shade strip and the library footer both build this one row, so
 //! their glyphs, order, fixed widths, messages, and slider spec cannot drift
@@ -62,19 +62,41 @@ pub(super) fn mini_volume_spec() -> (f32, f32, f32, f32, fn(f32) -> Message) {
     )
 }
 
+/// The compact row's readout: the elapsed (or remaining) time over the
+/// track's total, such as `00:53/3:30`.
+///
+/// `elapsed` is passed through unchanged when `total` is the `--:--`
+/// placeholder, so the empty and unknown-track states keep their single
+/// placeholder instead of drawing `--:--/--:--`.
+pub(super) fn mini_transport_readout<'a>(
+    elapsed: Cow<'a, str>,
+    total: Cow<'a, str>,
+) -> Cow<'a, str> {
+    if total == "--:--" {
+        elapsed
+    } else {
+        Cow::Owned(format!("{elapsed}/{total}"))
+    }
+}
+
 /// One full-width compact row: the four fixed-width buttons separated by a
-/// 6px gap, the current time readout, a fill spacer, and the volume slider
-/// pinned to the row's right edge.
+/// 6px gap, the elapsed-over-total time readout, a fill spacer, and the volume
+/// slider pinned to the row's right edge.
 ///
 /// `is_playing` chooses the Play/Pause glyph; `volume` is the slider's value;
-/// `elapsed` is the same string [`WinampPlayer::now_playing_elapsed`] gives the
-/// Now Playing bar, so the elapsed/remaining choice is shown here too.
+/// `elapsed` and `total` are the same strings
+/// [`WinampPlayer::now_playing_elapsed`] and [`WinampPlayer::now_playing_time`]
+/// give the Now Playing bar, so the elapsed/remaining choice and the track's
+/// total are shown here too. When the total is unknown the readout stays the
+/// plain `elapsed` string (see [`mini_transport_readout`]).
 ///
 /// [`WinampPlayer::now_playing_elapsed`]: crate::ui::WinampPlayer::now_playing_elapsed
+/// [`WinampPlayer::now_playing_time`]: crate::ui::WinampPlayer::now_playing_time
 pub(super) fn mini_transport_row<'a>(
     is_playing: bool,
     volume: f32,
     elapsed: Cow<'a, str>,
+    total: Cow<'a, str>,
 ) -> Row<'a, Message> {
     let mut row: Row<'a, Message> = Row::new().width(Length::Fill).align_y(Vertical::Center);
     for (label, width, message) in mini_transport_controls(is_playing) {
@@ -84,13 +106,17 @@ pub(super) fn mini_transport_row<'a>(
         let button: Element<'a, Message> = button;
         row = row.push(button).push(spacer(6.0));
     }
-    row.push(Text::new(elapsed).size(14).color(theme::LCD_GREEN))
-        .push(Space::new().width(Length::Fill))
-        .push(
-            Container::new(mini_volume_slider(volume))
-                .id(MINI_VOLUME_ID)
-                .width(Length::Fixed(MINI_VOLUME_WIDTH)),
-        )
+    row.push(
+        Text::new(mini_transport_readout(elapsed, total))
+            .size(14)
+            .color(theme::LCD_GREEN),
+    )
+    .push(Space::new().width(Length::Fill))
+    .push(
+        Container::new(mini_volume_slider(volume))
+            .id(MINI_VOLUME_ID)
+            .width(Length::Fixed(MINI_VOLUME_WIDTH)),
+    )
 }
 
 /// The compact row's volume slider, built from [`mini_volume_spec`] and
@@ -111,15 +137,18 @@ fn mini_volume_slider(volume: f32) -> Element<'static, Message> {
 /// The normal-mode library footer: the shared compact row beneath the browse
 /// list, on the window face's raised chrome.
 ///
+/// `elapsed` and `total` are the same time strings the LCD shows, so the
+/// footer's readout is the elapsed (or remaining) time over the track's total.
 /// It keeps the row's fixed [`MINI_TRANSPORT_HEIGHT`] and its 6px horizontal
 /// padding, so the slider lands at the same right edge as the shade strip's.
 pub fn view_library_strip<'a>(
     is_playing: bool,
     volume: f32,
     elapsed: Cow<'a, str>,
+    total: Cow<'a, str>,
 ) -> Element<'a, Message> {
     bevel::raised_panel(
-        Container::new(mini_transport_row(is_playing, volume, elapsed))
+        Container::new(mini_transport_row(is_playing, volume, elapsed, total))
             .width(Length::Fill)
             .height(Length::Fixed(MINI_TRANSPORT_HEIGHT))
             .align_y(Vertical::Center)
