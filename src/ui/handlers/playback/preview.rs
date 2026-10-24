@@ -18,14 +18,15 @@ use crate::ui::{Message, WinampPlayer};
 use super::{forward_track_id, showing_songs, stop};
 
 /// The position poll's tick: schedule a query of the loaded preview's
-/// position, of its sample rate and channel mode, of its own length, and of
-/// whether it has reached its end. It also advances the paused readout's blink
-/// phase, reusing this one-second poll rather than adding a timer. All four
-/// queries run in tasks, so the UI thread never blocks on the audio backend,
-/// and each reply carries the epoch the query was issued under, so a
-/// transition that lands first invalidates it. While a transport transition is
-/// still reaching the backend, none is issued: the backend would still report
-/// the previous preview, and the epoch no longer identifies it.
+/// position and of whether it has reached its end; while its sample rate and
+/// channel mode or its own length is still unknown, also query that value. It
+/// also advances the paused readout's blink phase, reusing this one-second
+/// poll rather than adding a timer. Every query runs in a task, so the UI
+/// thread never blocks on the audio backend, and each reply carries the epoch
+/// the query was issued under, so a transition that lands first invalidates
+/// it. While a transport transition is still reaching the backend, none is
+/// issued: the backend would still report the previous preview, and the epoch
+/// no longer identifies it.
 pub(in crate::ui) fn position_tick(player: &mut WinampPlayer) -> Task<Message> {
     if player.pending_position_transitions > 0 {
         return Task::none();
@@ -42,22 +43,36 @@ pub(in crate::ui) fn position_tick(player: &mut WinampPlayer) -> Task<Message> {
         async move { position_service.playback_position() },
         move |position| Message::PlaybackPosition { epoch, position },
     );
-    let format_service = player.apple_music_service.clone();
-    let format = Task::perform(
-        async move { format_service.playback_format() },
-        move |format| Message::PlaybackFormat { epoch, format },
-    );
-    let duration_service = player.apple_music_service.clone();
-    let duration = Task::perform(
-        async move { duration_service.playback_duration() },
-        move |duration| Message::PlaybackDuration { epoch, duration },
-    );
+    let mut queries = vec![position];
+    // The format and preview length are read from the decoded source when the
+    // preview is appended and do not change while that player lives; a Stop or
+    // a new selection clears both through `reset_position_readout`. Query each
+    // only while its value is missing, so a steady preview polls the backend
+    // for the position and finished state alone: every reply rebuilds the
+    // whole screen, and those replies would rebuild it for a value that cannot
+    // have changed. A slow preview load, or a source that cannot supply one of
+    // them, leaves that value missing, so the next tick retries until the
+    // backend can answer.
+    if player.playback_format.is_none() {
+        let format_service = player.apple_music_service.clone();
+        queries.push(Task::perform(
+            async move { format_service.playback_format() },
+            move |format| Message::PlaybackFormat { epoch, format },
+        ));
+    }
+    if player.playback_duration.is_none() {
+        let duration_service = player.apple_music_service.clone();
+        queries.push(Task::perform(
+            async move { duration_service.playback_duration() },
+            move |duration| Message::PlaybackDuration { epoch, duration },
+        ));
+    }
     let finished_service = player.apple_music_service.clone();
-    let finished = Task::perform(
+    queries.push(Task::perform(
         async move { finished_service.preview_finished() },
         move |finished| Message::PlaybackFinished { epoch, finished },
-    );
-    Task::batch([position, format, duration, finished])
+    ));
+    Task::batch(queries)
 }
 
 /// Whether a poll reply stamped `epoch` still answers the current preview and

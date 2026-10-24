@@ -6225,6 +6225,122 @@ fn position_tick_blinks_the_elapsed_readout_only_while_paused() {
 }
 
 #[test]
+fn position_tick_skips_the_format_and_length_once_both_are_known() {
+    use futures::StreamExt;
+
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, _state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    player.playback_format = Some(PlaybackFormat {
+        sample_rate_hz: 44_100,
+        channels: 2,
+        bitrate_kbps: Some(256),
+    });
+    player.playback_duration = Some(Duration::from_secs(30));
+    let epoch = player.position_epoch;
+    let mut stream = iced_runtime::task::into_stream(update(&mut player, Message::PositionTick))
+        .expect("the position tick must schedule a task");
+    let mut replies = Vec::new();
+    while let Some(action) = futures::executor::block_on(await_or_timeout(
+        "position tick",
+        TASK_TIMEOUT,
+        stream.next(),
+    )) {
+        if let iced_runtime::Action::Output(message) = action {
+            replies.push(message);
+        }
+    }
+
+    assert!(
+        replies.iter().any(|message| matches!(
+            message,
+            Message::PlaybackPosition { epoch: reply_epoch, .. } if *reply_epoch == epoch
+        )),
+        "the tick must still query the position: {replies:?}"
+    );
+    assert!(
+        !replies.iter().any(|message| matches!(
+            message,
+            Message::PlaybackFormat { .. } | Message::PlaybackDuration { .. }
+        )),
+        "a steady preview's format and length cannot change, so the tick must not query them: {replies:?}"
+    );
+}
+
+// The two optional values are polled independently, so a preview whose source
+// cannot supply one of them still polls for that one without re-querying the
+// known one.
+#[test]
+fn position_tick_queries_only_the_missing_value() {
+    use futures::StreamExt;
+
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, _state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    player.playback_format = Some(PlaybackFormat {
+        sample_rate_hz: 44_100,
+        channels: 2,
+        bitrate_kbps: Some(256),
+    });
+    let epoch = player.position_epoch;
+    let mut replies = Vec::new();
+    let mut stream = iced_runtime::task::into_stream(update(&mut player, Message::PositionTick))
+        .expect("the position tick must schedule a task");
+    while let Some(action) = futures::executor::block_on(await_or_timeout(
+        "position tick",
+        TASK_TIMEOUT,
+        stream.next(),
+    )) {
+        if let iced_runtime::Action::Output(message) = action {
+            replies.push(message);
+        }
+    }
+    assert!(
+        replies.iter().any(|message| matches!(
+            message,
+            Message::PlaybackDuration { epoch: reply_epoch, duration: Some(_) }
+                if *reply_epoch == epoch
+        )),
+        "an unknown length must still be queried: {replies:?}"
+    );
+    assert!(
+        !replies
+            .iter()
+            .any(|message| matches!(message, Message::PlaybackFormat { .. })),
+        "a known format must not be queried again: {replies:?}"
+    );
+
+    player.playback_format = None;
+    player.playback_duration = Some(Duration::from_secs(30));
+    let epoch = player.position_epoch;
+    let mut replies = Vec::new();
+    let mut stream = iced_runtime::task::into_stream(update(&mut player, Message::PositionTick))
+        .expect("the position tick must schedule a task");
+    while let Some(action) = futures::executor::block_on(await_or_timeout(
+        "position tick",
+        TASK_TIMEOUT,
+        stream.next(),
+    )) {
+        if let iced_runtime::Action::Output(message) = action {
+            replies.push(message);
+        }
+    }
+    assert!(
+        replies.iter().any(|message| matches!(
+            message,
+            Message::PlaybackFormat { epoch: reply_epoch, .. } if *reply_epoch == epoch
+        )),
+        "an unknown format must still be queried: {replies:?}"
+    );
+    assert!(
+        !replies
+            .iter()
+            .any(|message| matches!(message, Message::PlaybackDuration { .. })),
+        "a known length must not be queried again: {replies:?}"
+    );
+}
+
+#[test]
 fn spectrum_tick_queries_spectrum_and_carries_the_epoch() {
     use futures::StreamExt;
 

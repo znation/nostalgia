@@ -571,7 +571,9 @@ its internal id, whenever the id is in the known-track index:
   backend's own decoded source. With no reported format both labels stay dim and the prefix is
   absent. Pause keeps the reported format; Stop and a new selection clear it. A format reply issued
   before a Stop or a new selection, or landing while a transport transition is in flight, is
-  dropped.
+  dropped. The poll asks for the format and the preview length only while the value it supplies is
+  missing, so a steady preview's tick queries the position and the finished state alone: both are
+  read once from the decoded source, and Stop or a new selection clears them.
 - The LCD's visualizer row draws exactly `BAND_COUNT` green bars, left to right in band order,
   bottom-aligned inside a fixed-height strip between the title and the status row. The bar heights
   come from the loaded preview's stored spectrum, each band clamped to `0.0..=1.0`; no reported
@@ -702,8 +704,8 @@ source's own total duration, and
 the LCD's status row built by `views::view_now_playing`. The `PlaybackFormat` handler in
 `src/ui/handlers/playback/preview.rs` stores the reply beside the position under the same epoch and
 pending-transition guards, and `reset_position_readout` clears the format on Stop and a new
-selection; `position_tick` batches all three backend queries: the position, the format, and the
-preview's length. `views::seek_bar::seek_bar_value` resolves the thumb and scale from the position
+selection; `position_tick` queries the position and the finished state on every tick, and the
+format and the preview's length only while each is still unknown. `views::seek_bar::seek_bar_value` resolves the thumb and scale from the position
 and the `playback_duration` field, and `views::view_seek_bar` builds the strip: a full-width
 `Message::SeekPreviewChanged`/`Message::SeekPreviewReleased` slider when that scale exists, or an
 empty fixed-height stand-in otherwise. The `PlaybackDuration` handler stores that reply under the
@@ -774,6 +776,8 @@ rather than the panic unwinding the event loop.
 - `position_poll_waits_for_a_selected_tracks_play_to_settle`
 - `an_unrelated_transport_completion_keeps_the_poll_waiting`
 - `position_tick_schedules_a_query`
+- `position_tick_skips_the_format_and_length_once_both_are_known`
+- `position_tick_queries_only_the_missing_value`
 - `position_tick_stream_emits_position_ticks`
 - `a_refused_position_thread_ends_the_tick_stream_instead_of_panicking`
 - `a_refused_position_thread_reports_the_cause_and_the_loss`
