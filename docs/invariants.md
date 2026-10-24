@@ -250,7 +250,7 @@ pins every row's secondary label to the right edge.
 
 **Pinned by.**
 
-- `artist_row_uses_name_and_selects_the_artist_by_index`
+- `artist_row_uses_name_and_album_count`
 - `album_count_label_singular_plural_and_none`
 - `artist_row_puts_its_album_count_at_the_right_edge`
   (all in `src/ui/views/tests.rs`)
@@ -287,7 +287,7 @@ or placeholder as the row's secondary text.
 
 **Pinned by.**
 
-- `album_row_uses_title_and_selects_the_album_by_index`
+- `album_row_uses_title_and_duration`
 - `album_row_shows_the_title_alone_when_the_artist_is_empty`
 - `album_row_shows_a_placeholder_when_the_duration_is_unknown`
   (all in `src/ui/views/tests.rs`)
@@ -695,8 +695,10 @@ rather than the panic unwinding the event loop.
 - `now_playing_elapsed_remaining_counts_down_from_the_total`
 - `format_lcd_elapsed_pads_minutes_and_seconds`
 - `format_lcd_remaining_prefixes_a_minus_and_pads`
+  (all in `src/ui/views/tests.rs`)
 - `toggle_time_display_switches_to_remaining_and_persists`
 - `toggle_time_display_with_no_track_keeps_the_placeholder`
+  (both in `src/ui/tests.rs`)
 - `marquee_text_keeps_a_line_that_fits`
 - `marquee_text_windows_from_the_offset`
 - `marquee_text_wraps_through_the_gap_to_the_start`
