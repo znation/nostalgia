@@ -33,9 +33,9 @@ use super::{
     BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, EQ_STEP, TITLE_BAR_HEIGHT, VOLUME_MAX, VOLUME_MIN,
     VOLUME_STEP, can_go_back, can_retry_artists, format_track_time, seek_bar_value, view_albums,
     view_all_albums, view_all_albums_button, view_all_songs, view_all_songs_button, view_artists,
-    view_back_button, view_browse_nav_buttons, view_equalizer, view_now_playing, view_playlists,
-    view_playlists_button, view_retry_button, view_search_box, view_seek_bar, view_songs,
-    view_title_band, view_title_bar, view_transport_controls, volume_wheel_message,
+    view_back_button, view_browse_nav_buttons, view_equalizer, view_now_playing, view_open_button,
+    view_playlists, view_playlists_button, view_retry_button, view_search_box, view_seek_bar,
+    view_songs, view_title_band, view_title_bar, view_transport_controls, volume_wheel_message,
 };
 use crate::audio::{PlaybackFormat, Spectrum};
 use crate::equalizer::{
@@ -58,29 +58,20 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::time::Duration;
 
-// Each row maps one library entry to the (title, secondary label, press
-// message, current-track flag) tuple that `scrollable_list` renders as a
-// button. Wrong label text or a swapped selection message would silently
-// break the browse UI, so the mapping is the contract these tests pin
-// down — the flag is pinned too, since it drives the `▶`/highlight
-// marker.
+// Each row maps one library entry to the (title, secondary label,
+// current-track flag) tuple that `scrollable_list` renders as a button. Wrong
+// label text would silently break the browse UI, so the mapping is the
+// contract these tests pin down. The press message is the list's, built from
+// the row position and list epoch (see `scrollable_list`), and the flag is
+// pinned too, since it drives the `▶`/highlight marker.
 
 #[test]
-fn artist_row_uses_name_and_selects_the_artist_by_index() {
-    // The row carries the position `view_artists` enumerates and the
-    // list's epoch, not the id: the update loop resolves that index back
-    // to the artist. The index-to-id mapping is pinned by
-    // `artist_selected_fetches_the_artists_albums_into_the_player` in
-    // `ui::tests`.
+fn artist_row_uses_name_and_album_count() {
     let mut artist = sample_artist();
     artist.album_count = 2;
-    let (title, label, message, is_current) = artist_row(0, 0, &artist);
+    let (title, label, is_current) = artist_row(&artist);
     assert_eq!(title, "The Sample Band");
     assert_eq!(label, "2 albums");
-    assert!(matches!(
-        message,
-        Message::ArtistSelected { epoch: 0, index: 0 }
-    ));
     assert!(!is_current);
 }
 
@@ -96,9 +87,10 @@ fn scrollable_list_clips_an_overlong_title_to_its_column() {
         [(
             Cow::Borrowed(long_title.as_str()),
             Cow::Borrowed("3:30"),
-            Message::Ignored,
             false,
         )],
+        0,
+        None,
         "No songs",
     );
     let mut renderer = layout_capture::headless_renderer();
@@ -133,7 +125,7 @@ fn album_count_label_singular_plural_and_none() {
 fn artist_row_puts_its_album_count_at_the_right_edge() {
     let mut artist = sample_artist();
     artist.album_count = 2;
-    let mut element = scrollable_list([artist_row(0, 0, &artist)], "No artists");
+    let mut element = scrollable_list([artist_row(&artist)], 0, None, "No artists");
     let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
 
     let title = capture.find("The Sample Band");
@@ -150,20 +142,12 @@ fn artist_row_puts_its_album_count_at_the_right_edge() {
 }
 
 #[test]
-fn album_row_uses_title_and_selects_the_album_by_index() {
-    // As with `artist_row`: the message carries the row's position and the
-    // list's epoch, and
-    // `album_selected_fetches_the_albums_songs_into_the_player` in
-    // `ui::tests` pins the index-to-id mapping.
+fn album_row_uses_title_and_duration() {
     let mut album = sample_album();
     album.duration_ms = 630_000;
-    let (title, label, message, is_current) = album_row(0, 0, &album);
+    let (title, label, is_current) = album_row(&album);
     assert_eq!(title, "The Sample Band - First Record");
     assert_eq!(label, "10:30");
-    assert!(matches!(
-        message,
-        Message::AlbumSelected { epoch: 0, index: 0 }
-    ));
     assert!(!is_current);
 }
 
@@ -174,14 +158,10 @@ fn album_row_shows_the_title_alone_when_the_artist_is_empty() {
     let mut album = sample_album();
     album.artist = String::new();
     album.duration_ms = 95_000;
-    let (title, label, message, is_current) = album_row(0, 0, &album);
+    let (title, label, is_current) = album_row(&album);
     assert_eq!(title, "First Record");
     assert!(matches!(title, std::borrow::Cow::Borrowed(_)));
     assert_eq!(label, "1:35");
-    assert!(matches!(
-        message,
-        Message::AlbumSelected { epoch: 0, index: 0 }
-    ));
     assert!(!is_current);
 }
 
@@ -191,50 +171,30 @@ fn album_row_shows_the_title_alone_when_the_artist_is_empty() {
 #[test]
 fn album_row_shows_a_placeholder_when_the_duration_is_unknown() {
     let album = sample_album();
-    let (_, label, message, is_current) = album_row(0, 0, &album);
+    let (_, label, is_current) = album_row(&album);
     assert_eq!(label, "--:--");
-    assert!(matches!(
-        message,
-        Message::AlbumSelected { epoch: 0, index: 0 }
-    ));
     assert!(!is_current);
 }
 
 #[test]
-fn playlist_row_uses_name_and_selects_the_playlist_by_index() {
-    // As with the other rows: the message carries the row's position and
-    // the list's epoch, and
-    // `playlist_selected_in_playlists_loads_its_songs_and_back_returns_to_playlists`
-    // in `ui::tests` pins the index-to-id mapping.
+fn playlist_row_uses_name_and_the_view_songs_hint() {
     let playlist = sample_playlist();
-    let (title, label, message, is_current) = playlist_row(0, 0, &playlist);
+    let (title, label, is_current) = playlist_row(&playlist);
     assert_eq!(title, "Morning Drive");
     assert_eq!(label, "View Songs");
-    assert!(matches!(
-        message,
-        Message::PlaylistSelected { epoch: 0, index: 0 }
-    ));
     assert!(!is_current);
 }
 
 #[test]
-fn song_row_uses_title_and_selects_the_song_by_index() {
-    // As with the other rows: the message carries the row's position and
-    // the list's epoch, and
-    // `track_selected_starts_playback_of_the_selected_track` in
-    // `ui::tests` pins the index-to-id mapping. Without a cached title the
-    // row composes the display title itself, so a list stored without caches
-    // still reads `<artist> - <title>`.
+fn song_row_uses_title_and_length() {
+    // Without a cached title the row composes the display title itself, so a
+    // list stored without caches still reads `<artist> - <title>`.
     let song = sample_song();
-    let (title, label, message, is_current) = song_row(0, 0, &song, None, None, None);
+    let (title, label, is_current) = song_row(&song, None, None, None);
     assert_eq!(title, "The Sample Band - Opening");
     // `sample_song` is 210_000 ms long, so the secondary label is its
     // `m:ss` length rather than the old static "Play" hint.
     assert_eq!(label, "3:30");
-    assert!(matches!(
-        message,
-        Message::TrackSelected { epoch: 0, index: 0 }
-    ));
     assert!(!is_current);
 }
 
@@ -245,7 +205,7 @@ fn song_row_prefers_the_lists_cached_title() {
     // A cached value that differs from the song's fields proves the row
     // borrows the cache; the `None` tests pin the fallback.
     let song = sample_song();
-    let (title, _, _, _) = song_row(0, 0, &song, Some("Cached - Title"), None, None);
+    let (title, _, _) = song_row(&song, Some("Cached - Title"), None, None);
     assert_eq!(title, "Cached - Title");
 }
 
@@ -255,7 +215,7 @@ fn song_row_uses_the_title_alone_when_the_artist_is_empty() {
     // dangling `" - "` prefix.
     let mut song = sample_song();
     song.artist = String::new();
-    let (title, _, _, _) = song_row(0, 0, &song, None, None, None);
+    let (title, _, _) = song_row(&song, None, None, None);
     assert_eq!(title, "Opening");
 }
 
@@ -266,7 +226,7 @@ fn song_row_prefers_the_lists_cached_length_label() {
     // cached label that differs from the duration's formatting proves the
     // row borrows the cache; the `None` tests above pin the fallback.
     let song = sample_song();
-    let (_, label, _, _) = song_row(0, 0, &song, None, Some("1:23"), None);
+    let (_, label, _) = song_row(&song, None, Some("1:23"), None);
     assert_eq!(label, "1:23");
 }
 
@@ -276,7 +236,7 @@ fn song_row_shows_an_unknown_duration_as_blank_time() {
     // `--:--` placeholder as the Now Playing bar, not `0:00`.
     let mut song = sample_song();
     song.duration_ms = 0;
-    let (_, label, _, _) = song_row(0, 0, &song, None, None, None);
+    let (_, label, _) = song_row(&song, None, None, None);
     assert_eq!(label, "--:--");
 }
 
@@ -285,13 +245,13 @@ fn song_row_marks_the_current_track() {
     // The flag is true only when `current_track` names exactly this
     // song; a different id — or no track at all — leaves the row
     // unmarked, so the `▶`/highlight marker follows the playback state.
-    let (_, _, _, is_current) = song_row(0, 0, &sample_song(), None, None, Some("song-1"));
+    let (_, _, is_current) = song_row(&sample_song(), None, None, Some("song-1"));
     assert!(is_current);
 
-    let (_, _, _, is_current) = song_row(0, 0, &sample_song(), None, None, Some("other-song"));
+    let (_, _, is_current) = song_row(&sample_song(), None, None, Some("other-song"));
     assert!(!is_current);
 
-    let (_, _, _, is_current) = song_row(0, 0, &sample_song(), None, None, None);
+    let (_, _, is_current) = song_row(&sample_song(), None, None, None);
     assert!(!is_current);
 }
 
@@ -1855,15 +1815,27 @@ fn construct_every_browse_view(
     epoch: u64,
     loading: bool,
 ) {
-    let _artists = view_artists(artists, epoch, loading, None);
-    let _albums = view_albums(albums, epoch, loading, None);
-    let _songs = view_songs(songs, &[], &[], epoch, loading, None, None, false);
-    let _songs_marked = view_songs(songs, &[], &[], epoch, loading, None, Some("song-1"), false);
-    let _songs_searched = view_songs(songs, &[], &[], epoch, loading, None, None, true);
-    let _all_songs = view_all_songs(songs, &[], &[], epoch, loading, None, None);
-    let _all_songs_marked = view_all_songs(songs, &[], &[], epoch, loading, None, Some("song-1"));
-    let _all_albums = view_all_albums(albums, epoch, loading, None);
-    let _playlists = view_playlists(playlists, epoch, loading, None);
+    let _artists = view_artists(artists, epoch, None, loading, None);
+    let _albums = view_albums(albums, epoch, None, loading, None);
+    let _songs = view_songs(songs, &[], &[], epoch, None, loading, None, None, false);
+    let _songs_marked = view_songs(
+        songs,
+        &[],
+        &[],
+        epoch,
+        None,
+        loading,
+        None,
+        Some("song-1"),
+        false,
+    );
+    let _songs_selected = view_songs(songs, &[], &[], epoch, Some(0), loading, None, None, false);
+    let _songs_searched = view_songs(songs, &[], &[], epoch, None, loading, None, None, true);
+    let _all_songs = view_all_songs(songs, &[], &[], epoch, None, loading, None, None);
+    let _all_songs_marked =
+        view_all_songs(songs, &[], &[], epoch, None, loading, None, Some("song-1"));
+    let _all_albums = view_all_albums(albums, epoch, None, loading, None);
+    let _playlists = view_playlists(playlists, epoch, None, loading, None);
 }
 
 // The footer beneath a loaded song list must report the exact count and total
@@ -2074,10 +2046,16 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
     );
     let _back = view_back_button();
     let _retry = view_retry_button();
+    let _open = view_open_button();
     let _nav = view_browse_nav_buttons();
     let _all_songs = view_all_songs_button();
     let _all_albums = view_all_albums_button();
     let _playlists = view_playlists_button();
+}
+
+#[test]
+fn browse_open_button_constructs() {
+    let _open = view_open_button();
 }
 
 // The search box is an iced `TextInput`, whose placeholder and callbacks

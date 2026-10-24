@@ -961,6 +961,110 @@ fn selection_messages_with_a_stale_epoch_or_index_do_nothing() {
     assert!(state.blocking_lock().current_track.is_none());
 }
 
+// A browse row's first press only selects it: the view, the fetched lists,
+// and the playing track must all stay as they were, and no task may be
+// scheduled, so a click cannot drill in or start playback by itself.
+#[test]
+fn a_single_row_press_selects_without_opening() {
+    let (mut player, _state) = test_player();
+    seed_browse_lists(&mut player);
+    player.artists.loading = false;
+
+    assert_message_schedules_no_work(&mut player, Message::SelectRow { epoch: 0, index: 0 });
+
+    assert_view(&player, CurrentView::Artists);
+    assert_eq!(player.artists.selected(), Some(0));
+}
+
+// The second press on the row that is already selected is what a
+// double-click delivers: it dispatches the existing ArtistSelected action,
+// which steps to Albums exactly as the old single press did.
+#[test]
+fn a_second_press_on_the_selected_row_opens_it() {
+    let (mut player, _state) = test_player();
+    seed_browse_lists(&mut player);
+    player.artists.loading = false;
+    let epoch = player.artists.epoch;
+
+    assert_message_schedules_no_work(&mut player, Message::SelectRow { epoch, index: 0 });
+    let task = update(&mut player, Message::SelectRow { epoch, index: 0 });
+    let opened = futures::executor::block_on(task_output(task, "second row press"));
+    match &opened {
+        Message::ArtistSelected { epoch: e, index: 0 } if *e == epoch => {}
+        other => panic!("the second press must dispatch the artist open: {other:?}"),
+    }
+
+    let _ = update(&mut player, opened);
+    assert_view(&player, CurrentView::Albums);
+}
+
+// The Open button opens the selected song through the existing TrackSelected
+// path, so the pressed row's index resolves to the same playback the old
+// single press started.
+#[tokio::test]
+async fn open_selected_opens_the_selected_song() {
+    let (mut player, state) = test_player();
+    seed_browse_lists(&mut player);
+    player.current_view = CurrentView::Songs;
+    player.songs.loading = false;
+    let epoch = player.songs.epoch;
+    assert_message_schedules_no_work(&mut player, Message::SelectRow { epoch, index: 0 });
+
+    let task = update(&mut player, Message::OpenSelected);
+    let opened = futures::executor::block_on(task_output(task, "open selected song"));
+    match &opened {
+        Message::TrackSelected { epoch: e, index: 0 } if *e == epoch => {}
+        other => panic!("Open must dispatch the selected song: {other:?}"),
+    }
+    drive_task(
+        update(&mut player, opened),
+        "playback",
+        |message| match message {
+            Message::TrackPlayed { committed, .. } => assert!(committed),
+            other => panic!("unexpected playback task output: {other:?}"),
+        },
+    )
+    .await;
+
+    let state = state.lock().await;
+    assert_eq!(state.current_track.as_deref(), Some("song-1"));
+    assert!(state.is_playing);
+}
+
+#[test]
+fn open_selected_with_nothing_selected_is_a_noop() {
+    let (mut player, _state) = test_player();
+    seed_browse_lists(&mut player);
+    player.current_view = CurrentView::Albums;
+
+    assert_message_schedules_no_work(&mut player, Message::OpenSelected);
+
+    assert_view(&player, CurrentView::Albums);
+    assert_eq!(player.albums.selected(), None);
+}
+
+#[test]
+fn replacing_or_sorting_rows_clears_the_selection() {
+    let (mut player, _state) = test_player();
+    let mut second = sample_artist();
+    second.id = "artist-2".to_string();
+    second.name = "Zzz".to_string();
+    player.artists.items = vec![sample_artist(), second];
+    player.artists.loading = false;
+    let epoch = player.artists.epoch;
+    let _ = update(&mut player, Message::SelectRow { epoch, index: 0 });
+    assert_eq!(player.artists.selected(), Some(0));
+
+    let _ = update(&mut player, Message::SortBrowse);
+    assert_eq!(player.artists.selected(), None);
+
+    let epoch = player.artists.epoch;
+    let _ = update(&mut player, Message::SelectRow { epoch, index: 0 });
+    assert_eq!(player.artists.selected(), Some(0));
+    let _ = update(&mut player, Message::ArtistsLoaded(vec![sample_artist()]));
+    assert_eq!(player.artists.selected(), None);
+}
+
 // The browse hierarchy must be navigable back up (Songs → Albums →
 // Artists), not just down: without `Message::Back` a session is a one-way
 // corridor that ends stuck at the bottom of the hierarchy. These arms use
@@ -6532,6 +6636,23 @@ fn browse_nav_buttons_place_sort_beside_top() {
         sort.x >= top.x + top.width,
         "Sort must render to the right of Top: {:?}",
         capture.fragments()
+    );
+}
+
+// Open is a browse-list control: it sits above the list it opens from, so the
+// root must push it above the first row on every level.
+#[test]
+fn browse_open_button_sits_above_the_browse_list() {
+    let (mut player, _state) = test_player();
+    player.artists.items = vec![sample_artist()];
+    player.artists.loading = false;
+
+    let capture = captured_root_view_text_bounds(&player);
+    let open = capture.find("Open");
+    let row = capture.find("The Sample Band");
+    assert!(
+        open.y < row.y,
+        "Open must sit above the browse list's first row: {open:?}, row {row:?}"
     );
 }
 

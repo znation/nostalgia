@@ -142,11 +142,17 @@ fn one_line_title<'a>(title: Cow<'a, str>) -> Cow<'a, str> {
 }
 
 /// Builds a scrollable list where each item is a button showing its 1-based
-/// position, a title, and a secondary label pinned to the row's right edge,
-/// emitting the given message on press. Shared by every browse list view. The
-/// last tuple element marks the currently playing row: its prefix carries a
-/// `▶` marker first and it gets a highlighted background so the list reads as
-/// a playlist. Only `song_row` ever sets the flag to true.
+/// position, a title, and a secondary label pinned to the row's right edge.
+/// The tuple's final element marks the currently playing row: its prefix
+/// carries a `▶` marker first and it gets a highlighted background so the
+/// list reads as a playlist. Only `song_row` ever sets the flag to true.
+///
+/// Every row button emits [`Message::SelectRow`] with the list's `epoch` and
+/// the row's position: a single press only selects the row (drawing the same
+/// blue bar as the playing row when `selected` names it), and a second press
+/// on the selected row or the Open button dispatches the existing open
+/// action. The `▶` prefix stays tied to `is_current`, so a selected row is
+/// highlighted without being mistaken for the playing one.
 ///
 /// A title carrying a line break is flattened to one line, and a title too
 /// long for its column is clipped there, so it can neither grow the row past
@@ -167,13 +173,15 @@ fn one_line_title<'a>(title: Cow<'a, str>) -> Cow<'a, str> {
 /// because that would need invalidating on every store for no correctness
 /// gain.
 pub(in crate::ui::views) fn scrollable_list<'a>(
-    items: impl IntoIterator<Item = (Cow<'a, str>, Cow<'a, str>, Message, bool)>,
+    items: impl IntoIterator<Item = (Cow<'a, str>, Cow<'a, str>, bool)>,
+    epoch: u64,
+    selected: Option<usize>,
     empty_label: &'a str,
 ) -> Element<'a, Message> {
     let mut column = Column::new().padding(BROWSE_LIST_PADDING);
     let mut is_empty = true;
 
-    for (position, (title, label, message, is_current)) in items.into_iter().enumerate() {
+    for (position, (title, label, is_current)) in items.into_iter().enumerate() {
         is_empty = false;
         let button = Button::new(
             Row::new()
@@ -196,11 +204,15 @@ pub(in crate::ui::views) fn scrollable_list<'a>(
                 .push(Text::new(label).size(14)),
         )
         .width(Length::Fill)
-        .on_press(message)
+        .on_press(Message::SelectRow {
+            epoch,
+            index: position,
+        })
         .style(|_theme, status| style::playlist_row_style(status));
-        // The current row keeps the playlist row's text and hover/press face
-        // and only swaps the background for the highlight color.
-        column = column.push(if is_current {
+        // The selected and current rows keep the playlist row's text and
+        // hover/press face and only swap the background for the highlight
+        // color; the prefix already distinguishes the current track.
+        column = column.push(if is_current || selected == Some(position) {
             button.style(|_theme, status| current_row_style(status))
         } else {
             button
@@ -220,24 +232,18 @@ pub(in crate::ui::views) fn scrollable_list<'a>(
 }
 
 /// The browse row an artist becomes: its name, its album count (``"1 album"``,
-/// ``"2 albums"``, or no label when it has none), the message emitted when it
-/// is pressed, and the current-track flag. `epoch` is
-/// the loaded-list epoch and `index` the artist's position in that list; both
-/// become the selection message's payload, so building a row never clones the
-/// artist's id — the update loop resolves the index back to an id only when
-/// the row is actually pressed, and rejects the press if the list has since
-/// been replaced. Kept out of `view_artists` so the title/label/selection
-/// contract is testable without an iced renderer. Artists are never the
-/// currently playing row, so the flag is always false.
+/// ``"2 albums"``, or no label when it has none), and the current-track flag.
+/// Artists are never the currently playing row, so the flag is always false.
+/// The press message is [`Message::SelectRow`], built by [`scrollable_list`]
+/// from the row's position and its list's epoch, so building a row never
+/// clones the artist's id — the update loop resolves the index back to an id
+/// only when the row is actually opened.
 pub(in crate::ui::views) fn artist_row<'a>(
-    epoch: u64,
-    index: usize,
     artist: &'a Artist,
-) -> (Cow<'a, str>, Cow<'a, str>, Message, bool) {
+) -> (Cow<'a, str>, Cow<'a, str>, bool) {
     (
         Cow::Borrowed(artist.name.as_str()),
         album_count_label(artist.album_count),
-        Message::ArtistSelected { epoch, index },
         false,
     )
 }
@@ -257,40 +263,27 @@ pub(in crate::ui::views) fn album_count_label(count: usize) -> Cow<'static, str>
 /// The browse row an album becomes: its display title (`<artist> - <title>`,
 /// or the title alone when the artist is empty; see [`Album::display_title`]),
 /// its total running time ([`format_track_time`], or `--:--` when the source
-/// supplied no songs), the message emitted when it is pressed, and the
-/// current-track flag. `epoch`
-/// and `index` are the loaded-list epoch and the album's position in that
-/// list, carried so building a row never clones the album's id (see
-/// [`artist_row`]). Albums are never the currently playing row, so the flag
-/// is always false.
-pub(in crate::ui::views) fn album_row<'a>(
-    epoch: u64,
-    index: usize,
-    album: &'a Album,
-) -> (Cow<'a, str>, Cow<'a, str>, Message, bool) {
+/// supplied no songs), and the current-track flag. Albums are never the
+/// currently playing row, so the flag is always false. [`scrollable_list`]
+/// supplies the press message from the row's position and list epoch.
+pub(in crate::ui::views) fn album_row<'a>(album: &'a Album) -> (Cow<'a, str>, Cow<'a, str>, bool) {
     (
         album.display_title(),
         Cow::Owned(format_track_time(album.duration_ms)),
-        Message::AlbumSelected { epoch, index },
         false,
     )
 }
 
-/// The browse row a playlist becomes: its name, the "View Songs" hint, the
-/// message emitted when it is pressed, and the current-track flag. `epoch` and
-/// `index` are the loaded-list epoch and the playlist's position in that list,
-/// carried so building a row never clones the playlist's id (see
-/// [`artist_row`]). Playlists are never the currently playing row, so the flag
-/// is always false.
+/// The browse row a playlist becomes: its name, the "View Songs" hint, and
+/// the current-track flag. Playlists are never the currently playing row, so
+/// the flag is always false. [`scrollable_list`] supplies the press message
+/// from the row's position and list epoch.
 pub(in crate::ui::views) fn playlist_row<'a>(
-    epoch: u64,
-    index: usize,
     playlist: &'a Playlist,
-) -> (Cow<'a, str>, Cow<'a, str>, Message, bool) {
+) -> (Cow<'a, str>, Cow<'a, str>, bool) {
     (
         Cow::Borrowed(playlist.name.as_str()),
         Cow::Borrowed("View Songs"),
-        Message::PlaylistSelected { epoch, index },
         false,
     )
 }
@@ -298,12 +291,10 @@ pub(in crate::ui::views) fn playlist_row<'a>(
 /// The browse row a song becomes: its display title (`<artist> - <title>`,
 /// or the title alone when the artist is empty; see [`Song::display_title`]),
 /// the track's formatted length ([`format_track_time`]) as the secondary
-/// label, the message emitted when it is pressed, and whether it is the
-/// currently playing track (true only when `current_track` names this song).
-/// `epoch` and `index` are the loaded-list epoch and the song's position in
-/// that list, carried so building a row never clones the song's id (see
-/// [`artist_row`]). The flag feeds `scrollable_list`'s `▶` + highlight
-/// marker, so the song list reads as a playlist.
+/// label, and whether it is the currently playing track (true only when
+/// `current_track` names this song). The flag feeds [`scrollable_list`]'s `▶`
+/// and highlight marker, so the song list reads as a playlist; the press message
+/// is that builder's [`Message::SelectRow`], not this row's.
 ///
 /// `cached_title` and `cached_label` are the title and length the loaded list
 /// stored for this row (see `BrowseList::store_with_row_text`), borrowed so a
@@ -312,13 +303,11 @@ pub(in crate::ui::views) fn playlist_row<'a>(
 /// back to composing the title and formatting the duration for this row, so
 /// the rendered row is unchanged.
 pub(in crate::ui::views) fn song_row<'a>(
-    epoch: u64,
-    index: usize,
     song: &'a Song,
     cached_title: Option<&'a str>,
     cached_label: Option<&'a str>,
     current_track: Option<&str>,
-) -> (Cow<'a, str>, Cow<'a, str>, Message, bool) {
+) -> (Cow<'a, str>, Cow<'a, str>, bool) {
     let title = match cached_title {
         Some(title) => Cow::Borrowed(title),
         None => song.display_title(),
@@ -327,32 +316,23 @@ pub(in crate::ui::views) fn song_row<'a>(
         Some(label) => Cow::Borrowed(label),
         None => Cow::Owned(format_track_time(song.duration_ms)),
     };
-    (
-        title,
-        label,
-        Message::TrackSelected { epoch, index },
-        Some(song.id.as_str()) == current_track,
-    )
+    (title, label, Some(song.id.as_str()) == current_track)
 }
 
 /// Builds an album list: the shared body of [`super::view_albums`] and
 /// [`super::view_all_albums`], mapping each album to an [`album_row`] by its
-/// position in `albums` and carrying `epoch`. `placeholder` is the caller's
-/// [`browse_placeholder`] wording for an empty list. A non-empty list also
-/// appends its item-count footer ([`list_with_count`]).
+/// position in `albums` and carrying `epoch` and the selected row into
+/// [`scrollable_list`]. `placeholder` is the caller's [`browse_placeholder`]
+/// wording for an empty list. A non-empty list also appends its item-count
+/// footer ([`list_with_count`]).
 pub(in crate::ui::views) fn album_list<'a>(
     albums: &'a [Album],
     epoch: u64,
+    selected: Option<usize>,
     placeholder: &'a str,
 ) -> Element<'a, Message> {
     list_with_count(
-        scrollable_list(
-            albums
-                .iter()
-                .enumerate()
-                .map(|(index, album)| album_row(epoch, index, album)),
-            placeholder,
-        ),
+        scrollable_list(albums.iter().map(album_row), epoch, selected, placeholder),
         albums.len(),
         "album",
         "albums",
@@ -425,33 +405,35 @@ pub(in crate::ui::views) fn song_list_summary(songs: &[Song]) -> String {
 }
 
 /// Builds a song list: the shared body of [`super::view_songs`] and
-/// [`super::view_all_songs`], mapping each song to a [`song_row`] by its position in
-/// `songs` and pairing it with the cached title and length at the same index
-/// (see [`song_row`]). `placeholder` is the caller's [`browse_placeholder`]
-/// wording for an empty list; it differs between the two callers because only
-/// a search reads as "no matches". A non-empty list also appends the
-/// count-and-time footer ([`song_list_summary`]) beneath its rows; an empty
-/// list returns only the scrollable so its loading, error, or empty
-/// placeholder stays alone.
+/// [`super::view_all_songs`], mapping each song to a [`song_row`] by its
+/// position in `songs` and pairing it with the cached title and length at the
+/// same index (see [`song_row`]). `epoch` and `selected` reach
+/// [`scrollable_list`], so every row press selects and the selected row draws
+/// the blue bar. `placeholder` is the caller's [`browse_placeholder`] wording
+/// for an empty list; it differs between the two callers because only a search
+/// reads as "no matches". A non-empty list also appends the count-and-time
+/// footer ([`song_list_summary`]) beneath its rows; an empty list returns only
+/// the scrollable so its loading, error, or empty placeholder stays alone.
 pub(in crate::ui::views) fn song_list<'a>(
     songs: &'a [Song],
     titles: &'a [String],
     labels: &'a [String],
     epoch: u64,
+    selected: Option<usize>,
     current_track: Option<&str>,
     placeholder: &'a str,
 ) -> Element<'a, Message> {
     let list = scrollable_list(
         songs.iter().enumerate().map(|(index, song)| {
             song_row(
-                epoch,
-                index,
                 song,
                 titles.get(index).map(String::as_str),
                 labels.get(index).map(String::as_str),
                 current_track,
             )
         }),
+        epoch,
+        selected,
         placeholder,
     );
     if songs.is_empty() {

@@ -111,6 +111,16 @@ pub(in crate::ui) enum Message {
     EqPresetSelected(Preset),
     NextTrack,
     PreviousTrack,
+    // A browse row's single press: select that row (the view paints the
+    // selection bar) without opening it. A second press on the row that is
+    // already selected opens it, so a double-click reaches the existing
+    // artist/album/track/playlist action on its second press. The epoch and
+    // index travel like the selection messages below, so a press that
+    // outlived its list cannot select or open the wrong row.
+    SelectRow {
+        epoch: u64,
+        index: usize,
+    },
     // The selection messages carry a row's index into the list that rendered
     // it, plus that list's epoch. Building a row therefore never clones the
     // entry's `String` id (the view rebuilds on every message, so that clone
@@ -134,6 +144,10 @@ pub(in crate::ui) enum Message {
         epoch: u64,
         index: usize,
     },
+    // The browse view's Open button: open the row selected in the showing
+    // list through the same message a second press dispatches. With nothing
+    // selected it is a no-op and schedules no task.
+    OpenSelected,
     Back,
     // The browse view's Top button: snap the current list back to its first
     // row. The arm schedules an iced scroll operation on the browse list's

@@ -92,6 +92,85 @@ pub(in crate::ui) fn album_selected(
     ))
 }
 
+/// A browse row was pressed once. Select it in the showing list; only a
+/// second press on the row that is already selected opens it, through
+/// [`open_row`]. A stale epoch or out-of-range index is rejected by
+/// `BrowseList::select_row` and leaves the selection alone, and a first press
+/// schedules no fetch, playback, or view change.
+pub(in crate::ui) fn select_row(
+    player: &mut WinampPlayer,
+    epoch: u64,
+    index: usize,
+) -> Task<Message> {
+    let already_selected = match player.current_view {
+        CurrentView::Artists => player.artists.select_row(epoch, index),
+        CurrentView::Albums => player.albums.select_row(epoch, index),
+        CurrentView::Songs => player.songs.select_row(epoch, index),
+        CurrentView::AllSongs => player.all_songs.select_row(epoch, index),
+        CurrentView::AllAlbums => player.all_albums.select_row(epoch, index),
+        CurrentView::Playlists => player.playlists.select_row(epoch, index),
+    };
+    if already_selected == Some(true) {
+        open_row(player, epoch, index)
+    } else {
+        Task::none()
+    }
+}
+
+/// The browse view's Open button: open the row the showing list has selected
+/// through the same message a second press dispatches. Nothing selected means
+/// nothing to open, so the press is a no-op that schedules no task.
+pub(in crate::ui) fn open_selected(player: &mut WinampPlayer) -> Task<Message> {
+    let selection = match player.current_view {
+        CurrentView::Artists => player
+            .artists
+            .selected()
+            .map(|index| (player.artists.epoch, index)),
+        CurrentView::Albums => player
+            .albums
+            .selected()
+            .map(|index| (player.albums.epoch, index)),
+        CurrentView::Songs => player
+            .songs
+            .selected()
+            .map(|index| (player.songs.epoch, index)),
+        CurrentView::AllSongs => player
+            .all_songs
+            .selected()
+            .map(|index| (player.all_songs.epoch, index)),
+        CurrentView::AllAlbums => player
+            .all_albums
+            .selected()
+            .map(|index| (player.all_albums.epoch, index)),
+        CurrentView::Playlists => player
+            .playlists
+            .selected()
+            .map(|index| (player.playlists.epoch, index)),
+    };
+    let Some((epoch, index)) = selection else {
+        return Task::none();
+    };
+    open_row(player, epoch, index)
+}
+
+/// Dispatches the existing open action for the showing list: the artist,
+/// album, track, or playlist selection message the old single row press used
+/// to emit directly. Those handlers keep their epoch/index staleness checks,
+/// fetch clearing, and playback path, so selecting a row first changes only
+/// when the action fires, not what it does.
+fn open_row(player: &WinampPlayer, epoch: u64, index: usize) -> Task<Message> {
+    match player.current_view {
+        CurrentView::Artists => Task::done(Message::ArtistSelected { epoch, index }),
+        CurrentView::Albums | CurrentView::AllAlbums => {
+            Task::done(Message::AlbumSelected { epoch, index })
+        }
+        CurrentView::Songs | CurrentView::AllSongs => {
+            Task::done(Message::TrackSelected { epoch, index })
+        }
+        CurrentView::Playlists => Task::done(Message::PlaylistSelected { epoch, index }),
+    }
+}
+
 /// A playlist's row was pressed: load the playlist's songs into the shared
 /// songs buffer and record the origin for Back. The playlist twin of the
 /// album handler above: resolve the press against the Playlists list that

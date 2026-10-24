@@ -29,23 +29,25 @@ use rows::{
 pub use rows::{BROWSE_LIST_ID, BROWSE_LIST_PADDING, BROWSE_ROW_HEIGHT};
 
 /// The Artists browse view: one row per artist, in the order given, each
-/// emitting [`Message::ArtistSelected`] with the artist's index in the list
-/// and the list's `epoch`. `loading` and `error` select the placeholder
-/// wording (see [`browse_placeholder`]); a fetch failure wins. Built by
-/// [`scrollable_list`] from the [`artist_row`] mapping; a non-empty list also
-/// appends its item-count footer ([`list_with_count`]).
+/// selecting its row with [`Message::SelectRow`] carrying the artist's index
+/// in the list and the list's `epoch`; pressing the selected row again opens
+/// the artist. `selected` paints that row's blue bar without adding the `▶`
+/// playing marker. `loading` and `error` select the placeholder wording (see
+/// [`browse_placeholder`]); a fetch failure wins. Built by [`scrollable_list`]
+/// from the [`artist_row`] mapping; a non-empty list also appends its
+/// item-count footer ([`list_with_count`]).
 pub fn view_artists<'a>(
     artists: &'a [Artist],
     epoch: u64,
+    selected: Option<usize>,
     loading: bool,
     error: Option<&'a str>,
 ) -> Element<'a, Message> {
     list_with_count(
         scrollable_list(
-            artists
-                .iter()
-                .enumerate()
-                .map(|(index, artist)| artist_row(epoch, index, artist)),
+            artists.iter().map(artist_row),
+            epoch,
+            selected,
             browse_placeholder(&CurrentView::Artists, loading, error, false),
         ),
         artists.len(),
@@ -55,44 +57,43 @@ pub fn view_artists<'a>(
 }
 
 /// The Albums browse view: one row per album, in the order given, each
-/// emitting [`Message::AlbumSelected`] with the album's index in the list and
-/// the list's `epoch`. `loading` and `error` select the placeholder wording
-/// (see [`browse_placeholder`]); a fetch failure wins. Built by
-/// [`album_list`] from the [`rows::album_row`] mapping.
+/// selecting its row with [`Message::SelectRow`] (a second press opens it).
+/// `selected` paints that row's blue bar. `loading` and `error` select the
+/// placeholder wording (see [`browse_placeholder`]); a fetch failure wins.
+/// Built by [`album_list`] from the [`rows::album_row`] mapping.
 pub fn view_albums<'a>(
     albums: &'a [Album],
     epoch: u64,
+    selected: Option<usize>,
     loading: bool,
     error: Option<&'a str>,
 ) -> Element<'a, Message> {
     album_list(
         albums,
         epoch,
+        selected,
         browse_placeholder(&CurrentView::Albums, loading, error, false),
     )
 }
 
-/// The Songs browse view: one row per song, in the order given, each emitting
-/// [`Message::TrackSelected`] with the song's index in the list and the
-/// list's `epoch`; the row whose id is `current_track` is marked as playing.
-/// `titles` and `labels` hold the display titles and formatted lengths the
-/// loaded list cached in the same order as `songs` (see
-/// `BrowseList::store_with_row_text`); an index without a cached title or
-/// label falls back to composing that song's title or formatting its duration.
-/// `loading`,
-/// `error`, and `search_active` select the placeholder wording (see
-/// [`browse_placeholder`]); a fetch failure wins, and a loaded-empty search
-/// reads as "no matches" rather than as an empty album. Built by
-/// [`song_list`] from the [`rows::song_row`] mapping.
-// `titles` and `labels` join the existing per-level view state; grouping them
-// into a wrapper type would add a concept without making the call site
-// clearer.
+/// The Songs browse view: one row per song, in the order given, each
+/// selecting its row with [`Message::SelectRow`] (a second press plays it);
+/// the row whose id is `current_track` is marked as playing and `selected`
+/// paints the selected row's blue bar. `titles` and `labels` hold the display
+/// titles and formatted lengths the loaded list cached in the same order as
+/// `songs` (see `BrowseList::store_with_row_text`); an index without a cached
+/// title or label falls back to composing that song's title or formatting its
+/// duration. `loading`, `error`, and `search_active` select the placeholder
+/// wording (see [`browse_placeholder`]); a fetch failure wins, and a
+/// loaded-empty search reads as "no matches" rather than as an empty album.
+/// Built by [`song_list`] from the [`rows::song_row`] mapping.
 #[allow(clippy::too_many_arguments)]
 pub fn view_songs<'a>(
     songs: &'a [Song],
     titles: &'a [String],
     labels: &'a [String],
     epoch: u64,
+    selected: Option<usize>,
     loading: bool,
     error: Option<&'a str>,
     current_track: Option<&str>,
@@ -103,24 +104,27 @@ pub fn view_songs<'a>(
         titles,
         labels,
         epoch,
+        selected,
         current_track,
         browse_placeholder(&CurrentView::Songs, loading, error, search_active),
     )
 }
 
 /// The All Songs browse view: one row per song in the whole library, in the
-/// order given, each emitting [`Message::TrackSelected`] with the song's
-/// index in the list and the list's `epoch`; the row whose id is
-/// `current_track` is marked as playing. `titles` and `labels` are the same
-/// cached display-title and formatted-length slices [`view_songs`] takes. It
-/// mirrors [`view_songs`] but
-/// never shows the search wording, because the flat list is not a search's
-/// result. Built by [`song_list`] from the [`rows::song_row`] mapping.
+/// order given, each selecting its row with [`Message::SelectRow`] (a second
+/// press plays it); the row whose id is `current_track` is marked as playing
+/// and `selected` paints the selected row's blue bar. `titles` and `labels`
+/// are the same cached display-title and formatted-length slices
+/// [`view_songs`] takes. It mirrors [`view_songs`] but never shows the search
+/// wording, because the flat list is not a search's result. Built by
+/// [`song_list`] from the [`rows::song_row`] mapping.
+#[allow(clippy::too_many_arguments)]
 pub fn view_all_songs<'a>(
     songs: &'a [Song],
     titles: &'a [String],
     labels: &'a [String],
     epoch: u64,
+    selected: Option<usize>,
     loading: bool,
     error: Option<&'a str>,
     current_track: Option<&str>,
@@ -130,50 +134,53 @@ pub fn view_all_songs<'a>(
         titles,
         labels,
         epoch,
+        selected,
         current_track,
         browse_placeholder(&CurrentView::AllSongs, loading, error, false),
     )
 }
 
 /// The All Albums browse view: one row per album in the whole library, in the
-/// order given, each emitting [`Message::AlbumSelected`] with the album's
-/// index in the list and the list's `epoch`. It mirrors [`view_albums`] —
-/// album rows carry no current-track marker — but is its own view so its
-/// presses resolve against `all_albums` and Back from the songs it opens
-/// returns to this list. It never shows the search wording, because the flat
-/// list is not a search's result. Built by [`album_list`] from the
+/// order given, each selecting its row with [`Message::SelectRow`] (a second
+/// press opens it); `selected` paints that row's blue bar. It mirrors
+/// [`view_albums`] — album rows carry no current-track marker — but is its own
+/// view so its presses resolve against `all_albums` and Back from the songs it
+/// opens returns to this list. It never shows the search wording, because the
+/// flat list is not a search's result. Built by [`album_list`] from the
 /// [`rows::album_row`] mapping.
 pub fn view_all_albums<'a>(
     albums: &'a [Album],
     epoch: u64,
+    selected: Option<usize>,
     loading: bool,
     error: Option<&'a str>,
 ) -> Element<'a, Message> {
     album_list(
         albums,
         epoch,
+        selected,
         browse_placeholder(&CurrentView::AllAlbums, loading, error, false),
     )
 }
 
 /// The Playlists browse view: one row per playlist, in the order given, each
-/// emitting [`Message::PlaylistSelected`] with the playlist's index in the
-/// list and the list's `epoch`. `loading` and `error` select the placeholder
-/// wording (see [`browse_placeholder`]); a fetch failure wins. Built by
-/// [`scrollable_list`] from the [`playlist_row`] mapping; a non-empty list
-/// also appends its item-count footer ([`list_with_count`]).
+/// selecting its row with [`Message::SelectRow`] (a second press opens it);
+/// `selected` paints that row's blue bar. `loading` and `error` select the
+/// placeholder wording (see [`browse_placeholder`]); a fetch failure wins.
+/// Built by [`scrollable_list`] from the [`playlist_row`] mapping; a non-empty
+/// list also appends its item-count footer ([`list_with_count`]).
 pub fn view_playlists<'a>(
     playlists: &'a [Playlist],
     epoch: u64,
+    selected: Option<usize>,
     loading: bool,
     error: Option<&'a str>,
 ) -> Element<'a, Message> {
     list_with_count(
         scrollable_list(
-            playlists
-                .iter()
-                .enumerate()
-                .map(|(index, playlist)| playlist_row(epoch, index, playlist)),
+            playlists.iter().map(playlist_row),
+            epoch,
+            selected,
             browse_placeholder(&CurrentView::Playlists, loading, error, false),
         ),
         playlists.len(),
@@ -228,6 +235,14 @@ pub fn view_top_button() -> Element<'static, Message> {
 /// epoch.
 pub fn view_sort_button() -> Element<'static, Message> {
     labeled_button("Sort", Message::SortBrowse).into()
+}
+
+/// The browse view's Open button: open the row selected in the showing list
+/// through the same artist/album/track/playlist action a second press
+/// dispatches. Rendered above every browse level; with nothing selected the
+/// update loop's `OpenSelected` arm is a no-op.
+pub fn view_open_button() -> Element<'static, Message> {
+    labeled_button("Open", Message::OpenSelected).into()
 }
 
 /// The Top and Sort buttons as one row, so Sort renders beside Top rather than

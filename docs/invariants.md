@@ -54,6 +54,48 @@ shown; it returns false only for `CurrentView::Artists`.
 Albums/Songs, a dead end" in `BUGS-FIXED.md`. The All Songs, All Albums, and Playlists levels
 were added later and are covered here too.
 
+## Browse selection
+
+**Guarantee.** Each browse list owns at most one selected row. A single press on any artist,
+album, song, or playlist row selects it and draws the playing row's blue bar, without changing the
+view, playing a song, or scheduling a fetch; the `▶` marker stays tied to the playing track. Only a
+matching epoch and an in-range index can select, so a press rendered from a replaced list is a
+no-op. A second press on the row that is already selected, or the `Open` button, dispatches the
+existing artist/album/track/playlist open action, so a double-click reaches the same drill-in or
+playback on its second press. The selection is cleared whenever the rows are replaced, cleared,
+failed, sorted, or restored to library order, because the stored index then names a different
+row.
+
+**Enforced by.** `BrowseList::select_row` in `src/ui/browse.rs` validates the press through
+`BrowseList::select` and records it, returning `Some(true)` only for the second press on the
+selected row; `BrowseList::selected` exposes it to the view, and `replace_rows`, `clear`, `fail`,
+`sort_rows_by`, and `restore_library_order` clear it with the rows or order they change.
+`browse::select_row` and `browse::open_selected` in `src/ui/handlers/browse.rs` route the two
+messages and share `browse::open_row`, which emits the existing `ArtistSelected`,
+`AlbumSelected`, `TrackSelected`, or `PlaylistSelected` message. `views::browse::scrollable_list`
+puts `Message::SelectRow { epoch, index }` on every row and highlights the selected row, and
+`views::view_open_button` (re-exported by `src/ui/views/mod.rs`) builds the Open button.
+
+**Pinned by.**
+
+- `select_row_records_a_press_and_reports_the_second_one`
+- `select_row_rejects_a_stale_epoch_or_out_of_range_index`
+- `replacing_clearing_or_failing_rows_drops_the_selection`
+- `sorting_or_restoring_rows_drops_the_selection`
+  (all in `src/ui/browse.rs`)
+- `a_single_row_press_selects_without_opening`
+- `a_second_press_on_the_selected_row_opens_it`
+- `open_selected_opens_the_selected_song`
+- `open_selected_with_nothing_selected_is_a_noop`
+- `replacing_or_sorting_rows_clears_the_selection`
+- `browse_open_button_sits_above_the_browse_list`
+  (all in `src/ui/tests.rs`)
+- `now_playing_bar_and_browse_action_buttons_construct`
+- `browse_open_button_constructs`
+- `browse_views_construct_over_the_loaded_library`
+- `browse_views_construct_over_an_empty_list`
+  (all in `src/ui/views/tests.rs`)
+
 ## Browse reply freshness
 
 **Guarantee.** A fetched browse reply — success or failure — is stored only when no newer request

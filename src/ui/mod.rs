@@ -175,6 +175,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::TrackSelected { epoch, index } => {
             handlers::playback::track_selected(player, epoch, index)
         }
+        Message::SelectRow { epoch, index } => handlers::browse::select_row(player, epoch, index),
         Message::ArtistSelected { epoch, index } => {
             handlers::browse::artist_selected(player, epoch, index)
         }
@@ -184,6 +185,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::PlaylistSelected { epoch, index } => {
             handlers::browse::playlist_selected(player, epoch, index)
         }
+        Message::OpenSelected => handlers::browse::open_selected(player),
         Message::Back => handlers::browse::back(player),
         Message::ScrollBrowseToTop => handlers::browse::scroll_browse_to_top(),
         Message::SortBrowse => handlers::browse::sort_browse(player),

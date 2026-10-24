@@ -99,12 +99,14 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
         CurrentView::Artists => views::view_artists(
             &player.artists.items,
             player.artists.epoch,
+            player.artists.selected(),
             player.artists.loading,
             player.artists.error.as_deref(),
         ),
         CurrentView::Albums => views::view_albums(
             &player.albums.items,
             player.albums.epoch,
+            player.albums.selected(),
             player.albums.loading,
             player.albums.error.as_deref(),
         ),
@@ -120,6 +122,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
                 &player.songs.titles,
                 &player.songs.labels,
                 player.songs.epoch,
+                player.songs.selected(),
                 player.songs.loading,
                 player.songs.error.as_deref(),
                 state.current_track.as_deref(),
@@ -135,6 +138,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
                 &player.all_songs.titles,
                 &player.all_songs.labels,
                 player.all_songs.epoch,
+                player.all_songs.selected(),
                 player.all_songs.loading,
                 player.all_songs.error.as_deref(),
                 state.current_track.as_deref(),
@@ -145,12 +149,14 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
         CurrentView::AllAlbums => views::view_all_albums(
             &player.all_albums.items,
             player.all_albums.epoch,
+            player.all_albums.selected(),
             player.all_albums.loading,
             player.all_albums.error.as_deref(),
         ),
         CurrentView::Playlists => views::view_playlists(
             &player.playlists.items,
             player.playlists.epoch,
+            player.playlists.selected(),
             player.playlists.loading,
             player.playlists.error.as_deref(),
         ),
@@ -209,7 +215,9 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
     }
     // The Top and Sort buttons share one row, Sort beside Top, so the
     // current list can always be returned to its first row and reordered
-    // in place.
+    // in place. Open sits above them, on every browse level, and opens the
+    // row a first click selected; with nothing selected it does nothing.
+    column = column.push(views::view_open_button());
     column = column.push(views::view_browse_nav_buttons());
     // The All Songs, All Albums, and Playlists buttons open the flat lists;
     // they live on the Artists view, beside Back/Retry, so each list is one

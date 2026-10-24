@@ -54,6 +54,15 @@ pub(super) struct BrowseList<T> {
     /// epoch (see [`Self::clear`]), so the replacing list's epoch is bumped
     /// past the cleared one's and differs from it.
     pub(super) epoch: u64,
+    /// The row a single press last selected, or `None` while nothing is
+    /// selected. Only [`Self::select_row`] sets it; every transition that
+    /// changes the rows ([`Self::replace_rows`], [`Self::clear`],
+    /// [`Self::fail`]) or their order ([`Self::sort_rows_by`],
+    /// [`Self::restore_library_order`]) drops it, because the index it stores
+    /// names a row in the previous list or order. The view paints the
+    /// selected row with the playing row's blue bar; the `▶` marker stays
+    /// tied to the playing track.
+    selected: Option<usize>,
     /// The permutation [`Self::sort_rows_by`] has applied to the rows, or
     /// `None` while they are in library order. Entry `i` is the library index
     /// of the row now at position `i`, so [`Self::restore_library_order`] can
@@ -91,6 +100,7 @@ impl<T> BrowseList<T> {
             titles: Vec::new(),
             labels: Vec::new(),
             epoch: 0,
+            selected: None,
             library_positions: None,
             loading,
             error: None,
@@ -128,6 +138,26 @@ impl<T> BrowseList<T> {
             return None;
         }
         self.items.get(index)
+    }
+
+    /// Selects the row a browse-row press names without opening it.
+    ///
+    /// Returns `Some(false)` when the press selected the row, `Some(true)`
+    /// when that row was already selected (the second press of a double-click,
+    /// which opens it), and `None` when [`Self::select`] rejects a stale epoch
+    /// or out-of-range index. A rejected press leaves the selection alone, so
+    /// a stale message can neither select nor open the wrong row.
+    pub(super) fn select_row(&mut self, epoch: u64, index: usize) -> Option<bool> {
+        self.select(epoch, index)?;
+        let already_selected = self.selected == Some(index);
+        self.selected = Some(index);
+        Some(already_selected)
+    }
+
+    /// The selected row, or `None` when nothing is selected. The view paints
+    /// this row with the playing row's blue bar.
+    pub(super) fn selected(&self) -> Option<usize> {
+        self.selected
     }
 
     /// Replaces the rows with a freshly fetched list, bumps the epoch, marks
@@ -170,6 +200,7 @@ impl<T> BrowseList<T> {
     /// caches and [`Self::store_with_row_text`] rebuilds them.
     fn replace_rows(&mut self, items: Vec<T>) {
         self.items = items;
+        self.selected = None;
         self.library_positions = None;
         self.epoch = self.epoch.wrapping_add(1);
         self.loading = false;
@@ -214,6 +245,9 @@ impl<T> BrowseList<T> {
             Some(positions) => order.iter().map(|&index| positions[index]).collect(),
             None => order.clone(),
         });
+        // The selection names a row in the old order, which this reorder (and
+        // the epoch bump) just invalidated.
+        self.selected = None;
         self.reorder_rows(&order);
         self.epoch = self.epoch.wrapping_add(1);
     }
@@ -239,6 +273,9 @@ impl<T> BrowseList<T> {
         for (current, &library) in positions.iter().enumerate() {
             inverse[library] = current;
         }
+        // Like sorting, restoring changes what every index names, so the
+        // selected index no longer identifies the row the user picked.
+        self.selected = None;
         self.reorder_rows(&inverse);
         self.epoch = self.epoch.wrapping_add(1);
     }
@@ -284,6 +321,7 @@ impl<T> BrowseList<T> {
         self.items.clear();
         self.titles.clear();
         self.labels.clear();
+        self.selected = None;
         self.library_positions = None;
         self.loading = true;
         self.error = None;
@@ -297,8 +335,86 @@ impl<T> BrowseList<T> {
         self.items.clear();
         self.titles.clear();
         self.labels.clear();
+        self.selected = None;
         self.library_positions = None;
         self.loading = false;
         self.error = Some(report);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BrowseList;
+
+    /// A loaded list of `items`, with the epoch [`BrowseList::store`] gives it.
+    fn loaded(items: &[&str]) -> BrowseList<String> {
+        let mut list = BrowseList::new(false);
+        list.store(items.iter().map(|item| item.to_string()).collect());
+        list
+    }
+
+    #[test]
+    fn select_row_records_a_press_and_reports_the_second_one() {
+        let mut list = loaded(&["one", "two"]);
+        let epoch = list.epoch;
+
+        assert_eq!(list.selected(), None);
+        assert_eq!(list.select_row(epoch, 1), Some(false));
+        assert_eq!(list.selected(), Some(1));
+        // The second press on the same row is the double-click's open.
+        assert_eq!(list.select_row(epoch, 1), Some(true));
+        assert_eq!(list.selected(), Some(1));
+        // A press on another row moves the selection without opening.
+        assert_eq!(list.select_row(epoch, 0), Some(false));
+        assert_eq!(list.selected(), Some(0));
+    }
+
+    #[test]
+    fn select_row_rejects_a_stale_epoch_or_out_of_range_index() {
+        let mut list = loaded(&["one", "two"]);
+        let epoch = list.epoch;
+        assert_eq!(list.select_row(epoch, 0), Some(false));
+
+        // A stale epoch and an out-of-range index both leave the existing
+        // selection untouched, so the press cannot move or open it.
+        assert_eq!(list.select_row(epoch.wrapping_add(1), 0), None);
+        assert_eq!(list.selected(), Some(0));
+        assert_eq!(list.select_row(epoch, 9), None);
+        assert_eq!(list.selected(), Some(0));
+    }
+
+    #[test]
+    fn replacing_clearing_or_failing_rows_drops_the_selection() {
+        let mut list = loaded(&["one", "two"]);
+        let epoch = list.epoch;
+        assert_eq!(list.select_row(epoch, 0), Some(false));
+        list.store(vec!["three".to_string()]);
+        assert_eq!(list.selected(), None);
+
+        let epoch = list.epoch;
+        assert_eq!(list.select_row(epoch, 0), Some(false));
+        list.clear();
+        assert_eq!(list.selected(), None);
+
+        list.store(vec!["four".to_string()]);
+        let epoch = list.epoch;
+        assert_eq!(list.select_row(epoch, 0), Some(false));
+        list.fail("boom".to_string());
+        assert_eq!(list.selected(), None);
+    }
+
+    #[test]
+    fn sorting_or_restoring_rows_drops_the_selection() {
+        let mut list = loaded(&["banana", "apple"]);
+        let epoch = list.epoch;
+        assert_eq!(list.select_row(epoch, 0), Some(false));
+
+        list.sort_rows_by(|item| item.clone());
+        assert_eq!(list.selected(), None);
+
+        let epoch = list.epoch;
+        assert_eq!(list.select_row(epoch, 0), Some(false));
+        list.restore_library_order();
+        assert_eq!(list.selected(), None);
     }
 }
