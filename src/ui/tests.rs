@@ -8767,3 +8767,109 @@ fn an_empty_browse_level_draws_no_count_footer() {
         );
     }
 }
+
+// Every browse level's placeholder is chosen by `browse_placeholder` from
+// that level's own `loading`, `error`, and (for Songs) `search_active` flags.
+// The pure wording tests and each builder test cover that choice, but only a
+// laid-out root proves `view` passes the right level's flags into the
+// matching builder. Give one level at a time a loading flag, then a failed
+// report, and read the placeholder the root actually draws; finally show an
+// empty search, whose no-match wording replaces the empty-album label.
+#[test]
+fn root_view_draws_each_browse_levels_own_placeholder() {
+    // One setter per level, so each case names its own buffer and sets
+    // `current_view` itself (the enum is not `Copy`). One report per level
+    // too, so a wrong arm reading its neighbour's error is caught rather than
+    // matched by a shared string.
+    type SetLevel = fn(&mut WinampPlayer, bool, Option<&str>);
+    let cases: [(SetLevel, &str); 6] = [
+        (
+            |player, loading, error| {
+                player.current_view = CurrentView::Artists;
+                player.artists.loading = loading;
+                player.artists.error = error.map(str::to_string);
+            },
+            "artists failed",
+        ),
+        (
+            |player, loading, error| {
+                player.current_view = CurrentView::Albums;
+                player.albums.loading = loading;
+                player.albums.error = error.map(str::to_string);
+            },
+            "albums failed",
+        ),
+        (
+            |player, loading, error| {
+                player.current_view = CurrentView::Songs;
+                player.songs.loading = loading;
+                player.songs.error = error.map(str::to_string);
+            },
+            "songs failed",
+        ),
+        (
+            |player, loading, error| {
+                player.current_view = CurrentView::AllSongs;
+                player.all_songs.loading = loading;
+                player.all_songs.error = error.map(str::to_string);
+            },
+            "all songs failed",
+        ),
+        (
+            |player, loading, error| {
+                player.current_view = CurrentView::AllAlbums;
+                player.all_albums.loading = loading;
+                player.all_albums.error = error.map(str::to_string);
+            },
+            "all albums failed",
+        ),
+        (
+            |player, loading, error| {
+                player.current_view = CurrentView::Playlists;
+                player.playlists.loading = loading;
+                player.playlists.error = error.map(str::to_string);
+            },
+            "playlists failed",
+        ),
+    ];
+
+    for (set_state, report) in cases {
+        let (mut player, _state) = test_player();
+        // The boot-time artists fetch starts loading; clear it so only the
+        // level under test decides what the root draws.
+        player.artists.loading = false;
+
+        set_state(&mut player, true, None);
+        let capture = captured_root_view_text_bounds(&player);
+        let texts: Vec<&str> = capture.texts().collect();
+        assert!(
+            texts.contains(&"Loading…"),
+            "the {report} case must draw the loading placeholder: {texts:?}"
+        );
+
+        set_state(&mut player, false, Some(report));
+        let capture = captured_root_view_text_bounds(&player);
+        let texts: Vec<&str> = capture.texts().collect();
+        assert!(
+            texts.contains(&report),
+            "the {report} case must draw its own report: {texts:?}"
+        );
+        assert!(
+            !texts.contains(&"Loading…"),
+            "the {report} case must drop the loading placeholder on failure: {texts:?}"
+        );
+    }
+
+    let (mut player, _state) = test_player();
+    player.artists.loading = false;
+    player.current_view = CurrentView::Songs;
+    player.search_active = true;
+    let capture = captured_root_view_text_bounds(&player);
+    assert!(
+        capture
+            .texts()
+            .any(|text| text == "No songs match your search"),
+        "an empty search must draw its no-match wording: {:?}",
+        capture.texts().collect::<Vec<_>>()
+    );
+}

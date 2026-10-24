@@ -542,7 +542,8 @@ refresh does not re-join and reformat every row.
   middle, and bottom, and the preamp label shares the band labels' text row. The response curve
   above them starts at the first band, not over the preamp and scale.
 - The root `view` draws the browse level named by `CurrentView` from that level's own buffer and
-  cached row text, and marks the playing row only in the Songs and All Songs lists.
+  cached row text, with its loading, failure, or empty-search placeholder chosen from that same
+  level's flags, and marks the playing row only in the Songs and All Songs lists.
 - The root `view` draws Back on every level below Artists, Retry only on Artists while its fetch
   has failed, and the All Songs, All Albums, and Playlists buttons only on Artists.
 - The app bar and the two section bands are `TITLE_BAR_HEIGHT` tall. The app bar centers
@@ -582,6 +583,7 @@ tiny-skia renderer.
 `root_view_draws_the_transport_glyph_row`,
 `root_view_offers_back_retry_and_flat_list_buttons_only_where_they_belong`,
 `root_view_draws_the_current_browse_levels_own_rows`,
+`root_view_draws_each_browse_levels_own_placeholder`,
 `root_view_draws_the_equalizer_and_library_title_bands_in_order`,
 `toggle_equalizer_panel_hides_and_restores_the_section`,
 `toggle_library_panel_hides_and_restores_the_library_section`,
