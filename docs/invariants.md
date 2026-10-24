@@ -278,7 +278,7 @@ list is a no-op: it neither reorders rows nor bumps the epoch.
 
 **Enforced by.** `BrowseList::sort_rows_by` in `src/ui/browse.rs` builds a stable index permutation
 from the lowercased row keys and rebuilds `items`, `titles`, and `labels` by it, bumping the epoch
-only when there are at least two rows and the list is not loading; it also records the cumulative
+only when there are at least two rows and the list is neither loading nor failed; it also records the cumulative
 permutation back to library order, and `BrowseList::restore_library_order` inverts it so the rows
 (and their cached text) return to the order they were stored in, bumping the epoch as any index
 change must. `browse::sort_browse` in `src/ui/handlers/browse.rs` matches the current view onto

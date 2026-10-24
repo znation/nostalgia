@@ -237,8 +237,8 @@ impl<T> BrowseList<T> {
     /// epoch is bumped like
     /// [`Self::replace_rows`] because the indices a rendered row emits now name
     /// different entries; `loading`, `error`, and the request generation are
-    /// left alone, and a list with fewer than two rows or one still loading is
-    /// a no-op.
+    /// left alone, and a list with fewer than two rows or one still loading or
+    /// failed is a no-op.
     pub(super) fn sort_rows_by(&mut self, key: impl Fn(&T) -> String)
     where
         T: Clone,
@@ -247,8 +247,9 @@ impl<T> BrowseList<T> {
         // them would be undone (or raced) by the reply; the documented
         // guarantee is that Sort while loading changes nothing. The app's
         // transitions empty the rows in `clear` before setting `loading`, but
-        // this check pins the guarantee independently of that ordering.
-        if self.items.len() < 2 || self.loading {
+        // this check pins the guarantee independently of that ordering. The
+        // same holds for a failed list, whose rows `fail` clears today.
+        if self.items.len() < 2 || self.loading || self.error.is_some() {
             return;
         }
         let keys: Vec<String> = self
@@ -371,6 +372,19 @@ mod tests {
         let mut list = BrowseList::new(false);
         list.store(items.iter().map(|item| item.to_string()).collect());
         list
+    }
+
+    #[test]
+    fn sort_leaves_a_failed_list_holding_rows_untouched() {
+        let mut list = loaded(&["b", "a"]);
+        list.error = Some("boom".to_string());
+        let epoch = list.epoch;
+
+        list.sort_rows_by(|item| item.clone());
+
+        assert_eq!(list.items, ["b", "a"]);
+        assert_eq!(list.epoch, epoch);
+        assert!(list.library_positions.is_none());
     }
 
     #[test]
