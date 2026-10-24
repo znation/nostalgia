@@ -186,9 +186,13 @@ pub(in crate::ui) enum Message {
     // query String just to have a message ready for a press. `FocusSearch`
     // moves keyboard focus to the box via its `BROWSE_SEARCH_ID` widget id,
     // changing no browse or playback state and submitting nothing.
+    // `ClearSearch` is the Clear button beside the box: it empties the stored
+    // query and, when a search is showing, leaves it exactly as Back does;
+    // it schedules no fetch and touches no playback.
     SearchChanged(String),
     SearchSubmitted,
     FocusSearch,
+    ClearSearch,
     LoadArtists,
     ArtistsLoaded(Vec<Artist>),
     AlbumsLoaded(Vec<Album>),

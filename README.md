@@ -106,7 +106,9 @@ on the selected row (a double-click), Enter, or the `Open` button
 opens it — drilling into an artist, album, or playlist, or playing a song — while Back still
 climbs out. A `Search library` box above the browse list searches the library when you
 press Enter, replacing the list with the matching songs; Back leaves a search for the artists
-list. The Artists list also has `All Songs`, `All Albums`, and `Playlists` buttons: the first
+list. A `Clear` button beside the search box empties the typed query; when a search is showing it
+also returns to the artists list exactly as Back does, and otherwise it changes only the box's
+text. The Artists list also has `All Songs`, `All Albums`, and `Playlists` buttons: the first
 opens a flat list of every song in the library, whose rows play like any other song row, the
 second opens a flat list of every album, whose rows open that album's songs, and the third opens a
 flat list of every playlist, whose rows open that playlist's songs. Back from any of these lists

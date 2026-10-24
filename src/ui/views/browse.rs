@@ -1,8 +1,8 @@
 //! The browse views — the artist → album → song drill-down, the flat All
 //! Songs and All Albums lists, and the Playlists list: the per-level view
 //! builders, the search box (tagged with [`BROWSE_SEARCH_ID`] so Ctrl+F can
-//! focus it), and the Back, Open, Top, Sort, Reload, All Songs, All Albums,
-//! Playlists, and Retry buttons above them. The scrollable list and list
+//! focus it), the Clear button beside it, and the Back, Open, Top, Sort,
+//! Reload, All Songs, All Albums, Playlists, and Retry buttons above them. The scrollable list and list
 //! builders live in the [`rows`] submodule; the pure wording, row-label, and
 //! summary helpers live in [`rows::text`].
 //!
@@ -12,7 +12,7 @@
 //! without an iced renderer.
 
 use iced::{
-    Element,
+    Element, Length,
     widget::{Row, TextInput},
 };
 
@@ -326,13 +326,35 @@ pub const BROWSE_SEARCH_ID: &str = "nostalgia-search-box";
 /// from any level of the hierarchy and Ctrl+F can focus it there (shade mode
 /// has no search box, so the key is a no-op). The submit message owns no copy
 /// of the query, so this per-view builder allocates nothing for the submit
-/// path; the text input itself still builds its own value.
+/// path; the text input itself still builds its own value. Pair it with
+/// [`view_clear_search_button`] through [`view_search_row`].
 pub fn view_search_box(query: &str) -> Element<'_, Message> {
     TextInput::new("Search library", query)
         .id(BROWSE_SEARCH_ID)
         .on_input(Message::SearchChanged)
         .on_submit(Message::SearchSubmitted)
         .style(|_theme, status| style::chrome_text_input_style(status))
+        .into()
+}
+
+/// The Clear button beside the library search box: the update loop's
+/// [`Message::ClearSearch`] arm empties the typed query and, when a search is
+/// showing, returns to the artists list exactly as Back does. Rendered beside
+/// the box through [`view_search_row`] on every normal-mode browse level;
+/// shade mode builds neither.
+pub fn view_clear_search_button() -> Element<'static, Message> {
+    labeled_button("Clear", Message::ClearSearch).into()
+}
+
+/// The search box and its Clear button as one row: the box keeps its
+/// [`Length::Fill`] width and Clear follows it at the
+/// row's right. Rendered on every browse screen in normal mode; shade mode
+/// builds no search row.
+pub fn view_search_row(query: &str) -> Element<'_, Message> {
+    Row::new()
+        .width(Length::Fill)
+        .push(view_search_box(query))
+        .push(view_clear_search_button())
         .into()
 }
 

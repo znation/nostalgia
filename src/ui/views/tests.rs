@@ -4,8 +4,10 @@ use super::browse::rows::text::{
     list_count_summary, playlist_row, row_prefix, song_list_summary, song_row,
 };
 use super::browse::rows::{browse_row_style, scrollable_list};
-use super::browse::view_reload_button;
-use super::browse::{BROWSE_SEARCH_ID, BROWSE_VIEWS};
+use super::browse::{
+    BROWSE_SEARCH_ID, BROWSE_VIEWS, view_clear_search_button, view_reload_button, view_search_box,
+    view_search_row,
+};
 use super::equalizer::{
     EQ_SLIDER_HEIGHT, RESPONSE_CURVE_COLUMNS, RESPONSE_CURVE_HEIGHT, RESPONSE_CURVE_LINE_HEIGHT,
     eq_enabled_label, response_curve_offsets, response_curve_row,
@@ -35,8 +37,8 @@ use super::{
     VOLUME_STEP, can_go_back, can_retry_artists, format_track_time, seek_bar_value, view_albums,
     view_all_albums, view_all_albums_button, view_all_songs, view_all_songs_button, view_artists,
     view_back_button, view_browse_nav_buttons, view_equalizer, view_now_playing, view_open_button,
-    view_playlists, view_playlists_button, view_retry_button, view_search_box, view_seek_bar,
-    view_songs, view_title_band, view_title_bar, view_transport_controls, volume_wheel_message,
+    view_playlists, view_playlists_button, view_retry_button, view_seek_bar, view_songs,
+    view_title_band, view_title_bar, view_transport_controls, volume_wheel_message,
 };
 use crate::audio::{PlaybackFormat, Spectrum};
 use crate::equalizer::{
@@ -2098,6 +2100,8 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
     let _open = view_open_button();
     let _nav = view_browse_nav_buttons();
     let _reload = view_reload_button();
+    let _clear = view_clear_search_button();
+    let _search_row = view_search_row("Opening");
     let _all_songs = view_all_songs_button();
     let _all_albums = view_all_albums_button();
     let _playlists = view_playlists_button();
@@ -2116,6 +2120,60 @@ fn browse_open_button_constructs() {
 fn view_search_box_constructs() {
     let _empty = view_search_box("");
     let _filled = view_search_box("Opening");
+}
+
+#[test]
+fn view_clear_search_button_constructs() {
+    let _clear = view_clear_search_button();
+}
+
+// The Clear button must render beside the search box on every normal-mode
+// browse level, so lay the row out and compare the input's real bounds with
+// the Clear label's: Clear starts at or after the box's right edge and the two
+// overlap vertically.
+#[test]
+fn view_search_row_draws_clear_after_the_search_box() {
+    use iced::advanced::widget::operation::TextInput;
+
+    #[derive(Default)]
+    struct CapturedInput(Option<Rectangle>);
+    impl Operation for CapturedInput {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+        fn text_input(&mut self, id: Option<&Id>, bounds: Rectangle, _state: &mut dyn TextInput) {
+            if id == Some(&Id::new(BROWSE_SEARCH_ID)) {
+                self.0 = Some(bounds);
+            }
+        }
+    }
+
+    let renderer = layout_capture::headless_renderer();
+    let mut element = view_search_row("Opening");
+    let mut tree = Tree::new(element.as_widget());
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &layout_capture::limits());
+    let mut captured = CapturedInput::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &renderer, &mut captured);
+    let input = captured
+        .0
+        .expect("the search row must contain the search box");
+
+    let mut element = view_search_row("Opening");
+    let capture = layout_capture::capture_text(&mut element, &renderer);
+    let clear = capture.find("Clear");
+
+    assert!(
+        clear.x >= input.x + input.width,
+        "Clear must follow the search box: {input:?}, {clear:?}"
+    );
+    assert!(
+        clear.y < input.y + input.height && input.y < clear.y + clear.height,
+        "Clear and the search box must share the row vertically: {input:?}, {clear:?}"
+    );
 }
 
 // Ctrl+F targets the search box by widget id, so the laid-out text input must

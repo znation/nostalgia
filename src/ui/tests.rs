@@ -2047,6 +2047,83 @@ fn back_leaves_an_active_search_for_the_artists_list() {
     assert!(!player.search_active);
 }
 
+// Clear without an active search is only a text-box edit: it empties the
+// query and leaves the view, rows, selection, search flag, and playback
+// exactly as they were, scheduling no fetch or scroll.
+#[test]
+fn clear_search_without_an_active_search_clears_only_the_query() {
+    let (mut player, state) = test_player();
+    player.current_view = CurrentView::Albums;
+    player.albums.items = vec![sample_album()];
+    player.songs.items = vec![sample_song()];
+    let _ = update(&mut player, Message::SelectRow { epoch: 0, index: 0 });
+    player.search_query = "echo".to_string();
+    {
+        let mut shared = state.blocking_lock();
+        shared.current_track = Some("song-1".to_string());
+        shared.is_playing = true;
+    }
+    let albums = player.albums.items.clone();
+    let songs = player.songs.items.clone();
+
+    assert_message_schedules_no_work(&mut player, Message::ClearSearch);
+
+    assert_eq!(player.search_query, "");
+    assert_view(&player, CurrentView::Albums);
+    assert_eq!(player.albums.items, albums);
+    assert_eq!(player.songs.items, songs);
+    assert_eq!(player.albums.selected(), Some(0));
+    assert!(!player.search_active);
+    let shared = state.blocking_lock();
+    assert_eq!(shared.current_track.as_deref(), Some("song-1"));
+    assert!(shared.is_playing);
+}
+
+// Clear with an empty query and no active search has nothing to do, so it
+// schedules no work at all.
+#[test]
+fn clear_search_with_an_empty_query_schedules_no_work() {
+    let (mut player, _state) = test_player();
+
+    assert_message_schedules_no_work(&mut player, Message::ClearSearch);
+
+    assert_eq!(player.search_query, "");
+    assert!(!player.search_active);
+}
+
+// Clear while a search is showing is the Back button plus an emptied query:
+// it returns to Artists, restores the artists list's library order, snaps the
+// list to the top, and leaves the search-result rows in the songs buffer.
+#[tokio::test]
+async fn clear_search_while_a_search_is_active_returns_to_artists_and_clears_the_query() {
+    let (mut player, _state) = test_player();
+    let mut first_alphabetically = sample_artist();
+    first_alphabetically.id = "artist-0".to_string();
+    first_alphabetically.name = "A Sample Band".to_string();
+    player.artists.items = vec![sample_artist(), first_alphabetically];
+    // The startup artists list stays marked loading until a fetch reply
+    // lands, and sorting a loading list is a documented no-op.
+    player.artists.loading = false;
+    let library_order = player.artists.items.clone();
+    let _ = update(&mut player, Message::SortBrowse);
+    assert_ne!(player.artists.items, library_order);
+
+    player.search_active = true;
+    player.current_view = CurrentView::Songs;
+    player.search_query = "echo".to_string();
+    player.songs.items = stepping_songs();
+    let search_results = player.songs.items.clone();
+
+    assert_task_snaps_browse_list_to_top(update(&mut player, Message::ClearSearch), "clear search")
+        .await;
+
+    assert_eq!(player.search_query, "");
+    assert!(!player.search_active);
+    assert_view(&player, CurrentView::Artists);
+    assert_eq!(player.artists.items, library_order);
+    assert_eq!(player.songs.items, search_results);
+}
+
 // Entering a browse level leaves the search: ArtistSelected and AlbumSelected
 // both clear the active flag, so Back from the level they open behaves like an
 // ordinary browse again.

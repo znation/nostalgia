@@ -86,8 +86,8 @@ unbound, and every other Control chord remains the window manager's. Shade mode 
 box, so Ctrl+F there is a no-op.
 
 **Enforced by.** `views::browse::BROWSE_SEARCH_ID` in `src/ui/views/browse.rs`, applied with
-`.id(BROWSE_SEARCH_ID)` by `views::browse::view_search_box` (re-exported by
-`src/ui/views/mod.rs`), gives the text input a stable focus target. `Message::FocusSearch` in
+`.id(BROWSE_SEARCH_ID)` by `views::browse::view_search_box` (used by the
+re-exported `views::browse::view_search_row`), gives the text input a stable focus target. `Message::FocusSearch` in
 `src/ui/message.rs` is routed by `src/ui/mod.rs` to `browse::focus_search` in
 `src/ui/handlers/browse.rs`, which returns `iced::widget::operation::focus(BROWSE_SEARCH_ID)` and
 mutates no player state. `shortcuts::shortcut` in `src/ui/shortcuts.rs` claims a Control-held `f`
@@ -101,6 +101,36 @@ before its Control/Alt/Logo chord guard, while leaving Alt+F and Logo+F to the w
 - `view_search_box_registers_its_focus_id` (`src/ui/views/tests.rs`)
 
 **History.** Added with the Ctrl+F keyboard affordance for the library search box.
+
+## Library search clearing
+
+**Guarantee.** A `Clear` button beside the `Search library` box on every normal-mode browse
+level empties the typed query. With no search showing it changes only the box text: no browse
+rows, view, selection, search-active flag, playback, fetch, or scroll change. While a search is
+showing it leaves the search exactly as Back does — it empties the query, deactivates the search,
+returns to the Artists view, restores the artists list's library order, and snaps the browse list
+to its top — while leaving the search-result rows in the songs buffer and scheduling no fetch or
+playback. Shade mode builds no search row, so it has no Clear button.
+
+**Enforced by.** `Message::ClearSearch` in `src/ui/message.rs` is routed by `src/ui/mod.rs` to
+`browse::clear_search` in `src/ui/handlers/browse.rs`; that handler empties `search_query` and,
+only while `search_active` is set, delegates to `handlers::browse::back`, which is what makes the
+active case identical to the Back button. `views::browse::view_clear_search_button` renders the
+button and `views::browse::view_search_row` places it after the search box; `view_search_row` is
+re-exported by `src/ui/views/mod.rs`, and the view tests import the button and box builders from
+`views::browse` directly. `src/ui/view.rs` builds that row where the bare search box used to sit.
+
+**Pinned by.**
+
+- `clear_search_without_an_active_search_clears_only_the_query` (`src/ui/tests.rs`)
+- `clear_search_with_an_empty_query_schedules_no_work` (`src/ui/tests.rs`)
+- `clear_search_while_a_search_is_active_returns_to_artists_and_clears_the_query`
+  (`src/ui/tests.rs`)
+- `view_clear_search_button_constructs` (`src/ui/views/tests.rs`)
+- `view_search_row_draws_clear_after_the_search_box` (`src/ui/views/tests.rs`)
+
+**History.** Added the one-press way to empty the library search box, reusing Back for the
+active-search case so the two affordances cannot drift apart.
 
 ## Browse selection
 

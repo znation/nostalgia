@@ -260,9 +260,9 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
             .push(views::view_all_albums_button())
             .push(views::view_playlists_button());
     }
-    // The search box sits on every browse screen, so a query can be typed
-    // from any level of the hierarchy.
-    column = column.push(views::view_search_box(&player.search_query));
+    // The search box and its Clear button sit on every browse screen, so a
+    // query can be typed from (and cleared at) any level of the hierarchy.
+    column = column.push(views::view_search_row(&player.search_query));
     column
         .push(main_content)
         .push(views::view_library_strip(

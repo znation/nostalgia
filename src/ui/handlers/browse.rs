@@ -380,6 +380,23 @@ pub(in crate::ui) fn focus_search() -> Task<Message> {
     iced::widget::operation::focus(views::BROWSE_SEARCH_ID)
 }
 
+/// The Clear button beside the search box: empty the typed query and, when a
+/// search is showing, leave it exactly as Back does.
+///
+/// Reusing [`back`] for the active case is what makes it identical to the
+/// Back button: it deactivates the search, switches to Artists, restores the
+/// artists list's library order, and snaps the list to its top. The inactive
+/// case mutates only the query, so it schedules no fetch or scroll. Neither
+/// case refetches or clears any browse rows, and neither touches playback.
+pub(in crate::ui) fn clear_search(player: &mut WinampPlayer) -> Task<Message> {
+    player.search_query.clear();
+    if player.search_active {
+        back(player)
+    } else {
+        Task::none()
+    }
+}
+
 /// The library search box submitted: take the stored text when Enter is
 /// pressed and replace the songs list with the search results.
 pub(in crate::ui) fn search_submitted(player: &mut WinampPlayer) -> Task<Message> {
