@@ -11,7 +11,7 @@ use super::player::worker::{Command, WorkerPlayer, await_device_ready, serve_com
 use super::player::{DEVICE_OPEN_TIMEOUT, WORKER_QUERY_TIMEOUT};
 use super::preview::{
     MAX_PREVIEW_BYTES, PREVIEW_TIMEOUT, PreviewCache, PublicAddressResolver, download_and_decode,
-    preview_agent, preview_agent_with_timeout,
+    download_and_decode_cached, preview_agent, preview_agent_with_timeout,
 };
 use super::*;
 use crate::equalizer::BAND_COUNT;

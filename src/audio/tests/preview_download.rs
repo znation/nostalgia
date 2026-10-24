@@ -452,3 +452,35 @@ fn with_a_proxy_set_the_preview_agent_stays_direct() {
         "the preview fetch must be direct even when a proxy is configured"
     );
 }
+
+// The cached fetch the worker runs must not remember a body that failed to
+// decode: the second play of the same URL goes back to the network. The
+// server answers one connection, so the retry's download error (rather than a
+// second decode error from a replayed body) shows the cache stayed empty.
+#[test]
+fn a_cached_fetch_does_not_replay_a_body_that_failed_to_decode() {
+    let address = serve_one_response(
+        "HTTP/1.1 200 OK\r\nContent-Type: audio/mp4\r\nContent-Length: 4\r\nConnection: close\r\n\r\nJUNK",
+    );
+    let agent = agent_with_timeout(Duration::from_secs(5));
+    let url = format!("http://{address}/not-a-preview.m4a");
+    let cache = PreviewCache::default();
+
+    let first = download_and_decode_cached(&cache, &agent, &url)
+        .err()
+        .expect("garbage bytes must not decode as an MP4 preview");
+    assert!(
+        first.to_string().contains("decoding the preview failed"),
+        "unexpected error: {first}"
+    );
+
+    let second = download_and_decode_cached(&cache, &agent, &url)
+        .err()
+        .expect("the one-shot server is gone, so the retry must fail");
+    assert!(
+        second
+            .to_string()
+            .contains("downloading the preview failed"),
+        "the retry should have gone back to the network, got: {second}"
+    );
+}
