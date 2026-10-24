@@ -1,4 +1,4 @@
-use super::playback::play_log_line;
+use super::playback::play::play_log_line;
 use super::threads::{
     off_thread, off_thread_with, spawn_sign_in_thread, start_sign_in_with, startup_token,
 };

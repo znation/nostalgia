@@ -407,7 +407,7 @@ fn absolute_next_url(next: &str) -> Option<String> {
 /// The notice logged when a collection has more pages than [`MAX_PAGES`], so
 /// `fetch` stops with rows unread. `next` is server-controlled text headed for
 /// the terminal, so it is formatted with `Debug` — as
-/// [`crate::apple_music::playback::play_log_line`] formats an id — to escape a control
+/// [`crate::apple_music::playback::play::play_log_line`] formats an id — to escape a control
 /// character (`\u{1b}`) or a Unicode format character such as the
 /// right-to-left override `\u{202e}` instead of letting it reach the terminal
 /// raw.

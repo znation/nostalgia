@@ -13,9 +13,9 @@
 //! restarts) the preview and marks it playing. The still-unimplemented stubs
 //! (`next_track` and `previous_track`) stay so a real implementation has a
 //! surface to land on. Inside, `browse` holds the queries (over `rest` or the
-//! `sample` fallbacks), `playback` the transport transitions, `validation` the
-//! id and preview-URL guards, and `threads` the background sign-in and REST
-//! seams.
+//! `sample` fallbacks), `playback` the transport transitions, output controls,
+//! and play path, `validation` the id and preview-URL guards, and `threads` the
+//! background sign-in and REST seams.
 //!
 //! The service also holds the authenticated `MusicKit` session
 //! ([`crate::music_kit_auth::MusicKitSession`]) obtained by [`init_service`]

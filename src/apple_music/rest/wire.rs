@@ -131,7 +131,7 @@ struct ApiError {
 /// Escaping it with [`str::escape_debug`] renders a control character
 /// (`\u{1b}`) or a Unicode format character such as the right-to-left override
 /// `\u{202e}` as a visible `\u{..}` sequence instead of letting it reach the
-/// terminal raw, matching how [`crate::apple_music::playback::play_log_line`] escapes a
+/// terminal raw, matching how [`crate::apple_music::playback::play::play_log_line`] escapes a
 /// library id. An ordinary message (letters, digits, spaces) passes through
 /// unchanged.
 pub(super) fn api_error_cause(body: &str) -> Option<String> {

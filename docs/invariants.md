@@ -1088,7 +1088,7 @@ once the player holds a preview's format and `rodio::Player::empty` reports the 
 drained;
 `RodioOutput::is_finished` bounds the worker's `Command::Finished` reply like the other backend
 queries, mapping a missing reply to false. `AppleMusicService::preview_finished` in
-`src/apple_music/playback.rs` forwards the backend's answer without touching shared state.
+`src/apple_music/playback/output.rs` forwards the backend's answer without touching shared state.
 `handlers::playback::preview::position_tick` schedules the finished query, `Message::PlaybackFinished`
 carries its reply, and `handlers::playback::preview::playback_finished` advances the transport;
 `handlers::playback::forward_track_id` (shared with `handlers::playback::step_track`) applies the
