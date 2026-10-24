@@ -3,7 +3,7 @@
 //! writes the line-based settings file.
 
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use super::Settings;
 
@@ -85,9 +85,27 @@ impl FileStore {
     #[must_use]
     pub fn load(&self) -> Option<Settings> {
         let path = self.path.as_ref()?;
-        let text = std::fs::read_to_string(path).ok()?;
-        Some(Settings::from_text(&text))
+        match std::fs::read_to_string(path) {
+            Ok(text) => Some(Settings::from_text(&text)),
+            Err(error) => {
+                if let Some(message) = read_failure_message(path, &error) {
+                    eprintln!("{message}");
+                }
+                None
+            }
+        }
     }
+}
+
+/// The diagnostic for a settings file that exists but cannot be read, or
+/// `None` for a missing file, which is the normal first-run state.
+fn read_failure_message(path: &Path, error: &std::io::Error) -> Option<String> {
+    (error.kind() != std::io::ErrorKind::NotFound).then(|| {
+        format!(
+            "failed to read the settings file {}: {error}; using defaults",
+            path.display()
+        )
+    })
 }
 
 impl SettingsWriter for FileStore {
@@ -145,6 +163,18 @@ mod tests {
             FileStore::resolve_path(None, None, Some(OsString::new())),
             None
         );
+    }
+
+    #[test]
+    fn read_failure_message_names_the_path_except_for_a_missing_file() {
+        let path = Path::new("/cfg/settings.ini");
+        let missing = std::io::Error::from(std::io::ErrorKind::NotFound);
+        assert_eq!(read_failure_message(path, &missing), None);
+
+        let denied = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+        let message = read_failure_message(path, &denied).unwrap();
+        assert!(message.contains("/cfg/settings.ini"), "{message}");
+        assert!(message.contains("using defaults"), "{message}");
     }
 
     fn varied_settings() -> Settings {
