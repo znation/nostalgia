@@ -1136,6 +1136,61 @@ async fn open_selected_opens_the_selected_song() {
     assert!(state.is_playing);
 }
 
+// The Open button opens whatever row the showing list has selected, not only
+// a song: the README promises it drills into an artist, album, or playlist
+// exactly as a second row press does. `open_selected` resolves the selection
+// against the current view and `open_row` maps that view to its selection
+// message, so pin every arm the song-only test above leaves out. A dropped or
+// swapped arm would make Open silently do nothing (or open the wrong level)
+// on that browse screen.
+#[test]
+fn open_selected_opens_the_selected_row_on_every_browse_level() {
+    for view in [
+        CurrentView::Artists,
+        CurrentView::Albums,
+        CurrentView::AllSongs,
+        CurrentView::AllAlbums,
+        CurrentView::Playlists,
+    ] {
+        let (mut player, _state) = test_player();
+        seed_browse_lists(&mut player);
+        player.current_view = view;
+        let epoch = match &player.current_view {
+            CurrentView::Artists => player.artists.epoch,
+            CurrentView::Albums => player.albums.epoch,
+            CurrentView::AllSongs => player.all_songs.epoch,
+            CurrentView::AllAlbums => player.all_albums.epoch,
+            CurrentView::Playlists => player.playlists.epoch,
+            CurrentView::Songs => unreachable!("the Songs level has its own Open test"),
+        };
+
+        assert_message_schedules_no_work(&mut player, Message::SelectRow { epoch, index: 0 });
+        let task = update(&mut player, Message::OpenSelected);
+        let opened = futures::executor::block_on(task_output(task, "open the selected row"));
+
+        let expected = match &player.current_view {
+            CurrentView::Artists => {
+                matches!(&opened, Message::ArtistSelected { epoch: e, index: 0 } if *e == epoch)
+            }
+            CurrentView::Albums | CurrentView::AllAlbums => {
+                matches!(&opened, Message::AlbumSelected { epoch: e, index: 0 } if *e == epoch)
+            }
+            CurrentView::AllSongs => {
+                matches!(&opened, Message::TrackSelected { epoch: e, index: 0 } if *e == epoch)
+            }
+            CurrentView::Playlists => {
+                matches!(&opened, Message::PlaylistSelected { epoch: e, index: 0 } if *e == epoch)
+            }
+            CurrentView::Songs => unreachable!("the Songs level has its own Open test"),
+        };
+        assert!(
+            expected,
+            "Open from {:?} must dispatch the selected row, got {opened:?}",
+            player.current_view
+        );
+    }
+}
+
 // Enter is the keyboard activation route for a selected browse row: the
 // shortcut table maps a plain press to OpenSelected, whose update arm dispatches
 // the same TrackSelected playback the Open button does.
