@@ -145,10 +145,23 @@ fn artist_row_puts_its_album_count_at_the_right_edge() {
 fn album_row_uses_title_and_duration() {
     let mut album = sample_album();
     album.duration_ms = 630_000;
-    let (title, label, is_current) = album_row(&album);
+    let (title, label, is_current) = album_row(&album, None, None);
     assert_eq!(title, "The Sample Band - First Record");
     assert_eq!(label, "10:30");
     assert!(!is_current);
+}
+
+#[test]
+fn album_row_prefers_the_lists_cached_title_and_running_time() {
+    // The loaded album list caches each row's display title and formatted
+    // running time, and the row builder must borrow them rather than joining
+    // the artist and title and formatting the duration again. Cached values
+    // that differ from the album's fields prove the row uses the cache; the
+    // `None` tests pin the fallback.
+    let album = sample_album();
+    let (title, label, _) = album_row(&album, Some("Cached - Title"), Some("1:23"));
+    assert_eq!(title, "Cached - Title");
+    assert_eq!(label, "1:23");
 }
 
 // An album with no artist has nothing to join, so the row must not render a
@@ -158,7 +171,7 @@ fn album_row_shows_the_title_alone_when_the_artist_is_empty() {
     let mut album = sample_album();
     album.artist = String::new();
     album.duration_ms = 95_000;
-    let (title, label, is_current) = album_row(&album);
+    let (title, label, is_current) = album_row(&album, None, None);
     assert_eq!(title, "First Record");
     assert!(matches!(title, std::borrow::Cow::Borrowed(_)));
     assert_eq!(label, "1:35");
@@ -171,7 +184,7 @@ fn album_row_shows_the_title_alone_when_the_artist_is_empty() {
 #[test]
 fn album_row_shows_a_placeholder_when_the_duration_is_unknown() {
     let album = sample_album();
-    let (_, label, is_current) = album_row(&album);
+    let (_, label, is_current) = album_row(&album, None, None);
     assert_eq!(label, "--:--");
     assert!(!is_current);
 }
@@ -1817,7 +1830,7 @@ fn construct_every_browse_view(
     loading: bool,
 ) {
     let _artists = view_artists(artists, epoch, None, loading, None);
-    let _albums = view_albums(albums, epoch, None, loading, None);
+    let _albums = view_albums(albums, &[], &[], epoch, None, loading, None);
     let _songs = view_songs(songs, &[], &[], epoch, None, loading, None, None, false);
     let _songs_marked = view_songs(
         songs,
@@ -1835,7 +1848,7 @@ fn construct_every_browse_view(
     let _all_songs = view_all_songs(songs, &[], &[], epoch, None, loading, None, None);
     let _all_songs_marked =
         view_all_songs(songs, &[], &[], epoch, None, loading, None, Some("song-1"));
-    let _all_albums = view_all_albums(albums, epoch, None, loading, None);
+    let _all_albums = view_all_albums(albums, &[], &[], epoch, None, loading, None);
     let _playlists = view_playlists(playlists, epoch, None, loading, None);
 }
 

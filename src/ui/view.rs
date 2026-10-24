@@ -117,6 +117,8 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
         ),
         CurrentView::Albums => views::view_albums(
             &player.albums.items,
+            &player.albums.titles,
+            &player.albums.labels,
             player.albums.epoch,
             player.albums.selected(),
             player.albums.loading,
@@ -157,9 +159,12 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
             )
         }
         // The flat album list renders like the per-artist Albums view: album
-        // rows with no current-track marker.
+        // rows with no current-track marker, drawing the cached title and
+        // running time the load stored.
         CurrentView::AllAlbums => views::view_all_albums(
             &player.all_albums.items,
+            &player.all_albums.titles,
+            &player.all_albums.labels,
             player.all_albums.epoch,
             player.all_albums.selected(),
             player.all_albums.loading,

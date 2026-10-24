@@ -10,10 +10,10 @@
 //! instead of spelling out the parallel-field bookkeeping at each site.
 //!
 //! The `update` arms go through `store`/`store_with_row_text`/`clear`/`fail`: the
-//! Artists, Albums, All Albums, and Playlists `*Loaded` arms call `store`, the
-//! Songs and All Songs `*Loaded` arms call `store_with_row_text` so each track's
-//! display title and formatted length are composed once per load, every
-//! `*LoadFailed` arm calls `fail`, and
+//! Artists and Playlists `*Loaded` arms call `store`, the Songs, All Songs,
+//! Albums, and All Albums `*Loaded` arms call `store_with_row_text` so each
+//! row's display title and formatted length or running time are composed once
+//! per load, every `*LoadFailed` arm calls `fail`, and
 //! the navigation arms, `LoadArtists`, the flat-list/Playlists buttons, and
 //! `SearchSubmitted` start their fetch through the event loop's `fetch_level`,
 //! which calls `clear` before `begin_fetch`. `select` resolves all four
@@ -33,17 +33,18 @@ pub(super) struct BrowseList<T> {
     pub(super) items: Vec<T>,
     /// The primary title each row renders, cached when the rows are stored
     /// (see [`Self::store_with_row_text`]) so a view refresh does not re-join
-    /// every artist and title. Only the song lists populate it; [`Self::store`]
-    /// leaves it empty, and the row builder falls back to composing the title
-    /// in that case. Every transition that changes `items` keeps the two in
-    /// lockstep: `store` clears the titles, `store_with_row_text` rebuilds
-    /// them beside the rows, and `clear`/`fail` drop them with the rows.
+    /// every artist and title. The song and album lists populate it;
+    /// [`Self::store`] leaves it empty, and the row builder falls back to
+    /// composing the title in that case. Every transition that changes `items`
+    /// keeps the two in lockstep: `store` clears the titles,
+    /// `store_with_row_text` rebuilds them beside the rows, and
+    /// `clear`/`fail` drop them with the rows.
     pub(super) titles: Vec<String>,
     /// The secondary label each row renders, cached when the rows are stored
     /// (see [`Self::store_with_row_text`]) so a view refresh does not reformat
-    /// every row. Only the song lists populate it; [`Self::store`] leaves it
-    /// empty, and the row builder falls back to formatting in that case. Every
-    /// transition that changes `items` keeps the two in lockstep: `store`
+    /// every row. The song and album lists populate it; [`Self::store`] leaves
+    /// it empty, and the row builder falls back to formatting in that case.
+    /// Every transition that changes `items` keeps the two in lockstep: `store`
     /// clears the labels, `store_with_row_text` rebuilds them beside the rows,
     /// and `clear`/`fail` drop them with the rows.
     pub(super) labels: Vec<String>,

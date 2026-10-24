@@ -177,12 +177,11 @@ fn one_line_title<'a>(title: Cow<'a, str>) -> Cow<'a, str> {
 /// which distinguishes a fetch failure, a buffer no reply has populated yet
 /// (still loading), and one that loaded empty and names the list.
 ///
-/// The primary title and the secondary label are both [`Cow`]s: a song row's
-/// title and length are borrowed from the loaded list's caches in the common
-/// case and only composed on the fallback path, while the artist, album, and
-/// playlist rows borrow their names and static hints. This builder runs on
-/// every view refresh, so borrowing avoids a `String` allocation per row per
-/// frame. The row prefix is one owned `String` per row per refresh,
+/// The primary title and the secondary label are both [`Cow`]s: a song or
+/// album row's title and label are borrowed from the loaded list's caches in
+/// the common case and only composed on the fallback path, while a playlist
+/// row borrows its name and static hint. This builder runs on every view
+/// refresh, so borrowing avoids a `String` allocation per row per frame. The row prefix is one owned `String` per row per refresh,
 /// since it depends on the row's position; it is not cached in `BrowseList`
 /// because that would need invalidating on every store for no correctness
 /// gain.
@@ -277,12 +276,27 @@ pub(in crate::ui::views) fn album_count_label(count: usize) -> Cow<'static, str>
 /// supplied no songs), and the current-track flag. Albums are never the
 /// currently playing row, so the flag is always false. [`scrollable_list`]
 /// supplies the press message from the row's position and list epoch.
-pub(in crate::ui::views) fn album_row<'a>(album: &'a Album) -> (Cow<'a, str>, Cow<'a, str>, bool) {
-    (
-        album.display_title(),
-        Cow::Owned(format_track_time(album.duration_ms)),
-        false,
-    )
+///
+/// `cached_title` and `cached_label` are the title and running time the loaded
+/// list stored for this row (see `BrowseList::store_with_row_text`), borrowed
+/// so a refresh of a large album library does not re-join every artist and
+/// title and reformat every duration. `None` — a list stored without caches,
+/// as a test may do — falls back to composing the title and formatting the
+/// duration for this row, so the rendered row is unchanged.
+pub(in crate::ui::views) fn album_row<'a>(
+    album: &'a Album,
+    cached_title: Option<&'a str>,
+    cached_label: Option<&'a str>,
+) -> (Cow<'a, str>, Cow<'a, str>, bool) {
+    let title = match cached_title {
+        Some(title) => Cow::Borrowed(title),
+        None => album.display_title(),
+    };
+    let label = match cached_label {
+        Some(label) => Cow::Borrowed(label),
+        None => Cow::Owned(format_track_time(album.duration_ms)),
+    };
+    (title, label, false)
 }
 
 /// The browse row a playlist becomes: its name, the "View Songs" hint, and
@@ -332,18 +346,33 @@ pub(in crate::ui::views) fn song_row<'a>(
 
 /// Builds an album list: the shared body of [`super::view_albums`] and
 /// [`super::view_all_albums`], mapping each album to an [`album_row`] by its
-/// position in `albums` and carrying `epoch` and the selected row into
-/// [`scrollable_list`]. `placeholder` is the caller's [`browse_placeholder`]
-/// wording for an empty list. A non-empty list also appends its item-count
-/// footer ([`list_with_count`]).
+/// position in `albums` and pairing it with the cached title and running time
+/// at the same index (see [`album_row`]). `epoch` and `selected` reach
+/// [`scrollable_list`], so every row press selects and the selected row draws
+/// the blue bar. `placeholder` is the caller's [`browse_placeholder`] wording
+/// for an empty list. A non-empty list also appends its item-count footer
+/// ([`list_with_count`]).
 pub(in crate::ui::views) fn album_list<'a>(
     albums: &'a [Album],
+    titles: &'a [String],
+    labels: &'a [String],
     epoch: u64,
     selected: Option<usize>,
     placeholder: &'a str,
 ) -> Element<'a, Message> {
     list_with_count(
-        scrollable_list(albums.iter().map(album_row), epoch, selected, placeholder),
+        scrollable_list(
+            albums.iter().enumerate().map(|(index, album)| {
+                album_row(
+                    album,
+                    titles.get(index).map(String::as_str),
+                    labels.get(index).map(String::as_str),
+                )
+            }),
+            epoch,
+            selected,
+            placeholder,
+        ),
         albums.len(),
         "album",
         "albums",

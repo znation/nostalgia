@@ -3329,6 +3329,24 @@ fn albums_loaded_populates_list() {
         |player| &mut player.albums.items,
         |player| player.albums.loading,
     );
+
+    // The list caches each row's display title and formatted running time
+    // when it is stored, in row order, so a view refresh borrows them instead
+    // of re-joining every artist and title and formatting every duration
+    // again (see `BrowseList::store_with_row_text`).
+    let mut album = sample_album();
+    album.duration_ms = 630_000;
+    let _ = update(&mut player, Message::AlbumsLoaded(vec![album]));
+    assert_eq!(
+        player.albums.titles,
+        ["The Sample Band - First Record"],
+        "the album row's display title is cached at store time"
+    );
+    assert_eq!(
+        player.albums.labels,
+        ["10:30"],
+        "the album row's running time is cached at store time"
+    );
 }
 
 #[test]
@@ -3385,6 +3403,23 @@ fn all_albums_loaded_stores_the_flat_list() {
         Message::AllAlbumsLoaded,
         |player| &mut player.all_albums.items,
         |player| player.all_albums.loading,
+    );
+
+    // The flat list caches each row's display title and formatted running
+    // time too, so the whole-library Albums view does not re-join and
+    // reformat every row on each refresh.
+    let mut album = sample_album();
+    album.duration_ms = 95_000;
+    let _ = update(&mut player, Message::AllAlbumsLoaded(vec![album]));
+    assert_eq!(
+        player.all_albums.titles,
+        ["The Sample Band - First Record"],
+        "the flat album row's display title is cached at store time"
+    );
+    assert_eq!(
+        player.all_albums.labels,
+        ["1:35"],
+        "the flat album row's running time is cached at store time"
     );
 }
 
@@ -3659,6 +3694,49 @@ fn sort_reorders_all_albums_by_their_display_title() {
         .map(|album| album.id.as_str())
         .collect();
     assert_eq!(ids, ["alpha", "zulu"]);
+}
+
+#[test]
+fn sort_reorders_all_albums_and_keeps_their_cached_text_aligned() {
+    let (mut player, _state) = test_player();
+    player.current_view = CurrentView::AllAlbums;
+    let albums = vec![
+        Album {
+            id: "zulu".to_string(),
+            title: "Alpha".to_string(),
+            artist_id: "artist-1".to_string(),
+            artist: "Zulu".to_string(),
+            duration_ms: 60_000,
+        },
+        Album {
+            id: "alpha".to_string(),
+            title: "Zulu".to_string(),
+            artist_id: "artist-1".to_string(),
+            artist: "alpha".to_string(),
+            duration_ms: 120_000,
+        },
+    ];
+    let _ = update(&mut player, Message::AllAlbumsLoaded(albums));
+
+    let _ = update(&mut player, Message::SortBrowse);
+
+    let ids: Vec<&str> = player
+        .all_albums
+        .items
+        .iter()
+        .map(|album| album.id.as_str())
+        .collect();
+    assert_eq!(ids, ["alpha", "zulu"]);
+    assert_eq!(
+        player.all_albums.titles,
+        ["alpha - Zulu", "Zulu - Alpha"],
+        "each row keeps its own cached display title"
+    );
+    assert_eq!(
+        player.all_albums.labels,
+        ["2:00", "1:00"],
+        "each row keeps its own cached running time"
+    );
 }
 
 #[test]

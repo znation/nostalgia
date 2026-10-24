@@ -161,8 +161,8 @@ navigation shows the previous level's rows" in `BUGS-FIXED.md`.
 **Guarantee.** The Sort button reorders only the browse list currently showing, ascending by each
 row's rendered text compared case-insensitively: Artists and Playlists by name, Albums and All
 Albums by `artist - title`, and Songs and All Songs by `artist - title`. Rows whose keys compare
-equal keep their library order. A song list reorders its cached titles and labels by the same
-permutation as its songs, so each row keeps its own title and duration. The reorder is one-shot:
+equal keep their library order. The song and album lists reorder their cached titles and labels
+by the same permutation as their rows, so each row keeps its own title and duration. The reorder is one-shot:
 it bumps only that list's epoch, so a selection press rendered before the sort is rejected while
 the post-sort indices resolve to the sorted rows, and it leaves the other lists, the current
 view, the search state, and playback unchanged. Navigating away and back restores the library's
@@ -191,6 +191,7 @@ child is open), and `views::view_browse_nav_buttons` in `src/ui/views/browse.rs`
 - `sort_reorders_songs_and_keeps_their_cached_text_aligned`
 - `sort_reorders_all_songs_and_keeps_their_cached_text_aligned`
 - `sort_reorders_all_albums_by_their_display_title`
+- `sort_reorders_all_albums_and_keeps_their_cached_text_aligned`
 - `sort_bumps_the_epoch_so_a_pre_sort_press_is_rejected`
 - `sort_with_an_empty_or_loading_list_is_a_noop`
 - `sort_leaves_other_lists_view_search_and_playback_untouched`
@@ -295,14 +296,22 @@ Apple Music album field: it is skipped by serde and deserializes to `0`.
 `RestLibrary::get_album_durations` in `src/apple_music/rest.rs` groups and sums the library songs;
 `browse::apply_album_durations` in `src/apple_music/browse.rs` fills the signed-in album lists;
 and `views::browse::rows::album_row` in `src/ui/views/browse/rows.rs` renders the formatted time
-or placeholder as the row's secondary text.
+or placeholder as the row's secondary text. The loaded album lists cache each row's display
+title and formatted running time through `BrowseList::store_with_row_text` (`store_albums` in
+`src/ui/handlers/browse/fetch.rs`), and `album_row` borrows them, falling back to composing the
+title and formatting the duration for an index without a cached value, so a view refresh does
+not re-join and reformat every row.
 
 **Pinned by.**
 
 - `album_row_uses_title_and_duration`
+- `album_row_prefers_the_lists_cached_title_and_running_time`
 - `album_row_shows_the_title_alone_when_the_artist_is_empty`
 - `album_row_shows_a_placeholder_when_the_duration_is_unknown`
   (all in `src/ui/views/tests.rs`)
+- `albums_loaded_populates_list`
+- `all_albums_loaded_stores_the_flat_list`
+  (both in `src/ui/tests.rs`)
 - `albums_carry_their_songs_total_durations`
   (in `src/sample_library.rs`)
 - `album_duration_is_not_serialized_and_defaults_to_zero`

@@ -39,10 +39,24 @@ pub(in crate::ui) fn artists_loaded(
     Task::none()
 }
 
-/// The albums fetch landed: store the rows in the albums list.
+/// The albums fetch landed: store the rows in the albums list, caching each
+/// row's display title and formatted running time (see [`store_albums`]).
 pub(in crate::ui) fn albums_loaded(player: &mut WinampPlayer, albums: Vec<Album>) -> Task<Message> {
-    player.albums.store(albums);
+    store_albums(&mut player.albums, albums);
     Task::none()
+}
+
+/// Store a loaded album list, caching each row's display title and formatted
+/// running time once (see `BrowseList::store_with_row_text`), the album twin
+/// of [`store_songs`]. Without the cache a view refresh re-joins every album's
+/// artist and title and reformats every running time, and the flat All Albums
+/// list can hold the whole library.
+fn store_albums(list: &mut BrowseList<Album>, albums: Vec<Album>) {
+    list.store_with_row_text(
+        albums,
+        |album| album.display_title().into_owned(),
+        |album| views::format_track_time(album.duration_ms),
+    );
 }
 
 /// The songs fetch landed: store the rows in the songs list. Cache each
@@ -77,12 +91,12 @@ pub(in crate::ui) fn all_songs_loaded(
 }
 
 /// The flat whole-library albums fetch landed: store the rows in the All
-/// Albums list.
+/// Albums list, with the same cached row text as the browsed list.
 pub(in crate::ui) fn all_albums_loaded(
     player: &mut WinampPlayer,
     albums: Vec<Album>,
 ) -> Task<Message> {
-    player.all_albums.store(albums);
+    store_albums(&mut player.all_albums, albums);
     Task::none()
 }
 

@@ -58,11 +58,17 @@ pub fn view_artists<'a>(
 
 /// The Albums browse view: one row per album, in the order given, each
 /// selecting its row with [`Message::SelectRow`] (a second press opens it).
-/// `selected` paints that row's blue bar. `loading` and `error` select the
-/// placeholder wording (see [`browse_placeholder`]); a fetch failure wins.
-/// Built by [`album_list`] from the [`rows::album_row`] mapping.
+/// `titles` and `labels` hold the display titles and formatted running times
+/// the loaded list cached in the same order as `albums` (see
+/// `BrowseList::store_with_row_text`); an index without a cached title or
+/// label falls back to composing that album's title or formatting its
+/// duration. `selected` paints that row's blue bar. `loading` and `error`
+/// select the placeholder wording (see [`browse_placeholder`]); a fetch
+/// failure wins. Built by [`album_list`] from the [`rows::album_row`] mapping.
 pub fn view_albums<'a>(
     albums: &'a [Album],
+    titles: &'a [String],
+    labels: &'a [String],
     epoch: u64,
     selected: Option<usize>,
     loading: bool,
@@ -70,6 +76,8 @@ pub fn view_albums<'a>(
 ) -> Element<'a, Message> {
     album_list(
         albums,
+        titles,
+        labels,
         epoch,
         selected,
         browse_placeholder(&CurrentView::Albums, loading, error, false),
@@ -142,14 +150,17 @@ pub fn view_all_songs<'a>(
 
 /// The All Albums browse view: one row per album in the whole library, in the
 /// order given, each selecting its row with [`Message::SelectRow`] (a second
-/// press opens it); `selected` paints that row's blue bar. It mirrors
-/// [`view_albums`] — album rows carry no current-track marker — but is its own
-/// view so its presses resolve against `all_albums` and Back from the songs it
-/// opens returns to this list. It never shows the search wording, because the
-/// flat list is not a search's result. Built by [`album_list`] from the
-/// [`rows::album_row`] mapping.
+/// press opens it); `titles` and `labels` are the same cached display-title
+/// and formatted-running-time slices [`view_albums`] takes. `selected` paints
+/// that row's blue bar. It mirrors [`view_albums`] — album rows carry no
+/// current-track marker — but is its own view so its presses resolve against
+/// `all_albums` and Back from the songs it opens returns to this list. It
+/// never shows the search wording, because the flat list is not a search's
+/// result. Built by [`album_list`] from the [`rows::album_row`] mapping.
 pub fn view_all_albums<'a>(
     albums: &'a [Album],
+    titles: &'a [String],
+    labels: &'a [String],
     epoch: u64,
     selected: Option<usize>,
     loading: bool,
@@ -157,6 +168,8 @@ pub fn view_all_albums<'a>(
 ) -> Element<'a, Message> {
     album_list(
         albums,
+        titles,
+        labels,
         epoch,
         selected,
         browse_placeholder(&CurrentView::AllAlbums, loading, error, false),
