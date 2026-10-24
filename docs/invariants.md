@@ -156,10 +156,10 @@ fallback.
 
 **Pinned by.**
 
-- `search_songs_matches_the_sample_library_by_title_or_artist` (`src/apple_music/tests.rs`)
-- `search_songs_matches_the_sample_library_by_album_title` (`src/apple_music/tests.rs`)
-- `search_songs_rejects_a_blank_query` (`src/apple_music/tests.rs`)
-- `search_songs_uses_the_rest_library_when_signed_in` (`src/apple_music/tests.rs`)
+- `search_songs_matches_the_sample_library_by_title_or_artist` (`src/apple_music/tests/browse_sample.rs`)
+- `search_songs_matches_the_sample_library_by_album_title` (`src/apple_music/tests/browse_sample.rs`)
+- `search_songs_rejects_a_blank_query` (`src/apple_music/tests/browse_sample.rs`)
+- `search_songs_uses_the_rest_library_when_signed_in` (`src/apple_music/tests/browse_rest.rs`)
 
 **History.** Added the album-title match so typing an album name the browse lists show finds
 that album's songs offline.
@@ -451,7 +451,7 @@ those labels through `BrowseList::store_with_labels`, so `artist_row` can borrow
   (in `src/sample_library.rs`)
 - `get_favorite_artists_uses_the_rest_library_when_signed_in`
 - `get_favorite_artists_counts_albums_by_artist_name_from_the_rest_library`
-  (both in `src/apple_music/tests.rs`)
+  (both in `src/apple_music/tests/browse_rest.rs`)
 - `album_counts_by_artist_counts_non_empty_names`
 - `artist_album_count_is_not_serialized_and_defaults_to_zero`
   (both in `src/library.rs`)
@@ -506,7 +506,7 @@ refresh does not re-join and reformat every row.
 - `get_all_albums_leaves_an_album_without_matching_songs_at_zero_duration`
 - `get_all_albums_fails_when_the_albums_request_fails`
 - `get_all_albums_fails_when_the_album_durations_request_fails`
-  (all in `src/apple_music/tests.rs`)
+  (all in `src/apple_music/tests/browse_rest.rs`)
 
 ## UI layout
 
@@ -884,7 +884,7 @@ its internal id, whenever the id is in the known-track index:
   `toggle_without_a_loaded_preview_stops_the_transport`,
   `pause_after_stop_leaves_the_transport_stopped`, `resume_resumes_the_audio_backend`,
   `stop_stops_the_audio_backend`, `toggle_play_pause_pauses_while_playing`, and
-  `resume_after_stop_restarts_the_preview` in `src/apple_music/tests.rs`.
+  `resume_after_stop_restarts_the_preview` in `src/apple_music/tests/transport.rs`.
 - The seek slider beneath the LCD measures the backend-reported preview length, not the catalog
   track's length at the LCD's right edge. Its thumb follows the stored position, or the drag in
   progress while one is held; the thumb and the large elapsed readout both resolve their position
@@ -1046,7 +1046,7 @@ rather than the panic unwinding the event loop.
 - `the_position_thread_is_named_nostalgia_position_poll`
 - `the_position_timer_runs_only_while_there_is_a_position_to_refresh`
 - `a_paused_preview_needs_the_position_poll_before_its_first_reply` (`src/ui/tests.rs`)
-- `play_track_without_a_preview_url_stops_the_previous_preview` (`src/apple_music/tests.rs`)
+- `play_track_without_a_preview_url_stops_the_previous_preview` (`src/apple_music/tests/play_track.rs`)
 - `position_query_reports_none_when_nothing_is_loaded`
 - `a_seek_is_reflected_by_the_next_position_query`
 - `a_pause_keeps_the_loaded_player_reporting_its_position`
@@ -1057,7 +1057,7 @@ rather than the panic unwinding the event loop.
 - `playback_format_query_reports_none_when_nothing_is_loaded`
 - `rodio_output_asks_the_worker_for_its_format`
 - `silent_output_reports_no_playback_format` (`src/audio/tests/rodio_output.rs`)
-- `playback_format_forwards_the_audio_output_format` (`src/apple_music/tests.rs`)
+- `playback_format_forwards_the_audio_output_format` (`src/apple_music/tests/audio_forwarding.rs`)
 - `format_playback_prefix_formats_khz_and_bitrate`
 - `channel_mode_label_names_the_reported_channels`
 - `channel_label_color_lights_only_the_reported_mode`
@@ -1076,9 +1076,9 @@ rather than the panic unwinding the event loop.
 - `seek_preview_released_invalidates_an_in_flight_position_reply`
 - `seek_preview_released_backend_failure_leaves_the_position_alone`
 - `position_tick_queries_position_and_duration` (`src/ui/tests.rs`)
-- `playback_duration_forwards_the_audio_output_duration` (`src/apple_music/tests.rs`)
+- `playback_duration_forwards_the_audio_output_duration` (`src/apple_music/tests/audio_forwarding.rs`)
 - `seek_output_to_forwards_an_absolute_position`
-- `seek_output_to_propagates_an_audio_backend_failure` (`src/apple_music/tests.rs`)
+- `seek_output_to_propagates_an_audio_backend_failure` (`src/apple_music/tests/audio_forwarding.rs`)
 - `silent_output_reports_no_playback_duration`
 - `duration_for_source_reads_a_samples_buffers_length`
 - `clamp_seek_clamps_to_the_preview_length_and_passes_through_without_one`
@@ -1105,7 +1105,7 @@ rather than the panic unwinding the event loop.
 - `a_refused_spectrum_thread_ends_the_tick_stream_instead_of_panicking` (`src/ui/tests.rs`)
 - `a_refused_spectrum_thread_reports_the_cause_and_the_loss` (`src/ui/tests.rs`)
 - `the_spectrum_thread_is_named_nostalgia_spectrum_poll` (`src/ui/tests.rs`)
-- `playback_spectrum_forwards_the_audio_output_spectrum` (`src/apple_music/tests.rs`)
+- `playback_spectrum_forwards_the_audio_output_spectrum` (`src/apple_music/tests/audio_forwarding.rs`)
 - `the_marquee_timer_runs_only_while_the_line_needs_to_scroll`
 - `the_player_knows_when_the_now_playing_line_needs_the_marquee`
 - `track_selected_resets_the_marquee_offset` (`src/ui/tests.rs`)
@@ -1462,7 +1462,7 @@ redirects and disables the proxy.
 - `preview_url_problem_unwraps_a_disguised_internal_host`
 - `preview_url_problem_rejects_a_url_without_a_usable_https_host`
 - `is_numeric_host_form_recognizes_legacy_spellings_and_leaves_names_alone`
-  (all in `src/apple_music/tests.rs`)
+  (all in `src/apple_music/tests/validation.rs`)
 - `the_preview_agent_refuses_a_hostname_that_resolves_to_loopback`
 - `the_preview_resolver_allows_a_public_address_literal`
   (both in `src/audio/tests/preview_download.rs`)
@@ -1518,7 +1518,7 @@ backend queries. On the UI side, `views::now_playing::visualizer_bar_heights` an
 - `silent_output_reports_no_spectrum` (`src/audio/tests/rodio_output.rs`)
 - `rodio_output_asks_the_worker_for_its_spectrum` (`src/audio/tests/rodio_output.rs`)
 - `rodio_output_reports_a_closed_worker_for_every_command` (`src/audio/tests/rodio_output.rs`)
-- `playback_spectrum_forwards_the_audio_output_spectrum` (`src/apple_music/tests.rs`)
+- `playback_spectrum_forwards_the_audio_output_spectrum` (`src/apple_music/tests/audio_forwarding.rs`)
 - `visualizer_bar_heights_scale_and_clamp_the_reported_bands`
 - `visualizer_bar_heights_maps_a_nan_band_to_empty` (`src/ui/views/tests.rs`)
 - `now_playing_content_keeps_the_visualizer_height_with_and_without_a_spectrum`
@@ -1578,7 +1578,7 @@ same list/Shuffle/Repeat rules as Next, and the no-next-song case reuses `handle
 - `rodio_output_reports_none_when_the_finished_reply_times_out` (`src/audio/tests/rodio_output.rs`)
 - `rodio_output_reports_a_closed_worker_for_every_command` (`src/audio/tests/rodio_output.rs`)
 - `stop_removes_the_player_so_a_finished_query_reports_none` (`src/audio/tests/worker.rs`)
-- `preview_finished_forwards_the_audio_output_state` (`src/apple_music/tests.rs`)
+- `preview_finished_forwards_the_audio_output_state` (`src/apple_music/tests/audio_forwarding.rs`)
 - `position_tick_queries_preview_finished` (`src/ui/tests.rs`)
 - `preview_end_advances_to_the_next_song` (`src/ui/tests.rs`)
 - `preview_end_in_all_songs_steps_the_flat_list` (`src/ui/tests.rs`)
