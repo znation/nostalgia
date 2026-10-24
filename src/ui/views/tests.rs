@@ -720,22 +720,13 @@ fn lcd_indicator_strip_publishes_always_on_top_on_a_and_visualizer_on_v() {
             lcd_indicator_strip().into();
         let capture = layout_capture::capture_text(&mut element, &renderer);
         let letter = capture.find(label);
-        let mut user_interface = iced_runtime::user_interface::UserInterface::build(
+        let messages = layout_capture::publish_at(
             element,
-            layout_capture::limits().max(),
-            iced_runtime::user_interface::Cache::new(),
             &mut renderer,
-        );
-        let mut messages = Vec::new();
-        let mut clipboard = iced::advanced::clipboard::Null;
-        let _ = user_interface.update(
             &[iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
                 iced::mouse::Button::Left,
             ))],
-            iced::mouse::Cursor::Available(iced::Point::new(letter.center_x(), letter.center_y())),
-            &mut renderer,
-            &mut clipboard,
-            &mut messages,
+            iced::Point::new(letter.center_x(), letter.center_y()),
         );
         match label {
             "A" => assert!(
@@ -939,25 +930,13 @@ fn elapsed_readout_toggles_only_while_not_stopped() {
         .into();
         let capture = layout_capture::capture_text(&mut element, &renderer);
         let elapsed = capture.find("00:53");
-        let mut user_interface = iced_runtime::user_interface::UserInterface::build(
+        let messages = layout_capture::publish_at(
             element,
-            layout_capture::limits().max(),
-            iced_runtime::user_interface::Cache::new(),
             &mut renderer,
-        );
-        let mut messages = Vec::new();
-        let mut clipboard = iced::advanced::clipboard::Null;
-        let _ = user_interface.update(
             &[iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
                 iced::mouse::Button::Left,
             ))],
-            iced::mouse::Cursor::Available(iced::Point::new(
-                elapsed.center_x(),
-                elapsed.center_y(),
-            )),
-            &mut renderer,
-            &mut clipboard,
-            &mut messages,
+            iced::Point::new(elapsed.center_x(), elapsed.center_y()),
         );
         let toggles = messages
             .iter()
@@ -2826,27 +2805,13 @@ fn shade_strip_double_click_restores_the_window() {
     );
     let capture = layout_capture::capture_text(&mut element, &renderer);
     let center = iced::Point::new(capture.size().width / 2.0, capture.size().height / 2.0);
-    let mut user_interface = iced_runtime::user_interface::UserInterface::build(
-        element,
-        layout_capture::limits().max(),
-        iced_runtime::user_interface::Cache::new(),
-        &mut renderer,
-    );
-    let mut clipboard = iced::advanced::clipboard::Null;
-    let mut messages = Vec::new();
-
-    let _ = user_interface.update(
-        &[
-            iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
-            iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
-                iced::mouse::Button::Left,
-            )),
-        ],
-        iced::mouse::Cursor::Available(center),
-        &mut renderer,
-        &mut clipboard,
-        &mut messages,
-    );
+    let single_click = [
+        iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
+        iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+            iced::mouse::Button::Left,
+        )),
+    ];
+    let messages = layout_capture::publish_at(element, &mut renderer, &single_click, center);
     assert!(
         !messages
             .iter()
@@ -2854,15 +2819,28 @@ fn shade_strip_double_click_restores_the_window() {
         "a single click on the strip must not unshade: {messages:?}"
     );
 
-    messages.clear();
-    let _ = user_interface.update(
-        &[iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
+    let double_click = [
+        iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
+        iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
             iced::mouse::Button::Left,
-        ))],
-        iced::mouse::Cursor::Available(center),
+        )),
+        iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
+        iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+            iced::mouse::Button::Left,
+        )),
+    ];
+    let messages = layout_capture::publish_at(
+        view_shade_strip(
+            TransportMode::Stopped,
+            0.5,
+            Cow::Borrowed("00:53"),
+            Cow::Borrowed("3:30"),
+            None,
+            None,
+        ),
         &mut renderer,
-        &mut clipboard,
-        &mut messages,
+        &double_click,
+        center,
     );
     let toggles = messages
         .iter()
@@ -2898,37 +2876,16 @@ fn shade_strip_double_clicks_on_controls_do_not_restore_the_window() {
         }
     }
 
-    fn double_click_at(
-        element: iced::Element<'_, Message>,
-        point: iced::Point,
-        renderer: &mut iced::Renderer,
-    ) -> Vec<Message> {
-        let mut user_interface = iced_runtime::user_interface::UserInterface::build(
-            element,
-            layout_capture::limits().max(),
-            iced_runtime::user_interface::Cache::new(),
-            renderer,
-        );
-        let mut messages = Vec::new();
-        let mut clipboard = iced::advanced::clipboard::Null;
-        let _ = user_interface.update(
-            &[
-                iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
-                iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
-                    iced::mouse::Button::Left,
-                )),
-                iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
-                iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
-                    iced::mouse::Button::Left,
-                )),
-            ],
-            iced::mouse::Cursor::Available(point),
-            renderer,
-            &mut clipboard,
-            &mut messages,
-        );
-        messages
-    }
+    let double_click = [
+        iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
+        iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+            iced::mouse::Button::Left,
+        )),
+        iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
+        iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+            iced::mouse::Button::Left,
+        )),
+    ];
 
     let strip = || {
         view_shade_strip(
@@ -2975,7 +2932,7 @@ fn shade_strip_double_clicks_on_controls_do_not_restore_the_window() {
             iced::Point::new(volume.x + volume.width * 0.25, volume.center_y()),
         ),
     ] {
-        let messages = double_click_at(strip(), point, &mut renderer);
+        let messages = layout_capture::publish_at(strip(), &mut renderer, &double_click, point);
         assert!(
             !messages
                 .iter()
@@ -3185,25 +3142,13 @@ fn compact_readout_toggles_time_display_only_while_not_stopped() {
             };
             let capture = layout_capture::capture_text(&mut element, &renderer);
             let readout = capture.find("00:53/3:30");
-            let mut user_interface = iced_runtime::user_interface::UserInterface::build(
+            let messages = layout_capture::publish_at(
                 element,
-                layout_capture::limits().max(),
-                iced_runtime::user_interface::Cache::new(),
                 &mut renderer,
-            );
-            let mut messages = Vec::new();
-            let mut clipboard = iced::advanced::clipboard::Null;
-            let _ = user_interface.update(
                 &[iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
                     iced::mouse::Button::Left,
                 ))],
-                iced::mouse::Cursor::Available(iced::Point::new(
-                    readout.center_x(),
-                    readout.center_y(),
-                )),
-                &mut renderer,
-                &mut clipboard,
-                &mut messages,
+                iced::Point::new(readout.center_x(), readout.center_y()),
             );
             let expected = mode != TransportMode::Stopped;
             let toggles = messages

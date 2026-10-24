@@ -16,7 +16,7 @@ use iced::advanced::{
     renderer::Headless,
     widget::{Id, Tree, operation::Operation},
 };
-use iced::{Element, Font, Pixels, Rectangle, Size};
+use iced::{Element, Event, Font, Pixels, Point, Rectangle, Size};
 
 /// The bounds every captured tree is laid out in.
 pub(crate) fn limits() -> Limits {
@@ -163,6 +163,41 @@ where
 {
     let (_tree, _node, capture) = layout_and_capture(element, renderer);
     capture
+}
+
+/// Builds a user interface for `element` under [`limits`] and dispatches
+/// `events` with the cursor at `point`, returning the messages the tree
+/// publishes.
+///
+/// The headless mouse-driven tests build the same `UserInterface`, wire the
+/// same null clipboard, and collect the same message vector around each
+/// event batch; this helper keeps that boilerplate in one place so a test
+/// only names the events and where they land.
+pub(crate) fn publish_at<'a, Message, Theme, Renderer>(
+    element: Element<'a, Message, Theme, Renderer>,
+    renderer: &mut Renderer,
+    events: &[Event],
+    point: Point,
+) -> Vec<Message>
+where
+    Renderer: iced::advanced::Renderer,
+{
+    let mut user_interface = iced_runtime::user_interface::UserInterface::build(
+        element,
+        limits().max(),
+        iced_runtime::user_interface::Cache::new(),
+        renderer,
+    );
+    let mut messages = Vec::new();
+    let mut clipboard = iced::advanced::clipboard::Null;
+    let _ = user_interface.update(
+        events,
+        iced::mouse::Cursor::Available(point),
+        renderer,
+        &mut clipboard,
+        &mut messages,
+    );
+    messages
 }
 
 /// Lays `element` out and draws it with `renderer`, returning the text
