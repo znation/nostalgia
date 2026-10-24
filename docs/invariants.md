@@ -599,8 +599,8 @@ bands and app bar, `transport_glyphs_match_the_mockup_order_and_widths`,
 `eq_panel_toggle_targets_the_visibility_flag`,
 `library_panel_toggle_targets_the_visibility_flag`, and
 `equalizer_preamp_and_db_scale_sit_left_of_the_band_sliders` (`src/ui/views/tests.rs`),
-and `toggle_button_style_sinks_while_on` (`src/ui/style.rs`) for the
-glyph row, the Repeat and Shuffle faces, and the equalizer band row.
+and `toggle_button_style_sinks_while_on` (`src/ui/style.rs`) for the A, EQ,
+and PL toggles.
 
 **History.** Reconstructed from "Sort renders below Top instead of beside it, contradicting the
 documented layout" and "Transport buttons resize to their label text, so pressing Play/Pause
