@@ -2681,6 +2681,31 @@ async fn search_songs_fails_when_the_rest_search_fails() {
     );
 }
 
+// A signed-in search that matched nothing is an ordinary empty result, not a
+// reason to fall back to the sample library: the term matches a sample title
+// case-insensitively, so a regression that treated an empty REST result as
+// "fall back" would return "Opening" for a signed-in user. Apple omits the
+// `library-songs` key for a no-match search, so this also drives the
+// missing-key branch of the search envelope through the public query. The URL
+// pins the trimmed term and the search endpoint, proving the answer came from
+// the REST search rather than the in-memory samples.
+#[tokio::test]
+async fn search_songs_returns_no_songs_for_an_empty_signed_in_result() {
+    let stub = StubTransport::returning(r#"{"results":{}}"#);
+    let service = signed_in_service(&stub);
+
+    let songs = service.search_songs("  opening  ").await.unwrap();
+
+    assert!(
+        songs.is_empty(),
+        "an empty signed-in search must not fall back to the sample songs: {songs:?}"
+    );
+    assert_single_call(
+        &stub,
+        "https://api.music.apple.com/v1/me/library/search?term=opening&types=library-songs&limit=25",
+    );
+}
+
 // The All Songs view routes through the REST client when a session is stored,
 // so a signed-in user sees the real library rather than the sample one. The
 // stub returns a song whose id is not a sample id, so the result can only
