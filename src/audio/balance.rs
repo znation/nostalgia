@@ -5,7 +5,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Duration;
 
 use rodio::source::SeekError;
-use rodio::{ChannelCount, Sample, SampleRate, Source};
+use rodio::{Sample, Source};
+
+use super::delegate::{forward_size_hint, forward_source_reads};
 
 /// A [`Source`] adapter that applies a live stereo balance to its samples.
 ///
@@ -54,27 +56,11 @@ impl<S: Source> Iterator for BalanceSource<S> {
         Some(sample * gain)
     }
 
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.inner.size_hint()
-    }
+    forward_size_hint!();
 }
 
 impl<S: Source> Source for BalanceSource<S> {
-    fn current_span_len(&self) -> Option<usize> {
-        self.inner.current_span_len()
-    }
-
-    fn channels(&self) -> ChannelCount {
-        self.inner.channels()
-    }
-
-    fn sample_rate(&self) -> SampleRate {
-        self.inner.sample_rate()
-    }
-
-    fn total_duration(&self) -> Option<Duration> {
-        self.inner.total_duration()
-    }
+    forward_source_reads!();
 
     fn try_seek(&mut self, pos: Duration) -> Result<(), SeekError> {
         // rodio's seek implementations leave the next sample on the same

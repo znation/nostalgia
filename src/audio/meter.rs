@@ -13,6 +13,7 @@ use std::time::Duration;
 use rodio::source::SeekError;
 use rodio::{Sample, Source};
 
+use super::delegate::{forward_size_hint, forward_source_reads};
 use crate::equalizer::{BAND_COUNT, BAND_HZ};
 
 /// The number of mono samples the meter analyzes, about 46 ms at 44.1 kHz.
@@ -191,27 +192,11 @@ impl<S: Source> Iterator for MeterSource<S> {
         Some(sample)
     }
 
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.inner.size_hint()
-    }
+    forward_size_hint!();
 }
 
 impl<S: Source> Source for MeterSource<S> {
-    fn current_span_len(&self) -> Option<usize> {
-        self.inner.current_span_len()
-    }
-
-    fn channels(&self) -> rodio::ChannelCount {
-        self.inner.channels()
-    }
-
-    fn sample_rate(&self) -> rodio::SampleRate {
-        self.inner.sample_rate()
-    }
-
-    fn total_duration(&self) -> Option<Duration> {
-        self.inner.total_duration()
-    }
+    forward_source_reads!();
 
     fn try_seek(&mut self, pos: Duration) -> Result<(), SeekError> {
         self.inner.try_seek(pos)?;

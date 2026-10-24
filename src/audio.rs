@@ -30,6 +30,7 @@ use std::time::Duration;
 use crate::music_error::AppleMusicError;
 
 mod balance;
+mod delegate;
 mod equalizer;
 mod meter;
 mod player;
