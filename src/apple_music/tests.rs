@@ -2370,6 +2370,68 @@ async fn get_favorite_artists_returns_no_artists_for_an_empty_signed_in_library(
     );
 }
 
+// The empty signed-in library is an ordinary empty result for the whole-library
+// queries too, not the sample fallback: a regression that treated an empty
+// collection as "no session" would show a signed-in user playlists they do not
+// own. The pinned URL proves the answer came from the signed-in collection.
+#[tokio::test]
+async fn get_playlists_returns_no_playlists_for_an_empty_signed_in_library() {
+    let stub = StubTransport::returning(r#"{"data":[]}"#);
+    let service = signed_in_service(&stub);
+
+    let playlists = service.get_playlists().await.unwrap();
+
+    assert!(
+        playlists.is_empty(),
+        "an empty signed-in library must not fall back to the sample playlists: {playlists:?}"
+    );
+    assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/playlists");
+}
+
+// The All Songs twin: the sample library has songs, so an empty signed-in
+// collection that fell back would fill the flat view with music the user does
+// not own. The URL pins the signed-in songs collection as the source.
+#[tokio::test]
+async fn get_all_songs_returns_no_songs_for_an_empty_signed_in_library() {
+    let stub = StubTransport::returning(r#"{"data":[]}"#);
+    let service = signed_in_service(&stub);
+
+    let songs = service.get_all_songs().await.unwrap();
+
+    assert!(
+        songs.is_empty(),
+        "an empty signed-in library must not fall back to the sample songs: {songs:?}"
+    );
+    assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/songs");
+}
+
+// The All Albums twin: the load reads the album collection and then the songs
+// collection (for the running times), so both empty bodies prove an empty
+// signed-in library stays empty rather than falling back to the sample albums.
+// Both calls are pinned so a regression cannot skip the durations request.
+#[tokio::test]
+async fn get_all_albums_returns_no_albums_for_an_empty_signed_in_library() {
+    let stub = StubTransport::returning_bodies(&[r#"{"data":[]}"#, r#"{"data":[]}"#]);
+    let service = signed_in_service(&stub);
+
+    let albums = service.get_all_albums().await.unwrap();
+
+    assert!(
+        albums.is_empty(),
+        "an empty signed-in library must not fall back to the sample albums: {albums:?}"
+    );
+    let calls = stub.calls();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(
+        calls[0].0,
+        "https://api.music.apple.com/v1/me/library/albums"
+    );
+    assert_eq!(
+        calls[1].0,
+        "https://api.music.apple.com/v1/me/library/songs"
+    );
+}
+
 #[tokio::test]
 async fn get_albums_by_artist_uses_the_rest_library_when_signed_in() {
     let stub = StubTransport::returning_bodies(&[
