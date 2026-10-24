@@ -129,8 +129,9 @@ plays, C pauses, V stops, R toggles Repeat and S toggles Shuffle, A toggles alwa
 switches the large readout between elapsed and remaining time (the same actions as the on-screen A
 controls and a readout click), and the up/down arrows nudge the volume while the left/right arrows
 seek five seconds back or forward. Backspace steps the browse list back one level exactly like the
-`Back` button, and does nothing at the Artists list; while the `Search library` box is focused it
-keeps Backspace for editing its query instead of navigating. Ctrl+F moves keyboard focus to the
+`Back` button, and does nothing at the Artists list; Home snaps the browse list to its first row
+and End to its last, like `Top`; while the `Search library` box is focused it keeps Backspace,
+Home, and End for editing its query instead of navigating. Ctrl+F moves keyboard focus to the
 `Search library` box from any normal-mode browse level without searching or changing the current
 view, list, selection, or typed query, and the box then takes typed keys as usual; in window-shade
 mode there is no search box, so Ctrl+F does nothing. With Shuffle on, Previous retraces the

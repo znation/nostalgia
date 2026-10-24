@@ -564,22 +564,40 @@ async fn browse_scroll_effects(task: Task<Message>, what: &str) -> BrowseScrollE
 }
 
 /// Drives `task` until it runs an iced scroll operation and asserts that
-/// operation snaps the browse list to its first row. This distinguishes the
-/// real scroll task from any other follow-up work a navigation arm might
-/// schedule, and pins that the same arm does not also scroll to a row.
-async fn assert_task_snaps_browse_list_to_top(task: Task<Message>, what: &str) {
-    use iced::advanced::widget::operation::scrollable::RelativeOffset;
-
+/// operation snaps the browse list to `offset`. This distinguishes the real
+/// scroll task from any other follow-up work a navigation arm might schedule,
+/// and pins that the same arm does not also scroll to a row.
+async fn assert_task_snaps_browse_list_to(
+    offset: iced::advanced::widget::operation::scrollable::RelativeOffset<Option<f32>>,
+    task: Task<Message>,
+    what: &str,
+) {
     let effects = browse_scroll_effects(task, what).await;
     assert_eq!(
         effects.snapped,
-        Some(RelativeOffset::START.into()),
-        "{what} must snap the browse list to its first row"
+        Some(offset),
+        "{what} must snap the browse list to the expected row"
     );
     assert_eq!(
         effects.scrolled, None,
         "{what} must not scroll the browse list to a row"
     );
+}
+
+/// Drives `task` until it runs an iced scroll operation and asserts that
+/// operation snaps the browse list to its first row.
+async fn assert_task_snaps_browse_list_to_top(task: Task<Message>, what: &str) {
+    use iced::advanced::widget::operation::scrollable::RelativeOffset;
+
+    assert_task_snaps_browse_list_to(RelativeOffset::START.into(), task, what).await;
+}
+
+/// Drives `task` until it runs an iced scroll operation and asserts that
+/// operation snaps the browse list to its last row.
+async fn assert_task_snaps_browse_list_to_end(task: Task<Message>, what: &str) {
+    use iced::advanced::widget::operation::scrollable::RelativeOffset;
+
+    assert_task_snaps_browse_list_to(RelativeOffset::END.into(), task, what).await;
 }
 
 /// Drives `task` until it runs an iced scroll operation and asserts that
@@ -1487,6 +1505,22 @@ fn scroll_browse_to_top_schedules_a_scroll_task() {
     futures::executor::block_on(assert_task_snaps_browse_list_to_top(
         update(&mut player, Message::ScrollBrowseToTop),
         "top",
+    ));
+
+    assert_view(&player, CurrentView::Artists);
+    assert!(state.blocking_lock().current_track.is_none());
+    assert!(!state.blocking_lock().is_playing);
+}
+
+// The End key only asks iced to snap the browse scrollable to its last row;
+// it must leave the view and the shared playback state alone.
+#[test]
+fn scroll_browse_to_bottom_schedules_a_scroll_task() {
+    let (mut player, state) = test_player();
+
+    futures::executor::block_on(assert_task_snaps_browse_list_to_end(
+        update(&mut player, Message::ScrollBrowseToBottom),
+        "bottom",
     ));
 
     assert_view(&player, CurrentView::Artists);

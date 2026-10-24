@@ -283,6 +283,32 @@ so Next, Previous, a shuffled retrace, and a natural preview end all follow the 
 - `stepping_while_another_browse_level_shows_does_not_scroll`
 - `a_row_press_does_not_scroll_the_list`
 
+## Browse keyboard scrolling
+
+**Guarantee.** A plain or Shift-held `Home` key press snaps the showing browse list to its first
+row, exactly like the `Top` button, and `End` snaps it to its last row. Both are view-scroll
+operations only: they change no current view, rows or row order, selection, typed query,
+search-active flag, or playback state, and they schedule no fetch or playback task. In shade mode
+no browse list is built, so the scroll operation has no target and nothing moves. While the
+`Search library` box is focused, its `TextInput` captures Home and End for editing the query
+rather than scrolling the list, as it captures Backspace. Ctrl/Alt/Logo chords with Home or End
+stay unbound.
+
+**Enforced by.** `shortcuts::shortcut` in `src/ui/shortcuts.rs` maps `Home` to
+`Message::ScrollBrowseToTop` and `End` to `Message::ScrollBrowseToBottom` after its
+Control/Alt/Logo chord guard. `src/ui/mod.rs` routes `Message::ScrollBrowseToBottom` to
+`handlers::browse::scroll_browse_to_bottom`, and both handlers in `src/ui/handlers/browse.rs`
+share a `snap_to` call on the stable `views::BROWSE_LIST_ID` that every
+`views::browse::scrollable_list` carries.
+
+**Pinned by.**
+
+- `scroll_browse_to_bottom_schedules_a_scroll_task` (`src/ui/tests.rs`)
+- `message_for_maps_home_and_end_to_browse_scroll` (`src/ui/shortcuts.rs`)
+- `shortcut_ignores_chord_modifiers` (`src/ui/shortcuts.rs`)
+
+**History.** Added with the Home and End keyboard scrolling alongside the existing Top button.
+
 ## Browse row labels
 
 **Guarantee.** Each artist row shows the number of albums the loaded library holds for that

@@ -254,15 +254,26 @@ pub(in crate::ui) fn back(player: &mut WinampPlayer) -> Task<Message> {
     }
 }
 
-/// The browse view's Top button: snap the current list back to its first
-/// row. The list carries `views::BROWSE_LIST_ID` whichever level is
-/// showing, so one operation serves the Top button and every navigation that
-/// opens a fresh list.
+/// Snap the showing browse list to `offset` through its stable widget id.
+/// The list carries `views::BROWSE_LIST_ID` whichever level is showing, so
+/// one operation serves the Top button, the Home and End keys, and every
+/// navigation that opens a fresh list.
+fn snap_browse_list(offset: iced::widget::scrollable::RelativeOffset) -> Task<Message> {
+    iced::widget::operation::snap_to(views::BROWSE_LIST_ID, offset)
+}
+
+/// The browse view's Top button and the Home key: snap the current list back
+/// to its first row. This touches only the list's scroll offset; it changes
+/// no rows, selection, view, search state, or playback.
 pub(in crate::ui) fn scroll_browse_to_top() -> Task<Message> {
-    iced::widget::operation::snap_to(
-        views::BROWSE_LIST_ID,
-        iced::widget::scrollable::RelativeOffset::START,
-    )
+    snap_browse_list(iced::widget::scrollable::RelativeOffset::START)
+}
+
+/// The End key's counterpart to [`scroll_browse_to_top`]: snap the current
+/// list to its last row. Like Home it touches only the list's scroll offset;
+/// it changes no rows, selection, view, search state, or playback.
+pub(in crate::ui) fn scroll_browse_to_bottom() -> Task<Message> {
+    snap_browse_list(iced::widget::scrollable::RelativeOffset::END)
 }
 
 /// Scroll the browse list so its row `index` starts at the viewport's top

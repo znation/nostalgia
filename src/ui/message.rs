@@ -157,6 +157,10 @@ pub(in crate::ui) enum Message {
     // row. The arm schedules an iced scroll operation on the browse list's
     // stable widget id and changes no state.
     ScrollBrowseToTop,
+    // The End key's counterpart to the Top button: snap the current list to
+    // its last row. The arm schedules an iced scroll operation on the browse
+    // list's stable widget id and changes no state.
+    ScrollBrowseToBottom,
     // The browse view's Sort button: reorder the showing list alphabetically
     // by its rows' rendered text. The handler bumps that list's epoch so a
     // press rendered before the sort is rejected, and leaves every other list
