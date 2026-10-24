@@ -498,7 +498,7 @@ refresh does not re-join and reformat every row.
 - `album_duration_is_not_serialized_and_defaults_to_zero`
   (in `src/library.rs`)
 - `get_album_durations_groups_and_sums_library_songs`
-  (in `src/apple_music/rest/tests.rs`)
+  (in `src/apple_music/rest/tests/library.rs`)
 - `get_albums_by_artist_uses_the_rest_library_when_signed_in`
 - `get_albums_by_artist_fails_when_the_albums_request_fails`
 - `get_albums_by_artist_fails_when_the_album_durations_request_fails`
@@ -1375,10 +1375,10 @@ reads it through `take(MAX_RESPONSE_BYTES + 1)` and checks the decoded length be
 
 **Pinned by.**
 
-- `a_response_of_exactly_the_cap_is_accepted` (`src/apple_music/rest/tests.rs`)
-- `a_compressed_response_larger_than_the_cap_is_rejected` (`src/apple_music/rest/tests.rs`)
-- `a_response_with_more_wire_bytes_than_the_cap_is_rejected` (`src/apple_music/rest/tests.rs`)
-- `a_text_response_with_invalid_utf8_keeps_the_lossy_replacement` (`src/apple_music/rest/tests.rs`)
+- `a_response_of_exactly_the_cap_is_accepted` (`src/apple_music/rest/tests/transport.rs`)
+- `a_compressed_response_larger_than_the_cap_is_rejected` (`src/apple_music/rest/tests/transport.rs`)
+- `a_response_with_more_wire_bytes_than_the_cap_is_rejected` (`src/apple_music/rest/tests/transport.rs`)
+- `a_text_response_with_invalid_utf8_keeps_the_lossy_replacement` (`src/apple_music/rest/tests/transport.rs`)
 
 **History.** Added 2026-10-23 after `Body::read_to_string()` was found to limit only wire bytes
 (its 10 MiB `MAX_BODY_SIZE` sits under `ureq`'s gzip decoder), leaving a compressed REST reply
