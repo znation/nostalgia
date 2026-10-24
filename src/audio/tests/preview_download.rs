@@ -262,7 +262,7 @@ fn a_redirecting_preview_is_not_followed() {
         "the preview download returned HTTP 302 Found"
     );
 
-    let followed = foreign_thread.join().unwrap();
+    let followed = foreign_thread.join().unwrap().request;
     assert!(
         followed.is_none(),
         "the preview fetch reached the redirect target: {followed:?}"

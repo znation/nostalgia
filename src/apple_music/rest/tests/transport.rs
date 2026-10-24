@@ -136,7 +136,7 @@ fn a_redirect_is_not_followed_so_the_user_token_cannot_leak() {
     });
     let _ = receiver.recv_timeout(std::time::Duration::from_secs(5));
 
-    let leaked = foreign_thread.join().unwrap();
+    let leaked = foreign_thread.join().unwrap().request;
     assert!(
         leaked.is_none(),
         "the user token reached the redirect target: {leaked:?}"
@@ -471,7 +471,8 @@ fn a_request_carries_the_developer_and_user_tokens() {
 
     let request = receiver
         .recv_timeout(std::time::Duration::from_secs(5))
-        .expect("the server captured the request");
+        .expect("the server captured the request")
+        .request;
     // Header names are case-insensitive, so match on a lowercased copy while
     // reporting the captured request verbatim in any failure.
     let lower = request.to_ascii_lowercase();

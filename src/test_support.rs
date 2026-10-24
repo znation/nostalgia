@@ -720,37 +720,60 @@ pub(crate) fn read_some_request(stream: &mut TcpStream) -> String {
     String::from_utf8_lossy(&buffer[..read]).into_owned()
 }
 
+/// The first request recorded by [`record_first_request`], together with the
+/// name of the thread that recorded it so a test can pin the helper's thread
+/// name instead of leaving it unobservable.
+pub(crate) struct RecordedFirstRequest {
+    /// The request text, or `None` when no request arrived within the bound.
+    pub(crate) request: Option<String>,
+    /// The recording thread's name, read on that thread.
+    pub(crate) thread_name: Option<String>,
+}
+
 /// Spawns a thread that accepts the first request to `listener` and returns
 /// its text, giving up after one second so "no request arrived" is a bounded
 /// result rather than a hang. The listener is switched to nonblocking and
 /// polled; a `WouldBlock` before the deadline sleeps, and the deadline returns
-/// `None`.
+/// a record with no request.
 ///
 /// The `apple_music::rest` and `audio` suites' redirect tests both stand up a
 /// "foreign" listener this way to prove a redirect was not followed: joining
-/// the handle and finding `None` means no request reached the redirect target.
+/// the handle and finding no request means no request reached the redirect
+/// target.
 pub(crate) fn record_first_request(
     listener: TcpListener,
-) -> std::thread::JoinHandle<Option<String>> {
+) -> std::thread::JoinHandle<RecordedFirstRequest> {
     listener.set_nonblocking(true).unwrap();
-    std::thread::spawn(move || {
-        let deadline = Instant::now() + Duration::from_secs(1);
-        loop {
-            match listener.accept() {
-                Ok((mut stream, _)) => return Some(read_some_request(&mut stream)),
-                Err(ref error)
-                    if error.kind() == std::io::ErrorKind::WouldBlock
-                        && Instant::now() >= deadline =>
-                {
-                    return None;
+    std::thread::Builder::new()
+        .name("nostalgia-test-listener".to_string())
+        .spawn(move || {
+            let thread_name = std::thread::current().name().map(str::to_string);
+            let deadline = Instant::now() + Duration::from_secs(1);
+            loop {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        return RecordedFirstRequest {
+                            request: Some(read_some_request(&mut stream)),
+                            thread_name,
+                        };
+                    }
+                    Err(ref error)
+                        if error.kind() == std::io::ErrorKind::WouldBlock
+                            && Instant::now() >= deadline =>
+                    {
+                        return RecordedFirstRequest {
+                            request: None,
+                            thread_name,
+                        };
+                    }
+                    Err(ref error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(error) => panic!("foreign listener failed: {error}"),
                 }
-                Err(ref error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                    std::thread::sleep(Duration::from_millis(10));
-                }
-                Err(error) => panic!("foreign listener failed: {error}"),
             }
-        }
-    })
+        })
+        .unwrap()
 }
 
 /// Serves exactly one HTTP response on a fresh loopback listener: binds,
@@ -772,15 +795,17 @@ pub(crate) fn serve_one_response(response: &str) -> SocketAddr {
 /// accepts one connection, reads whatever request arrived, writes `response`
 /// verbatim, and closes.
 pub(crate) fn serve_one_response_bytes(response: &[u8]) -> SocketAddr {
-    let (listener, address) = loopback_listener();
-    let response = response.to_vec();
-    std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
-        let _ = read_some_request(&mut stream);
-        let _ = stream.write_all(&response);
-        let _ = stream.flush();
-    });
-    address
+    spawn_one_shot_server(response.to_vec()).0
+}
+
+/// The request served by [`serve_one_response_capturing_request`], together
+/// with the name of the thread that served it so a test can pin the helper's
+/// thread name instead of leaving it unobservable.
+pub(crate) struct CapturedRequest {
+    /// The request text the server read.
+    pub(crate) request: String,
+    /// The serving thread's name, read on that thread.
+    pub(crate) thread_name: Option<String>,
 }
 
 /// Serves exactly one HTTP response on a fresh loopback listener and returns
@@ -791,17 +816,33 @@ pub(crate) fn serve_one_response_bytes(response: &[u8]) -> SocketAddr {
 /// request-capture test calls it.
 pub(crate) fn serve_one_response_capturing_request(
     response: &str,
-) -> (SocketAddr, std::sync::mpsc::Receiver<String>) {
+) -> (SocketAddr, std::sync::mpsc::Receiver<CapturedRequest>) {
+    spawn_one_shot_server(response.as_bytes().to_vec())
+}
+
+/// The shared one-shot server behind the `serve_one_response*` helpers: a
+/// named thread accepts one connection, reads the request, writes `response`
+/// verbatim, and reports the request on the returned receiver (which callers
+/// that do not need it simply drop).
+fn spawn_one_shot_server(
+    response: Vec<u8>,
+) -> (SocketAddr, std::sync::mpsc::Receiver<CapturedRequest>) {
     let (listener, address) = loopback_listener();
-    let response = response.to_string();
     let (sender, receiver) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
-        let request = read_some_request(&mut stream);
-        let _ = stream.write_all(response.as_bytes());
-        let _ = stream.flush();
-        let _ = sender.send(request);
-    });
+    std::thread::Builder::new()
+        .name("nostalgia-test-server".to_string())
+        .spawn(move || {
+            let thread_name = std::thread::current().name().map(str::to_string);
+            let (mut stream, _) = listener.accept().unwrap();
+            let request = read_some_request(&mut stream);
+            let _ = stream.write_all(&response);
+            let _ = stream.flush();
+            let _ = sender.send(CapturedRequest {
+                request,
+                thread_name,
+            });
+        })
+        .unwrap();
     (address, receiver)
 }
 
@@ -902,4 +943,48 @@ fn crc32_of_zeros(count: usize) -> u32 {
         crc = table[(crc & 0xff) as usize] ^ (crc >> 8);
     }
     crc ^ 0xffff_ffff
+}
+
+#[cfg(test)]
+mod loopback_thread_names {
+    use std::io::Write;
+    use std::net::TcpStream;
+    use std::time::Duration;
+
+    use super::{loopback_listener, record_first_request, serve_one_response_capturing_request};
+
+    // Both one-shot loopback helpers run on named threads so a panic there is
+    // attributed to `nostalgia-test-*` rather than `<unnamed>`. Pin each name
+    // on the helper's own thread; the name is spelled out here rather than
+    // read back from the helper, so a rename in either place fails the test.
+    #[test]
+    fn record_first_request_names_its_thread() {
+        let (listener, address) = loopback_listener();
+        let handle = record_first_request(listener);
+        let mut client = TcpStream::connect(address).unwrap();
+        client.write_all(b"GET / HTTP/1.1\r\n\r\n").unwrap();
+
+        let recorded = handle.join().unwrap();
+        assert!(recorded.request.is_some());
+        assert_eq!(
+            recorded.thread_name.as_deref(),
+            Some("nostalgia-test-listener")
+        );
+    }
+
+    #[test]
+    fn serve_one_response_capturing_request_names_its_thread() {
+        let (address, receiver) = serve_one_response_capturing_request(
+            "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        );
+        let mut client = TcpStream::connect(address).unwrap();
+        client.write_all(b"GET / HTTP/1.1\r\n\r\n").unwrap();
+
+        let captured = receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(captured.request.starts_with("GET / HTTP/1.1"));
+        assert_eq!(
+            captured.thread_name.as_deref(),
+            Some("nostalgia-test-server")
+        );
+    }
 }
