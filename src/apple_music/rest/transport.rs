@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use super::super::AppleMusicError;
-use super::REQUEST_TIMEOUT;
+use super::paging::REQUEST_TIMEOUT;
 use super::wire::api_error_cause;
 use crate::http::agent_with_timeout;
 use crate::music_kit_auth::MusicKitSession;

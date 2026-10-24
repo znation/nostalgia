@@ -1,3 +1,6 @@
+use std::time::{Duration, Instant};
+
+use super::paging::*;
 use super::transport::{MAX_RESPONSE_BYTES, shared_agent};
 use super::wire::api_error_cause;
 use super::*;

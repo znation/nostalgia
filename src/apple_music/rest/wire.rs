@@ -58,14 +58,14 @@ pub(super) fn parse_search_envelope(
 /// The `{ "data": [ ... ] }` envelope every Apple Music collection response
 /// carries. Apple caps a page at 100 items and links the next page in `next`;
 /// [`RestLibrary::fetch`](super::RestLibrary::fetch) follows that link (up to
-/// [`MAX_PAGES`](super::MAX_PAGES) pages) so a
+/// [`MAX_PAGES`](super::paging::MAX_PAGES) pages) so a
 /// larger library is read in full rather than truncated to its first page.
 #[derive(Deserialize)]
 struct Envelope<T> {
     data: Vec<T>,
     /// The API's link to the next page of a paginated collection, present only
     /// when there is one. [`RestLibrary::fetch`](super::RestLibrary::fetch)
-    /// follows it, up to [`MAX_PAGES`](super::MAX_PAGES) pages, when it names a
+    /// follows it, up to [`MAX_PAGES`](super::paging::MAX_PAGES) pages, when it names a
     /// same-origin path.
     next: Option<String>,
 }
@@ -283,7 +283,7 @@ impl Resource {
     /// The id and title are required (see
     /// [`required_id`] and [`required_name`]); the artist, duration, and
     /// preview URL fall back to their "source supplied none" sentinels. The
-    /// whole-library path maps up to [`MAX_PAGES`](super::MAX_PAGES) pages
+    /// whole-library path maps up to [`MAX_PAGES`](super::paging::MAX_PAGES) pages
     /// of songs, so consuming the parsed resource avoids re-allocating every
     /// string it already owns.
     pub(super) fn into_song(self, album_id: &str) -> Result<Song, AppleMusicError> {
