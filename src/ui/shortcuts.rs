@@ -104,6 +104,8 @@ mod tests {
         assert!(matches!(map("b"), Some(Message::NextTrack)));
         assert!(matches!(map("r"), Some(Message::ToggleRepeat)));
         assert!(matches!(map("s"), Some(Message::ToggleShuffle)));
+        assert!(matches!(map("a"), Some(Message::ToggleAlwaysOnTop)));
+        assert!(matches!(map("t"), Some(Message::ToggleTimeDisplay)));
     }
 
     #[test]
@@ -190,14 +192,6 @@ mod tests {
                 Modifiers::SHIFT,
             )
         });
-        assert!(matches!(
-            shortcut(&Key::Character("A".into()), Modifiers::SHIFT),
-            Some(Message::ToggleAlwaysOnTop)
-        ));
-        assert!(matches!(
-            shortcut(&Key::Character("T".into()), Modifiers::SHIFT),
-            Some(Message::ToggleTimeDisplay)
-        ));
     }
 
     #[test]
