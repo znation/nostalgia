@@ -3613,6 +3613,103 @@ fn previous_track_with_no_songs_loaded_does_nothing() {
     assert_message_schedules_no_work(&mut player, Message::PreviousTrack);
 }
 
+// Classic Winamp's restart rule: once a loaded preview has played at least
+// three seconds, Previous restarts it from zero instead of stepping. The
+// expected threshold is the literal `Duration::from_secs(3)` rather than the
+// handler's constant, so a changed threshold fails this test.
+#[test]
+fn previous_restarts_the_preview_after_three_seconds() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) =
+        futures::executor::block_on(player_playing_preview(Arc::clone(&recording)));
+    player.songs.items = stepping_songs();
+    player.playback_position = Some(Duration::from_secs(3));
+    player.seek_preview = Some(Duration::from_secs(1));
+    let epoch = player.position_epoch;
+
+    let task = update(&mut player, Message::PreviousTrack);
+
+    assert_no_task(task);
+    assert_preview_calls(&recording.calls(), &[AudioCall::SeekTo(Duration::ZERO)]);
+    assert_eq!(player.playback_position, Some(Duration::ZERO));
+    assert_eq!(player.seek_preview, None);
+    assert_eq!(player.position_epoch, epoch.wrapping_add(1));
+    assert_eq!(
+        state.blocking_lock().current_track.as_deref(),
+        Some("song-1")
+    );
+}
+
+// Before the three-second threshold the same Previous press steps through the
+// showing list exactly as it always has, sending no absolute seek.
+#[test]
+fn previous_steps_before_the_restart_threshold() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, _state) =
+        futures::executor::block_on(player_playing_preview(Arc::clone(&recording)));
+    player.songs.items = stepping_songs();
+    player.playback_position = Some(Duration::from_secs(2));
+
+    let task = update(&mut player, Message::PreviousTrack);
+
+    assert_track_selected(task, 0, 0);
+    assert_preview_calls(&recording.calls(), &[]);
+}
+
+// The restart branch precedes Shuffle's recorded-play retrace, so a late
+// Previous restarts instead of walking the history and consuming an entry.
+#[test]
+fn previous_with_shuffle_restarts_after_the_threshold_instead_of_retracing() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) =
+        futures::executor::block_on(player_playing_preview(Arc::clone(&recording)));
+    player.songs.items = stepping_songs();
+    state.blocking_lock().shuffle = true;
+    record_a_play(&mut player, &state, "song-1");
+    record_a_play(&mut player, &state, "song-3");
+    record_a_play(&mut player, &state, "song-2");
+    player.playback_position = Some(Duration::from_secs(3));
+
+    let task = update(&mut player, Message::PreviousTrack);
+
+    assert_no_task(task);
+    assert_preview_calls(&recording.calls(), &[AudioCall::SeekTo(Duration::ZERO)]);
+    assert_eq!(
+        state.blocking_lock().current_track.as_deref(),
+        Some("song-2")
+    );
+}
+
+// A rejected restart seek is only logged: the track stays queued with its
+// position and epoch unchanged, and no step is scheduled. The fake counts its
+// rejection, proving the restart reached the failing backend.
+#[test]
+fn a_failed_previous_restart_leaves_the_track_queued() {
+    let audio = Arc::new(FailingAudio::failing_seek());
+    let (mut player, state) =
+        player_with_audio(Arc::clone(&audio) as Arc<dyn crate::audio::AudioOutput>);
+    futures::executor::block_on(player.apple_music_service.play_track(
+        "song-1",
+        Some(PREVIEW_URL),
+        || true,
+    ))
+    .unwrap();
+    player.songs.items = stepping_songs();
+    player.playback_position = Some(Duration::from_secs(3));
+    let epoch = player.position_epoch;
+
+    let task = update(&mut player, Message::PreviousTrack);
+
+    assert_no_task(task);
+    assert_eq!(audio.attempts(FailingCommand::Seek), 1);
+    assert_eq!(player.playback_position, Some(Duration::from_secs(3)));
+    assert_eq!(player.position_epoch, epoch);
+    assert_eq!(
+        state.blocking_lock().current_track.as_deref(),
+        Some("song-1")
+    );
+}
+
 // Next and Previous can step the playing row outside the visible list, so
 // while a song list is showing each step batches a scroll to the landed row's
 // laid-out offset with the selection it already scheduled. From song-2, Next

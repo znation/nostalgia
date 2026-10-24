@@ -134,8 +134,9 @@ buttons minimize and close. The window title
 (the name the desktop environment shows for the app) names the current track as
 `<number>Artist - Title - nostalgia` (omitting the number or artist when empty), keeping the
 interrupted track's name across Stop and reading just `nostalgia` when no known track is current.
-With the window focused, the classic Winamp keys drive playback: Z and B step back and forward, X
-plays, C pauses, V stops, R toggles Repeat and S toggles Shuffle, A toggles always-on-top and T
+With the window focused, the classic Winamp keys drive playback: Z and B step back and forward
+(a Z press restarts the loaded preview from its start once it has played at least three seconds),
+X plays, C pauses, V stops, R toggles Repeat and S toggles Shuffle, A toggles always-on-top and T
 switches the large readout between elapsed and remaining time (the same actions as the on-screen A
 controls and a readout click), E shows or hides the equalizer panel exactly like the `EQ` button
 beside the balance slider, and the up/down arrows nudge the volume while the left/right arrows
@@ -149,7 +150,9 @@ view, list, selection, or typed query, and the box then takes typed keys as usua
 mode there is no search box, so Ctrl+F does nothing. F5 refetches the library and returns to the
 Artists list, exactly like the `Reload` button. While the window is focused, the system media
 keys Play/Pause, Play, Pause, Stop, Next track, and Previous track drive those same transport
-controls. With Shuffle on, Previous retraces the
+controls. Previous — the button, the Z key, and the system Previous track key — restarts the
+loaded preview from its start once it has played at least three seconds, and steps back before
+that; with Shuffle on, such an earlier Previous retraces the
 tracks actually played before the current one instead of stepping one row backward in the list.
 While a song list is showing, Next, Previous (including a shuffled retrace), and the preview-end
 advance scroll that list so the landed row stays in view. The volume slider and the up/down arrows

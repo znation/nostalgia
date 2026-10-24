@@ -8,6 +8,7 @@
 //! written by the service rather than by the UI thread.
 
 use std::sync::atomic::Ordering;
+use std::time::Duration;
 
 use iced::Task;
 
@@ -21,6 +22,11 @@ use crate::ui::views;
 use crate::ui::{CurrentView, Message, WinampPlayer};
 
 pub(in crate::ui) mod preview;
+
+/// The position at which Previous restarts the loaded preview instead of
+/// stepping to the preceding song, matching classic Winamp's three-second
+/// rule.
+const PREVIOUS_RESTART_SECS: u64 = 3;
 
 /// The Play/Pause button: toggles the preview between playing and paused.
 /// A track with no loaded preview stops instead, since there is nothing to
@@ -144,7 +150,33 @@ fn forward_track_id(
 /// random-vs-sequential and wrap-vs-stop-at-the-edge decisions (see
 /// `transport::shuffled_track_id` and `transport::next_track_id`) stay in
 /// `transport` too.
+///
+/// A backward step first applies classic Winamp's restart rule: when the
+/// backend still holds a loaded preview whose last reported position — the
+/// one the readout shows, not a fresh backend query — is at least
+/// [`PREVIOUS_RESTART_SECS`], it restarts that preview from zero instead of
+/// stepping. The restart branch runs before the Shuffle/Repeat arithmetic, so
+/// a late Previous neither steps nor consumes a recorded-play history entry.
+/// Earlier positions, no loaded preview, and no reported position fall
+/// through to the step unchanged.
 pub(in crate::ui) fn step_track(player: &mut WinampPlayer, forward: bool) -> Task<Message> {
+    if !forward
+        && player
+            .playback_position
+            .is_some_and(|position| position >= Duration::from_secs(PREVIOUS_RESTART_SECS))
+        && player.apple_music_service.has_loaded_preview()
+    {
+        player.seek_preview = None;
+        match player.apple_music_service.seek_output_to(Duration::ZERO) {
+            Ok(()) => {
+                player.position_epoch = player.position_epoch.wrapping_add(1);
+                player.playback_position = Some(Duration::ZERO);
+            }
+            Err(error) => eprintln!("restarting the preview failed: {error}"),
+        }
+        return Task::none();
+    }
+
     // The stepped song is computed under the state lock, borrowing the
     // current track directly rather than cloning it to satisfy `as_deref`.
     // The lock covers the pure stepping scan, which is fast, and the

@@ -1557,3 +1557,30 @@ in `src/ui/transport.rs` implements the recorded-play walk.
 - `track_selected_starts_playback_of_the_selected_track` (`src/ui/tests.rs`)
 - `play_into_maps_a_hanging_play_to_a_completed_message` (`src/ui/tests.rs`)
 - `play_into_reports_a_failed_play_and_still_completes` (`src/ui/tests.rs`)
+
+## Previous restart
+
+**Guarantee.** A Previous press on a loaded preview whose last reported position is at least three
+seconds restarts that preview from zero: exactly one absolute seek to zero, any seek drag cleared,
+the readout position reset to zero, and the position epoch bumped so in-flight replies are dropped.
+The current track and transport mode stay unchanged. Earlier positions, a backend with no loaded
+preview, or no reported position step through the showing list as before, including Repeat's edge
+behavior and Shuffle's recorded-play retrace. A rejected restart seek is logged and leaves the
+track queued with its position and epoch unchanged; no step is scheduled. The decision uses the
+last reported position — the one the readout shows — not a fresh backend query.
+
+**Enforced by.** `handlers::playback::step_track` in `src/ui/handlers/playback.rs` applies the
+restart branch before the stepping arithmetic, consulting
+`AppleMusicService::has_loaded_preview` and `AppleMusicService::seek_output_to`;
+`transport::previous_track_id` and `transport::PlayHistory` in `src/ui/transport.rs` implement the
+unchanged step paths.
+
+**Pinned by.**
+
+- `previous_restarts_the_preview_after_three_seconds` (`src/ui/tests.rs`)
+- `previous_steps_before_the_restart_threshold` (`src/ui/tests.rs`)
+- `previous_with_shuffle_restarts_after_the_threshold_instead_of_retracing` (`src/ui/tests.rs`)
+- `a_failed_previous_restart_leaves_the_track_queued` (`src/ui/tests.rs`)
+
+**History.** Added 2026-10-24 with the Previous restart plan, matching classic Winamp's rule that a
+late Previous restarts the track already playing instead of stepping back.
