@@ -4,11 +4,11 @@
 use super::balance::BalanceSource;
 use super::equalizer::{EqSettings, EqSource};
 use super::meter::{MeterSource, SPECTRUM_WINDOW, SpectrumMeter, spectrum_bands};
-use super::player::{
-    Command, DEVICE_OPEN_TIMEOUT, RodioPlayer, SeekablePlayer, WORKER_QUERY_TIMEOUT, WorkerPlayer,
-    await_device_ready, clamp_seek, duration_for_source, format_for_source, preview_bitrate_kbps,
-    seek_player, seek_target, serve_commands,
-};
+use super::player::format::{duration_for_source, format_for_source, preview_bitrate_kbps};
+use super::player::rodio_player::RodioPlayer;
+use super::player::seek::{SeekablePlayer, clamp_seek, seek_player, seek_target};
+use super::player::worker::{Command, WorkerPlayer, await_device_ready, serve_commands};
+use super::player::{DEVICE_OPEN_TIMEOUT, WORKER_QUERY_TIMEOUT};
 use super::preview::{
     MAX_PREVIEW_BYTES, PREVIEW_TIMEOUT, PublicAddressResolver, download_and_decode, preview_agent,
     preview_agent_with_timeout,

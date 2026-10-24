@@ -597,9 +597,9 @@ measure the line, and `ui::timers::subscriptions` subscribes `marquee_ticks` onl
 exceeds `MARQUEE_WIDTH`, and `position_ticks` only while `WinampPlayer::needs_position_poll` reports
 a preview whose position can still change. `audio::PlaybackFormat` carries the preview's sample rate,
 channel count, and average bitrate; `audio::preview::DecodedPreview` hands the download's encoded
-byte count to `audio::player::format_for_source`, which reads the rate and channels from the
-decoded `rodio` source and computes the bitrate through `audio::player::preview_bitrate_kbps` from
-the source's own total duration, and
+byte count to `format_for_source` in `src/audio/player/format.rs`, which reads the rate and
+channels from the decoded `rodio` source and computes the bitrate through
+`preview_bitrate_kbps` from the source's own total duration, and
 `views::now_playing::text::format_playback_prefix`/`text::channel_mode_label` format them, and
 `views::now_playing::CHANNEL_LABELS`/`channel_label_color`/`now_playing_status_row` render them in
 the LCD's status row built by `views::view_now_playing`. The `PlaybackFormat` handler in
@@ -888,8 +888,9 @@ are dropped, and the poll runs only while playing.
 analyzes outside the lock, `clear` empties the ring while keeping the partial downmix frame) in
 `src/audio/meter.rs`; `MeterSource` records each sample while returning it unchanged and clears
 the ring on `try_seek` without resetting that frame. `AudioOutput::spectrum`
-in `src/audio.rs` defaults to `None`, and `RodioPlayer::spectrum` in `src/audio/player.rs` answers
-`Some` only once the player holds a preview's format, through the worker's `Command::Spectrum`
+in `src/audio.rs` defaults to `None`, and `RodioPlayer::spectrum` in
+`src/audio/player/rodio_player.rs` answers `Some` only once the player holds a preview's format,
+through the worker's `Command::Spectrum`
 handled beside `Command::PlaybackFormat`; `RodioOutput::spectrum` bounds the query like the other
 backend queries. On the UI side, `views::now_playing::visualizer_bar_heights` and
 `views::now_playing::now_playing_visualizer_row` scale and draw the bands,
@@ -952,8 +953,9 @@ readout, status row's reported format, visualizer, and seek bar clear together. 
 stale epoch, a pending transition, and a not-finished reply never advance.
 
 **Enforced by.** `audio::AudioOutput::is_finished` in `src/audio.rs` defaults to false, and
-`audio::player::RodioPlayer::is_finished` in `src/audio/player.rs` answers true only once the
-player holds a preview's format and `rodio::Player::empty` reports the queued source has drained;
+`audio::player::rodio_player::RodioPlayer::is_finished` in `src/audio/player/rodio_player.rs` answers true only
+once the player holds a preview's format and `rodio::Player::empty` reports the queued source has
+drained;
 `RodioOutput::is_finished` bounds the worker's `Command::Finished` reply like the other backend
 queries, mapping a missing reply to false. `AppleMusicService::preview_finished` in
 `src/apple_music/playback.rs` forwards the backend's answer without touching shared state.
