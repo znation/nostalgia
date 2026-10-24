@@ -152,8 +152,8 @@ preview or restarts a stopped one from the beginning. When a loaded preview reac
 playing, the player steps forward through the showing list: to the next song, to the first song with
 Repeat on at the end, or, with Shuffle on, to a shuffled song when another exists. With Repeat off
 on the last song it stops instead and keeps that song queued for Play. The volume, balance, Repeat
-and Shuffle flags, the equalizer's on/off state, curve, and preset, the large readout's
-elapsed/remaining choice, the visualizer's shown/hidden choice, and the title bar's always-on-top
+and Shuffle flags, the equalizer's on/off state, curve, and preset, the elapsed/remaining readout
+choice, the visualizer's shown/hidden choice, and the title bar's always-on-top
 choice are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or
 `$HOME/.config/nostalgia/settings.ini`) and restored at the next launch;
 `NOSTALGIA_SETTINGS_PATH` overrides the path. A missing or malformed entry falls back to its
