@@ -27,7 +27,7 @@ use super::now_playing::{
     visualizer_bar_heights,
 };
 use super::shade::{SHADE_STRIP_HEIGHT, SHADED_HEIGHT, view_shade_strip};
-use super::title_bar::{CLUTTER_BUTTON_WIDTH, TITLE_BAR_BUTTON_WIDTH};
+use super::title_bar::{TITLE_BAR_BUTTON_WIDTH, TITLE_BAR_LEFT_BUTTON_WIDTH};
 use super::transport::{
     EQ_PANEL_BUTTON_WIDTH, LIBRARY_PANEL_BUTTON_WIDTH, eq_panel_toggle, library_panel_toggle,
     play_pause_glyph, play_pause_word, repeat_label, shuffle_label, transport_buttons,
@@ -689,7 +689,7 @@ fn lcd_indicator_strip_draws_each_label_in_order_at_a_fixed_width() {
     assert_eq!(width, 12.0, "the strip's fixed width");
 }
 
-// Only A and V are live: A reuses the title bar's always-on-top toggle, V
+// Only A and V are live: A reuses the always-on-top toggle, V
 // toggles the LCD visualizer, and O, I, and D publish nothing.
 #[test]
 fn lcd_indicator_message_arms_a_and_v_and_leaves_o_i_d_inert() {
@@ -710,7 +710,7 @@ fn lcd_indicator_message_arms_a_and_v_and_leaves_o_i_d_inert() {
 }
 
 // The strip must wire the mapping up, not just expose it: drive a real left
-// press at each letter's bounds. A publishes the title bar's always-on-top
+// press at each letter's bounds. A publishes the always-on-top
 // toggle, V publishes the visualizer toggle, and O publishes nothing.
 #[test]
 fn lcd_indicator_strip_publishes_always_on_top_on_a_and_visualizer_on_v() {
@@ -3284,7 +3284,7 @@ fn title_band_centers_its_label_at_the_title_bar_height() {
     );
 }
 
-// The app bar's drag region spans only the space between the A toggle and the
+// The app bar's drag region spans only the space between the M button and the
 // shade button. Putting the tapes inside it must center NOSTALGIA in that
 // middle span, not in the whole window, while the edge controls keep their
 // pinned places.
@@ -3303,14 +3303,14 @@ fn title_bar_centers_its_name_between_its_edge_controls() {
         .as_widget_mut()
         .operate(&mut tree, Layout::new(&node), &renderer, &mut containers);
 
-    // The A toggle and the shade button each draw a container at their pinned
-    // width. Read the A slot's right edge and the leftmost 22px button's left
+    // The M button and the shade button each draw a container at their pinned
+    // width. Read the M slot's right edge and the leftmost 22px button's left
     // edge from the laid-out tree rather than from their glyph bounds, whose
     // measured widths vary with the renderer.
-    let a_right = containers
+    let menu_right = containers
         .0
         .iter()
-        .filter(|bounds| (bounds.width - CLUTTER_BUTTON_WIDTH).abs() < 0.5)
+        .filter(|bounds| (bounds.width - TITLE_BAR_LEFT_BUTTON_WIDTH).abs() < 0.5)
         .map(|bounds| bounds.x + bounds.width)
         .fold(f32::NEG_INFINITY, f32::max);
     let shade_left = containers
@@ -3319,13 +3319,195 @@ fn title_bar_centers_its_name_between_its_edge_controls() {
         .filter(|bounds| (bounds.width - TITLE_BAR_BUTTON_WIDTH).abs() < 0.5)
         .map(|bounds| bounds.x)
         .fold(f32::INFINITY, f32::min);
-    let middle_center = (a_right + shade_left) / 2.0;
+    let middle_center = (menu_right + shade_left) / 2.0;
 
     let name = capture.find("NOSTALGIA");
     let name_center = name.x + name.width / 2.0;
     assert!(
         (name_center - middle_center).abs() < 0.5,
-        "NOSTALGIA must center between the A and shade controls: {name:?}, \
-         span {a_right:?}..{shade_left:?}"
+        "NOSTALGIA must center between the M and shade controls: {name:?}, \
+         span {menu_right:?}..{shade_left:?}"
     );
+}
+
+// The title bar's left slot is the classic main-menu M button, and a press
+// publishes the About toggle. It must not still be an always-on-top control:
+// the LCD strip's A keeps that job.
+#[test]
+fn title_bar_m_button_publishes_toggle_about() {
+    let mut renderer = layout_capture::headless_renderer();
+    let mut element = view_title_bar(false);
+    let capture = layout_capture::capture_text(&mut element, &renderer);
+    let menu = capture.find("M");
+    let mut user_interface = iced_runtime::user_interface::UserInterface::build(
+        element,
+        layout_capture::limits().max(),
+        iced_runtime::user_interface::Cache::new(),
+        &mut renderer,
+    );
+    let mut messages = Vec::new();
+    let mut clipboard = iced::advanced::clipboard::Null;
+    let _ = user_interface.update(
+        &[
+            iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
+            iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                iced::mouse::Button::Left,
+            )),
+        ],
+        iced::mouse::Cursor::Available(iced::Point::new(menu.center_x(), menu.center_y())),
+        &mut renderer,
+        &mut clipboard,
+        &mut messages,
+    );
+    assert_eq!(
+        messages
+            .iter()
+            .filter(|message| matches!(message, Message::ToggleAbout))
+            .count(),
+        1,
+        "a press on M must publish exactly one ToggleAbout: {messages:?}"
+    );
+    assert!(
+        !messages
+            .iter()
+            .any(|message| matches!(message, Message::ToggleAlwaysOnTop)),
+        "the title bar's left slot must no longer toggle always-on-top: {messages:?}"
+    );
+}
+
+/// The About overlay over a blank full-space base, so its layout is measured
+/// against the same window limits as the root view.
+fn about_overlay_element() -> Element<'static, Message> {
+    let base: Element<'static, Message> = iced::widget::Space::new()
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into();
+    super::view_about_overlay(base)
+}
+
+#[test]
+fn about_overlay_draws_the_name_version_and_tagline() {
+    let mut element = about_overlay_element();
+    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+    let texts: Vec<&str> = capture.texts().collect();
+    for expected in [
+        "ABOUT NOSTALGIA",
+        concat!("v", env!("CARGO_PKG_VERSION")),
+        "The classic Winamp look, rebuilt in Rust — with Apple Music as the library.",
+        "Close",
+    ] {
+        assert!(
+            texts.contains(&expected),
+            "the About overlay must draw {expected:?}: {texts:?}"
+        );
+    }
+}
+
+// Close and the backdrop each dismiss the panel with one ToggleAbout; a press
+// on the panel's own text chrome is swallowed with Ignored, so the panel stays
+// open.
+#[test]
+fn about_overlay_closes_from_close_and_backdrop_but_ignores_its_chrome() {
+    let mut renderer = layout_capture::headless_renderer();
+    for target in ["Close", "ABOUT NOSTALGIA", "BACKDROP"] {
+        let mut element = about_overlay_element();
+        let capture = layout_capture::capture_text(&mut element, &renderer);
+        let point = if target == "BACKDROP" {
+            iced::Point::new(2.0, capture.size().height - 2.0)
+        } else {
+            let bounds = capture.find(target);
+            iced::Point::new(bounds.center_x(), bounds.center_y())
+        };
+        let mut user_interface = iced_runtime::user_interface::UserInterface::build(
+            element,
+            layout_capture::limits().max(),
+            iced_runtime::user_interface::Cache::new(),
+            &mut renderer,
+        );
+        let mut messages = Vec::new();
+        let mut clipboard = iced::advanced::clipboard::Null;
+        let _ = user_interface.update(
+            &[
+                iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
+                iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                    iced::mouse::Button::Left,
+                )),
+            ],
+            iced::mouse::Cursor::Available(point),
+            &mut renderer,
+            &mut clipboard,
+            &mut messages,
+        );
+        let toggles = messages
+            .iter()
+            .filter(|message| matches!(message, Message::ToggleAbout))
+            .count();
+        if target == "ABOUT NOSTALGIA" {
+            assert_eq!(
+                toggles, 0,
+                "the panel's chrome must not dismiss it: {messages:?}"
+            );
+            assert_eq!(
+                messages.len(),
+                1,
+                "the panel must publish exactly one message: {messages:?}"
+            );
+            assert!(
+                matches!(messages.first(), Some(Message::Ignored)),
+                "the panel must swallow the press with Ignored: {messages:?}"
+            );
+        } else {
+            assert_eq!(
+                toggles, 1,
+                "{target} must publish exactly one ToggleAbout: {messages:?}"
+            );
+        }
+    }
+}
+
+// The panel is modal for the wheel too: a scroll over the backdrop or the
+// panel is captured, so a wheel handler in the base beneath never fires.
+#[test]
+fn about_overlay_captures_the_wheel_from_the_base_beneath() {
+    let mut renderer = layout_capture::headless_renderer();
+    for over_panel in [false, true] {
+        let base: Element<'static, Message> = iced::widget::MouseArea::new(
+            iced::widget::Space::new()
+                .width(Length::Fill)
+                .height(Length::Fill),
+        )
+        .on_scroll(|_| Message::ToggleEqualizerPanel)
+        .into();
+        let mut element = super::view_about_overlay(base);
+        let capture = layout_capture::capture_text(&mut element, &renderer);
+        let point = if over_panel {
+            let bounds = capture.find("ABOUT NOSTALGIA");
+            iced::Point::new(bounds.center_x(), bounds.center_y())
+        } else {
+            iced::Point::new(2.0, capture.size().height - 2.0)
+        };
+        let mut user_interface = iced_runtime::user_interface::UserInterface::build(
+            element,
+            layout_capture::limits().max(),
+            iced_runtime::user_interface::Cache::new(),
+            &mut renderer,
+        );
+        let mut messages = Vec::new();
+        let mut clipboard = iced::advanced::clipboard::Null;
+        let _ = user_interface.update(
+            &[iced::Event::Mouse(iced::mouse::Event::WheelScrolled {
+                delta: iced::mouse::ScrollDelta::Lines { x: 0.0, y: 1.0 },
+            })],
+            iced::mouse::Cursor::Available(point),
+            &mut renderer,
+            &mut clipboard,
+            &mut messages,
+        );
+        assert!(
+            !messages
+                .iter()
+                .any(|message| matches!(message, Message::ToggleEqualizerPanel)),
+            "a wheel over the overlay (panel: {over_panel}) must not reach the base: {messages:?}"
+        );
+    }
 }

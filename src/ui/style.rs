@@ -107,9 +107,9 @@ pub fn chrome_button_style(status: button::Status) -> button::Style {
 
 /// The chrome style for a toggle button that reads as on: the sunken
 /// ([`button::Status::Pressed`]) chrome while `on`, and the ordinary chrome for
-/// `status` while off. The title bar's A toggle and the transport row's EQ and
-/// PL panel toggles all follow this one rule, so it lives here once. Pure, so
-/// the rule is testable without building a widget.
+/// `status` while off. The LCD strip's `A`, the title bar's `M`, and the
+/// transport row's EQ and PL panel toggles all follow this one rule, so it
+/// lives here once. Pure, so the rule is testable without building a widget.
 pub fn toggle_button_style(on: bool, status: button::Status) -> button::Style {
     if on {
         chrome_button_style(button::Status::Pressed)

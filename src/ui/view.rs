@@ -24,7 +24,9 @@ use super::views;
 /// the tree is the title bar over the compact transport strip and the rest of
 /// the screen is dropped. The strip's time readout publishes the same
 /// [`Message::ToggleTimeDisplay`] as the hidden LCD's, so the elapsed/remaining
-/// choice stays switchable in shade mode.
+/// choice stays switchable in shade mode. While [`WinampPlayer::about_visible`]
+/// holds outside shade mode, the normal-mode tree is the base of
+/// [`views::view_about_overlay`].
 pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // Shade mode builds only the title bar and its compact transport strip —
     // the Now Playing bar, seek strip, transport row, equalizer, and browse
@@ -32,8 +34,9 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // pair. The strip keeps the transport buttons, the elapsed-over-total
     // readout, a seek slider over the loaded preview's own length, and the
     // volume slider. The short state lock resolves only what the strip draws,
-    // so the rolled-up frame stays cheap.
-    if player.shaded {
+    // so the rolled-up frame stays cheap. The About panel never draws here:
+    // opening it while shaded restores the window first.
+    let base: Element<'_, Message> = if player.shaded {
         let (transport_mode, volume, elapsed, total, position, duration) = {
             let state = player.state.blocking_lock();
             (
@@ -45,11 +48,11 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
                 player.playback_duration,
             )
         };
-        return Column::new()
+        Column::new()
             .push(
                 MouseArea::new(
                     Column::new()
-                        .push(views::view_title_bar(player.always_on_top))
+                        .push(views::view_title_bar(player.about_visible))
                         .push(views::view_shade_strip(
                             transport_mode,
                             volume,
@@ -61,231 +64,237 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
                 )
                 .on_scroll(views::volume_wheel_message),
             )
-            .into();
-    }
-
-    // The now-playing title, artist, playlist number, elapsed time, and total
-    // are resolved while the state lock is held, from a borrowed `current_track`
-    // against the accumulated `known_tracks` index (see
-    // [`WinampPlayer::now_playing_label`], [`WinampPlayer::now_playing_artist`],
-    // [`WinampPlayer::now_playing_number`],
-    // [`WinampPlayer::now_playing_elapsed`], and
-    // [`WinampPlayer::now_playing_time`]). The label, artist, number, and
-    // elapsed placeholder borrow from `known_tracks` (or the `"Nothing"`/`""`/
-    // `""`/`"00:00"`/`"--:--"` literals); the total borrows the cached length,
-    // while a reported elapsed position allocates its formatted `MM:SS` string.
-    let (
-        now_playing,
-        now_playing_artist,
-        now_playing_number,
-        now_playing_elapsed,
-        now_playing_time,
-        playback_format,
-        spectrum,
-        transport_mode,
-        is_playing,
-        volume,
-        balance,
-        repeat,
-        shuffle,
-        eq_enabled,
-        eq_preamp,
-        eq_bands,
-        eq_preset,
-    ) = {
-        let state = player.state.blocking_lock();
-        (
-            player.now_playing_label(state.current_track.as_deref()),
-            player.now_playing_artist(state.current_track.as_deref()),
-            player.now_playing_number(state.current_track.as_deref()),
-            player.now_playing_elapsed(state.current_track.as_deref()),
-            player.now_playing_time(state.current_track.as_deref()),
-            player.playback_format,
-            player.spectrum,
-            state.transport_mode(),
-            state.is_playing,
-            state.volume(),
-            state.balance(),
-            state.repeat,
-            state.shuffle,
-            state.eq_enabled,
-            state.eq_preamp(),
-            state.eq_bands(),
-            state.eq_preset(),
-        )
-    };
-
-    let main_content = match &player.current_view {
-        CurrentView::Artists => views::view_artists(
-            &player.artists.items,
-            &player.artists.labels,
-            player.artists.epoch,
-            player.artists.selected(),
-            player.artists.loading,
-            player.artists.error.as_deref(),
-        ),
-        CurrentView::Albums => views::view_albums(
-            &player.albums.items,
-            &player.albums.titles,
-            &player.albums.labels,
-            player.albums.epoch,
-            player.albums.selected(),
-            player.albums.loading,
-            player.albums.error.as_deref(),
-        ),
-        // A second short lock (like the label block above) hands the current
-        // track's id to the Songs view so it can mark the playing row. The
-        // borrowed id is compared inside `song_row` and the guard drops at
-        // the end of this arm, so no per-frame `Option<String>` clone is
-        // needed.
-        CurrentView::Songs => {
-            let state = player.state.blocking_lock();
-            views::view_songs(
-                &player.songs.items,
-                &player.songs.titles,
-                &player.songs.labels,
-                player.songs.epoch,
-                player.songs.selected(),
-                player.songs.loading,
-                player.songs.error.as_deref(),
-                state.current_track.as_deref(),
-                player.search_active,
-            )
-        }
-        // The flat whole-library view marks its playing row from the same
-        // second lock the Songs arm takes.
-        CurrentView::AllSongs => {
-            let state = player.state.blocking_lock();
-            views::view_all_songs(
-                &player.all_songs.items,
-                &player.all_songs.titles,
-                &player.all_songs.labels,
-                player.all_songs.epoch,
-                player.all_songs.selected(),
-                player.all_songs.loading,
-                player.all_songs.error.as_deref(),
-                state.current_track.as_deref(),
-            )
-        }
-        // The flat album list renders like the per-artist Albums view: album
-        // rows with no current-track marker, drawing the cached title and
-        // running time the load stored.
-        CurrentView::AllAlbums => views::view_all_albums(
-            &player.all_albums.items,
-            &player.all_albums.titles,
-            &player.all_albums.labels,
-            player.all_albums.epoch,
-            player.all_albums.selected(),
-            player.all_albums.loading,
-            player.all_albums.error.as_deref(),
-        ),
-        CurrentView::Playlists => views::view_playlists(
-            &player.playlists.items,
-            player.playlists.epoch,
-            player.playlists.selected(),
-            player.playlists.loading,
-            player.playlists.error.as_deref(),
-        ),
-    };
-
-    // The player panels are one `MouseArea` so a wheel roll over any of them
-    // nudges the volume; its content still sees each event first, so the
-    // title-bar drag, LCD click, sliders, and buttons keep their behavior.
-    // The library band and everything below stay outside the area, leaving
-    // the browse list's own `Scrollable` to take the wheel without touching
-    // the volume.
-    //
-    // The footer gets its own clones of the elapsed and total strings before
-    // the LCD takes them, so the two can never disagree about elapsed versus
-    // remaining mode or about the track's total.
-    let library_elapsed = now_playing_elapsed.clone();
-    let library_total = now_playing_time.clone();
-    let mut player_panels = Column::new()
-        .push(views::view_title_bar(player.always_on_top))
-        .push(views::view_now_playing(
-            now_playing_elapsed,
+            .into()
+    } else {
+        // The now-playing title, artist, playlist number, elapsed time, and total
+        // are resolved while the state lock is held, from a borrowed `current_track`
+        // against the accumulated `known_tracks` index (see
+        // [`WinampPlayer::now_playing_label`], [`WinampPlayer::now_playing_artist`],
+        // [`WinampPlayer::now_playing_number`],
+        // [`WinampPlayer::now_playing_elapsed`], and
+        // [`WinampPlayer::now_playing_time`]). The label, artist, number, and
+        // elapsed placeholder borrow from `known_tracks` (or the `"Nothing"`/`""`/
+        // `""`/`"00:00"`/`"--:--"` literals); the total borrows the cached length,
+        // while a reported elapsed position allocates its formatted `MM:SS` string.
+        let (
             now_playing,
             now_playing_artist,
             now_playing_number,
+            now_playing_elapsed,
             now_playing_time,
-            player.marquee_offset,
             playback_format,
-            views::visible_spectrum(spectrum, player.visualizer_visible),
+            spectrum,
             transport_mode,
-            player.blink_visible,
-        ))
-        .push(views::view_seek_bar(
-            player.readout_position(),
-            player.playback_duration,
-        ))
-        .push(views::view_transport_controls(
             is_playing,
             volume,
             balance,
             repeat,
             shuffle,
-            player.eq_panel_visible,
-            player.library_panel_visible,
-        ));
-    // The EQ button on the transport row is layout-only: it shows or hides this
-    // band and panel, while the shared EQ state keeps driving the audio. The
-    // freed height flows to the browse list below because nothing here pins the
-    // column's height or resizes the window.
-    if player.eq_panel_visible {
-        player_panels = player_panels
-            .push(views::view_title_band("NOSTALGIA EQUALIZER"))
-            .push(views::view_equalizer(
-                eq_enabled, eq_preamp, &eq_bands, eq_preset,
+            eq_enabled,
+            eq_preamp,
+            eq_bands,
+            eq_preset,
+        ) = {
+            let state = player.state.blocking_lock();
+            (
+                player.now_playing_label(state.current_track.as_deref()),
+                player.now_playing_artist(state.current_track.as_deref()),
+                player.now_playing_number(state.current_track.as_deref()),
+                player.now_playing_elapsed(state.current_track.as_deref()),
+                player.now_playing_time(state.current_track.as_deref()),
+                player.playback_format,
+                player.spectrum,
+                state.transport_mode(),
+                state.is_playing,
+                state.volume(),
+                state.balance(),
+                state.repeat,
+                state.shuffle,
+                state.eq_enabled,
+                state.eq_preamp(),
+                state.eq_bands(),
+                state.eq_preset(),
+            )
+        };
+
+        let main_content = match &player.current_view {
+            CurrentView::Artists => views::view_artists(
+                &player.artists.items,
+                &player.artists.labels,
+                player.artists.epoch,
+                player.artists.selected(),
+                player.artists.loading,
+                player.artists.error.as_deref(),
+            ),
+            CurrentView::Albums => views::view_albums(
+                &player.albums.items,
+                &player.albums.titles,
+                &player.albums.labels,
+                player.albums.epoch,
+                player.albums.selected(),
+                player.albums.loading,
+                player.albums.error.as_deref(),
+            ),
+            // A second short lock (like the label block above) hands the current
+            // track's id to the Songs view so it can mark the playing row. The
+            // borrowed id is compared inside `song_row` and the guard drops at
+            // the end of this arm, so no per-frame `Option<String>` clone is
+            // needed.
+            CurrentView::Songs => {
+                let state = player.state.blocking_lock();
+                views::view_songs(
+                    &player.songs.items,
+                    &player.songs.titles,
+                    &player.songs.labels,
+                    player.songs.epoch,
+                    player.songs.selected(),
+                    player.songs.loading,
+                    player.songs.error.as_deref(),
+                    state.current_track.as_deref(),
+                    player.search_active,
+                )
+            }
+            // The flat whole-library view marks its playing row from the same
+            // second lock the Songs arm takes.
+            CurrentView::AllSongs => {
+                let state = player.state.blocking_lock();
+                views::view_all_songs(
+                    &player.all_songs.items,
+                    &player.all_songs.titles,
+                    &player.all_songs.labels,
+                    player.all_songs.epoch,
+                    player.all_songs.selected(),
+                    player.all_songs.loading,
+                    player.all_songs.error.as_deref(),
+                    state.current_track.as_deref(),
+                )
+            }
+            // The flat album list renders like the per-artist Albums view: album
+            // rows with no current-track marker, drawing the cached title and
+            // running time the load stored.
+            CurrentView::AllAlbums => views::view_all_albums(
+                &player.all_albums.items,
+                &player.all_albums.titles,
+                &player.all_albums.labels,
+                player.all_albums.epoch,
+                player.all_albums.selected(),
+                player.all_albums.loading,
+                player.all_albums.error.as_deref(),
+            ),
+            CurrentView::Playlists => views::view_playlists(
+                &player.playlists.items,
+                player.playlists.epoch,
+                player.playlists.selected(),
+                player.playlists.loading,
+                player.playlists.error.as_deref(),
+            ),
+        };
+
+        // The player panels are one `MouseArea` so a wheel roll over any of them
+        // nudges the volume; its content still sees each event first, so the
+        // title-bar drag, LCD click, sliders, and buttons keep their behavior.
+        // The library band and everything below stay outside the area, leaving
+        // the browse list's own `Scrollable` to take the wheel without touching
+        // the volume.
+        //
+        // The footer gets its own clones of the elapsed and total strings before
+        // the LCD takes them, so the two can never disagree about elapsed versus
+        // remaining mode or about the track's total.
+        let library_elapsed = now_playing_elapsed.clone();
+        let library_total = now_playing_time.clone();
+        let mut player_panels = Column::new()
+            .push(views::view_title_bar(player.about_visible))
+            .push(views::view_now_playing(
+                now_playing_elapsed,
+                now_playing,
+                now_playing_artist,
+                now_playing_number,
+                now_playing_time,
+                player.marquee_offset,
+                playback_format,
+                views::visible_spectrum(spectrum, player.visualizer_visible),
+                transport_mode,
+                player.blink_visible,
+            ))
+            .push(views::view_seek_bar(
+                player.readout_position(),
+                player.playback_duration,
+            ))
+            .push(views::view_transport_controls(
+                is_playing,
+                volume,
+                balance,
+                repeat,
+                shuffle,
+                player.eq_panel_visible,
+                player.library_panel_visible,
             ));
-    }
+        // The EQ button on the transport row is layout-only: it shows or hides this
+        // band and panel, while the shared EQ state keeps driving the audio. The
+        // freed height flows to the browse list below because nothing here pins the
+        // column's height or resizes the window.
+        if player.eq_panel_visible {
+            player_panels = player_panels
+                .push(views::view_title_band("NOSTALGIA EQUALIZER"))
+                .push(views::view_equalizer(
+                    eq_enabled, eq_preamp, &eq_bands, eq_preset,
+                ));
+        }
 
-    // The PL button on the transport row is layout-only too: it shows or
-    // hides the whole library column below, while the shared browse, search,
-    // selection, playback, and player state keep their values. The player
-    // panels above stay drawn, and nothing resizes the window.
-    let mut library = Column::new().push(views::view_title_band("NOSTALGIA LIBRARY"));
-    // The Back button sits above the list it navigates and exists only where
-    // the hierarchy has a level above to return to (see `views::can_go_back`).
-    if views::can_go_back(&player.current_view) {
-        library = library.push(views::view_back_button());
-    }
-    // A failed top-level artists fetch is a dead end: no navigation re-issues
-    // it, so the Artists view offers a Retry that re-runs `LoadArtists`.
-    // Every other browse level recovers by navigating back into it, so those
-    // failures need no button.
-    if views::can_retry_artists(&player.current_view, player.artists.error.as_deref()) {
-        library = library.push(views::view_retry_button());
-    }
-    // The Top, Sort, and Reload buttons share one row, Reload beside Sort, so
-    // the current list can always be returned to its first row, reordered in
-    // place, or replaced with a freshly fetched artists list. Open sits above
-    // them, on every browse level, and opens the row a first click selected;
-    // with nothing selected it does nothing.
-    library = library.push(views::view_open_button());
-    library = library.push(views::view_browse_nav_buttons());
-    // The All Songs, All Albums, and Playlists buttons open the flat lists;
-    // they live on the Artists view, beside Back/Retry, so each list is one
-    // press from the top of the hierarchy.
-    if matches!(player.current_view, CurrentView::Artists) {
-        library = library
-            .push(views::view_all_songs_button())
-            .push(views::view_all_albums_button())
-            .push(views::view_playlists_button());
-    }
-    // The search box and its Clear button sit on every browse screen, so a
-    // query can be typed from (and cleared at) any level of the hierarchy.
-    library = library.push(views::view_search_row(&player.search_query));
-    library = library.push(main_content).push(views::view_library_strip(
-        transport_mode,
-        volume,
-        library_elapsed,
-        library_total,
-    ));
+        // The PL button on the transport row is layout-only too: it shows or
+        // hides the whole library column below, while the shared browse, search,
+        // selection, playback, and player state keep their values. The player
+        // panels above stay drawn, and nothing resizes the window.
+        let mut library = Column::new().push(views::view_title_band("NOSTALGIA LIBRARY"));
+        // The Back button sits above the list it navigates and exists only where
+        // the hierarchy has a level above to return to (see `views::can_go_back`).
+        if views::can_go_back(&player.current_view) {
+            library = library.push(views::view_back_button());
+        }
+        // A failed top-level artists fetch is a dead end: no navigation re-issues
+        // it, so the Artists view offers a Retry that re-runs `LoadArtists`.
+        // Every other browse level recovers by navigating back into it, so those
+        // failures need no button.
+        if views::can_retry_artists(&player.current_view, player.artists.error.as_deref()) {
+            library = library.push(views::view_retry_button());
+        }
+        // The Top, Sort, and Reload buttons share one row, Reload beside Sort, so
+        // the current list can always be returned to its first row, reordered in
+        // place, or replaced with a freshly fetched artists list. Open sits above
+        // them, on every browse level, and opens the row a first click selected;
+        // with nothing selected it does nothing.
+        library = library.push(views::view_open_button());
+        library = library.push(views::view_browse_nav_buttons());
+        // The All Songs, All Albums, and Playlists buttons open the flat lists;
+        // they live on the Artists view, beside Back/Retry, so each list is one
+        // press from the top of the hierarchy.
+        if matches!(player.current_view, CurrentView::Artists) {
+            library = library
+                .push(views::view_all_songs_button())
+                .push(views::view_all_albums_button())
+                .push(views::view_playlists_button());
+        }
+        // The search box and its Clear button sit on every browse screen, so a
+        // query can be typed from (and cleared at) any level of the hierarchy.
+        library = library.push(views::view_search_row(&player.search_query));
+        library = library.push(main_content).push(views::view_library_strip(
+            transport_mode,
+            volume,
+            library_elapsed,
+            library_total,
+        ));
 
-    let mut column =
-        Column::new().push(MouseArea::new(player_panels).on_scroll(views::volume_wheel_message));
-    if player.library_panel_visible {
-        column = column.push(library);
+        let mut column = Column::new()
+            .push(MouseArea::new(player_panels).on_scroll(views::volume_wheel_message));
+        if player.library_panel_visible {
+            column = column.push(library);
+        }
+        column.into()
+    };
+
+    if player.about_visible && !player.shaded {
+        views::view_about_overlay(base)
+    } else {
+        base
     }
-    column.into()
 }

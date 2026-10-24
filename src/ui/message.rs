@@ -269,7 +269,11 @@ pub(in crate::ui) enum Message {
     // shade mode, or restores it. The first shade measures the window so the
     // pre-shade inner size can be restored; later shades reuse it.
     ToggleWindowShade,
-    // The clutter bar's always-on-top toggle. The arm flips the flag and
+    // The title bar's `M` button: flips the transient About panel. Opening it
+    // while the window is shaded first restores the window, so the panel never
+    // draws in shade mode. The flag is not persisted.
+    ToggleAbout,
+    // The LCD strip's always-on-top toggle. The arm flips the flag and
     // schedules `iced::window::set_level` for the resolved window, which is a
     // no-op until the window id resolves.
     ToggleAlwaysOnTop,

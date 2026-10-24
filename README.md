@@ -125,7 +125,11 @@ and opening a list starts it at the top. A `Sort` button beside `Top` reorders t
 alphabetically by its rows' rendered text, ignoring case; the reorder is one-shot, so reopening
 the list restores the library's order. A `Reload` button beside `Sort` refetches the library's
 artists list and returns to the Artists list, clearing any active search while leaving the typed
-query in the search box. The title bar's `A` button toggles always-on-top; its
+query in the search box. The title bar's `M` button opens a transient About panel naming the app,
+showing its `v`-prefixed package version and the line `The classic Winamp look, rebuilt in
+Rust — with Apple Music as the library.`; `M` (through the backdrop over its slot), the panel's
+`Close` button, or a click on the backdrop outside the panel closes it, and opening it while the
+window is rolled up restores the window first. Its
 shade button, a double-click on the bar, or a double-click on the rolled-up strip rolls the window
 up to the title bar plus a compact
 transport strip with Previous, Play/Pause, Stop, Next, the same elapsed-over-total time readout, a
@@ -171,11 +175,12 @@ playing, the player steps forward through the showing list: to the next song, to
 Repeat on at the end, or, with Shuffle on, to a shuffled song when another exists. With Repeat off
 on the last song it stops instead and keeps that song queued for Play. The volume, balance, Repeat
 and Shuffle flags, the equalizer's on/off state, curve, and preset, the elapsed/remaining readout
-choice, the visualizer's shown/hidden choice, and the title bar's always-on-top
+choice, the visualizer's shown/hidden choice, and the always-on-top
 choice are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or
 `$HOME/.config/nostalgia/settings.ini`) and restored at the next launch;
 `NOSTALGIA_SETTINGS_PATH` overrides the path. A missing or malformed entry falls back to its
-default. The title bar's `A` choice is remembered for the next launch, and a saved-on launch starts
+default. The always-on-top choice (the LCD strip's `A` or the `A` key) is remembered for the next
+launch, and a saved-on launch starts
 with the window pinned once boot resolves its window id. There are no CLI flags yet.
 
 ## Development

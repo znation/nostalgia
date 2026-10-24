@@ -1,6 +1,6 @@
 //! The custom Winamp title bar and the mockups' decorative section bands: the
-//! gold title tape, the centered label between two tapes, the clutter bar's
-//! always-on-top toggle, and the shade, minimize, and close buttons.
+//! gold title tape, the centered label between two tapes, the app bar's menu
+//! button, and the shade, minimize, and close buttons.
 
 use iced::{
     Color, Element, Length,
@@ -22,10 +22,10 @@ pub const TITLE_BAR_HEIGHT: f32 = 24.0;
 /// reflow the drag region beside it.
 pub(super) const TITLE_BAR_BUTTON_WIDTH: f32 = 22.0;
 
-/// The always-on-top clutter toggle's pinned width. It is narrower than the
-/// window buttons: the A slot is a small square in the classic skin, and it
-/// sits at the left edge of the bar rather than beside the window buttons.
-pub(super) const CLUTTER_BUTTON_WIDTH: f32 = 18.0;
+/// The title bar's leftmost menu button's pinned width. It is narrower than
+/// the window buttons: the M slot is a small square in the classic skin, and
+/// it sits at the left edge of the bar rather than beside the window buttons.
+pub(super) const TITLE_BAR_LEFT_BUTTON_WIDTH: f32 = 18.0;
 
 /// A 1px full-width strip in `color`, the tape's top light edge and bottom
 /// shadow.
@@ -96,19 +96,20 @@ pub fn view_title_band(label: &'static str) -> Element<'static, Message> {
 
 /// The custom Winamp title bar: the app name centered between gold tapes on a
 /// raised [`theme::TITLE_BLUE`] band, draggable to move the window, with the
-/// clutter bar's always-on-top toggle at the left and shade, minimize, and
-/// close buttons on the right. Double-clicking the band toggles the classic
-/// roll-up (shade) mode via [`Message::ToggleWindowShade`].
+/// classic main-menu `M` button at the left and shade, minimize, and close
+/// buttons on the right. Double-clicking the band toggles the classic roll-up
+/// (shade) mode via [`Message::ToggleWindowShade`].
 ///
 /// The whole band except the buttons is a [`MouseArea`], so a press anywhere
 /// on it emits [`Message::WindowDragged`] and the update loop begins the OS
 /// window drag, while a double-click emits [`Message::ToggleWindowShade`].
-/// The A toggle is sunken while `always_on_top` holds and raised otherwise;
-/// the shade, minimize, and close buttons are [`fixed_width_button`]s — the
-/// same raised chrome as the transport row — pinned so their glyphs cannot
-/// resize them. The bar paints [`style::title_bar_style`] and wraps it in
-/// [`bevel::raised_panel`], so it carries the base skin's raised bevel.
-pub fn view_title_bar(always_on_top: bool) -> Element<'static, Message> {
+/// The M button toggles the About panel and is sunken while `about_visible`
+/// holds and raised otherwise; the shade, minimize, and close buttons are
+/// [`fixed_width_button`]s — the same raised chrome as the transport row —
+/// pinned so their glyphs cannot resize them. The bar paints
+/// [`style::title_bar_style`] and wraps it in [`bevel::raised_panel`], so it
+/// carries the base skin's raised bevel.
+pub fn view_title_bar(about_visible: bool) -> Element<'static, Message> {
     let drag_region = MouseArea::new(
         Container::new(title_band_content(TITLE_BAR_TEXT))
             .width(Length::Fill)
@@ -117,15 +118,15 @@ pub fn view_title_bar(always_on_top: bool) -> Element<'static, Message> {
     .on_press(Message::WindowDragged)
     .on_double_click(Message::ToggleWindowShade);
 
-    let clutter_toggle = Button::new(Text::new("A"))
-        .on_press(Message::ToggleAlwaysOnTop)
-        .width(Length::Fixed(CLUTTER_BUTTON_WIDTH))
-        .style(move |_theme, status| style::toggle_button_style(always_on_top, status));
+    let menu_button = Button::new(Text::new("M"))
+        .on_press(Message::ToggleAbout)
+        .width(Length::Fixed(TITLE_BAR_LEFT_BUTTON_WIDTH))
+        .style(move |_theme, status| style::toggle_button_style(about_visible, status));
 
     bevel::raised_panel(
         Container::new(
             Row::new()
-                .push(clutter_toggle)
+                .push(menu_button)
                 .push(drag_region)
                 .push(fixed_width_button(
                     "▭",
@@ -159,10 +160,10 @@ mod tests {
     // region or the buttons after it. These widths are private to this module
     // and no other test reads them, so a zeroed or widened button could pass
     // the suite while the bar reflowed. Pin the widths; the 22 > 18 split is
-    // the documented narrow A slot.
+    // the documented narrow M slot.
     #[test]
     fn title_bar_buttons_keep_their_pinned_widths() {
         assert_eq!(TITLE_BAR_BUTTON_WIDTH, 22.0);
-        assert_eq!(CLUTTER_BUTTON_WIDTH, 18.0);
+        assert_eq!(TITLE_BAR_LEFT_BUTTON_WIDTH, 18.0);
     }
 }

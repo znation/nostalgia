@@ -3369,11 +3369,11 @@ fn window_id_resolved_stores_the_window_id() {
 
 /// The three custom-title-bar window actions that are complete no-ops without
 /// a window id, in the order the title bar renders them: the draggable band,
-/// minimize, and close. The clutter and shade toggles also touch the window,
-/// but each flips a player flag before its window call, so they keep their own
-/// tests. The two tests below drive this set against the two window-id states
-/// — no work before `boot`'s query resolves, work after — so a new no-op
-/// window action is added here once rather than to both loops.
+/// minimize, and close. The always-on-top, shade, and About toggles also touch
+/// the window, but each flips a player flag before its window call, so they
+/// keep their own tests. The two tests below drive this set against the two
+/// window-id states — no work before `boot`'s query resolves, work after — so a
+/// new no-op window action is added here once rather than to both loops.
 const TITLE_BAR_WINDOW_ACTIONS: [Message; 3] = [
     Message::WindowDragged,
     Message::MinimizeWindow,
@@ -3418,6 +3418,90 @@ fn toggle_always_on_top_without_a_window_id_still_flips_the_flag() {
 
     assert_message_schedules_no_work(&mut player, Message::ToggleAlwaysOnTop);
     assert!(player.always_on_top);
+}
+
+#[test]
+fn toggle_about_shows_and_hides_the_panel_without_touching_playback() {
+    let (mut player, state) = test_player();
+    seed_browse_lists(&mut player);
+    let before = {
+        let state = state.blocking_lock();
+        (
+            state.transport_mode(),
+            state.current_track.clone(),
+            state.volume(),
+            state.balance(),
+            state.eq_enabled,
+            state.eq_preamp(),
+            state.eq_bands(),
+            state.eq_preset(),
+            state.repeat,
+            state.shuffle,
+        )
+    };
+    let browse_before = (
+        player.artists.items.len(),
+        player.songs.items.len(),
+        player.artists.selected(),
+        player.songs.selected(),
+        player.search_query.clone(),
+        player.search_active,
+    );
+    assert!(!player.about_visible);
+
+    assert_message_schedules_no_work(&mut player, Message::ToggleAbout);
+    assert!(player.about_visible);
+
+    assert_message_schedules_no_work(&mut player, Message::ToggleAbout);
+    assert!(!player.about_visible);
+
+    let after = {
+        let state = state.blocking_lock();
+        (
+            state.transport_mode(),
+            state.current_track.clone(),
+            state.volume(),
+            state.balance(),
+            state.eq_enabled,
+            state.eq_preamp(),
+            state.eq_bands(),
+            state.eq_preset(),
+            state.repeat,
+            state.shuffle,
+        )
+    };
+    assert_eq!(
+        after, before,
+        "the About toggle must leave playback, volume, and equalizer state untouched"
+    );
+    assert_eq!(
+        (
+            player.artists.items.len(),
+            player.songs.items.len(),
+            player.artists.selected(),
+            player.songs.selected(),
+            player.search_query.clone(),
+            player.search_active,
+        ),
+        browse_before,
+        "the About toggle must leave the browse and search state untouched"
+    );
+    assert_eq!(player.current_view, CurrentView::Artists);
+}
+
+#[test]
+fn toggle_about_while_shaded_restores_the_window_first() {
+    let (mut player, _state) = player_with_window_id();
+    player.shaded = true;
+    player.unshaded_size = Some(iced::Size::new(800.0, 600.0));
+
+    assert_message_schedules_work(&mut player, Message::ToggleAbout);
+
+    assert!(
+        !player.shaded,
+        "opening About must restore the window first"
+    );
+    assert!(player.about_visible);
 }
 
 #[test]
@@ -7852,7 +7936,8 @@ fn view_constructs_over_the_apps_full_input_space() {
     construct_view_in_every_browse_view(&mut player);
 
     // The loaded shape: every browse buffer populated, rendered for every
-    // now-playing resolution a session can reach.
+    // now-playing resolution a session can reach, including with the About
+    // panel open over the otherwise unchanged base.
     seed_browse_lists(&mut player);
 
     let now_playing_options = [None, Some("song-1"), Some("no-such-song")];
@@ -7902,6 +7987,11 @@ fn view_constructs_over_the_apps_full_input_space() {
     player.all_albums.error = Some("music-library fetch failed: boom".to_string());
     player.playlists.error = Some("music-library fetch failed: boom".to_string());
     construct_view_in_every_browse_view(&mut player);
+
+    // The About panel over the loaded normal-mode tree must build without
+    // panicking too.
+    player.about_visible = true;
+    construct_view_in_every_browse_view(&mut player);
 }
 
 #[test]
@@ -7915,13 +8005,24 @@ fn view_constructs_when_the_window_is_shaded() {
 
     seed_browse_lists(&mut player);
     construct_view_in_every_browse_view(&mut player);
+
+    // An About flag left set while shaded must not draw the panel: the shade
+    // branch is the title bar plus the strip whatever the flag says.
+    player.about_visible = true;
+    construct_view_in_every_browse_view(&mut player);
+    let shaded = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = shaded.texts().collect();
+    assert!(
+        !texts.contains(&"ABOUT NOSTALGIA"),
+        "shade mode must never draw the About panel: {texts:?}"
+    );
 }
 
 #[test]
-fn title_bar_constructs_for_both_always_on_top_states() {
+fn title_bar_constructs_for_both_about_states() {
     // iced `Element`s expose no tree introspection, so the observable
-    // contract is that the title bar builds for both toggle states — the
-    // sunken A slot and the raised one — without panicking.
+    // contract is that the title bar builds for both About states — the
+    // sunken M slot and the raised one — without panicking.
     let _ = views::view_title_bar(false);
     let _ = views::view_title_bar(true);
 }

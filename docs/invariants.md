@@ -549,7 +549,7 @@ refresh does not re-join and reformat every row.
 - The root `view` draws Back on every level below Artists, Retry only on Artists while its fetch
   has failed, and the All Songs, All Albums, and Playlists buttons only on Artists.
 - The app bar and the two section bands are `TITLE_BAR_HEIGHT` tall. The app bar centers
-  `NOSTALGIA` between gold tapes with its A and shade/minimize/close controls pinned at the
+  `NOSTALGIA` between gold tapes with its M and shade/minimize/close controls pinned at the
   edges. Normal mode draws `NOSTALGIA EQUALIZER` immediately above the equalizer and
   `NOSTALGIA LIBRARY` immediately above the browse controls; the section bands emit no messages
   and are absent in shade mode.
@@ -615,7 +615,7 @@ library column (2026-10-24).
 
 **Guarantee.** The values the user sets that outlive a track — volume, balance, Repeat, Shuffle, the
 equalizer's on/off state, preamp, ten band gains, and selected preset, the large readout's
-elapsed/remaining choice, the visualizer's shown/hidden choice, and the title bar's always-on-top
+elapsed/remaining choice, the visualizer's shown/hidden choice, and the LCD strip's always-on-top
 choice — are loaded once before the
 first view is drawn and rewritten after any update that changes their snapshot. An update that
 leaves the snapshot unchanged writes nothing. Reads and writes go through the state's clamped
@@ -825,8 +825,8 @@ its internal id, whenever the id is in the known-track index:
   dropped. The spectrum poll is subscribed only while playback is running.
 - The LCD's left edge always draws the five classic indicator letters `O`, `A`, `I`, `D`, `V`,
   in that order, at a fixed width, in every playback state including the empty `--:--` bar. `A`
-  and `V` are mouse areas: pressing `A` publishes `Message::ToggleAlwaysOnTop` (the title bar's
-  always-on-top toggle) and pressing `V` publishes `Message::ToggleVisualizer`, which flips only
+  and `V` are mouse areas: pressing `A` publishes `Message::ToggleAlwaysOnTop` (the LCD strip's
+  own always-on-top control) and pressing `V` publishes `Message::ToggleVisualizer`, which flips only
   the LCD's display flag. `O`, `I`, and `D` stay decorative and publish nothing. The strip keeps
   its fixed width and letter order, so the content beside it does not move.
 - A transport glyph leads the row in a fixed `LCD_TRANSPORT_WIDTH` slot before the large elapsed
@@ -1144,6 +1144,9 @@ rather than the panic unwinding the event loop.
   stops when the content captures them; the inert stopped readout swallows the double-click
   through its own no-op handler instead of restoring, and the strip keeps `SHADE_STRIP_HEIGHT` and
   its blue chrome.
+- Opening the About panel while shaded restores the window first through the same
+  `handlers::window::toggle_window_shade`, so the shade tree stays the title bar plus strip and
+  never draws the panel.
 
 **Enforced by.** `views::shade::view_shade_strip` wraps
 `views::mini_transport::mini_transport_strip_with_seek` on the title bar's blue chrome in a
@@ -1189,7 +1192,37 @@ bar; the shaded branch of `ui::view::view` stacks the bar and strip; and
 **History.** Added with the window-shade transport strip; the earlier shade mode built the title
 bar alone. The strip's controls now come from the shared compact row the library footer uses; the
 shade strip additionally draws the Now Playing bar's seek slider from `seek_bar::seek_slider`.
-A double-click on the strip now restores the window, matching the title bar's double-click.
+A double-click on the strip now restores the window, matching the title bar's double-click. Opening
+About now restores the window first, so the panel never draws in shade mode (2026-10-24).
+
+## About panel
+
+**Guarantee.** The app bar's leftmost `M` button opens a transient, unpersisted About panel:
+
+- `views::view_title_bar` draws `M` in the left slot and publishes `Message::ToggleAbout` on a
+  press. The LCD strip's `A` keeps publishing `Message::ToggleAlwaysOnTop`; the title bar no
+  longer has an always-on-top control.
+- `handlers::window::toggle_about` flips `WinampPlayer::about_visible`. Opening it while
+  `WinampPlayer::shaded` holds first calls `toggle_window_shade` and returns that task, so the
+  window restores before the panel draws; the flag is layout-only and not persisted.
+- While the flag holds outside shade mode, `views::view_about_overlay` stacks the panel over the
+  otherwise unchanged normal-mode base: `views::about::ABOUT_VERSION` (a `v`-prefixed
+  `CARGO_PKG_VERSION`), `ABOUT NOSTALGIA`, the mockup tagline, and a `Close` button. `Close` and
+  the full-window backdrop each publish one `Message::ToggleAbout`; a press on the panel's own
+  chrome publishes `Message::Ignored` and leaves it open. The shade branch never draws the panel.
+
+**Enforced by.** `views::title_bar::view_title_bar`, `views::about::view_about_overlay`,
+`Message::ToggleAbout`, `handlers::window::toggle_about`, `WinampPlayer::about_visible`, and the
+normal-mode branch of `ui::view::view` in `src/ui/view.rs`, which wraps the base tree only while
+`about_visible && !shaded` holds.
+
+**Pinned by.** `title_bar_m_button_publishes_toggle_about`,
+`about_overlay_draws_the_name_version_and_tagline`, and
+`about_overlay_closes_from_close_and_backdrop_but_ignores_its_chrome` (`src/ui/views/tests.rs`);
+`toggle_about_shows_and_hides_the_panel_without_touching_playback`,
+`toggle_about_while_shaded_restores_the_window_first`, `view_constructs_over_the_apps_full_input_space`,
+`view_constructs_when_the_window_is_shaded`, and `title_bar_constructs_for_both_about_states`
+(`src/ui/tests.rs`).
 
 ## Library footer
 

@@ -1,5 +1,6 @@
 //! The window message handlers: the app window's resolved id and the custom
-//! title bar's actions — drag, minimize, close, shade, and always-on-top.
+//! title bar's actions — drag, minimize, close, shade, always-on-top, and the
+//! About panel.
 //!
 //! Every action acts on the resolved window id and is a no-op until it
 //! exists; `with_window_id` holds that guard once, so each handler names only
@@ -87,8 +88,22 @@ pub(in crate::ui) fn window_shade_measured(
     resize_to_shade(player, size.width)
 }
 
-/// The title bar's clutter toggle: flip the flag and schedule the window-level
-/// change. `with_window_id` makes the level call a no-op before the window id
+/// The title bar's `M` button: flip the transient About panel. Opening it
+/// while the window is shaded first calls [`toggle_window_shade`] and returns
+/// that task, so the window restores before the panel draws; closing it never
+/// touches the window. The flag is layout-only and not persisted.
+pub(in crate::ui) fn toggle_about(player: &mut WinampPlayer) -> Task<Message> {
+    let opening = !player.about_visible;
+    player.about_visible = opening;
+    if opening && player.shaded {
+        toggle_window_shade(player)
+    } else {
+        Task::none()
+    }
+}
+
+/// The LCD strip's always-on-top toggle: flip the flag and schedule the
+/// window-level change. `with_window_id` makes the level call a no-op before the window id
 /// resolves, exactly like the other title-bar actions, while the flag still
 /// flips so the view redraws the toggle.
 pub(in crate::ui) fn toggle_always_on_top(player: &mut WinampPlayer) -> Task<Message> {

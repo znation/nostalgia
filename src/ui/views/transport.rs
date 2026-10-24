@@ -148,8 +148,8 @@ pub(super) fn library_panel_toggle() -> (&'static str, f32, Message) {
 /// One of the transport row's panel toggles, built from its spec and pinned to
 /// the spec's width. `open` sinks the chrome while the panel it controls is
 /// shown (see [`style::toggle_button_style`]), the same on/off rule as the
-/// title bar's A toggle. The EQ and PL toggles both build through here, so
-/// neither can drift from that rule.
+/// LCD strip's `A` and the title bar's `M` toggles. The EQ and PL toggles both
+/// build through here, so neither can drift from that rule.
 fn panel_toggle_button(
     (label, width, message): (&'static str, f32, Message),
     open: bool,

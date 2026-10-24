@@ -39,11 +39,11 @@ pub(in crate::ui) struct WinampPlayer {
     /// only the title bar and the compact transport strip, and the window is
     /// resized to [`views::SHADED_HEIGHT`].
     pub(in crate::ui) shaded: bool,
-    /// Whether the window is pinned above other windows. The title bar's
-    /// clutter toggle flips it, and `update` schedules
-    /// `iced::window::set_level` to match; `view` renders the toggle sunken
-    /// while it holds. It lives here rather than in `AppState` so the shaded
-    /// frame can read it without the state lock.
+    /// Whether the window is pinned above other windows. The LCD strip's `A`
+    /// toggle and the `A` key flip it, and `update` schedules
+    /// `iced::window::set_level` to match; `view` renders the strip's control
+    /// sunken while it holds. It lives here rather than in `AppState` so the
+    /// shaded frame can read it without the state lock.
     pub(in crate::ui) always_on_top: bool,
     /// The window's inner size captured just before the first shade, so
     /// unshading can restore it. `None` until the measurement lands.
@@ -160,6 +160,11 @@ pub(in crate::ui) struct WinampPlayer {
     /// layout flag only: no playback, equalizer, browse, search, or selection
     /// state changes, and hiding the section does not resize the window.
     pub(in crate::ui) library_panel_visible: bool,
+    /// Whether the transient About panel is drawn over the normal-mode tree.
+    /// `Message::ToggleAbout` flips it; it is closed at launch and deliberately
+    /// not persisted. Opening it while [`Self::shaded`] holds restores the
+    /// window first, and `view` never draws it in shade mode.
+    pub(in crate::ui) about_visible: bool,
     /// The seek bar's in-progress drag, or `None` while the thumb follows the
     /// reported position. `Message::SeekPreviewChanged` stores the drag and
     /// `Message::SeekPreviewReleased` seeks to and clears it, so only a release
@@ -266,6 +271,7 @@ impl WinampPlayer {
             visualizer_visible: true,
             eq_panel_visible: true,
             library_panel_visible: true,
+            about_visible: false,
             seek_preview: None,
             time_display: views::TimeDisplay::Elapsed,
             position_epoch: 0,
@@ -283,7 +289,7 @@ impl WinampPlayer {
     /// nothing, which keeps timer and backend poll messages from touching the
     /// file. The snapshot also carries the player-owned readout mode,
     /// visualizer choice, and always-on-top flag, so a click on the LCD time or
-    /// the strip's `V` or the title bar's `A` saves exactly one new snapshot.
+    /// the strip's `V` or the LCD strip's `A` saves exactly one new snapshot.
     /// With no store attached (tests, and before `init_ui` attaches the
     /// production one) this returns before taking the state lock.
     pub(in crate::ui) fn persist_settings_if_changed(&mut self) {

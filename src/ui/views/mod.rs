@@ -7,7 +7,8 @@
 //! loop. Keeping them free of the `WinampPlayer` struct means the view layer
 //! can be reworked (or tested) independently of how the app is booted.
 //!
-//! Each panel lives in its own submodule — `browse` (the artist → album →
+//! Each panel lives in its own submodule — `about` (the transient About
+//! overlay), `browse` (the artist → album →
 //! song drill-down, the flat lists, and Playlists, with their list scaffolding
 //! in `browse::rows` and pure row wording and labels in `browse::rows::text`),
 //! `title_bar`, `shade` (the rolled-up
@@ -26,6 +27,7 @@ use iced::{
 
 use crate::ui::{Message, style};
 
+mod about;
 mod browse;
 mod equalizer;
 mod mini_transport;
@@ -35,6 +37,7 @@ mod shade;
 mod title_bar;
 mod transport;
 
+pub use about::view_about_overlay;
 pub(crate) use browse::artist_album_count_label;
 pub use browse::{
     BROWSE_LIST_ID, BROWSE_LIST_PADDING, BROWSE_PAGE_HEIGHT, BROWSE_ROW_HEIGHT, BROWSE_SEARCH_ID,

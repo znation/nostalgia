@@ -175,7 +175,7 @@ where
 }
 
 /// The message an indicator letter publishes when pressed: `A` toggles
-/// always-on-top through the same [`Message::ToggleAlwaysOnTop`] the title bar
+/// always-on-top through the same [`Message::ToggleAlwaysOnTop`] the `A` key
 /// uses, `V` toggles the LCD visualizer, and `O`, `I`, and `D` are decorative
 /// and publish nothing. Pure so the mapping is testable without a renderer.
 pub fn lcd_indicator_message(label: &str) -> Option<Message> {
