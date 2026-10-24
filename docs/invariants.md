@@ -1310,14 +1310,17 @@ browser's `POST /token` callback behind it:
 - A connection is dropped when its own budget (`CONNECTION_READ_TIMEOUT`, five seconds) is spent
   from the moment it was accepted; the flow's deadline (`AUTH_TIMEOUT`) is the outer bound.
 - The pending connections are capped (`MAX_PENDING_CONNECTIONS`), so a flood of connections cannot
-  grow the server's share of the process's file descriptors without bound; the oldest pending
-  connection makes way for the newest, so a flood cannot push the browser's callback out of the
-  list either.
+  grow the server's share of the process's file descriptors without bound. When the cap is reached
+  the accept loop takes on no more connections until a pending one is served or its budget is spent,
+  leaving the rest in the kernel's accept queue; a connection the server has already accepted is
+  never displaced by a newer one, so a flood cannot evict the browser's callback after it has been
+  accepted.
 - One pass of the accept loop takes on at most `MAX_ACCEPTS_PER_PASS` connections, and a connection
-  taken on in a pass is served in the next one, so a callback that is queued behind N connections is
-  served within `ceil((N + 1) / MAX_ACCEPTS_PER_PASS) + 1` poll intervals (`ACCEPT_POLL_INTERVAL`,
-  25 ms) — one poll interval for every eight connections queued ahead of it. The flow's deadline
-  remains the outer bound.
+  taken on in a pass is served in the next one, so a callback that is queued behind N connections
+  the pending list has room for is served within `ceil((N + 1) / MAX_ACCEPTS_PER_PASS) + 1` poll
+  intervals (`ACCEPT_POLL_INTERVAL`, 25 ms) — one poll interval for every eight connections queued
+  ahead of it. While the list is full the callback waits in the kernel's accept queue until a
+  pending connection is served or its budget is spent; the flow's deadline remains the outer bound.
 - A bootstrap directory left in the temp dir by a process that died before its guard could remove it
   is swept by the next sign-in once it is older than `BOOTSTRAP_STALE_AFTER` (twice `AUTH_TIMEOUT`).
   A fresher bootstrap directory (which may belong to another running instance), an entry with a
@@ -1340,7 +1343,7 @@ reports a removal failure without failing the new sign-in.
 - `authorize_serves_the_callback_after_repeated_stalled_connections`
 - `authorize_serves_the_callback_after_a_stalled_connection_is_dropped`
 - `a_stalled_connection_is_dropped_when_its_budget_is_spent`
-- `the_pending_list_is_capped_and_the_oldest_connection_makes_way`
+- `the_pending_list_is_capped_without_displacing_an_accepted_connection`
 - `one_pass_takes_on_a_bounded_number_of_connections`
 - `the_reader_reports_a_partial_request_as_incomplete`
 - `the_bootstrap_sweep_removes_only_old_bootstrap_directories`
@@ -1349,7 +1352,9 @@ reports a removal failure without failing the new sign-in.
   (all in `src/music_kit_auth/tests.rs`)
 
 **History.** Reconstructed from "A stalled connection is served for its whole budget before the next
-one, so repeated stalls starve the sign-in callback" in `BUGS-FIXED.md`.
+one, so repeated stalls starve the sign-in callback" in `BUGS-FIXED.md`. On 2026-10-24 the cap
+stopped evicting the oldest accepted connection: eviction could drop the browser's callback between
+its header and body reads, so a full list now refuses new accepts until a slot frees.
 
 ## REST transport
 

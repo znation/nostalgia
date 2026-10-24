@@ -1,8 +1,10 @@
 //! The loopback server that serves the sign-in page and captures the
 //! `POST /token` callback.
 //!
-//! Each accepted connection is read without waiting, so a client that stalls
-//! cannot hold the browser's callback behind it (see [`serve_pending`] and
+//! Each accepted connection is read without waiting, so a stalled client holds
+//! only its own slot, and only until its budget is spent. When all slots are
+//! taken, a newer connection (the browser's callback included) waits in the
+//! kernel accept queue until a slot frees (see [`serve_pending`] and
 //! [`accept_pending`]).
 
 use std::io;
@@ -18,19 +20,21 @@ use super::{MusicKitSession, jwt_shape_problem};
 /// How many accepted connections the server reads at once.
 ///
 /// The connections are read one after another but never *waited* for, so this
-/// only bounds the server's share of the process's file descriptors; the
-/// oldest pending connection makes way for the newest when the bound is
-/// reached.
+/// only bounds the server's share of the process's file descriptors. When the
+/// bound is reached the accept loop stops taking on connections until a
+/// pending one is served or its budget is spent; an accepted connection is
+/// never displaced by a newer one.
 pub(super) const MAX_PENDING_CONNECTIONS: usize = 64;
 
 /// How many connections one pass of the accept loop takes on.
 ///
 /// The bound keeps a flood of connections from filling the pending list in one
-/// pass, and it bounds the wait of a connection that is queued behind others:
-/// a callback queued behind N connections is taken on within
-/// `ceil((N + 1) / MAX_ACCEPTS_PER_PASS)` passes and served in the pass after
-/// that, so a callback queued behind eight other connections waits one pass
-/// per eight queued connections.
+/// pass. While the pending list has room, a callback queued behind N
+/// connections is taken on within `ceil((N + 1) / MAX_ACCEPTS_PER_PASS)`
+/// passes and served in the pass after that. When the pending list is full
+/// ([`MAX_PENDING_CONNECTIONS`]) nothing is accepted, so the callback waits in
+/// the kernel queue until a pending connection is served or its budget is
+/// spent.
 pub(super) const MAX_ACCEPTS_PER_PASS: usize = 8;
 
 /// A connection the server has accepted but whose request has not arrived yet.
@@ -103,9 +107,12 @@ pub(super) fn serve_pending(
 /// Takes on the connections that are waiting to be served.
 ///
 /// The listener is non-blocking, so this never waits: a connection that has
-/// not arrived yet is left in the kernel's queue for the next pass. Each
-/// accepted connection is bounded by the per-connection budget from the moment
-/// it is accepted, with the flow's deadline as the outer bound.
+/// not arrived yet is left in the kernel's queue for the next pass. When the
+/// pending list is full this accepts nothing, leaving the waiting connections
+/// in the kernel's accept queue until a pending one is served or its budget is
+/// spent, so a flood cannot displace a connection the server has already
+/// accepted. Each accepted connection is bounded by the per-connection budget
+/// from the moment it is accepted, with the flow's deadline as the outer bound.
 pub(super) fn accept_pending(
     listener: &TcpListener,
     pending: &mut Vec<PendingConnection>,
@@ -113,6 +120,12 @@ pub(super) fn accept_pending(
     connection_budget: Duration,
 ) -> io::Result<()> {
     for _ in 0..MAX_ACCEPTS_PER_PASS {
+        // The list is full: leave the rest in the kernel's queue and try again
+        // next pass rather than evicting a connection already accepted (which
+        // could be the browser's callback between its header and body reads).
+        if pending.len() >= MAX_PENDING_CONNECTIONS {
+            return Ok(());
+        }
         let (stream, _address) = match listener.accept() {
             Ok(accepted) => accepted,
             Err(ref error) if error.kind() == io::ErrorKind::WouldBlock => return Ok(()),
@@ -124,11 +137,6 @@ pub(super) fn accept_pending(
             // waiting for the real callback.
             Err(_) => continue,
         };
-        // The oldest pending connection makes way for the newest, so the
-        // server reads a bounded number of connections at once.
-        if pending.len() >= MAX_PENDING_CONNECTIONS {
-            pending.remove(0);
-        }
         let connection_deadline = deadline.min(Instant::now() + connection_budget);
         pending.push(PendingConnection {
             reader,

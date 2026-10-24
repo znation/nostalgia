@@ -1448,11 +1448,11 @@ fn authorize_serves_the_callback_after_repeated_stalled_connections() {
 // The server reads a bounded number of connections at once, so a flood of
 // connections cannot grow the server's share of the process's file descriptors
 // without bound. The cap is behavior, not a comment: the pending list never
-// grows past `MAX_PENDING_CONNECTIONS`, and the oldest pending connection
-// makes way for the newest, so a flood cannot push the browser's callback out
-// of the list either.
+// grows past `MAX_PENDING_CONNECTIONS`, and a connection already accepted is
+// never displaced by a newer one — the extra connections wait in the kernel's
+// accept queue until a pending connection is served or its budget is spent.
 #[test]
-fn the_pending_list_is_capped_and_the_oldest_connection_makes_way() {
+fn the_pending_list_is_capped_without_displacing_an_accepted_connection() {
     let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind the listener");
     let port = listener
         .local_addr()
@@ -1477,22 +1477,24 @@ fn the_pending_list_is_capped_and_the_oldest_connection_makes_way() {
 
     let mut pending = Vec::new();
     let deadline = Instant::now() + Duration::from_secs(5);
-    // Take on every client; each pass takes on at most `MAX_ACCEPTS_PER_PASS`.
+    // Take on every client that fits; each pass takes on at most
+    // `MAX_ACCEPTS_PER_PASS`.
     while pending.len() < MAX_PENDING_CONNECTIONS {
         accept_pending(&listener, &mut pending, deadline, Duration::from_secs(5))
             .expect("accept the waiting connections");
     }
-    // One more pass takes on the last client, which evicts the oldest.
+    // The list is full, so this pass takes on nothing and the extra client
+    // stays in the kernel's accept queue.
     accept_pending(&listener, &mut pending, deadline, Duration::from_secs(5))
-        .expect("accept the last connection");
+        .expect("a full pending list accepts no more connections");
 
     assert_eq!(
         pending.len(),
         MAX_PENDING_CONNECTIONS,
         "the pending list must not grow past its cap"
     );
-    // The oldest connection made way for the newest: the first pending
-    // connection is the second client, not the first.
+    // The oldest connection was not displaced: the first pending connection
+    // is still the first client.
     let oldest_kept = pending[0]
         .reader
         .stream()
@@ -1500,8 +1502,30 @@ fn the_pending_list_is_capped_and_the_oldest_connection_makes_way() {
         .expect("the pending connection has a peer")
         .port();
     assert_eq!(
-        oldest_kept, ports[1],
-        "the oldest pending connection must make way for the newest"
+        oldest_kept, ports[0],
+        "an accepted connection must not be displaced by a newer one"
+    );
+
+    // Free one slot the way serving that connection does, then the extra
+    // client that was waiting in the kernel is taken on.
+    pending.remove(0);
+    accept_pending(&listener, &mut pending, deadline, Duration::from_secs(5))
+        .expect("accept the queued connection once a slot is free");
+    let pending_ports: Vec<u16> = pending
+        .iter_mut()
+        .map(|connection| {
+            connection
+                .reader
+                .stream()
+                .peer_addr()
+                .expect("the pending connection has a peer")
+                .port()
+        })
+        .collect();
+    assert_eq!(pending.len(), MAX_PENDING_CONNECTIONS);
+    assert!(
+        pending_ports.contains(&ports[MAX_PENDING_CONNECTIONS]),
+        "the extra connection must be accepted after a slot frees"
     );
 }
 
