@@ -184,11 +184,13 @@ impl AppState {
         }
     }
 
-    /// Flip the equalizer's on/off flag in place. The UI's EQ button is the
-    /// only toggle caller; keeping the flip here (rather than inlined at the
-    /// call site) puts the toggling semantics next to the field they mutate,
-    /// like `toggle_repeat`. The stored preamp and band gains are left alone,
-    /// so re-enabling the equalizer restores the curve the user dialed in.
+    /// Flip the equalizer's on/off flag in place. The equalizer panel's
+    /// `EQ: On`/`EQ: Off` button is the only UI caller, through
+    /// `Message::ToggleEqualizer`; keeping the flip here (rather than inlined
+    /// at the call site) puts the toggling semantics next to the field they
+    /// mutate, like `toggle_repeat`. The stored preamp and band gains are left
+    /// alone, so re-enabling the equalizer restores the curve the user dialed
+    /// in.
     pub fn toggle_equalizer(&mut self) {
         self.eq_enabled = !self.eq_enabled;
     }

@@ -114,10 +114,10 @@ fn boot(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> (WinampPlaye
 /// transport buttons and keys, the track stepping, the play request and its
 /// completion, the elapsed/remaining toggle, and the marquee tick in
 /// `handlers::playback`; the seek drag and release and the backend polls in
-/// `handlers::playback::preview`; the volume,
-/// balance, seek nudges, and equalizer in `handlers::mixer`; the browse
-/// hierarchy, the Back, Open, Top, and Sort navigation, and the library search in
-/// `handlers::browse`, and the initial load and fetch results in
+/// `handlers::playback::preview`; the volume, balance, seek nudges, the
+/// equalizer, and the equalizer panel's show/hide toggle in `handlers::mixer`;
+/// the browse hierarchy, the Back, Open, Top, and Sort navigation, and the
+/// library search in `handlers::browse`, and the initial load and fetch results in
 /// `handlers::browse::fetch`; and the custom title bar's window
 /// actions in `handlers::window`. The table carries no behavior of its own,
 /// so a change to one concern stays in that concern's module.
