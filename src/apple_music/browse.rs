@@ -1,6 +1,5 @@
 //! Browse and search queries for [`AppleMusicService`].
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use super::rest;
@@ -14,18 +13,25 @@ use crate::library::{Album, Artist, Playlist, Song, album_counts_by_artist};
 use crate::music_kit_auth::MusicKitSession;
 use crate::sample_library::sample_library;
 
-/// Assigns each album its running time from `durations`, keyed by the exact
+/// Reads the whole-library song durations and fills each of `albums` from
+/// them, returning the albums. The durations map is keyed by the exact
 /// `(album title, artist display name)` pair the whole-library songs read
-/// groups by. A miss — no song reported that album — sets `0`, which the row
-/// renders as the `--:--` placeholder. The lookup clones the two key parts
-/// because the map owns its keys while `albums` borrows its strings.
-fn apply_album_durations(albums: &mut [Album], durations: &HashMap<(String, String), u64>) {
-    for album in albums {
+/// groups by; a miss — no song reported that album — sets `0`, which the row
+/// renders as the `--:--` placeholder. The lookup clones the key's two parts
+/// because the map owns its strings while `albums` borrows its own.
+fn with_album_durations(
+    rest: &rest::RestLibrary,
+    session: &MusicKitSession,
+    mut albums: Vec<Album>,
+) -> Result<Vec<Album>, AppleMusicError> {
+    let durations = rest.get_album_durations(session)?;
+    for album in &mut albums {
         album.duration_ms = durations
             .get(&(album.title.clone(), album.artist.clone()))
             .copied()
             .unwrap_or(0);
     }
+    Ok(albums)
 }
 
 impl AppleMusicService {
@@ -89,10 +95,8 @@ impl AppleMusicService {
         let id = artist_id.to_string();
         self.browse(
             move |rest, session| {
-                let mut albums = rest.get_albums_by_artist(session, &id)?;
-                let durations = rest.get_album_durations(session)?;
-                apply_album_durations(&mut albums, &durations);
-                Ok(albums)
+                let albums = rest.get_albums_by_artist(session, &id)?;
+                with_album_durations(rest, session, albums)
             },
             || lookup(&sample_library().albums_by_artist, artist_id),
         )
@@ -200,10 +204,8 @@ impl AppleMusicService {
     pub async fn get_all_albums(&self) -> Result<Vec<Album>, AppleMusicError> {
         self.browse(
             |rest, session| {
-                let mut albums = rest.get_all_albums(session)?;
-                let durations = rest.get_album_durations(session)?;
-                apply_album_durations(&mut albums, &durations);
-                Ok(albums)
+                let albums = rest.get_all_albums(session)?;
+                with_album_durations(rest, session, albums)
             },
             sample_all_albums,
         )
