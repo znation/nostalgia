@@ -29,12 +29,16 @@ exactly one level up, and Back never falls through to the wrong level:
 - An active search's result list → Artists, not the album the search was issued from.
 
 Artists itself has no level above it, so Back there is a no-op (and the Back button is not shown).
+A plain or Shift-held Backspace key press is the keyboard route to the same single-step Back
+action, and is likewise a no-op at Artists; the focused `Search library` box's `TextInput`
+captures it for editing, as it does Enter for `SearchSubmitted`.
 
 **Enforced by.** The `Message::Back` handler — `browse::back` in `src/ui/handlers/browse.rs`,
 routed from the `update` dispatch table in `src/ui/mod.rs` — checks `search_active` first, then
 matches on `current_view` and `songs_origin` to pick the one level up. `views::can_go_back` in
 `src/ui/views/browse.rs` (re-exported by `src/ui/views/mod.rs`) decides whether the Back button is
-shown; it returns false only for `CurrentView::Artists`.
+shown; it returns false only for `CurrentView::Artists`. `shortcuts::message_for` in
+`src/ui/shortcuts.rs` maps Backspace to `Message::Back`, after its Control/Alt/Logo chord guard.
 
 **Pinned by.**
 
@@ -47,7 +51,9 @@ shown; it returns false only for `CurrentView::Artists`.
 - `playlist_selected_in_playlists_loads_its_songs_and_back_returns_to_playlists`
 - `album_selected_in_all_albums_loads_its_songs_and_back_returns_to_all_albums`
 - `back_leaves_an_active_search_for_the_artists_list`
+- `backspace_steps_back_from_albums`
   (all in `src/ui/tests.rs`)
+- `message_for_maps_backspace_to_back` (`src/ui/shortcuts.rs`)
 - `back_button_is_available_only_below_the_artist_list` (`src/ui/views/tests.rs`)
 
 **History.** Reconstructed from "Browse view can only move forward — no way back from

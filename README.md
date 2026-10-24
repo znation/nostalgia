@@ -126,7 +126,9 @@ With the window
 focused, the classic Winamp keys drive playback: Z
 and B step back and forward, X plays, C pauses, V stops, R toggles Repeat and S toggles Shuffle,
 and the up/down arrows nudge the volume while the left/right arrows seek five seconds back or
-forward. With Shuffle on, Previous retraces the tracks actually played before the current one
+forward. Backspace steps the browse list back one level exactly like the `Back` button, and does
+nothing at the Artists list; while the `Search library` box is focused it keeps Backspace for
+editing its query instead of navigating. With Shuffle on, Previous retraces the tracks actually played before the current one
 instead of stepping one row backward in the list. While a song list is showing, Next, Previous
 (including a shuffled retrace), and the preview-end advance scroll that list so the landed row
 stays in view. The volume slider and the up/down arrows set

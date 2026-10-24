@@ -1197,6 +1197,32 @@ fn back_from_albums_returns_to_artists() {
     assert_view(&player, CurrentView::Artists);
 }
 
+// Backspace is the keyboard route to the same single-step Back action the Back
+// button dispatches, so it pins both the shortcut table and the handler wiring.
+#[test]
+fn backspace_steps_back_from_albums() {
+    use iced::keyboard::{Event, Key, Modifiers, key};
+
+    let mut player = player_in_albums();
+    assert_view(&player, CurrentView::Albums);
+
+    let backspace = Event::KeyPressed {
+        key: Key::Named(key::Named::Backspace),
+        modified_key: Key::Named(key::Named::Backspace),
+        physical_key: key::Physical::Code(key::Code::Backspace),
+        location: iced::keyboard::Location::Standard,
+        modifiers: Modifiers::NONE,
+        text: None,
+        repeat: false,
+    };
+    let message =
+        super::shortcuts::message_for(backspace).expect("Backspace must map to a message");
+    assert!(matches!(message, Message::Back));
+
+    let _ = update(&mut player, message);
+    assert_view(&player, CurrentView::Artists);
+}
+
 #[test]
 fn back_from_songs_returns_to_albums() {
     let mut player = player_in_albums();
