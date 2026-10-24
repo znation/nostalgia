@@ -90,8 +90,8 @@ the rows and artist, album, and playlist lists showing their item count beneath 
 button beside the balance slider shows and hides the equalizer panel, which is open at launch;
 hiding it gives its height to the browse list without changing EQ processing. A
 compact transport strip sits beneath the browse list with Previous, Play/Pause, Stop, Next,
-an elapsed-over-total time readout, and a volume slider, the same controls as the window-shade
-strip. The readout shows the elapsed (or remaining) time over the track's total (`00:53/3:30`)
+an elapsed-over-total time readout, and a volume slider — the window-shade strip's controls
+without its seek slider. The readout shows the elapsed (or remaining) time over the track's total (`00:53/3:30`)
 and shows just the elapsed string when no total is known, so the empty state reads the plain
 `--:--`.
 Each
@@ -123,8 +123,9 @@ the list restores the library's order. A `Reload` button beside `Sort` refetches
 artists list and returns to the Artists list, clearing any active search while leaving the typed
 query in the search box. The title bar's `A` button toggles always-on-top, its
 shade button (or a double-click on the bar) rolls the window up to the title bar plus a compact
-transport strip with Previous, Play/Pause, Stop, Next, the same elapsed-over-total time readout,
-and a volume slider, and back. Its `–` and `✕` buttons minimize and close. The window title
+transport strip with Previous, Play/Pause, Stop, Next, the same elapsed-over-total time readout, a
+seek slider over the preview's own length, and a volume slider, and back. Its `–` and `✕`
+buttons minimize and close. The window title
 (the name the desktop environment shows for the app) names the current track as
 `<number>Artist - Title - nostalgia` (omitting the number or artist when empty), keeping the
 interrupted track's name across Stop and reading just `nostalgia` when no known track is current.

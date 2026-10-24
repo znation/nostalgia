@@ -11,6 +11,7 @@
 //! stays inert.
 
 use std::borrow::Cow;
+use std::time::Duration;
 
 use iced::{
     Element, Length,
@@ -42,6 +43,13 @@ pub(super) const MINI_VOLUME_WIDTH: f32 = 80.0;
 ///
 /// [`Id`]: iced::advanced::widget::Id
 pub(crate) const MINI_VOLUME_ID: &str = "mini-transport-volume";
+
+/// The id of the compact row's seek-slider container. The shade strip is the
+/// only strip that draws one (the library footer builds none), so the id never
+/// collides; a test finds the slider's laid-out bounds through it.
+///
+/// [`Id`]: iced::advanced::widget::Id
+pub(crate) const MINI_SEEK_ID: &str = "mini-transport-seek";
 
 /// The compact row's four chrome buttons, in row order: Previous, Play/Pause,
 /// Stop, and Next. It drops the tooltip words from [`transport_glyphs`] so
@@ -106,6 +114,51 @@ pub(super) fn mini_transport_row<'a>(
     elapsed: Cow<'a, str>,
     total: Cow<'a, str>,
 ) -> Row<'a, Message> {
+    mini_transport_row_with_optional_seek(mode, volume, elapsed, total, None)
+}
+
+/// The shade strip's compact row: the same buttons, time readout, and volume
+/// slider as [`mini_transport_row`], with a chrome seek slider between the
+/// readout and the volume slider while the backend reports both a playback
+/// position and a non-zero preview length.
+///
+/// The seek slider comes from [`super::seek_bar::seek_slider`], so it shares
+/// the Now Playing seek bar's scale, step, and drag/release messages; dragging
+/// it previews the target in the readout the caller already derives from
+/// [`WinampPlayer::readout_position`]. With no position or no usable length it
+/// draws nothing and the row keeps the fill space that pins the volume slider
+/// to the right edge. The library footer builds [`mini_transport_row`], so it
+/// never gains a seek slider.
+///
+/// [`WinampPlayer::readout_position`]: crate::ui::WinampPlayer::readout_position
+pub(super) fn mini_transport_row_with_seek<'a>(
+    mode: TransportMode,
+    volume: f32,
+    elapsed: Cow<'a, str>,
+    total: Cow<'a, str>,
+    position: Option<Duration>,
+    duration: Option<Duration>,
+) -> Row<'a, Message> {
+    let seek: Option<Element<'a, Message>> =
+        super::seek_bar::seek_slider(position, duration).map(|slider| {
+            Container::new(slider)
+                .id(MINI_SEEK_ID)
+                .width(Length::Fill)
+                .into()
+        });
+    mini_transport_row_with_optional_seek(mode, volume, elapsed, total, seek)
+}
+
+/// Builds the compact row's shared leading controls — the four buttons and the
+/// elapsed-over-total readout — then the optional seek slider or the fill
+/// spacer, and finally the right-edge volume slider.
+fn mini_transport_row_with_optional_seek<'a>(
+    mode: TransportMode,
+    volume: f32,
+    elapsed: Cow<'a, str>,
+    total: Cow<'a, str>,
+    seek: Option<Element<'a, Message>>,
+) -> Row<'a, Message> {
     let is_playing = mode == TransportMode::Playing;
     let mut row: Row<'a, Message> = Row::new().width(Length::Fill).align_y(Vertical::Center);
     for (label, width, message) in mini_transport_controls(is_playing) {
@@ -126,13 +179,16 @@ pub(super) fn mini_transport_row<'a>(
     } else {
         readout.into()
     };
-    row.push(readout)
-        .push(Space::new().width(Length::Fill))
-        .push(
-            Container::new(mini_volume_slider(volume))
-                .id(MINI_VOLUME_ID)
-                .width(Length::Fixed(MINI_VOLUME_WIDTH)),
-        )
+    row = row.push(readout);
+    match seek {
+        Some(seek) => row = row.push(seek).push(spacer(6.0)),
+        None => row = row.push(Space::new().width(Length::Fill)),
+    }
+    row.push(
+        Container::new(mini_volume_slider(volume))
+            .id(MINI_VOLUME_ID)
+            .width(Length::Fixed(MINI_VOLUME_WIDTH)),
+    )
 }
 
 /// The compact row's volume slider, built from [`mini_volume_spec`] and
@@ -163,7 +219,35 @@ pub(super) fn mini_transport_strip<'a>(
     total: Cow<'a, str>,
     height: f32,
 ) -> Container<'a, Message> {
-    Container::new(mini_transport_row(mode, volume, elapsed, total))
+    mini_transport_strip_container(mini_transport_row(mode, volume, elapsed, total), height)
+}
+
+/// The shade strip's compact row in the same shared strip geometry as
+/// [`mini_transport_strip`], with the seek slider the rolled-up window needs.
+/// The library footer calls [`mini_transport_strip`] instead, so it stays
+/// seekless, while both views keep their geometry from drifting apart.
+pub(super) fn mini_transport_strip_with_seek<'a>(
+    mode: TransportMode,
+    volume: f32,
+    elapsed: Cow<'a, str>,
+    total: Cow<'a, str>,
+    position: Option<Duration>,
+    duration: Option<Duration>,
+    height: f32,
+) -> Container<'a, Message> {
+    mini_transport_strip_container(
+        mini_transport_row_with_seek(mode, volume, elapsed, total, position, duration),
+        height,
+    )
+}
+
+/// Wraps a compact row in the fill-width, fixed-height, centered, 6px-padded
+/// container both strips use, so their geometry cannot drift apart.
+fn mini_transport_strip_container<'a>(
+    row: Row<'a, Message>,
+    height: f32,
+) -> Container<'a, Message> {
+    Container::new(row)
         .width(Length::Fill)
         .height(Length::Fixed(height))
         .align_y(Vertical::Center)

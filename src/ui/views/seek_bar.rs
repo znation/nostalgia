@@ -35,6 +35,27 @@ pub fn seek_bar_value(
     Some((thumb, length))
 }
 
+/// Builds the chrome seek slider over the preview's own length, or `None`
+/// when [`seek_bar_value`] cannot place a thumb (see its rules).
+///
+/// Both seek controls build from this one constructor, so the Now Playing
+/// strip and the rolled-up shade strip share a scale, step, and message pair:
+/// dragging emits [`Message::SeekPreviewChanged`] and releasing emits
+/// [`Message::SeekPreviewReleased`], so only the release reaches the backend.
+pub(super) fn seek_slider(
+    position: Option<Duration>,
+    duration: Option<Duration>,
+) -> Option<Slider<'static, f32, Message>> {
+    let (thumb, length) = seek_bar_value(position, duration)?;
+    Some(
+        Slider::new(0.0..=length, thumb, Message::SeekPreviewChanged)
+            .step(1.0)
+            .on_release(Message::SeekPreviewReleased)
+            .width(Length::Fill)
+            .style(|_theme, status| style::chrome_slider_style(status)),
+    )
+}
+
 /// Builds the seek strip beneath the LCD: a full-width chrome slider over the
 /// preview's own length while one is reported, or an empty fixed-height strip
 /// otherwise.
@@ -45,13 +66,8 @@ pub fn view_seek_bar(
     position: Option<Duration>,
     duration: Option<Duration>,
 ) -> Element<'static, Message> {
-    let content: Element<'static, Message> = match seek_bar_value(position, duration) {
-        Some((thumb, length)) => Slider::new(0.0..=length, thumb, Message::SeekPreviewChanged)
-            .step(1.0)
-            .on_release(Message::SeekPreviewReleased)
-            .width(Length::Fill)
-            .style(|_theme, status| style::chrome_slider_style(status))
-            .into(),
+    let content: Element<'static, Message> = match seek_slider(position, duration) {
+        Some(slider) => slider.into(),
         None => Space::new().into(),
     };
     Container::new(content)

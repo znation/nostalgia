@@ -27,16 +27,20 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // Shade mode builds only the title bar and its compact transport strip —
     // the Now Playing bar, seek strip, transport row, equalizer, and browse
     // list are all dropped, and the window itself is resized down to that
-    // pair. The short state lock resolves only what the strip draws, so the
-    // rolled-up frame stays cheap.
+    // pair. The strip keeps the transport buttons, the elapsed-over-total
+    // readout, a seek slider over the loaded preview's own length, and the
+    // volume slider. The short state lock resolves only what the strip draws,
+    // so the rolled-up frame stays cheap.
     if player.shaded {
-        let (transport_mode, volume, elapsed, total) = {
+        let (transport_mode, volume, elapsed, total, position, duration) = {
             let state = player.state.blocking_lock();
             (
                 state.transport_mode(),
                 state.volume(),
                 player.now_playing_elapsed(state.current_track.as_deref()),
                 player.now_playing_time(state.current_track.as_deref()),
+                player.readout_position(),
+                player.playback_duration,
             )
         };
         return Column::new()
@@ -49,6 +53,8 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
                             volume,
                             elapsed,
                             total,
+                            position,
+                            duration,
                         )),
                 )
                 .on_scroll(views::volume_wheel_message),

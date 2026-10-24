@@ -7747,23 +7747,25 @@ fn captured_root_view_text_bounds(player: &WinampPlayer) -> layout_capture::Text
 }
 
 /// Lays the root `view` out and returns the bounds of the container tagged
-/// `views::MINI_VOLUME_ID`, so a test can find the library footer's volume
-/// slider in the real laid-out tree.
-fn captured_root_view_volume_slider(player: &WinampPlayer) -> Option<iced::Rectangle> {
+/// `id`, so a test can find a compact strip's slider in the real laid-out
+/// tree.
+fn captured_root_view_container(player: &WinampPlayer, target_id: &str) -> Option<iced::Rectangle> {
     use iced::advanced::{
         Layout,
         widget::{Id, Tree, operation::Operation},
     };
 
-    #[derive(Default)]
-    struct CapturedSlider(Option<iced::Rectangle>);
-    impl Operation for CapturedSlider {
+    struct CapturedContainer {
+        target_id: Id,
+        bounds: Option<iced::Rectangle>,
+    }
+    impl Operation for CapturedContainer {
         fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
             operate(self);
         }
         fn container(&mut self, id: Option<&Id>, bounds: iced::Rectangle) {
-            if id == Some(&Id::new(views::MINI_VOLUME_ID)) {
-                self.0 = Some(bounds);
+            if id == Some(&self.target_id) {
+                self.bounds = Some(bounds);
             }
         }
     }
@@ -7774,11 +7776,21 @@ fn captured_root_view_volume_slider(player: &WinampPlayer) -> Option<iced::Recta
     let node = element
         .as_widget_mut()
         .layout(&mut tree, &renderer, &layout_capture::limits());
-    let mut captured = CapturedSlider::default();
+    let mut captured = CapturedContainer {
+        target_id: Id::from(target_id.to_string()),
+        bounds: None,
+    };
     element
         .as_widget_mut()
         .operate(&mut tree, Layout::new(&node), &renderer, &mut captured);
-    captured.0
+    captured.bounds
+}
+
+/// Lays the root `view` out and returns the bounds of the container tagged
+/// `views::MINI_VOLUME_ID`, so a test can find the library footer's volume
+/// slider in the real laid-out tree.
+fn captured_root_view_volume_slider(player: &WinampPlayer) -> Option<iced::Rectangle> {
+    captured_root_view_container(player, views::MINI_VOLUME_ID)
 }
 
 // In shade mode the root view is the title bar over the compact strip, so the
@@ -7792,6 +7804,57 @@ fn shaded_root_view_is_the_title_bar_plus_the_strip() {
 
     let capture = captured_root_view_text_bounds(&player);
     assert_eq!(capture.size().height, views::SHADED_HEIGHT);
+}
+
+// The rolled-up strip's seek slider previews through the readout the root
+// view already derives from the player: a held drag shows its target there,
+// over the preview's own length, so scrubbing works with the LCD hidden.
+#[test]
+fn shade_root_readout_previews_the_seek_drag() {
+    let (mut player, _current_track) = play_song_1_then_browse_to_album_2();
+    player.shaded = true;
+    player.playback_position = Some(Duration::from_secs(45));
+    player.playback_duration = Some(Duration::from_secs(180));
+
+    // The shaded root must actually lay out the strip's seek control, not just
+    // read the player's preview position: without this the readout assertions
+    // below would also pass in a build with no shade seek slider at all.
+    let seek = captured_root_view_container(&player, views::MINI_SEEK_ID)
+        .expect("the shaded strip's seek slider must be laid out");
+    let volume = captured_root_view_volume_slider(&player)
+        .expect("the shaded strip's volume slider must be laid out");
+    let before = captured_root_view_text_bounds(&player);
+    let readout = before.find("00:45/3:30");
+    assert!(
+        readout.x + readout.width <= seek.x + 0.5,
+        "the seek slider must follow the shaded readout: {readout:?} then {seek:?}"
+    );
+    assert!(
+        seek.x + seek.width <= volume.x + 0.5,
+        "the seek slider must precede the volume slider: {seek:?} then {volume:?}"
+    );
+
+    let _ = update(&mut player, Message::SeekPreviewChanged(12.0));
+    let after = captured_root_view_text_bounds(&player);
+    assert!(
+        after.texts().any(|text| text == "00:12/3:30"),
+        "the shaded readout must preview the held seek drag: {:?}",
+        after.fragments()
+    );
+    assert!(
+        !after.texts().any(|text| text == "00:45/3:30"),
+        "the backend position must give way to the drag preview: {:?}",
+        after.fragments()
+    );
+    assert_eq!(after.size().height, views::SHADED_HEIGHT);
+
+    // Normal mode's library footer shares the compact row but never the seek
+    // slider, so the same position and length must not lay one out there.
+    player.shaded = false;
+    assert!(
+        captured_root_view_container(&player, views::MINI_SEEK_ID).is_none(),
+        "the library footer must not gain a seek slider"
+    );
 }
 
 // The strip is shade-mode-only. Both modes now draw a Previous glyph — the

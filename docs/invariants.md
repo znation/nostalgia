@@ -1085,20 +1085,30 @@ rather than the panic unwinding the event loop.
   resized to that same height (`SHADED_HEIGHT = TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT`). The
   strip keeps a fixed `SHADE_STRIP_HEIGHT`, which aliases the shared
   `MINI_TRANSPORT_HEIGHT`, and normal mode builds no shade strip.
-- The strip shows Previous, Play/Pause, Stop, Next, the elapsed-over-total time readout, and a
-  volume slider. Its four buttons emit the same messages as their full transport-row twins
+- The strip shows Previous, Play/Pause, Stop, Next, the elapsed-over-total time readout, a seek
+  slider while a preview position and length are known, and a volume slider. Its four buttons
+  emit the same messages as their full transport-row twins
   (`Message::PreviousTrack`, `Message::PlayPause`, `Message::Stop`, `Message::NextTrack`), each
   pinned to a fixed width so the glyph swap cannot reflow the strip. The strip builds them from
   the shared compact row's `mini_transport_controls`, which projects the full row's
   `transport_glyphs` spec, so the shade strip, the library footer, and the full row share the
   same glyphs, order, widths, and messages; the Play/Pause glyph is `"▶"` while stopped and
-  `"II"` while playing. A fill spacer pushes the slider to the right edge, after the
-  left-aligned buttons and time readout.
+  `"II"` while playing. Without a seek slider a fill spacer pushes the volume slider to the right
+  edge, after the left-aligned buttons and time readout.
 - The time readout joins the same `WinampPlayer::now_playing_elapsed` and
   `WinampPlayer::now_playing_time` strings the Now Playing bar draws as `<elapsed>/<total>`, so
   the elapsed/remaining choice and the track's total carry into shade mode. When the total is the
   `--:--` placeholder the readout is just the elapsed string, never `--:--/--:--`. The volume
   slider writes `Message::VolumeChange` and reads the shared volume.
+- While the backend reports both a playback position and a non-zero preview length, the strip
+  draws a seek slider between the time readout and the volume slider, over that preview length
+  rather than the catalog track's length, with its thumb clamped into `0..=length`. It comes from
+  `views::seek_bar::seek_slider`, the same constructor the Now Playing bar uses, so it emits only
+  `Message::SeekPreviewChanged` while dragging and `Message::SeekPreviewReleased` on release: the
+  Now Playing bar's backend seek path. A held drag previews through the shaded readout because
+  the caller resolves the time string through `WinampPlayer::readout_position`. With no position,
+  no length, or a zero length, no seek slider is drawn and the row keeps the fill space that pins
+  the volume slider to the right edge. The library footer builds no seek slider.
 - While playing or paused, the time readout is a click target that publishes
   `Message::ToggleTimeDisplay`, flipping the same `WinampPlayer::time_display` mode the LCD uses;
   while stopped it publishes nothing, so a stopped press cannot silently switch the persisted
@@ -1107,13 +1117,17 @@ rather than the panic unwinding the event loop.
   than a second rule.
 
 **Enforced by.** `views::shade::view_shade_strip` wraps
-`views::mini_transport::mini_transport_row` on the title bar's blue chrome;
+`views::mini_transport::mini_transport_row_with_seek` on the title bar's blue chrome (the library
+footer keeps `mini_transport_row`, which builds no seek slider);
 `views::mini_transport::mini_transport_controls` projects
 `views::transport::transport_glyphs` (including `views::transport::play_pause_glyph`) into the
 compact buttons; `views::mini_transport::mini_transport_readout` joins the elapsed and total
 strings and keeps a single time string when the total is unknown;
-`views::mini_transport::mini_transport_row` wraps the readout in a
-`MouseArea::on_press(Message::ToggleTimeDisplay)` only when
+`views::mini_transport::mini_transport_row_with_seek` tags its seek container
+`views::mini_transport::MINI_SEEK_ID` and builds the slider from
+`views::seek_bar::seek_slider`, which returns `None` unless `views::seek_bar::seek_bar_value`
+resolves a position and non-zero length; `views::mini_transport::mini_transport_row` wraps the
+readout in a `MouseArea::on_press(Message::ToggleTimeDisplay)` only when
 `views::now_playing::elapsed_readout_clickable` holds for the strip's mode, and leaves it a plain
 `Text` while stopped; `views::mini_transport::mini_volume_spec` fixes the slider's shared range
 and `Message::VolumeChange`; `views::mini_transport::MINI_TRANSPORT_HEIGHT` owns the height, and
@@ -1128,16 +1142,19 @@ bar; the shaded branch of `ui::view::view` stacks the bar and strip; and
 `shade_height_pins_the_rolled_up_window`,
 `shade_volume_slider_spec_matches_the_shared_volume_range_and_message`,
 `shade_strip_draws_the_time_readout_and_puts_the_volume_slider_at_the_right_edge`,
+`shade_strip_shows_a_seek_slider_only_when_position_and_length_are_known`,
 `mini_transport_readout_appends_the_known_total`,
 `compact_readout_toggles_time_display_only_while_not_stopped`, and
 `view_shade_strip_keeps_its_fixed_height_for_both_playback_states` (`src/ui/views/tests.rs`);
 `shaded_root_view_is_the_title_bar_plus_the_strip`, `shade_strip_draws_only_while_shaded`,
+`shade_root_readout_previews_the_seek_drag`,
 `shade_target_size_is_the_title_bar_plus_the_strip`,
 `title_bar_height_pins_the_shade_strip`, and `root_view_footer_shows_elapsed_over_total`
 (`src/ui/tests.rs`).
 
 **History.** Added with the window-shade transport strip; the earlier shade mode built the title
-bar alone. The strip's controls now come from the shared compact row the library footer uses.
+bar alone. The strip's controls now come from the shared compact row the library footer uses; the
+shade strip additionally draws the Now Playing bar's seek slider from `seek_bar::seek_slider`.
 
 ## Library footer
 
@@ -1154,9 +1171,10 @@ bar alone. The strip's controls now come from the shared compact row the library
   string, never `<elapsed>/--:--`.
 - The volume slider is tagged `MINI_VOLUME_ID`, pinned to `MINI_VOLUME_WIDTH` at the row's right
   edge, and writes `Message::VolumeChange`. No new message, handler, or playback path exists.
-- The footer and the shade strip build from the same row builder, so a glyph, order, width,
-  message, or slider change shows up in both. Normal mode draws no shade strip, and shade mode
-  draws no library footer.
+- The footer and the shade strip build from the same compact row, so a glyph, order, width,
+  message, or volume-slider change shows up in both; the shade strip adds only its seek slider,
+  which the footer never builds. Normal mode draws no shade strip, and shade mode draws no
+  library footer.
 - While playing or paused, the footer's time readout is a click target that publishes
   `Message::ToggleTimeDisplay`, flipping the same `WinampPlayer::time_display` mode the LCD uses;
   while stopped it publishes nothing. The shared row applies the LCD's own

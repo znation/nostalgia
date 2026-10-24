@@ -13,8 +13,8 @@ use super::equalizer::{
     eq_enabled_label, response_curve_offsets, response_curve_row,
 };
 use super::mini_transport::{
-    MINI_TRANSPORT_HEIGHT, MINI_VOLUME_ID, MINI_VOLUME_WIDTH, mini_transport_controls,
-    mini_transport_readout, mini_volume_spec, view_library_strip,
+    MINI_SEEK_ID, MINI_TRANSPORT_HEIGHT, MINI_VOLUME_ID, MINI_VOLUME_WIDTH,
+    mini_transport_controls, mini_transport_readout, mini_volume_spec, view_library_strip,
 };
 use super::now_playing::text::{format_lcd_elapsed, format_lcd_remaining};
 use super::now_playing::{
@@ -2797,8 +2797,14 @@ fn view_shade_strip_keeps_its_fixed_height_for_both_playback_states() {
         TransportMode::Paused,
         TransportMode::Playing,
     ] {
-        let mut element =
-            view_shade_strip(mode, 0.5, Cow::Borrowed("00:53"), Cow::Borrowed("3:30"));
+        let mut element = view_shade_strip(
+            mode,
+            0.5,
+            Cow::Borrowed("00:53"),
+            Cow::Borrowed("3:30"),
+            None,
+            None,
+        );
         let mut tree = Tree::new(element.as_widget());
         let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
         let node = element
@@ -2809,6 +2815,89 @@ fn view_shade_strip_keeps_its_fixed_height_for_both_playback_states() {
             SHADE_STRIP_HEIGHT,
             "the strip must keep its fixed height in {mode:?} mode"
         );
+    }
+}
+
+// The rolled-up strip's seek slider is the Now Playing bar's own control: it
+// appears only when the backend reports both a position and a non-zero
+// preview length, sits between the readout and the right-edge volume slider,
+// and blanks without disturbing the row's fill layout otherwise.
+#[test]
+fn shade_strip_shows_a_seek_slider_only_when_position_and_length_are_known() {
+    #[derive(Default)]
+    struct CapturedControls {
+        seek: Option<Rectangle>,
+        volume: Option<Rectangle>,
+    }
+    impl Operation for CapturedControls {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+        fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
+            if id == Some(&Id::new(MINI_SEEK_ID)) {
+                self.seek = Some(bounds);
+            } else if id == Some(&Id::new(MINI_VOLUME_ID)) {
+                self.volume = Some(bounds);
+            }
+        }
+    }
+
+    for (position, duration, expected) in [
+        (
+            Some(Duration::from_secs(10)),
+            Some(Duration::from_secs(30)),
+            true,
+        ),
+        (None, Some(Duration::from_secs(30)), false),
+        (Some(Duration::from_secs(10)), None, false),
+        (Some(Duration::from_secs(10)), Some(Duration::ZERO), false),
+    ] {
+        let renderer = layout_capture::headless_renderer();
+        let mut element = view_shade_strip(
+            TransportMode::Stopped,
+            0.5,
+            Cow::Borrowed("00:53"),
+            Cow::Borrowed("3:30"),
+            position,
+            duration,
+        );
+        let capture = layout_capture::capture_text(&mut element, &renderer);
+        let mut tree = Tree::new(element.as_widget());
+        let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
+        let node = element
+            .as_widget_mut()
+            .layout(&mut tree, &renderer, &limits);
+        let mut controls = CapturedControls::default();
+        element
+            .as_widget_mut()
+            .operate(&mut tree, Layout::new(&node), &renderer, &mut controls);
+
+        let volume = controls
+            .volume
+            .unwrap_or_else(|| panic!("missing volume slider for {position:?}/{duration:?}"));
+        assert_eq!(volume.width, MINI_VOLUME_WIDTH);
+        assert!(
+            (volume.x + volume.width - (node.size().width - 6.0)).abs() < 0.5,
+            "the volume slider must stay at the right edge: {volume:?} in {:?}",
+            node.size()
+        );
+        match controls.seek {
+            Some(seek) if expected => {
+                let readout = capture.find("00:53/3:30");
+                assert!(
+                    readout.x + readout.width <= seek.x + 0.5,
+                    "the seek slider must follow the readout: {readout:?} then {seek:?}"
+                );
+                assert!(
+                    seek.x + seek.width <= volume.x + 0.5,
+                    "the seek slider must precede the volume slider: {seek:?} then {volume:?}"
+                );
+            }
+            None if !expected => {}
+            other => {
+                panic!("seek container presence wrong for {position:?}/{duration:?}: {other:?}")
+            }
+        }
     }
 }
 
@@ -2856,6 +2945,8 @@ fn captured_shade_strip(elapsed: &str, total: &str) -> (Vec<String>, Option<Rect
         0.5,
         Cow::Borrowed(elapsed),
         Cow::Borrowed(total),
+        None,
+        None,
     ))
 }
 
@@ -2896,9 +2987,14 @@ fn compact_readout_toggles_time_display_only_while_not_stopped() {
     ] {
         for strip in ["shade", "library"] {
             let mut element: iced::Element<'_, Message, iced::Theme, iced::Renderer> = match strip {
-                "shade" => {
-                    view_shade_strip(mode, 0.5, Cow::Borrowed("00:53"), Cow::Borrowed("3:30"))
-                }
+                "shade" => view_shade_strip(
+                    mode,
+                    0.5,
+                    Cow::Borrowed("00:53"),
+                    Cow::Borrowed("3:30"),
+                    None,
+                    None,
+                ),
                 _ => view_library_strip(mode, 0.5, Cow::Borrowed("00:53"), Cow::Borrowed("3:30")),
             };
             let capture = layout_capture::capture_text(&mut element, &renderer);
