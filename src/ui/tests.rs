@@ -8463,3 +8463,48 @@ fn root_view_draws_the_current_browse_levels_own_rows() {
         );
     }
 }
+
+// A browse list with no rows shows only its empty wording: `list_with_count`
+// returns the list unchanged at a zero count, and `song_list` skips its
+// count-and-time footer, so the loading, error, or empty placeholder stays
+// alone. A footer such as "0 artists" or "0 songs - 0:00" would describe rows
+// the panel does not have, so pin its absence at every level along with the
+// wording that must remain.
+#[test]
+fn an_empty_browse_level_draws_no_count_footer() {
+    let (mut player, _state) = test_player();
+    // A fresh player is empty but has the boot-time artists fetch in flight;
+    // mark every list loaded so each level shows its empty wording.
+    player.artists.loading = false;
+    player.albums.loading = false;
+    player.songs.loading = false;
+    player.all_songs.loading = false;
+    player.all_albums.loading = false;
+    player.playlists.loading = false;
+
+    let cases = [
+        (CurrentView::Artists, "No artists", "0 artists"),
+        (CurrentView::Albums, "No albums", "0 albums"),
+        (CurrentView::Songs, "No songs", "0 songs - 0:00"),
+        (CurrentView::AllSongs, "No songs", "0 songs - 0:00"),
+        (CurrentView::AllAlbums, "No albums", "0 albums"),
+        (CurrentView::Playlists, "No playlists", "0 playlists"),
+    ];
+
+    for (view, empty_label, footer) in cases {
+        let level = format!("{view:?}");
+        player.current_view = view;
+        let capture = captured_root_view_text_bounds(&player);
+        let texts: Vec<&str> = capture.texts().collect();
+        assert!(
+            texts.contains(&empty_label),
+            "{level} must draw its empty wording {empty_label:?}: {:?}",
+            capture.fragments()
+        );
+        assert!(
+            !texts.contains(&footer),
+            "{level} must not draw a zero-count footer {footer:?}: {:?}",
+            capture.fragments()
+        );
+    }
+}
