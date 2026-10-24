@@ -2315,6 +2315,31 @@ async fn get_favorite_artists_counts_albums_by_artist_name_from_the_rest_library
     );
 }
 
+// The documented guarantee is that an artist whose name matches no album
+// gets a count of 0. Both artists in the test above match at least one
+// album, so this pins the missing-key fallback itself.
+#[tokio::test]
+async fn get_favorite_artists_gives_an_artist_with_no_matching_album_a_count_of_zero() {
+    let stub = StubTransport::returning_bodies(&[
+        r#"{"data":[{"id":"artist-1","attributes":{"name":"Mono Tones"}}]}"#,
+        r#"{"data":[{"id":"album-1","attributes":{"name":"First Record","artistName":"The Sample Band"}}]}"#,
+    ]);
+    let service = signed_in_service(&stub);
+
+    let artists = service.get_favorite_artists().await.unwrap();
+
+    assert_eq!(
+        artists,
+        vec![Artist {
+            id: "artist-1".to_string(),
+            name: "Mono Tones".to_string(),
+            album_count: 0,
+        }]
+    );
+    let calls = stub.calls();
+    assert_eq!(calls.len(), 2);
+}
+
 #[tokio::test]
 async fn get_albums_by_artist_uses_the_rest_library_when_signed_in() {
     let stub = StubTransport::returning_bodies(&[
