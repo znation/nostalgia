@@ -105,6 +105,19 @@ pub fn chrome_button_style(status: button::Status) -> button::Style {
     }
 }
 
+/// The chrome style for a toggle button that reads as on: the sunken
+/// ([`button::Status::Pressed`]) chrome while `on`, and the ordinary chrome for
+/// `status` while off. The title bar's A toggle and the transport row's EQ and
+/// PL panel toggles all follow this one rule, so it lives here once. Pure, so
+/// the rule is testable without building a widget.
+pub fn toggle_button_style(on: bool, status: button::Status) -> button::Style {
+    if on {
+        chrome_button_style(button::Status::Pressed)
+    } else {
+        chrome_button_style(status)
+    }
+}
+
 /// The chrome style for the library search box.
 ///
 /// The raised face, light [`theme::TEXT`] value, and light top-left bevel edge
@@ -658,6 +671,33 @@ mod tests {
         // width, radius, or shadow offset could pass every other test while the
         // disabled bevel changed shape.
         assert_same_edge_geometry(&active, &disabled);
+    }
+
+    // The A, EQ, and PL toggles all read as on by sinking the chrome; this
+    // pins that rule for every status an off button can report, against the
+    // shared chrome faces, so a changed face, edge, or shadow cannot leave a
+    // toggle reading wrong.
+    #[test]
+    fn toggle_button_style_sinks_while_on() {
+        for status in [
+            button::Status::Active,
+            button::Status::Hovered,
+            button::Status::Disabled,
+        ] {
+            let on = toggle_button_style(true, status);
+            let pressed = chrome_button_style(button::Status::Pressed);
+            assert_eq!(on.background, pressed.background);
+            assert_eq!(on.text_color, pressed.text_color);
+            assert_eq!(on.border, pressed.border);
+            assert_eq!(on.shadow, pressed.shadow);
+
+            let off = toggle_button_style(false, status);
+            let ordinary = chrome_button_style(status);
+            assert_eq!(off.background, ordinary.background);
+            assert_eq!(off.text_color, ordinary.text_color);
+            assert_eq!(off.border, ordinary.border);
+            assert_eq!(off.shadow, ordinary.shadow);
+        }
     }
 
     #[test]

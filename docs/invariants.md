@@ -554,9 +554,9 @@ and Reload buttons into one `Row`. `views::view_transport_controls`,
 `views::transport::transport_buttons`, and `views::transport::transport_glyphs` in
 `src/ui/views/transport.rs` build the glyph row from `fixed_width_button`s and
 `iced::widget::Tooltip`s; `views::transport::eq_panel_toggle` and
-`views::transport::eq_panel_button_style` build and style the EQ toggle,
-`views::transport::library_panel_toggle` and
-`views::transport::library_panel_button_style` build and style the PL toggle,
+`views::transport::library_panel_toggle` spec the EQ and PL toggles, which
+`views::transport::panel_toggle_button` builds and `style::toggle_button_style`
+in `src/ui/style.rs` sinks while its panel is shown,
 `handlers::mixer::toggle_equalizer_panel` and `handlers::mixer::toggle_library_panel` flip the
 layout flags; `shortcuts::shortcut` in
 `src/ui/shortcuts.rs` maps plain and Shift-held E to that same message; `view` pushes the
@@ -593,10 +593,9 @@ bands and app bar, `transport_glyphs_match_the_mockup_order_and_widths`,
 `transport_buttons_keep_their_measured_face_widths`,
 `main_transport_and_shade_strip_share_glyphs_order_and_widths`,
 `eq_panel_toggle_targets_the_visibility_flag`,
-`eq_panel_button_style_sinks_while_the_panel_is_open`,
-`library_panel_toggle_targets_the_visibility_flag`,
-`library_panel_button_style_sinks_while_the_panel_is_open`, and
-`equalizer_preamp_and_db_scale_sit_left_of_the_band_sliders` (`src/ui/views/tests.rs`) for the
+`library_panel_toggle_targets_the_visibility_flag`, and
+`equalizer_preamp_and_db_scale_sit_left_of_the_band_sliders` (`src/ui/views/tests.rs`),
+and `toggle_button_style_sinks_while_on` (`src/ui/style.rs`) for the
 glyph row, the Repeat and Shuffle faces, and the equalizer band row.
 
 **History.** Reconstructed from "Sort renders below Top instead of beside it, contradicting the

@@ -4,7 +4,7 @@
 
 use iced::{
     Color, Element, Length,
-    widget::{Button, Column, Container, MouseArea, Row, Space, Text, button, container},
+    widget::{Button, Column, Container, MouseArea, Row, Space, Text, container},
 };
 
 use crate::ui::{Message, bevel, style, theme};
@@ -120,13 +120,7 @@ pub fn view_title_bar(always_on_top: bool) -> Element<'static, Message> {
     let clutter_toggle = Button::new(Text::new("A"))
         .on_press(Message::ToggleAlwaysOnTop)
         .width(Length::Fixed(CLUTTER_BUTTON_WIDTH))
-        .style(move |_theme, status| {
-            if always_on_top {
-                style::chrome_button_style(button::Status::Pressed)
-            } else {
-                style::chrome_button_style(status)
-            }
-        });
+        .style(move |_theme, status| style::toggle_button_style(always_on_top, status));
 
     bevel::raised_panel(
         Container::new(

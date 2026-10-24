@@ -29,9 +29,9 @@ use super::now_playing::{
 use super::shade::{SHADE_STRIP_HEIGHT, SHADED_HEIGHT, view_shade_strip};
 use super::title_bar::{CLUTTER_BUTTON_WIDTH, TITLE_BAR_BUTTON_WIDTH};
 use super::transport::{
-    EQ_PANEL_BUTTON_WIDTH, LIBRARY_PANEL_BUTTON_WIDTH, eq_panel_button_style, eq_panel_toggle,
-    library_panel_button_style, library_panel_toggle, play_pause_glyph, play_pause_word,
-    repeat_label, shuffle_label, transport_buttons, transport_glyphs,
+    EQ_PANEL_BUTTON_WIDTH, LIBRARY_PANEL_BUTTON_WIDTH, eq_panel_toggle, library_panel_toggle,
+    play_pause_glyph, play_pause_word, repeat_label, shuffle_label, transport_buttons,
+    transport_glyphs,
 };
 use super::{
     BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, EQ_STEP, TITLE_BAR_HEIGHT, VOLUME_MAX, VOLUME_MIN,
@@ -2359,33 +2359,6 @@ fn eq_panel_toggle_targets_the_visibility_flag() {
     );
 }
 
-// The EQ button follows the title bar's A toggle rule: sunken while the thing
-// it controls is on, ordinary chrome while it is off. Read the style helper's
-// fields against the shared chrome faces so a changed face, edge, or shadow
-// cannot leave the button reading wrong.
-#[test]
-fn eq_panel_button_style_sinks_while_the_panel_is_open() {
-    for status in [
-        iced::widget::button::Status::Active,
-        iced::widget::button::Status::Hovered,
-        iced::widget::button::Status::Disabled,
-    ] {
-        let open = eq_panel_button_style(true, status);
-        let pressed = style::chrome_button_style(iced::widget::button::Status::Pressed);
-        assert_eq!(open.background, pressed.background);
-        assert_eq!(open.text_color, pressed.text_color);
-        assert_eq!(open.border, pressed.border);
-        assert_eq!(open.shadow, pressed.shadow);
-
-        let closed = eq_panel_button_style(false, status);
-        let ordinary = style::chrome_button_style(status);
-        assert_eq!(closed.background, ordinary.background);
-        assert_eq!(closed.text_color, ordinary.text_color);
-        assert_eq!(closed.border, ordinary.border);
-        assert_eq!(closed.shadow, ordinary.shadow);
-    }
-}
-
 #[test]
 fn library_panel_toggle_targets_the_visibility_flag() {
     let (label, width, message) = library_panel_toggle();
@@ -2397,31 +2370,6 @@ fn library_panel_toggle_targets_the_visibility_flag() {
         matches!(message, Message::ToggleLibraryPanel),
         "the PL button must toggle the library section, not any playback or browse state"
     );
-}
-
-// The PL button follows the EQ button's and the title bar's A toggle rule:
-// sunken while the thing it controls is on, ordinary chrome while it is off.
-#[test]
-fn library_panel_button_style_sinks_while_the_panel_is_open() {
-    for status in [
-        iced::widget::button::Status::Active,
-        iced::widget::button::Status::Hovered,
-        iced::widget::button::Status::Disabled,
-    ] {
-        let open = library_panel_button_style(true, status);
-        let pressed = style::chrome_button_style(iced::widget::button::Status::Pressed);
-        assert_eq!(open.background, pressed.background);
-        assert_eq!(open.text_color, pressed.text_color);
-        assert_eq!(open.border, pressed.border);
-        assert_eq!(open.shadow, pressed.shadow);
-
-        let closed = library_panel_button_style(false, status);
-        let ordinary = style::chrome_button_style(status);
-        assert_eq!(closed.background, ordinary.background);
-        assert_eq!(closed.text_color, ordinary.text_color);
-        assert_eq!(closed.border, ordinary.border);
-        assert_eq!(closed.shadow, ordinary.shadow);
-    }
 }
 
 #[test]

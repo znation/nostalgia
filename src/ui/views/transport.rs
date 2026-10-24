@@ -4,8 +4,8 @@
 //! use.
 
 use iced::{
-    Element, Length,
-    widget::{Button, Row, Text, Tooltip, button, tooltip},
+    Element,
+    widget::{Button, Row, Text, Tooltip, tooltip},
 };
 
 use crate::ui::{Message, style, theme};
@@ -130,17 +130,6 @@ pub(super) fn eq_panel_toggle() -> (&'static str, f32, Message) {
     ("EQ", EQ_PANEL_BUTTON_WIDTH, Message::ToggleEqualizerPanel)
 }
 
-/// The EQ toggle's chrome: sunken while the equalizer panel is open, so the
-/// button reads as on, and the ordinary chrome for `status` while it is
-/// hidden. That is the title bar's A toggle rule.
-pub(super) fn eq_panel_button_style(open: bool, status: button::Status) -> button::Style {
-    if open {
-        style::chrome_button_style(button::Status::Pressed)
-    } else {
-        style::chrome_button_style(status)
-    }
-}
-
 /// The library-section toggle's fixed width, in pixels: enough for its `PL`
 /// label, pinned so the section's visibility cannot reflow the row.
 pub(super) const LIBRARY_PANEL_BUTTON_WIDTH: f32 = 30.0;
@@ -156,15 +145,17 @@ pub(super) fn library_panel_toggle() -> (&'static str, f32, Message) {
     )
 }
 
-/// The PL toggle's chrome: sunken while the library section is shown, so the
-/// button reads as on, and the ordinary chrome for `status` while it is
-/// hidden. That is the EQ toggle's and the title bar's A toggle rule.
-pub(super) fn library_panel_button_style(open: bool, status: button::Status) -> button::Style {
-    if open {
-        style::chrome_button_style(button::Status::Pressed)
-    } else {
-        style::chrome_button_style(status)
-    }
+/// One of the transport row's panel toggles, built from its spec and pinned to
+/// the spec's width. `open` sinks the chrome while the panel it controls is
+/// shown (see [`style::toggle_button_style`]), the same on/off rule as the
+/// title bar's A toggle. The EQ and PL toggles both build through here, so
+/// neither can drift from that rule.
+fn panel_toggle_button(
+    (label, width, message): (&'static str, f32, Message),
+    open: bool,
+) -> Button<'static, Message> {
+    fixed_width_button(label, width, message)
+        .style(move |_theme, status| style::toggle_button_style(open, status))
 }
 
 /// The transport row: the Previous, Play/Pause, Stop, Next, Repeat, and
@@ -210,19 +201,10 @@ pub fn view_transport_controls(
         Message::BalanceChange,
     ))
     .push(spacer(20.0))
-    .push({
-        let (label, width, message) = eq_panel_toggle();
-        Button::new(Text::new(label))
-            .on_press(message)
-            .width(Length::Fixed(width))
-            .style(move |_theme, status| eq_panel_button_style(eq_panel_visible, status))
-    })
-    .push({
-        let (label, width, message) = library_panel_toggle();
-        Button::new(Text::new(label))
-            .on_press(message)
-            .width(Length::Fixed(width))
-            .style(move |_theme, status| library_panel_button_style(library_panel_visible, status))
-    })
+    .push(panel_toggle_button(eq_panel_toggle(), eq_panel_visible))
+    .push(panel_toggle_button(
+        library_panel_toggle(),
+        library_panel_visible,
+    ))
     .into()
 }
