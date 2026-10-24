@@ -288,6 +288,41 @@ fn repeat_and_equalizer_changes_reach_the_saved_snapshot() {
     assert_eq!(store.snapshots()[1], current);
 }
 
+#[test]
+fn toggle_time_display_reaches_the_saved_snapshot() {
+    let (mut player, _state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+
+    let _ = update(&mut player, Message::ToggleTimeDisplay);
+    let snapshots = store.snapshots();
+    assert_eq!(snapshots.len(), 1);
+    assert!(snapshots[0].time_display_remaining());
+
+    let _ = update(&mut player, Message::Ignored);
+    assert_eq!(store.snapshots().len(), 1);
+
+    let _ = update(&mut player, Message::ToggleTimeDisplay);
+    let snapshots = store.snapshots();
+    assert_eq!(snapshots.len(), 2);
+    assert!(!snapshots[1].time_display_remaining());
+}
+
+#[test]
+fn saved_time_display_mode_is_restored_on_boot() {
+    let (mut player, _state) = test_player();
+    let mut remaining = Settings::default();
+    remaining.set_time_display_remaining(true);
+
+    player.adopt_saved_settings(remaining.clone());
+    assert_eq!(player.time_display, views::TimeDisplay::Remaining);
+    assert_eq!(player.saved_settings, remaining);
+
+    player.adopt_saved_settings(Settings::default());
+    assert_eq!(player.time_display, views::TimeDisplay::Elapsed);
+    assert_eq!(player.saved_settings, Settings::default());
+}
+
 /// The longest a driven `Task` is allowed to take before its test fails.
 ///
 /// A task that never yields its completion message — a hung service future,

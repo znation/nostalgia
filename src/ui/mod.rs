@@ -48,7 +48,9 @@ use crate::{apple_music::AppleMusicService, state::AppState};
 /// sign-in on; the UI stores a clone, so the session that sign-in stores is the
 /// session the UI later reads. `store` and `saved` are the settings file's
 /// writer and the snapshot `main` already restored into `state`; the player
-/// keeps both so `update` can save every later change. `main` must call this
+/// keeps both so `update` can save every later change, and
+/// `adopt_saved_settings` also restores the player-owned elapsed/remaining
+/// readout mode from the snapshot. `main` must call this
 /// from a plain (non-async) context: iced drives its event loop synchronously
 /// on the calling thread, and `update`/`view` use `blocking_lock` on the shared
 /// state, which panics inside a runtime.
@@ -67,7 +69,7 @@ pub fn init_ui(
         move || {
             let (mut player, task) = boot(state.clone(), service.clone());
             player.settings_store = Some(Box::new(store.clone()));
-            player.saved_settings = saved.clone();
+            player.adopt_saved_settings(saved.clone());
             (player, task)
         },
         update,

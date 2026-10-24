@@ -1,12 +1,15 @@
 //! The user's mixer and equalizer settings, persisted across launches.
 //!
-//! [`Settings`] is a small snapshot of the values the player keeps in
-//! [`AppState`] while it runs: the volume, balance, Repeat and Shuffle flags,
-//! and the equalizer's on/off state, preamp, band gains, and selected preset.
-//! [`FileStore`] loads that snapshot from a line-based text file at startup
-//! and rewrites it whenever the UI changes one of those values. Playback
-//! position, the browse level, the search box, the current track, and window
-//! placement are deliberately not persisted.
+//! [`Settings`] is a small snapshot of the values the player keeps while it
+//! runs: the volume, balance, Repeat and Shuffle flags, the equalizer's on/off
+//! state, preamp, band gains, and selected preset, and the Now Playing
+//! readout's elapsed/remaining mode. All but the last live in [`AppState`];
+//! the time mode lives on the UI's `WinampPlayer`, so the player sets it on
+//! its snapshot before saving and restores it after loading. [`FileStore`]
+//! loads the snapshot from a line-based text file at startup and rewrites it
+//! whenever the UI changes one of those values. Playback position, the browse
+//! level, the search box, the current track, and window placement are
+//! deliberately not persisted.
 
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -14,13 +17,15 @@ use std::path::PathBuf;
 use crate::equalizer::{self, Preset};
 use crate::state::AppState;
 
-/// The persisted subset of [`AppState`]: the mixer and equalizer values the
-/// next launch restores.
+/// The persisted values the next launch restores: the mixer and equalizer
+/// subset of [`AppState`] plus the UI-owned readout mode.
 ///
-/// The fields are private; build a snapshot with [`Settings::from_state`] and
-/// restore it with [`Settings::apply_to`]. `Default` mirrors
-/// [`AppState::default`], so if one starting value changes the other must
-/// change with it.
+/// The fields are private; build a state-backed snapshot with
+/// [`Settings::from_state`] and restore it with [`Settings::apply_to`].
+/// `time_display_remaining` is not held in [`AppState`]: `from_state` leaves
+/// it elapsed and the player overwrites it from its own mode before saving.
+/// `Default` mirrors [`AppState::default`] plus elapsed, so if one starting
+/// value changes the other must change with it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
     volume: f32,
@@ -31,12 +36,14 @@ pub struct Settings {
     eq_preamp: f32,
     eq_bands: [f32; equalizer::BAND_COUNT],
     eq_preset: Option<Preset>,
+    time_display_remaining: bool,
 }
 
 impl Default for Settings {
     /// The same starting values as [`AppState::default`]: half volume, a
     /// centered balance, both toggles off, and the equalizer off with a flat
-    /// curve and no preset. A missing or unreadable settings file starts here.
+    /// curve and no preset, plus the elapsed readout mode. A missing or
+    /// unreadable settings file starts here.
     fn default() -> Self {
         Self {
             volume: 0.5,
@@ -47,6 +54,7 @@ impl Default for Settings {
             eq_preamp: 0.0,
             eq_bands: [0.0; equalizer::BAND_COUNT],
             eq_preset: None,
+            time_display_remaining: false,
         }
     }
 }
@@ -65,7 +73,23 @@ impl Settings {
             eq_preamp: state.eq_preamp(),
             eq_bands: state.eq_bands(),
             eq_preset: state.eq_preset(),
+            time_display_remaining: false,
         }
+    }
+
+    /// Whether the Now Playing readout shows the track's remaining time
+    /// rather than its elapsed time. The player owns this value, so it reads
+    /// it back when saving and restores it from the loaded snapshot at boot.
+    #[must_use]
+    pub fn time_display_remaining(&self) -> bool {
+        self.time_display_remaining
+    }
+
+    /// Set whether the Now Playing readout shows remaining time. The player
+    /// calls this on its fresh snapshot before saving; [`Self::apply_to`]
+    /// deliberately leaves the UI-owned mode alone.
+    pub fn set_time_display_remaining(&mut self, remaining: bool) {
+        self.time_display_remaining = remaining;
     }
 
     /// Restore this snapshot into `state`.
@@ -108,6 +132,14 @@ impl Settings {
             "eq_preset={}\n",
             self.eq_preset.map_or("", |preset| preset.name)
         ));
+        text.push_str(&format!(
+            "time_display={}\n",
+            if self.time_display_remaining {
+                "remaining"
+            } else {
+                "elapsed"
+            }
+        ));
         text
     }
 
@@ -141,6 +173,13 @@ impl Settings {
                         settings.eq_preset = Some(*preset);
                     }
                 }
+                // Only the two written words are recognized; any other value
+                // leaves the default elapsed mode.
+                "time_display" => match value {
+                    "remaining" => settings.time_display_remaining = true,
+                    "elapsed" => settings.time_display_remaining = false,
+                    _ => {}
+                },
                 _ => {
                     if let Some(index) = key
                         .strip_prefix("eq_band_")
@@ -302,14 +341,36 @@ mod tests {
             .unwrap();
         state.apply_eq_preset(rock);
 
-        let settings = Settings::from_state(&state);
+        let mut settings = Settings::from_state(&state);
+        settings.set_time_display_remaining(true);
         assert_eq!(Settings::from_text(&settings.to_text()), settings);
+        assert!(Settings::from_text(&settings.to_text()).time_display_remaining());
 
         let custom = Settings {
             eq_preset: None,
             ..settings
         };
         assert_eq!(Settings::from_text(&custom.to_text()), custom);
+    }
+
+    #[test]
+    fn time_display_round_trips_both_words_and_ignores_unknown_values() {
+        let elapsed = Settings::default();
+        assert!(!elapsed.time_display_remaining());
+        assert!(!Settings::from_text(&elapsed.to_text()).time_display_remaining());
+
+        let mut remaining = elapsed.clone();
+        remaining.set_time_display_remaining(true);
+        assert!(remaining.to_text().contains("time_display=remaining"));
+        assert!(
+            Settings::from_text(&remaining.to_text()).time_display_remaining(),
+            "remaining must survive the round trip"
+        );
+
+        assert!(
+            !Settings::from_text("time_display=sideways\n").time_display_remaining(),
+            "an unknown word must fall back to elapsed"
+        );
     }
 
     #[test]
@@ -323,6 +384,7 @@ mod tests {
                     eq_band_10=3\n\
                     eq_band_x=2\n\
                     eq_preset=Unknown\n\
+                    time_display=sideways\n\
                     mystery=1\n";
         assert_eq!(Settings::from_text(text), Settings::default());
     }

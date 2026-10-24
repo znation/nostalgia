@@ -82,11 +82,15 @@ fn main() -> iced::Result {
     // first view, and hand both the store and the restored snapshot to the
     // UI so its update loop can save later changes.
     let store = settings::FileStore::from_environment();
+    // Keep the loaded snapshot rather than rebuilding it from state: the
+    // readout's elapsed/remaining mode lives on the UI player, not
+    // `AppState`, so only the loaded copy carries it to `init_ui`.
+    let loaded = store.load();
     let mut initial_state = AppState::default();
-    if let Some(saved) = store.load() {
+    if let Some(saved) = &loaded {
         saved.apply_to(&mut initial_state);
     }
-    let saved = settings::Settings::from_state(&initial_state);
+    let saved = loaded.unwrap_or_else(|| settings::Settings::from_state(&initial_state));
     let state = Arc::new(Mutex::new(initial_state));
 
     // Initialize the Apple Music service. The same service instance is

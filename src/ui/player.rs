@@ -268,16 +268,19 @@ impl WinampPlayer {
     /// so a changed volume, balance, toggle, or equalizer value is written
     /// without a save call in each handler; an unchanged snapshot writes
     /// nothing, which keeps timer and backend poll messages from touching the
-    /// file. With no store attached (tests, and before `init_ui` attaches the
-    /// production one) this returns before taking the state lock.
+    /// file. The snapshot also carries the player-owned readout mode, so a
+    /// click on the LCD time saves exactly one new snapshot. With no store
+    /// attached (tests, and before `init_ui` attaches the production one) this
+    /// returns before taking the state lock.
     pub(in crate::ui) fn persist_settings_if_changed(&mut self) {
         if self.settings_store.is_none() {
             return;
         }
-        let snapshot = {
+        let mut snapshot = {
             let state = self.state.blocking_lock();
             Settings::from_state(&state)
         };
+        snapshot.set_time_display_remaining(self.time_display == views::TimeDisplay::Remaining);
         if snapshot == self.saved_settings {
             return;
         }
@@ -285,6 +288,20 @@ impl WinampPlayer {
             store.save(&snapshot);
         }
         self.saved_settings = snapshot;
+    }
+
+    /// Adopt the snapshot `main` loaded before the first view: restore the
+    /// player-owned readout mode and remember the snapshot so the update
+    /// loop's first comparison does not re-save it. The state-backed values
+    /// were already applied to `AppState` by `main`, so this touches only the
+    /// time mode.
+    pub(in crate::ui) fn adopt_saved_settings(&mut self, saved: Settings) {
+        self.time_display = if saved.time_display_remaining() {
+            views::TimeDisplay::Remaining
+        } else {
+            views::TimeDisplay::Elapsed
+        };
+        self.saved_settings = saved;
     }
 
     /// The Now Playing bar's label for `current_track`, resolved against the

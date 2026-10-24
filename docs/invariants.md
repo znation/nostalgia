@@ -391,39 +391,52 @@ gap; the shared harness closes it.
 
 ## Settings persistence
 
-**Guarantee.** The mixer and equalizer values the user sets — volume, balance, Repeat, Shuffle,
-and the equalizer's on/off state, preamp, ten band gains, and selected preset — are loaded once
-before the first view is drawn and rewritten after any update that changes their snapshot. An
-update that leaves the snapshot unchanged writes nothing. Reads and writes go through the state's
-clamped setters, so out-of-range values from a file cannot push shared state outside its documented
-ranges. A missing or unreadable file, or a malformed line, falls back per key without failing
-startup; an unwritable file is logged rather than crashing the player. Playback position, the browse
-level, the search box, the current track, and window placement are deliberately not persisted.
+**Guarantee.** The values the user sets that outlive a track — volume, balance, Repeat, Shuffle,
+the equalizer's on/off state, preamp, ten band gains, and selected preset, and the large readout's
+elapsed/remaining choice — are loaded once before the first view is drawn and rewritten after any
+update that changes their snapshot. An update that leaves the snapshot unchanged writes nothing.
+Reads and writes go through the state's clamped setters, so out-of-range values from a file cannot
+push shared state outside its documented ranges. A missing or unreadable file, or a malformed line,
+falls back per key without failing startup; an unwritable file is logged rather than crashing the
+player. The readout mode is the one persisted value not held in `AppState`: it lives on
+`WinampPlayer::time_display`, `main` passes the loaded snapshot through to
+`WinampPlayer::adopt_saved_settings` (which restores it before the first view), and
+`persist_settings_if_changed` copies it into the snapshot before comparing and saving. A missing
+or malformed `time_display` line falls back to elapsed. Playback position, the browse level, the
+search box, the current track, and window placement are deliberately not persisted.
 
 **Enforced by.** `src/main.rs` resolves the path with `settings::FileStore::from_environment`,
 loads it once with `FileStore::load`, applies the result with `settings::Settings::apply_to`, and
-passes the store and the resulting `Settings::from_state` snapshot to `ui::init_ui`. The loaded
+passes the store and the loaded snapshot (or a `Settings::from_state` snapshot when the file is
+absent) to `ui::init_ui`. The loaded
 file's text is parsed by `Settings::from_text`, which ignores unknown keys and malformed values
 per key, and `apply_to` writes through `AppState::set_volume`, `set_balance`, `set_eq_preamp`, and
 `set_eq_band` before restoring a preset through `apply_eq_preset`. `ui::init_ui` attaches the
-store and snapshot to `WinampPlayer`; `update` calls
-`WinampPlayer::persist_settings_if_changed` once after every message, and that method compares
-`Settings::from_state` against the last snapshot before calling `settings::SettingsWriter::save`.
+store to `WinampPlayer` and restores the snapshot through
+`WinampPlayer::adopt_saved_settings`, which sets `time_display` and records the snapshot;
+`update` calls
+`WinampPlayer::persist_settings_if_changed` once after every message, and that method copies the
+player-owned readout mode into `Settings::from_state`, then compares that snapshot against the
+last one before calling `settings::SettingsWriter::save`.
 `FileStore`'s `SettingsWriter` impl creates the parent directory and logs a failed create or write.
 With no store attached the method returns before taking the state lock, so tests keep the default
 no-op behavior.
 
 **Pinned by.** `to_text_round_trips_every_field`,
+`time_display_round_trips_both_words_and_ignores_unknown_values`,
 `from_text_ignores_malformed_and_unknown_lines`,
 `apply_to_clamps_out_of_range_values_through_the_state_setters`,
 `apply_to_restores_a_saved_preset`,
 `settings_path_resolves_override_then_xdg_then_home_then_none`, and
 `file_store_save_then_load_returns_the_same_settings` (`src/settings.rs`), plus
-`a_changed_setting_is_saved_once_and_unchanged_updates_are_not` and
-`repeat_and_equalizer_changes_reach_the_saved_snapshot` (`src/ui/tests.rs`).
+`a_changed_setting_is_saved_once_and_unchanged_updates_are_not`,
+`repeat_and_equalizer_changes_reach_the_saved_snapshot`,
+`toggle_time_display_reaches_the_saved_snapshot`, and
+`saved_time_display_mode_is_restored_on_boot` (`src/ui/tests.rs`).
 
 **History.** Added with the settings-persistence plan on 2026-10-23; the player previously kept
-these values in memory only and started every launch at `AppState::default()`.
+these values in memory only and started every launch at `AppState::default()`. The readout's
+elapsed/remaining mode joined the file later the same day.
 
 ## Equalizer band tint
 
