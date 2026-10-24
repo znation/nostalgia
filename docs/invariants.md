@@ -1280,11 +1280,12 @@ preview past it; the decoded take rejects before the decoder when its extra byte
 decoded over-cap failure names the cap; other read failures, including one past the wire limit,
 keep the `reading the preview failed:` prefix.
 
-**Enforced by.** `download_and_decode` in `src/audio/preview.rs` calls
+**Enforced by.** `download_preview` in `src/audio/preview.rs` calls
 `response.body_mut().with_config().limit(MAX_PREVIEW_BYTES + 1).reader()` for the wire limit, then
 reads it through `take(MAX_PREVIEW_BYTES + 1)` and checks the decoded length before
-`rodio::Decoder::new_mp4`. It does not use `Body::read_to_vec`, whose limiter sits under `ureq`'s
-gzip decoder and so counts compressed bytes.
+`rodio::Decoder::new_mp4` in `decode_preview`; `download_and_decode` composes the two. It does not
+use `Body::read_to_vec`, whose limiter sits under `ureq`'s gzip decoder and so counts compressed
+bytes.
 
 **Pinned by.**
 
@@ -1296,6 +1297,24 @@ gzip decoder and so counts compressed bytes.
 past 10 MiB before decoding; the decoded-byte fix keeps the original wire cap alongside it. The
 wire limit was later raised one byte above the cap so an exactly-at-cap preview is read instead
 of failing the limit on its last byte, the same boundary the REST transport raised.
+
+## Preview replay cache
+
+**Guarantee.** The audio worker keeps the last successfully decoded preview body, keyed by its URL,
+and decodes that body again instead of downloading when the same URL is replayed — after a Stop
+whose remembered preview URL Play restarts, or when Repeat replays a one-song list. The cache holds
+one body, bounded by `MAX_PREVIEW_BYTES`, and a different URL replaces it, so it does not grow with
+the tracks played. A download or decode that fails is not cached, so the next play tries again.
+
+**Enforced by.** `audio::preview::PreviewCache::load_or_decode` in `src/audio/preview.rs`, used by
+`download_and_decode_cached` from the `run_worker` fetch closure in
+`src/audio/player/worker.rs`. `DecodedPreview` carries the encoded body it decodes, so a cache miss
+stores the body the download produced.
+
+**Pinned by.**
+
+- `preview_cache_replays_the_same_url_without_loading_it_again` (`src/audio/tests.rs`)
+- `preview_cache_keeps_only_the_last_url_and_never_caches_a_failed_load` (`src/audio/tests.rs`)
 
 ## Preview host guard
 

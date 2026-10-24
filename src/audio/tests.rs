@@ -10,8 +10,8 @@ use super::player::seek::{SeekablePlayer, clamp_seek, seek_player, seek_target};
 use super::player::worker::{Command, WorkerPlayer, await_device_ready, serve_commands};
 use super::player::{DEVICE_OPEN_TIMEOUT, WORKER_QUERY_TIMEOUT};
 use super::preview::{
-    MAX_PREVIEW_BYTES, PREVIEW_TIMEOUT, PublicAddressResolver, download_and_decode, preview_agent,
-    preview_agent_with_timeout,
+    MAX_PREVIEW_BYTES, PREVIEW_TIMEOUT, PreviewCache, PublicAddressResolver, download_and_decode,
+    preview_agent, preview_agent_with_timeout,
 };
 use super::*;
 use crate::equalizer::BAND_COUNT;
@@ -909,6 +909,74 @@ fn a_preview_of_exactly_the_cap_reaches_the_decoder() {
         error.to_string().contains("decoding the preview failed"),
         "an exactly-at-cap preview must be read whole before decoding, got: {error}"
     );
+}
+
+/// The replay path through the worker's fetch: the first play of a URL runs
+/// the load (download plus decode) and the second decodes the cached body
+/// without loading it again.
+#[test]
+fn preview_cache_replays_the_same_url_without_loading_it_again() {
+    fn decode_len(body: Arc<[u8]>) -> Result<usize, AppleMusicError> {
+        Ok(body.len())
+    }
+
+    let cache = PreviewCache::default();
+    let loads = std::cell::Cell::new(0);
+    let load = || {
+        loads.set(loads.get() + 1);
+        Ok::<_, AppleMusicError>((3, Arc::<[u8]>::from(&[1u8, 2, 3][..])))
+    };
+    assert_eq!(cache.load_or_decode("a", load, decode_len).unwrap(), 3);
+    let load = || {
+        loads.set(loads.get() + 1);
+        Ok::<_, AppleMusicError>((3, Arc::<[u8]>::from(&[1u8, 2, 3][..])))
+    };
+    assert_eq!(cache.load_or_decode("a", load, decode_len).unwrap(), 3);
+    assert_eq!(loads.get(), 1);
+}
+
+/// The cache is single-entry: a different URL replaces the body, and a load
+/// that fails (a download or decode error) is not cached, so the next play of
+/// that URL tries again.
+#[test]
+fn preview_cache_keeps_only_the_last_url_and_never_caches_a_failed_load() {
+    fn decode_len(body: Arc<[u8]>) -> Result<usize, AppleMusicError> {
+        Ok(body.len())
+    }
+
+    let cache = PreviewCache::default();
+    let loads = std::cell::Cell::new(0);
+    let load = || {
+        loads.set(loads.get() + 1);
+        Ok::<_, AppleMusicError>((1, Arc::<[u8]>::from(&[1u8][..])))
+    };
+    assert_eq!(cache.load_or_decode("a", load, decode_len).unwrap(), 1);
+    let load = || {
+        loads.set(loads.get() + 1);
+        Ok::<_, AppleMusicError>((2, Arc::<[u8]>::from(&[2u8, 3][..])))
+    };
+    assert_eq!(cache.load_or_decode("b", load, decode_len).unwrap(), 2);
+    // The older URL was replaced, so replaying it loads again.
+    let load = || {
+        loads.set(loads.get() + 1);
+        Ok::<_, AppleMusicError>((1, Arc::<[u8]>::from(&[1u8][..])))
+    };
+    assert_eq!(cache.load_or_decode("a", load, decode_len).unwrap(), 1);
+    assert_eq!(loads.get(), 3);
+
+    let cache = PreviewCache::default();
+    let loads = std::cell::Cell::new(0);
+    let fail = || {
+        loads.set(loads.get() + 1);
+        Err::<(usize, Arc<[u8]>), _>(AppleMusicError::new("download failed"))
+    };
+    assert!(cache.load_or_decode("a", fail, decode_len).is_err());
+    let fail = || {
+        loads.set(loads.get() + 1);
+        Err::<(usize, Arc<[u8]>), _>(AppleMusicError::new("download failed"))
+    };
+    assert!(cache.load_or_decode("a", fail, decode_len).is_err());
+    assert_eq!(loads.get(), 2);
 }
 
 #[test]

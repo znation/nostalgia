@@ -174,6 +174,7 @@ impl WorkerPlayer for RodioPlayer {
         let DecodedPreview {
             source,
             encoded_bytes,
+            ..
         } = preview;
         self.append_source(source, encoded_bytes);
     }

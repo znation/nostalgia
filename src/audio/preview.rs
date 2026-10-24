@@ -2,7 +2,7 @@
 //! resolver that refuses internal addresses, and the MP4/AAC decode.
 
 use std::io::{Cursor, Read};
-use std::sync::OnceLock;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 use ureq::unversioned::resolver::{DefaultResolver, ResolvedSocketAddrs, Resolver};
@@ -101,14 +101,69 @@ impl Resolver for PublicAddressResolver {
     }
 }
 
-/// A downloaded preview and the length of the encoded body it was decoded
-/// from, which is what the LCD's bitrate readout divides by the source's
-/// duration.
+/// A downloaded preview, its encoded body, and the body's length, which is
+/// what the LCD's bitrate readout divides by the source's duration.
 pub(super) struct DecodedPreview {
     /// The decoded audio source.
-    pub source: rodio::Decoder<Cursor<Vec<u8>>>,
+    pub source: rodio::Decoder<Cursor<Arc<[u8]>>>,
     /// The number of bytes downloaded, before decoding.
     pub encoded_bytes: u64,
+    /// The encoded body the source decodes. The worker keeps it for a replay
+    /// when the next play names the same URL (see [`PreviewCache`]).
+    pub body: Arc<[u8]>,
+}
+
+/// The last successfully decoded preview body, keyed by its URL, so replaying
+/// the same preview does not download it again.
+///
+/// A replay happens after a Stop (Play restarts the remembered preview URL) and
+/// when Repeat replays a one-song list, so the worker otherwise re-reads an
+/// unchanged asset the user has just heard. Only one body is kept: a different
+/// URL replaces it, so the cache stays bounded by [`MAX_PREVIEW_BYTES`] and
+/// never grows with the tracks played.
+#[derive(Debug, Default)]
+pub(super) struct PreviewCache {
+    last: Mutex<Option<(String, Arc<[u8]>)>>,
+}
+
+impl PreviewCache {
+    /// The cached body for `url`, or `None` when the last stored preview is a
+    /// different URL.
+    fn get(&self, url: &str) -> Option<Arc<[u8]>> {
+        let last = self
+            .last
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        last.as_ref()
+            .and_then(|(cached_url, body)| (cached_url == url).then(|| Arc::clone(body)))
+    }
+
+    /// Stores `body` as the preview for `url`, replacing any earlier body.
+    fn store(&self, url: &str, body: Arc<[u8]>) {
+        *self
+            .last
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some((url.to_owned(), body));
+    }
+
+    /// Decodes the cached body for `url`, or runs `load` and then caches the
+    /// body it returns. `load` covers both the download and the decode, so a
+    /// failure at either step leaves the cache untouched and the next play
+    /// tries again. The cache stores only after `load` succeeds, so a body
+    /// that does not decode is never replayed from memory.
+    pub(super) fn load_or_decode<T>(
+        &self,
+        url: &str,
+        load: impl FnOnce() -> Result<(T, Arc<[u8]>), AppleMusicError>,
+        decode: impl FnOnce(Arc<[u8]>) -> Result<T, AppleMusicError>,
+    ) -> Result<T, AppleMusicError> {
+        if let Some(body) = self.get(url) {
+            return decode(body);
+        }
+        let (decoded, body) = load()?;
+        self.store(url, body);
+        Ok(decoded)
+    }
 }
 
 /// Downloads `url` through `agent` and decodes it as an `MP4`/`AAC` preview.
@@ -135,6 +190,36 @@ pub(super) fn download_and_decode(
     agent: &ureq::Agent,
     url: &str,
 ) -> Result<DecodedPreview, AppleMusicError> {
+    let body = download_preview(agent, url)?;
+    decode_preview(body)
+}
+
+/// [`download_and_decode`] through `cache`: when `url` names the body the
+/// worker last decoded, decode that body again instead of downloading it.
+///
+/// A cache miss downloads and decodes once through [`download_and_decode`] and
+/// stores the body only after that succeeds, so a failed download or decode is
+/// retried on the next play.
+pub(super) fn download_and_decode_cached(
+    cache: &PreviewCache,
+    agent: &ureq::Agent,
+    url: &str,
+) -> Result<DecodedPreview, AppleMusicError> {
+    cache.load_or_decode(
+        url,
+        || {
+            download_and_decode(agent, url).map(|preview| {
+                let body = Arc::clone(&preview.body);
+                (preview, body)
+            })
+        },
+        decode_preview,
+    )
+}
+
+/// Downloads `url` and returns its body without decoding, enforcing the wire
+/// and decoded body caps described on [`download_and_decode`].
+fn download_preview(agent: &ureq::Agent, url: &str) -> Result<Arc<[u8]>, AppleMusicError> {
     let mut response = agent.get(url).call().map_err(|error| {
         AppleMusicError::new(format!("downloading the preview failed: {error}"))
     })?;
@@ -160,10 +245,18 @@ pub(super) fn download_and_decode(
             MAX_PREVIEW_BYTES / (1024 * 1024)
         )));
     }
-    let source = rodio::Decoder::new_mp4(Cursor::new(bytes))
+    Ok(Arc::from(bytes))
+}
+
+/// Decodes an encoded preview body, recording its length for the bitrate
+/// readout.
+fn decode_preview(body: Arc<[u8]>) -> Result<DecodedPreview, AppleMusicError> {
+    let encoded_bytes = u64::try_from(body.len()).unwrap_or(u64::MAX);
+    let source = rodio::Decoder::new_mp4(Cursor::new(Arc::clone(&body)))
         .map_err(|error| AppleMusicError::new(format!("decoding the preview failed: {error}")))?;
     Ok(DecodedPreview {
         source,
         encoded_bytes,
+        body,
     })
 }

@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use crate::music_error::AppleMusicError;
 
-use super::super::preview::{download_and_decode, preview_agent};
+use super::super::preview::{PreviewCache, download_and_decode_cached, preview_agent};
 use super::super::{EqSnapshot, PlaybackFormat, Spectrum};
 use super::rodio_player::RodioPlayer;
 
@@ -156,10 +156,11 @@ pub(in crate::audio) fn run_worker(
     };
     let _ = ready.send(Ok(()));
 
+    let cache = PreviewCache::default();
     serve_commands(
         receiver,
         || RodioPlayer::new(rodio::Player::connect_new(device.mixer())),
-        |url| download_and_decode(preview_agent(), url),
+        |url| download_and_decode_cached(&cache, preview_agent(), url),
     );
 }
 
@@ -201,10 +202,10 @@ fn with_player<P>(player: &Option<P>, act: impl FnOnce(&P)) {
 /// `create_player` and previews decoded by `fetch`.
 ///
 /// `create_player` and `fetch` are injected — rather than the loop opening a
-/// device and calling [`download_and_decode`] directly — so its state
+/// device and calling the guarded download directly — so its state
 /// transitions are testable without an output device (see [`WorkerPlayer`]);
 /// production passes `rodio::Player::connect_new` over the opened device and
-/// [`download_and_decode`] over [`preview_agent`].
+/// [`download_and_decode_cached`] over [`preview_agent`].
 ///
 /// A failed `Play` download stops and drops the previous player before
 /// logging. By the time the worker downloads a selection, `play_track` has
