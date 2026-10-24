@@ -72,9 +72,22 @@ use std::time::Duration;
 fn artist_row_uses_name_and_album_count() {
     let mut artist = sample_artist();
     artist.album_count = 2;
-    let (title, label, is_current) = artist_row(&artist);
+    let (title, label, is_current) = artist_row(&artist, None);
     assert_eq!(title, "The Sample Band");
     assert_eq!(label, "2 albums");
+    assert!(!is_current);
+}
+
+#[test]
+fn artist_row_prefers_the_lists_cached_album_count() {
+    // The artists list caches each row's label at store time; a refresh must
+    // borrow it instead of formatting the count again. A stale cache would
+    // show the wrong count, so the cached text wins over `album_count`.
+    let mut artist = sample_artist();
+    artist.album_count = 2;
+    let (title, label, is_current) = artist_row(&artist, Some("7 albums"));
+    assert_eq!(title, "The Sample Band");
+    assert_eq!(label, "7 albums");
     assert!(!is_current);
 }
 
@@ -128,7 +141,7 @@ fn album_count_label_singular_plural_and_none() {
 fn artist_row_puts_its_album_count_at_the_right_edge() {
     let mut artist = sample_artist();
     artist.album_count = 2;
-    let mut element = scrollable_list([artist_row(&artist)], 0, None, "No artists");
+    let mut element = scrollable_list([artist_row(&artist, None)], 0, None, "No artists");
     let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
 
     let title = capture.find("The Sample Band");
@@ -1832,7 +1845,7 @@ fn construct_every_browse_view(
     epoch: u64,
     loading: bool,
 ) {
-    let _artists = view_artists(artists, epoch, None, loading, None);
+    let _artists = view_artists(artists, &[], epoch, None, loading, None);
     let _albums = view_albums(albums, &[], &[], epoch, None, loading, None);
     let _songs = view_songs(songs, &[], &[], epoch, None, loading, None, None, false);
     let _songs_marked = view_songs(

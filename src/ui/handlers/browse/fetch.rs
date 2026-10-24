@@ -30,12 +30,18 @@ pub(in crate::ui) fn load_artists(player: &mut WinampPlayer) -> Task<Message> {
     )
 }
 
-/// The artists fetch landed: store the rows in the artists list.
+/// The artists fetch landed: store the rows in the artists list, caching each
+/// row's album-count label (see `BrowseList::store_with_labels`) so a view
+/// refresh borrows it instead of formatting the same `"N albums"` text again.
+/// The artist names stay borrowed from the rows, so only the label cache is
+/// populated.
 pub(in crate::ui) fn artists_loaded(
     player: &mut WinampPlayer,
     artists: Vec<Artist>,
 ) -> Task<Message> {
-    player.artists.store(artists);
+    player.artists.store_with_labels(artists, |artist| {
+        views::artist_album_count_label(artist).into_owned()
+    });
     Task::none()
 }
 

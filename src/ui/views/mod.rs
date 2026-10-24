@@ -35,6 +35,7 @@ mod shade;
 mod title_bar;
 mod transport;
 
+pub(crate) use browse::artist_album_count_label;
 pub use browse::{
     BROWSE_LIST_ID, BROWSE_LIST_PADDING, BROWSE_ROW_HEIGHT, BROWSE_SEARCH_ID, can_go_back,
     can_retry_artists, view_albums, view_all_albums, view_all_albums_button, view_all_songs,

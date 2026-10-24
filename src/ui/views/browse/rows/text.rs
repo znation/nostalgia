@@ -84,14 +84,21 @@ pub(in crate::ui::views) fn row_prefix(position: usize, is_current: bool) -> Str
 /// from the row's position and its list's epoch, so building a row never
 /// clones the artist's id — the update loop resolves the index back to an id
 /// only when the row is actually opened.
+///
+/// `cached_label` is the album-count label the loaded list stored for this row
+/// (see `BrowseList::store_with_labels`), borrowed so a refresh of a large
+/// artist list does not format and allocate the same count again. `None` — a
+/// list stored without a cache, as a test may do — falls back to composing the
+/// label with [`album_count_label`], so the rendered row is unchanged.
 pub(in crate::ui::views) fn artist_row<'a>(
     artist: &'a Artist,
+    cached_label: Option<&'a str>,
 ) -> (Cow<'a, str>, Cow<'a, str>, bool) {
-    (
-        Cow::Borrowed(artist.name.as_str()),
-        album_count_label(artist.album_count),
-        false,
-    )
+    let label = match cached_label {
+        Some(label) => Cow::Borrowed(label),
+        None => album_count_label(artist.album_count),
+    };
+    (Cow::Borrowed(artist.name.as_str()), label, false)
 }
 
 /// The secondary label an artist row shows for its album count: no label for

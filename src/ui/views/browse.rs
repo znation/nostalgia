@@ -11,6 +11,8 @@
 //! about `WinampPlayer` or the update loop — so the browse UI is testable
 //! without an iced renderer.
 
+use std::borrow::Cow;
+
 use iced::{
     Element, Length,
     widget::{Row, TextInput},
@@ -23,21 +25,32 @@ use super::labeled_button;
 
 pub(super) mod rows;
 
-use rows::text::{artist_row, browse_placeholder, playlist_row};
+use rows::text::{album_count_label, artist_row, browse_placeholder, playlist_row};
 use rows::{album_list, list_with_count, scrollable_list, song_list};
 
 pub use rows::{BROWSE_LIST_ID, BROWSE_LIST_PADDING, BROWSE_ROW_HEIGHT};
 
+/// The secondary label an artist row caches at load time: the same
+/// [`album_count_label`] text the row falls back to composing, exposed so the
+/// artists fetch can store it through `BrowseList::store_with_labels` without
+/// duplicating the singular/plural wording.
+pub(crate) fn artist_album_count_label(artist: &Artist) -> Cow<'static, str> {
+    album_count_label(artist.album_count)
+}
+
 /// The Artists browse view: one row per artist, in the order given, each
 /// selecting its row with [`Message::SelectRow`] carrying the artist's index
 /// in the list and the list's `epoch`; pressing the selected row again opens
-/// the artist. `selected` paints that row's blue bar without adding the `▶`
-/// playing marker. `loading` and `error` select the placeholder wording (see
-/// [`browse_placeholder`]); a fetch failure wins. Built by [`scrollable_list`]
-/// from the [`artist_row`] mapping; a non-empty list also appends its
-/// item-count footer ([`list_with_count`]).
+/// the artist. `labels` holds the album-count text the loaded list cached in
+/// the same order as `artists` (see `BrowseList::store_with_labels`); an index
+/// without a cached label falls back to composing it. `selected` paints that
+/// row's blue bar without adding the `▶` playing marker. `loading` and `error`
+/// select the placeholder wording (see [`browse_placeholder`]); a fetch
+/// failure wins. Built by [`scrollable_list`] from the [`artist_row`] mapping;
+/// a non-empty list also appends its item-count footer ([`list_with_count`]).
 pub fn view_artists<'a>(
     artists: &'a [Artist],
+    labels: &'a [String],
     epoch: u64,
     selected: Option<usize>,
     loading: bool,
@@ -45,7 +58,10 @@ pub fn view_artists<'a>(
 ) -> Element<'a, Message> {
     list_with_count(
         scrollable_list(
-            artists.iter().map(artist_row),
+            artists
+                .iter()
+                .enumerate()
+                .map(|(index, artist)| artist_row(artist, labels.get(index).map(String::as_str))),
             epoch,
             selected,
             browse_placeholder(&CurrentView::Artists, loading, error, false),

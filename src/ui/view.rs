@@ -110,6 +110,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
     let main_content = match &player.current_view {
         CurrentView::Artists => views::view_artists(
             &player.artists.items,
+            &player.artists.labels,
             player.artists.epoch,
             player.artists.selected(),
             player.artists.loading,

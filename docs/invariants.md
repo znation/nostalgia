@@ -259,7 +259,9 @@ navigation shows the previous level's rows" in `BUGS-FIXED.md`.
 row's rendered text compared case-insensitively: Artists and Playlists by name, Albums and All
 Albums by `artist - title`, and Songs and All Songs by `artist - title`. Rows whose keys compare
 equal keep their library order. The song and album lists reorder their cached titles and labels
-by the same permutation as their rows, so each row keeps its own title and duration. The reorder
+by the same permutation as their rows, so each row keeps its own title and duration; the artists
+list does the same for its cached album-count labels (it caches no titles, because each name is
+borrowed from the row). The reorder
 is one-shot: it bumps only that list's epoch, so a selection press rendered before the sort is
 rejected while the post-sort indices resolve to the sorted rows, and it leaves the other lists,
 the current view, the search state, and playback unchanged. Navigating away and back restores the
@@ -284,6 +286,7 @@ draw beside Top.
 - `browse_nav_buttons_place_sort_beside_top`
 - `browse_nav_buttons_place_reload_beside_sort`
 - `sort_reorders_artists_case_insensitively`
+- `sort_reorders_artists_and_keeps_their_cached_labels_aligned`
 - `sort_is_stable_for_equal_keys_and_back_restores_them`
 - `sort_reorders_albums_by_their_display_title`
 - `sort_reorders_playlists_by_name`
@@ -377,7 +380,11 @@ first and the whole albums collection second (one extra paginated request), coun
 exact `Album::artist` display name (skipping albums whose artist name is empty), and matches an
 artist by `Artist::name`; a failure in either request surfaces as the existing artists load
 failure and its Retry path. `Artist::album_count` is derived data, not an Apple Music field: it
-is skipped by serde and deserializes to `0`.
+is skipped by serde and deserializes to `0`. The loaded Artists list caches each row's
+album-count label at store time through `BrowseList::store_with_labels` (`artists_loaded` in
+`src/ui/handlers/browse/fetch.rs`), and `artist_row` borrows it, falling back to composing the
+label for an index without a cached value, so a view refresh does not reformat every count. The
+cache holds only labels; each row's name stays borrowed from the artist, so no names are cloned.
 
 **Enforced by.** `Artist::album_count` in `src/library.rs`;
 `library::album_counts_by_artist` counts non-empty `Album::artist` names;
@@ -385,14 +392,19 @@ is skipped by serde and deserializes to `0`.
 the sample library or from the two signed-in requests; and
 `views::browse::rows::text::album_count_label` in `src/ui/views/browse/rows/text.rs` renders the
 singular, plural, and empty labels that `artist_row` uses as its secondary text, and
-`scrollable_list` pins every row's secondary label to the right edge.
+`scrollable_list` pins every row's secondary label to the right edge. The artists fetch stores
+those labels through `BrowseList::store_with_labels`, so `artist_row` can borrow one per row.
 
 **Pinned by.**
 
 - `artist_row_uses_name_and_album_count`
+- `artist_row_prefers_the_lists_cached_album_count`
 - `album_count_label_singular_plural_and_none`
 - `artist_row_puts_its_album_count_at_the_right_edge`
   (all in `src/ui/views/tests.rs`)
+- `artists_loaded_populates_list`
+- `sort_reorders_artists_and_keeps_their_cached_labels_aligned`
+  (both in `src/ui/tests.rs`)
 - `sample_library_artists_carry_their_album_counts`
   (in `src/sample_library.rs`)
 - `get_favorite_artists_uses_the_rest_library_when_signed_in`

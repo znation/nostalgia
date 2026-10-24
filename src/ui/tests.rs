@@ -3694,6 +3694,23 @@ fn artists_loaded_populates_list() {
         |player| &mut player.artists.items,
         |player| player.artists.loading,
     );
+
+    // The artists list caches each row's album-count label when it is stored,
+    // in row order, so a view refresh borrows it instead of formatting the
+    // same count again. The title cache stays empty because the name is
+    // already borrowed from the row.
+    let mut artist = sample_artist();
+    artist.album_count = 2;
+    let _ = update(&mut player, Message::ArtistsLoaded(vec![artist]));
+    assert_eq!(
+        player.artists.labels,
+        ["2 albums"],
+        "the artist row's album count is cached at store time"
+    );
+    assert!(
+        player.artists.titles.is_empty(),
+        "the artists list caches only labels, not a duplicate of every name"
+    );
 }
 
 #[test]
@@ -3862,6 +3879,39 @@ fn sort_reorders_artists_case_insensitively() {
         .map(|artist| artist.name.as_str())
         .collect();
     assert_eq!(names, ["Apple", "banana", "cherry"]);
+}
+
+#[test]
+fn sort_reorders_artists_and_keeps_their_cached_labels_aligned() {
+    let (mut player, _state) = test_player();
+    let artist = |id: &str, name: &str, album_count: usize| Artist {
+        id: id.to_string(),
+        name: name.to_string(),
+        album_count,
+    };
+    let _ = update(
+        &mut player,
+        Message::ArtistsLoaded(vec![
+            artist("banana", "banana", 0),
+            artist("apple", "Apple", 2),
+            artist("cherry", "cherry", 1),
+        ]),
+    );
+
+    let _ = update(&mut player, Message::SortBrowse);
+
+    let names: Vec<&str> = player
+        .artists
+        .items
+        .iter()
+        .map(|artist| artist.name.as_str())
+        .collect();
+    assert_eq!(names, ["Apple", "banana", "cherry"]);
+    assert_eq!(
+        player.artists.labels,
+        ["2 albums", "", "1 album"],
+        "each sorted artist row keeps its own cached album count"
+    );
 }
 
 // The documented sort is stable: rows whose rendered text compares equal

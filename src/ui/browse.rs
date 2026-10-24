@@ -6,14 +6,17 @@
 //! safe, the loading flag the view reads for its "Loading…" placeholder, the
 //! failure report it shows instead, and the request counter that drops a
 //! superseded reply all live together here, so an `update` arm names the
-//! transition (`store`, `store_with_row_text`, `clear`, `fail`, `begin_fetch`)
+//! transition (`store`, `store_with_row_text`, `store_with_labels`, `clear`,
+//! `fail`, `begin_fetch`)
 //! instead of spelling out the parallel-field bookkeeping at each site.
 //!
-//! The `update` arms go through `store`/`store_with_row_text`/`clear`/`fail`: the
-//! Artists and Playlists `*Loaded` arms call `store`, the Songs, All Songs,
-//! Albums, and All Albums `*Loaded` arms call `store_with_row_text` so each
-//! row's display title and formatted length or running time are composed once
-//! per load, every `*LoadFailed` arm calls `fail`, and
+//! The `update` arms go through
+//! `store`/`store_with_row_text`/`store_with_labels`/`clear`/`fail`: the
+//! Artists `*Loaded` arm calls `store_with_labels`, the Playlists arm calls
+//! `store`, and the Songs, All Songs, Albums, and All Albums `*Loaded` arms
+//! call `store_with_row_text` so each row's display title and formatted length
+//! or running time are composed once per load, every `*LoadFailed` arm calls
+//! `fail`, and
 //! the navigation arms, `LoadArtists`, `ReloadLibrary`, the flat-list/Playlists
 //! buttons, and `SearchSubmitted` start their fetch through the event loop's
 //! `fetch_level`,
@@ -42,12 +45,13 @@ pub(super) struct BrowseList<T> {
     /// `clear`/`fail` drop them with the rows.
     pub(super) titles: Vec<String>,
     /// The secondary label each row renders, cached when the rows are stored
-    /// (see [`Self::store_with_row_text`]) so a view refresh does not reformat
-    /// every row. The song and album lists populate it; [`Self::store`] leaves
-    /// it empty, and the row builder falls back to formatting in that case.
-    /// Every transition that changes `items` keeps the two in lockstep: `store`
-    /// clears the labels, `store_with_row_text` rebuilds them beside the rows,
-    /// and `clear`/`fail` drop them with the rows.
+    /// (see [`Self::store_with_row_text`] and [`Self::store_with_labels`]) so a
+    /// view refresh does not reformat every row. The song, album, and artist
+    /// lists populate it; [`Self::store`] leaves it empty, and the row builder
+    /// falls back to formatting in that case. Every transition that changes
+    /// `items` keeps the two in lockstep: `store` clears the labels,
+    /// `store_with_row_text` and `store_with_labels` rebuild them beside the
+    /// rows, and `clear`/`fail` drop them with the rows.
     pub(super) labels: Vec<String>,
     /// Counts list replacements, bumped by [`Self::store`] whenever a fetched
     /// list replaces the rows. A selection message carries the epoch of the
@@ -70,8 +74,8 @@ pub(super) struct BrowseList<T> {
     /// of the row now at position `i`, so [`Self::restore_library_order`] can
     /// undo every sort since the rows were stored. Any transition that
     /// replaces the rows ([`Self::store`], [`Self::store_with_row_text`],
-    /// [`Self::clear`], [`Self::fail`]) drops it: a freshly fetched list is
-    /// already in library order.
+    /// [`Self::store_with_labels`], [`Self::clear`], [`Self::fail`]) drops it:
+    /// a freshly fetched list is already in library order.
     library_positions: Option<Vec<usize>>,
     /// True while a fetch for this level is waiting on a reply: it starts
     /// true for the artists fetch `boot` schedules, and [`Self::clear`] sets
@@ -197,9 +201,23 @@ impl<T> BrowseList<T> {
         self.replace_rows(items);
     }
 
+    /// Replaces the rows like [`Self::store`], and caches one secondary label
+    /// per row by running `label` once per item, in row order, leaving the
+    /// primary-title cache empty. The artists list uses this because its row
+    /// title is borrowed straight from the artist name and only the
+    /// album-count label is composed: caching the title too would clone every
+    /// name for no view-time saving. [`Self::store_with_row_text`] covers the
+    /// lists that need both caches.
+    pub(super) fn store_with_labels(&mut self, items: Vec<T>, label: impl Fn(&T) -> String) {
+        self.titles.clear();
+        self.labels = items.iter().map(label).collect();
+        self.replace_rows(items);
+    }
+
     /// Replaces `items` and bumps the list state that a replacement changes,
     /// leaving the cached row text to the caller: [`Self::store`] clears both
-    /// caches and [`Self::store_with_row_text`] rebuilds them.
+    /// caches, [`Self::store_with_row_text`] rebuilds both, and
+    /// [`Self::store_with_labels`] rebuilds only the labels.
     fn replace_rows(&mut self, items: Vec<T>) {
         self.items = items;
         self.selected = None;
