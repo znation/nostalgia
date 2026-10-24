@@ -163,25 +163,24 @@ advance scroll that list so the landed row stays in view. The volume slider and 
 set the audio backend's playback level, and rolling the mouse wheel over the player panels nudges
 the volume by one slider step in the roll's vertical direction, except that a roll over the drawn
 seek slider, in the Now Playing bar or the shade strip, seeks five seconds forward or back instead;
-over the browse list the wheel keeps scrolling the list instead. The balance slider sets its stereo balance, and the equalizer panel's
-on/off button, sliders, and presets change the playing preview's curve live; the volume and balance
-are remembered for the next track. Setting `APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a
-browser-based MusicKit sign-in: browse and search queries then read your Apple Music library through
-the REST API, and fall back to the built-in sample library when it is unset. Playback plays the
-selected song's Apple Music preview through `rodio` when the library supplies one, and updates the
-UI state either way. Pause and Stop silence the preview through the audio backend; a pause with no
-loaded preview stops the transport instead, since there is nothing to pause. Play resumes a paused
-preview or restarts a stopped one from the beginning. When a loaded preview reaches its end while
-playing, the player steps forward through the showing list: to the next song, to the first song with
-Repeat on at the end, or, with Shuffle on, to a shuffled song when another exists. With Repeat off
-on the last song it stops instead and keeps that song queued for Play. The volume, balance, Repeat
-and Shuffle flags, the equalizer's on/off state, curve, and preset, the elapsed/remaining readout
-choice, the visualizer's shown/hidden choice, and the always-on-top
-choice are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or
-`$HOME/.config/nostalgia/settings.ini`) and restored at the next launch;
-`NOSTALGIA_SETTINGS_PATH` overrides the path. A missing or malformed entry falls back to its
-default. The always-on-top choice (the LCD strip's `A` or the `A` key) is remembered for the next
-launch, and a saved-on launch starts
+over the browse list the wheel keeps scrolling the list instead. The balance slider sets its stereo
+balance, and the equalizer panel's on/off button, sliders, and presets change the playing preview's
+curve live; the volume and balance are remembered for the next track. Setting
+`APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a browser-based MusicKit sign-in: browse and search
+queries then read your Apple Music library through the REST API, and fall back to the built-in
+sample library when it is unset. Playback plays the selected song's Apple Music preview through
+`rodio` when the library supplies one, and updates the UI state either way. Pause and Stop silence
+the preview through the audio backend; a pause with no loaded preview stops the transport instead,
+since there is nothing to pause. Play resumes a paused preview or restarts a stopped one from the
+beginning. When a loaded preview reaches its end while playing, the player steps forward through the
+showing list: to the next song, to the first song with Repeat on at the end, or, with Shuffle on, to
+a shuffled song when another exists. With Repeat off on the last song it stops instead and keeps
+that song queued for Play. The volume, balance, Repeat and Shuffle flags, the equalizer's on/off
+state, curve, and preset, the elapsed/remaining readout choice, the visualizer's shown/hidden
+choice, and the always-on-top choice are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or
+`$HOME/.config/nostalgia/settings.ini`) and restored at the next launch; `NOSTALGIA_SETTINGS_PATH`
+overrides the path. A missing or malformed entry falls back to its default. The always-on-top choice
+(the LCD strip's `A` or the `A` key) is remembered for the next launch, and a saved-on launch starts
 with the window pinned once boot resolves its window id. There are no CLI flags yet.
 
 ## Development
