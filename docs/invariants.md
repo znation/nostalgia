@@ -502,8 +502,9 @@ restored flag holds. It is still not window placement: the window's size, positi
 are not persisted. Playback position, the browse level, the search box, the current track, and
 window placement are deliberately not persisted.
 
-**Enforced by.** `src/main.rs` resolves the path with `settings::FileStore::from_environment`,
-loads it once with `FileStore::load`, applies the result with `settings::Settings::apply_to`, and
+**Enforced by.** `src/main.rs` resolves the path with
+`settings::file_store::FileStore::from_environment`, loads it once with `FileStore::load`, applies
+the result with `settings::Settings::apply_to`, and
 passes the store and the loaded snapshot (or a `Settings::from_state` snapshot when the file is
 absent) to `ui::init_ui`. The loaded
 file's text is parsed by `Settings::from_text`, which ignores unknown keys and malformed values
@@ -515,10 +516,12 @@ store to `WinampPlayer` and restores the snapshot through
 records the snapshot; `update` calls
 `WinampPlayer::persist_settings_if_changed` once after every message, and that method copies
 the three player-owned values into `Settings::from_state`, then compares that snapshot against the
-last one before calling `settings::SettingsWriter::save`. Boot's `WindowIdResolved` is handled by
+last one before calling `settings::file_store::SettingsWriter::save`. Boot's `WindowIdResolved` is
+handled by
 `handlers::window::window_id_resolved`, which applies the restored level through
 `window_level` once the id exists.
-`FileStore`'s `SettingsWriter` impl creates the parent directory and logs a failed create or write.
+`settings::file_store::FileStore`'s `SettingsWriter` impl creates the parent directory and logs a
+failed create or write.
 With no store attached the method returns before taking the state lock, so tests keep the default
 no-op behavior. `shortcuts::message_for` maps `A` to `Message::ToggleAlwaysOnTop`, the arm those
 controls press.
@@ -531,7 +534,7 @@ controls press.
 `apply_to_clamps_out_of_range_values_through_the_state_setters`,
 `apply_to_restores_a_saved_preset`,
 `settings_path_resolves_override_then_xdg_then_home_then_none`, and
-`file_store_save_then_load_returns_the_same_settings` (`src/settings.rs`), plus
+`file_store_save_then_load_returns_the_same_settings` (`src/settings/file_store.rs`), plus
 `a_changed_setting_is_saved_once_and_unchanged_updates_are_not`,
 `repeat_and_equalizer_changes_reach_the_saved_snapshot`,
 `toggle_time_display_reaches_the_saved_snapshot`,

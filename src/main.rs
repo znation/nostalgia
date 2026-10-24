@@ -82,7 +82,7 @@ fn main() -> iced::Result {
     // Resolve the persisted mixer and equalizer snapshot once, before the
     // first view, and hand both the store and the restored snapshot to the
     // UI so its update loop can save later changes.
-    let store = settings::FileStore::from_environment();
+    let store = settings::file_store::FileStore::from_environment();
     // Keep the loaded snapshot rather than rebuilding it from state: the
     // readout's elapsed/remaining mode lives on the UI player, not
     // `AppState`, so only the loaded copy carries it to `init_ui`.

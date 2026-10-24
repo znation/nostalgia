@@ -39,7 +39,8 @@ pub(in crate::ui) use view::view;
 
 use timers::subscriptions;
 
-use crate::settings::{FileStore, Settings};
+use crate::settings::Settings;
+use crate::settings::file_store::FileStore;
 use crate::{apple_music::AppleMusicService, state::AppState};
 
 /// Runs the UI, blocking until the window is closed.

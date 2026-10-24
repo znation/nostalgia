@@ -12,7 +12,8 @@ use tokio::sync::Mutex;
 use crate::apple_music::AppleMusicService;
 use crate::audio::{PlaybackFormat, Spectrum};
 use crate::library::{Album, Artist, Playlist, Song};
-use crate::settings::{Settings, SettingsWriter};
+use crate::settings::Settings;
+use crate::settings::file_store::SettingsWriter;
 use crate::state::AppState;
 
 use super::browse::BrowseList;
