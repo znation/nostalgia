@@ -134,6 +134,16 @@ mod tests {
         }
     }
 
+    /// Asserts that pressing `key` with `modifiers` maps to the message `pattern`.
+    macro_rules! assert_maps {
+        ($key:expr, $modifiers:expr => $pattern:pat) => {
+            assert!(matches!(
+                message_for(key_pressed($key, $modifiers)),
+                Some($pattern)
+            ))
+        };
+    }
+
     /// Asserts each classic letter binding maps to its transport message, by
     /// driving `map` with every letter. The tests below pass different mappers:
     /// one wraps the letter in a `KeyPressed` event for `message_for`, the other
@@ -160,91 +170,46 @@ mod tests {
 
     #[test]
     fn message_for_maps_the_arrow_keys() {
-        assert!(matches!(
-            message_for(key_pressed(
-                Key::Named(key::Named::ArrowUp),
-                Modifiers::NONE
-            )),
-            Some(Message::VolumeUp)
-        ));
-        assert!(matches!(
-            message_for(key_pressed(
-                Key::Named(key::Named::ArrowDown),
-                Modifiers::NONE
-            )),
-            Some(Message::VolumeDown)
-        ));
-        assert!(matches!(
-            message_for(key_pressed(
-                Key::Named(key::Named::ArrowLeft),
-                Modifiers::NONE
-            )),
-            Some(Message::SeekBackward)
-        ));
-        assert!(matches!(
-            message_for(key_pressed(
-                Key::Named(key::Named::ArrowRight),
-                Modifiers::NONE
-            )),
-            Some(Message::SeekForward)
-        ));
+        assert_maps!(Key::Named(key::Named::ArrowUp), Modifiers::NONE => Message::VolumeUp);
+        assert_maps!(Key::Named(key::Named::ArrowDown), Modifiers::NONE => Message::VolumeDown);
+        assert_maps!(Key::Named(key::Named::ArrowLeft), Modifiers::NONE => Message::SeekBackward);
+        assert_maps!(Key::Named(key::Named::ArrowRight), Modifiers::NONE => Message::SeekForward);
     }
 
     #[test]
     fn message_for_maps_enter_to_open_selected() {
         for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
-            assert!(matches!(
-                message_for(key_pressed(Key::Named(key::Named::Enter), modifiers)),
-                Some(Message::OpenSelected)
-            ));
+            assert_maps!(Key::Named(key::Named::Enter), modifiers => Message::OpenSelected);
         }
     }
 
     #[test]
     fn message_for_maps_backspace_to_back() {
         for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
-            assert!(matches!(
-                message_for(key_pressed(Key::Named(key::Named::Backspace), modifiers)),
-                Some(Message::Back)
-            ));
+            assert_maps!(Key::Named(key::Named::Backspace), modifiers => Message::Back);
         }
     }
 
     #[test]
     fn message_for_maps_home_and_end_to_browse_scroll() {
         for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
-            assert!(matches!(
-                message_for(key_pressed(Key::Named(key::Named::Home), modifiers)),
-                Some(Message::ScrollBrowseToTop)
-            ));
-            assert!(matches!(
-                message_for(key_pressed(Key::Named(key::Named::End), modifiers)),
-                Some(Message::ScrollBrowseToBottom)
-            ));
+            assert_maps!(Key::Named(key::Named::Home), modifiers => Message::ScrollBrowseToTop);
+            assert_maps!(Key::Named(key::Named::End), modifiers => Message::ScrollBrowseToBottom);
         }
     }
 
     #[test]
     fn message_for_maps_page_keys_to_browse_paging() {
         for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
-            assert!(matches!(
-                message_for(key_pressed(Key::Named(key::Named::PageDown), modifiers)),
-                Some(Message::ScrollBrowsePageDown)
-            ));
-            assert!(matches!(
-                message_for(key_pressed(Key::Named(key::Named::PageUp), modifiers)),
-                Some(Message::ScrollBrowsePageUp)
-            ));
+            assert_maps!(Key::Named(key::Named::PageDown), modifiers => Message::ScrollBrowsePageDown);
+            assert_maps!(Key::Named(key::Named::PageUp), modifiers => Message::ScrollBrowsePageUp);
         }
     }
 
     #[test]
     fn message_for_maps_f5_to_reload() {
         for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
-            assert!(matches!(
-                message_for(key_pressed(Key::Named(key::Named::F5), modifiers)),
-                Some(Message::ReloadLibrary)
-            ));
+            assert_maps!(Key::Named(key::Named::F5), modifiers => Message::ReloadLibrary);
         }
     }
 
@@ -253,53 +218,20 @@ mod tests {
         // The system media keys drive the same transport messages as the
         // on-screen controls and classic letters, plain or with Shift held.
         for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
-            assert!(matches!(
-                message_for(key_pressed(
-                    Key::Named(key::Named::MediaPlayPause),
-                    modifiers
-                )),
-                Some(Message::PlayPause)
-            ));
-            assert!(matches!(
-                message_for(key_pressed(Key::Named(key::Named::MediaPlay), modifiers)),
-                Some(Message::Play)
-            ));
-            assert!(matches!(
-                message_for(key_pressed(Key::Named(key::Named::MediaPause), modifiers)),
-                Some(Message::Pause)
-            ));
-            assert!(matches!(
-                message_for(key_pressed(Key::Named(key::Named::MediaStop), modifiers)),
-                Some(Message::Stop)
-            ));
-            assert!(matches!(
-                message_for(key_pressed(
-                    Key::Named(key::Named::MediaTrackNext),
-                    modifiers
-                )),
-                Some(Message::NextTrack)
-            ));
-            assert!(matches!(
-                message_for(key_pressed(
-                    Key::Named(key::Named::MediaTrackPrevious),
-                    modifiers
-                )),
-                Some(Message::PreviousTrack)
-            ));
+            assert_maps!(Key::Named(key::Named::MediaPlayPause), modifiers => Message::PlayPause);
+            assert_maps!(Key::Named(key::Named::MediaPlay), modifiers => Message::Play);
+            assert_maps!(Key::Named(key::Named::MediaPause), modifiers => Message::Pause);
+            assert_maps!(Key::Named(key::Named::MediaStop), modifiers => Message::Stop);
+            assert_maps!(Key::Named(key::Named::MediaTrackNext), modifiers => Message::NextTrack);
+            assert_maps!(Key::Named(key::Named::MediaTrackPrevious), modifiers => Message::PreviousTrack);
         }
     }
 
     #[test]
     fn message_for_maps_a_and_t_to_the_classic_toggles() {
         for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
-            assert!(matches!(
-                message_for(key_pressed(Key::Character("a".into()), modifiers)),
-                Some(Message::ToggleAlwaysOnTop)
-            ));
-            assert!(matches!(
-                message_for(key_pressed(Key::Character("t".into()), modifiers)),
-                Some(Message::ToggleTimeDisplay)
-            ));
+            assert_maps!(Key::Character("a".into()), modifiers => Message::ToggleAlwaysOnTop);
+            assert_maps!(Key::Character("t".into()), modifiers => Message::ToggleTimeDisplay);
         }
     }
 
