@@ -142,11 +142,12 @@ pub(in crate::ui) struct WinampPlayer {
     /// Whether the LCD's indicator strip's V control lets the visualizer row
     /// draw the stored spectrum. `Message::ToggleVisualizer` flips it; hiding
     /// leaves [`Self::spectrum`] and the spectrum poll untouched, so showing
-    /// the bars again draws the current ones.
+    /// the bars again draws the current ones. The choice is saved and restored
+    /// by `persist_settings_if_changed` and `adopt_saved_settings`.
     pub(in crate::ui) visualizer_visible: bool,
     /// Whether the normal-mode `NOSTALGIA EQUALIZER` band and equalizer panel
     /// are drawn. `Message::ToggleEqualizerPanel` flips it; it is open at
-    /// launch and is not persisted, like [`Self::visualizer_visible`]. It is a
+    /// launch and is deliberately not persisted, unlike [`Self::visualizer_visible`]. It is a
     /// layout flag only: the EQ's on/off state, curve, and preset, and the
     /// audio they forward, are untouched, and hiding the section hands its
     /// height to the browse list without resizing the window.
@@ -271,11 +272,11 @@ impl WinampPlayer {
     /// so a changed volume, balance, toggle, or equalizer value is written
     /// without a save call in each handler; an unchanged snapshot writes
     /// nothing, which keeps timer and backend poll messages from touching the
-    /// file. The snapshot also carries the player-owned readout mode and
-    /// always-on-top flag, so a click on the LCD time or the title bar's `A`
-    /// saves exactly one new snapshot. With no store attached (tests, and
-    /// before `init_ui` attaches the production one) this returns before
-    /// taking the state lock.
+    /// file. The snapshot also carries the player-owned readout mode,
+    /// visualizer choice, and always-on-top flag, so a click on the LCD time or
+    /// the strip's `V` or the title bar's `A` saves exactly one new snapshot.
+    /// With no store attached (tests, and before `init_ui` attaches the
+    /// production one) this returns before taking the state lock.
     pub(in crate::ui) fn persist_settings_if_changed(&mut self) {
         if self.settings_store.is_none() {
             return;
@@ -285,6 +286,7 @@ impl WinampPlayer {
             Settings::from_state(&state)
         };
         snapshot.set_time_display_remaining(self.time_display == views::TimeDisplay::Remaining);
+        snapshot.set_visualizer_visible(self.visualizer_visible);
         snapshot.set_always_on_top(self.always_on_top);
         if snapshot == self.saved_settings {
             return;
@@ -296,16 +298,17 @@ impl WinampPlayer {
     }
 
     /// Adopt the snapshot `main` loaded before the first view: restore the
-    /// player-owned readout mode and always-on-top flag and remember the
-    /// snapshot so the update loop's first comparison does not re-save it. The
-    /// state-backed values were already applied to `AppState` by `main`, so
-    /// this touches only those two UI-owned values.
+    /// player-owned readout mode, visualizer choice, and always-on-top flag and
+    /// remember the snapshot so the update loop's first comparison does not
+    /// re-save it. The state-backed values were already applied to `AppState`
+    /// by `main`, so this touches only those three UI-owned values.
     pub(in crate::ui) fn adopt_saved_settings(&mut self, saved: Settings) {
         self.time_display = if saved.time_display_remaining() {
             views::TimeDisplay::Remaining
         } else {
             views::TimeDisplay::Elapsed
         };
+        self.visualizer_visible = saved.visualizer_visible();
         self.always_on_top = saved.always_on_top();
         self.saved_settings = saved;
     }

@@ -399,19 +399,22 @@ gap; the shared harness closes it.
 
 **Guarantee.** The values the user sets that outlive a track — volume, balance, Repeat, Shuffle,
 the equalizer's on/off state, preamp, ten band gains, and selected preset, the large readout's
-elapsed/remaining choice, and the title bar's always-on-top choice — are loaded once before the
+elapsed/remaining choice, the visualizer's shown/hidden choice, and the title bar's always-on-top
+choice — are loaded once before the
 first view is drawn and rewritten after any update that changes their snapshot. An update that
 leaves the snapshot unchanged writes nothing.
 Reads and writes go through the state's clamped setters, so out-of-range values from a file cannot
 push shared state outside its documented ranges. A missing or unreadable file, or a malformed line,
 falls back per key without failing startup; an unwritable file is logged rather than crashing the
-player. The readout mode and the always-on-top choice are the two persisted values not held in
-`AppState`: they live on `WinampPlayer::time_display` and `WinampPlayer::always_on_top`, `main`
-passes the loaded snapshot through to `WinampPlayer::adopt_saved_settings` (which restores both
-before the first view), and `persist_settings_if_changed` copies them into the snapshot before
-comparing and saving. A missing
-or malformed `time_display` line falls back to elapsed, and a missing or malformed
-`always_on_top` line falls back to unpinned. The classic `A` key reaches the same
+player. The readout mode, the visualizer's shown/hidden choice, and the always-on-top choice are
+the three persisted values not held in `AppState`: they live on `WinampPlayer::time_display`,
+`WinampPlayer::visualizer_visible`, and `WinampPlayer::always_on_top`, `main`
+passes the loaded snapshot through to `WinampPlayer::adopt_saved_settings` (which restores all
+three before the first view), and `persist_settings_if_changed` copies them into the snapshot
+before comparing and saving. A missing
+or malformed `time_display` line falls back to elapsed, a missing or malformed
+`always_on_top` line falls back to unpinned, and a missing or malformed `visualizer_visible` line
+falls back to shown. The classic `A` key reaches the same
 `Message::ToggleAlwaysOnTop` arm through `shortcuts::message_for`, so it flips the flag and
 schedules the same window-level call as the on-screen A controls. The saved always-on-top level waits for the window id
 every other window action uses: `window_id_resolved` stores the id, then schedules
@@ -427,10 +430,11 @@ file's text is parsed by `Settings::from_text`, which ignores unknown keys and m
 per key, and `apply_to` writes through `AppState::set_volume`, `set_balance`, `set_eq_preamp`, and
 `set_eq_band` before restoring a preset through `apply_eq_preset`. `ui::init_ui` attaches the
 store to `WinampPlayer` and restores the snapshot through
-`WinampPlayer::adopt_saved_settings`, which restores `time_display` and `always_on_top` and
+`WinampPlayer::adopt_saved_settings`, which restores `time_display`, `visualizer_visible`, and
+`always_on_top` and
 records the snapshot; `update` calls
 `WinampPlayer::persist_settings_if_changed` once after every message, and that method copies
-the two player-owned values into `Settings::from_state`, then compares that snapshot against the
+the three player-owned values into `Settings::from_state`, then compares that snapshot against the
 last one before calling `settings::SettingsWriter::save`. Boot's `WindowIdResolved` is handled by
 `handlers::window::window_id_resolved`, which applies the restored level through
 `window_level` once the id exists.
@@ -441,6 +445,7 @@ controls press.
 
 **Pinned by.** `to_text_round_trips_every_field`,
 `time_display_round_trips_both_words_and_ignores_unknown_values`,
+`visualizer_visibility_round_trips_and_ignores_malformed_values`,
 `always_on_top_round_trips_and_ignores_malformed_values`,
 `from_text_ignores_malformed_and_unknown_lines`,
 `apply_to_clamps_out_of_range_values_through_the_state_setters`,
@@ -451,6 +456,8 @@ controls press.
 `repeat_and_equalizer_changes_reach_the_saved_snapshot`,
 `toggle_time_display_reaches_the_saved_snapshot`,
 `saved_time_display_mode_is_restored_on_boot`,
+`toggle_visualizer_reaches_the_saved_snapshot`,
+`saved_visualizer_visibility_is_restored_on_boot`,
 `toggle_always_on_top_reaches_the_saved_snapshot`,
 `saved_always_on_top_is_restored_on_boot`,
 `window_level_selects_always_on_top`, and
@@ -459,7 +466,9 @@ reaching the same arm is pinned by `a_toggles_always_on_top_from_the_keyboard` (
 
 **History.** Added with the settings-persistence plan on 2026-10-23; the player previously kept
 these values in memory only and started every launch at `AppState::default()`. The readout's
-elapsed/remaining mode and the always-on-top choice joined the file later the same day.
+elapsed/remaining mode and the always-on-top choice joined the file later the same day. The
+visualizer's shown/hidden choice joined it with the same plan, restoring before the first view
+while the stored spectrum and its poll stay transient.
 
 ## Equalizer band tint
 

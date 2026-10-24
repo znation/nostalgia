@@ -358,6 +358,41 @@ fn saved_always_on_top_is_restored_on_boot() {
     assert_eq!(player.saved_settings, Settings::default());
 }
 
+#[test]
+fn toggle_visualizer_reaches_the_saved_snapshot() {
+    let (mut player, _state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+
+    let _ = update(&mut player, Message::ToggleVisualizer);
+    let snapshots = store.snapshots();
+    assert_eq!(snapshots.len(), 1);
+    assert!(!snapshots[0].visualizer_visible());
+
+    let _ = update(&mut player, Message::Ignored);
+    assert_eq!(store.snapshots().len(), 1);
+
+    let _ = update(&mut player, Message::ToggleVisualizer);
+    let snapshots = store.snapshots();
+    assert_eq!(snapshots.len(), 2);
+    assert!(snapshots[1].visualizer_visible());
+}
+
+#[test]
+fn saved_visualizer_visibility_is_restored_on_boot() {
+    let (mut player, _state) = test_player();
+    let mut hidden = Settings::default();
+    hidden.set_visualizer_visible(false);
+
+    player.adopt_saved_settings(hidden.clone());
+    assert!(!player.visualizer_visible);
+    assert_eq!(player.saved_settings, hidden);
+
+    player.adopt_saved_settings(Settings::default());
+    assert!(player.visualizer_visible);
+    assert_eq!(player.saved_settings, Settings::default());
+}
+
 /// The longest a driven `Task` is allowed to take before its test fails.
 ///
 /// A task that never yields its completion message — a hung service future,

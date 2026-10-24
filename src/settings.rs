@@ -3,10 +3,11 @@
 //! [`Settings`] is a small snapshot of the values the player keeps while it
 //! runs: the volume, balance, Repeat and Shuffle flags, the equalizer's on/off
 //! state, preamp, band gains, and selected preset, the Now Playing readout's
-//! elapsed/remaining mode, and the always-on-top flag. All but the last two
-//! live in [`AppState`]; the readout mode and the always-on-top flag live on
-//! the UI's `WinampPlayer`, so the player sets them on its snapshot before
-//! saving and restores them after loading. [`FileStore`] loads the snapshot
+//! elapsed/remaining mode, the visualizer's shown/hidden choice, and the
+//! always-on-top flag. All but the last three live in [`AppState`]; the readout
+//! mode, visualizer choice, and always-on-top flag live on the UI's
+//! `WinampPlayer`, so the player sets them on its snapshot before saving and
+//! restores them after loading. [`FileStore`] loads the snapshot
 //! from a line-based text file at startup and rewrites it whenever the UI
 //! changes one of those values. Playback position, the browse level, the
 //! search box, the current track, and window placement (other than the saved
@@ -19,16 +20,16 @@ use crate::equalizer::{self, Preset};
 use crate::state::AppState;
 
 /// The persisted values the next launch restores: the mixer and equalizer
-/// subset of [`AppState`] plus the UI-owned readout mode and always-on-top
-/// flag.
+/// subset of [`AppState`] plus the UI-owned readout mode, visualizer choice,
+/// and always-on-top flag.
 ///
 /// The fields are private; build a state-backed snapshot with
 /// [`Settings::from_state`] and restore it with [`Settings::apply_to`].
-/// `time_display_remaining` and `always_on_top` are not held in [`AppState`]:
-/// `from_state` leaves them elapsed and unpinned, and the player overwrites
-/// them from its own values before saving. `Default` mirrors
-/// [`AppState::default`] plus elapsed and unpinned, so if one starting value
-/// changes the other must change with it.
+/// `time_display_remaining`, `visualizer_visible`, and `always_on_top` are not
+/// held in [`AppState`]: `from_state` leaves them elapsed, shown, and unpinned,
+/// and the player overwrites them from its own values before saving. `Default`
+/// mirrors [`AppState::default`] plus elapsed, shown, and unpinned, so if one
+/// starting value changes the other must change with it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
     volume: f32,
@@ -40,14 +41,16 @@ pub struct Settings {
     eq_bands: [f32; equalizer::BAND_COUNT],
     eq_preset: Option<Preset>,
     time_display_remaining: bool,
+    visualizer_visible: bool,
     always_on_top: bool,
 }
 
 impl Default for Settings {
     /// The same starting values as [`AppState::default`]: half volume, a
     /// centered balance, both toggles off, and the equalizer off with a flat
-    /// curve and no preset, plus the elapsed readout mode and an unpinned
-    /// window. A missing or unreadable settings file starts here.
+    /// curve and no preset, plus the elapsed readout mode, the shown
+    /// visualizer, and an unpinned window. A missing or unreadable settings
+    /// file starts here.
     fn default() -> Self {
         Self {
             volume: 0.5,
@@ -59,6 +62,7 @@ impl Default for Settings {
             eq_bands: [0.0; equalizer::BAND_COUNT],
             eq_preset: None,
             time_display_remaining: false,
+            visualizer_visible: true,
             always_on_top: false,
         }
     }
@@ -79,6 +83,7 @@ impl Settings {
             eq_bands: state.eq_bands(),
             eq_preset: state.eq_preset(),
             time_display_remaining: false,
+            visualizer_visible: true,
             always_on_top: false,
         }
     }
@@ -96,6 +101,22 @@ impl Settings {
     /// deliberately leaves the UI-owned mode alone.
     pub fn set_time_display_remaining(&mut self, remaining: bool) {
         self.time_display_remaining = remaining;
+    }
+
+    /// Whether the LCD's spectrum visualizer draws its bars. The player owns
+    /// this value, so it reads it back when saving and restores it from the
+    /// loaded snapshot at boot. The stored spectrum and its poll are separate
+    /// and are not persisted.
+    #[must_use]
+    pub fn visualizer_visible(&self) -> bool {
+        self.visualizer_visible
+    }
+
+    /// Set whether the LCD's spectrum visualizer draws its bars. The player
+    /// calls this on its fresh snapshot before saving; [`Self::apply_to`]
+    /// deliberately leaves the UI-owned flag alone.
+    pub fn set_visualizer_visible(&mut self, visible: bool) {
+        self.visualizer_visible = visible;
     }
 
     /// Whether the window is pinned above other windows. The player owns this
@@ -119,8 +140,8 @@ impl Settings {
     /// (`set_volume`, `set_balance`, `set_eq_preamp`, and `set_eq_band`), so a
     /// hand-edited file cannot push the state out of range. An applied preset
     /// is restored last through `apply_eq_preset`, after the per-band writes
-    /// have cleared the selection. The UI-owned readout mode and always-on-top
-    /// flag are deliberately left alone.
+    /// have cleared the selection. The UI-owned readout mode, visualizer
+    /// choice, and always-on-top flag are deliberately left alone.
     pub fn apply_to(&self, state: &mut AppState) {
         state.set_volume(self.volume);
         state.set_balance(self.balance);
@@ -162,6 +183,7 @@ impl Settings {
                 "elapsed"
             }
         ));
+        text.push_str(&format!("visualizer_visible={}\n", self.visualizer_visible));
         text.push_str(&format!("always_on_top={}\n", self.always_on_top));
         text
     }
@@ -203,6 +225,10 @@ impl Settings {
                     "elapsed" => settings.time_display_remaining = false,
                     _ => {}
                 },
+                // A malformed value leaves the default shown visualizer.
+                "visualizer_visible" => {
+                    parse_into(&mut settings.visualizer_visible, value);
+                }
                 // A malformed value leaves the default unpinned window.
                 "always_on_top" => parse_into(&mut settings.always_on_top, value),
                 _ => {
@@ -368,9 +394,11 @@ mod tests {
 
         let mut settings = Settings::from_state(&state);
         settings.set_time_display_remaining(true);
+        settings.set_visualizer_visible(false);
         settings.set_always_on_top(true);
         assert_eq!(Settings::from_text(&settings.to_text()), settings);
         assert!(Settings::from_text(&settings.to_text()).time_display_remaining());
+        assert!(!Settings::from_text(&settings.to_text()).visualizer_visible());
         assert!(Settings::from_text(&settings.to_text()).always_on_top());
 
         let custom = Settings {
@@ -397,6 +425,30 @@ mod tests {
         assert!(
             !Settings::from_text("time_display=sideways\n").time_display_remaining(),
             "an unknown word must fall back to elapsed"
+        );
+    }
+
+    #[test]
+    fn visualizer_visibility_round_trips_and_ignores_malformed_values() {
+        let shown = Settings::default();
+        assert!(shown.visualizer_visible());
+        assert!(Settings::from_text(&shown.to_text()).visualizer_visible());
+
+        let mut hidden = shown.clone();
+        hidden.set_visualizer_visible(false);
+        assert!(hidden.to_text().contains("visualizer_visible=false"));
+        assert!(
+            !Settings::from_text(&hidden.to_text()).visualizer_visible(),
+            "a hidden visualizer must survive the round trip"
+        );
+
+        assert!(
+            Settings::from_text("visualizer_visible=true\n").visualizer_visible(),
+            "an explicit true must stay shown"
+        );
+        assert!(
+            Settings::from_text("visualizer_visible=maybe\n").visualizer_visible(),
+            "an unknown value must fall back to shown"
         );
     }
 
@@ -436,6 +488,7 @@ mod tests {
                     eq_band_x=2\n\
                     eq_preset=Unknown\n\
                     time_display=sideways\n\
+                    visualizer_visible=maybe\n\
                     always_on_top=yes\n\
                     mystery=1\n";
         assert_eq!(Settings::from_text(text), Settings::default());
