@@ -623,18 +623,21 @@ mod tests {
         assert_eq!(band_gain_color(f32::NAN), theme::EQ_GAIN_MID);
     }
 
-    #[test]
-    fn band_slider_style_paints_both_rail_halves_and_keeps_the_chrome_thumb() {
-        let gain = 6.0;
-        let tint = Background::Color(band_gain_color(gain));
+    /// Asserts `style_for` paints both rail halves `fill` at every slider
+    /// status while keeping the chrome slider's rail geometry and thumb.
+    fn assert_fills_rail_and_keeps_chrome_thumb(
+        fill: Color,
+        style_for: impl Fn(slider::Status) -> slider::Style,
+    ) {
+        let fill = Background::Color(fill);
         for status in [
             slider::Status::Active,
             slider::Status::Hovered,
             slider::Status::Dragged,
         ] {
-            let style = band_slider_style(gain, status);
+            let style = style_for(status);
             let chrome = chrome_slider_style(status);
-            assert_eq!(style.rail.backgrounds, (tint, tint));
+            assert_eq!(style.rail.backgrounds, (fill, fill));
             assert_eq!(style.rail.width, chrome.rail.width);
             assert_eq!(style.rail.border, chrome.rail.border);
             assert_eq!(style.handle, chrome.handle);
@@ -642,21 +645,19 @@ mod tests {
     }
 
     #[test]
+    fn band_slider_style_paints_both_rail_halves_and_keeps_the_chrome_thumb() {
+        let gain = 6.0;
+        assert_fills_rail_and_keeps_chrome_thumb(band_gain_color(gain), |status| {
+            band_slider_style(gain, status)
+        });
+    }
+
+    #[test]
     fn level_slider_style_paints_both_rail_halves_and_keeps_the_chrome_thumb() {
-        for fill_color in [theme::VOLUME_SLIDER_FILL, theme::BALANCE_SLIDER_FILL] {
-            let fill = Background::Color(fill_color);
-            for status in [
-                slider::Status::Active,
-                slider::Status::Hovered,
-                slider::Status::Dragged,
-            ] {
-                let style = level_slider_style(fill_color, status);
-                let chrome = chrome_slider_style(status);
-                assert_eq!(style.rail.backgrounds, (fill, fill));
-                assert_eq!(style.rail.width, chrome.rail.width);
-                assert_eq!(style.rail.border, chrome.rail.border);
-                assert_eq!(style.handle, chrome.handle);
-            }
+        for fill in [theme::VOLUME_SLIDER_FILL, theme::BALANCE_SLIDER_FILL] {
+            assert_fills_rail_and_keeps_chrome_thumb(fill, |status| {
+                level_slider_style(fill, status)
+            });
         }
     }
 
