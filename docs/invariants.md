@@ -516,7 +516,8 @@ refresh does not re-join and reformat every row.
   `Stop`, `Next`). The four glyph buttons are pinned to fixed widths 34, 30, 30, and 34 px, so
   the Play/Pause glyph swap cannot reflow the row. Repeat and Shuffle remain the `Repeat:
   Off/On` and `Shuffle: Off/On` text toggles, pinned to 104 and 112 px, so their label swaps
-  cannot reflow it either. The shade strip builds its four buttons from the same glyph spec.
+  cannot reflow it either. The shade strip and the library footer build their four buttons
+  from the same glyph spec.
 - The main transport row's fixed-width `EQ` toggle follows the balance slider in every playback
   state and is sunken while the equalizer panel is shown, ordinary chrome while it is hidden.
   Plain or Shift-held `E` dispatches the same `Message::ToggleEqualizerPanel` from the keyboard;

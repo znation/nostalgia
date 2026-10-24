@@ -2284,9 +2284,9 @@ fn transport_buttons_keep_their_measured_face_widths() {
     );
 }
 
-// The four glyph buttons share the shade strip's spec, in the mockup's order:
-// Previous, Play/Pause, Stop, Next. Pin each glyph, tooltip word, width, and
-// message so a swapped face or reordered pair fails here.
+// The four glyph buttons' shared spec, in the mockup's order: Previous,
+// Play/Pause, Stop, Next. Pin each glyph, tooltip word, width, and message so
+// a swapped face or reordered pair fails here.
 #[test]
 fn transport_glyphs_match_the_mockup_order_and_widths() {
     let stopped = transport_glyphs(false);

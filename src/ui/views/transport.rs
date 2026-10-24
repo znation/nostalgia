@@ -16,7 +16,8 @@ use super::{
 
 /// The Play/Pause button's glyph: `"II"` while playing, `"▶"` otherwise.
 /// Pure so the glyph logic is testable without an iced `Element`, and shared
-/// with the shade strip so the two transport rows cannot drift.
+/// by the full transport row and both compact strips (the shade strip and the
+/// library footer) so no transport row can drift.
 pub(super) fn play_pause_glyph(is_playing: bool) -> &'static str {
     if is_playing { "II" } else { "▶" }
 }
@@ -49,9 +50,10 @@ pub(super) fn shuffle_label(shuffle: bool) -> &'static str {
 /// Play/Pause, Stop, and Next. Each tuple is `(glyph, tooltip word, fixed
 /// width, message)`.
 ///
-/// The main row and the shade strip both build from this one list, so their
-/// glyphs, order, widths, and messages cannot drift apart. `is_playing`
-/// chooses the Play/Pause glyph and word.
+/// The main row and both compact strips (the shade strip and the library
+/// footer) build from this one list, so their glyphs, order, widths, and
+/// messages cannot drift apart. `is_playing` chooses the Play/Pause glyph and
+/// word.
 pub(super) fn transport_glyphs(
     is_playing: bool,
 ) -> [(&'static str, &'static str, f32, Message); 4] {

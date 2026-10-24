@@ -96,10 +96,11 @@ pub fn format_track_time(duration_ms: u64) -> String {
 ///
 /// The browse rows (a 10px gap between the title and the secondary label),
 /// the transport row (a 20px gap between each control), the equalizer header
-/// (an 8px gap between its on/off button and preset pick list), and the shade
-/// strip (a 6px gap between its transport buttons) all construct the same
-/// `Space`, so the `Space::new().width(Length::Fixed(..))` expression lives
-/// here once instead of being repeated at every call site.
+/// (an 8px gap between its on/off button and preset pick list), and the
+/// compact transport row drawn by the shade strip and the library footer
+/// (a 6px gap between its transport buttons) all construct the same `Space`,
+/// so the `Space::new().width(Length::Fixed(..))` expression lives here once
+/// instead of being repeated at every call site.
 fn spacer(width: f32) -> Space {
     Space::new().width(Length::Fixed(width))
 }
@@ -110,9 +111,9 @@ fn spacer(width: f32) -> Space {
 /// Playlists, and Retry buttons and the equalizer panel's on/off button call
 /// this directly;
 /// the transport row's six buttons (Play/Pause, Stop, Previous, Next, Repeat,
-/// Shuffle), the shade strip's four (Previous, Play/Pause, Stop, Next), and
-/// the title bar's shade, minimize, and close buttons reach it through
-/// [`fixed_width_button`]. They all build the same
+/// Shuffle), the four in each compact strip (the shade strip and the library
+/// footer), and the title bar's shade, minimize, and close buttons reach it
+/// through [`fixed_width_button`]. They all build the same
 /// `Button::new(Text::new(..)).on_press(..)` widget, so that expression lives
 /// here once instead of being repeated at every call site. The label is
 /// `'static` — a literal, or a `&'static str` such as

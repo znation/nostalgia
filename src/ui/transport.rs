@@ -20,8 +20,8 @@ use crate::library::Song;
 /// edge song instead of wrapping, so the button re-lands on the current
 /// track. `None` when `songs` is empty. Both direction lookups share the
 /// empty guard, the current-song position scan, and the boundary handling,
-/// so the stepping logic lives here once and the two public functions below
-/// only name the direction.
+/// so the stepping logic lives here once and the Next and Previous wrappers
+/// below only name the direction.
 fn stepped_track_id(
     songs: &[Song],
     current: Option<&str>,
