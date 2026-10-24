@@ -7767,6 +7767,37 @@ fn a_hard_line_break_in_a_title_does_not_change_the_row_pitch() {
     );
 }
 
+// The row flattener replaces both halves of a line break with spaces. A
+// lone carriage return (old Mac line ending) is not cosmic-text's `\r\n`
+// split, but the guard still replaces it so the title reads as two words on
+// one line instead of keeping the control character; a `\r\n` pair becomes
+// two spaces for the same reason.
+#[test]
+fn a_carriage_return_in_a_title_does_not_change_the_row_pitch() {
+    let (mut player, _state) = player_stepping_from(None);
+    player.current_view = CurrentView::Songs;
+    player.songs.items[0].title = "One\rTwo".to_string();
+
+    let capture = captured_root_view_text_bounds(&player);
+    let first = capture.find("1. ");
+    let second = capture.find("2. ");
+    let pitch = second.y - first.y;
+
+    assert!(
+        (pitch - views::BROWSE_ROW_HEIGHT).abs() < 0.01,
+        "row pitch {pitch} must equal BROWSE_ROW_HEIGHT {} despite the title's carriage return; rows at {first:?} and {second:?}",
+        views::BROWSE_ROW_HEIGHT
+    );
+    assert!(
+        capture
+            .fragments()
+            .iter()
+            .any(|(text, _)| text.contains("One Two")),
+        "the carriage return must be flattened to a space: {:?}",
+        capture.fragments()
+    );
+}
+
 // The transport row is rebuilt every frame and the Play/Pause glyph changes
 // with playback. A text-sized Play button once widened to Pause and moved
 // every control after it; this lays out the whole root `view` in both states

@@ -334,6 +334,7 @@ so Next, Previous, a shuffled retrace, and a natural preview end all follow the 
 - `scrollable_list_clips_an_overlong_title_to_its_column`
   (`src/ui/views/tests.rs`)
 - `a_hard_line_break_in_a_title_does_not_change_the_row_pitch`
+- `a_carriage_return_in_a_title_does_not_change_the_row_pitch`
 - `next_and_previous_scroll_the_showing_song_list_to_the_landed_row`
 - `a_finished_preview_scrolls_the_song_list_to_the_advanced_row`
 - `stepping_while_another_browse_level_shows_does_not_scroll`

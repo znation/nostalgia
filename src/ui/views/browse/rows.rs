@@ -71,9 +71,10 @@ pub const BROWSE_LIST_PADDING: f32 = 20.0;
 pub const BROWSE_ROW_HEIGHT: f32 = 33.4;
 
 /// Flattens the line breaks in a browse row's `title` to spaces. cosmic-text
-/// starts a new `BufferLine` at `\n`/`\r\n` even with wrapping disabled, so a
-/// title carrying one would make its row taller than [`BROWSE_ROW_HEIGHT`];
-/// the scroll-to-row offset counts on every row having exactly that pitch.
+/// starts a new `BufferLine` at `\n`, `\r\n`, or a lone `\r` even with
+/// wrapping disabled, so a title carrying one would make its row taller than
+/// [`BROWSE_ROW_HEIGHT`]; the scroll-to-row offset counts on every row having
+/// exactly that pitch.
 fn one_line_title<'a>(title: Cow<'a, str>) -> Cow<'a, str> {
     if title.contains('\n') || title.contains('\r') {
         Cow::Owned(
