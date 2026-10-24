@@ -2340,6 +2340,36 @@ async fn get_favorite_artists_gives_an_artist_with_no_matching_album_a_count_of_
     assert_eq!(calls.len(), 2);
 }
 
+// A signed-in account with an empty library is an ordinary empty result, not
+// the sample fallback: the sample library answers only when no session is
+// stored, so a regression that treated "no artists came back" as "fall back
+// to the samples" would show a signed-in user music they do not own. The
+// second call pins that the albums collection is still read for the count,
+// and both empty bodies prove the load answers with an empty list rather
+// than an error.
+#[tokio::test]
+async fn get_favorite_artists_returns_no_artists_for_an_empty_signed_in_library() {
+    let stub = StubTransport::returning_bodies(&[r#"{"data":[]}"#, r#"{"data":[]}"#]);
+    let service = signed_in_service(&stub);
+
+    let artists = service.get_favorite_artists().await.unwrap();
+
+    assert!(
+        artists.is_empty(),
+        "an empty signed-in library must not fall back to the sample artists: {artists:?}"
+    );
+    let calls = stub.calls();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(
+        calls[0].0,
+        "https://api.music.apple.com/v1/me/library/artists"
+    );
+    assert_eq!(
+        calls[1].0,
+        "https://api.music.apple.com/v1/me/library/albums"
+    );
+}
+
 #[tokio::test]
 async fn get_albums_by_artist_uses_the_rest_library_when_signed_in() {
     let stub = StubTransport::returning_bodies(&[
