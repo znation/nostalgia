@@ -89,7 +89,7 @@ box, so Ctrl+F there is a no-op.
 `.id(BROWSE_SEARCH_ID)` by `views::browse::view_search_box` (used by the re-exported
 `views::browse::view_search_row`), gives the text input a stable focus target.
 `Message::FocusSearch` in `src/ui/message.rs` is routed by `src/ui/mod.rs` to
-`browse::focus_search` in `src/ui/handlers/browse.rs`, which returns
+`browse::search::focus_search` in `src/ui/handlers/browse/search.rs`, which returns
 `iced::widget::operation::focus(BROWSE_SEARCH_ID)` and mutates no player state.
 `shortcuts::shortcut` in `src/ui/shortcuts.rs` claims a Control-held `f` before its
 Control/Alt/Logo chord guard, while leaving Alt+F and Logo+F to the window manager.
@@ -114,7 +114,8 @@ to its top — while leaving the search-result rows in the songs buffer and sche
 playback. Shade mode builds no search row, so it has no Clear button.
 
 **Enforced by.** `Message::ClearSearch` in `src/ui/message.rs` is routed by `src/ui/mod.rs` to
-`browse::clear_search` in `src/ui/handlers/browse.rs`; that handler empties `search_query` and,
+`browse::search::clear_search` in `src/ui/handlers/browse/search.rs`; that handler empties
+`search_query` and,
 only while `search_active` is set, delegates to `handlers::browse::back`, which is what makes the
 active case identical to the Back button. `views::browse::view_clear_search_button` renders the
 button and `views::browse::view_search_row` places it after the search box; `view_search_row` is
@@ -325,9 +326,9 @@ behavior, and playback, selection, sorting, row text, and audio behavior are unc
 `src/ui/views/browse/rows.rs` are the one pitch and padding `scrollable_list` lays its rows
 out with, and `scrollable_list` flattens title line breaks and clips each title to its
 column, so every row keeps that pitch and stays inside its column;
-`handlers::browse::scroll_browse_to_row` in `src/ui/handlers/browse.rs` schedules the
-`iced::widget::operation::scroll_to` absolute offset, and
-`handlers::browse::scroll_browse_to_playing_row` gates it on the current view.
+`handlers::browse::scroll::scroll_browse_to_row` in `src/ui/handlers/browse/scroll.rs` schedules
+the `iced::widget::operation::scroll_to` absolute offset, and
+`handlers::browse::scroll::scroll_browse_to_playing_row` gates it on the current view.
 `handlers::playback::step_track` and
 `handlers::playback::preview::playback_finished` batch that scroll with their `TrackSelected`,
 so Next, Previous, a shuffled retrace, and a natural preview end all follow the landed row.
@@ -362,8 +363,9 @@ captures Backspace. Ctrl/Alt/Logo chords with Home, End, Page Up, or Page Down s
 `Message::ScrollBrowseToTop`, `End` to `Message::ScrollBrowseToBottom`, `Page Down` to
 `Message::ScrollBrowsePageDown`, and `Page Up` to `Message::ScrollBrowsePageUp` after its
 Control/Alt/Logo chord guard. `src/ui/mod.rs` routes the four messages to
-`handlers::browse::scroll_browse_to_top`/`_bottom` and `scroll_browse_page_up`/`_down`. The snap
-handlers in `src/ui/handlers/browse.rs` share a `snap_to` call, while the page handlers share
+`handlers::browse::scroll::scroll_browse_to_top`/`_bottom` and `scroll_browse_page_up`/`_down`.
+The snap handlers in `src/ui/handlers/browse/scroll.rs` share a `snap_to` call, while the page
+handlers share
 `scroll_browse_by`, which calls iced's `scroll_by` with `y = ±views::BROWSE_PAGE_HEIGHT`; both
 target the stable `views::BROWSE_LIST_ID` that every `views::browse::scrollable_list` carries.
 

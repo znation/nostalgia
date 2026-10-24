@@ -121,10 +121,11 @@ fn boot(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> (WinampPlaye
 /// `handlers::playback`; the seek drag and release and the backend polls in
 /// `handlers::playback::preview`; the volume, balance, seek nudges, the
 /// equalizer, and the equalizer panel's show/hide toggle in `handlers::mixer`;
-/// the browse hierarchy, the Back, Open, Top, Sort, and Reload navigation, and
-/// the library search with its Clear button in `handlers::browse`, and the
-/// initial load and fetch results in `handlers::browse::fetch`; and the custom
-/// title bar's window
+/// the browse hierarchy, the Back, Open, Top, Sort, and Reload navigation in
+/// `handlers::browse`, the library search with its Clear button in
+/// `handlers::browse::search`, the list's scroll operations in
+/// `handlers::browse::scroll`, and the initial load and fetch results in
+/// `handlers::browse::fetch`; and the custom title bar's window
 /// actions in `handlers::window`. The table carries no behavior of its own,
 /// so a change to one concern stays in that concern's module.
 fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
@@ -194,19 +195,19 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         }
         Message::OpenSelected => handlers::browse::open_selected(player),
         Message::Back => handlers::browse::back(player),
-        Message::ScrollBrowseToTop => handlers::browse::scroll_browse_to_top(),
-        Message::ScrollBrowseToBottom => handlers::browse::scroll_browse_to_bottom(),
-        Message::ScrollBrowsePageUp => handlers::browse::scroll_browse_page_up(),
-        Message::ScrollBrowsePageDown => handlers::browse::scroll_browse_page_down(),
+        Message::ScrollBrowseToTop => handlers::browse::scroll::scroll_browse_to_top(),
+        Message::ScrollBrowseToBottom => handlers::browse::scroll::scroll_browse_to_bottom(),
+        Message::ScrollBrowsePageUp => handlers::browse::scroll::scroll_browse_page_up(),
+        Message::ScrollBrowsePageDown => handlers::browse::scroll::scroll_browse_page_down(),
         Message::SortBrowse => handlers::browse::sort_browse(player),
         Message::ReloadLibrary => handlers::browse::reload_library(player),
         Message::ShowAllSongs => handlers::browse::show_all_songs(player),
         Message::ShowAllAlbums => handlers::browse::show_all_albums(player),
         Message::ShowPlaylists => handlers::browse::show_playlists(player),
-        Message::SearchChanged(text) => handlers::browse::search_changed(player, text),
-        Message::SearchSubmitted => handlers::browse::search_submitted(player),
-        Message::FocusSearch => handlers::browse::focus_search(),
-        Message::ClearSearch => handlers::browse::clear_search(player),
+        Message::SearchChanged(text) => handlers::browse::search::search_changed(player, text),
+        Message::SearchSubmitted => handlers::browse::search::search_submitted(player),
+        Message::FocusSearch => handlers::browse::search::focus_search(),
+        Message::ClearSearch => handlers::browse::search::clear_search(player),
         Message::LoadArtists => handlers::browse::fetch::load_artists(player),
         Message::ArtistsLoaded(artists) => handlers::browse::fetch::artists_loaded(player, artists),
         Message::AlbumsLoaded(albums) => handlers::browse::fetch::albums_loaded(player, albums),

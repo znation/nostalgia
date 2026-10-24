@@ -3,8 +3,9 @@
 //!
 //! Each handler writes only the list its request named. `browse_reply`
 //! re-checks the request generation on the UI thread before dispatching, so a
-//! superseded reply cannot overwrite a newer list. The navigation and search
-//! that issue these fetches live in the parent [`super`] module.
+//! superseded reply cannot overwrite a newer list. The navigation that issues
+//! these fetches lives in the parent [`super`] module, and the search in
+//! [`super::search`].
 
 use iced::Task;
 

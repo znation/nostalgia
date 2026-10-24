@@ -187,7 +187,7 @@ pub(in crate::ui) fn step_track(player: &mut WinampPlayer, forward: bool) -> Tas
                 Task::done(Message::TrackSelected { epoch, index }),
                 // Keep the landed row in view: Next and Previous (including
                 // Shuffle's retrace) can step outside the visible list.
-                super::browse::scroll_browse_to_playing_row(player, index),
+                super::browse::scroll::scroll_browse_to_playing_row(player, index),
             ]),
             None => Task::none(),
         },

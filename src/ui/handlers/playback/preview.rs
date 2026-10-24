@@ -186,7 +186,7 @@ pub(in crate::ui) fn playback_finished(
             }),
             // A natural preview end follows the advanced row exactly as Next
             // does, so keep that row in view too.
-            super::super::browse::scroll_browse_to_playing_row(player, index),
+            super::super::browse::scroll::scroll_browse_to_playing_row(player, index),
         ]),
         None => stop(player),
     }

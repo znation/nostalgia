@@ -1,8 +1,8 @@
 //! The browse message handlers: the artist → album → song hierarchy, the flat
 //! whole-library lists, and the Back, Open, Top, Sort, and Reload navigation
-//! over every level, plus the library search and its Clear button. The initial
-//! load and the fetch results that fill the lists live in the [`fetch`]
-//! submodule.
+//! over every level. The initial load and the fetch results that fill the
+//! lists live in the [`fetch`] submodule, the list's scroll operations in
+//! [`scroll`], and the library search and its Clear button in [`search`].
 //!
 //! Every fetch clears the list it refills before it goes out, so a press
 //! during the fetch cannot resolve against the previous level's rows, and
@@ -12,10 +12,11 @@
 use iced::Task;
 
 use crate::ui::loading::fetch_level;
-use crate::ui::views;
 use crate::ui::{CurrentView, Message, SongsOrigin, WinampPlayer};
 
 pub(in crate::ui) mod fetch;
+pub(in crate::ui) mod scroll;
+pub(in crate::ui) mod search;
 
 /// An artist's row was pressed: step down to the Albums level and fetch that
 /// artist's albums. As with `TrackSelected`, the row message carries the
@@ -249,88 +250,9 @@ pub(in crate::ui) fn back(player: &mut WinampPlayer) -> Task<Message> {
             // reopened, so neither can be the list being restored.
             CurrentView::Songs | CurrentView::AllSongs => {}
         }
-        scroll_browse_to_top()
+        scroll::scroll_browse_to_top()
     } else {
         Task::none()
-    }
-}
-
-/// Snap the showing browse list to `offset` through its stable widget id.
-/// The list carries `views::BROWSE_LIST_ID` whichever level is showing, so
-/// one operation serves the Top button, the Home and End keys, and every
-/// navigation that opens a fresh list.
-fn snap_browse_list(offset: iced::widget::scrollable::RelativeOffset) -> Task<Message> {
-    iced::widget::operation::snap_to(views::BROWSE_LIST_ID, offset)
-}
-
-/// The browse view's Top button and the Home key: snap the current list back
-/// to its first row. This touches only the list's scroll offset; it changes
-/// no rows, selection, view, search state, or playback.
-pub(in crate::ui) fn scroll_browse_to_top() -> Task<Message> {
-    snap_browse_list(iced::widget::scrollable::RelativeOffset::START)
-}
-
-/// The End key's counterpart to [`scroll_browse_to_top`]: snap the current
-/// list to its last row. Like Home it touches only the list's scroll offset;
-/// it changes no rows, selection, view, search state, or playback.
-pub(in crate::ui) fn scroll_browse_to_bottom() -> Task<Message> {
-    snap_browse_list(iced::widget::scrollable::RelativeOffset::END)
-}
-
-/// Scroll the showing browse list by `delta` vertical pixels through its
-/// stable widget id. Unlike the absolute [`scroll_browse_to_row`], the step is
-/// relative to the list's current offset. It touches only the scroll offset
-/// and has no target in shade mode, where no browse list is built.
-fn scroll_browse_by(delta: f32) -> Task<Message> {
-    iced::widget::operation::scroll_by(
-        views::BROWSE_LIST_ID,
-        iced::widget::scrollable::AbsoluteOffset { x: 0.0, y: delta },
-    )
-}
-
-/// The Page Up key: scroll the current list back by one
-/// [`views::BROWSE_PAGE_HEIGHT`], relative to where it sits now. Like Home and
-/// End it changes no rows, selection, view, search state, or playback, and
-/// iced clamps a page that would pass the list's top.
-pub(in crate::ui) fn scroll_browse_page_up() -> Task<Message> {
-    scroll_browse_by(-views::BROWSE_PAGE_HEIGHT)
-}
-
-/// The Page Down key's counterpart to [`scroll_browse_page_up`]: scroll the
-/// current list forward by one [`views::BROWSE_PAGE_HEIGHT`], relative to
-/// where it sits now. It likewise touches only the scroll offset, and iced
-/// clamps a page that would pass the list's end.
-pub(in crate::ui) fn scroll_browse_page_down() -> Task<Message> {
-    scroll_browse_by(views::BROWSE_PAGE_HEIGHT)
-}
-
-/// Scroll the browse list so its row `index` starts at the viewport's top
-/// edge. The absolute offset is the list's top padding plus the row's
-/// laid-out pitch times its position; iced clamps it to the list's content,
-/// so a row near the end scrolls only as far as the list allows and a short
-/// list simply stays put.
-pub(in crate::ui) fn scroll_browse_to_row(index: usize) -> Task<Message> {
-    iced::widget::operation::scroll_to(
-        views::BROWSE_LIST_ID,
-        iced::widget::scrollable::AbsoluteOffset {
-            x: None,
-            y: Some(views::BROWSE_LIST_PADDING + index as f32 * views::BROWSE_ROW_HEIGHT),
-        },
-    )
-}
-
-/// Keep the stepped-to playing row visible: scroll the browse list to `index`
-/// only while a song list (`Songs` or `AllSongs`) is showing, since those are
-/// the levels whose rows carry the `▶` playing marker. Another browse level
-/// leaves the list where it is, and so does a direct row press — the pressed
-/// row is already in view — which deliberately does not call this.
-pub(in crate::ui) fn scroll_browse_to_playing_row(
-    player: &WinampPlayer,
-    index: usize,
-) -> Task<Message> {
-    match player.current_view {
-        CurrentView::Songs | CurrentView::AllSongs => scroll_browse_to_row(index),
-        _ => Task::none(),
     }
 }
 
@@ -392,65 +314,6 @@ pub(in crate::ui) fn show_playlists(player: &mut WinampPlayer) -> Task<Message> 
     ))
 }
 
-/// The library search box: each keystroke is stored here and the search box
-/// renders it back.
-pub(in crate::ui) fn search_changed(player: &mut WinampPlayer, text: String) -> Task<Message> {
-    player.search_query = text;
-    Task::none()
-}
-
-/// Ctrl+F was pressed: move keyboard focus to the library search box through
-/// its `views::BROWSE_SEARCH_ID` widget id. The handler mutates no state and
-/// submits nothing; typing into the focused box then edits the query exactly
-/// as a click does. In shade mode the box is not in the widget tree, so the
-/// focus operation finds no matching focusable and the key is a no-op.
-pub(in crate::ui) fn focus_search() -> Task<Message> {
-    iced::widget::operation::focus(views::BROWSE_SEARCH_ID)
-}
-
-/// The Clear button beside the search box: empty the typed query and, when a
-/// search is showing, leave it exactly as Back does.
-///
-/// Reusing [`back`] for the active case is what makes it identical to the
-/// Back button: it deactivates the search, switches to Artists, restores the
-/// artists list's library order, and snaps the list to its top. The inactive
-/// case mutates only the query, so it schedules no fetch or scroll. Neither
-/// case refetches or clears any browse rows, and neither touches playback.
-pub(in crate::ui) fn clear_search(player: &mut WinampPlayer) -> Task<Message> {
-    player.search_query.clear();
-    if player.search_active {
-        back(player)
-    } else {
-        Task::none()
-    }
-}
-
-/// The library search box submitted: take the stored text when Enter is
-/// pressed and replace the songs list with the search results.
-pub(in crate::ui) fn search_submitted(player: &mut WinampPlayer) -> Task<Message> {
-    // A blank query has nothing to match: `search_songs` rejects it,
-    // and issuing the fetch would only turn the empty box into an
-    // error report. Leave the current list and view alone.
-    let query = player.search_query.trim().to_string();
-    if query.is_empty() {
-        return Task::none();
-    }
-    player.search_query = query.clone();
-    player.search_active = true;
-    player.current_view = CurrentView::Songs;
-    // The search results reuse the songs buffer, so the previous list's
-    // rows are dropped and a press during the fetch cannot resolve
-    // against them (the same clear-before-fetch the navigation handlers do).
-    fetch_at_top(fetch_level(
-        &mut player.songs,
-        &player.apple_music_service,
-        format!("searching the library for {query:?}"),
-        move |service| async move { service.search_songs(&query).await },
-        Message::SongsLoaded,
-        Message::SongsLoadFailed,
-    ))
-}
-
 /// The browse view's Sort button was pressed: reorder the currently showing
 /// list alphabetically by each row's rendered text, case-insensitively.
 ///
@@ -498,6 +361,6 @@ pub(in crate::ui) fn reload_library(player: &mut WinampPlayer) -> Task<Message> 
 /// Navigation replaces the visible list, so leaving the new level at the
 /// previous list's scroll offset would hide its first rows; batching the
 /// scroll with the fetch keeps the two one operation from the update loop.
-fn fetch_at_top(task: Task<Message>) -> Task<Message> {
-    Task::batch([task, scroll_browse_to_top()])
+pub(super) fn fetch_at_top(task: Task<Message>) -> Task<Message> {
+    Task::batch([task, scroll::scroll_browse_to_top()])
 }
