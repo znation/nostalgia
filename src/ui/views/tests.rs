@@ -1,8 +1,8 @@
 use super::super::{CurrentView, Message, style, theme};
 use super::browse::BROWSE_VIEWS;
 use super::browse::rows::{
-    album_count_label, album_row, artist_row, browse_placeholder, current_row_style,
-    empty_list_label, list_count_summary, playlist_row, row_prefix, scrollable_list,
+    album_count_label, album_row, artist_row, browse_placeholder, empty_list_label,
+    highlighted_row_style, list_count_summary, playlist_row, row_prefix, scrollable_list,
     song_list_summary, song_row,
 };
 use super::equalizer::{
@@ -1889,15 +1889,15 @@ fn song_list_summary_truncates_a_sub_second_total() {
     assert_eq!(song_list_summary(&[summary_song(1_999)]), "1 song - 0:01");
 }
 
-// The currently playing row is marked by a selection bar. iced's `Element`
-// API exposes no way to read a built `Button`'s style, and the row-style
-// closure only runs at render time, so building the marked row (above)
-// never executes the override. `current_row_style` is the pure seam that
-// pins it: every hover/press state keeps the highlight background rather
-// than the unmarked row's face ladder, and the row's light text is kept so
-// the title stays legible on the bar.
+// The playing and selected rows share a selection-bar highlight. iced's
+// `Element` API exposes no way to read a built `Button`'s style, and the
+// row-style closure only runs at render time, so building the marked row
+// (above) never executes the override. `highlighted_row_style` is the pure
+// seam that pins it: every hover/press state keeps the highlight background
+// rather than the unmarked row's face ladder, and the row's light text is
+// kept so the title stays legible on the bar.
 #[test]
-fn current_row_style_paints_the_selection_bar_over_every_row_state() {
+fn highlighted_row_style_paints_the_selection_bar_over_every_row_state() {
     use iced::widget::button::Status;
 
     for status in [
@@ -1906,10 +1906,10 @@ fn current_row_style_paints_the_selection_bar_over_every_row_state() {
         Status::Pressed,
         Status::Disabled,
     ] {
-        let marked = current_row_style(status);
+        let marked = highlighted_row_style(status);
         assert_eq!(
             marked.background,
-            Some(iced::Background::Color(theme::PLAYING_ROW_HIGHLIGHT))
+            Some(iced::Background::Color(theme::ROW_HIGHLIGHT))
         );
         assert_eq!(
             marked.text_color,
@@ -1920,7 +1920,7 @@ fn current_row_style_paints_the_selection_bar_over_every_row_state() {
     // The bar must differ from the unmarked resting row, or the marker
     // would be invisible against the well.
     assert_ne!(
-        current_row_style(Status::Active).background,
+        highlighted_row_style(Status::Active).background,
         style::playlist_row_style(Status::Active).background
     );
 }

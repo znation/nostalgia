@@ -1,5 +1,5 @@
 //! Browse row mapping and list construction: the placeholder wording, the row
-//! prefix and current-row highlight, the scrollable list, the per-level row
+//! prefix and highlight, the scrollable list, the per-level row
 //! mappings, and the count and playing-time footers.
 //!
 //! These are the pure pieces the public browse views in the parent module
@@ -73,16 +73,16 @@ pub(in crate::ui::views) fn browse_placeholder<'a>(
     }
 }
 
-/// The style for a browse row that is currently playing: the flat
-/// [`style::playlist_row_style`] with its background forced to
-/// [`theme::PLAYING_ROW_HIGHLIGHT`], so the playing row reads as a
+/// The style for a highlighted browse row — the currently playing row or the
+/// selected row: the flat [`style::playlist_row_style`] with its background
+/// forced to [`theme::ROW_HIGHLIGHT`], so a highlighted row reads as a
 /// selection bar in every hover/press state instead of following the row's
 /// face ladder under the cursor. Pure, so the highlight — which iced's
 /// `Element` API gives no way to read back from the built `Button`, and whose
 /// closure runs only at render time — is testable.
-pub(in crate::ui::views) fn current_row_style(status: button::Status) -> button::Style {
+pub(in crate::ui::views) fn highlighted_row_style(status: button::Status) -> button::Style {
     let mut row = style::playlist_row_style(status);
-    row.background = Some(Background::Color(theme::PLAYING_ROW_HIGHLIGHT));
+    row.background = Some(Background::Color(theme::ROW_HIGHLIGHT));
     row
 }
 
@@ -213,7 +213,7 @@ pub(in crate::ui::views) fn scrollable_list<'a>(
         // hover/press face and only swap the background for the highlight
         // color; the prefix already distinguishes the current track.
         column = column.push(if is_current || selected == Some(position) {
-            button.style(|_theme, status| current_row_style(status))
+            button.style(|_theme, status| highlighted_row_style(status))
         } else {
             button
         });

@@ -39,9 +39,9 @@ pub const LCD_GREEN_DIM: Color = Color::from_rgb(0.0, 0.35, 0.0);
 /// that tells Stop apart from the green playing and paused glyphs.
 pub const LCD_RED: Color = Color::from_rgb(1.0, 0.1, 0.1);
 
-/// The highlight color behind the currently playing row in a Songs list,
-/// echoing Winamp's playlist selection bar (a saturated blue).
-pub const PLAYING_ROW_HIGHLIGHT: Color = Color::from_rgb(0.25, 0.5, 1.0);
+/// The highlight color behind the playing row and the selected row in a browse
+/// list, echoing Winamp's playlist selection bar (a saturated blue).
+pub const ROW_HIGHLIGHT: Color = Color::from_rgb(0.25, 0.5, 1.0);
 
 /// The light top/left edge of a raised panel bevel, and the dark bottom/right
 /// edge of a sunken one.
@@ -153,8 +153,8 @@ mod tests {
         assert_ne!(palette.danger, palette.success);
     }
 
-    // The palette tests above read the six palette slots. The playing-row
-    // highlight and the LCD well's recess are the two base-skin colors
+    // The palette tests above read the six palette slots. The row highlight
+    // and the LCD well's recess are the two base-skin colors
     // painted from constants no test reads at all: `views::browse::rows::scrollable_list`
     // and `bevel::lcd_well` apply them inside inline style closures, which
     // iced's `Element` API exposes no way to introspect. Their RGB values are
@@ -164,9 +164,9 @@ mod tests {
     // than the window face it recesses into, and the highlight stands apart
     // from both.
     #[test]
-    fn panel_recess_and_playing_row_highlight_keep_their_base_skin_colors() {
+    fn panel_recess_and_row_highlight_keep_their_base_skin_colors() {
         assert_eq!(LCD_BACKGROUND, Color::from_rgb(0.05, 0.05, 0.05));
-        assert_eq!(PLAYING_ROW_HIGHLIGHT, Color::from_rgb(0.25, 0.5, 1.0));
+        assert_eq!(ROW_HIGHLIGHT, Color::from_rgb(0.25, 0.5, 1.0));
 
         // The recess reads as sunken only if it is darker than the face it
         // sits in. Bound to locals so the comparison is a runtime check rather
@@ -178,8 +178,8 @@ mod tests {
         assert!(recess.b < face.b);
 
         // The selection bar must stand out from the window face and the well.
-        assert_ne!(PLAYING_ROW_HIGHLIGHT, WINDOW_BACKGROUND);
-        assert_ne!(PLAYING_ROW_HIGHLIGHT, LCD_BACKGROUND);
+        assert_ne!(ROW_HIGHLIGHT, WINDOW_BACKGROUND);
+        assert_ne!(ROW_HIGHLIGHT, LCD_BACKGROUND);
     }
 
     // The tests above read each palette slot against the named constant that
