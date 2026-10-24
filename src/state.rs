@@ -702,6 +702,17 @@ mod tests {
         assert_eq!(state.volume(), 0.0);
     }
 
+    #[test]
+    fn nudge_volume_with_a_nan_delta_falls_to_silence_like_set_volume() {
+        // The sum is NaN, so `set_volume`'s clamp applies its silence
+        // fallback rather than leaving the old volume or storing the NaN.
+        let mut state = AppState::default();
+        state.set_volume(0.5);
+
+        state.nudge_volume(f32::NAN);
+        assert_eq!(state.volume(), 0.0);
+    }
+
     // `set_volume` is a mutation `assert_keeps_track_and_volume` cannot guard
     // (neither can `nudge_volume`), because volume is the field that helper
     // holds constant. Its three
