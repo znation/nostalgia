@@ -12,16 +12,16 @@ not only in the Fixed entry.
 
 ### The largest test modules are flat files, so a failure's fixtures are far from the test (found by the steward role 2026-10-24)
 
-**Symptom.** The five largest test modules are single flat files with no inner `mod` splits: `src/ui/tests.rs`
-(8,769 lines), `src/ui/views/tests.rs` (3,190), `src/apple_music/tests.rs` (3,185),
-`src/music_kit_auth/tests.rs` (1,816), and `src/apple_music/rest/tests.rs` (1,734). A test in
+**Symptom.** Four test modules are still single flat files with no inner `mod` splits: `src/ui/tests.rs`
+(9,087 lines), `src/ui/views/tests.rs` (3,613), `src/apple_music/tests.rs` (3,185), and
+`src/music_kit_auth/tests.rs` (1,840). A test in
 `src/ui/tests.rs` can sit thousands of lines from the fixture it uses, so finding that fixture means
 grepping or scanning the whole file, and a full read costs most of a role's reading budget. Concurrent
 worktrees also keep adding tests to the same file, so their merges collide there. This is a
 maintainability risk, not a runtime defect: nothing fails because of it today.
 
 **How to reproduce.** `wc -l` on the paths above reports those lengths, and
-`grep -c '^\s*mod '` reports 0 for each of the five, so none is split by concern.
+`grep -c '^\s*mod '` reports 0 for each of the four, so none is split by concern (re-measured 2026-10-24).
 
 **Suspected cause.** Each `tests.rs` grew by appending tests for every feature that landed in its module;
 nothing divides it into submodules the way the production code is divided, so the file keeps growing
@@ -30,7 +30,7 @@ without a boundary that prompts a split.
 **Direction.** When a bug is next hard to locate inside one of these files, split that module by concern
 (for example browse, playback, settings, and layout tests) into sibling submodules or a `tests/`
 directory, keeping shared fixtures in `test_support`. Split the file that is being worked in rather than
-all five at once, and move tests without changing their assertions.
+all four at once, and move tests without changing their assertions.
 
 **Progress.** `src/audio/tests.rs`, `src/apple_music/rest/tests.rs`, and `src/music_kit_auth/tests.rs` are now split into `tests/` directories by concern (the last into `bootstrap`, `tokens`, `authorize`, `http_request`, `server`, and `opener`, with shared helpers in `mod.rs`), tests moved without changing assertions. Still flat: `src/ui/tests.rs`, `src/ui/views/tests.rs`, and `src/apple_music/tests.rs`; split each when next worked in.
 
