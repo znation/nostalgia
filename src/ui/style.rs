@@ -16,6 +16,9 @@ use iced::{
 use super::bevel::bevel_edges;
 use super::theme;
 
+mod level_tint;
+pub use level_tint::{balance_level_color, volume_level_color};
+
 /// A 1px square-cornered [`Border`] in `color`.
 ///
 /// The base skin's chrome edges are square 1px outlines; iced's [`Border`]

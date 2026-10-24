@@ -21,7 +21,7 @@ use iced::{
 };
 
 use crate::state::TransportMode;
-use crate::ui::{Message, bevel, theme};
+use crate::ui::{Message, bevel, style, theme};
 
 use super::{
     VOLUME_MAX, VOLUME_MIN, VOLUME_STEP, chrome_slider, fixed_width_button, spacer,
@@ -201,7 +201,7 @@ fn mini_transport_row_with_optional_seek<'a>(
 }
 
 /// The compact row's volume slider, built from [`mini_volume_spec`] and
-/// painting the shared [`theme::VOLUME_SLIDER_FILL`] groove.
+/// tinting its groove with [`style::volume_level_color`].
 fn mini_volume_slider(volume: f32) -> Element<'static, Message> {
     let (min, max, step, width, on_change) = mini_volume_spec();
     chrome_slider(
@@ -210,7 +210,7 @@ fn mini_volume_slider(volume: f32) -> Element<'static, Message> {
         volume,
         step,
         width,
-        theme::VOLUME_SLIDER_FILL,
+        style::volume_level_color(volume),
         on_change,
     )
 }

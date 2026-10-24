@@ -77,7 +77,7 @@ time (`-02:37`) and back; the choice stays until clicked again. The compact read
 footer and the shade strip are click targets too while playing or paused, switching the same mode;
 a stopped readout ignores the click. The bar sits above Previous,
 Play/Pause, Stop, and Next glyph controls with word tooltips, then the Repeat and Shuffle
-toggles, a volume slider over an orange groove and a balance slider over a green groove,
+toggles, a volume slider whose groove runs from green when silent through orange at half volume to red at full volume, a balance slider whose groove is green at center and reddens toward either side,
 an equalizer panel (an EQ on/off button, a preset pick list, a response curve above ten band
 sliders, with a vertical preamp slider and a `+12 dB` / `0 dB` / `-12 dB` scale to their left),
 and a browse list whose song rows read `artist - title` (or the title alone when the source

@@ -8,7 +8,7 @@ use iced::{
     widget::{Button, Row, Text, Tooltip, tooltip},
 };
 
-use crate::ui::{Message, style, theme};
+use crate::ui::{Message, style};
 
 use super::{
     BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, VOLUME_MAX, VOLUME_MIN, VOLUME_STEP, chrome_slider,
@@ -188,7 +188,7 @@ pub fn view_transport_controls(
         volume,
         VOLUME_STEP,
         100.0,
-        theme::VOLUME_SLIDER_FILL,
+        style::volume_level_color(volume),
         Message::VolumeChange,
     ))
     .push(chrome_slider(
@@ -197,7 +197,7 @@ pub fn view_transport_controls(
         balance,
         BALANCE_STEP,
         100.0,
-        theme::BALANCE_SLIDER_FILL,
+        style::balance_level_color(balance),
         Message::BalanceChange,
     ))
     .push(spacer(20.0))

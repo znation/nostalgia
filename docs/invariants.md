@@ -710,18 +710,27 @@ used by `views::view_equalizer` in `src/ui/views/equalizer.rs`.
 ## Level slider fill
 
 **Guarantee.** The transport volume slider and the shade-mode volume slider paint both halves of
-their rail `theme::VOLUME_SLIDER_FILL` (the mockup's orange), and the transport balance slider
-paints both halves in `theme::BALANCE_SLIDER_FILL` (the mockup's green). Both rail halves carry
+their rail `style::volume_level_color(volume)`: `theme::EQ_GAIN_LOW` (green) at 0.0,
+`theme::VOLUME_SLIDER_FILL` (the mockup's orange) exactly at 0.5, and `theme::EQ_GAIN_HIGH` (red)
+at 1.0. The transport balance slider paints both halves in `style::balance_level_color(balance)`:
+`theme::BALANCE_SLIDER_FILL` (the mockup's green) exactly at center, `theme::EQ_GAIN_HIGH` at
+either extreme, symmetric left and right. Both rail halves carry
 the fill in every interaction status, so no gray segment remains on either side of the thumb.
 The chrome thumb, the 4px rail width, the 1px dark rail border, and the square geometry are
 unchanged from `chrome_slider_style`, and hover and drag still change only the handle face. The
 seek bar and the equalizer preamp keep the neutral `theme::LCD_BACKGROUND` groove.
 
 **Enforced by.** `style::level_slider_style` in `src/ui/style.rs`, used by `views::chrome_slider`
-in `src/ui/views/mod.rs` (the transport row and shade strip pass their fills there).
+in `src/ui/views/mod.rs` (the transport row and shade strip pass their fills there), with the
+fills computed in `src/ui/style/level_tint.rs`.
 
 **Pinned by.** `base_skin_colors_keep_their_documented_literal_values` in `src/ui/theme.rs` and
-`level_slider_style_paints_both_rail_halves_and_keeps_the_chrome_thumb` in `src/ui/style.rs`.
+`level_slider_style_paints_both_rail_halves_and_keeps_the_chrome_thumb` in `src/ui/style.rs`, and
+in `src/ui/style/level_tint.rs` the tests `volume_color_hits_its_three_stops_exactly`,
+`volume_color_clamps_and_maps_nan_to_silence`,
+`volume_color_between_stops_lies_between_neighbours`,
+`balance_color_is_green_at_center_and_red_at_the_sides`, `balance_color_is_symmetric`, and
+`level_colors_are_opaque`.
 
 **History.** The fill is presentation-only: slider ranges, steps, messages, thumb geometry, and
 playback behavior are unchanged.
