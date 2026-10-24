@@ -536,7 +536,7 @@ refresh does not re-join and reformat every row.
   `view` draws the whole normal-mode library column — the `NOSTALGIA LIBRARY` band, the
   Back/Retry/Open/Top/Sort/Reload and flat-list buttons, the search row, the browse list, and
   the library footer — exactly when `WinampPlayer::library_panel_visible` holds. The library
-  section is open at launch, the flag is not persisted, and hiding it keeps the title bar, Now
+  section is open on a first launch, the flag is saved per `## Settings persistence`, and hiding it keeps the title bar, Now
   Playing bar, seek bar, transport row, and equalizer section drawn without changing any
   playback, equalizer, browse, search, selection, or window-size state.
 - The equalizer band row puts the vertical preamp slider leftmost, then the `+12 DB` / `0 DB` /
@@ -615,20 +615,21 @@ library column (2026-10-24).
 
 **Guarantee.** The values the user sets that outlive a track — volume, balance, Repeat, Shuffle, the
 equalizer's on/off state, preamp, ten band gains, and selected preset, the large readout's
-elapsed/remaining choice, the visualizer's shown/hidden choice, and the LCD strip's always-on-top
-choice — are loaded once before the
+elapsed/remaining choice, the visualizer's shown/hidden choice, the equalizer and library panels' shown/hidden choices,
+and the LCD strip's always-on-top choice — are loaded once before the
 first view is drawn and rewritten after any update that changes their snapshot. An update that
 leaves the snapshot unchanged writes nothing. Reads and writes go through the state's clamped
 setters, so out-of-range values from a file cannot push shared state outside its documented ranges.
 A missing or unreadable file, or a malformed line, falls back per key without failing startup; an
 unwritable file is logged rather than crashing the player. The readout mode, the visualizer's
-shown/hidden choice, and the always-on-top choice are the three persisted values not held in
-`AppState`: they live on `WinampPlayer::time_display`, `WinampPlayer::visualizer_visible`, and
+shown/hidden choice, the two panel choices, and the always-on-top choice are the five persisted values not held in
+`AppState`: they live on `WinampPlayer::time_display`, `WinampPlayer::visualizer_visible`,
+`WinampPlayer::eq_panel_visible`, `WinampPlayer::library_panel_visible`, and
 `WinampPlayer::always_on_top`, `main` passes the loaded snapshot through to
-`WinampPlayer::adopt_saved_settings` (which restores all three before the first view), and
+`WinampPlayer::adopt_saved_settings` (which restores all five before the first view), and
 `persist_settings_if_changed` copies them into the snapshot before comparing and saving. A missing
 or malformed `time_display` line falls back to elapsed, a missing or malformed `always_on_top` line
-falls back to unpinned, and a missing or malformed `visualizer_visible` line falls back to shown.
+falls back to unpinned, and a missing or malformed `visualizer_visible`, `eq_panel_visible`, or `library_panel_visible` line falls back to shown.
 The classic `A` key reaches the same `Message::ToggleAlwaysOnTop` arm through
 `shortcuts::message_for`, so it flips the flag and schedules the same window-level call as the
 on-screen A controls. The saved always-on-top level waits for the window id every other window
@@ -646,11 +647,11 @@ file's text is parsed by `Settings::from_text`, which ignores unknown keys and m
 per key, and `apply_to` writes through `AppState::set_volume`, `set_balance`, `set_eq_preamp`, and
 `set_eq_band` before restoring a preset through `apply_eq_preset`. `ui::init_ui` attaches the
 store to `WinampPlayer` and restores the snapshot through
-`WinampPlayer::adopt_saved_settings`, which restores `time_display`, `visualizer_visible`, and
-`always_on_top` and
+`WinampPlayer::adopt_saved_settings`, which restores `time_display`, `visualizer_visible`, `eq_panel_visible`,
+`library_panel_visible`, and `always_on_top` and
 records the snapshot; `update` calls
 `WinampPlayer::persist_settings_if_changed` once after every message, and that method copies
-the three player-owned values into `Settings::from_state`, then compares that snapshot against the
+the five player-owned values into `Settings::from_state`, then compares that snapshot against the
 last one before calling `settings::file_store::SettingsWriter::save`. Boot's `WindowIdResolved` is
 handled by
 `handlers::window::window_id_resolved`, which applies the restored level through
@@ -664,6 +665,7 @@ controls press.
 **Pinned by.** `to_text_round_trips_every_field`,
 `time_display_round_trips_both_words_and_ignores_unknown_values`,
 `visualizer_visibility_round_trips_and_ignores_malformed_values`,
+`panel_visibility_round_trips_and_ignores_malformed_values`,
 `always_on_top_round_trips_and_ignores_malformed_values`,
 `from_text_ignores_malformed_and_unknown_lines`,
 `apply_to_clamps_out_of_range_values_through_the_state_setters`,
@@ -676,6 +678,8 @@ controls press.
 `saved_time_display_mode_is_restored_on_boot`,
 `toggle_visualizer_reaches_the_saved_snapshot`,
 `saved_visualizer_visibility_is_restored_on_boot`,
+`toggle_panels_reach_the_saved_snapshot`, `saved_panel_visibility_is_restored_on_boot`,
+`shaded_eq_toggle_saves_nothing`,
 `toggle_always_on_top_reaches_the_saved_snapshot`,
 `saved_always_on_top_is_restored_on_boot`,
 `window_level_selects_always_on_top`, and
@@ -686,7 +690,8 @@ reaching the same arm is pinned by `a_toggles_always_on_top_from_the_keyboard` (
 these values in memory only and started every launch at `AppState::default()`. The readout's
 elapsed/remaining mode and the always-on-top choice joined the file later the same day. The
 visualizer's shown/hidden choice joined it with the same plan, restoring before the first view
-while the stored spectrum and its poll stay transient.
+while the stored spectrum and its poll stay transient. The equalizer and library panels'
+shown/hidden choices joined it on 2026-10-24; both previously reopened on every launch.
 
 ## Equalizer band tint
 

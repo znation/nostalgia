@@ -87,11 +87,11 @@ total running time at the right (`10:30`, or `--:--` when the source supplied no
 artist rows show their album count at the right (`2 albums`, `1 album`, and no count for an
 artist with none), with each song list showing its song count and total playing time beneath
 the rows and artist, album, and playlist lists showing their item count beneath theirs. An `EQ`
-button beside the balance slider shows and hides the equalizer panel, which is open at launch;
+button beside the balance slider shows and hides the equalizer panel, which is open on a first launch and then reopens as last left;
 hiding it gives its height to the browse list without changing EQ processing. A `PL` button
 directly beside `EQ` shows and hides the whole library section — its `NOSTALGIA LIBRARY` band,
 browse controls, search box, list, and footer — while the title bar, Now Playing bar, seek bar,
-transport row, and equalizer stay drawn; the library is open at launch, the toggle changes no
+transport row, and equalizer stay drawn; the library is open on a first launch and then reopens as last left, the toggle changes no
 playback, equalizer, browse, or search state, and it does not resize the window. A
 compact transport strip sits beneath the browse list with Previous, Play/Pause, Stop, Next,
 an elapsed-over-total time readout, and a volume slider — the window-shade strip's controls
@@ -181,7 +181,7 @@ showing list: to the next song, to the first song with Repeat on at the end, or,
 a shuffled song when another exists. With Repeat off on the last song it stops instead and keeps
 that song queued for Play. The volume, balance, Repeat and Shuffle flags, the equalizer's on/off
 state, curve, and preset, the elapsed/remaining readout choice, the visualizer's shown/hidden
-choice, and the always-on-top choice are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or
+choice, the equalizer and library panels' shown/hidden choices, and the always-on-top choice are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or
 `$HOME/.config/nostalgia/settings.ini`) and restored at the next launch; `NOSTALGIA_SETTINGS_PATH`
 overrides the path. A missing or malformed entry falls back to its default. The always-on-top choice
 (the LCD strip's `A` or the `A` key) is remembered for the next launch, and a saved-on launch starts

@@ -3,9 +3,10 @@
 //! [`Settings`] is a small snapshot of the values the player keeps while it
 //! runs: the volume, balance, Repeat and Shuffle flags, the equalizer's on/off
 //! state, preamp, band gains, and selected preset, the Now Playing readout's
-//! elapsed/remaining mode, the visualizer's shown/hidden choice, and the
-//! always-on-top flag. All but the last three live in [`AppState`]; the readout
-//! mode, visualizer choice, and always-on-top flag live on the UI's
+//! elapsed/remaining mode, the visualizer's shown/hidden choice, the equalizer
+//! and library panels' shown/hidden choices, and the always-on-top flag. All
+//! but the last five live in [`AppState`]; the readout mode, visualizer choice,
+//! panel choices, and always-on-top flag live on the UI's
 //! `WinampPlayer`, so the player sets them on its snapshot before saving and
 //! restores them after loading. The file-backed store and the writer seam
 //! live in [`file_store`].
@@ -23,14 +24,15 @@ use crate::state::AppState;
 
 /// The persisted values the next launch restores: the mixer and equalizer
 /// subset of [`AppState`] plus the UI-owned readout mode, visualizer choice,
-/// and always-on-top flag.
+/// equalizer and library panel choices, and always-on-top flag.
 ///
 /// The fields are private; build a state-backed snapshot with
 /// [`Settings::from_state`] and restore it with [`Settings::apply_to`].
-/// `time_display_remaining`, `visualizer_visible`, and `always_on_top` are not
-/// held in [`AppState`]: `from_state` leaves them elapsed, shown, and unpinned,
-/// and the player overwrites them from its own values before saving. `Default`
-/// mirrors [`AppState::default`] plus elapsed, shown, and unpinned, so if one
+/// `time_display_remaining`, `visualizer_visible`, `eq_panel_visible`,
+/// `library_panel_visible`, and `always_on_top` are not held in
+/// [`AppState`]: `from_state` leaves them elapsed, shown (all three), and
+/// unpinned, and the player overwrites them from its own values before
+/// saving. `Default` mirrors [`AppState::default`] plus elapsed, shown, and unpinned, so if one
 /// starting value changes the other must change with it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
@@ -44,6 +46,8 @@ pub struct Settings {
     eq_preset: Option<Preset>,
     time_display_remaining: bool,
     visualizer_visible: bool,
+    eq_panel_visible: bool,
+    library_panel_visible: bool,
     always_on_top: bool,
 }
 
@@ -51,7 +55,7 @@ impl Default for Settings {
     /// The same starting values as [`AppState::default`]: half volume, a
     /// centered balance, both toggles off, and the equalizer off with a flat
     /// curve and no preset, plus the elapsed readout mode, the shown
-    /// visualizer, and an unpinned window. A missing or unreadable settings
+    /// visualizer and both panels, and an unpinned window. A missing or unreadable settings
     /// file starts here.
     fn default() -> Self {
         Self {
@@ -65,6 +69,8 @@ impl Default for Settings {
             eq_preset: None,
             time_display_remaining: false,
             visualizer_visible: true,
+            eq_panel_visible: true,
+            library_panel_visible: true,
             always_on_top: false,
         }
     }
@@ -86,6 +92,8 @@ impl Settings {
             eq_preset: state.eq_preset(),
             time_display_remaining: false,
             visualizer_visible: true,
+            eq_panel_visible: true,
+            library_panel_visible: true,
             always_on_top: false,
         }
     }
@@ -121,6 +129,37 @@ impl Settings {
         self.visualizer_visible = visible;
     }
 
+    /// Whether the normal-mode equalizer panel is shown. The player owns this
+    /// value, so it reads it back when saving and restores it from the loaded
+    /// snapshot at boot. It is a layout choice only; the EQ's own state is
+    /// separate.
+    #[must_use]
+    pub fn eq_panel_visible(&self) -> bool {
+        self.eq_panel_visible
+    }
+
+    /// Set whether the equalizer panel is shown. The player calls this on its
+    /// fresh snapshot before saving; [`Self::apply_to`] deliberately leaves
+    /// the UI-owned flag alone.
+    pub fn set_eq_panel_visible(&mut self, visible: bool) {
+        self.eq_panel_visible = visible;
+    }
+
+    /// Whether the normal-mode library section is shown. The player owns this
+    /// value, so it reads it back when saving and restores it from the loaded
+    /// snapshot at boot.
+    #[must_use]
+    pub fn library_panel_visible(&self) -> bool {
+        self.library_panel_visible
+    }
+
+    /// Set whether the library section is shown. The player calls this on its
+    /// fresh snapshot before saving; [`Self::apply_to`] deliberately leaves
+    /// the UI-owned flag alone.
+    pub fn set_library_panel_visible(&mut self, visible: bool) {
+        self.library_panel_visible = visible;
+    }
+
     /// Whether the window is pinned above other windows. The player owns this
     /// value, so it reads it back when saving and restores it from the loaded
     /// snapshot at boot.
@@ -143,7 +182,7 @@ impl Settings {
     /// hand-edited file cannot push the state out of range. An applied preset
     /// is restored last through `apply_eq_preset`, after the per-band writes
     /// have cleared the selection. The UI-owned readout mode, visualizer
-    /// choice, and always-on-top flag are deliberately left alone.
+    /// choice, panel choices, and always-on-top flag are deliberately left alone.
     pub fn apply_to(&self, state: &mut AppState) {
         state.set_volume(self.volume);
         state.set_balance(self.balance);
@@ -186,6 +225,11 @@ impl Settings {
             }
         ));
         text.push_str(&format!("visualizer_visible={}\n", self.visualizer_visible));
+        text.push_str(&format!("eq_panel_visible={}\n", self.eq_panel_visible));
+        text.push_str(&format!(
+            "library_panel_visible={}\n",
+            self.library_panel_visible
+        ));
         text.push_str(&format!("always_on_top={}\n", self.always_on_top));
         text
     }
@@ -230,6 +274,11 @@ impl Settings {
                 // A malformed value leaves the default shown visualizer.
                 "visualizer_visible" => {
                     parse_into(&mut settings.visualizer_visible, value);
+                }
+                // A malformed value leaves the default shown panel.
+                "eq_panel_visible" => parse_into(&mut settings.eq_panel_visible, value),
+                "library_panel_visible" => {
+                    parse_into(&mut settings.library_panel_visible, value);
                 }
                 // A malformed value leaves the default unpinned window.
                 "always_on_top" => parse_into(&mut settings.always_on_top, value),
@@ -289,10 +338,14 @@ mod tests {
         let mut settings = Settings::from_state(&state);
         settings.set_time_display_remaining(true);
         settings.set_visualizer_visible(false);
+        settings.set_eq_panel_visible(false);
+        settings.set_library_panel_visible(false);
         settings.set_always_on_top(true);
         assert_eq!(Settings::from_text(&settings.to_text()), settings);
         assert!(Settings::from_text(&settings.to_text()).time_display_remaining());
         assert!(!Settings::from_text(&settings.to_text()).visualizer_visible());
+        assert!(!Settings::from_text(&settings.to_text()).eq_panel_visible());
+        assert!(!Settings::from_text(&settings.to_text()).library_panel_visible());
         assert!(Settings::from_text(&settings.to_text()).always_on_top());
 
         let custom = Settings {
@@ -347,6 +400,32 @@ mod tests {
     }
 
     #[test]
+    fn panel_visibility_round_trips_and_ignores_malformed_values() {
+        let shown = Settings::default();
+        assert!(shown.eq_panel_visible());
+        assert!(shown.library_panel_visible());
+
+        let mut eq_hidden = shown.clone();
+        eq_hidden.set_eq_panel_visible(false);
+        let back = Settings::from_text(&eq_hidden.to_text());
+        assert!(!back.eq_panel_visible());
+        assert!(back.library_panel_visible());
+
+        let mut library_hidden = shown.clone();
+        library_hidden.set_library_panel_visible(false);
+        let back = Settings::from_text(&library_hidden.to_text());
+        assert!(back.eq_panel_visible());
+        assert!(!back.library_panel_visible());
+
+        let unknown = Settings::from_text("eq_panel_visible=maybe\nlibrary_panel_visible=maybe\n");
+        assert!(
+            unknown.eq_panel_visible(),
+            "an unknown value must fall back to shown"
+        );
+        assert!(unknown.library_panel_visible());
+    }
+
+    #[test]
     fn always_on_top_round_trips_and_ignores_malformed_values() {
         let unpinned = Settings::default();
         assert!(!unpinned.always_on_top());
@@ -383,6 +462,8 @@ mod tests {
                     eq_preset=Unknown\n\
                     time_display=sideways\n\
                     visualizer_visible=maybe\n\
+                    eq_panel_visible=maybe\n\
+                    library_panel_visible=maybe\n\
                     always_on_top=yes\n\
                     mystery=1\n";
         assert_eq!(Settings::from_text(text), Settings::default());

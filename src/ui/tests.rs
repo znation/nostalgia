@@ -394,6 +394,58 @@ fn saved_visualizer_visibility_is_restored_on_boot() {
     assert_eq!(player.saved_settings, Settings::default());
 }
 
+#[test]
+fn toggle_panels_reach_the_saved_snapshot() {
+    let (mut player, _state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+
+    let _ = update(&mut player, Message::ToggleEqualizerPanel);
+    let snapshots = store.snapshots();
+    assert_eq!(snapshots.len(), 1);
+    assert!(!snapshots[0].eq_panel_visible());
+    assert!(snapshots[0].library_panel_visible());
+
+    let _ = update(&mut player, Message::Ignored);
+    assert_eq!(store.snapshots().len(), 1);
+
+    let _ = update(&mut player, Message::ToggleLibraryPanel);
+    let snapshots = store.snapshots();
+    assert_eq!(snapshots.len(), 2);
+    assert!(!snapshots[1].eq_panel_visible());
+    assert!(!snapshots[1].library_panel_visible());
+}
+
+#[test]
+fn saved_panel_visibility_is_restored_on_boot() {
+    let (mut player, _state) = test_player();
+    let mut hidden = Settings::default();
+    hidden.set_eq_panel_visible(false);
+    hidden.set_library_panel_visible(false);
+
+    player.adopt_saved_settings(hidden.clone());
+    assert!(!player.eq_panel_visible);
+    assert!(!player.library_panel_visible);
+    assert_eq!(player.saved_settings, hidden);
+
+    player.adopt_saved_settings(Settings::default());
+    assert!(player.eq_panel_visible);
+    assert!(player.library_panel_visible);
+    assert_eq!(player.saved_settings, Settings::default());
+}
+
+#[test]
+fn shaded_eq_toggle_saves_nothing() {
+    let (mut player, _state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+    player.shaded = true;
+
+    let _ = update(&mut player, Message::ToggleEqualizerPanel);
+    assert!(player.eq_panel_visible);
+    assert!(store.snapshots().is_empty());
+}
+
 /// The longest a driven `Task` is allowed to take before its test fails.
 ///
 /// A task that never yields its completion message — a hung service future,
