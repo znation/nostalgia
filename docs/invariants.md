@@ -472,8 +472,9 @@ Apple Music album field: it is skipped by serde and deserializes to `0`.
 **Enforced by.** `Album::duration_ms` in `src/library.rs`; `SampleLibrary::new` in
 `src/sample_library.rs` derives each sample album's total from its indexed songs;
 `RestLibrary::get_album_durations` in `src/apple_music/rest.rs` groups and sums the library songs;
-`browse::apply_album_durations` in `src/apple_music/browse.rs` fills the signed-in album lists;
-and `views::browse::rows::text::album_row` in `src/ui/views/browse/rows/text.rs` renders the
+`browse::with_album_durations` in `src/apple_music/browse.rs` fetches the whole-library durations
+and fills both signed-in album lists. `views::browse::rows::text::album_row` in
+`src/ui/views/browse/rows/text.rs` renders the
 formatted time or placeholder as the row's secondary text. The loaded album lists cache each
 row's display title and formatted running time through `BrowseList::store_with_row_text`
 (`store_albums` in `src/ui/handlers/browse/fetch.rs`), and `album_row` borrows them, falling back
