@@ -256,18 +256,18 @@ pub fn band_gain_color(gain: f32) -> Color {
 /// [`band_gain_color`]; tinting only one would leave a gray segment whose
 /// extent moves with the value. The rail width and border and the whole handle
 /// stay exactly [`chrome_slider_style`]'s, so the tint changes only the
-/// groove's color. Pure, so the rule is testable without building a widget.
+/// groove's color. Delegates the rail-fill rule to [`level_slider_style`], so
+/// the two styles cannot drift apart. Pure, so the rule is testable without
+/// building a widget.
 pub fn band_slider_style(gain: f32, status: slider::Status) -> slider::Style {
-    let mut style = chrome_slider_style(status);
-    let tint = Background::Color(band_gain_color(gain));
-    style.rail.backgrounds = (tint, tint);
-    style
+    level_slider_style(band_gain_color(gain), status)
 }
 
 /// The chrome slider style with both rail halves painted `fill`.
 ///
 /// This is the level sliders' style (transport volume and balance, shade
-/// volume): iced paints `backgrounds.0` from the range start to the thumb and
+/// volume), and [`band_slider_style`] reuses it with the band's gain color as
+/// the fill: iced paints `backgrounds.0` from the range start to the thumb and
 /// `backgrounds.1` from the thumb to the range end, so both halves carry the
 /// fill and no gray segment remains on either side. The rail width and border
 /// and the whole handle stay exactly [`chrome_slider_style`]'s, so the fill
