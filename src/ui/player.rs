@@ -141,6 +141,13 @@ pub(in crate::ui) struct WinampPlayer {
     /// leaves [`Self::spectrum`] and the spectrum poll untouched, so showing
     /// the bars again draws the current ones.
     pub(in crate::ui) visualizer_visible: bool,
+    /// Whether the normal-mode `NOSTALGIA EQUALIZER` band and equalizer panel
+    /// are drawn. `Message::ToggleEqualizerPanel` flips it; it is open at
+    /// launch and is not persisted, like [`Self::visualizer_visible`]. It is a
+    /// layout flag only: the EQ's on/off state, curve, and preset, and the
+    /// audio they forward, are untouched, and hiding the section hands its
+    /// height to the browse list without resizing the window.
+    pub(in crate::ui) eq_panel_visible: bool,
     /// The seek bar's in-progress drag, or `None` while the thumb follows the
     /// reported position. `Message::SeekPreviewChanged` stores the drag and
     /// `Message::SeekPreviewReleased` seeks to and clears it, so only a release
@@ -245,6 +252,7 @@ impl WinampPlayer {
             blink_visible: true,
             spectrum: None,
             visualizer_visible: true,
+            eq_panel_visible: true,
             seek_preview: None,
             time_display: views::TimeDisplay::Elapsed,
             position_epoch: 0,

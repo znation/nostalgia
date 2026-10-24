@@ -105,6 +105,10 @@ pub(in crate::ui) enum Message {
     // again. It flips only the LCD's display flag, changes no playback state,
     // and schedules no work; the stored spectrum and its poll keep running.
     ToggleVisualizer,
+    // The player row's EQ button: shows or hides the normal-mode equalizer
+    // section. It flips only the panel-visibility flag — not the EQ's on/off
+    // state, curve, or preset — and schedules no work.
+    ToggleEqualizerPanel,
     ToggleEqualizer,
     EqPreampChange(f32),
     EqBandChange(usize, f32),

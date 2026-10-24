@@ -61,6 +61,15 @@ pub(in crate::ui) fn seek_forward(player: &mut WinampPlayer) -> Task<Message> {
     seek_preview(player, views::SEEK_STEP_SECS)
 }
 
+/// The player row's EQ button: shows or hides the normal-mode equalizer
+/// section. This is a layout-only toggle, distinct from
+/// [`toggle_equalizer`], which flips the audio equalizer's on/off state; it
+/// changes no shared EQ value and schedules no work.
+pub(in crate::ui) fn toggle_equalizer_panel(player: &mut WinampPlayer) -> Task<Message> {
+    player.eq_panel_visible = !player.eq_panel_visible;
+    Task::none()
+}
+
 /// The equalizer's on/off button.
 pub(in crate::ui) fn toggle_equalizer(player: &mut WinampPlayer) -> Task<Message> {
     mutate_equalizer(player, AppState::toggle_equalizer)

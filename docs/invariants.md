@@ -318,6 +318,12 @@ or placeholder as the row's secondary text.
   the Play/Pause glyph swap cannot reflow the row. Repeat and Shuffle remain the `Repeat:
   Off/On` and `Shuffle: Off/On` text toggles, pinned to 104 and 112 px, so their label swaps
   cannot reflow it either. The shade strip builds its four buttons from the same glyph spec.
+- The main transport row's fixed-width `EQ` toggle follows the balance slider in every playback
+  state and is sunken while the equalizer panel is shown, ordinary chrome while it is hidden.
+  The root `view` draws the `NOSTALGIA EQUALIZER` band and `view_equalizer` exactly when
+  `WinampPlayer::eq_panel_visible` holds. Hiding them moves the `NOSTALGIA LIBRARY` band and the
+  browse list up into the freed height without resizing the window, and leaves the equalizer's
+  on/off state, preamp, band gains, preset, and audio forwarding untouched.
 - The equalizer band row puts the vertical preamp slider leftmost, then the `+12 DB` / `0 DB` /
   `-12 DB` scale, then the ten band sliders. The scale reads top to bottom beside the rail's top,
   middle, and bottom, and the preamp label shares the band labels' text row. The response curve
@@ -336,7 +342,10 @@ or placeholder as the row's secondary text.
 and Sort buttons into one `Row`. `views::view_transport_controls`,
 `views::transport::transport_buttons`, and `views::transport::transport_glyphs` in
 `src/ui/views/transport.rs` build the glyph row from `fixed_width_button`s and
-`iced::widget::Tooltip`s; `views::mini_transport::mini_transport_controls` projects the same
+`iced::widget::Tooltip`s; `views::transport::eq_panel_toggle` and
+`views::transport::eq_panel_button_style` build and style the EQ toggle, and
+`handlers::mixer::toggle_equalizer_panel` flips the layout flag; `view` pushes the equalizer
+section only while that flag holds; `views::mini_transport::mini_transport_controls` projects the same
 glyph spec for the shade strip and the library footer. `views::equalizer::preamp_column`,
 `views::equalizer::db_scale_column`, and `views::view_equalizer` in
 `src/ui/views/equalizer.rs` build the equalizer band row and align the curve with it. The
@@ -355,14 +364,17 @@ drawn text fragment's absolute bounds with iced's headless tiny-skia renderer.
 `root_view_draws_the_transport_glyph_row`,
 `root_view_offers_back_retry_and_flat_list_buttons_only_where_they_belong`,
 `root_view_draws_the_current_browse_levels_own_rows`,
-`root_view_draws_the_equalizer_and_library_title_bands_in_order`, and
+`root_view_draws_the_equalizer_and_library_title_bands_in_order`,
+`toggle_equalizer_panel_hides_and_restores_the_section`, and
 `shaded_root_view_draws_no_section_title_bands` (`src/ui/tests.rs`), plus
 `title_band_centers_its_label_at_the_title_bar_height` and
 `title_bar_centers_its_name_between_its_edge_controls` (`src/ui/views/tests.rs`) for the title
 bands and app bar, `transport_glyphs_match_the_mockup_order_and_widths`,
 `transport_buttons_keep_a_fixed_width_across_label_changes`,
 `transport_buttons_keep_their_measured_face_widths`,
-`main_transport_and_shade_strip_share_glyphs_order_and_widths`, and
+`main_transport_and_shade_strip_share_glyphs_order_and_widths`,
+`eq_panel_toggle_targets_the_visibility_flag`,
+`eq_panel_button_style_sinks_while_the_panel_is_open`, and
 `equalizer_preamp_and_db_scale_sit_left_of_the_band_sliders` (`src/ui/views/tests.rs`) for the
 glyph row, the Repeat and Shuffle faces, and the equalizer band row.
 

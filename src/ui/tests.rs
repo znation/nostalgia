@@ -4933,6 +4933,87 @@ fn hidden_visualizer_draws_no_bars_in_the_root_view() {
     );
 }
 
+// The player row's EQ button shows and hides the equalizer section. It is a
+// layout toggle only: the shared equalizer state and the values the audio
+// layer would read must survive it, and hiding the section must leave the
+// library section in place but move it up into the freed height.
+#[test]
+fn toggle_equalizer_panel_hides_and_restores_the_section() {
+    let (mut player, state) = test_player();
+    let mut artist = sample_artist();
+    artist.name = "Panel Toggle Artist".to_string();
+    player.artists.items = vec![artist];
+    // Turn the audio equalizer on so the panel's own button reads `EQ: On`;
+    // hiding the panel must not switch it off.
+    state.blocking_lock().toggle_equalizer();
+    let before = {
+        let state = state.blocking_lock();
+        (
+            state.eq_enabled,
+            state.eq_preamp(),
+            state.eq_bands(),
+            state.eq_preset(),
+        )
+    };
+    assert!(player.eq_panel_visible);
+
+    let open = captured_root_view_text_bounds(&player);
+    let open_band = open.find("NOSTALGIA EQUALIZER");
+    let open_library = open.find("NOSTALGIA LIBRARY");
+    open.find("EQ: On");
+    open.find("Panel Toggle Artist");
+
+    assert_message_schedules_no_work(&mut player, Message::ToggleEqualizerPanel);
+    assert!(!player.eq_panel_visible);
+
+    let hidden = captured_root_view_text_bounds(&player);
+    let hidden_texts: Vec<&str> = hidden.texts().collect();
+    assert!(
+        !hidden_texts.contains(&"NOSTALGIA EQUALIZER"),
+        "hiding the panel must drop its title band: {hidden_texts:?}"
+    );
+    assert!(
+        !hidden_texts.contains(&"EQ: On"),
+        "hiding the panel must drop the equalizer's own on/off button: {hidden_texts:?}"
+    );
+    assert!(
+        hidden_texts.contains(&"EQ"),
+        "the transport row's EQ button must stay drawn: {hidden_texts:?}"
+    );
+    let hidden_library = hidden.find("NOSTALGIA LIBRARY");
+    let hidden_artist = hidden.find("Panel Toggle Artist");
+    assert!(
+        hidden_library.y < open_library.y,
+        "the library band must move up into the freed height: {hidden_library:?} vs {open_library:?}"
+    );
+    assert!(
+        hidden_artist.y > hidden_library.y,
+        "the browse list must keep drawing its rows below the library band"
+    );
+
+    assert_message_schedules_no_work(&mut player, Message::ToggleEqualizerPanel);
+    assert!(player.eq_panel_visible);
+
+    let restored = captured_root_view_text_bounds(&player);
+    assert_eq!(restored.find("NOSTALGIA EQUALIZER"), open_band);
+    assert_eq!(restored.find("EQ: On").y, open.find("EQ: On").y);
+    assert_eq!(restored.find("NOSTALGIA LIBRARY"), open_library);
+
+    let after = {
+        let state = state.blocking_lock();
+        (
+            state.eq_enabled,
+            state.eq_preamp(),
+            state.eq_bands(),
+            state.eq_preset(),
+        )
+    };
+    assert_eq!(
+        after, before,
+        "the panel toggle must leave the equalizer's state untouched"
+    );
+}
+
 #[test]
 fn stop_clears_the_elapsed_readout() {
     let (mut player, current_track) = play_song_1_then_browse_to_album_2();

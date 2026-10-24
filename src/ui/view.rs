@@ -1,6 +1,7 @@
 //! The root screen assembly: the title bar, Now Playing bar, seek strip,
-//! transport row, equalizer panel, and browse level stacked into the tree
-//! `init_ui` hands to iced. Widget construction itself lives in `views`.
+//! transport row, the player's EQ-button-controlled equalizer section, and the
+//! browse level stacked into the tree `init_ui` hands to iced. Widget
+//! construction itself lives in `views`.
 
 use iced::{
     Element,
@@ -12,11 +13,14 @@ use super::player::{CurrentView, WinampPlayer};
 use super::views;
 
 /// Assembles the app screen: the title bar, Now Playing bar, seek strip,
-/// transport row, and equalizer panel — all built in `views` from the resolved
-/// title and the shared playback, volume, Repeat, Shuffle, and EQ state — above
-/// the current browse list, with the compact library transport footer beneath
-/// it. When the window is shaded, the tree is the title bar over the compact
-/// transport strip and the rest of the screen is dropped.
+/// transport row, and — while [`WinampPlayer::eq_panel_visible`] holds — the
+/// equalizer band and panel, all built in `views` from the resolved title and
+/// the shared playback, volume, Repeat, Shuffle, and EQ state — above the
+/// current browse list, with the compact library transport footer beneath it.
+/// Hiding the equalizer section moves the library band and browse list up into
+/// the freed height; nothing resizes the window. When the window is shaded,
+/// the tree is the title bar over the compact transport strip and the rest of
+/// the screen is dropped.
 pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // Shade mode builds only the title bar and its compact transport strip —
     // the Now Playing bar, seek strip, transport row, equalizer, and browse
@@ -175,7 +179,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // remaining mode or about the track's total.
     let library_elapsed = now_playing_elapsed.clone();
     let library_total = now_playing_time.clone();
-    let player_panels = Column::new()
+    let mut player_panels = Column::new()
         .push(views::view_title_bar(player.always_on_top))
         .push(views::view_now_playing(
             now_playing_elapsed,
@@ -194,12 +198,24 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
             player.playback_duration,
         ))
         .push(views::view_transport_controls(
-            is_playing, volume, balance, repeat, shuffle,
-        ))
-        .push(views::view_title_band("NOSTALGIA EQUALIZER"))
-        .push(views::view_equalizer(
-            eq_enabled, eq_preamp, &eq_bands, eq_preset,
+            is_playing,
+            volume,
+            balance,
+            repeat,
+            shuffle,
+            player.eq_panel_visible,
         ));
+    // The EQ button on the transport row is layout-only: it shows or hides this
+    // band and panel, while the shared EQ state keeps driving the audio. The
+    // freed height flows to the browse list below because nothing here pins the
+    // column's height or resizes the window.
+    if player.eq_panel_visible {
+        player_panels = player_panels
+            .push(views::view_title_band("NOSTALGIA EQUALIZER"))
+            .push(views::view_equalizer(
+                eq_enabled, eq_preamp, &eq_bands, eq_preset,
+            ));
+    }
 
     let mut column = Column::new()
         .push(MouseArea::new(player_panels).on_scroll(views::volume_wheel_message))

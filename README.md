@@ -84,7 +84,9 @@ supplies no artist) and show each track's length at the right, whose album rows 
 total running time at the right (`10:30`, or `--:--` when the source supplied none), and whose
 artist rows show their album count at the right (`2 albums`, `1 album`, and no count for an
 artist with none), with each song list showing its song count and total playing time beneath
-the rows and artist, album, and playlist lists showing their item count beneath theirs. A
+the rows and artist, album, and playlist lists showing their item count beneath theirs. An `EQ`
+button beside the balance slider shows and hides the equalizer panel, which is open at launch;
+hiding it gives its height to the browse list without changing EQ processing. A
 compact transport strip sits beneath the browse list with Previous, Play/Pause, Stop, Next,
 an elapsed-over-total time readout, and a volume slider, the same controls as the window-shade
 strip. The readout shows the elapsed (or remaining) time over the track's total (`00:53/3:30`)
