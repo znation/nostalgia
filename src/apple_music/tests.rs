@@ -665,6 +665,21 @@ async fn get_playlists_uses_the_rest_library_when_signed_in() {
     assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/playlists");
 }
 
+// A signed-in playlists load has no sample-library fallback: it answers from
+// the sample library only when no session is stored, so a failed request must
+// surface the error for the UI's Retry path. The sample library has playlists,
+// so a fallback on failure would return them instead of the error.
+#[tokio::test]
+async fn get_playlists_fails_when_the_playlists_request_fails() {
+    let stub = StubTransport::failing("playlists down");
+    let service = signed_in_service(&stub);
+
+    let error = service.get_playlists().await.unwrap_err();
+
+    assert_eq!(error.to_string(), "playlists down");
+    assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/playlists");
+}
+
 // Opening a playlist routes through the REST client when a session is stored,
 // so a signed-in user browses the real playlist's tracks. The stub returns a
 // song whose id is not a sample id, so the result can only have come from the
