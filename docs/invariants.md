@@ -1345,11 +1345,13 @@ reports a removal failure without failing the new sign-in.
 - `a_stalled_connection_is_dropped_when_its_budget_is_spent`
 - `the_pending_list_is_capped_without_displacing_an_accepted_connection`
 - `one_pass_takes_on_a_bounded_number_of_connections`
+  (all in `src/music_kit_auth/tests/server.rs`)
 - `the_reader_reports_a_partial_request_as_incomplete`
+  (in `src/music_kit_auth/tests/http_request.rs`)
 - `the_bootstrap_sweep_removes_only_old_bootstrap_directories`
 - `the_bootstrap_sweep_skips_a_symlink_instead_of_following_it`
 - `a_new_bootstrap_write_sweeps_a_stale_directory_from_a_crashed_flow`
-  (all in `src/music_kit_auth/tests.rs`)
+  (all in `src/music_kit_auth/tests/bootstrap.rs`)
 
 **History.** Reconstructed from "A stalled connection is served for its whole budget before the next
 one, so repeated stalls starve the sign-in callback" in `BUGS-FIXED.md`. On 2026-10-24 the cap

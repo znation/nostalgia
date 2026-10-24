@@ -32,6 +32,6 @@ without a boundary that prompts a split.
 directory, keeping shared fixtures in `test_support`. Split the file that is being worked in rather than
 all five at once, and move tests without changing their assertions.
 
-**Progress.** `src/audio/tests.rs` and `src/apple_music/rest/tests.rs` are now split into `tests/` directories by concern (the latter into `library`, `transport`, and `paging`), tests moved without changing assertions. Still flat: `src/ui/tests.rs`, `src/ui/views/tests.rs`, `src/apple_music/tests.rs`, and `src/music_kit_auth/tests.rs`; split each when next worked in.
+**Progress.** `src/audio/tests.rs`, `src/apple_music/rest/tests.rs`, and `src/music_kit_auth/tests.rs` are now split into `tests/` directories by concern (the last into `bootstrap`, `tokens`, `authorize`, `http_request`, `server`, and `opener`, with shared helpers in `mod.rs`), tests moved without changing assertions. Still flat: `src/ui/tests.rs`, `src/ui/views/tests.rs`, and `src/apple_music/tests.rs`; split each when next worked in.
 
 ## Fixed
