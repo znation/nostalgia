@@ -237,7 +237,7 @@ fn form_pairs(form: &str) -> impl Iterator<Item = (&str, &str)> {
 /// already presents the per-flow secret. Requiring it here means a local
 /// client that reaches the loopback port without knowing the nonce is refused
 /// the sign-in page and the developer token it embeds.
-fn page_query_carries_nonce(query: Option<&str>, nonce: &str) -> bool {
+pub(super) fn page_query_carries_nonce(query: Option<&str>, nonce: &str) -> bool {
     query.is_some_and(|query| {
         form_pairs(query)
             .any(|(key, value)| key == "state" && nonce_matches(&percent_decode(value), nonce))

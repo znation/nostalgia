@@ -135,6 +135,57 @@ fn nonce_matches_accepts_only_the_exact_nonce() {
     }
 }
 
+// The page route's gate reads the nonce out of the query string: the `state`
+// field may sit anywhere among others and arrive percent-encoded, a repeated
+// field passes if any copy matches, and a missing query, a missing field, a
+// wrong value, or a similarly named key is refused.
+#[test]
+fn page_query_carries_nonce_accepts_only_a_matching_state_field() {
+    let nonce = "0123456789abcdef";
+
+    assert!(page_query_carries_nonce(
+        Some("state=0123456789abcdef"),
+        nonce
+    ));
+    assert!(page_query_carries_nonce(
+        Some("a=1&state=0123456789abcdef&b=2"),
+        nonce
+    ));
+    assert!(page_query_carries_nonce(
+        Some("state=%30123456789abcdef"),
+        nonce
+    ));
+    assert!(page_query_carries_nonce(
+        Some("state=wrong&state=0123456789abcdef"),
+        nonce
+    ));
+    assert!(page_query_carries_nonce(
+        Some("junk&state=0123456789abcdef"),
+        nonce
+    ));
+
+    assert!(!page_query_carries_nonce(None, nonce));
+    assert!(!page_query_carries_nonce(Some(""), nonce));
+    assert!(!page_query_carries_nonce(Some("state="), nonce));
+    assert!(!page_query_carries_nonce(Some("state"), nonce));
+    assert!(!page_query_carries_nonce(
+        Some("state=0123456789abcdee"),
+        nonce
+    ));
+    assert!(!page_query_carries_nonce(
+        Some("State=0123456789abcdef"),
+        nonce
+    ));
+    assert!(!page_query_carries_nonce(
+        Some("xstate=0123456789abcdef"),
+        nonce
+    ));
+    assert!(!page_query_carries_nonce(
+        Some("other=0123456789abcdef"),
+        nonce
+    ));
+}
+
 #[test]
 fn debug_redacts_both_tokens() {
     let session = MusicKitSession {
