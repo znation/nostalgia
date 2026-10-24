@@ -1056,7 +1056,7 @@ rather than the panic unwinding the event loop.
 - `playback_format_query_returns_the_loaded_players_format`
 - `playback_format_query_reports_none_when_nothing_is_loaded`
 - `rodio_output_asks_the_worker_for_its_format`
-- `silent_output_reports_no_playback_format` (`src/audio/tests.rs`)
+- `silent_output_reports_no_playback_format` (`src/audio/tests/rodio_output.rs`)
 - `playback_format_forwards_the_audio_output_format` (`src/apple_music/tests.rs`)
 - `format_playback_prefix_formats_khz_and_bitrate`
 - `channel_mode_label_names_the_reported_channels`
@@ -1086,7 +1086,7 @@ rather than the panic unwinding the event loop.
 - `rodio_output_reports_none_when_the_duration_reply_times_out`
 - `seek_to_command_reaches_the_loaded_player`
 - `duration_query_returns_the_loaded_players_duration`
-- `duration_query_reports_none_when_nothing_is_loaded` (`src/audio/tests.rs`)
+- `duration_query_reports_none_when_nothing_is_loaded` (`src/audio/tests/worker.rs`)
 - `playback_format_reply_stores_the_loaded_previews_format`
 - `playback_format_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped`
 - `stop_clears_the_playback_format_while_pause_keeps_it`
@@ -1400,9 +1400,9 @@ bytes.
 
 **Pinned by.**
 
-- `a_compressed_preview_larger_than_the_cap_is_rejected` (`src/audio/tests.rs`)
-- `a_preview_with_more_wire_bytes_than_the_cap_is_rejected` (`src/audio/tests.rs`)
-- `a_preview_of_exactly_the_cap_reaches_the_decoder` (`src/audio/tests.rs`)
+- `a_compressed_preview_larger_than_the_cap_is_rejected` (`src/audio/tests/preview_download.rs`)
+- `a_preview_with_more_wire_bytes_than_the_cap_is_rejected` (`src/audio/tests/preview_download.rs`)
+- `a_preview_of_exactly_the_cap_reaches_the_decoder` (`src/audio/tests/preview_download.rs`)
 
 **History.** Added 2026-10-23 after the wire-byte cap was found to let a small gzip body expand
 past 10 MiB before decoding; the decoded-byte fix keeps the original wire cap alongside it. The
@@ -1424,8 +1424,8 @@ stores the body the download produced.
 
 **Pinned by.**
 
-- `preview_cache_replays_the_same_url_without_loading_it_again` (`src/audio/tests.rs`)
-- `preview_cache_keeps_only_the_last_url_and_never_caches_a_failed_load` (`src/audio/tests.rs`)
+- `preview_cache_replays_the_same_url_without_loading_it_again` (`src/audio/tests/preview_download.rs`)
+- `preview_cache_keeps_only_the_last_url_and_never_caches_a_failed_load` (`src/audio/tests/preview_download.rs`)
 
 ## Preview host guard
 
@@ -1458,7 +1458,7 @@ redirects and disables the proxy.
   (all in `src/apple_music/tests.rs`)
 - `the_preview_agent_refuses_a_hostname_that_resolves_to_loopback`
 - `the_preview_resolver_allows_a_public_address_literal`
-  (both in `src/audio/tests.rs`)
+  (both in `src/audio/tests/preview_download.rs`)
 
 **History.** Reconstructed from "Preview URL guard accepts IPv4 multicast and reserved ranges" in
 `BUGS-FIXED.md` (2026-10-23); the v6 branch already refused multicast while the v4 branch did not.
@@ -1498,19 +1498,19 @@ backend queries. On the UI side, `views::now_playing::visualizer_bar_heights` an
 
 **Pinned by.**
 
-- `spectrum_bands_peak_at_the_matching_band_for_a_sine` (`src/audio/tests.rs`)
-- `spectrum_bands_zero_a_band_at_or_above_nyquist` (`src/audio/tests.rs`)
-- `meter_source_passes_samples_through_and_records_their_spectrum` (`src/audio/tests.rs`)
-- `meter_source_seek_keeps_the_downmix_phase` (`src/audio/tests.rs`)
-- `meter_window_keeps_the_newest_samples_in_play_order` (`src/audio/tests.rs`)
-- `spectrum_query_returns_the_loaded_players_spectrum` (`src/audio/tests.rs`)
-- `spectrum_query_reports_none_when_nothing_is_loaded` (`src/audio/tests.rs`)
-- `loaded_player_reports_its_meter_but_an_unloaded_one_reports_nothing` (`src/audio/tests.rs`)
-- `append_records_the_appended_source_through_the_players_meter` (`src/audio/tests.rs`)
-- `stop_removes_the_player_so_a_spectrum_query_reports_none` (`src/audio/tests.rs`)
-- `silent_output_reports_no_spectrum` (`src/audio/tests.rs`)
-- `rodio_output_asks_the_worker_for_its_spectrum` (`src/audio/tests.rs`)
-- `rodio_output_reports_a_closed_worker_for_every_command` (`src/audio/tests.rs`)
+- `spectrum_bands_peak_at_the_matching_band_for_a_sine` (`src/audio/tests/sources.rs`)
+- `spectrum_bands_zero_a_band_at_or_above_nyquist` (`src/audio/tests/sources.rs`)
+- `meter_source_passes_samples_through_and_records_their_spectrum` (`src/audio/tests/sources.rs`)
+- `meter_source_seek_keeps_the_downmix_phase` (`src/audio/tests/sources.rs`)
+- `meter_window_keeps_the_newest_samples_in_play_order` (`src/audio/tests/sources.rs`)
+- `spectrum_query_returns_the_loaded_players_spectrum` (`src/audio/tests/worker.rs`)
+- `spectrum_query_reports_none_when_nothing_is_loaded` (`src/audio/tests/worker.rs`)
+- `loaded_player_reports_its_meter_but_an_unloaded_one_reports_nothing` (`src/audio/tests/worker.rs`)
+- `append_records_the_appended_source_through_the_players_meter` (`src/audio/tests/worker.rs`)
+- `stop_removes_the_player_so_a_spectrum_query_reports_none` (`src/audio/tests/worker.rs`)
+- `silent_output_reports_no_spectrum` (`src/audio/tests/rodio_output.rs`)
+- `rodio_output_asks_the_worker_for_its_spectrum` (`src/audio/tests/rodio_output.rs`)
+- `rodio_output_reports_a_closed_worker_for_every_command` (`src/audio/tests/rodio_output.rs`)
 - `playback_spectrum_forwards_the_audio_output_spectrum` (`src/apple_music/tests.rs`)
 - `visualizer_bar_heights_scale_and_clamp_the_reported_bands`
 - `visualizer_bar_heights_maps_a_nan_band_to_empty` (`src/ui/views/tests.rs`)
@@ -1562,15 +1562,15 @@ same list/Shuffle/Repeat rules as Next, and the no-next-song case reuses `handle
 
 **Pinned by.**
 
-- `finished_query_returns_the_loaded_players_finished_state` (`src/audio/tests.rs`)
-- `finished_query_reports_none_when_nothing_is_loaded` (`src/audio/tests.rs`)
-- `rodio_player_reports_finished_only_after_its_appended_preview_drains` (`src/audio/tests.rs`)
-- `a_paused_preview_reports_unfinished` (`src/audio/tests.rs`)
-- `silent_output_reports_an_unfinished_preview` (`src/audio/tests.rs`)
-- `rodio_output_asks_the_worker_for_its_finished_state` (`src/audio/tests.rs`)
-- `rodio_output_reports_none_when_the_finished_reply_times_out` (`src/audio/tests.rs`)
-- `rodio_output_reports_a_closed_worker_for_every_command` (`src/audio/tests.rs`)
-- `stop_removes_the_player_so_a_finished_query_reports_none` (`src/audio/tests.rs`)
+- `finished_query_returns_the_loaded_players_finished_state` (`src/audio/tests/worker.rs`)
+- `finished_query_reports_none_when_nothing_is_loaded` (`src/audio/tests/worker.rs`)
+- `rodio_player_reports_finished_only_after_its_appended_preview_drains` (`src/audio/tests/worker.rs`)
+- `a_paused_preview_reports_unfinished` (`src/audio/tests/worker.rs`)
+- `silent_output_reports_an_unfinished_preview` (`src/audio/tests/rodio_output.rs`)
+- `rodio_output_asks_the_worker_for_its_finished_state` (`src/audio/tests/rodio_output.rs`)
+- `rodio_output_reports_none_when_the_finished_reply_times_out` (`src/audio/tests/rodio_output.rs`)
+- `rodio_output_reports_a_closed_worker_for_every_command` (`src/audio/tests/rodio_output.rs`)
+- `stop_removes_the_player_so_a_finished_query_reports_none` (`src/audio/tests/worker.rs`)
 - `preview_finished_forwards_the_audio_output_state` (`src/apple_music/tests.rs`)
 - `position_tick_queries_preview_finished` (`src/ui/tests.rs`)
 - `preview_end_advances_to_the_next_song` (`src/ui/tests.rs`)
