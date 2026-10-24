@@ -12,7 +12,7 @@
 
 use iced::advanced::{
     Layout,
-    layout::Limits,
+    layout::{Limits, Node},
     renderer::Headless,
     widget::{Id, Tree, operation::Operation},
 };
@@ -122,12 +122,14 @@ impl Operation for CapturedText {
     }
 }
 
-/// Lays `element` out under [`limits`] with `renderer` and returns the text
-/// fragments it would draw plus its resolved root size.
-pub(crate) fn capture_text<'a, Message, Theme, Renderer>(
+/// Lays `element` out under [`limits`] and records its draw operations,
+/// returning the state tree, the resolved layout node, and the text fragments
+/// plus root size. Both capture entry points start from this same tree, node,
+/// and text capture; the pixel variant then also draws the laid-out tree.
+fn layout_and_capture<'a, Message, Theme, Renderer>(
     element: &mut Element<'a, Message, Theme, Renderer>,
     renderer: &Renderer,
-) -> TextCapture
+) -> (Tree, Node, TextCapture)
 where
     Renderer: iced::advanced::Renderer,
 {
@@ -140,10 +142,27 @@ where
     element
         .as_widget_mut()
         .operate(&mut tree, Layout::new(&node), renderer, &mut captured);
-    TextCapture {
-        fragments: captured.0,
-        size,
-    }
+    (
+        tree,
+        node,
+        TextCapture {
+            fragments: captured.0,
+            size,
+        },
+    )
+}
+
+/// Lays `element` out under [`limits`] with `renderer` and returns the text
+/// fragments it would draw plus its resolved root size.
+pub(crate) fn capture_text<'a, Message, Theme, Renderer>(
+    element: &mut Element<'a, Message, Theme, Renderer>,
+    renderer: &Renderer,
+) -> TextCapture
+where
+    Renderer: iced::advanced::Renderer,
+{
+    let (_tree, _node, capture) = layout_and_capture(element, renderer);
+    capture
 }
 
 /// Lays `element` out and draws it with `renderer`, returning the text
@@ -158,20 +177,12 @@ pub(crate) fn capture_text_and_pixels<'a, Message, Theme, Renderer>(
 where
     Renderer: iced::advanced::Renderer + iced::advanced::text::Renderer + Headless,
 {
-    let mut tree = Tree::new(element.as_widget());
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, renderer, &limits());
-    let size = node.size();
-    let mut captured = CapturedText::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), renderer, &mut captured);
+    let (tree, node, capture) = layout_and_capture(element, renderer);
 
     let style = iced::advanced::renderer::Style {
         text_color: iced::Color::BLACK,
     };
-    let viewport = Rectangle::with_size(size);
+    let viewport = Rectangle::with_size(node.size());
     element.as_widget().draw(
         &tree,
         renderer,
@@ -182,13 +193,11 @@ where
         &viewport,
     );
 
+    let size = capture.size();
     let pixel_size = Size::new(size.width.ceil() as u32, size.height.ceil() as u32);
     let pixels = renderer.screenshot(pixel_size, 1.0, iced::Color::TRANSPARENT);
     (
-        TextCapture {
-            fragments: captured.0,
-            size,
-        },
+        capture,
         PixelCapture {
             pixels,
             size: pixel_size,
