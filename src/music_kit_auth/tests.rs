@@ -599,6 +599,32 @@ fn random_nonce_is_a_fresh_sixteen_hex_digit_value() {
     );
 }
 
+// Both nonce checks use `nonce_matches`, whose constant-time comparison is
+// what keeps a guess's reply time from depending on how many leading bytes it
+// got right. A prefix of the nonce, a superstring, an empty value, and a value
+// with one byte changed must all be rejected; only the exact nonce matches.
+// The timing property itself is not observable from a unit test, so this pins
+// the equivalence the constant-time fold must preserve.
+#[test]
+fn nonce_matches_accepts_only_the_exact_nonce() {
+    let nonce = "0123456789abcdef";
+
+    assert!(nonce_matches(nonce, nonce));
+    assert!(!nonce_matches("", nonce));
+    assert!(!nonce_matches(&nonce[..nonce.len() - 1], nonce));
+    assert!(!nonce_matches(&format!("{nonce}0"), nonce));
+    assert!(!nonce_matches("0123456789abcdee", nonce));
+    for index in 0..nonce.len() {
+        let mut guess = nonce.as_bytes().to_vec();
+        guess[index] ^= 1;
+        let guess = String::from_utf8(guess).expect("flipping one ASCII byte keeps UTF-8");
+        assert!(
+            !nonce_matches(&guess, nonce),
+            "a nonce differing at byte {index} must not match"
+        );
+    }
+}
+
 #[test]
 fn debug_redacts_both_tokens() {
     let session = MusicKitSession {

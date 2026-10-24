@@ -231,8 +231,34 @@ fn form_pairs(form: &str) -> impl Iterator<Item = (&str, &str)> {
 /// the sign-in page and the developer token it embeds.
 fn page_query_carries_nonce(query: Option<&str>, nonce: &str) -> bool {
     query.is_some_and(|query| {
-        form_pairs(query).any(|(key, value)| key == "state" && percent_decode(value) == nonce)
+        form_pairs(query)
+            .any(|(key, value)| key == "state" && nonce_matches(&percent_decode(value), nonce))
     })
+}
+
+/// Whether `candidate` equals this flow's `state` nonce, compared in constant
+/// time.
+///
+/// Both checks of the nonce — the page query and the callback body — compare a
+/// value any local client can choose against the one secret that gates the
+/// developer token. Ordinary string equality stops at the first differing
+/// byte, so a client that times the server's replies could learn how many
+/// leading bytes of a guess matched and recover the nonce one byte at a time.
+/// Here every byte of both values is folded into the same accumulator, and a
+/// length difference is folded into it too rather than returning early, so a
+/// reply's timing does not depend on where a guess first differs. The nonce's
+/// own length is fixed and public (see `random_nonce`), so the loop length
+/// depends only on values the client already knows.
+pub(super) fn nonce_matches(candidate: &str, nonce: &str) -> bool {
+    let candidate = candidate.as_bytes();
+    let nonce = nonce.as_bytes();
+    let mut difference = u8::from(candidate.len() != nonce.len());
+    for index in 0..candidate.len().max(nonce.len()) {
+        let left = candidate.get(index).copied().unwrap_or(0);
+        let right = nonce.get(index).copied().unwrap_or(0);
+        difference |= left ^ right;
+    }
+    difference == 0
 }
 
 /// Handles the `POST /token` callback: validates `state` and `userToken` and
@@ -256,7 +282,10 @@ fn handle_token(
         }
     }
 
-    if state.as_deref() != Some(nonce) {
+    let matches = state
+        .as_deref()
+        .is_some_and(|state| nonce_matches(state, nonce));
+    if !matches {
         let _ = write_response(
             stream,
             400,
