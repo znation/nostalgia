@@ -184,8 +184,8 @@ that song queued for Play. The volume, balance, Repeat and Shuffle flags, the eq
 state, curve, and preset, the elapsed/remaining readout choice, the visualizer's shown/hidden
 choice, the equalizer and library panels' shown/hidden choices, and the always-on-top choice are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or
 `$HOME/.config/nostalgia/settings.ini`) and restored at the next launch; `NOSTALGIA_SETTINGS_PATH`
-overrides the path. A missing or malformed entry falls back to its default, and a settings file that exists but cannot be
-read falls back to defaults with one line on stderr naming the file. The always-on-top choice
+overrides the path. A missing or malformed entry falls back to its default (a byte that is not UTF-8 spoils only its own
+line), and a settings file that exists but cannot be read falls back to defaults with one line on stderr naming the file. The always-on-top choice
 (the LCD strip's `A` or the `A` key) is remembered for the next launch, and a saved-on launch starts
 with the window pinned once boot resolves its window id. There are no CLI flags yet.
 
