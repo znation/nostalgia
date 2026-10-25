@@ -1634,7 +1634,7 @@ the known-track index to the current track, or clears it when no track is curren
 `src/ui/loading.rs`; `Message::TrackPlayed` carries it in `src/ui/message.rs`;
 `handlers::playback::track_played` in `src/ui/handlers/playback.rs` records only a committed play
 of the current generation and otherwise calls `PlayHistory::retry_pending`; `transport::PlayHistory`
-in `src/ui/transport.rs` implements the recorded-play walk.
+in `src/ui/transport/history.rs` implements the recorded-play walk.
 
 **Pinned by.**
 
@@ -1661,7 +1661,8 @@ last reported position — the one the readout shows — not a fresh backend que
 **Enforced by.** `handlers::playback::step_track` in `src/ui/handlers/playback.rs` applies the
 restart branch before the stepping arithmetic, consulting
 `AppleMusicService::has_loaded_preview` and `AppleMusicService::seek_output_to`;
-`transport::previous_track_id` and `transport::PlayHistory` in `src/ui/transport.rs` implement the
+`transport::previous_track_id` in `src/ui/transport.rs` and `transport::PlayHistory` in
+`src/ui/transport/history.rs` implement the
 unchanged step paths.
 
 **Pinned by.**
