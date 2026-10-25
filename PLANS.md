@@ -21,4 +21,63 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 _None yet._
 
+### Numpad 2/4/5/6/7/8/9 drive the transport and volume, like Winamp (planned 2026-10-24 by the plan role)
+
+**Goal.** Classic Winamp binds the numeric keypad (with NumLock on): 4 previous, 5 play, 6 next,
+7 rewind 5 s, 9 fast-forward 5 s, 8 volume up, 2 volume down. Nostalgia ignores keypad digits:
+`shortcuts::message_for` drops the `location` field of `Event::KeyPressed`, and `shortcut` binds
+no digit. Map those seven keypad digits to the messages the existing keys send (Z/X/B and the
+arrows), so they follow those messages' rules exactly. Top-row digits (`Location::Standard`)
+stay unbound. Keypad 0, 1, 3 (Winamp's open file and jump 10 songs) and the keypad operators
+are out of scope and stay unbound. With NumLock off, the keypad sends
+`Key::Named(ArrowLeft…)` and still goes through the arrow bindings as it does today. This plan
+is independent of the waiting song-list footer plan; the two share only `README.md` and
+`docs/invariants.md`, in different paragraphs and sections.
+
+**Approach.**
+- `src/ui/shortcuts.rs`: add `fn numpad_shortcut(key: &Key, location: Location, modifiers:
+  Modifiers) -> Option<Message>` (import `iced::keyboard::Location`). It returns `None` unless
+  `location == Location::Numpad` and none of Control, Alt, or Logo is held (Shift is allowed,
+  as for the letters). Otherwise it matches `Key::Character` `"4"` → `PreviousTrack`, `"5"` →
+  `Play`, `"6"` → `NextTrack`, `"7"` → `SeekBackward`, `"9"` → `SeekForward`, `"8"` →
+  `VolumeUp`, `"2"` → `VolumeDown`, and anything else → `None`. Give it a doc comment listing the
+  bindings, the unbound keypad keys, and the NumLock-off note.
+- `message_for`: destructure `location` too, and return
+  `numpad_shortcut(&key, location, modifiers).or_else(|| shortcut(&key, modifiers))`. Leave
+  `shortcut`'s signature alone, because its direct tests call it. Add a sentence on the keypad
+  digits to the doc comments of `message_for` and `shortcut`.
+- `iced::keyboard::listen` already skips events a focused widget captured, so a digit typed into
+  `Search library` does not reach the mapper, the same as letters. Do not change
+  `src/ui/timers.rs`.
+
+**Files touched.** `src/ui/shortcuts.rs` (code and its `tests` module), `docs/invariants.md`,
+`README.md`.
+
+**Acceptance criteria.**
+- In the `shortcuts.rs` `tests` module, add a helper `numpad_pressed(key, modifiers)` shaped like
+  `key_pressed`, with `location: Location::Numpad`, and these tests:
+  - `message_for_maps_the_numpad_transport_digits`: with `Modifiers::NONE` and with
+    `Modifiers::SHIFT`, keypad `"4"`, `"5"`, `"6"`, `"7"`, `"9"`, `"8"`, `"2"` map to
+    `PreviousTrack`, `Play`, `NextTrack`, `SeekBackward`, `SeekForward`, `VolumeUp`, and
+    `VolumeDown`.
+  - `message_for_leaves_other_digits_unbound`: keypad `"0"`, `"1"`, `"3"`, and `"+"` map to
+    `None`, and each of `"2"` and `"4"` through `"9"` pressed through `key_pressed` (Standard
+    location) maps to `None`.
+  - `message_for_ignores_numpad_chords`: keypad `"4"` with `Modifiers::CTRL`, `Modifiers::ALT`,
+    and `Modifiers::LOGO` maps to `None`.
+  - `message_for_maps_numpad_arrows_like_the_arrow_keys`: `Key::Named(ArrowLeft)` and
+    `Key::Named(ArrowUp)` through `numpad_pressed` map to `SeekBackward` and `VolumeUp`.
+- Existing shortcut tests pass unchanged.
+- `docs/invariants.md`: add a `## Numpad keys` section after `## List edge jumps` (Guarantee /
+  Enforced by / Pinned by / History, the same shape as `## Media keys`). It states the seven
+  keypad bindings, that they send the same messages as Z/X/B and the arrows, that top-row
+  digits, keypad 0/1/3, and Ctrl/Alt/Logo chords stay unbound, and the NumLock-off arrow
+  behaviour. Name `numpad_shortcut` and `message_for` under Enforced by and the four new tests
+  under Pinned by.
+- README Usage: after the sentence ending "seek five seconds back or forward.", add one sentence:
+  with NumLock on, keypad 4, 5, and 6 play the previous, current, and next song, 7 and 9 seek
+  five seconds back or forward, and 8 and 2 nudge the volume, like Winamp. Do not touch the
+  brief or status blocks.
+- `make check` passes.
+
 ## Done
