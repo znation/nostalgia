@@ -1,8 +1,12 @@
 //! The text the LCD shows in place of the title while a mixer slider is
 //! being dragged, as in classic Winamp: `Volume: 72%`, `Balance: Center`,
 //! `Balance: 31% Left`. An equalizer slider reads `EQ: 60HZ +3 DB` for a band
-//! and `Preamp: -12 DB` for the preamp.
+//! and `Preamp: -12 DB` for the preamp. A seek-slider drag reads
+//! `Seek to: 01:23/03:30 (39%)`.
 
+use std::time::Duration;
+
+use super::text::format_lcd_elapsed;
 use crate::equalizer::{BAND_COUNT, BAND_FREQUENCIES};
 
 /// The mixer slider currently held down.
@@ -45,9 +49,49 @@ pub fn mixer_readout_text(
     }
 }
 
+/// The readout for a seek drag at `target` in a preview of `length`:
+/// `Seek to: 00:12/00:30 (41%)`. The target is clamped to the length and the
+/// percentage is the floored share of it, `0` for a zero length.
+pub fn seek_readout_text(target: Duration, length: Duration) -> String {
+    let target_ms = target.min(length).as_millis() as u64;
+    let length_ms = length.as_millis() as u64;
+    let pct = (target_ms * 100)
+        .checked_div(length_ms)
+        .unwrap_or(0)
+        .min(100);
+    format!(
+        "Seek to: {}/{} ({pct}%)",
+        format_lcd_elapsed(target_ms),
+        format_lcd_elapsed(length_ms)
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn seek_readout_shows_target_length_and_floored_percent() {
+        let secs = Duration::from_secs;
+        let len = secs(30);
+        assert_eq!(
+            seek_readout_text(Duration::from_millis(12_500), len),
+            "Seek to: 00:12/00:30 (41%)"
+        );
+        assert_eq!(
+            seek_readout_text(Duration::ZERO, len),
+            "Seek to: 00:00/00:30 (0%)"
+        );
+        assert_eq!(seek_readout_text(len, len), "Seek to: 00:30/00:30 (100%)");
+        assert_eq!(
+            seek_readout_text(secs(45), len),
+            "Seek to: 00:30/00:30 (100%)"
+        );
+        assert_eq!(
+            seek_readout_text(secs(5), Duration::ZERO),
+            "Seek to: 00:00/00:00 (0%)"
+        );
+    }
 
     #[test]
     fn volume_readout_rounds_to_whole_percent() {

@@ -22,7 +22,7 @@ use crate::ui::{Message, bevel, theme};
 pub(super) mod mixer_readout;
 pub(super) mod text;
 
-pub use mixer_readout::{MixerDrag, mixer_readout_text};
+pub use mixer_readout::{MixerDrag, mixer_readout_text, seek_readout_text};
 
 pub use text::{
     KnownTrack, TimeDisplay, channel_mode_label, format_playback_prefix, needs_marquee,

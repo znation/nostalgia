@@ -346,7 +346,7 @@ impl WinampPlayer {
     /// as `view` resolves them, so the timer scrolls precisely the lines the
     /// bar windows.
     pub(in crate::ui) fn needs_marquee(&self) -> bool {
-        if self.mixer_drag.is_some() {
+        if self.mixer_drag.is_some() || self.seek_preview.is_some() {
             return false;
         }
         let state = self.state.blocking_lock();

@@ -1680,7 +1680,9 @@ late Previous restarts the track already playing instead of stepping back.
 **Guarantee.** While a volume or balance `chrome_slider`, or an equalizer band or preamp slider, is held,
 the Now Playing LCD draws that slider's live level (`Volume: 72%`, `Balance: Center`,
 `Balance: 31% Left`, `EQ: 60HZ +3 DB`, `Preamp: -12 DB`) in place of the
-`Now Playing: ` caption and title; the glyph, elapsed readout, and total stay. The release shows the
+`Now Playing: ` caption and title; dragging the seek slider likewise reads `Seek to: 00:12/00:30 (41%)`
+(target over the preview's `playback_duration`, floored percent) while `seek_preview` is held, and a mixer
+drag wins if both were set; without a `playback_duration` the title stays; the glyph, elapsed readout, and total stay. The release shows the
 title again. The EQ on/off button and preset picks never set the readout. The global arrow-key handlers and wheel never set the readout; a slider's own
 arrow-key or Ctrl+wheel change message does. `timers::mixer_key_message` turns a navigation key press
 (arrows, Home/End, Page) into `MixerReleased` and is always subscribed, because the slider sets the
@@ -1688,25 +1690,27 @@ readout during the event it must then see; other keys send nothing. `timers::mix
 does the same for a wheel roll but is subscribed only while a readout shows (the `mixer_readout_showing`
 argument of `subscriptions`), so plain list scrolling rebuilds no screen. Known limit: the Ctrl+wheel
 change that sets a readout leaves it until the next wheel roll or navigation key. The marquee timer is off during
-a drag. Nothing is persisted. Known limit: iced sends no release if a slider is removed mid-drag, so
+a drag, seek drags included. Nothing is persisted. Known limit: iced sends no release if a slider is removed mid-drag, so
 the readout would then stay until the next mixer-slider release.
 
 **Enforced by.** `handlers::mixer::{volume_change, balance_change, eq_preamp_change, eq_band_change, mixer_released}`,
 `eq_slider_column`'s `on_release`,
 `WinampPlayer::mixer_drag` and `needs_marquee`, `chrome_slider`'s `on_release`, and
-`views::mixer_readout_text` / `now_playing_row`'s `mixer_readout` parameter.
+`views::mixer_readout_text` / `views::seek_readout_text` / `now_playing_row`'s `mixer_readout` parameter.
 
 **Pinned by.**
 
 - `volume_readout_rounds_to_whole_percent`, `balance_readout_names_the_side`,
-  `eq_readouts_show_the_band_label_and_signed_gain`
+  `eq_readouts_show_the_band_label_and_signed_gain`, `seek_readout_shows_target_length_and_floored_percent`
   (`src/ui/views/now_playing/mixer_readout.rs`)
 - `now_playing_row_with_a_readout_replaces_the_title` (`src/ui/views/tests/now_playing.rs`)
 - `a_key_or_wheel_event_ends_a_mixer_readout` (`src/ui/tests.rs`)
 - `dragging_volume_shows_the_level_until_release`, `dragging_balance_shows_the_side`,
   `volume_keys_and_wheel_do_not_show_the_readout`, `the_marquee_pauses_during_a_mixer_drag`,
   `dragging_an_eq_band_shows_its_gain_until_release`, `dragging_the_preamp_shows_its_gain`,
-  `eq_toggle_and_preset_do_not_show_the_readout`, `an_out_of_range_eq_band_shows_no_readout`
+  `eq_toggle_and_preset_do_not_show_the_readout`, `an_out_of_range_eq_band_shows_no_readout`,
+  `dragging_the_seek_slider_shows_the_target_until_release`, `a_seek_drag_without_a_duration_shows_no_seek_text`,
+  `the_marquee_pauses_during_a_seek_drag`
   (`src/ui/tests.rs`)
 
 **History.** Added 2026-10-24 with the mixer readout plan.
