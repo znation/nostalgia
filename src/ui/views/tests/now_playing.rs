@@ -555,29 +555,31 @@ fn elapsed_readout_toggles_only_while_not_stopped() {
     }
 }
 
+/// Lays out the sample "00:53 / Opening / Band" row in `mode`, with the
+/// elapsed readout's blink phase `elapsed_visible`, and captures its text.
+fn captured_sample_row(mode: TransportMode, elapsed_visible: bool) -> layout_capture::TextCapture {
+    let mut element: iced::Element<'_, Message, iced::Theme, ()> = now_playing_row(
+        Cow::Borrowed("00:53"),
+        Cow::Borrowed("Opening"),
+        Cow::Borrowed("Band"),
+        Cow::Borrowed(""),
+        Cow::Borrowed("3:30"),
+        0,
+        mode,
+        elapsed_visible,
+        None,
+    )
+    .into();
+    layout_capture::capture_text(&mut element, &())
+}
+
 // The hidden blink phase draws the elapsed text transparent instead of
 // removing it, so the text keeps the same bounds and the title, total, and
 // status row stay in place.
 #[test]
 fn now_playing_row_keeps_the_elapsed_bounds_when_the_blink_hides_it() {
-    let capture = |visible: bool| {
-        let mut element: iced::Element<'_, Message, iced::Theme, ()> = now_playing_row(
-            Cow::Borrowed("00:53"),
-            Cow::Borrowed("Opening"),
-            Cow::Borrowed("Band"),
-            Cow::Borrowed(""),
-            Cow::Borrowed("3:30"),
-            0,
-            TransportMode::Paused,
-            visible,
-            None,
-        )
-        .into();
-        layout_capture::capture_text(&mut element, &())
-    };
-
-    let visible = capture(true);
-    let hidden = capture(false);
+    let visible = captured_sample_row(TransportMode::Paused, true);
+    let hidden = captured_sample_row(TransportMode::Paused, false);
 
     assert_eq!(visible.find("00:53"), hidden.find("00:53"));
     assert_eq!(
@@ -599,19 +601,7 @@ fn now_playing_row_keeps_the_elapsed_readout_in_place_across_transport_modes() {
         TransportMode::Paused,
         TransportMode::Stopped,
     ] {
-        let mut element: iced::Element<'_, Message, iced::Theme, ()> = now_playing_row(
-            Cow::Borrowed("00:53"),
-            Cow::Borrowed("Opening"),
-            Cow::Borrowed("Band"),
-            Cow::Borrowed(""),
-            Cow::Borrowed("3:30"),
-            0,
-            mode,
-            true,
-            None,
-        )
-        .into();
-        let capture = layout_capture::capture_text(&mut element, &());
+        let capture = captured_sample_row(mode, true);
         let glyph = capture.find(transport_glyph(mode));
         let elapsed = capture.find("00:53");
         assert!(
