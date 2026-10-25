@@ -1310,6 +1310,24 @@ normal-mode branch of `ui::view::view` in `src/ui/view.rs`, which wraps the base
 `view_constructs_over_the_apps_full_input_space`, `view_constructs_when_the_window_is_shaded`, and
 `title_bar_constructs_for_both_about_states` (`src/ui/tests/view_tests.rs`).
 
+## Song-list footer
+
+**Guarantee.** A non-empty song list draws a footer beneath its rows. With no selection it reads
+`<count> song(s) - <total>`. While the list's own `selected` index names a song, it reads
+`<count> song(s) - <selected length>/<total>`, for example `2 songs - 3:30/4:15`; a zero-length
+selected song reads `0:00`. An index past the list falls back to the plain form.
+
+**Enforced by.** `views::browse::rows::text::song_list_summary` formats both forms;
+`views::browse::rows::song_list` passes its `selected` argument to it.
+
+**Pinned by.** `song_list_summary_counts_songs_and_sums_durations` and the other existing
+`song_list_summary_*` tests (plain form, `None`),
+`song_list_summary_puts_the_selected_length_before_the_total`,
+`song_list_summary_reads_a_zero_length_selection_as_zero`, and
+`song_list_summary_ignores_a_selection_past_the_list` (`src/ui/views/tests/browse.rs`).
+
+**History.** Added with the selected-length footer, like Winamp's playlist status line.
+
 ## Library footer
 
 **Guarantee.** While the library panel is shown in normal mode, it draws exactly one compact

@@ -202,21 +202,28 @@ pub(in crate::ui::views) fn list_count_summary(
 }
 
 /// The count-and-time footer beneath a loaded song list: `"<count> song(s) -
-/// <total>"`, with the singular `song` for a count of one and the total from
+/// <total>"`, or `"<count> song(s) - <selected>/<total>"` while `selected`
+/// indexes a song in the list (a zero-length selection reads `0:00`; an index
+/// past the list falls back to the plain form), with the singular `song` for a count of one and the total from
 /// [`format_minutes_seconds`] (whose zero total is a real `"0:00"`, not the
 /// per-track `"--:--"` placeholder). Every entry counts, including one whose
 /// `duration_ms` is `0`; the durations are summed with `u64::saturating_add`
 /// so a large list cannot overflow the total. Pure so the wording and
 /// arithmetic are testable without an iced renderer.
-pub(in crate::ui::views) fn song_list_summary(songs: &[Song]) -> String {
+pub(in crate::ui::views) fn song_list_summary(songs: &[Song], selected: Option<usize>) -> String {
     let total_ms = songs
         .iter()
         .fold(0u64, |total, song| total.saturating_add(song.duration_ms));
     let noun = if songs.len() == 1 { "song" } else { "songs" };
-    format!(
-        "{} {} - {}",
-        songs.len(),
-        noun,
-        format_minutes_seconds(total_ms)
-    )
+    let total = format_minutes_seconds(total_ms);
+    match selected.and_then(|index| songs.get(index)) {
+        Some(song) => format!(
+            "{} {} - {}/{}",
+            songs.len(),
+            noun,
+            format_minutes_seconds(song.duration_ms),
+            total
+        ),
+        None => format!("{} {} - {}", songs.len(), noun, total),
+    }
 }

@@ -339,28 +339,50 @@ fn summary_song(duration_ms: u64) -> Song {
 }
 
 #[test]
-fn song_list_summary_counts_songs_and_sums_durations() {
-    assert_eq!(song_list_summary(&[]), "0 songs - 0:00");
+fn song_list_summary_puts_the_selected_length_before_the_total() {
     let songs = [summary_song(210_000), summary_song(45_000)];
-    assert_eq!(song_list_summary(&songs), "2 songs - 4:15");
+    assert_eq!(song_list_summary(&songs, Some(1)), "2 songs - 0:45/4:15");
+    assert_eq!(song_list_summary(&songs, Some(0)), "2 songs - 3:30/4:15");
+}
+
+#[test]
+fn song_list_summary_reads_a_zero_length_selection_as_zero() {
+    let songs = [summary_song(210_000), summary_song(0)];
+    assert_eq!(song_list_summary(&songs, Some(1)), "2 songs - 0:00/3:30");
+}
+
+#[test]
+fn song_list_summary_ignores_a_selection_past_the_list() {
+    assert_eq!(
+        song_list_summary(&[summary_song(210_000)], Some(1)),
+        "1 song - 3:30"
+    );
+    assert_eq!(song_list_summary(&[], Some(0)), "0 songs - 0:00");
+}
+
+#[test]
+fn song_list_summary_counts_songs_and_sums_durations() {
+    assert_eq!(song_list_summary(&[], None), "0 songs - 0:00");
+    let songs = [summary_song(210_000), summary_song(45_000)];
+    assert_eq!(song_list_summary(&songs, None), "2 songs - 4:15");
 }
 
 #[test]
 fn song_list_summary_uses_the_singular_for_one_song() {
     let songs = [summary_song(210_000)];
-    assert_eq!(song_list_summary(&songs), "1 song - 3:30");
+    assert_eq!(song_list_summary(&songs, None), "1 song - 3:30");
 }
 
 #[test]
 fn song_list_summary_counts_unknown_durations_without_adding_time() {
     let songs = [summary_song(210_000), summary_song(0)];
-    assert_eq!(song_list_summary(&songs), "2 songs - 3:30");
+    assert_eq!(song_list_summary(&songs, None), "2 songs - 3:30");
 }
 
 #[test]
 fn song_list_summary_keeps_counting_minutes_past_an_hour() {
     let songs = [summary_song(3_665_000)];
-    assert_eq!(song_list_summary(&songs), "1 song - 61:05");
+    assert_eq!(song_list_summary(&songs, None), "1 song - 61:05");
 }
 
 // The total is summed with `saturating_add`, so a payload carrying a duration
@@ -369,15 +391,24 @@ fn song_list_summary_keeps_counting_minutes_past_an_hour() {
 #[test]
 fn song_list_summary_saturates_a_total_past_the_u64_ceiling() {
     let songs = [summary_song(u64::MAX), summary_song(1)];
-    assert_eq!(song_list_summary(&songs), "2 songs - 307445734561825:51");
+    assert_eq!(
+        song_list_summary(&songs, None),
+        "2 songs - 307445734561825:51"
+    );
 }
 
 // The footer's time is whole seconds, so a sub-second total truncates rather
 // than rounding: a 999 ms list reads 0:00 and 1_999 ms reads 0:01.
 #[test]
 fn song_list_summary_truncates_a_sub_second_total() {
-    assert_eq!(song_list_summary(&[summary_song(999)]), "1 song - 0:00");
-    assert_eq!(song_list_summary(&[summary_song(1_999)]), "1 song - 0:01");
+    assert_eq!(
+        song_list_summary(&[summary_song(999)], None),
+        "1 song - 0:00"
+    );
+    assert_eq!(
+        song_list_summary(&[summary_song(1_999)], None),
+        "1 song - 0:01"
+    );
 }
 
 // The playing row is marked by its white text, not a selection bar; the

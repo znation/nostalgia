@@ -260,7 +260,7 @@ pub(in crate::ui::views) fn list_with_count<'a>(
 /// the blue bar. `placeholder` is the caller's [`text::browse_placeholder`] wording
 /// for an empty list; it differs between the two callers because only a search
 /// reads as "no matches". A non-empty list also appends the count-and-time
-/// footer ([`song_list_summary`]) beneath its rows; an empty list returns only
+/// footer ([`song_list_summary`], which includes the selected row's length) beneath its rows; an empty list returns only
 /// the scrollable so its loading, error, or empty placeholder stays alone.
 pub(in crate::ui::views) fn song_list<'a>(
     songs: &'a [Song],
@@ -287,5 +287,5 @@ pub(in crate::ui::views) fn song_list<'a>(
     if songs.is_empty() {
         return list;
     }
-    with_footer(list, song_list_summary(songs))
+    with_footer(list, song_list_summary(songs, selected))
 }
