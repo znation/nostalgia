@@ -96,4 +96,48 @@ mod tests {
             .join()
             .expect("the tick thread should finish cleanly");
     }
+
+    // A refused spawn must not panic the UI thread: the failure goes to the
+    // reporter exactly once, and the stream ends (its sender went down with
+    // the work that never ran) instead of hanging the caller's readout.
+    #[test]
+    fn a_refused_spawn_is_reported_and_ends_the_stream() {
+        use iced::futures::{StreamExt, executor::block_on};
+        use std::cell::RefCell;
+        use std::io;
+
+        let reported = RefCell::new(Vec::new());
+        let mut stream = Box::pin(tick_stream(
+            Duration::from_millis(1),
+            |_work| Err(io::Error::other("no threads left")),
+            |error| {
+                reported.borrow_mut().push(error.to_string());
+                "tick thread refused".to_string()
+            },
+        ));
+
+        assert_eq!(block_on(stream.next()), None, "the stream must end");
+        assert_eq!(*reported.borrow(), vec!["no threads left".to_string()]);
+    }
+
+    // The started thread feeds the stream: a live spawner yields ticks, and
+    // the failure reporter is never consulted.
+    #[test]
+    fn a_started_thread_yields_ticks_without_reporting_failure() {
+        use iced::futures::{StreamExt, executor::block_on};
+
+        let mut stream = Box::pin(tick_stream(
+            Duration::from_millis(1),
+            |work| {
+                std::thread::Builder::new()
+                    .name("nostalgia-tick-stream-test".to_string())
+                    .spawn(work)
+                    .map(|_| ())
+            },
+            |_error| panic!("a successful spawn must not report a failure"),
+        ));
+
+        assert_eq!(block_on(stream.next()), Some(()));
+        assert_eq!(block_on(stream.next()), Some(()));
+    }
 }
