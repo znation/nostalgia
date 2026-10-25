@@ -90,8 +90,11 @@ impl FileStore {
     pub fn load(&self) -> Option<Settings> {
         let path = self.path.as_ref()?;
         sweep_stale_temporaries(path);
-        match std::fs::read_to_string(path) {
-            Ok(text) => Some(Settings::from_text(&text)),
+        // Read bytes and decode lossily: one corrupt byte must spoil only its
+        // own line, not make `read_to_string` reject the whole file and reset
+        // every other setting.
+        match std::fs::read(path) {
+            Ok(bytes) => Some(Settings::from_text(&String::from_utf8_lossy(&bytes))),
             Err(error) => {
                 if let Some(message) = read_failure_message(path, &error) {
                     eprintln!("{message}");
@@ -337,6 +340,26 @@ mod tests {
                 .unwrap()
                 .as_nanos()
         ))
+    }
+
+    // A byte that is not UTF-8 spoils only its own line; the other settings
+    // still load instead of the whole file falling back to defaults.
+    #[test]
+    fn file_store_load_keeps_valid_lines_around_invalid_utf8() {
+        let root = temporary_root("invalid-utf8");
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("settings.ini");
+        let mut bytes = b"volume=0.25\nbalance=\xff\xfe\nrepeat=true\n".to_vec();
+        bytes.extend_from_slice(b"shuffle=true\n");
+        std::fs::write(&path, bytes).unwrap();
+
+        let loaded = FileStore::at(path).load().expect("file is readable");
+
+        assert!((loaded.volume - 0.25).abs() < f32::EPSILON);
+        assert!(loaded.repeat && loaded.shuffle);
+        assert!(loaded.balance.abs() < f32::EPSILON);
+
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     // With no resolvable location, persistence is disabled: loading yields
