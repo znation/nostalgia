@@ -620,8 +620,10 @@ and the LCD strip's always-on-top choice — are loaded once before the
 first view is drawn and rewritten after any update that changes their snapshot. An update that
 leaves the snapshot unchanged writes nothing. Reads and writes go through the state's clamped
 setters, so out-of-range values from a file cannot push shared state outside its documented ranges.
-A missing or unreadable file, or a malformed line, falls back per key without failing startup; an
-unwritable file is logged rather than crashing the player. Each save stages the whole snapshot in
+A missing file, or a malformed line, falls back per key without failing startup; an unreadable file
+falls back the same way and prints one stderr line naming the path (`read_failure_message` in
+`src/settings/file_store.rs`, which stays silent for a missing file); an unwritable file is logged
+rather than crashing the player. Each save stages the whole snapshot in
 a sibling temp file, flushes it to disk, and renames it over the target, so a failed, interrupted,
 or crashed write leaves the previous file intact instead of a truncated one; a failed write or
 rename removes the temp file, and a load sweeps temp files a killed save left behind once they are
