@@ -213,26 +213,48 @@ fn temporary_sibling(path: &Path) -> PathBuf {
 /// Replace `path` with `text` by writing a sibling temp file, syncing it, and
 /// renaming it over the target, so a process killed mid-write leaves the
 /// previous file intact instead of a truncated one. A failed write, sync, or
-/// rename removes the temp file and reports the error.
+/// rename removes the temp file and reports the error. The containing
+/// directory is synced after the rename so the new name survives a power loss;
+/// a failure there is reported although the new file is already in place.
 fn write_atomically(path: &Path, text: &str) -> io::Result<()> {
-    write_atomically_syncing(path, text, File::sync_all)
+    write_atomically_syncing(path, text, File::sync_all, sync_parent_directory)
 }
 
-/// [`write_atomically`] with the flush step injected. The sync runs after the
+/// Flush the directory entry of `path` (the rename) to disk. Directories
+/// cannot be opened for syncing on non-Unix platforms, where this does nothing.
+fn sync_parent_directory(path: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        let parent = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
+        File::open(parent)?.sync_all()
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        Ok(())
+    }
+}
+
+/// [`write_atomically`] with the flush steps injected. The file sync runs after the
 /// bytes are written and before the rename: without it a delayed-allocation
 /// filesystem could report ENOSPC during writeback after the rename already
 /// replaced the previous file, and a crash could persist the rename without
-/// the new contents.
+/// the new contents. `sync_directory` runs only after a successful rename.
 fn write_atomically_syncing(
     path: &Path,
     text: &str,
     sync: impl FnOnce(&File) -> io::Result<()>,
+    sync_directory: impl FnOnce(&Path) -> io::Result<()>,
 ) -> io::Result<()> {
     write_atomically_with(path, |temporary| {
         let mut file = File::create(temporary)?;
         file.write_all(text.as_bytes())?;
         sync(&file)
-    })
+    })?;
+    sync_directory(path)
 }
 
 fn write_atomically_with(
@@ -423,21 +445,56 @@ mod tests {
         std::fs::write(&path, "volume=0.25\n").unwrap();
 
         let mut synced_with_old_target = false;
-        write_atomically_syncing(&path, "volume=0.9\n", |file| {
-            synced_with_old_target = std::fs::read_to_string(&path).unwrap() == "volume=0.25\n";
-            file.sync_all()
-        })
+        write_atomically_syncing(
+            &path,
+            "volume=0.9\n",
+            |file| {
+                synced_with_old_target = std::fs::read_to_string(&path).unwrap() == "volume=0.25\n";
+                file.sync_all()
+            },
+            |_| Ok(()),
+        )
         .unwrap();
         assert!(synced_with_old_target);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "volume=0.9\n");
 
-        let error = write_atomically_syncing(&path, "volume=0.1\n", |_| {
-            Err(io::Error::other("no space left"))
-        })
+        let mut directory_synced = false;
+        let error = write_atomically_syncing(
+            &path,
+            "volume=0.1\n",
+            |_| Err(io::Error::other("no space left")),
+            |_| {
+                directory_synced = true;
+                Ok(())
+            },
+        )
         .unwrap_err();
+        assert!(!directory_synced);
         assert_eq!(error.to_string(), "no space left");
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "volume=0.9\n");
         assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    // The directory is synced after the rename, so the new file is already in
+    // place when it runs, and its failure is reported rather than swallowed.
+    #[test]
+    fn the_directory_is_synced_after_the_rename_and_its_failure_is_reported() {
+        let root = temporary_root("dir-sync");
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("settings.ini");
+        std::fs::write(&path, "volume=0.25\n").unwrap();
+
+        let mut contents_at_sync = String::new();
+        let error = write_atomically_syncing(&path, "volume=0.9\n", File::sync_all, |target| {
+            contents_at_sync = std::fs::read_to_string(target).unwrap();
+            Err(io::Error::other("directory sync failed"))
+        })
+        .unwrap_err();
+
+        assert_eq!(contents_at_sync, "volume=0.9\n");
+        assert_eq!(error.to_string(), "directory sync failed");
+        sync_parent_directory(&path).unwrap();
         std::fs::remove_dir_all(&root).unwrap();
     }
 

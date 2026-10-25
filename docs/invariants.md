@@ -624,7 +624,7 @@ A missing file, or a malformed line (including bytes that are not UTF-8, which a
 falls back the same way and prints one stderr line naming the path (`read_failure_message` in
 `src/settings/file_store.rs`, which stays silent for a missing file); an unwritable file is logged
 rather than crashing the player. Each save stages the whole snapshot in
-a sibling temp file, flushes it to disk, and renames it over the target, so a failed, interrupted,
+a sibling temp file, flushes it to disk, and renames it over the target and then syncs the directory, so a failed, interrupted,
 or crashed write leaves the previous file intact instead of a truncated one; a failed write or
 rename removes the temp file, and a load sweeps temp files a killed save left behind once they are
 old enough not to belong to an in-flight save. The readout mode, the visualizer's shown/hidden
