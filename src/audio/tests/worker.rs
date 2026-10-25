@@ -1,5 +1,26 @@
 use super::*;
 
+// Sends one query to a worker with no player installed and asserts it
+// answers `None` without creating a player. `query` names the query in the
+// panic message; `command` wraps the reply sender in the query's variant.
+fn assert_unloaded_query_reports_none<T: std::fmt::Debug + PartialEq>(
+    query: &str,
+    command: fn(mpsc::Sender<Option<T>>) -> Command,
+) {
+    let (sender, receiver) = mpsc::channel();
+    let create_player = || -> RecordingPlayer {
+        panic!("a {query} must not create a player");
+    };
+    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+    let (reply, replies) = mpsc::channel();
+
+    sender.send(command(reply)).unwrap();
+    drop(sender);
+    serve_commands(receiver, create_player, fetch);
+
+    assert_eq!(replies.recv().unwrap(), None);
+}
+
 // `play_track` commits the new track and returns `Ok` as soon as the
 // command is queued, so the worker's later download failure is invisible
 // to the caller. If that failure left the previous player running, the old
@@ -252,18 +273,7 @@ fn duration_query_returns_the_loaded_players_duration() {
 // creating a player or inventing a length.
 #[test]
 fn duration_query_reports_none_when_nothing_is_loaded() {
-    let (sender, receiver) = mpsc::channel();
-    let create_player = || -> RecordingPlayer {
-        panic!("a duration query must not create a player");
-    };
-    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
-    let (reply, replies) = mpsc::channel();
-
-    sender.send(Command::Duration(reply)).unwrap();
-    drop(sender);
-    serve_commands(receiver, create_player, fetch);
-
-    assert_eq!(replies.recv().unwrap(), None);
+    assert_unloaded_query_reports_none("duration query", Command::Duration);
 }
 
 // Pause must not unload the player: the worker keeps it installed and
@@ -299,18 +309,7 @@ fn a_pause_keeps_the_loaded_player_reporting_its_position() {
 // creating a player or inventing a zero position.
 #[test]
 fn position_query_reports_none_when_nothing_is_loaded() {
-    let (sender, receiver) = mpsc::channel();
-    let create_player = || -> RecordingPlayer {
-        panic!("a position query must not create a player");
-    };
-    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
-    let (reply, replies) = mpsc::channel();
-
-    sender.send(Command::Position(reply)).unwrap();
-    drop(sender);
-    serve_commands(receiver, create_player, fetch);
-
-    assert_eq!(replies.recv().unwrap(), None);
+    assert_unloaded_query_reports_none("position query", Command::Position);
 }
 
 // A format query with a player installed must answer from that player, the
@@ -342,18 +341,7 @@ fn playback_format_query_returns_the_loaded_players_format() {
 // inventing a sample rate for a preview that is not loaded.
 #[test]
 fn playback_format_query_reports_none_when_nothing_is_loaded() {
-    let (sender, receiver) = mpsc::channel();
-    let create_player = || -> RecordingPlayer {
-        panic!("a format query must not create a player");
-    };
-    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
-    let (reply, replies) = mpsc::channel();
-
-    sender.send(Command::PlaybackFormat(reply)).unwrap();
-    drop(sender);
-    serve_commands(receiver, create_player, fetch);
-
-    assert_eq!(replies.recv().unwrap(), None);
+    assert_unloaded_query_reports_none("format query", Command::PlaybackFormat);
 }
 
 // The Rodio player's query guard reports its meter only once a preview is
@@ -532,36 +520,14 @@ fn finished_query_returns_the_loaded_players_finished_state() {
 // claiming a preview that is not loaded has ended.
 #[test]
 fn finished_query_reports_none_when_nothing_is_loaded() {
-    let (sender, receiver) = mpsc::channel();
-    let create_player = || -> RecordingPlayer {
-        panic!("a finished query must not create a player");
-    };
-    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
-    let (reply, replies) = mpsc::channel();
-
-    sender.send(Command::Finished(reply)).unwrap();
-    drop(sender);
-    serve_commands(receiver, create_player, fetch);
-
-    assert_eq!(replies.recv().unwrap(), None);
+    assert_unloaded_query_reports_none("finished query", Command::Finished);
 }
 
 // With no player installed, a spectrum query reports `None` instead of
 // inventing bars for a preview that is not loaded.
 #[test]
 fn spectrum_query_reports_none_when_nothing_is_loaded() {
-    let (sender, receiver) = mpsc::channel();
-    let create_player = || -> RecordingPlayer {
-        panic!("a spectrum query must not create a player");
-    };
-    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
-    let (reply, replies) = mpsc::channel();
-
-    sender.send(Command::Spectrum(reply)).unwrap();
-    drop(sender);
-    serve_commands(receiver, create_player, fetch);
-
-    assert_eq!(replies.recv().unwrap(), None);
+    assert_unloaded_query_reports_none("spectrum query", Command::Spectrum);
 }
 
 // Stop drops the loaded player, so a later spectrum query cannot answer with
