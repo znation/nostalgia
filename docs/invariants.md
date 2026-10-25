@@ -714,14 +714,14 @@ side of the thumb. A gain outside the range clamps to the matching end stop, and
 renders the flat yellow instead of an invalid color. The vertical preamp slider's groove in the band
 row takes the same tint from the stored preamp gain.
 
-**Enforced by.** `style::band_gain_color` and `style::band_slider_style` in `src/ui/style.rs`,
+**Enforced by.** `style::band_gain_color` and `style::band_slider_style` in `src/ui/style/slider_style.rs`,
 used by `views::view_equalizer` and `views::equalizer::preamp_slider_style` in
 `src/ui/views/equalizer.rs`.
 
 **Pinned by.** `preamp_slider_style_matches_the_band_tint_for_its_gain` in
 `src/ui/views/tests/equalizer.rs`, `band_gain_color_runs_green_through_yellow_to_red`,
 `band_gain_color_clamps_and_maps_nan_to_flat`, and
-`band_slider_style_paints_both_rail_halves_and_keeps_the_chrome_thumb` in `src/ui/style.rs`.
+`band_slider_style_paints_both_rail_halves_and_keeps_the_chrome_thumb` in `src/ui/style/slider_style.rs`.
 
 **History.** The tint is presentation-only: it reads the same stored gains the sliders and
 `BandFilter` use but does not change the curve the audio filter applies.
@@ -739,12 +739,12 @@ The chrome thumb, the 4px rail width, the 1px dark rail border, and the square g
 unchanged from `chrome_slider_style`, and hover and drag still change only the handle face. The
 seek bar keeps the neutral `theme::LCD_BACKGROUND` groove.
 
-**Enforced by.** `style::level_slider_style` in `src/ui/style.rs`, used by `views::chrome_slider`
+**Enforced by.** `style::level_slider_style` in `src/ui/style/slider_style.rs`, used by `views::chrome_slider`
 in `src/ui/views/mod.rs` (the transport row and shade strip pass their fills there), with the
 fills computed in `src/ui/style/level_tint.rs`.
 
 **Pinned by.** `base_skin_colors_keep_their_documented_literal_values` in `src/ui/theme.rs` and
-`level_slider_style_paints_both_rail_halves_and_keeps_the_chrome_thumb` in `src/ui/style.rs`, and
+`level_slider_style_paints_both_rail_halves_and_keeps_the_chrome_thumb` in `src/ui/style/slider_style.rs`, and
 in `src/ui/style/level_tint.rs` the tests `volume_color_hits_its_three_stops_exactly`,
 `volume_color_clamps_and_maps_nan_to_silence`,
 `volume_color_between_stops_lies_between_neighbours`,
