@@ -53,8 +53,8 @@ pub struct AppState {
     eq_preamp: f32,
     /// The gain in decibels of each of the [`equalizer::BAND_COUNT`] bands,
     /// low frequency to high; flat (all `0.0`) by default. Kept private like
-    /// `volume`: [`AppState::set_eq_band`] and
-    /// [`AppState::apply_eq_preset`] are its writers, both through
+    /// `volume`: [`AppState::set_eq_band`], [`AppState::set_all_eq_bands`],
+    /// and [`AppState::apply_eq_preset`] are its writers, all through
     /// [`equalizer::clamp_gain`], and [`AppState::eq_bands`] is its only
     /// reader.
     eq_bands: [f32; equalizer::BAND_COUNT],
@@ -210,8 +210,9 @@ impl AppState {
     /// (a stale slider message after the band count shrinks, say) is ignored
     /// rather than panicking: `get_mut` yields `None` and nothing is stored,
     /// so a bad index can't take the window down mid-drag. The field is
-    /// private and both writers go through `clamp_gain` (this setter and
-    /// [`AppState::apply_eq_preset`]), so every stored band gain is clamped.
+    /// private and every writer goes through `clamp_gain` (this setter,
+    /// [`AppState::set_all_eq_bands`], and [`AppState::apply_eq_preset`]), so
+    /// every stored band gain is clamped.
     /// A hand-moved slider is a custom curve, so a stored gain clears
     /// any applied preset selection; an ignored out-of-range index stores
     /// nothing and leaves the selection alone.
@@ -220,6 +221,14 @@ impl AppState {
             *slot = equalizer::clamp_gain(gain);
             self.eq_preset = None;
         }
+    }
+
+    /// Store one clamped gain into every band and clear the preset selection,
+    /// since the curve is now custom. The equalizer's dB scale labels are the
+    /// only caller. It leaves the preamp alone, as Winamp's labels do.
+    pub fn set_all_eq_bands(&mut self, gain: f32) {
+        self.eq_bands = [equalizer::clamp_gain(gain); equalizer::BAND_COUNT];
+        self.eq_preset = None;
     }
 
     /// Apply a whole preset curve: store its preamp and every band gain
@@ -636,6 +645,24 @@ mod tests {
         let mut state = AppState::default();
         state.set_eq_band(0, f32::NAN);
         assert_eq!(state.eq_bands()[0], 0.0);
+    }
+
+    #[test]
+    fn set_all_eq_bands_clamps_every_band_and_clears_the_preset() {
+        let mut state = AppState::default();
+        let preset = rock_preset();
+        state.apply_eq_preset(preset);
+
+        state.set_all_eq_bands(99.0);
+        assert_eq!(
+            state.eq_bands(),
+            [crate::equalizer::GAIN_MAX_DB; crate::equalizer::BAND_COUNT]
+        );
+        assert_eq!(state.eq_preamp(), preset.preamp);
+        assert_eq!(state.eq_preset(), None);
+
+        state.set_all_eq_bands(0.0);
+        assert_eq!(state.eq_bands(), [0.0; crate::equalizer::BAND_COUNT]);
     }
 
     #[test]

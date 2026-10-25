@@ -7,6 +7,38 @@ use super::*;
 // moves means the thumb cannot reach the stored extreme; a bound the clamp
 // accepts but the slider cannot reach leaves part of the scale unusable.
 
+// A left press on a dB scale label must publish the set-all message with that
+// label's gain, and nothing else.
+#[test]
+fn pressing_a_db_scale_label_sets_every_band_to_its_gain() {
+    for (label, gain) in [
+        ("+12 DB", GAIN_MAX_DB),
+        ("0 DB", 0.0),
+        ("-12 DB", GAIN_MIN_DB),
+    ] {
+        let mut renderer = layout_capture::headless_renderer();
+        let mut element = view_equalizer(true, 0.0, &[0.0; BAND_COUNT], None);
+        let capture = layout_capture::capture_text(&mut element, &renderer);
+        let text = capture.find(label);
+        let messages = layout_capture::publish_at(
+            element,
+            &mut renderer,
+            &[iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
+                iced::mouse::Button::Left,
+            ))],
+            iced::Point::new(text.center_x(), text.center_y()),
+        );
+        let sent: Vec<f32> = messages
+            .iter()
+            .filter_map(|message| match message {
+                Message::EqBandsSetAll(g) => Some(*g),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(sent, vec![gain], "a press on {label}: {messages:?}");
+    }
+}
+
 // The mockup draws the preamp as a vertical slider in the band row with a dB
 // scale beside it, not as a horizontal slider above the curve. Lay out the
 // real panel and pin the scale's top-to-bottom order, the preamp label's

@@ -169,7 +169,8 @@ balance; a drag moving back toward the middle snaps to exact center within 10% o
 `Balance: 31% Left`) in place of the title until release; an equalizer band or preamp drag does the same
 (`EQ: 60HZ +3 DB`, `Preamp: -12 DB`), and dragging the seek slider shows the target
 (`Seek to: 01:23/03:30 (39%)`) the same way. The equalizer panel's on/off button,
-sliders, and presets change the playing preview's curve live; the volume and balance are
+sliders, and presets change the playing preview's curve live; clicking `+12 DB`, `0 DB`, or `-12 DB` sets all ten bands to that gain and
+leaves the preamp alone; the volume and balance are
 remembered for the next track. Setting
 `APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a browser-based MusicKit sign-in: browse and search
 queries then read your Apple Music library through the REST API, and fall back to the built-in

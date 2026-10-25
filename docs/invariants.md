@@ -726,6 +726,19 @@ used by `views::view_equalizer` and `views::equalizer::preamp_slider_style` in
 **History.** The tint is presentation-only: it reads the same stored gains the sliders and
 `BandFilter` use but does not change the curve the audio filter applies.
 
+## Equalizer scale shortcuts
+
+**Guarantee.** A press on an equalizer dB scale label (`+12 DB`, `0 DB`, `-12 DB`) stores that
+label's clamped gain in all ten bands, clears the preset selection, leaves the preamp, the on/off
+flag and the LCD readout untouched, and forwards the curve to the audio backend.
+
+**Enforced by.** `db_scale_column` in `src/ui/views/equalizer.rs`, `handlers::mixer::eq_bands_set_all`,
+and `AppState::set_all_eq_bands`.
+
+**Pinned by.** `set_all_eq_bands_clamps_every_band_and_clears_the_preset` in `src/state.rs`,
+`eq_scale_click_sets_every_band_and_keeps_the_preamp` in `src/ui/tests/mixer_tests.rs`, and
+`pressing_a_db_scale_label_sets_every_band_to_its_gain` in `src/ui/views/tests/equalizer.rs`.
+
 ## Level slider fill
 
 **Guarantee.** The transport volume slider and the shade-mode volume slider paint both halves of

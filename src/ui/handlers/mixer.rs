@@ -129,6 +129,12 @@ pub(in crate::ui) fn eq_band_change(
     mutate_equalizer(player, |state| state.set_eq_band(band, gain))
 }
 
+/// A press on an equalizer dB scale label. It sets no `mixer_drag`: a click
+/// has no release to clear an LCD readout.
+pub(in crate::ui) fn eq_bands_set_all(player: &mut WinampPlayer, gain: f32) -> Task<Message> {
+    mutate_equalizer(player, |state| state.set_all_eq_bands(gain))
+}
+
 /// A preset pick from the equalizer's preset list.
 pub(in crate::ui) fn eq_preset_selected(
     player: &mut WinampPlayer,

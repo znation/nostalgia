@@ -120,6 +120,8 @@ pub(in crate::ui) enum Message {
     ToggleEqualizer,
     EqPreampChange(f32),
     EqBandChange(usize, f32),
+    // From a press on an equalizer dB scale label; carries that label's gain.
+    EqBandsSetAll(f32),
     EqPresetSelected(Preset),
     NextTrack,
     PreviousTrack,

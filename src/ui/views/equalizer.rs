@@ -4,7 +4,10 @@
 
 use iced::{
     Element, Length,
-    widget::{Column, Container, PickList, Row, Space, Text, VerticalSlider, container, slider},
+    mouse::Interaction,
+    widget::{
+        Column, Container, MouseArea, PickList, Row, Space, Text, VerticalSlider, container, slider,
+    },
 };
 
 use crate::equalizer::{
@@ -88,16 +91,24 @@ pub(super) fn response_curve_offsets(bands: &[f32; BAND_COUNT], columns: usize) 
 /// Builds the equalizer's dB scale: `+12 DB` at the rail's top, `0 DB` in the
 /// middle, and `-12 DB` at its bottom. The column is exactly
 /// [`EQ_SLIDER_HEIGHT`] tall and its two fill `Space`s split the leftover height
-/// evenly, so the middle label centers on the rail beside it.
+/// evenly, so the middle label centers on the rail beside it. Pressing a label
+/// sends [`Message::EqBandsSetAll`] with its gain, as in Winamp.
 pub(super) fn db_scale_column() -> Column<'static, Message> {
     Column::new()
         .width(Length::Shrink)
         .height(Length::Fixed(EQ_SLIDER_HEIGHT))
-        .push(Text::new("+12 DB").size(12))
+        .push(scale_label("+12 DB", GAIN_MAX_DB))
         .push(Space::new().height(Length::Fill))
-        .push(Text::new("0 DB").size(12))
+        .push(scale_label("0 DB", 0.0))
         .push(Space::new().height(Length::Fill))
-        .push(Text::new("-12 DB").size(12))
+        .push(scale_label("-12 DB", GAIN_MIN_DB))
+}
+
+/// One clickable dB scale label that sets every band to `gain`.
+fn scale_label(label: &'static str, gain: f32) -> MouseArea<'static, Message> {
+    MouseArea::new(Text::new(label).size(12))
+        .on_press(Message::EqBandsSetAll(gain))
+        .interaction(Interaction::Pointer)
 }
 
 /// Builds one equalizer slider column: a [`VerticalSlider`] over a gain, sized

@@ -50,6 +50,20 @@ fn eq_preset_selected_applies_the_curve_and_selection() {
 }
 
 #[test]
+fn eq_scale_click_sets_every_band_and_keeps_the_preamp() {
+    let (mut player, state) = test_player();
+    let _ = update(&mut player, Message::EqPresetSelected(rock_preset()));
+
+    let _ = update(&mut player, Message::EqBandsSetAll(GAIN_MIN_DB));
+
+    let state = state.blocking_lock();
+    assert_eq!(state.eq_bands(), [GAIN_MIN_DB; BAND_COUNT]);
+    assert_eq!(state.eq_preamp(), rock_preset().preamp);
+    assert_eq!(state.eq_preset(), None);
+    assert_eq!(player.mixer_drag, None);
+}
+
+#[test]
 fn volume_up_and_down_nudge_by_the_slider_step() {
     let (mut player, state) = test_player();
 
