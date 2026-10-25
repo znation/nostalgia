@@ -321,13 +321,7 @@ fn search_library_follows_a_next_page() {
 
 #[test]
 fn search_library_reports_a_transport_error_bare() {
-    let stub = StubTransport::failing("network down");
-    let library = library_over(&stub);
-
-    let error = library
-        .search_library(&rest_session(), "x")
-        .unwrap_err()
-        .to_string();
+    let error = transport_error_over(|library| library.search_library(&rest_session(), "x"));
 
     assert_eq!(error, "network down");
 }
@@ -436,13 +430,7 @@ fn get_all_songs_follows_a_next_page() {
 
 #[test]
 fn get_all_songs_reports_a_transport_error_bare() {
-    let stub = StubTransport::failing("network down");
-    let library = library_over(&stub);
-
-    let error = library
-        .get_all_songs(&rest_session())
-        .unwrap_err()
-        .to_string();
+    let error = transport_error_over(|library| library.get_all_songs(&rest_session()));
 
     assert_eq!(error, "network down");
 }
@@ -536,13 +524,7 @@ fn get_all_albums_follows_a_next_page() {
 
 #[test]
 fn get_all_albums_reports_a_transport_error_bare() {
-    let stub = StubTransport::failing("network down");
-    let library = library_over(&stub);
-
-    let error = library
-        .get_all_albums(&rest_session())
-        .unwrap_err()
-        .to_string();
+    let error = transport_error_over(|library| library.get_all_albums(&rest_session()));
 
     assert_eq!(error, "network down");
 }
@@ -599,13 +581,7 @@ fn get_all_playlists_follows_a_next_page() {
 
 #[test]
 fn get_all_playlists_reports_a_transport_error_bare() {
-    let stub = StubTransport::failing("network down");
-    let library = library_over(&stub);
-
-    let error = library
-        .get_all_playlists(&rest_session())
-        .unwrap_err()
-        .to_string();
+    let error = transport_error_over(|library| library.get_all_playlists(&rest_session()));
 
     assert_eq!(error, "network down");
 }
@@ -669,13 +645,9 @@ fn get_songs_from_playlist_percent_encodes_the_playlist_id() {
 
 #[test]
 fn get_songs_from_playlist_reports_a_transport_error_bare() {
-    let stub = StubTransport::failing("network down");
-    let library = library_over(&stub);
-
-    let error = library
-        .get_songs_from_playlist(&rest_session(), "playlist-9")
-        .unwrap_err()
-        .to_string();
+    let error = transport_error_over(|library| {
+        library.get_songs_from_playlist(&rest_session(), "playlist-9")
+    });
 
     assert_eq!(error, "network down");
 }
@@ -713,13 +685,7 @@ fn encode_path_segment_applies_the_rfc_3986_rule_to_every_ascii_byte() {
 
 #[test]
 fn transport_error_propagates_the_bare_cause() {
-    let stub = StubTransport::failing("network down");
-    let library = library_over(&stub);
-
-    let error = library
-        .get_favorite_artists(&rest_session())
-        .unwrap_err()
-        .to_string();
+    let error = transport_error_over(|library| library.get_favorite_artists(&rest_session()));
 
     // The cause is bare: the UI supplies the context naming the query, so
     // this layer does not repeat it.
@@ -728,26 +694,16 @@ fn transport_error_propagates_the_bare_cause() {
 
 #[test]
 fn albums_by_artist_transport_error_propagates_the_bare_cause() {
-    let stub = StubTransport::failing("network down");
-    let library = library_over(&stub);
-
-    let error = library
-        .get_albums_by_artist(&rest_session(), "artist-9")
-        .unwrap_err()
-        .to_string();
+    let error =
+        transport_error_over(|library| library.get_albums_by_artist(&rest_session(), "artist-9"));
 
     assert_eq!(error, "network down");
 }
 
 #[test]
 fn songs_from_album_transport_error_propagates_the_bare_cause() {
-    let stub = StubTransport::failing("network down");
-    let library = library_over(&stub);
-
-    let error = library
-        .get_songs_from_album(&rest_session(), "album-9")
-        .unwrap_err()
-        .to_string();
+    let error =
+        transport_error_over(|library| library.get_songs_from_album(&rest_session(), "album-9"));
 
     assert_eq!(error, "network down");
 }

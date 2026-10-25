@@ -32,6 +32,19 @@ fn error_over<T>(
     query(&library).map(|_| ()).unwrap_err().to_string()
 }
 
+/// The error message `query` reports when the transport itself fails with
+/// "network down".
+///
+/// The bare-cause tests all build the same failing stub and reduce their
+/// query's error to its `Display` string; this runs that scaffold once.
+fn transport_error_over<T>(
+    query: impl FnOnce(&RestLibrary) -> Result<T, AppleMusicError>,
+) -> String {
+    let stub = StubTransport::failing("network down");
+    let library = library_over(&stub);
+    query(&library).map(|_| ()).unwrap_err().to_string()
+}
+
 mod library;
 mod paging;
 mod transport;
