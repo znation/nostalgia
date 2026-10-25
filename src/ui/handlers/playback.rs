@@ -227,6 +227,23 @@ pub(in crate::ui) fn step_track(player: &mut WinampPlayer, forward: bool) -> Tas
     }
 }
 
+/// The task Ctrl+Z and Ctrl+B schedule: play the first (`last` false) or last
+/// song of the list the current view shows, ignoring Shuffle, Repeat, the
+/// current track, and the Previous restart rule, and scroll the list to that
+/// row like `step_track`. An empty list schedules nothing. It reads no shared
+/// state and leaves `play_history` alone.
+pub(in crate::ui) fn jump_to_edge_track(player: &mut WinampPlayer, last: bool) -> Task<Message> {
+    let (items, epoch) = showing_songs(player);
+    let Some(final_index) = items.len().checked_sub(1) else {
+        return Task::none();
+    };
+    let index = if last { final_index } else { 0 };
+    Task::batch([
+        Task::done(Message::TrackSelected { epoch, index }),
+        super::browse::scroll::scroll_browse_to_playing_row(player, index),
+    ])
+}
+
 /// The play request: the message carries the pressed row's index plus the
 /// epoch of the list that rendered it. The Songs view draws from `songs`
 /// and the flat All Songs view draws from `all_songs`, so resolve the press

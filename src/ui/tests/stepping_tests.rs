@@ -806,3 +806,75 @@ fn preview_end_with_a_stale_epoch_or_pending_transition_is_dropped() {
         },
     );
 }
+
+#[test]
+fn first_track_selects_the_first_song() {
+    let (mut player, _state) = player_stepping_from(Some("song-1"));
+
+    let task = update(&mut player, Message::FirstTrack);
+
+    assert_track_selected(task, 0, 0);
+}
+
+#[test]
+fn last_track_selects_the_last_song() {
+    let (mut player, _state) = player_stepping_from(Some("song-0"));
+
+    let task = update(&mut player, Message::LastTrack);
+
+    assert_track_selected(task, 0, stepping_songs().len() - 1);
+}
+
+#[test]
+fn edge_jumps_ignore_shuffle_and_repeat() {
+    let (mut player, state) = player_stepping_from(Some("song-1"));
+    {
+        let mut state = state.blocking_lock();
+        state.shuffle = true;
+        state.repeat = true;
+    }
+
+    let task = update(&mut player, Message::FirstTrack);
+    assert_track_selected(task, 0, 0);
+    let task = update(&mut player, Message::LastTrack);
+    assert_track_selected(task, 0, stepping_songs().len() - 1);
+}
+
+#[test]
+fn edge_jumps_with_no_songs_loaded_do_nothing() {
+    let (mut player, _state) = test_player();
+
+    assert_message_schedules_no_work(&mut player, Message::FirstTrack);
+    assert_message_schedules_no_work(&mut player, Message::LastTrack);
+}
+
+#[test]
+fn edge_jumps_in_all_songs_use_the_flat_list() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(second_album_songs()));
+    let _ = update(&mut player, Message::AllSongsLoaded(stepping_songs()));
+    player.current_view = CurrentView::AllSongs;
+
+    let task = update(&mut player, Message::FirstTrack);
+    assert_track_selected(task, 1, 0);
+    let task = update(&mut player, Message::LastTrack);
+    assert_track_selected(task, 1, stepping_songs().len() - 1);
+}
+
+#[test]
+fn edge_jumps_scroll_the_showing_song_list() {
+    let (mut player, _state) = player_stepping_from(Some("song-1"));
+    player.current_view = CurrentView::Songs;
+    let last = stepping_songs().len() - 1;
+
+    futures::executor::block_on(assert_task_scrolls_browse_list_to(
+        update(&mut player, Message::FirstTrack),
+        "first",
+        views::BROWSE_LIST_PADDING,
+    ));
+    futures::executor::block_on(assert_task_scrolls_browse_list_to(
+        update(&mut player, Message::LastTrack),
+        "last",
+        views::BROWSE_LIST_PADDING + last as f32 * views::BROWSE_ROW_HEIGHT,
+    ));
+}

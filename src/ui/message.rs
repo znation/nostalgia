@@ -125,6 +125,10 @@ pub(in crate::ui) enum Message {
     EqPresetSelected(Preset),
     NextTrack,
     PreviousTrack,
+    // Ctrl+Z: play the first song of the showing list, whatever Shuffle and Repeat say.
+    FirstTrack,
+    // Ctrl+B: play the last song of the showing list, whatever Shuffle and Repeat say.
+    LastTrack,
     // A browse row's single press: select that row (the view paints the
     // selection bar) without opening it. A second press on the row that is
     // already selected opens it, so a double-click reaches the existing

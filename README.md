@@ -146,7 +146,8 @@ X plays, C pauses, V stops, R toggles Repeat and S toggles Shuffle, A toggles al
 switches the large readout between elapsed and remaining time (the same actions as the on-screen A
 controls and a readout click), E shows or hides the equalizer panel exactly like the `EQ` button
 beside the balance slider, and the up/down arrows nudge the volume while the left/right arrows
-seek five seconds back or forward. Backspace steps the browse list back one level exactly like the
+seek five seconds back or forward. Ctrl+Z plays the first song of the list Z and B step through
+and Ctrl+B plays its last song. Backspace steps the browse list back one level exactly like the
 `Back` button, and does nothing at the Artists list; Home snaps the browse list to its first row
 and End to its last, like `Top`, and Page Up and Page Down scroll it one page at a time in the
 matching direction; while the `Search library` box is focused it keeps Backspace,

@@ -154,6 +154,8 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::EqPresetSelected(preset) => handlers::mixer::eq_preset_selected(player, preset),
         Message::NextTrack => handlers::playback::step_track(player, true),
         Message::PreviousTrack => handlers::playback::step_track(player, false),
+        Message::FirstTrack => handlers::playback::jump_to_edge_track(player, false),
+        Message::LastTrack => handlers::playback::jump_to_edge_track(player, true),
         Message::MarqueeTick => handlers::playback::marquee_tick(player),
         // The position poll asks the backend in tasks, as the service's
         // backend queries bound their own wait; `update` stays non-blocking.

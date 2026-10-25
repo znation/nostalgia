@@ -315,7 +315,7 @@ draw beside Top.
 ## Browse playing-row visibility
 
 **Guarantee.** When Next, Previous (including Shuffle's retrace of the tracks actually played), or
-the preview-end advance lands on a song while a song list (`CurrentView::Songs` or
+the preview-end advance, or a Ctrl+Z / Ctrl+B edge jump lands on a song while a song list (`CurrentView::Songs` or
 `CurrentView::AllSongs`) is showing, the update loop scrolls the browse list to that row's offset,
 `BROWSE_LIST_PADDING + index * BROWSE_ROW_HEIGHT`, in addition to scheduling the existing
 `TrackSelected`. `BROWSE_ROW_HEIGHT` is the laid-out vertical pitch between consecutive browse rows:
@@ -335,9 +335,9 @@ column, so every row keeps that pitch and stays inside its column;
 `handlers::browse::scroll::scroll_browse_to_row` in `src/ui/handlers/browse/scroll.rs` schedules
 the `iced::widget::operation::scroll_to` absolute offset, and
 `handlers::browse::scroll::scroll_browse_to_playing_row` gates it on the current view.
-`handlers::playback::step_track` and
+`handlers::playback::step_track`, `handlers::playback::jump_to_edge_track`, and
 `handlers::playback::preview::playback_finished` batch that scroll with their `TrackSelected`,
-so Next, Previous, a shuffled retrace, and a natural preview end all follow the landed row.
+so Next, Previous, a shuffled retrace, an edge jump, and a natural preview end all follow the landed row.
 
 **Pinned by.**
 
@@ -347,6 +347,7 @@ so Next, Previous, a shuffled retrace, and a natural preview end all follow the 
 - `a_hard_line_break_in_a_title_does_not_change_the_row_pitch`
 - `a_carriage_return_in_a_title_does_not_change_the_row_pitch`
 - `next_and_previous_scroll_the_showing_song_list_to_the_landed_row`
+- `edge_jumps_scroll_the_showing_song_list` (`src/ui/tests/stepping_tests.rs`)
 - `a_finished_preview_scrolls_the_song_list_to_the_advanced_row`
 - `stepping_while_another_browse_level_shows_does_not_scroll`
 - `a_row_press_does_not_scroll_the_list`
@@ -409,6 +410,29 @@ variants to those messages after its Control/Alt/Logo chord guard.
 - `shortcut_ignores_chord_modifiers` (`src/ui/shortcuts.rs`)
 
 **History.** Added with the system media-key transport bindings.
+
+## List edge jumps
+
+**Guarantee.** With the window focused, Ctrl+Z (also with Shift) maps to `Message::FirstTrack` and
+Ctrl+B to `Message::LastTrack`. They play the first and last song of the list the current view
+draws from (`all_songs` in the flat All Songs view, `songs` otherwise), whatever Shuffle, Repeat,
+the current track, and the playback position are, and scroll the list to that row. An empty list
+schedules nothing. Plain and Shift Z/B keep stepping, and Alt or Logo chords with them stay unbound.
+
+**Enforced by.** `shortcuts::shortcut` in `src/ui/shortcuts.rs` checks the two Control chords
+before its chord guard; `handlers::playback::jump_to_edge_track` picks the edge row and epoch from
+the showing list without reading shared state or touching the play history.
+
+**Pinned by.**
+
+- `message_for_maps_ctrl_z_and_ctrl_b_to_the_list_edges` and `shortcut_ignores_chord_modifiers`
+  (`src/ui/shortcuts.rs`)
+- `first_track_selects_the_first_song`, `last_track_selects_the_last_song`,
+  `edge_jumps_ignore_shuffle_and_repeat`, `edge_jumps_with_no_songs_loaded_do_nothing`,
+  `edge_jumps_in_all_songs_use_the_flat_list`, and `edge_jumps_scroll_the_showing_song_list`
+  (`src/ui/tests/stepping_tests.rs`)
+
+**History.** Added with the Ctrl+Z / Ctrl+B list-edge shortcuts.
 
 ## Browse row labels
 

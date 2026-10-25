@@ -20,7 +20,8 @@ use super::Message;
 /// Backspace to step the browse list back one level, Home and End to snap it
 /// to its first and last rows, Page Up and Page Down to scroll it one page at
 /// a time, F5 to refetch the library and return to the Artists list, Ctrl+F
-/// to focus the `Search library` box, and the system media keys
+/// to focus the `Search library` box, Ctrl+Z and Ctrl+B to play the first and
+/// last song of the showing list, and the system media keys
 /// (Play/Pause, Play, Pause, Stop, Next track, and Previous track) to the same
 /// transport messages as the on-screen controls
 /// (the one Control chord Winamp-style play uses).
@@ -45,7 +46,8 @@ pub(super) fn message_for(event: Event) -> Option<Message> {
 /// the `Search library` box, the up/down arrows nudge
 /// the volume, the left/right arrows seek five seconds
 /// back or forward, and the system media keys (Play/Pause, Play, Pause, Stop,
-/// Next track, and Previous track) drive the transport. Apart from Ctrl+F, a
+/// Next track, and Previous track) drive the transport. Apart from Ctrl+F,
+/// Ctrl+Z (play the first song), and Ctrl+B (play the last song), a
 /// Control, Alt, or
 /// Logo chord is left to the OS and window manager, so those modifiers yield
 /// `None`; Shift is allowed, and the letter match ignores ASCII case, so
@@ -62,6 +64,20 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
         && matches!(key, Key::Character(character) if character.eq_ignore_ascii_case("f"))
     {
         return Some(Message::FocusSearch);
+    }
+
+    // Ctrl+Z and Ctrl+B jump to the first and last song of the list Z and B
+    // step through, under the same no-Alt, no-Logo rule as Ctrl+F.
+    if modifiers.control() && !modifiers.alt() && !modifiers.logo() {
+        match key {
+            Key::Character(character) if character.eq_ignore_ascii_case("z") => {
+                return Some(Message::FirstTrack);
+            }
+            Key::Character(character) if character.eq_ignore_ascii_case("b") => {
+                return Some(Message::LastTrack);
+            }
+            _ => {}
+        }
     }
 
     if modifiers.control() || modifiers.alt() || modifiers.logo() {
@@ -281,12 +297,45 @@ mod tests {
     }
 
     #[test]
+    fn message_for_maps_ctrl_z_and_ctrl_b_to_the_list_edges() {
+        for modifiers in [Modifiers::CTRL, Modifiers::CTRL | Modifiers::SHIFT] {
+            for letter in ["z", "Z"] {
+                assert_maps!(Key::Character(letter.into()), modifiers => Message::FirstTrack);
+            }
+            for letter in ["b", "B"] {
+                assert_maps!(Key::Character(letter.into()), modifiers => Message::LastTrack);
+            }
+        }
+        for modifiers in [
+            Modifiers::ALT,
+            Modifiers::LOGO,
+            Modifiers::CTRL | Modifiers::ALT,
+            Modifiers::CTRL | Modifiers::LOGO,
+        ] {
+            for letter in ["z", "b"] {
+                assert!(
+                    message_for(key_pressed(Key::Character(letter.into()), modifiers)).is_none(),
+                    "{letter} with {modifiers:?} must not map"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn shortcut_ignores_chord_modifiers() {
         // Control, Alt, and Logo chords belong to the OS and window manager;
-        // Ctrl+F is the one Control exception, pinned by its own test above.
+        // Ctrl+F, Ctrl+Z, and Ctrl+B are the Control exceptions, pinned by
+        // their own tests; Z and B stay unbound with Alt or Logo.
+        for modifiers in [Modifiers::ALT, Modifiers::LOGO] {
+            for key in [Key::Character("z".into()), Key::Character("b".into())] {
+                assert!(
+                    shortcut(&key, modifiers).is_none(),
+                    "{key:?} with {modifiers:?} must not map"
+                );
+            }
+        }
         for modifiers in [Modifiers::CTRL, Modifiers::ALT, Modifiers::LOGO] {
             for key in [
-                Key::Character("z".into()),
                 Key::Character("x".into()),
                 Key::Character("r".into()),
                 Key::Character("s".into()),
