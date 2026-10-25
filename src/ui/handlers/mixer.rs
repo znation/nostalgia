@@ -48,16 +48,27 @@ pub(in crate::ui) fn volume_wheel(player: &mut WinampPlayer, direction: f32) -> 
     }
 }
 
-/// The balance slider's drag: sets the stereo balance.
+/// The balance slider's drag: sets the stereo balance. A move toward center
+/// that lands near it snaps to exactly center (see
+/// [`crate::state::snap_balance_to_center`]); "toward" is judged against the
+/// drag's previous requested value, so a drag continuing inward through the
+/// zone stays snapped.
 pub(in crate::ui) fn balance_change(player: &mut WinampPlayer, balance: f32) -> Task<Message> {
     player.mixer_drag = Some(views::MixerDrag::Balance);
-    mutate_balance(player, |state| state.set_balance(balance))
+    let previous = player.balance_drag_raw.replace(balance);
+    mutate_balance(player, |state| {
+        state.set_balance(crate::state::snap_balance_to_center(
+            previous.unwrap_or_else(|| state.balance()),
+            balance,
+        ))
+    })
 }
 
 /// The release of a mixer or equalizer slider drag: the LCD shows the title
 /// again. Harmless when no drag is shown.
 pub(in crate::ui) fn mixer_released(player: &mut WinampPlayer) -> Task<Message> {
     player.mixer_drag = None;
+    player.balance_drag_raw = None;
     Task::none()
 }
 

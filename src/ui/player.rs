@@ -180,6 +180,10 @@ pub(in crate::ui) struct WinampPlayer {
     /// The mixer slider being dragged, whose live level the LCD shows in place
     /// of the title; transient, never saved to settings.
     pub(in crate::ui) mixer_drag: Option<views::MixerDrag>,
+    /// The last unsnapped balance value the current drag requested, so the
+    /// center detent compares each move with the cursor's previous position
+    /// rather than the (possibly snapped) stored balance. Cleared on release.
+    pub(in crate::ui) balance_drag_raw: Option<f32>,
     /// The playback transition counter. Each backend query carries its value;
     /// `reset_position_readout` bumps it on a Stop or a new selection, so a
     /// reply that was already in flight is dropped rather than restoring the
@@ -278,6 +282,7 @@ impl WinampPlayer {
             seek_preview: None,
             time_display: views::TimeDisplay::Elapsed,
             mixer_drag: None,
+            balance_drag_raw: None,
             position_epoch: 0,
             pending_position_transitions: 0,
             plays_generation: Arc::new(AtomicU64::new(0)),

@@ -1714,3 +1714,21 @@ the readout would then stay until the next mixer-slider release.
   (`src/ui/tests/mixer_tests.rs`)
 
 **History.** Added 2026-10-24 with the mixer readout plan.
+
+## Balance center detent
+
+**Guarantee.** A `BalanceChange` that moves toward center and lands with magnitude below
+`BALANCE_CENTER_SNAP` (0.1) stores exactly `0.0`; the boundary value and any move away from
+center are stored as clamped ("toward" is judged against the drag's previous requested value, cleared on release, so a continuous inward drag stays snapped), so the slider's arrow keys can still leave center. Settings
+restore (`adopt_saved_settings`) goes through `AppState::set_balance` and is never snapped.
+
+**Enforced by.** `state::snap_balance_to_center` and `handlers::mixer::balance_change`.
+
+**Pinned by.**
+
+- `snap_balance_to_center_snaps_an_inward_move_near_center`,
+  `snap_balance_to_center_never_snaps_an_outward_move` (`src/state.rs`)
+- `dragging_balance_into_the_middle_snaps_to_center`, `a_continuous_inward_balance_drag_stays_snapped`,
+  `a_balance_step_after_release_leaves_center` (`src/ui/tests/mixer_tests.rs`)
+
+**History.** Added 2026-10-24 with the balance center detent plan.

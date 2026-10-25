@@ -346,9 +346,30 @@ pub fn clamp_balance(balance: f32) -> f32 {
     clamp::clamp_with_nan_fallback(balance, -1.0, 1.0, 0.0)
 }
 
+/// How close to center (exclusive) an inward balance move must land to snap to
+/// exactly `0.0`.
+pub const BALANCE_CENTER_SNAP: f32 = 0.1;
+
+/// The balance a slider change to `requested` stores, given the `current`
+/// position it moves from (a drag's previous requested value, else the stored balance): `requested` clamped by [`clamp_balance`], except that a move
+/// toward center landing within [`BALANCE_CENTER_SNAP`] of it stores exactly
+/// `0.0`, like the classic player's center detent. Only an inward move snaps
+/// (the clamped magnitude must also be below `current.abs()`); otherwise the
+/// slider's own arrow keys could never step out of center, since a 1% step
+/// out would snap straight back.
+#[must_use]
+pub fn snap_balance_to_center(current: f32, requested: f32) -> f32 {
+    let clamped = clamp_balance(requested);
+    if clamped.abs() < BALANCE_CENTER_SNAP && clamped.abs() < current.abs() {
+        0.0
+    } else {
+        clamped
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{AppState, TransportMode, clamp_volume};
+    use super::{AppState, TransportMode, clamp_volume, snap_balance_to_center};
     use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB};
     use crate::test_support::rock_preset;
 
@@ -793,5 +814,22 @@ mod tests {
         // The shared clamp handles the NaN branch; this pins that
         // `clamp_volume` passes the silence fallback.
         assert_eq!(clamp_volume(f32::NAN), 0.0);
+    }
+
+    #[test]
+    fn snap_balance_to_center_snaps_an_inward_move_near_center() {
+        assert_eq!(snap_balance_to_center(0.3, 0.05), 0.0);
+        assert_eq!(snap_balance_to_center(-0.3, -0.09), 0.0);
+        // The boundary itself is not snapped.
+        assert_eq!(snap_balance_to_center(0.3, 0.1), 0.1);
+    }
+
+    #[test]
+    fn snap_balance_to_center_never_snaps_an_outward_move() {
+        assert_eq!(snap_balance_to_center(0.0, 0.01), 0.01);
+        assert_eq!(snap_balance_to_center(0.0, -0.05), -0.05);
+        assert_eq!(snap_balance_to_center(0.05, 0.06), 0.06);
+        assert_eq!(snap_balance_to_center(0.5, f32::NAN), 0.0);
+        assert_eq!(snap_balance_to_center(0.5, 2.0), 1.0);
     }
 }
