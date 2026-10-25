@@ -242,6 +242,39 @@ mod tests {
         }
     }
 
+    // The Nyquist guard is `>=`: at 24 kHz the 12 kHz band sits exactly at
+    // Nyquist, where a peaking section degenerates (sin(pi) is zero), so it
+    // must be a pass-through while the 6 kHz band below it still applies.
+    #[test]
+    fn band_filter_treats_a_band_exactly_at_nyquist_as_pass_through() {
+        let mut at_nyquist = BandFilter::new(24_000);
+        at_nyquist.set_curve(true, 0.0, &gain_curve(7, 12.0));
+        for sample in [0.0, 0.5, -0.25, 1.0, -1.0, 0.75] {
+            assert_eq!(at_nyquist.process(sample), sample);
+        }
+
+        let mut below = BandFilter::new(24_000);
+        below.set_curve(true, 0.0, &gain_curve(6, 12.0));
+        let _ = below.process(1.0);
+        assert_ne!(below.process(0.0), 0.0, "the 6 kHz band must still apply");
+    }
+
+    // Each slider must shape its own band: boosting the 1 kHz band by 12 dB
+    // must leave a 60 Hz sine nearly untouched, so a mixed-up band index
+    // (or wrong center frequency) would show as a changed far-away level.
+    #[test]
+    fn band_filter_boost_leaves_a_distant_frequency_alone() {
+        let input_rms = settled_sine_rms(&mut BandFilter::new(44_100), 60.0);
+        let mut boost = BandFilter::new(44_100);
+        boost.set_curve(true, 0.0, &gain_curve(4, 12.0));
+
+        let ratio = settled_sine_rms(&mut boost, 60.0) / input_rms;
+        assert!(
+            (0.9..1.1).contains(&ratio),
+            "60 Hz level changed by {ratio}"
+        );
+    }
+
     #[test]
     fn band_filter_preamp_is_a_flat_gain() {
         let mut filter = BandFilter::new(44_100);
