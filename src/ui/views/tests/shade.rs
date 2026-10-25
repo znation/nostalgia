@@ -410,6 +410,29 @@ fn captured_library_strip(elapsed: &str, total: &str) -> (Vec<String>, Option<Re
     ))
 }
 
+/// Asserts a captured compact strip draws the `{time}/3:30` readout and seats
+/// its [`MINI_VOLUME_WIDTH`] volume slider 6px in from the right edge; `edge`
+/// names the strip in the failure message.
+fn assert_readout_and_right_edge_volume(
+    texts: &[String],
+    slider: Option<Rectangle>,
+    size: Size,
+    time: &str,
+    edge: &str,
+) {
+    let expected = format!("{time}/3:30");
+    assert!(
+        texts.iter().any(|text| text == &expected),
+        "missing {expected} readout: {texts:?}"
+    );
+    let slider = slider.unwrap_or_else(|| panic!("missing volume slider: {texts:?}"));
+    assert_eq!(slider.width, MINI_VOLUME_WIDTH);
+    assert!(
+        (slider.x + slider.width - (size.width - 6.0)).abs() < 0.5,
+        "slider must sit at the {edge}'s right edge: {slider:?} in {size:?}"
+    );
+}
+
 // The compact readout joins the elapsed (or remaining) value to the track's
 // total, and keeps the single plain placeholder when no total is known.
 #[test]
@@ -487,17 +510,7 @@ fn compact_readout_toggles_time_display_only_while_not_stopped() {
 fn shade_strip_draws_the_time_readout_and_puts_the_volume_slider_at_the_right_edge() {
     for time in ["00:53", "-02:37"] {
         let (texts, slider, size) = captured_shade_strip(time, "3:30");
-        let expected = format!("{time}/3:30");
-        assert!(
-            texts.iter().any(|text| text == &expected),
-            "missing {expected} readout: {texts:?}"
-        );
-        let slider = slider.unwrap_or_else(|| panic!("missing volume slider: {texts:?}"));
-        assert_eq!(slider.width, MINI_VOLUME_WIDTH);
-        assert!(
-            (slider.x + slider.width - (size.width - 6.0)).abs() < 0.5,
-            "slider must sit at the strip's right edge: {slider:?} in {size:?}"
-        );
+        assert_readout_and_right_edge_volume(&texts, slider, size, time, "strip");
     }
 }
 
@@ -549,23 +562,13 @@ fn view_library_strip_keeps_its_fixed_height() {
 fn library_strip_draws_the_four_controls_time_and_right_edge_volume() {
     for time in ["00:53", "-02:37"] {
         let (texts, slider, size) = captured_library_strip(time, "3:30");
-        let expected = format!("{time}/3:30");
         let glyphs: Vec<&str> = texts
             .iter()
             .map(String::as_str)
             .filter(|text| ["◀◀", "▶", "■", "▶▶"].contains(text))
             .collect();
         assert_eq!(glyphs, vec!["◀◀", "▶", "■", "▶▶"]);
-        assert!(
-            texts.iter().any(|text| text == &expected),
-            "missing {expected} readout: {texts:?}"
-        );
-        let slider = slider.unwrap_or_else(|| panic!("missing volume slider: {texts:?}"));
-        assert_eq!(slider.width, MINI_VOLUME_WIDTH);
-        assert!(
-            (slider.x + slider.width - (size.width - 6.0)).abs() < 0.5,
-            "slider must sit at the footer's right edge: {slider:?} in {size:?}"
-        );
+        assert_readout_and_right_edge_volume(&texts, slider, size, time, "footer");
     }
 }
 
