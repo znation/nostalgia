@@ -12,16 +12,15 @@ not only in the Fixed entry.
 
 ### The largest test modules are flat files, so a failure's fixtures are far from the test (found by the steward role 2026-10-24)
 
-**Symptom.** Four test modules are still single flat files with no inner `mod` splits: `src/ui/tests.rs`
-(9,087 lines), `src/ui/views/tests.rs` (3,613), `src/apple_music/tests.rs` (3,185), and
-`src/music_kit_auth/tests.rs` (1,840). A test in
-`src/ui/tests.rs` can sit thousands of lines from the fixture it uses, so finding that fixture means
-grepping or scanning the whole file, and a full read costs most of a role's reading budget. Concurrent
-worktrees also keep adding tests to the same file, so their merges collide there. This is a
+**Symptom.** One test module is still a single flat file with no inner `mod` splits: `src/ui/tests.rs`
+(9,261 lines). A test there can sit thousands of lines from the fixture it uses, so finding that fixture
+means grepping or scanning the whole file, and a full read costs most of a role's reading budget.
+Concurrent worktrees also keep adding tests to the same file, so their merges collide there. This is a
 maintainability risk, not a runtime defect: nothing fails because of it today.
 
-**How to reproduce.** `wc -l` on the paths above reports those lengths, and
-`grep -c '^\s*mod '` reports 0 for each of the four, so none is split by concern (re-measured 2026-10-24).
+**How to reproduce.** `wc -l src/ui/tests.rs` reports that length and `grep -c '^\s*mod ' src/ui/tests.rs`
+reports 0, so it is not split by concern (re-measured 2026-10-24). The other large test modules are
+already `tests/` directories (see Progress).
 
 **Suspected cause.** Each `tests.rs` grew by appending tests for every feature that landed in its module;
 nothing divides it into submodules the way the production code is divided, so the file keeps growing
