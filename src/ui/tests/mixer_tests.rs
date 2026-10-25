@@ -524,6 +524,65 @@ fn a_key_or_wheel_event_ends_a_mixer_readout() {
 }
 
 #[test]
+fn only_the_slider_navigation_keys_end_a_mixer_readout() {
+    use iced::keyboard::key::Named;
+    use iced::{Event, event::Status, keyboard, window};
+    let event = |named: Named, pressed: bool| {
+        let key = keyboard::Key::Named(named);
+        let physical_key =
+            keyboard::key::Physical::Unidentified(keyboard::key::NativeCode::Unidentified);
+        Event::Keyboard(if pressed {
+            keyboard::Event::KeyPressed {
+                key: key.clone(),
+                modified_key: key,
+                physical_key,
+                location: keyboard::Location::Standard,
+                modifiers: keyboard::Modifiers::empty(),
+                text: None,
+                repeat: false,
+            }
+        } else {
+            keyboard::Event::KeyReleased {
+                key: key.clone(),
+                modified_key: key,
+                physical_key,
+                location: keyboard::Location::Standard,
+                modifiers: keyboard::Modifiers::empty(),
+            }
+        })
+    };
+    let navigation = [
+        Named::ArrowUp,
+        Named::ArrowDown,
+        Named::ArrowLeft,
+        Named::ArrowRight,
+        Named::Home,
+        Named::End,
+        Named::PageUp,
+        Named::PageDown,
+    ];
+    for named in navigation {
+        assert!(
+            matches!(
+                mixer_key_message(event(named, true), Status::Ignored, window::Id::unique()),
+                Some(Message::MixerReleased)
+            ),
+            "{named:?} should end the readout"
+        );
+        assert!(
+            mixer_key_message(event(named, false), Status::Ignored, window::Id::unique()).is_none(),
+            "releasing {named:?} should send nothing"
+        );
+    }
+    for named in [Named::Enter, Named::Space, Named::Tab, Named::Escape] {
+        assert!(
+            mixer_key_message(event(named, true), Status::Ignored, window::Id::unique()).is_none(),
+            "{named:?} should send nothing"
+        );
+    }
+}
+
+#[test]
 fn the_marquee_pauses_during_a_mixer_drag() {
     let (mut player, state) = test_player();
     seed_current_title(&mut player, &state, "A Title Too Long For The LCD Bar");
