@@ -877,7 +877,9 @@ its internal id, whenever the id is in the known-track index:
   bottom-aligned inside a fixed-height strip between the title and the status row. The bar heights
   come from the loaded preview's stored spectrum, each band clamped to `0.0..=1.0`; no reported
   spectrum, including the silent fallback, draws zero-height bars while keeping the row's height,
-  so loading a preview does not move the title or status text. The bars are drawn only while
+  so loading a preview does not move the title or status text. The row is a mouse area whose
+  left press publishes `Message::ToggleVisualizer` (the same message as the `V` letter) whether the
+  bars are shown or hidden, pinned by `visualizer_row_press_publishes_toggle_visualizer`. The bars are drawn only while
   `WinampPlayer::visualizer_visible` holds; hiding them changes only what the LCD draws, keeping
   both the stored spectrum and the poll, so showing them again draws the current bars. Pause
   keeps the last bars frozen, while Stop and a new selection clear them. A spectrum reply issued

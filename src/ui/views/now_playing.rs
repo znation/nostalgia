@@ -277,10 +277,12 @@ pub fn visualizer_bar_heights(spectrum: Option<Spectrum>) -> [f32; BAND_COUNT] {
 /// bars. A missing spectrum draws the same row with zero-height bars, so the
 /// title and status text keep their places in every playback state. Generic
 /// over the theme and renderer so the tests can lay it out with iced's null
-/// renderer.
+/// renderer. The row is a mouse area: a left press publishes
+/// [`Message::ToggleVisualizer`] in every playback state, whether the bars are
+/// shown or hidden, exactly like the indicator strip's `V`.
 pub(super) fn now_playing_visualizer_row<'a, Theme, Renderer>(
     spectrum: Option<Spectrum>,
-) -> Row<'a, Message, Theme, Renderer>
+) -> MouseArea<'a, Message, Theme, Renderer>
 where
     Theme: iced::widget::text::Catalog + iced::widget::container::Catalog + 'a,
     <Theme as iced::widget::text::Catalog>::Class<'a>: From<iced::widget::text::StyleFn<'a, Theme>>,
@@ -288,7 +290,7 @@ where
         From<iced::widget::container::StyleFn<'a, Theme>>,
     Renderer: iced::advanced::text::Renderer + 'a,
 {
-    visualizer_bar_heights(spectrum).into_iter().fold(
+    let row = visualizer_bar_heights(spectrum).into_iter().fold(
         Row::new()
             .height(Length::Fixed(LCD_VISUALIZER_HEIGHT))
             .spacing(LCD_VISUALIZER_BAR_GAP)
@@ -314,7 +316,10 @@ where
                     }),
             )
         },
-    )
+    );
+    MouseArea::new(row)
+        .on_press(Message::ToggleVisualizer)
+        .interaction(Interaction::Pointer)
 }
 
 /// The LCD status row's channel indicators, in the mockup's left-to-right

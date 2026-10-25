@@ -65,7 +65,8 @@ absent. A loaded preview also drives a small green ten-bar spectrum visualizer b
 title, updating about four times a second while playback runs; Pause freezes the bars at their
 last levels, Stop and a new selection clear them, and the strip stays blank (with its height)
 when no preview reports a spectrum. The strip's `V` hides the bars and shows them again from the
-still-stored spectrum, so the poll keeps running while they are hidden. Beneath the LCD, a chrome
+still-stored spectrum, so the poll keeps running while they are hidden; a click on the bars'
+strip does the same, hidden or shown. Beneath the LCD, a chrome
 slider spans the loaded preview's own length and tracks its playback position; dragging moves
 the thumb and previews that
 position in the large elapsed readout (counting down from it when the readout shows remaining

@@ -345,6 +345,43 @@ fn lcd_indicator_strip_publishes_always_on_top_on_a_and_visualizer_on_v() {
     }
 }
 
+// A left press anywhere on the visualizer strip publishes the same toggle as
+// the indicator strip's V, whether the bars are drawn or the spectrum is empty.
+#[test]
+fn visualizer_row_press_publishes_toggle_visualizer() {
+    let mut renderer = layout_capture::headless_renderer();
+    for spectrum in [
+        None,
+        Some(Spectrum {
+            bands: [0.5; BAND_COUNT],
+        }),
+    ] {
+        let mut probe: iced::Element<'_, Message, iced::Theme, ()> =
+            now_playing_visualizer_row(spectrum).into();
+        let mut tree = Tree::new(probe.as_widget());
+        let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
+        let bounds = probe
+            .as_widget_mut()
+            .layout(&mut tree, &(), &limits)
+            .bounds();
+
+        let element: iced::Element<'_, Message, iced::Theme, iced::Renderer> =
+            now_playing_visualizer_row(spectrum).into();
+        let messages = layout_capture::publish_at(
+            element,
+            &mut renderer,
+            &[iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
+                iced::mouse::Button::Left,
+            ))],
+            iced::Point::new(bounds.center_x(), bounds.center_y()),
+        );
+        assert!(
+            matches!(messages.as_slice(), [Message::ToggleVisualizer]),
+            "a press on the visualizer row must publish exactly ToggleVisualizer: {messages:?}"
+        );
+    }
+}
+
 // Hiding the visualizer drops the bars from the LCD without clearing the
 // stored spectrum, so showing them again draws the current ones.
 #[test]
