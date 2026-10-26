@@ -830,6 +830,7 @@ arm those controls press.
 `apply_to_restores_a_saved_preset`,
 `settings_path_resolves_override_then_xdg_then_home_then_none`,
 `file_store_save_then_load_returns_the_same_settings`,
+`file_store_saves_and_loads_a_bare_file_name_in_the_current_directory`,
 `a_failed_half_write_leaves_the_previous_settings_file_intact`,
 `staged_settings_are_synced_before_the_rename_and_a_failed_sync_keeps_the_old_file`,
 `file_store_keeps_the_previous_file_when_the_replacement_cannot_be_staged`,

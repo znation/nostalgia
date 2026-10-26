@@ -377,6 +377,43 @@ mod tests {
         std::fs::remove_dir_all(&root).unwrap();
     }
 
+    // A save path with no directory component (`settings.ini`, say) belongs to
+    // the process's current directory, whose `Path::parent` is the empty path.
+    // The store must skip creating that empty parent and stage, rename, and
+    // sync beside the bare name rather than fail before writing. The sweep's
+    // bare-name path is pinned separately; this covers the save side.
+    #[test]
+    fn file_store_saves_and_loads_a_bare_file_name_in_the_current_directory() {
+        let name = format!(
+            "nostalgia-bare-save-{}-{}.ini",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let store = FileStore::at(PathBuf::from(&name));
+
+        let settings = varied_settings();
+        store.save(&settings);
+
+        assert_eq!(store.load(), Some(settings));
+        assert!(
+            Path::new(&name).is_file(),
+            "the bare save must land in the current directory"
+        );
+        let temp_prefix = format!(".{name}.tmp-");
+        assert!(
+            !std::fs::read_dir(".").unwrap().flatten().any(|entry| entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with(&temp_prefix)),
+            "the bare save must not leave its staged temp file behind"
+        );
+
+        std::fs::remove_file(&name).unwrap();
+    }
+
     fn temporary_root(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
             "nostalgia-settings-{label}-{}-{}",
