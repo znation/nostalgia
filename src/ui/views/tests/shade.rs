@@ -104,13 +104,7 @@ fn shade_strip_double_click_restores_the_window() {
     );
     let capture = layout_capture::capture_text(&mut element, &renderer);
     let center = iced::Point::new(capture.size().width / 2.0, capture.size().height / 2.0);
-    let single_click = [
-        iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
-        iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
-            iced::mouse::Button::Left,
-        )),
-    ];
-    let messages = layout_capture::publish_at(element, &mut renderer, &single_click, center);
+    let messages = layout_capture::click_at(element, &mut renderer, center);
     assert!(
         !messages
             .iter()

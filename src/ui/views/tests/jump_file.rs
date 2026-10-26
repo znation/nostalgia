@@ -22,37 +22,14 @@ fn overlay<'a>(
     view_jump_file_overlay(base, query, titles, epoch, selected)
 }
 
-fn press_at(element: Element<'_, Message>, point: iced::Point) -> Vec<Message> {
-    let mut renderer = layout_capture::headless_renderer();
-    let mut user_interface = iced_runtime::user_interface::UserInterface::build(
-        element,
-        layout_capture::limits().max(),
-        iced_runtime::user_interface::Cache::new(),
-        &mut renderer,
-    );
-    let mut messages = Vec::new();
-    let mut clipboard = iced::advanced::clipboard::Null;
-    let _ = user_interface.update(
-        &[
-            iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
-            iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
-                iced::mouse::Button::Left,
-            )),
-        ],
-        iced::mouse::Cursor::Available(point),
-        &mut renderer,
-        &mut clipboard,
-        &mut messages,
-    );
-    messages
-}
-
 fn press_label(query: &str, titles: &[String], epoch: u64, label: &str) -> Vec<Message> {
     let mut element = overlay(query, titles, epoch, None);
-    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+    let mut renderer = layout_capture::headless_renderer();
+    let capture = layout_capture::capture_text(&mut element, &renderer);
     let bounds = capture.find(label);
-    press_at(
+    layout_capture::click_at(
         element,
+        &mut renderer,
         iced::Point::new(bounds.center_x(), bounds.center_y()),
     )
 }
@@ -195,10 +172,11 @@ fn row_and_buttons_publish_their_messages() {
     ));
 
     let mut element = overlay("mid", &titles, 7, None);
-    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+    let mut renderer = layout_capture::headless_renderer();
+    let capture = layout_capture::capture_text(&mut element, &renderer);
     let backdrop = iced::Point::new(2.0, capture.size().height - 2.0);
     assert!(matches!(
-        press_at(element, backdrop).as_slice(),
+        layout_capture::click_at(element, &mut renderer, backdrop).as_slice(),
         [Message::ToggleJumpFile]
     ));
 }

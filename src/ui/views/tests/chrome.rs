@@ -55,25 +55,10 @@ fn title_bar_m_button_publishes_toggle_about() {
     let mut element = view_title_bar(false);
     let capture = layout_capture::capture_text(&mut element, &renderer);
     let menu = capture.find("M");
-    let mut user_interface = iced_runtime::user_interface::UserInterface::build(
+    let messages = layout_capture::click_at(
         element,
-        layout_capture::limits().max(),
-        iced_runtime::user_interface::Cache::new(),
         &mut renderer,
-    );
-    let mut messages = Vec::new();
-    let mut clipboard = iced::advanced::clipboard::Null;
-    let _ = user_interface.update(
-        &[
-            iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
-            iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
-                iced::mouse::Button::Left,
-            )),
-        ],
-        iced::mouse::Cursor::Available(iced::Point::new(menu.center_x(), menu.center_y())),
-        &mut renderer,
-        &mut clipboard,
-        &mut messages,
+        iced::Point::new(menu.center_x(), menu.center_y()),
     );
     assert_eq!(
         messages
@@ -134,26 +119,7 @@ fn about_overlay_closes_from_close_and_backdrop_but_ignores_its_chrome() {
             let bounds = capture.find(target);
             iced::Point::new(bounds.center_x(), bounds.center_y())
         };
-        let mut user_interface = iced_runtime::user_interface::UserInterface::build(
-            element,
-            layout_capture::limits().max(),
-            iced_runtime::user_interface::Cache::new(),
-            &mut renderer,
-        );
-        let mut messages = Vec::new();
-        let mut clipboard = iced::advanced::clipboard::Null;
-        let _ = user_interface.update(
-            &[
-                iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
-                iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
-                    iced::mouse::Button::Left,
-                )),
-            ],
-            iced::mouse::Cursor::Available(point),
-            &mut renderer,
-            &mut clipboard,
-            &mut messages,
-        );
+        let messages = layout_capture::click_at(element, &mut renderer, point);
         let toggles = messages
             .iter()
             .filter(|message| matches!(message, Message::ToggleAbout))
@@ -202,22 +168,13 @@ fn about_overlay_captures_the_wheel_from_the_base_beneath() {
         } else {
             iced::Point::new(2.0, capture.size().height - 2.0)
         };
-        let mut user_interface = iced_runtime::user_interface::UserInterface::build(
+        let messages = layout_capture::publish_at(
             element,
-            layout_capture::limits().max(),
-            iced_runtime::user_interface::Cache::new(),
             &mut renderer,
-        );
-        let mut messages = Vec::new();
-        let mut clipboard = iced::advanced::clipboard::Null;
-        let _ = user_interface.update(
             &[iced::Event::Mouse(iced::mouse::Event::WheelScrolled {
                 delta: iced::mouse::ScrollDelta::Lines { x: 0.0, y: 1.0 },
             })],
-            iced::mouse::Cursor::Available(point),
-            &mut renderer,
-            &mut clipboard,
-            &mut messages,
+            point,
         );
         assert!(
             !messages
@@ -452,26 +409,7 @@ fn file_info_overlay_closes_from_close_and_backdrop_but_ignores_its_chrome() {
             let bounds = capture.find(target);
             iced::Point::new(bounds.center_x(), bounds.center_y())
         };
-        let mut user_interface = iced_runtime::user_interface::UserInterface::build(
-            element,
-            layout_capture::limits().max(),
-            iced_runtime::user_interface::Cache::new(),
-            &mut renderer,
-        );
-        let mut messages = Vec::new();
-        let mut clipboard = iced::advanced::clipboard::Null;
-        let _ = user_interface.update(
-            &[
-                iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
-                iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
-                    iced::mouse::Button::Left,
-                )),
-            ],
-            iced::mouse::Cursor::Available(point),
-            &mut renderer,
-            &mut clipboard,
-            &mut messages,
-        );
+        let messages = layout_capture::click_at(element, &mut renderer, point);
         let toggles = messages
             .iter()
             .filter(|message| matches!(message, Message::ToggleFileInfo))
@@ -524,26 +462,7 @@ fn jump_time_overlay_buttons_and_backdrop_publish_their_messages() {
             let bounds = capture.find(target);
             iced::Point::new(bounds.center_x(), bounds.center_y())
         };
-        let mut user_interface = iced_runtime::user_interface::UserInterface::build(
-            element,
-            layout_capture::limits().max(),
-            iced_runtime::user_interface::Cache::new(),
-            &mut renderer,
-        );
-        let mut messages = Vec::new();
-        let mut clipboard = iced::advanced::clipboard::Null;
-        let _ = user_interface.update(
-            &[
-                iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
-                iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
-                    iced::mouse::Button::Left,
-                )),
-            ],
-            iced::mouse::Cursor::Available(point),
-            &mut renderer,
-            &mut clipboard,
-            &mut messages,
-        );
+        let messages = layout_capture::click_at(element, &mut renderer, point);
         if target == "Jump" {
             assert!(
                 matches!(messages.as_slice(), [Message::JumpTimeSubmitted]),

@@ -238,6 +238,34 @@ where
     messages
 }
 
+/// Dispatches one left-button press and release at `point`, returning the
+/// messages the tree publishes.
+///
+/// A control that acts on release needs both events, so this is the batch the
+/// title bar, overlay, and shade-strip click tests dispatch at a control's
+/// center. Tests that need a different batch — a press alone, a wheel, or two
+/// clicks in one batch — call [`publish_at`] directly.
+pub(crate) fn click_at<'a, Message, Theme, Renderer>(
+    element: Element<'a, Message, Theme, Renderer>,
+    renderer: &mut Renderer,
+    point: Point,
+) -> Vec<Message>
+where
+    Renderer: iced::advanced::Renderer,
+{
+    publish_at(
+        element,
+        renderer,
+        &[
+            Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
+            Event::Mouse(iced::mouse::Event::ButtonReleased(
+                iced::mouse::Button::Left,
+            )),
+        ],
+        point,
+    )
+}
+
 /// Lays `element` out and draws it with `renderer`, returning the text
 /// fragments it would draw, the RGBA pixels it actually paints, and the root
 /// size. A test can use the rendered pixels to check a label's color, which
