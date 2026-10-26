@@ -1,6 +1,7 @@
 use super::bootstrap::*;
 use super::http::write_response;
 use super::opener::*;
+use super::server::query::*;
 use super::server::*;
 use super::*;
 use std::env;
