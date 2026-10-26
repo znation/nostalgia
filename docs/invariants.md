@@ -1028,10 +1028,11 @@ its internal id, whenever the id is in the known-track index:
   before a Stop or a new selection, or landing while a transport transition is in flight, is
   dropped. The spectrum poll is subscribed only while playback is running.
 - The LCD's left edge always draws the five classic indicator letters `O`, `A`, `I`, `D`, `V`,
-  in that order, at a fixed width, in every playback state including the empty `--:--` bar. `A`
-  and `V` are mouse areas: pressing `A` publishes `Message::ToggleAlwaysOnTop` (the LCD strip's
-  own always-on-top control) and pressing `V` publishes `Message::ToggleVisualizer`, which flips only
-  the LCD's display flag. `O`, `I`, and `D` stay decorative and publish nothing. The strip keeps
+  in that order, at a fixed width, in every playback state including the empty `--:--` bar. `A`,
+  `I`, and `V` are mouse areas: pressing `A` publishes `Message::ToggleAlwaysOnTop` (the LCD
+  strip's own always-on-top control), pressing `I` publishes `Message::ToggleFileInfo` (the same
+  panel as Alt+3), and pressing `V` publishes `Message::ToggleVisualizer`, which flips only
+  the LCD's display flag. `O` and `D` stay decorative and publish nothing. The strip keeps
   its fixed width and letter order, so the content beside it does not move.
 - A transport glyph leads the row in a fixed `LCD_TRANSPORT_WIDTH` slot before the large elapsed
   readout, so the readout keeps its x position as the glyph changes: green `▶` while playing, green
@@ -1058,8 +1059,8 @@ its internal id, whenever the id is in the known-track index:
   `elapsed_readout_toggles_only_while_not_stopped`,
   and `now_playing_row_keeps_the_elapsed_bounds_when_the_blink_hides_it` in `src/ui/views/tests/now_playing.rs`,
   and `compact_readout_toggles_time_display_only_while_not_stopped` in `src/ui/views/tests/shade.rs`;
-  `lcd_indicator_message_arms_a_and_v_and_leaves_o_i_d_inert` and
-  `lcd_indicator_strip_publishes_always_on_top_on_a_and_visualizer_on_v` in `src/ui/views/tests/now_playing.rs`;
+  `lcd_indicator_message_arms_a_i_and_v_and_leaves_o_d_inert` and
+  `lcd_indicator_strip_publishes_always_on_top_on_a_visualizer_on_v_and_file_info_on_i` in `src/ui/views/tests/now_playing.rs`;
   `toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum` in `src/ui/tests/panels_tests.rs`;
   `position_tick_blinks_the_elapsed_readout_only_while_paused` in `src/ui/tests/`; and
   `toggle_playing_switches_between_playing_and_paused` and
@@ -1116,9 +1117,10 @@ transition, and the completion that reports that same transition ends it; while 
 the `handlers::playback::preview` poll handlers issue no query and its reply handlers store no
 reply. `AppleMusicService::play_track` stops the backend's previous preview when a selection has no
 preview URL. `views::now_playing::lcd_indicator_strip` draws
-`views::now_playing::LCD_INDICATOR_LABELS` down the LCD's left edge in a fixed-width column; its `A`
-and `V` cells publish `Message::ToggleAlwaysOnTop` and `Message::ToggleVisualizer` through
-`views::now_playing::lcd_indicator_message`, while `O`, `I`, and `D` publish nothing.
+`views::now_playing::LCD_INDICATOR_LABELS` down the LCD's left edge in a fixed-width column; its
+`A`, `I`, and `V` cells publish `Message::ToggleAlwaysOnTop`, `Message::ToggleFileInfo`, and
+`Message::ToggleVisualizer` through `views::now_playing::lcd_indicator_message`, while `O` and `D`
+publish nothing.
 `views::now_playing::visualizer_bar_heights` scales and clamps the stored spectrum, and
 `views::now_playing::now_playing_visualizer_row` draws its `BAND_COUNT` bars at fixed width inside
 the row `views::view_now_playing` places between the title and status rows. The `Spectrum` handler
@@ -1439,6 +1441,9 @@ normal-mode branch of `ui::view::view` in `src/ui/view.rs`, which wraps the base
 - `shortcuts::file_info_shortcut` maps the top-row `3` (by physical key, `Location::Standard`) with
   Alt held and Control, Shift, and Logo released to `Message::ToggleFileInfo`; Ctrl+Alt+3,
   Shift+Alt+3, Logo+Alt+3, keypad 3 with Alt, and a plain `3` map to nothing.
+- Pressing the LCD strip's `I` publishes the same `Message::ToggleFileInfo` as Alt+3 and goes
+  through the same `handlers::window::toggle_file_info` gate, so it does not open without a
+  known current track.
 - `handlers::window::toggle_file_info` flips `WinampPlayer::file_info_visible`. Opening needs a
   current track found in `known_tracks` (`WinampPlayer::current_known_track`); without one the flag
   stays false. Opening clears `about_visible`, and opening About clears `file_info_visible`.
@@ -1450,11 +1455,15 @@ normal-mode branch of `ui::view::view` in `src/ui/view.rs`, which wraps the base
   `Close` and the backdrop each publish one `Message::ToggleFileInfo`; a press on the panel's
   chrome publishes `Message::Ignored`. The shade branch never draws the panel.
 
-**Enforced by.** `shortcuts::file_info_shortcut`, `handlers::window::toggle_file_info`,
+**Enforced by.** `shortcuts::file_info_shortcut`, `views::now_playing::lcd_indicator_message`,
+`handlers::window::toggle_file_info`,
 `views::file_info::view_file_info_overlay`, `views::modal::modal_overlay`, and the overlay branch
 of `ui::view::view`.
 
 **Pinned by.** `message_for_maps_alt_3_to_file_info` (`src/ui/shortcuts.rs`);
+`lcd_indicator_message_arms_a_i_and_v_and_leaves_o_d_inert` and
+`lcd_indicator_strip_publishes_always_on_top_on_a_visualizer_on_v_and_file_info_on_i`
+(`src/ui/views/tests/now_playing.rs`);
 `toggle_file_info_shows_and_hides_the_panel_without_touching_playback`,
 `toggle_file_info_needs_a_known_current_track`, `file_info_and_about_close_each_other`, and
 `toggle_file_info_while_shaded_restores_the_window_first` (`src/ui/tests/window_tests.rs`);
@@ -1792,7 +1801,7 @@ backend queries. On the UI side, `views::now_playing::visualizer_bar_heights` an
 - `now_playing_visualizer_row_keeps_its_height_without_a_spectrum` (`src/ui/views/tests/lcd_display.rs`)
 - `now_playing_visualizer_row_draws_one_fixed_width_bar_per_band` (`src/ui/views/tests/lcd_display.rs`)
 - `visible_spectrum_hides_the_stored_bars_while_the_visualizer_is_off` (`src/ui/views/tests/now_playing.rs`)
-- `lcd_indicator_strip_publishes_always_on_top_on_a_and_visualizer_on_v`
+- `lcd_indicator_strip_publishes_always_on_top_on_a_visualizer_on_v_and_file_info_on_i`
   (`src/ui/views/tests/now_playing.rs`)
 - `toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum` (`src/ui/tests/panels_tests.rs`)
 - `hidden_visualizer_draws_no_bars_in_the_root_view` (`src/ui/tests/panels_tests.rs`)

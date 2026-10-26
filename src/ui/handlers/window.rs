@@ -106,7 +106,8 @@ pub(in crate::ui) fn toggle_about(player: &mut WinampPlayer) -> Task<Message> {
     }
 }
 
-/// Alt+3: flip the transient File info panel. Opening needs a current track
+/// Alt+3 or the LCD strip's `I`: flip the transient File info panel. Opening
+/// needs a current track
 /// resolved in `known_tracks` (as `window_title` resolves it); without one the
 /// flag stays as it was. Opening closes the About panel, and opening while
 /// shaded first restores the window exactly as [`toggle_about`] does. The flag

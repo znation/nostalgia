@@ -299,7 +299,8 @@ pub(in crate::ui) enum Message {
     // while the window is shaded first restores the window, so the panel never
     // draws in shade mode. The flag is not persisted.
     ToggleAbout,
-    // Alt+3: flips the transient File info panel for the current track.
+    // Alt+3 or the LCD strip's `I`: flips the transient File info panel for the
+    // current track.
     // Opening it needs a current track known to the player and closes About;
     // opening while shaded first restores the window. The flag is not persisted.
     ToggleFileInfo,

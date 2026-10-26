@@ -264,7 +264,7 @@ fn marquee_text_counts_characters_not_bytes() {
     assert_eq!(marquee_text("Café — Ok", 0, 5), "Café ");
 }
 
-/// Lays out the indicator strip (with its live `A` and `V` controls) and
+/// Lays out the indicator strip (with its live `A`, `I`, and `V` controls) and
 /// returns the text fragments it would draw and the width the column occupies.
 fn captured_indicator_texts() -> (Vec<String>, f32) {
     let mut element: iced::Element<'_, Message, iced::Theme, ()> = lcd_indicator_strip().into();
@@ -285,19 +285,23 @@ fn lcd_indicator_strip_draws_each_label_in_order_at_a_fixed_width() {
     assert_eq!(width, 12.0, "the strip's fixed width");
 }
 
-// Only A and V are live: A reuses the always-on-top toggle, V
-// toggles the LCD visualizer, and O, I, and D publish nothing.
+// Only A, I, and V are live: A reuses the always-on-top toggle, I opens
+// File info, V toggles the LCD visualizer, and O and D publish nothing.
 #[test]
-fn lcd_indicator_message_arms_a_and_v_and_leaves_o_i_d_inert() {
+fn lcd_indicator_message_arms_a_i_and_v_and_leaves_o_d_inert() {
     assert!(matches!(
         lcd_indicator_message("A"),
         Some(Message::ToggleAlwaysOnTop)
     ));
     assert!(matches!(
+        lcd_indicator_message("I"),
+        Some(Message::ToggleFileInfo)
+    ));
+    assert!(matches!(
         lcd_indicator_message("V"),
         Some(Message::ToggleVisualizer)
     ));
-    for label in ["O", "I", "D"] {
+    for label in ["O", "D"] {
         assert!(
             lcd_indicator_message(label).is_none(),
             "{label} must stay decorative"
@@ -306,12 +310,13 @@ fn lcd_indicator_message_arms_a_and_v_and_leaves_o_i_d_inert() {
 }
 
 // The strip must wire the mapping up, not just expose it: drive a real left
-// press at each letter's bounds. A publishes the always-on-top
-// toggle, V publishes the visualizer toggle, and O publishes nothing.
+// press at each letter's bounds. A publishes the always-on-top toggle, I
+// publishes the File info toggle, V publishes the visualizer toggle, and O
+// publishes nothing.
 #[test]
-fn lcd_indicator_strip_publishes_always_on_top_on_a_and_visualizer_on_v() {
+fn lcd_indicator_strip_publishes_always_on_top_on_a_visualizer_on_v_and_file_info_on_i() {
     let mut renderer = layout_capture::headless_renderer();
-    for label in ["A", "V", "O"] {
+    for label in ["A", "I", "V", "O"] {
         let mut element: iced::Element<'_, Message, iced::Theme, iced::Renderer> =
             lcd_indicator_strip().into();
         let capture = layout_capture::capture_text(&mut element, &renderer);
@@ -330,6 +335,12 @@ fn lcd_indicator_strip_publishes_always_on_top_on_a_and_visualizer_on_v() {
                     .iter()
                     .any(|message| matches!(message, Message::ToggleAlwaysOnTop)),
                 "a press on A must publish ToggleAlwaysOnTop: {messages:?}"
+            ),
+            "I" => assert!(
+                messages
+                    .iter()
+                    .any(|message| matches!(message, Message::ToggleFileInfo)),
+                "a press on I must publish ToggleFileInfo: {messages:?}"
             ),
             "V" => assert!(
                 messages

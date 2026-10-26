@@ -66,9 +66,9 @@ const LCD_VISUALIZER_BAR_WIDTH: f32 = 8.0;
 const LCD_VISUALIZER_BAR_GAP: f32 = 3.0;
 
 /// The classic indicator letters down the LCD's left edge, in the mockup's
-/// order. [`lcd_indicator_strip`] draws them; `A` and `V` are live controls,
-/// while `O`, `I`, and `D` stay decorative (an options menu, a file-info
-/// panel, and pixel-doubled window mode have no implementation here).
+/// order. [`lcd_indicator_strip`] draws them; `A`, `I`, and `V` are live
+/// controls, while `O` and `D` stay decorative (an options menu and
+/// pixel-doubled window mode have no implementation here).
 pub(super) const LCD_INDICATOR_LABELS: [&str; 5] = ["O", "A", "I", "D", "V"];
 
 /// The fixed width of the indicator strip, in pixels, so the content beside
@@ -82,7 +82,8 @@ pub(super) const LCD_INDICATOR_WIDTH: f32 = 12.0;
 const LCD_INDICATOR_SIZE: f32 = 10.0;
 
 /// The Now Playing bar: a small `O A I D V` strip down the LCD's left edge
-/// (with `A` toggling always-on-top and `V` the visualizer), then the large
+/// (with `A` toggling always-on-top, `I` opening File info, and `V` the
+/// visualizer), then the large
 /// elapsed readout, the "Now Playing:" caption
 /// followed by the current track's playlist number prefix, resolved artist,
 /// and title (or "Nothing" when nothing is current), with the track's plain
@@ -183,11 +184,14 @@ where
 
 /// The message an indicator letter publishes when pressed: `A` toggles
 /// always-on-top through the same [`Message::ToggleAlwaysOnTop`] the `A` key
-/// uses, `V` toggles the LCD visualizer, and `O`, `I`, and `D` are decorative
-/// and publish nothing. Pure so the mapping is testable without a renderer.
+/// uses, `I` opens the same File info panel as Alt+3 through
+/// [`Message::ToggleFileInfo`], `V` toggles the LCD visualizer, and `O` and
+/// `D` are decorative and publish nothing. Pure so the mapping is testable
+/// without a renderer.
 pub fn lcd_indicator_message(label: &str) -> Option<Message> {
     match label {
         "A" => Some(Message::ToggleAlwaysOnTop),
+        "I" => Some(Message::ToggleFileInfo),
         "V" => Some(Message::ToggleVisualizer),
         _ => None,
     }
@@ -195,11 +199,11 @@ pub fn lcd_indicator_message(label: &str) -> Option<Message> {
 
 /// Builds the indicator strip at the LCD's left edge: one small green letter
 /// per line, in [`LCD_INDICATOR_LABELS`] order, in a column of fixed
-/// [`LCD_INDICATOR_WIDTH`]. `A` and `V` are mouse areas that publish
-/// [`Message::ToggleAlwaysOnTop`] and [`Message::ToggleVisualizer`]; `O`, `I`,
-/// and `D` stay plain, decorative text. The strip is drawn in every playback
-/// state, and its fixed width pushes the content beside it one strip-width
-/// right.
+/// [`LCD_INDICATOR_WIDTH`]. `A`, `I`, and `V` are mouse areas that publish
+/// [`Message::ToggleAlwaysOnTop`], [`Message::ToggleFileInfo`], and
+/// [`Message::ToggleVisualizer`]; `O` and `D` stay plain, decorative text.
+/// The strip is drawn in every playback state, and its fixed width pushes the
+/// content beside it one strip-width right.
 pub(super) fn lcd_indicator_strip<'a, Theme, Renderer>() -> Column<'a, Message, Theme, Renderer>
 where
     Theme: iced::widget::text::Catalog + 'a,

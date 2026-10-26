@@ -45,9 +45,10 @@ The player on its own: [docs/screenshots/player.png](docs/screenshots/player.png
 ## Usage
 
 Build and run with `cargo run`; the player opens an iced window showing the Now Playing bar (a
-small `O A I D V` strip down the LCD's left edge, whose `A` toggles always-on-top and whose `V`
-hides and restores the visualizer while `O`, `I`, and `D` stay decorative; then a large
-elapsed-time readout at the left for a loaded preview, shown while playing or paused and blank
+small `O A I D V` strip down the LCD's left edge, whose `A` toggles always-on-top, whose `I`
+opens the File info panel, and whose `V` hides and restores the visualizer while `O` and `D` stay
+decorative; then a large elapsed-time readout at the left for a loaded preview, shown while
+playing or paused and blank
 (though it keeps its space)
 while stopped, except that the `--:--` placeholder stays visible when stopped with no current
 track or no known time, the playing track's 1-based position in the list it was played from
