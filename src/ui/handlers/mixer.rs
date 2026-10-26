@@ -194,26 +194,83 @@ pub(in crate::ui) fn eq_preset_selected(
     mutate_equalizer(player, |state| state.apply_eq_preset(preset))
 }
 
+/// The shared-state setting a mixer handler writes and then forwards to the
+/// audio backend.
+///
+/// Naming the three as a closed enum makes [`mutate_and_forward`] own both the
+/// forward call and its failure report, so a helper cannot pair one setting's
+/// label with another setting's backend method, and a misspelled label cannot
+/// compile. A failure names the setting and the clamped value it tried to send.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MixerSetting {
+    Volume,
+    Balance,
+    Equalizer,
+}
+
+impl MixerSetting {
+    /// Sends this setting's current clamped value from `state` to `service`.
+    fn forward(self, service: &AppleMusicService, state: &AppState) -> Result<(), AppleMusicError> {
+        match self {
+            Self::Volume => service.set_output_volume(state.volume()),
+            Self::Balance => service.set_output_balance(state.balance()),
+            Self::Equalizer => service.set_output_equalizer(state.eq_snapshot()),
+        }
+    }
+
+    /// The report phrase naming this setting and the value `state` holds, so a
+    /// failed forward says what the preview was being set to, not only that the
+    /// forward failed.
+    fn description(self, state: &AppState) -> String {
+        match self {
+            Self::Volume => {
+                format!("forwarding volume {} to the audio backend", state.volume())
+            }
+            Self::Balance => {
+                format!(
+                    "forwarding balance {} to the audio backend",
+                    state.balance()
+                )
+            }
+            Self::Equalizer => format!(
+                "forwarding equalizer {:?} to the audio backend",
+                state.eq_snapshot()
+            ),
+        }
+    }
+}
+
+/// Formats the report for a rejected mixer forward: names the setting and the
+/// clamped value that was sent, plus the backend's cause. Pure, like the seek
+/// and transport report helpers, so the contract is testable without capturing
+/// stderr.
+fn forward_failure_report(
+    setting: MixerSetting,
+    state: &AppState,
+    error: &impl std::fmt::Display,
+) -> String {
+    format!("{} failed: {error}", setting.description(state))
+}
+
 /// Locks the shared playback state, applies `mutation`, forwards the resulting
 /// clamped value to the audio backend, and returns no task.
 ///
 /// The volume, balance, and equalizer helpers below all repeat the same
 /// sequence — `blocking_lock`, one mutation, read the clamped value back
 /// under the lock, then one non-blocking channel send to the audio backend —
-/// so the shape lives here once and each helper names only its value and
-/// backend call. The state write and the forward happen under the one lock,
-/// so a slider drag stays responsive and its messages stay ordered. A backend
-/// error is logged; the state write has already committed.
+/// so the shape lives here once and each helper names only its setting. The
+/// state write and the forward happen under the one lock, so a slider drag
+/// stays responsive and its messages stay ordered. A backend error is logged;
+/// the state write has already committed.
 fn mutate_and_forward(
     player: &WinampPlayer,
+    setting: MixerSetting,
     mutation: impl FnOnce(&mut AppState),
-    forward: impl FnOnce(&AppleMusicService, &AppState) -> Result<(), AppleMusicError>,
-    failure: &'static str,
 ) -> Task<Message> {
     let mut state = player.state.blocking_lock();
     mutation(&mut state);
-    if let Err(error) = forward(&player.apple_music_service, &state) {
-        eprintln!("{failure}: {error}");
+    if let Err(error) = setting.forward(&player.apple_music_service, &state) {
+        eprintln!("{}", forward_failure_report(setting, &state, &error));
     }
     Task::none()
 }
@@ -223,12 +280,7 @@ fn mutate_and_forward(
 /// so a slider drag reaches the playing preview without restarting it; the
 /// lock-mutate-forward shape is [`mutate_and_forward`]'s.
 fn mutate_volume(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> Task<Message> {
-    mutate_and_forward(
-        player,
-        mutation,
-        |service, state| service.set_output_volume(state.volume()),
-        "forwarding volume to the audio backend failed",
-    )
+    mutate_and_forward(player, MixerSetting::Volume, mutation)
 }
 
 /// Forwards the mutated state's clamped balance to the audio backend. The
@@ -236,12 +288,7 @@ fn mutate_volume(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) ->
 /// without restarting it; the lock-mutate-forward shape is
 /// [`mutate_and_forward`]'s.
 fn mutate_balance(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> Task<Message> {
-    mutate_and_forward(
-        player,
-        mutation,
-        |service, state| service.set_output_balance(state.balance()),
-        "forwarding balance to the audio backend failed",
-    )
+    mutate_and_forward(player, MixerSetting::Balance, mutation)
 }
 
 /// Forwards a relative seek to the audio backend and returns no task. The
@@ -263,10 +310,39 @@ fn seek_preview(player: &WinampPlayer, offset_secs: i64) -> Task<Message> {
 /// re-reads its shared curve between samples. The lock-mutate-forward shape is
 /// [`mutate_and_forward`]'s.
 fn mutate_equalizer(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -> Task<Message> {
-    mutate_and_forward(
-        player,
-        mutation,
-        |service, state| service.set_output_equalizer(state.eq_snapshot()),
-        "forwarding equalizer to the audio backend failed",
-    )
+    mutate_and_forward(player, MixerSetting::Equalizer, mutation)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn forward_failure_report_names_the_setting_and_the_value_it_sent() {
+        let mut state = AppState::default();
+        state.set_volume(0.25);
+        assert_eq!(
+            forward_failure_report(MixerSetting::Volume, &state, &"the audio device is gone"),
+            "forwarding volume 0.25 to the audio backend failed: the audio device is gone"
+        );
+
+        state.set_balance(-0.5);
+        assert_eq!(
+            forward_failure_report(MixerSetting::Balance, &state, &"the audio device is gone"),
+            "forwarding balance -0.5 to the audio backend failed: the audio device is gone"
+        );
+
+        state.set_eq_preamp(3.0);
+        let equalizer =
+            forward_failure_report(MixerSetting::Equalizer, &state, &"the audio device is gone");
+        assert!(
+            equalizer.contains("forwarding equalizer EqSnapshot {"),
+            "{equalizer}"
+        );
+        assert!(equalizer.contains("preamp_db: 3.0"), "{equalizer}");
+        assert!(
+            equalizer.ends_with(" failed: the audio device is gone"),
+            "{equalizer}"
+        );
+    }
 }
