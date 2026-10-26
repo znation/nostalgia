@@ -185,7 +185,8 @@ a different row.
 **Enforced by.** `BrowseList::select_row` in `src/ui/browse.rs` validates the press through
 `BrowseList::select` and records it, returning `Some(true)` only for the second press on the
 selected row; `BrowseList::selected` exposes it to the view, and `replace_rows`, `clear`, `fail`,
-`sort_rows_by`, and `restore_library_order` clear it with the rows or order they change.
+`sort_rows_by`, and `restore_library_order` (both in `src/ui/browse/ordering.rs`) clear it with the
+rows or order they change.
 `browse::select_row` and `browse::open_selected` in `src/ui/handlers/browse.rs` route the two
 messages and share `browse::open_row`, which emits the existing `ArtistSelected`,
 `AlbumSelected`, `TrackSelected`, or `PlaylistSelected` message; `shortcuts::message_for` maps a
@@ -293,20 +294,20 @@ It is a no-op with no selection, at the edge the row would move past, or on a lo
 list. A move that changes the selection scrolls the list only far enough to show the moved row
 fully (and not at all when it is already visible); a no-op move schedules no task.
 
-**Enforced by.** `BrowseList::move_selected` in `src/ui/browse.rs`, `scroll::reveal_row_offset` and
+**Enforced by.** `BrowseList::move_selected` in `src/ui/browse/ordering.rs`, `scroll::reveal_row_offset` and
 `scroll::reveal_browse_row` in `src/ui/handlers/browse/scroll.rs`, `browse::move_selected_row`
 in `src/ui/handlers/browse.rs` (routed from `Message::MoveSelectedRowUp` and
 `Message::MoveSelectedRowDown`), and `shortcuts::move_row_shortcut` in `src/ui/shortcuts.rs`.
 `BrowseList::reverse_rows` and the shared `BrowseList::apply_reorder` in
-`src/ui/browse.rs`, `browse::reverse_browse` in `src/ui/handlers/browse.rs` (routed from
-`Message::ReverseBrowse`), `BrowseList::shuffle_rows` and `browse::shuffled_order` (seeded by
+`src/ui/browse/ordering.rs`, `browse::reverse_browse` in `src/ui/handlers/browse.rs` (routed from
+`Message::ReverseBrowse`), `BrowseList::shuffle_rows` and `browse::ordering::shuffled_order` (seeded by
 `transport::shuffle_roll`) with `browse::randomize_browse` (routed from `Message::RandomizeBrowse`),
 the Ctrl+R and Ctrl+Shift+R arms of `shortcut`, and `shortcuts::playlist_sort_shortcut`
-(Ctrl+Shift+1), both in `src/ui/shortcuts.rs`. `BrowseList::sort_rows_by` in `src/ui/browse.rs`
+(Ctrl+Shift+1), both in `src/ui/shortcuts.rs`. `BrowseList::sort_rows_by` in `src/ui/browse/ordering.rs`
 builds a stable index permutation from the lowercased row keys and reorders `items`, `titles`, and
 `labels` in place by it, bumping the epoch only when there are at least two rows and the list is
 neither loading nor failed; it also records the cumulative permutation back to library order,
-and `BrowseList::restore_library_order` inverts it so the rows
+and `BrowseList::restore_library_order` in `src/ui/browse/ordering.rs` inverts it so the rows
 (and their cached text) return to the order they were stored in, bumping the epoch as any index
 change must. `browse::sort_browse` in `src/ui/handlers/browse.rs` matches the current view onto
 its list and key, routed from `Message::SortBrowse` in the `update` dispatch table;

@@ -1,4 +1,4 @@
-use super::browse::shuffled_order;
+use super::browse::ordering::shuffled_order;
 use super::*;
 
 fn artist(name: &str) -> Artist {
