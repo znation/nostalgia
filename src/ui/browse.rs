@@ -263,23 +263,12 @@ impl<T> BrowseList<T> {
     where
         T: Clone,
     {
-        // A loading list's rows are being replaced by a fetch, so reordering
-        // them would be undone (or raced) by the reply; the documented
-        // guarantee is that Sort while loading changes nothing. The app's
-        // transitions empty the rows in `clear` before setting `loading`, but
-        // this check pins the guarantee independently of that ordering. The
-        // same holds for a failed list, whose rows `fail` clears today.
-        if self.items.len() < 2 || self.loading || self.error.is_some() {
-            return;
-        }
-        let keys: Vec<String> = self
-            .items
-            .iter()
-            .map(|item| key(item).to_lowercase())
-            .collect();
-        let mut order: Vec<usize> = (0..self.items.len()).collect();
-        order.sort_by(|&left, &right| keys[left].cmp(&keys[right]));
-        self.apply_reorder(order);
+        self.reorder_with(|items| {
+            let keys: Vec<String> = items.iter().map(|item| key(item).to_lowercase()).collect();
+            let mut order: Vec<usize> = (0..items.len()).collect();
+            order.sort_by(|&left, &right| keys[left].cmp(&keys[right]));
+            order
+        });
     }
 
     /// Reverses the loaded rows in place, one-shot like [`Self::sort_rows_by`]:
@@ -291,10 +280,7 @@ impl<T> BrowseList<T> {
     where
         T: Clone,
     {
-        if self.items.len() < 2 || self.loading || self.error.is_some() {
-            return;
-        }
-        self.apply_reorder((0..self.items.len()).rev().collect());
+        self.reorder_with(|items| (0..items.len()).rev().collect());
     }
 
     /// Shuffles the loaded rows in place by [`shuffled_order`]`(len, seed)`,
@@ -307,10 +293,27 @@ impl<T> BrowseList<T> {
     where
         T: Clone,
     {
+        self.reorder_with(|items| shuffled_order(items.len(), seed));
+    }
+
+    /// Applies the permutation `order` computes from the rows, unless the list
+    /// has fewer than two rows or is still loading or failed, in which case
+    /// nothing changes.
+    fn reorder_with(&mut self, order: impl FnOnce(&[T]) -> Vec<usize>)
+    where
+        T: Clone,
+    {
+        // A loading list's rows are being replaced by a fetch, so reordering
+        // them would be undone (or raced) by the reply; the documented
+        // guarantee is that Sort while loading changes nothing. The app's
+        // transitions empty the rows in `clear` before setting `loading`, but
+        // this check pins the guarantee independently of that ordering. The
+        // same holds for a failed list, whose rows `fail` clears today.
         if self.items.len() < 2 || self.loading || self.error.is_some() {
             return;
         }
-        self.apply_reorder(shuffled_order(self.items.len(), seed));
+        let order = order(&self.items);
+        self.apply_reorder(order);
     }
 
     /// Applies the permutation `order` (entry `i` names the current row that
