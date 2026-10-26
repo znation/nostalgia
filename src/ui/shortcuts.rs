@@ -21,7 +21,7 @@ use super::Message;
 /// to its first and last rows, Page Up and Page Down to scroll it one page at
 /// a time, F5 to refetch the library and return to the Artists list, Ctrl+F
 /// to focus the `Search library` box, Ctrl+Z and Ctrl+B to play the first and
-/// last song of the showing list, Ctrl+R to reverse the showing list, Ctrl+Shift+R to shuffle it, Ctrl+Shift+1 to sort it by title
+/// last song of the showing list, Ctrl+R to reverse the showing list, Ctrl+Shift+R to shuffle it, Ctrl+W to toggle window-shade mode, Ctrl+Shift+1 to sort it by title
 /// (see [`playlist_sort_shortcut`]), Alt+3 to flip the File info panel
 /// (see [`file_info_shortcut`]), and the system media keys
 /// (Play/Pause, Play, Pause, Stop, Next track, and Previous track) to the same
@@ -127,7 +127,8 @@ fn numpad_shortcut(key: &Key, location: Location, modifiers: Modifiers) -> Optio
 /// back or forward, and the system media keys (Play/Pause, Play, Pause, Stop,
 /// Next track, and Previous track) drive the transport. Apart from Ctrl+F,
 /// Ctrl+Z (play the first song), Ctrl+B (play the last song), and Ctrl+R
-/// (reverse the showing list), Ctrl+Shift+R (shuffle it), a
+/// (reverse the showing list), Ctrl+Shift+R (shuffle it), and Ctrl+W (toggle
+/// window-shade mode), a
 /// Control, Alt, or
 /// Logo chord is left to the OS and window manager, so those modifiers yield
 /// `None`; Shift is allowed, and the letter match ignores ASCII case, so
@@ -149,8 +150,8 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
     }
 
     // Ctrl+Z and Ctrl+B jump to the first and last song of the list Z and B
-    // step through, and Ctrl+R reverses the showing list and Ctrl+Shift+R shuffles it,
-    // under the same no-Alt, no-Logo rule as Ctrl+F.
+    // step through, Ctrl+R reverses the showing list, Ctrl+Shift+R shuffles it, and
+    // Ctrl+W rolls the window up into shade mode and back, under the same no-Alt, no-Logo rule as Ctrl+F.
     if modifiers.control() && !modifiers.alt() && !modifiers.logo() {
         match key {
             Key::Character(character) if character.eq_ignore_ascii_case("z") => {
@@ -166,6 +167,9 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
             }
             Key::Character(character) if character.eq_ignore_ascii_case("r") => {
                 return Some(Message::RandomizeBrowse);
+            }
+            Key::Character(character) if character.eq_ignore_ascii_case("w") => {
+                return Some(Message::ToggleWindowShade);
             }
             _ => {}
         }
@@ -570,6 +574,27 @@ mod tests {
             assert!(
                 message_for(key_pressed(Key::Character("r".into()), modifiers)).is_none(),
                 "r with {modifiers:?} must not map"
+            );
+        }
+    }
+
+    #[test]
+    fn message_for_maps_ctrl_w_to_toggle_window_shade() {
+        for modifiers in [Modifiers::CTRL, Modifiers::CTRL | Modifiers::SHIFT] {
+            assert_maps!(Key::Character("w".into()), modifiers => Message::ToggleWindowShade);
+        }
+        assert_maps!(Key::Character("W".into()), Modifiers::CTRL => Message::ToggleWindowShade);
+        for modifiers in [
+            Modifiers::NONE,
+            Modifiers::SHIFT,
+            Modifiers::ALT,
+            Modifiers::LOGO,
+            Modifiers::CTRL | Modifiers::ALT,
+            Modifiers::CTRL | Modifiers::LOGO,
+        ] {
+            assert!(
+                message_for(key_pressed(Key::Character("w".into()), modifiers)).is_none(),
+                "w with {modifiers:?} must not map"
             );
         }
     }

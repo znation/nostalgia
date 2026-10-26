@@ -88,7 +88,7 @@ restarting the app; F5 later became its keyboard route.
 focus to the `Search library` box without submitting a search. Focusing changes no browse view,
 list rows or order, selection, typed query, search-active flag, or playback state; typing into the
 focused box edits the query exactly as a click does. Plain F and the Alt+F and Logo+F chords stay
-unbound, and every other Control chord remains the window manager's. Shade mode builds no search
+unbound, and every other Control chord except the player's own (Ctrl+Z, Ctrl+B, Ctrl+R, Ctrl+W) remains the window manager's. Shade mode builds no search
 box, so Ctrl+F there is a no-op.
 
 **Enforced by.** `views::browse::BROWSE_SEARCH_ID` in `src/ui/views/browse.rs`, applied with
@@ -1264,6 +1264,10 @@ rather than the panic unwinding the event loop.
 ## Window shade
 
 **Guarantee.** Rolling the window up into shade mode keeps playback controllable:
+
+- Ctrl+W (Control, with optional Shift, and without Alt or Logo) publishes
+  `Message::ToggleWindowShade`, the same message as the shade button; plain W stays unbound.
+  Pinned by `message_for_maps_ctrl_w_to_toggle_window_shade` and `ctrl_w_rolls_the_window_up_and_back`.
 
 - Shade mode builds exactly the title bar over the compact transport strip, and the window is
   resized to that same height (`SHADED_HEIGHT = TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT`). The

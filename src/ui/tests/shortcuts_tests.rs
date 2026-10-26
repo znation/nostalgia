@@ -132,6 +132,34 @@ fn a_toggles_always_on_top_from_the_keyboard() {
 }
 
 #[test]
+fn ctrl_w_rolls_the_window_up_and_back() {
+    use iced::keyboard::{Event, Key, Modifiers, key};
+
+    let (mut player, _state) = player_with_window_id();
+    assert!(!player.shaded);
+
+    let ctrl_w = || Event::KeyPressed {
+        key: Key::Character("w".into()),
+        modified_key: Key::Character("w".into()),
+        physical_key: key::Physical::Code(key::Code::KeyW),
+        location: iced::keyboard::Location::Standard,
+        modifiers: Modifiers::CTRL,
+        text: None,
+        repeat: false,
+    };
+
+    let message = super::shortcuts::message_for(ctrl_w()).expect("Ctrl+W must map to a message");
+    assert!(matches!(message, Message::ToggleWindowShade));
+    assert_message_schedules_work(&mut player, message);
+    assert!(player.shaded);
+
+    player.unshaded_size = Some(iced::Size::new(800.0, 600.0));
+    let message = super::shortcuts::message_for(ctrl_w()).expect("Ctrl+W must map to a message");
+    assert_message_schedules_work(&mut player, message);
+    assert!(!player.shaded);
+}
+
+#[test]
 fn t_toggles_the_time_display_from_the_keyboard() {
     use iced::keyboard::{Event, Key, Modifiers, key};
 
