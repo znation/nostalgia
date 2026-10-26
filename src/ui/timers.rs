@@ -101,11 +101,11 @@ pub(super) fn marquee_thread_failure_report(error: &io::Error) -> String {
 ///
 /// The marquee timer exists to advance the Now Playing title window, and the
 /// view ignores that window while the line fits — so ticking for a fitting line
-/// would advance nothing. Every message makes iced rebuild the whole screen
-/// (the browse list's rows included), so an always-on timer would rebuild the
-/// UI four times a second to redraw a bar that cannot change. The timer is
-/// therefore subscribed only while the line needs to scroll, and dropped again
-/// once it fits.
+/// would advance nothing. Every message makes iced rebuild the whole visible
+/// screen (the library panel included while it shows), so an always-on timer
+/// would rebuild the UI four times a second to redraw a bar that cannot change.
+/// The timer is therefore subscribed only while the line needs to scroll, and
+/// dropped again once it fits.
 ///
 /// The position poll has the same shape: each tick and its replies rebuild the
 /// same whole screen, and a stopped player's view clears its current track's

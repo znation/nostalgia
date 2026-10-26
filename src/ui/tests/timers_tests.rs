@@ -14,11 +14,11 @@ fn marquee_tick_advances_the_offset() {
     assert_eq!(player.marquee_offset, 2);
 }
 
-// Every message makes iced rebuild the whole screen, browse list included, so
-// the marquee timer must not run for a line that fits the LCD whole: it would
-// rebuild the UI four times a second to redraw a bar that cannot change. The
-// keyboard listener always runs, so the subscription set is the two listeners
-// until the line needs to scroll.
+// Every message makes iced rebuild the whole visible screen, the library panel
+// included while it shows, so the marquee timer must not run for a line that
+// fits the LCD whole: it would rebuild the UI four times a second to redraw a
+// bar that cannot change. The keyboard listener always runs, so the
+// subscription set is the two listeners until the line needs to scroll.
 #[test]
 fn the_marquee_timer_runs_only_while_the_line_needs_to_scroll() {
     assert_eq!(subscriptions(false, false, false, false).len(), 2);
@@ -38,11 +38,11 @@ fn the_mixer_nudge_listener_is_always_subscribed() {
 }
 
 // The position poll has the same cost as the marquee: every tick and reply
-// rebuilds the whole screen, browse list included. A stopped player's view
-// clears its current track's time readout (except the `--:--` placeholder), so
-// the poll must leave the subscription set then, and join it again only while
-// playback is running or the backend still holds a preview whose position a
-// seek can move.
+// rebuilds the whole visible screen, the library panel included while it
+// shows. A stopped player's view clears its current track's time readout
+// (except the `--:--` placeholder), so the poll must leave the subscription
+// set then, and join it again only while playback is running or the backend
+// still holds a preview whose position a seek can move.
 #[test]
 fn the_position_timer_runs_only_while_there_is_a_position_to_refresh() {
     assert_eq!(subscriptions(false, true, false, false).len(), 3);

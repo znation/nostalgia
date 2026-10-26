@@ -44,7 +44,8 @@ pub(in crate::ui::views) fn display_len(label: &str, artist: &str, number: &str)
 ///
 /// The marquee timer runs only while this holds. A line that fits is shown
 /// whole, so ticking for it would advance an offset the view ignores — and
-/// every tick makes iced rebuild the whole screen, browse list included.
+/// every tick makes iced rebuild the whole visible screen, the library panel
+/// included while it shows.
 pub fn needs_marquee(label: &str, artist: &str, number: &str) -> bool {
     display_len(label, artist, number) > MARQUEE_WIDTH
 }

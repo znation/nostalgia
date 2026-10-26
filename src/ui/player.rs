@@ -406,9 +406,9 @@ impl WinampPlayer {
     /// reply, so a seek can still move it), or a stored position is still shown
     /// because Pause kept it. A stopped player's view clears the current
     /// track's time readout (except the `--:--` placeholder), so the poll stays
-    /// unsubscribed and the UI does not
-    /// rebuild the whole screen, browse list included, twice a second to
-    /// re-render an unchanged readout (see [`super::timers::subscriptions`]).
+    /// unsubscribed and the UI does not rebuild the whole visible screen, the
+    /// library panel included while it shows, twice a second to re-render an
+    /// unchanged readout (see [`super::timers::subscriptions`]).
     pub(in crate::ui) fn needs_position_poll(&self) -> bool {
         if self.playback_position.is_some() || self.apple_music_service.has_loaded_preview() {
             return true;
