@@ -33,7 +33,7 @@ pub(crate) async fn with_timeout<F: Future>(timeout: Duration, future: F) -> Opt
 const TIMER_THREAD_NAME: &str = "nostalgia-timer";
 
 /// Starts the detached thread that fires `fired` only when `finished` has not
-/// reported within `timeout`, and returns whether the thread started.
+/// reported within `timeout`, returning the spawn result.
 ///
 /// `crate::threads::spawn_named` starts the thread with the fallible
 /// `std::thread::Builder::spawn` form; a thread-creation failure (thread
@@ -44,13 +44,12 @@ fn spawn_timer(
     timeout: Duration,
     finished: std::sync::mpsc::Receiver<()>,
     fired: tokio::sync::oneshot::Sender<()>,
-) -> bool {
+) -> std::io::Result<()> {
     crate::threads::spawn_named(TIMER_THREAD_NAME, move || {
         if finished.recv_timeout(timeout).is_err() {
             let _ = fired.send(());
         }
     })
-    .is_ok()
 }
 
 /// [`with_timeout`] with an injectable timer spawner, so a test can drive the
@@ -67,12 +66,12 @@ async fn with_timeout_with<F: Future>(
         Duration,
         std::sync::mpsc::Receiver<()>,
         tokio::sync::oneshot::Sender<()>,
-    ) -> bool,
+    ) -> std::io::Result<()>,
 ) -> Option<F::Output> {
     let (fired, timer) = tokio::sync::oneshot::channel::<()>();
     let (done, finished) = std::sync::mpsc::channel::<()>();
-    if !spawn_timer(timeout, finished, fired) {
-        eprintln!("the timeout timer thread could not start; treating the wait as timed out");
+    if let Err(error) = spawn_timer(timeout, finished, fired) {
+        eprintln!("{}", timeout_timer_failure_report(&error));
         return None;
     }
     tokio::select! {
@@ -83,6 +82,14 @@ async fn with_timeout_with<F: Future>(
         }
         _ = timer => None,
     }
+}
+
+/// The report for a timeout timer thread that could not start: it names the
+/// cause and states the fallback, so a wait reported as timed out is not
+/// mistaken for a slow backend. Pure, so the report contract is testable
+/// without capturing stderr.
+pub(super) fn timeout_timer_failure_report(error: &std::io::Error) -> String {
+    format!("the timeout timer thread could not start: {error}; treating the wait as timed out")
 }
 
 #[cfg(test)]
@@ -118,8 +125,21 @@ mod tests {
         let output = futures::executor::block_on(with_timeout_with(
             Duration::from_secs(1),
             async { 7 },
-            |_timeout, _finished, _fired| false,
+            |_timeout, _finished, _fired| Err(std::io::Error::other("no threads left")),
         ));
         assert_eq!(output, None);
+    }
+
+    // A refused timer thread's report must name the cause as well as the
+    // fallback: without the cause a log reader cannot tell thread exhaustion
+    // from an internal fault, and the wait's `None` would look like a slow
+    // backend. Pinned as text so the cause cannot be dropped again.
+    #[test]
+    fn timeout_timer_failure_report_names_the_cause_and_the_fallback() {
+        let error = std::io::Error::other("no threads left");
+        assert_eq!(
+            timeout_timer_failure_report(&error),
+            "the timeout timer thread could not start: no threads left; treating the wait as timed out"
+        );
     }
 }
