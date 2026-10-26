@@ -16,6 +16,7 @@
 //! never reaches into another's code.
 
 pub(super) mod browse;
+pub(super) mod jump;
 pub(super) mod mixer;
 pub(super) mod playback;
 pub(super) mod window;

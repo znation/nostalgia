@@ -310,6 +310,11 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
             Some(track) => views::view_file_info_overlay(base, track),
             None => base,
         }
+    } else if player.jump_time_visible && !player.shaded {
+        match player.playback_duration {
+            Some(length) => views::view_jump_time_overlay(base, &player.jump_time_query, length),
+            None => base,
+        }
     } else {
         base
     }

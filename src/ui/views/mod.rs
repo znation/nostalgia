@@ -31,6 +31,7 @@ mod about;
 mod browse;
 mod equalizer;
 mod file_info;
+mod jump_time;
 mod mini_transport;
 mod modal;
 mod now_playing;
@@ -50,6 +51,7 @@ pub use browse::{
 };
 pub use equalizer::view_equalizer;
 pub use file_info::view_file_info_overlay;
+pub use jump_time::{JUMP_TIME_INPUT_ID, view_jump_time_overlay};
 pub use mini_transport::view_library_strip;
 pub use now_playing::{
     KnownTrack, MixerDrag, TimeDisplay, mixer_readout_text, needs_marquee, now_playing_artist,

@@ -138,7 +138,7 @@ fn toggle_about_while_shaded_restores_the_window_first() {
 }
 
 /// Makes `song-1` the current track and records it in `known_tracks`.
-fn make_current_track_known(player: &mut WinampPlayer, state: &Arc<Mutex<AppState>>) {
+pub(super) fn make_current_track_known(player: &mut WinampPlayer, state: &Arc<Mutex<AppState>>) {
     player.known_tracks.insert(
         "song-1".to_string(),
         views::KnownTrack {

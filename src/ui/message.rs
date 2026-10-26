@@ -303,6 +303,14 @@ pub(in crate::ui) enum Message {
     // Opening it needs a current track known to the player and closes About;
     // opening while shaded first restores the window. The flag is not persisted.
     ToggleFileInfo,
+    // Ctrl+J: flips the transient Jump to time panel. Opening it needs a
+    // loaded preview with a known length, closes About and File info, and
+    // while shaded first restores the window. The flag is not persisted.
+    ToggleJumpTime,
+    // A keystroke in the Jump to time box: stores the typed text.
+    JumpTimeChanged(String),
+    // Enter or the `Jump` button: seeks to the typed time and closes the panel.
+    JumpTimeSubmitted,
     // The LCD strip's always-on-top toggle. The arm flips the flag and
     // schedules `iced::window::set_level` for the resolved window, which is a
     // no-op until the window id resolves.

@@ -21,7 +21,7 @@ use super::Message;
 /// to its first and last rows, Page Up and Page Down to scroll it one page at
 /// a time, F5 to refetch the library and return to the Artists list, Ctrl+F
 /// to focus the `Search library` box, Ctrl+Z and Ctrl+B to play the first and
-/// last song of the showing list, Ctrl+R to reverse the showing list, Ctrl+Shift+R to shuffle it, Ctrl+W to toggle window-shade mode, Ctrl+Shift+1 to sort it by title
+/// last song of the showing list, Ctrl+R to reverse the showing list, Ctrl+Shift+R to shuffle it, Ctrl+W to toggle window-shade mode, Ctrl+J to flip the Jump to time panel, Ctrl+Shift+1 to sort it by title
 /// (see [`playlist_sort_shortcut`]), Alt+3 to flip the File info panel
 /// (see [`file_info_shortcut`]), and the system media keys
 /// (Play/Pause, Play, Pause, Stop, Next track, and Previous track) to the same
@@ -143,7 +143,8 @@ fn numpad_shortcut(key: &Key, location: Location, modifiers: Modifiers) -> Optio
 /// back or forward, and the system media keys (Play/Pause, Play, Pause, Stop,
 /// Next track, and Previous track) drive the transport. Apart from Ctrl+F,
 /// Ctrl+Z (play the first song), Ctrl+B (play the last song), and Ctrl+R
-/// (reverse the showing list), Ctrl+Shift+R (shuffle it), and Ctrl+W (toggle
+/// (reverse the showing list), Ctrl+Shift+R (shuffle it), Ctrl+J (flip the Jump to
+/// time panel), and Ctrl+W (toggle
 /// window-shade mode), a
 /// Control, Alt, or
 /// Logo chord is left to the OS and window manager, so those modifiers yield
@@ -167,7 +168,7 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
 
     // Ctrl+Z and Ctrl+B jump to the first and last song of the list Z and B
     // step through, Ctrl+R reverses the showing list, Ctrl+Shift+R shuffles it, and
-    // Ctrl+W rolls the window up into shade mode and back, under the same no-Alt, no-Logo rule as Ctrl+F.
+    // Ctrl+W rolls the window up into shade mode and back, Ctrl+J flips the Jump to time panel, under the same no-Alt, no-Logo rule as Ctrl+F.
     if modifiers.control() && !modifiers.alt() && !modifiers.logo() {
         match key {
             Key::Character(character) if character.eq_ignore_ascii_case("z") => {
@@ -186,6 +187,11 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
             }
             Key::Character(character) if character.eq_ignore_ascii_case("w") => {
                 return Some(Message::ToggleWindowShade);
+            }
+            Key::Character(character)
+                if character.eq_ignore_ascii_case("j") && !modifiers.shift() =>
+            {
+                return Some(Message::ToggleJumpTime);
             }
             _ => {}
         }
@@ -545,6 +551,23 @@ mod tests {
         assert!(message_for(digit2).is_none());
         let keypad = digit_pressed(one(), key::Code::Numpad1, Location::Numpad, both);
         assert!(message_for(keypad).is_none());
+    }
+
+    #[test]
+    fn message_for_maps_ctrl_j_to_jump_time() {
+        for character in ["j", "J"] {
+            let event = key_pressed(Key::Character(character.into()), Modifiers::CTRL);
+            assert!(matches!(message_for(event), Some(Message::ToggleJumpTime)));
+        }
+        for modifiers in [
+            Modifiers::CTRL | Modifiers::SHIFT,
+            Modifiers::CTRL | Modifiers::ALT,
+            Modifiers::CTRL | Modifiers::LOGO,
+            Modifiers::NONE,
+        ] {
+            let event = key_pressed(Key::Character("j".into()), modifiers);
+            assert!(message_for(event).is_none(), "{modifiers:?}");
+        }
     }
 
     #[test]

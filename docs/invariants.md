@@ -1434,6 +1434,32 @@ of `ui::view::view`.
 (`src/ui/views/tests/chrome.rs`); `view_constructs_when_the_window_is_shaded`
 (`src/ui/tests/view_tests.rs`).
 
+## Jump to time panel
+
+**Guarantee.** Ctrl+J flips a transient, unpersisted Jump to time panel that seeks the loaded preview:
+
+- `shortcuts::shortcut` maps `j` or `J` with Control held and Shift, Alt, and Logo released to
+  `Message::ToggleJumpTime`; Ctrl+Shift+J, Ctrl+Alt+J, Ctrl+Logo+J, and a plain `j` map to nothing.
+- `handlers::jump::toggle_jump_time` flips `WinampPlayer::jump_time_visible`. Opening needs
+  `playback_duration` to be `Some`; without it the flag stays false. Opening clears the query,
+  `about_visible`, and `file_info_visible`, and opening About or File info clears
+  `jump_time_visible`. Opening while `shaded` holds first calls `toggle_window_shade`.
+- `handlers::jump::parse_jump_time` accepts ASCII-digit seconds or `M:SS`; `jump_time_submitted`
+  seeks through `playback::preview::seek_preview_to` (clamped to the length), bumping
+  `position_epoch`, and closes the panel. An unparsable query changes nothing and keeps it open.
+- `views::view_jump_time_overlay` stacks `JUMP TO TIME`, `Track length: …`, the time box, and
+  `Jump` and `Close` buttons through `modal_overlay`. `Close` and the backdrop each publish one
+  `ToggleJumpTime`; `Jump` publishes `JumpTimeSubmitted`. The shade branch never draws it.
+
+**Enforced by.** `handlers::jump`, `handlers::playback::preview::seek_preview_to`,
+`views::jump_time::view_jump_time_overlay`, and the overlay branch of `ui::view::view`.
+
+**Pinned by.** `parses_seconds_and_minutes_seconds` and `rejects_malformed_times`
+(`src/ui/handlers/jump.rs`); `message_for_maps_ctrl_j_to_jump_time` (`src/ui/shortcuts.rs`); the
+tests in `src/ui/tests/jump_time_tests.rs`; `jump_time_overlay_draws_its_heading_length_and_buttons`
+and `jump_time_overlay_buttons_and_backdrop_publish_their_messages` (`src/ui/views/tests/chrome.rs`);
+`view_constructs_when_the_window_is_shaded` (`src/ui/tests/view_tests.rs`).
+
 ## Song-list footer
 
 **Guarantee.** A non-empty song list draws a footer beneath its rows. With no selection it reads

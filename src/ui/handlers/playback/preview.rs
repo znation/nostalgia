@@ -243,6 +243,15 @@ pub(in crate::ui) fn seek_preview_released(player: &mut WinampPlayer) -> Task<Me
     let Some(position) = player.seek_preview.take() else {
         return Task::none();
     };
+    seek_preview_to(player, position);
+    Task::none()
+}
+
+/// Seeks the preview to `position`, records it optimistically, and invalidates
+/// any position or duration reply already in flight. A backend failure is
+/// logged and leaves the recorded position alone. Shared by the seek bar's
+/// release and the Jump to time panel.
+pub(in crate::ui) fn seek_preview_to(player: &mut WinampPlayer, position: Duration) {
     match player.apple_music_service.seek_output_to(position) {
         Ok(()) => {
             player.position_epoch = player.position_epoch.wrapping_add(1);
@@ -250,5 +259,4 @@ pub(in crate::ui) fn seek_preview_released(player: &mut WinampPlayer) -> Task<Me
         }
         Err(error) => eprintln!("seeking the preview failed: {error}"),
     }
-    Task::none()
 }

@@ -173,6 +173,17 @@ fn view_constructs_when_the_window_is_shaded() {
         !texts.contains(&"FILE INFO"),
         "shade mode must never draw the File info panel: {texts:?}"
     );
+
+    // And for a Jump to time flag left set while shaded.
+    player.file_info_visible = false;
+    player.jump_time_visible = true;
+    player.playback_duration = Some(std::time::Duration::from_secs(30));
+    let shaded = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = shaded.texts().collect();
+    assert!(
+        !texts.contains(&"JUMP TO TIME"),
+        "shade mode must never draw the Jump to time panel: {texts:?}"
+    );
 }
 
 #[test]
