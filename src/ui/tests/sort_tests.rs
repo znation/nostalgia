@@ -1,5 +1,30 @@
 use super::*;
 
+fn album_ids(albums: &[Album]) -> Vec<&str> {
+    albums.iter().map(|album| album.id.as_str()).collect()
+}
+
+/// Two albums whose rendered titles ("Zulu - Alpha", "alpha - Zulu") sort
+/// opposite to their `title` fields, in library order (`zulu`, then `alpha`).
+fn display_title_albums(first_duration_ms: u64, second_duration_ms: u64) -> Vec<Album> {
+    vec![
+        Album {
+            id: "zulu".to_string(),
+            title: "Alpha".to_string(),
+            artist_id: "artist-1".to_string(),
+            artist: "Zulu".to_string(),
+            duration_ms: first_duration_ms,
+        },
+        Album {
+            id: "alpha".to_string(),
+            title: "Zulu".to_string(),
+            artist_id: "artist-1".to_string(),
+            artist: "alpha".to_string(),
+            duration_ms: second_duration_ms,
+        },
+    ]
+}
+
 #[test]
 fn sort_reorders_artists_case_insensitively() {
     let (mut player, _state) = test_player();
@@ -177,31 +202,11 @@ fn sort_reorders_albums_by_their_display_title() {
     // The display titles are "Zulu - Alpha" and "alpha - Zulu", so sorting
     // by the rendered text puts the second row first; sorting by `title`
     // alone would leave this order unchanged.
-    player.albums.items = vec![
-        Album {
-            id: "zulu".to_string(),
-            title: "Alpha".to_string(),
-            artist_id: "artist-1".to_string(),
-            artist: "Zulu".to_string(),
-            duration_ms: 0,
-        },
-        Album {
-            id: "alpha".to_string(),
-            title: "Zulu".to_string(),
-            artist_id: "artist-1".to_string(),
-            artist: "alpha".to_string(),
-            duration_ms: 0,
-        },
-    ];
+    player.albums.items = display_title_albums(0, 0);
 
     let _ = update(&mut player, Message::SortBrowse);
 
-    let ids: Vec<&str> = player
-        .albums
-        .items
-        .iter()
-        .map(|album| album.id.as_str())
-        .collect();
+    let ids = album_ids(&player.albums.items);
     assert_eq!(ids, ["alpha", "zulu"]);
 }
 
@@ -277,31 +282,11 @@ fn sort_reorders_all_songs_and_keeps_their_cached_text_aligned() {
 fn sort_reorders_all_albums_by_their_display_title() {
     let (mut player, _state) = test_player();
     player.current_view = CurrentView::AllAlbums;
-    player.all_albums.items = vec![
-        Album {
-            id: "zulu".to_string(),
-            title: "Alpha".to_string(),
-            artist_id: "artist-1".to_string(),
-            artist: "Zulu".to_string(),
-            duration_ms: 0,
-        },
-        Album {
-            id: "alpha".to_string(),
-            title: "Zulu".to_string(),
-            artist_id: "artist-1".to_string(),
-            artist: "alpha".to_string(),
-            duration_ms: 0,
-        },
-    ];
+    player.all_albums.items = display_title_albums(0, 0);
 
     let _ = update(&mut player, Message::SortBrowse);
 
-    let ids: Vec<&str> = player
-        .all_albums
-        .items
-        .iter()
-        .map(|album| album.id.as_str())
-        .collect();
+    let ids = album_ids(&player.all_albums.items);
     assert_eq!(ids, ["alpha", "zulu"]);
 }
 
@@ -309,32 +294,12 @@ fn sort_reorders_all_albums_by_their_display_title() {
 fn sort_reorders_all_albums_and_keeps_their_cached_text_aligned() {
     let (mut player, _state) = test_player();
     player.current_view = CurrentView::AllAlbums;
-    let albums = vec![
-        Album {
-            id: "zulu".to_string(),
-            title: "Alpha".to_string(),
-            artist_id: "artist-1".to_string(),
-            artist: "Zulu".to_string(),
-            duration_ms: 60_000,
-        },
-        Album {
-            id: "alpha".to_string(),
-            title: "Zulu".to_string(),
-            artist_id: "artist-1".to_string(),
-            artist: "alpha".to_string(),
-            duration_ms: 120_000,
-        },
-    ];
+    let albums = display_title_albums(60_000, 120_000);
     let _ = update(&mut player, Message::AllAlbumsLoaded(albums));
 
     let _ = update(&mut player, Message::SortBrowse);
 
-    let ids: Vec<&str> = player
-        .all_albums
-        .items
-        .iter()
-        .map(|album| album.id.as_str())
-        .collect();
+    let ids = album_ids(&player.all_albums.items);
     assert_eq!(ids, ["alpha", "zulu"]);
     assert_eq!(
         player.all_albums.titles,
@@ -603,12 +568,7 @@ fn back_from_songs_restores_a_sorted_albums_list_to_library_order() {
     assert_view(&player, CurrentView::Songs);
     let _ = update(&mut player, Message::Back);
 
-    let ids: Vec<&str> = player
-        .albums
-        .items
-        .iter()
-        .map(|album| album.id.as_str())
-        .collect();
+    let ids = album_ids(&player.albums.items);
     assert_eq!(ids, ["zulu", "alpha"]);
 }
 
@@ -638,12 +598,7 @@ fn back_from_all_albums_songs_restores_a_sorted_flat_list_to_library_order() {
     ];
 
     let _ = update(&mut player, Message::SortBrowse);
-    let sorted: Vec<&str> = player
-        .all_albums
-        .items
-        .iter()
-        .map(|album| album.id.as_str())
-        .collect();
+    let sorted = album_ids(&player.all_albums.items);
     assert_eq!(sorted, ["alpha", "zulu"]);
 
     let epoch = player.all_albums.epoch;
@@ -653,12 +608,7 @@ fn back_from_all_albums_songs_restores_a_sorted_flat_list_to_library_order() {
 
     let _ = update(&mut player, Message::Back);
 
-    let restored: Vec<&str> = player
-        .all_albums
-        .items
-        .iter()
-        .map(|album| album.id.as_str())
-        .collect();
+    let restored = album_ids(&player.all_albums.items);
     assert_view(&player, CurrentView::AllAlbums);
     assert_eq!(restored, ["zulu", "alpha"]);
 }
