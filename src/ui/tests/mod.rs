@@ -532,18 +532,25 @@ async fn assert_task_snaps_browse_list_to_end(task: Task<Message>, what: &str) {
 }
 
 /// Drives `task` until it runs an iced scroll operation and asserts that
-/// operation scrolls the browse list to absolute row offset `expected`.
-async fn assert_task_scrolls_browse_list_to(task: Task<Message>, what: &str, expected: f32) {
+/// operation reveals the browse row at absolute offset `expected` in a list
+/// reporting `viewport_height` scrolled to `scroll_top`.
+async fn assert_task_reveals_browse_row(
+    task: Task<Message>,
+    what: &str,
+    viewport_height: f32,
+    scroll_top: f32,
+    expected: f32,
+) {
     use iced::advanced::widget::operation::scrollable::AbsoluteOffset;
 
-    let effects = browse_scroll_effects(task, what).await;
+    let effects = browse_scroll_effects_at(task, what, viewport_height, scroll_top).await;
     assert_eq!(
         effects.scrolled,
         Some(AbsoluteOffset {
             x: None,
             y: Some(expected),
         }),
-        "{what} must scroll the browse list to row offset {expected}"
+        "{what} must scroll only as far as needed to reveal its row"
     );
     assert_eq!(
         effects.snapped, None,

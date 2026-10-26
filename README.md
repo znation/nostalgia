@@ -171,8 +171,9 @@ controls. Previous — the button, the Z key, and the system Previous track key 
 loaded preview from its start once it has played at least three seconds, and steps back before
 that; with Shuffle on, such an earlier Previous retraces the
 tracks actually played before the current one instead of stepping one row backward in the list.
-While a song list is showing, Next, Previous (including a shuffled retrace), and the preview-end
-advance scroll that list so the landed row stays in view. The volume slider and the up/down arrows
+While a song list is showing, Next, Previous (including a shuffled retrace), the preview-end
+advance, Ctrl+Z/Ctrl+B edge jumps, and keypad 1/3 ten-song jumps scroll that list only as far as
+needed to keep the landed row in view, like Winamp's playlist editor. The volume slider and the up/down arrows
 set the audio backend's playback level, and rolling the mouse wheel over the player panels nudges
 the volume by one slider step in the roll's vertical direction, except that a roll over the drawn
 seek slider, in the Now Playing bar or the shade strip, seeks five seconds forward or back instead;

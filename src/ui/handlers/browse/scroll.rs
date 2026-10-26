@@ -1,6 +1,6 @@
 //! The browse list's scroll operations: the Top/Home and End/End-key snaps,
-//! the Page Up and Page Down steps, the row and playing-row scrolls, and the
-//! minimal reveal of a moved row.
+//! the Page Up and Page Down steps, and the minimal reveal of a moved or
+//! playing row.
 //!
 //! Each handler is a pure `iced` scroll task against the list's stable widget
 //! id. They touch only the list's scroll offset — never its rows, selection,
@@ -36,9 +36,10 @@ pub(in crate::ui) fn scroll_browse_to_bottom() -> Task<Message> {
 }
 
 /// Scroll the showing browse list by `delta` vertical pixels through its
-/// stable widget id. Unlike the absolute [`scroll_browse_to_row`], the step is
-/// relative to the list's current offset. It touches only the scroll offset
-/// and has no target in shade mode, where no browse list is built.
+/// stable widget id. Unlike [`reveal_browse_row`], which moves the list only
+/// as far as one row needs, the step is relative to the list's current offset.
+/// It touches only the scroll offset and has no target in shade mode, where no
+/// browse list is built.
 fn scroll_browse_by(delta: f32) -> Task<Message> {
     iced::widget::operation::scroll_by(
         views::BROWSE_LIST_ID,
@@ -62,41 +63,30 @@ pub(in crate::ui) fn scroll_browse_page_down() -> Task<Message> {
     scroll_browse_by(views::BROWSE_PAGE_HEIGHT)
 }
 
-/// Scroll the browse list so its row `index` starts at the viewport's top
-/// edge. The absolute offset is the list's top padding plus the row's
-/// laid-out pitch times its position; iced clamps it to the list's content,
-/// so a row near the end scrolls only as far as the list allows and a short
-/// list simply stays put.
-pub(in crate::ui) fn scroll_browse_to_row(index: usize) -> Task<Message> {
-    iced::widget::operation::scroll_to(
-        views::BROWSE_LIST_ID,
-        iced::widget::scrollable::AbsoluteOffset {
-            x: None,
-            y: Some(views::BROWSE_LIST_PADDING + index as f32 * views::BROWSE_ROW_HEIGHT),
-        },
-    )
-}
-
-/// Keep the stepped-to playing row visible: scroll the browse list to `index`
-/// only while a song list (`Songs` or `AllSongs`) is showing, since those are
-/// the levels whose rows carry the `▶` playing marker. Another browse level
-/// leaves the list where it is, and so does a direct row press — the pressed
-/// row is already in view — which deliberately does not call this.
+/// Keep the stepped-to playing row visible: reveal the browse row at `index`
+/// in the list, scrolling only as far as needed and not at all when the row
+/// is already fully visible, and only while a song list (`Songs` or
+/// `AllSongs`) is showing, since those are the levels whose rows carry the
+/// `▶` playing marker. Another browse level leaves the list where it is, and
+/// so does a direct row press — the pressed row is already in view — which
+/// deliberately does not call this.
 pub(in crate::ui) fn scroll_browse_to_playing_row(
     player: &WinampPlayer,
     index: usize,
 ) -> Task<Message> {
     match player.current_view {
-        CurrentView::Songs | CurrentView::AllSongs => scroll_browse_to_row(index),
+        CurrentView::Songs | CurrentView::AllSongs => reveal_browse_row(index),
         _ => Task::none(),
     }
 }
 
 /// The scroll offset that shows row `index` fully in a viewport of
 /// `viewport_height` currently scrolled to `scroll_top`, or `None` when the
-/// row is already fully visible. It uses the row geometry of
-/// [`scroll_browse_to_row`]. The top edge is checked first, so a viewport
-/// shorter than one row shows the row's top.
+/// row is already fully visible. Row `index` spans from
+/// [`views::BROWSE_LIST_PADDING`] plus `index` times
+/// [`views::BROWSE_ROW_HEIGHT`] for one [`views::BROWSE_ROW_HEIGHT`]. The top
+/// edge is checked first, so a viewport shorter than one row shows the row's
+/// top.
 pub(in crate::ui) fn reveal_row_offset(
     index: usize,
     scroll_top: f32,

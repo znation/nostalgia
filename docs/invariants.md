@@ -361,30 +361,37 @@ draw beside Top.
 
 ## Browse playing-row visibility
 
-**Guarantee.** When Next, Previous (including Shuffle's retrace of the tracks actually played), or
-the preview-end advance, or a Ctrl+Z / Ctrl+B edge jump lands on a song while a song list (`CurrentView::Songs` or
-`CurrentView::AllSongs`) is showing, the update loop scrolls the browse list to that row's offset,
-`BROWSE_LIST_PADDING + index * BROWSE_ROW_HEIGHT`, in addition to scheduling the existing
-`TrackSelected`. `BROWSE_ROW_HEIGHT` is the laid-out vertical pitch between consecutive browse rows:
+**Guarantee.** When Next, Previous (including Shuffle's retrace of the tracks actually played),
+the preview-end advance, a Ctrl+Z / Ctrl+B edge jump, or a keypad 1/3 ten-song jump lands on a
+song while a song list (`CurrentView::Songs` or `CurrentView::AllSongs`) is showing, the update
+loop reveals that row in the browse list — scrolling only as far as needed to show it fully: to
+the row's top when the row is above the viewport, to its bottom edge when it is below, and not at
+all when it is already fully visible — in addition to scheduling the existing `TrackSelected`.
+Row `index` spans from `BROWSE_LIST_PADDING + index * BROWSE_ROW_HEIGHT` for one
+`BROWSE_ROW_HEIGHT`. `BROWSE_ROW_HEIGHT` is the laid-out vertical pitch between consecutive browse rows:
 every shared row title stays on one line — hard line breaks are flattened to spaces and a title
 wider than its column is clipped there — so no title can make its row taller or draw under the
-right-aligned label. `BROWSE_LIST_PADDING` is the list's top padding, which the offset includes. A
-later row therefore cannot drift out of view from a stale constant; iced clamps the absolute offset
-to the list's content. A direct row press does not scroll — the pressed row is already in view — and
-stepping while another browse level is showing does not scroll, since only a song list carries the
-`▶` playing marker. Top, Back, and every list-opening navigation keep their existing snap-to-top
-behavior, and playback, selection, sorting, row text, and audio behavior are unchanged.
+right-aligned label. `BROWSE_LIST_PADDING` is the list's top padding, which the row geometry
+includes. A later row therefore cannot drift out of view from a stale constant; iced clamps a
+reveal that would pass the list's top or end. A direct row press does not scroll — the pressed row
+is already in view — and stepping while another browse level is showing does not scroll, since
+only a song list carries the `▶` playing marker. Top, Back, and every list-opening navigation keep
+their existing snap-to-top behavior, and playback, selection, sorting, row text, and audio behavior
+are unchanged.
 
 **Enforced by.** `views::BROWSE_ROW_HEIGHT` and `views::BROWSE_LIST_PADDING` in
 `src/ui/views/browse/rows.rs` are the one pitch and padding `scrollable_list` lays its rows
 out with, and `scrollable_list` flattens title line breaks and clips each title to its
 column, so every row keeps that pitch and stays inside its column;
-`handlers::browse::scroll::scroll_browse_to_row` in `src/ui/handlers/browse/scroll.rs` schedules
-the `iced::widget::operation::scroll_to` absolute offset, and
-`handlers::browse::scroll::scroll_browse_to_playing_row` gates it on the current view.
-`handlers::playback::step_track`, `handlers::playback::jump_to_edge_track`, and
-`handlers::playback::preview::playback_finished` batch that scroll with their `TrackSelected`,
-so Next, Previous, a shuffled retrace, an edge jump, and a natural preview end all follow the landed row.
+`handlers::browse::scroll::reveal_browse_row` in `src/ui/handlers/browse/scroll.rs` reads the
+list's current offset and viewport height and schedules the minimal absolute offset computed by
+`reveal_row_offset`, and `handlers::browse::scroll::scroll_browse_to_playing_row` gates it on the
+current view.
+`handlers::playback::step_track`, `handlers::playback::jump_to_edge_track`,
+`handlers::playback::jump_ten_tracks`, and
+`handlers::playback::preview::playback_finished` batch that reveal with their `TrackSelected`,
+so Next, Previous, a shuffled retrace, an edge jump, a ten-song jump, and a natural preview end
+all follow the landed row.
 
 **Pinned by.**
 
@@ -393,9 +400,11 @@ so Next, Previous, a shuffled retrace, an edge jump, and a natural preview end a
   (`src/ui/views/tests/browse.rs`)
 - `a_hard_line_break_in_a_title_does_not_change_the_row_pitch`
 - `a_carriage_return_in_a_title_does_not_change_the_row_pitch`
-- `next_and_previous_scroll_the_showing_song_list_to_the_landed_row`
+- `next_and_previous_reveal_the_landed_row_only_when_it_leaves_the_viewport`
 - `edge_jumps_scroll_the_showing_song_list` (`src/ui/tests/stepping_tests.rs`)
 - `a_finished_preview_scrolls_the_song_list_to_the_advanced_row`
+- `a_finished_preview_within_the_viewport_does_not_scroll`
+- the inline `reveal_row_offset` tests in `src/ui/handlers/browse/scroll.rs`
 - `stepping_while_another_browse_level_shows_does_not_scroll`
 - `a_row_press_does_not_scroll_the_list`
 

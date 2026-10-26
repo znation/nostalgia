@@ -226,24 +226,46 @@ fn a_failed_previous_restart_leaves_the_track_queued() {
 }
 
 // Next and Previous can step the playing row outside the visible list, so
-// while a song list is showing each step batches a scroll to the landed row's
-// laid-out offset with the selection it already scheduled. From song-2, Next
-// lands on song-3 (index 2) and Previous on song-1 (index 0).
+// while a song list is showing each step reveals the landed row, scrolling
+// only as far as needed and not at all when it is already visible. From
+// song-2 in a one-row viewport showing song-2's top, Next lands on song-3
+// (index 2) and scrolls to its bottom edge, while Previous lands on song-1
+// (index 0) and scrolls up to its top.
 #[test]
-fn next_and_previous_scroll_the_showing_song_list_to_the_landed_row() {
+fn next_and_previous_reveal_the_landed_row_only_when_it_leaves_the_viewport() {
+    const ROW: f32 = views::BROWSE_ROW_HEIGHT;
+    const PAD: f32 = views::BROWSE_LIST_PADDING;
+
     let (mut player, _state) = player_stepping_from(Some("song-2"));
     player.current_view = CurrentView::Songs;
 
-    futures::executor::block_on(assert_task_scrolls_browse_list_to(
+    futures::executor::block_on(assert_task_reveals_browse_row(
         update(&mut player, Message::NextTrack),
         "next",
-        views::BROWSE_LIST_PADDING + 2.0 * views::BROWSE_ROW_HEIGHT,
+        ROW,
+        PAD + ROW,
+        PAD + 3.0 * ROW - ROW,
     ));
-    futures::executor::block_on(assert_task_scrolls_browse_list_to(
+
+    let (mut player, _state) = player_stepping_from(Some("song-2"));
+    player.current_view = CurrentView::Songs;
+    futures::executor::block_on(assert_task_reveals_browse_row(
         update(&mut player, Message::PreviousTrack),
         "previous",
-        views::BROWSE_LIST_PADDING,
+        ROW,
+        PAD + ROW,
+        PAD,
     ));
+
+    let (mut player, _state) = player_stepping_from(Some("song-2"));
+    player.current_view = CurrentView::Songs;
+    let effects = futures::executor::block_on(browse_scroll_effects_at(
+        update(&mut player, Message::NextTrack),
+        "next within a tall viewport",
+        10.0 * ROW,
+        0.0,
+    ));
+    assert!(!effects.any());
 }
 
 // A step only follows the playing row when a song list is showing: the other
@@ -591,15 +613,19 @@ fn preview_end_in_all_songs_steps_the_flat_list() {
 }
 
 // A natural preview end follows the advanced row exactly as Next does: from
-// song-1 it scrolls the showing song list to song-2's row.
+// song-1 it reveals song-2's row, scrolling only as far as the one-row
+// viewport needs, and not at all when the row is already visible.
 #[test]
 fn a_finished_preview_scrolls_the_song_list_to_the_advanced_row() {
+    const ROW: f32 = views::BROWSE_ROW_HEIGHT;
+    const PAD: f32 = views::BROWSE_LIST_PADDING;
+
     let recording = Arc::new(RecordingAudio::default());
     let (mut player, _state) = player_playing_stepping_song(&recording, "song-1");
     player.current_view = CurrentView::Songs;
     let epoch = player.position_epoch;
 
-    futures::executor::block_on(assert_task_scrolls_browse_list_to(
+    futures::executor::block_on(assert_task_reveals_browse_row(
         update(
             &mut player,
             Message::PlaybackFinished {
@@ -608,8 +634,34 @@ fn a_finished_preview_scrolls_the_song_list_to_the_advanced_row() {
             },
         ),
         "preview end",
-        views::BROWSE_LIST_PADDING + views::BROWSE_ROW_HEIGHT,
+        ROW,
+        0.0,
+        PAD + 2.0 * ROW - ROW,
     ));
+}
+
+#[test]
+fn a_finished_preview_within_the_viewport_does_not_scroll() {
+    const ROW: f32 = views::BROWSE_ROW_HEIGHT;
+
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, _state) = player_playing_stepping_song(&recording, "song-1");
+    player.current_view = CurrentView::Songs;
+    let epoch = player.position_epoch;
+
+    let effects = futures::executor::block_on(browse_scroll_effects_at(
+        update(
+            &mut player,
+            Message::PlaybackFinished {
+                epoch,
+                finished: true,
+            },
+        ),
+        "preview end within the viewport",
+        10.0 * ROW,
+        0.0,
+    ));
+    assert!(!effects.any());
 }
 
 // Repeat wraps a natural end at the last song back to the first, just as the
@@ -863,18 +915,25 @@ fn edge_jumps_in_all_songs_use_the_flat_list() {
 
 #[test]
 fn edge_jumps_scroll_the_showing_song_list() {
+    const ROW: f32 = views::BROWSE_ROW_HEIGHT;
+    const PAD: f32 = views::BROWSE_LIST_PADDING;
+
     let (mut player, _state) = player_stepping_from(Some("song-1"));
     player.current_view = CurrentView::Songs;
     let last = stepping_songs().len() - 1;
 
-    futures::executor::block_on(assert_task_scrolls_browse_list_to(
+    futures::executor::block_on(assert_task_reveals_browse_row(
         update(&mut player, Message::FirstTrack),
         "first",
-        views::BROWSE_LIST_PADDING,
+        ROW,
+        PAD + last as f32 * ROW,
+        PAD,
     ));
-    futures::executor::block_on(assert_task_scrolls_browse_list_to(
+    futures::executor::block_on(assert_task_reveals_browse_row(
         update(&mut player, Message::LastTrack),
         "last",
-        views::BROWSE_LIST_PADDING + last as f32 * views::BROWSE_ROW_HEIGHT,
+        ROW,
+        0.0,
+        PAD + (last as f32 + 1.0) * ROW - ROW,
     ));
 }
