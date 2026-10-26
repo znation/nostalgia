@@ -245,21 +245,35 @@ pub(crate) fn ip_is_internal(ip: std::net::IpAddr) -> bool {
 ///
 /// `Ipv6Addr::to_ipv4` decodes only the IPv4-mapped (`::ffff:0:0/96`) and
 /// IPv4-compatible (`::/96`) forms, which [`ip_is_internal`] checks before
-/// calling this. Three transition prefixes embed an IPv4 address it does not
+/// calling this. Several transition forms embed an IPv4 address it does not
 /// decode, so a preview hostname that resolves to one of them would otherwise
 /// route to an internal address through the transition instead of being
 /// refused: 6to4 (`2002::/16`, the IPv4 in bytes 2..6), NAT64
 /// (`64:ff9b::/96`, the IPv4 in the last 32 bits, and `64:ff9b:1::/48`, whose
-/// RFC 6052 `/48` layout splits the IPv4 address around the reserved octet), and
+/// RFC 6052 `/48` layout splits the IPv4 address around the reserved octet),
 /// Teredo (`2001:0000::/32`, whose server IPv4 in bytes 4..8 is stored in plain
 /// form and whose client IPv4 in bytes 12..16 is stored as the bitwise
 /// complement of the address; a connection goes to the server and then to the
-/// client, so an internal either way is refused).
+/// client, so an internal either way is refused), IPv4-translated
+/// (`::ffff:0:0:0/96`, the IPv4 in the last 32 bits), and ISATAP (an address
+/// outside those fixed prefixes whose interface identifier is `0:5efe` or
+/// `200:5efe` followed by the IPv4 in the last 32 bits, which tunnels to that
+/// IPv4 address).
 fn v6_embeds_internal_ipv4(v6: std::net::Ipv6Addr) -> bool {
     let octets = v6.octets();
     let internal = |a: u8, b: u8, c: u8, d: u8| {
         ip_is_internal(std::net::IpAddr::V4(std::net::Ipv4Addr::new(a, b, c, d)))
     };
+    // IPv4-translated: `::ffff:0:0:0/96`, distinct from the IPv4-mapped form
+    // `to_ipv4` decodes. The IPv4 is the last 32 bits.
+    if octets[..8].iter().all(|&byte| byte == 0)
+        && octets[8] == 0xff
+        && octets[9] == 0xff
+        && octets[10] == 0
+        && octets[11] == 0
+    {
+        return internal(octets[12], octets[13], octets[14], octets[15]);
+    }
     // 6to4: 2002:VVVV:WWWW::/48.
     if octets[0] == 0x20 && octets[1] == 0x02 {
         return internal(octets[2], octets[3], octets[4], octets[5]);
@@ -280,6 +294,19 @@ fn v6_embeds_internal_ipv4(v6: std::net::Ipv6Addr) -> bool {
     if octets[0] == 0x20 && octets[1] == 0x01 && octets[2] == 0x00 && octets[3] == 0x00 {
         return internal(octets[4], octets[5], octets[6], octets[7])
             || internal(!octets[12], !octets[13], !octets[14], !octets[15]);
+    }
+    // ISATAP: the fixed interface-identifier marker sits in bytes 10..12,
+    // with either the `0:5efe` or the u/l-bit-set `200:5efe` high half, and
+    // the IPv4 is the last 32 bits. Checking it last keeps each prefix's own
+    // embedding authoritative: an address inside 6to4, NAT64, or Teredo can
+    // carry the same marker with internal-looking last 32 bits while the IPv4
+    // its prefix embeds is public.
+    if octets[10] == 0x5e
+        && octets[11] == 0xfe
+        && (octets[8..10] == [0x00, 0x00] || octets[8..10] == [0x02, 0x00])
+        && internal(octets[12], octets[13], octets[14], octets[15])
+    {
+        return true;
     }
     false
 }

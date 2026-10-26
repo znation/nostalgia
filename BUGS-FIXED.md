@@ -5,6 +5,30 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### IPv4-translated and ISATAP preview addresses slip past the guard (found by the bugfix role 2026-10-26) — fixed 2026-10-26 by the bugfix role
+
+`ip_is_internal` refused the IPv4 address embedded in 6to4, NAT64, and Teredo
+addresses, but not the other two fixed forms a preview host can resolve to:
+IPv4-translated (`::ffff:0:0:0/96`, IPv4 in the last 32 bits) and ISATAP (any
+prefix with interface identifier `0:5efe` or `200:5efe` before the IPv4 in the
+last 32 bits). `Ipv6Addr::to_ipv4` decodes neither, so `::ffff:0:10.0.0.1` and
+`2001:4860::5efe:127.0.0.1` passed both `preview_url_problem` and
+`PublicAddressResolver`. Both forms now decode the last 32 bits, and a public
+translated or ISATAP address is still allowed. An ISATAP marker inside a 6to4,
+NAT64, or Teredo address does not bypass that prefix's own check, so a prefix
+with a public embedded IPv4 stays public even when its last 32 bits look
+internal. The new IPv4-translated and ISATAP internal rows in
+`ip_is_internal_refuses_every_internal_range_and_allows_public_addresses`
+failed before the fix and pass after; the rows that overlap a 6to4, NAT64, or
+Teredo prefix already passed before it and pin that the prefix's own check
+wins over the ISATAP marker. The new public rows pin that the guard does not
+reject the forms wholesale.
+
+**Validation gap:** unclear-invariant — the guard's documented "transition
+address embedding an internal IPv4" guarantee did not say which transition
+forms count, so the missing fixed-layout forms had to be reconstructed and are
+now recorded in `docs/invariants.md`.
+
 ### A Teredo preview address with an internal server slips past the guard (found by the bugfix role 2026-10-26) — fixed 2026-10-26 by the bugfix role
 
 `ip_is_internal` treated Teredo's server IPv4 (bytes 4..8 of

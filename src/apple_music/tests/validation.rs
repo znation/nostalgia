@@ -267,6 +267,21 @@ fn ip_is_internal_refuses_every_internal_range_and_allows_public_addresses() {
         // 8.8.8.8, so a last-32-bits decode would call it public.
         ("64:ff9b:1:7f00:0:100:808:808", true),
         ("64:ff9b:1:a9fe:0:a9fe:0:0", true),
+        // IPv4-translated (`::ffff:0:0:0/96`): the IPv4 address is in the last
+        // 32 bits, which `to_ipv4` does not decode.
+        ("::ffff:0:10.0.0.1", true),
+        ("::ffff:0:a9fe:a9fe", true),
+        // ISATAP embeds the IPv4 address in its interface identifier
+        // (`0:5efe` or `200:5efe`) under any prefix, so a globally scoped one
+        // can still tunnel to an internal host.
+        ("2001:4860::5efe:127.0.0.1", true),
+        ("2606:4700::200:5efe:192.168.1.1", true),
+        // The same ISATAP marker inside 6to4, NAT64, and Teredo addresses
+        // whose last 32 bits are public. Those prefixes still embed an
+        // internal IPv4, so an ISATAP match must not short-circuit them.
+        ("2002:7f00:1:0:0:5efe:808:808", true),
+        ("64:ff9b:1:7f00:0:5efe:808:808", true),
+        ("2001:0:7f00:1:0:5efe:80ff:fffe", true),
         // Teredo with an internal client (127.0.0.1) and a public server
         // (8.8.8.8).
         ("2001:0:808:808:0:0:80ff:fffe", true),
@@ -278,9 +293,10 @@ fn ip_is_internal_refuses_every_internal_range_and_allows_public_addresses() {
         // the internal 127.0.0.1, and a public client (8.8.4.4). Reading the
         // server field as obfuscated would wrongly refuse this address.
         ("2001:0:80ff:fffe:0:0:f7f7:fbfb", false),
-        // IPv6 public: a public v4-mapped address, ordinary public v6, a
+        // IPv6 public: a public v4-mapped address, an ordinary public v6, a
         // 6to4 address embedding 8.8.8.8, a NAT64 address embedding 8.8.8.8,
-        // and a Teredo address whose server and client are both public.
+        // a Teredo address whose server and client are both public, and
+        // IPv4-translated and ISATAP addresses embedding 8.8.8.8.
         ("::ffff:8.8.8.8", false),
         ("2001:4860:4860::8888", false),
         ("2606:4700:4700::1111", false),
@@ -288,6 +304,15 @@ fn ip_is_internal_refuses_every_internal_range_and_allows_public_addresses() {
         ("64:ff9b::808:808", false),
         ("64:ff9b:1:808:0:808:808:808", false),
         ("2001:0:808:808:0:0:f7f7:fbfb", false),
+        // A 6to4, NAT64 `/48`, or Teredo address that carries an ISATAP
+        // marker with internal-looking last 32 bits still tunnels to the
+        // public IPv4 in its own prefix, so it must stay public.
+        ("2002:808:808:0:0:5efe:7f00:1", false),
+        ("64:ff9b:1:808:0:5efe:7f00:1", false),
+        ("2001:0:808:808:0:5efe:7f00:1", false),
+        ("::ffff:0:808:808", false),
+        ("2001:4860::5efe:808:808", false),
+        ("2606:4700::200:5efe:808:808", false),
     ] {
         let ip: std::net::IpAddr = text
             .parse()
