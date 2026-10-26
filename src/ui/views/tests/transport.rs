@@ -192,6 +192,37 @@ fn volume_wheel_message_zeroes_a_horizontal_only_roll() {
     );
 }
 
+// A diagonal roll follows its vertical sign alone, whatever the horizontal
+// component says; infinite deltas keep their sign; and NaN, which compares
+// false both ways, is the no-op rather than a raise or lower.
+#[test]
+fn volume_wheel_message_follows_only_the_vertical_sign() {
+    use iced::mouse::ScrollDelta::{Lines, Pixels};
+    assert_wheel_direction(volume_wheel_message(Lines { x: -9.0, y: 1.0 }), 1.0);
+    assert_wheel_direction(volume_wheel_message(Pixels { x: 9.0, y: -1.0 }), -1.0);
+    assert_wheel_direction(
+        volume_wheel_message(Lines {
+            x: 0.0,
+            y: f32::INFINITY,
+        }),
+        1.0,
+    );
+    assert_wheel_direction(
+        volume_wheel_message(Pixels {
+            x: 0.0,
+            y: f32::NEG_INFINITY,
+        }),
+        -1.0,
+    );
+    assert_wheel_direction(
+        volume_wheel_message(Lines {
+            x: 5.0,
+            y: f32::NAN,
+        }),
+        0.0,
+    );
+}
+
 // The balance twin of the volume spec: the balance slider's range must
 // equal the range `set_balance`/`clamp_balance` store, so a drag to either
 // end lands exactly on the stored extreme, and its step is pinned so it
