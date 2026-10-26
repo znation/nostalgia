@@ -281,6 +281,33 @@ mod tests {
     }
 
     #[test]
+    fn mix_channel_returns_each_stop_exactly_and_blends_between() {
+        // Awkward fractions that a lerp written as `start + (end - start) * t`
+        // would not return exactly at t = 1.
+        assert_eq!(mix_channel(0.1, 0.7, 0.0), 0.1);
+        assert_eq!(mix_channel(0.1, 0.7, 1.0), 0.7);
+        assert_eq!(mix_channel(0.2, 0.6, 0.5), 0.4);
+        // Descending channels interpolate downward.
+        assert_eq!(mix_channel(1.0, 0.0, 0.25), 0.75);
+    }
+
+    #[test]
+    fn square_border_is_a_one_pixel_square_outline_in_the_color() {
+        let border = square_border(theme::PANEL_EDGE_DARK);
+        assert_eq!(border.color, theme::PANEL_EDGE_DARK);
+        assert_eq!(border.width, 1.0);
+        assert_eq!(border.radius, 0.0.into());
+    }
+
+    #[test]
+    fn square_shadow_is_a_sharp_one_pixel_down_right_offset_in_the_color() {
+        let shadow = square_shadow(theme::PANEL_EDGE_LIGHT);
+        assert_eq!(shadow.color, theme::PANEL_EDGE_LIGHT);
+        assert_eq!(shadow.offset, Vector::new(1.0, 1.0));
+        assert_eq!(shadow.blur_radius, 0.0);
+    }
+
+    #[test]
     fn chrome_face_is_the_rest_hover_press_ladder() {
         assert_eq!(chrome_face(false, false), theme::BUTTON_FACE);
         assert_eq!(chrome_face(true, false), theme::BUTTON_FACE_HOVERED);
