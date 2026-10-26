@@ -235,7 +235,7 @@ pub(super) fn write_response(
     content_type: &str,
     body: &str,
 ) -> io::Result<()> {
-    let _ = stream.set_nonblocking(false);
+    stream.set_nonblocking(false)?;
     stream.set_write_timeout(Some(CONNECTION_WRITE_TIMEOUT))?;
     let response = format!(
         "HTTP/1.1 {status} {reason}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nCache-Control: no-store\r\nReferrer-Policy: no-referrer\r\nConnection: close\r\n\r\n{body}",
