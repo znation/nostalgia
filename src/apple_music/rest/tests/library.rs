@@ -90,6 +90,7 @@ fn songs_from_album_maps_a_missing_duration_to_zero() {
             title: "Opening".to_string(),
             artist: String::new(),
             album: String::new(),
+            year: None,
             album_id: "album-9".to_string(),
             duration_ms: 0,
             preview_url: None,
@@ -132,6 +133,37 @@ fn songs_from_album_maps_a_missing_or_blank_album_name_to_empty() {
         r#"{"name":"Opening","albumName":"   "}"#,
     ] {
         assert_eq!(song_from_attributes(attributes).album, "");
+    }
+}
+
+// `attributes.releaseDate` maps onto `Song::year`, keeping only its leading
+// four-digit year. Apple documents `YYYY-MM-DD` but also returns `YYYY` and
+// `YYYY-MM`, so all three shapes name the same year, and surrounding
+// whitespace is trimmed before the year is read.
+#[test]
+fn release_date_maps_to_the_song_year() {
+    for date in ["2001-06-05", "2001", "2001-06", " 2001-06-05 "] {
+        assert_eq!(
+            song_from_attributes(&format!(r#"{{"name":"Opening","releaseDate":"{date}"}}"#)).year,
+            Some(2001)
+        );
+    }
+}
+
+// A missing release date, or one with no usable leading year, maps to the
+// `None` "source supplied none" sentinel so the File info panel omits the
+// year line rather than drawing a bogus year.
+#[test]
+fn release_date_absent_or_malformed_maps_to_no_year() {
+    for attributes in [
+        r#"{"name":"Opening"}"#,
+        r#"{"name":"Opening","releaseDate":""}"#,
+        r#"{"name":"Opening","releaseDate":"   "}"#,
+        r#"{"name":"Opening","releaseDate":"20"}"#,
+        r#"{"name":"Opening","releaseDate":"20x1-06-05"}"#,
+        r#"{"name":"Opening","releaseDate":"not-a-date"}"#,
+    ] {
+        assert_eq!(song_from_attributes(attributes).year, None);
     }
 }
 
@@ -273,6 +305,7 @@ fn search_library_maps_the_search_envelope_and_percent_encodes_the_term() {
             title: "Opening".to_string(),
             artist: "The Sample Band".to_string(),
             album: String::new(),
+            year: None,
             album_id: String::new(),
             duration_ms: 210_000,
             preview_url: Some(PREVIEW_URL.to_string()),
@@ -382,6 +415,7 @@ fn get_all_songs_maps_the_library_songs_collection() {
             title: "Opening".to_string(),
             artist: "The Sample Band".to_string(),
             album: String::new(),
+            year: None,
             album_id: String::new(),
             duration_ms: 210_000,
             preview_url: Some(PREVIEW_URL.to_string()),
@@ -645,6 +679,7 @@ fn get_songs_from_playlist_maps_the_playlist_tracks_collection() {
             title: "Opening".to_string(),
             artist: "The Sample Band".to_string(),
             album: String::new(),
+            year: None,
             album_id: String::new(),
             duration_ms: 210_000,
             preview_url: Some(PREVIEW_URL.to_string()),

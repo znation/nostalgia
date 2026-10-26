@@ -89,6 +89,13 @@ pub struct Song {
     /// as an older or partial response may omit it.
     #[serde(default)]
     pub album: String,
+    /// The track's release year, parsed from the source's release date; `None`
+    /// when the source supplied none or it was malformed. The File info panel
+    /// draws a `Year:` line only while it is `Some`. `#[serde(default)]` keeps
+    /// a payload without the field deserializable, as an older or partial
+    /// response may omit it.
+    #[serde(default)]
+    pub year: Option<u16>,
     /// The [`Album::id`] of the album this song belongs to.
     pub album_id: String,
     /// The track's length in milliseconds; `0` means the source supplied no
@@ -183,6 +190,7 @@ mod tests {
             "title": "Opening",
             "artist": "The Sample Band",
             "album": "First Record",
+            "year": null,
             "album_id": "album-1",
             "duration_ms": 210_000,
             "preview_url": null
@@ -190,10 +198,10 @@ mod tests {
     }
 
     /// The [`Song`] payload carrying every required field and omitting the
-    /// optional `preview_url` and `album`, so [`assert_every_field_required`]
-    /// can remove each key and see the parse fail. Passing [`song_payload`]
-    /// instead would clear the probe for those fields: a `#[serde(default)]`
-    /// field is allowed to be missing.
+    /// optional `preview_url`, `album`, and `year`, so
+    /// [`assert_every_field_required`] can remove each key and see the parse
+    /// fail. Passing [`song_payload`] instead would clear the probe for those
+    /// fields: a `#[serde(default)]` field is allowed to be missing.
     fn song_required_fields_payload() -> serde_json::Value {
         json!({ "id": "song-1", "title": "Opening", "artist": "The Sample Band", "album_id": "album-1", "duration_ms": 210_000 })
     }
@@ -447,6 +455,27 @@ mod tests {
             song.display_title(),
             std::borrow::Cow::Borrowed(_)
         ));
+    }
+
+    #[test]
+    fn song_round_trips_its_year() {
+        // The release year is part of the serialized model, not derived
+        // display data: a `Some(2001)` year must survive a round trip and
+        // serialize under the `year` key.
+        let mut song = sample_song();
+        song.year = Some(2001);
+        let payload = serde_json::to_value(&song).unwrap();
+        assert_eq!(payload["year"], json!(2001));
+        let parsed: Song = serde_json::from_value(payload).unwrap();
+        assert_eq!(parsed.year, Some(2001));
+    }
+
+    #[test]
+    fn song_year_defaults_to_none_when_the_payload_omits_it() {
+        // An older or partial response without `year` must parse, mapping to
+        // the `None` "source supplied none" sentinel.
+        let parsed: Song = serde_json::from_value(song_required_fields_payload()).unwrap();
+        assert_eq!(parsed.year, None);
     }
 
     #[test]

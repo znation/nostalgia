@@ -1,6 +1,6 @@
 //! The transient File info panel: a modal overlay over the normal-mode screen
-//! naming the current track's title, artist, album, length, and — while the
-//! loaded preview reports one — its format.
+//! naming the current track's title, artist, album, year, length, and — while
+//! the loaded preview reports one — its format.
 
 use iced::{
     Element,
@@ -25,6 +25,9 @@ const ARTIST_LABEL: &str = "Artist: ";
 /// The label before the track's album.
 const ALBUM_LABEL: &str = "Album: ";
 
+/// The label before the track's release year.
+const YEAR_LABEL: &str = "Year: ";
+
 /// The label before the track's formatted length.
 const LENGTH_LABEL: &str = "Length: ";
 
@@ -34,12 +37,13 @@ const FORMAT_LABEL: &str = "Format: ";
 /// Stacks the transient File info panel for `track` over `base`.
 ///
 /// The panel is modal (see [`modal_overlay`]): `Close` and the backdrop each
-/// publish [`Message::ToggleFileInfo`]. It lists the title, the artist and the
-/// album (each left out when the source supplied none), the length, which is
-/// `--:--` for an unknown duration, and — after the length and only while the
-/// loaded preview reports one (`format` is `Some`) — the format line built
-/// from the LCD status row's prefix and channel label, for example
-/// `Format: 256 KBPS  44 KHZ STEREO`. No state or playback is touched here.
+/// publish [`Message::ToggleFileInfo`]. It lists the title, the artist, the
+/// album, and the release year (each left out when the source supplied none),
+/// the length, which is `--:--` for an unknown duration, and — after the length
+/// and only while the loaded preview reports one (`format` is `Some`) — the
+/// format line built from the LCD status row's prefix and channel label, for
+/// example `Format: 256 KBPS  44 KHZ STEREO`. No state or playback is touched
+/// here.
 pub fn view_file_info_overlay<'a>(
     base: Element<'a, Message>,
     track: &'a KnownTrack,
@@ -57,6 +61,9 @@ pub fn view_file_info_overlay<'a>(
     if !track.album.is_empty() {
         content =
             content.push(Text::new(format!("{ALBUM_LABEL}{}", track.album)).color(theme::TEXT));
+    }
+    if let Some(year) = track.year {
+        content = content.push(Text::new(format!("{YEAR_LABEL}{year}")).color(theme::TEXT));
     }
     content = content.push(Text::new(format!("{LENGTH_LABEL}{}", track.time)).color(theme::TEXT));
     if let Some(format) = format {

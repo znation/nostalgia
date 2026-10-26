@@ -20,6 +20,24 @@ fn track_selected_records_the_played_tracks_title_and_time() {
     assert_eq!(first.album, "First Record");
 }
 
+// The Now Playing bar's File info panel reads the release year from the same
+// `known_tracks` entry as the title and album: `TrackSelected` must copy the
+// played song's `year`, not drop it.
+#[test]
+fn known_tracks_record_the_played_songs_year() {
+    let (mut player, _state) = test_player();
+    let mut songs = stepping_songs();
+    songs[0].year = Some(2001);
+    let _ = update(&mut player, Message::SongsLoaded(songs));
+
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+
+    assert_eq!(
+        player.known_tracks.get("song-1").map(|track| track.year),
+        Some(Some(2001))
+    );
+}
+
 // The number is the 1-based position of the row that selected the track, so
 // the first row records `"1. "` and the second `"2. "`.
 #[test]

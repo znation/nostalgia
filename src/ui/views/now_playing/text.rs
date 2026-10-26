@@ -109,6 +109,10 @@ pub struct KnownTrack {
     /// The album's title; `""` means the source supplied none, and the File
     /// info panel leaves the album line out.
     pub album: String,
+    /// The track's release year, copied from [`crate::library::Song::year`];
+    /// `None` means the source supplied none, and the File info panel leaves
+    /// the year line out.
+    pub year: Option<u16>,
     /// The cached `"<n>. "` prefix naming the track's 1-based position in the
     /// list row that selected it; `""` when no number is known.
     pub number: String,

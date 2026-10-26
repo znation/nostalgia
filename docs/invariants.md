@@ -1480,8 +1480,10 @@ and `toggle_about_while_shaded_restores_the_window_first` (`src/ui/tests/window_
   Opening while `shaded` holds first calls `toggle_window_shade` and returns that task.
 - While the flag holds outside shade mode and the track resolves, `views::view_file_info_overlay`
   stacks `FILE INFO`, `Title: …`, `Artist: …` (left out for an empty artist), `Album: …` (left
-  out for an empty album), `Length: …`, and a
-  `Close` button over the base through `views::modal::modal_overlay`, the chrome About shares.
+  out for an empty album), `Year: …` (left out when `KnownTrack::year` is `None`), `Length: …`,
+  and a `Close` button over the base through `views::modal::modal_overlay`, the chrome About
+  shares. `KnownTrack::year` is copied from `Song::year`, which `Resource::into_song` parses from
+  the resource's `releaseDate` (only its leading four ASCII-digit year is kept).
   Between `Length:` and `Close`, it also draws one `Format: …` line (`256 KBPS  44 KHZ STEREO`,
   or `44 KHZ MONO` when the backend reports no bitrate) only while
   `WinampPlayer::playback_format` is `Some`, formatted from
@@ -1505,10 +1507,16 @@ overlay branch of `ui::view::view`.
 `toggle_file_info_while_shaded_restores_the_window_first` (`src/ui/tests/window_tests.rs`);
 `file_info_overlay_draws_the_title_artist_album_and_length`,
 `file_info_overlay_omits_the_album_line_when_the_source_supplied_none`,
+`file_info_overlay_draws_the_tracks_year`, `file_info_overlay_omits_the_year_line_without_one`,
 `file_info_overlay_draws_the_loaded_previews_format`,
 `file_info_overlay_omits_the_format_line_without_a_loaded_preview`, and
 `file_info_overlay_closes_from_close_and_backdrop_but_ignores_its_chrome`
-(`src/ui/views/tests/chrome.rs`); `songs_from_album_maps_the_album_name` and
+(`src/ui/views/tests/chrome.rs`); `known_tracks_record_the_played_songs_year`
+(`src/ui/tests/readouts_tests.rs`); `release_date_maps_to_the_song_year` and
+`release_date_absent_or_malformed_maps_to_no_year`
+(`src/apple_music/rest/tests/library.rs`); `song_round_trips_its_year` and
+`song_year_defaults_to_none_when_the_payload_omits_it` (`src/library.rs`);
+`songs_from_album_maps_the_album_name` and
 `songs_from_album_maps_a_missing_or_blank_album_name_to_empty`
 (`src/apple_music/rest/tests/library.rs`); `file_info_panel_draws_the_loaded_previews_format` and
 `view_constructs_when_the_window_is_shaded` (`src/ui/tests/view_tests.rs`).

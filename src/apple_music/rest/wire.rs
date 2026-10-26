@@ -170,6 +170,10 @@ struct Attributes {
     /// omits it.
     #[serde(rename = "albumName")]
     album_name: Option<String>,
+    /// The resource's release date, normally `YYYY-MM-DD`; absent when the
+    /// API omits it. [`release_year`] reduces it to the year the model keeps.
+    #[serde(rename = "releaseDate")]
+    release_date: Option<String>,
     /// The track's length in milliseconds; absent when the API omits it.
     #[serde(rename = "durationInMillis")]
     duration_in_millis: Option<u64>,
@@ -291,15 +295,16 @@ impl Resource {
     pub(super) fn into_song(self, album_id: &str) -> Result<Song, AppleMusicError> {
         let Resource { id, attributes } = self;
         let id = required_id(id, "song")?;
-        let (title, artist, album, duration_ms, previews) = match attributes {
+        let (title, artist, album, release_date, duration_ms, previews) = match attributes {
             Some(attributes) => (
                 attributes.name,
                 attributes.artist_name,
                 attributes.album_name,
+                attributes.release_date,
                 attributes.duration_in_millis,
                 attributes.previews,
             ),
-            None => (None, None, None, None, None),
+            None => (None, None, None, None, None, None),
         };
         let title = required_name(title, &id, "song")?;
         let artist = artist_or_empty(artist);
@@ -322,10 +327,29 @@ impl Resource {
             title,
             artist,
             album,
+            year: release_date.as_deref().and_then(release_year),
             album_id: album_id.to_string(),
             duration_ms: duration_ms.unwrap_or(0),
             preview_url,
         })
+    }
+}
+
+/// The release year at the start of an Apple Music `releaseDate`, or `None`
+/// when the date is absent or malformed.
+///
+/// Apple documents `releaseDate` as `YYYY-MM-DD` but also returns `YYYY` and
+/// `YYYY-MM`, so only the first four bytes must be ASCII digits; the rest of
+/// the date does not affect the year. A blank, short, or non-numeric date has
+/// no usable year and maps to `None`, matching [`Song::year`]'s "source
+/// supplied none" sentinel. The date is trimmed first so surrounding
+/// whitespace does not hide a valid year.
+fn release_year(date: &str) -> Option<u16> {
+    let year = date.trim().get(..4)?;
+    if year.bytes().all(|byte| byte.is_ascii_digit()) {
+        year.parse().ok()
+    } else {
+        None
     }
 }
 

@@ -115,6 +115,7 @@ impl SampleLibrary {
                 title: "Opening".to_string(),
                 artist: "The Sample Band".to_string(),
                 album: "First Record".to_string(),
+                year: Some(2001),
                 album_id: "album-1".to_string(),
                 duration_ms: 210_000,
                 preview_url: None,
@@ -124,6 +125,7 @@ impl SampleLibrary {
                 title: "Middle".to_string(),
                 artist: "The Sample Band".to_string(),
                 album: "First Record".to_string(),
+                year: Some(2001),
                 album_id: "album-1".to_string(),
                 duration_ms: 240_000,
                 preview_url: None,
@@ -133,6 +135,7 @@ impl SampleLibrary {
                 title: "Ending".to_string(),
                 artist: "The Sample Band".to_string(),
                 album: "First Record".to_string(),
+                year: Some(2001),
                 album_id: "album-1".to_string(),
                 duration_ms: 180_000,
                 preview_url: None,
@@ -142,6 +145,7 @@ impl SampleLibrary {
                 title: "B-side".to_string(),
                 artist: "The Sample Band".to_string(),
                 album: "Second Record".to_string(),
+                year: Some(2003),
                 album_id: "album-2".to_string(),
                 duration_ms: 95_000,
                 preview_url: None,
@@ -151,6 +155,7 @@ impl SampleLibrary {
                 title: "Headliner".to_string(),
                 artist: "Echo Chamber".to_string(),
                 album: "Debut".to_string(),
+                year: Some(2005),
                 album_id: "album-3".to_string(),
                 duration_ms: 200_000,
                 preview_url: None,
@@ -469,6 +474,32 @@ mod tests {
                 ("song-3", "The Sample Band"),
                 ("song-4", "The Sample Band"),
                 ("song-5", "Echo Chamber"),
+            ]
+        );
+    }
+
+    // The File info panel draws a `Year:` line from `Song::year`, and
+    // `sample_library` is what the app browses when no Apple Music session is
+    // stored, so these values are user-visible. As with the duration and
+    // artist tests above, the index tests pin each song's id and title but
+    // never its year, so a missing or wrong year here would drop the line (or
+    // show a wrong one) while every existing test stayed green. Pin every
+    // song's year, in library order.
+    #[test]
+    fn songs_carry_the_documented_years() {
+        let library = sample_library();
+        let years: Vec<(&str, Option<u16>)> = songs_in_library_order(library)
+            .map(|song| (song.id.as_str(), song.year))
+            .collect();
+
+        assert_eq!(
+            years,
+            vec![
+                ("song-1", Some(2001u16)),
+                ("song-2", Some(2001)),
+                ("song-3", Some(2001)),
+                ("song-4", Some(2003)),
+                ("song-5", Some(2005)),
             ]
         );
     }

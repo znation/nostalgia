@@ -264,6 +264,7 @@ fn sample_known_track(artist: &str) -> KnownTrack {
         title: "Opening".to_string(),
         artist: artist.to_string(),
         album: "First Record".to_string(),
+        year: None,
         number: "1. ".to_string(),
         time: "3:30".to_string(),
         duration_ms: 210_000,
@@ -308,6 +309,39 @@ fn file_info_overlay_omits_the_album_line_when_the_source_supplied_none() {
     assert!(
         capture.texts().all(|text| !text.starts_with("Album:")),
         "an album-less track must draw no Album line"
+    );
+}
+
+#[test]
+fn file_info_overlay_draws_the_tracks_year() {
+    let mut track = sample_known_track("The Sample Band");
+    track.year = Some(2001);
+    let mut element = file_info_element(&track, None);
+    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+    let texts: Vec<&str> = capture.texts().collect();
+    let album_at = texts
+        .iter()
+        .position(|text| *text == "Album: First Record")
+        .unwrap();
+    let year_at = texts.iter().position(|text| *text == "Year: 2001").unwrap();
+    let length_at = texts
+        .iter()
+        .position(|text| *text == "Length: 3:30")
+        .unwrap();
+    assert!(
+        album_at < year_at && year_at < length_at,
+        "the year line must sit between Album and Length: {texts:?}"
+    );
+}
+
+#[test]
+fn file_info_overlay_omits_the_year_line_without_one() {
+    let track = sample_known_track("The Sample Band");
+    let mut element = file_info_element(&track, None);
+    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+    assert!(
+        capture.texts().all(|text| !text.starts_with("Year:")),
+        "a track without a year must draw no Year line"
     );
 }
 

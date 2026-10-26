@@ -1254,6 +1254,7 @@ fn seed_current_title(player: &mut WinampPlayer, state: &Arc<Mutex<AppState>>, t
             title: title.to_string(),
             artist: String::new(),
             album: String::new(),
+            year: None,
             number: String::new(),
             time: "3:30".to_string(),
             duration_ms: 210_000,
