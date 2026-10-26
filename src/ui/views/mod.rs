@@ -30,7 +30,9 @@ use crate::ui::{Message, style};
 mod about;
 mod browse;
 mod equalizer;
+mod file_info;
 mod mini_transport;
+mod modal;
 mod now_playing;
 mod seek_bar;
 mod shade;
@@ -47,6 +49,7 @@ pub use browse::{
     view_songs,
 };
 pub use equalizer::view_equalizer;
+pub use file_info::view_file_info_overlay;
 pub use mini_transport::view_library_strip;
 pub use now_playing::{
     KnownTrack, MixerDrag, TimeDisplay, mixer_readout_text, needs_marquee, now_playing_artist,

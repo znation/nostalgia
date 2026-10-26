@@ -22,7 +22,8 @@ use super::Message;
 /// a time, F5 to refetch the library and return to the Artists list, Ctrl+F
 /// to focus the `Search library` box, Ctrl+Z and Ctrl+B to play the first and
 /// last song of the showing list, Ctrl+R to reverse the showing list, Ctrl+Shift+R to shuffle it, Ctrl+Shift+1 to sort it by title
-/// (see [`playlist_sort_shortcut`]), and the system media keys
+/// (see [`playlist_sort_shortcut`]), Alt+3 to flip the File info panel
+/// (see [`file_info_shortcut`]), and the system media keys
 /// (Play/Pause, Play, Pause, Stop, Next track, and Previous track) to the same
 /// transport messages as the on-screen controls
 /// (the one Control chord Winamp-style play uses).
@@ -39,6 +40,7 @@ pub(super) fn message_for(event: Event) -> Option<Message> {
             location,
             ..
         } => playlist_sort_shortcut(&physical_key, location, modifiers)
+            .or_else(|| file_info_shortcut(&physical_key, location, modifiers))
             .or_else(|| numpad_shortcut(&key, location, modifiers))
             .or_else(|| shortcut(&key, modifiers)),
         Event::KeyReleased { .. } | Event::ModifiersChanged(_) => None,
@@ -63,6 +65,24 @@ fn playlist_sort_shortcut(
         && location == Location::Standard
         && *physical_key == key::Physical::Code(key::Code::Digit1))
     .then_some(Message::SortBrowse)
+}
+
+/// Winamp's Alt+3, "File info", flipping the File info panel. Like
+/// [`playlist_sort_shortcut`] it matches the top-row `3` by physical key, and
+/// requires Alt held with Control, Shift, and Logo released; the keypad `3`
+/// (`Location::Numpad`) never matches.
+fn file_info_shortcut(
+    physical_key: &key::Physical,
+    location: Location,
+    modifiers: Modifiers,
+) -> Option<Message> {
+    (modifiers.alt()
+        && !modifiers.control()
+        && !modifiers.shift()
+        && !modifiers.logo()
+        && location == Location::Standard
+        && *physical_key == key::Physical::Code(key::Code::Digit3))
+    .then_some(Message::ToggleFileInfo)
 }
 
 /// Winamp's numeric-keypad bindings, for keys pressed at `Location::Numpad`
@@ -504,6 +524,35 @@ mod tests {
         );
         assert!(message_for(digit2).is_none());
         let keypad = digit_pressed(one(), key::Code::Numpad1, Location::Numpad, both);
+        assert!(message_for(keypad).is_none());
+    }
+
+    #[test]
+    fn message_for_maps_alt_3_to_file_info() {
+        let three = || Key::Character("3".into());
+        let event = digit_pressed(
+            three(),
+            key::Code::Digit3,
+            Location::Standard,
+            Modifiers::ALT,
+        );
+        assert!(matches!(message_for(event), Some(Message::ToggleFileInfo)));
+
+        for modifiers in [
+            Modifiers::CTRL | Modifiers::ALT,
+            Modifiers::SHIFT | Modifiers::ALT,
+            Modifiers::LOGO | Modifiers::ALT,
+            Modifiers::NONE,
+        ] {
+            let event = digit_pressed(three(), key::Code::Digit3, Location::Standard, modifiers);
+            assert!(message_for(event).is_none(), "3 with {modifiers:?}");
+        }
+        let keypad = digit_pressed(
+            three(),
+            key::Code::Numpad3,
+            Location::Numpad,
+            Modifiers::ALT,
+        );
         assert!(message_for(keypad).is_none());
     }
 

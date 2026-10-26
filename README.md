@@ -129,7 +129,8 @@ alphabetically by its rows' rendered text, ignoring case; the reorder is one-sho
 the list restores the library's order; Ctrl+Shift+1 does the same sort from the keyboard, like
 Winamp's playlist editor. Ctrl+R reverses the showing list's order the same
 one-shot way, like Winamp's playlist editor, and Ctrl+Shift+R shuffles it into a random order the same
-one-shot way. A `Reload` button beside `Sort` refetches the library's
+one-shot way. Alt+3 opens a transient File info panel naming the current track's title, artist, and length, like
+Winamp; its `Close` button, a click on the backdrop, or Alt+3 again closes it, and it opens only while a track is current. A `Reload` button beside `Sort` refetches the library's
 artists list and returns to the Artists list, clearing any active search while leaving the typed
 query in the search box. The title bar's `M` button opens a transient About panel naming the app,
 showing its `v`-prefixed package version and the line `The classic Winamp look, rebuilt in

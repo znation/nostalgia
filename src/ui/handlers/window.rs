@@ -95,6 +95,30 @@ pub(in crate::ui) fn window_shade_measured(
 pub(in crate::ui) fn toggle_about(player: &mut WinampPlayer) -> Task<Message> {
     let opening = !player.about_visible;
     player.about_visible = opening;
+    if opening {
+        player.file_info_visible = false;
+    }
+    if opening && player.shaded {
+        toggle_window_shade(player)
+    } else {
+        Task::none()
+    }
+}
+
+/// Alt+3: flip the transient File info panel. Opening needs a current track
+/// resolved in `known_tracks` (as `window_title` resolves it); without one the
+/// flag stays as it was. Opening closes the About panel, and opening while
+/// shaded first restores the window exactly as [`toggle_about`] does. The flag
+/// is layout-only and not persisted.
+pub(in crate::ui) fn toggle_file_info(player: &mut WinampPlayer) -> Task<Message> {
+    let opening = !player.file_info_visible;
+    if opening && player.current_known_track().is_none() {
+        return Task::none();
+    }
+    player.file_info_visible = opening;
+    if opening {
+        player.about_visible = false;
+    }
     if opening && player.shaded {
         toggle_window_shade(player)
     } else {

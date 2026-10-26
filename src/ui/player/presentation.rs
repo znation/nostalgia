@@ -13,6 +13,14 @@ use crate::ui::views;
 const APP_TITLE: &str = "nostalgia";
 
 impl WinampPlayer {
+    /// The current track resolved against [`Self::known_tracks`], or `None`
+    /// with no current track or an unknown id. The state lock is released
+    /// before this returns.
+    pub(in crate::ui) fn current_known_track(&self) -> Option<&views::KnownTrack> {
+        let id = self.state.blocking_lock().current_track.clone()?;
+        self.known_tracks.get(&id)
+    }
+
     /// The title iced gives the application window. It follows the Now Playing
     /// bar: the current track's number, artist, and title, resolved against
     /// [`Self::known_tracks`], then ` - nostalgia`. With no current track or an

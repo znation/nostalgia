@@ -261,6 +261,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::ToggleWindowShade => handlers::window::toggle_window_shade(player),
         Message::WindowShadeMeasured(size) => handlers::window::window_shade_measured(player, size),
         Message::ToggleAbout => handlers::window::toggle_about(player),
+        Message::ToggleFileInfo => handlers::window::toggle_file_info(player),
         Message::ToggleAlwaysOnTop => handlers::window::toggle_always_on_top(player),
         Message::Ignored => handlers::browse::fetch::ignored(player),
         Message::TransportSettled => handlers::playback::transport_settled(player),

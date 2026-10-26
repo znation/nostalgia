@@ -1374,7 +1374,7 @@ About now restores the window first, so the panel never draws in shade mode (202
   the full-window backdrop each publish one `Message::ToggleAbout`; a press on the panel's own
   chrome publishes `Message::Ignored` and leaves it open. The shade branch never draws the panel.
 
-**Enforced by.** `views::title_bar::view_title_bar`, `views::about::view_about_overlay`,
+**Enforced by.** `views::title_bar::view_title_bar`, `views::about::view_about_overlay` (over `views::modal::modal_overlay`),
 `Message::ToggleAbout`, `handlers::window::toggle_about`, `WinampPlayer::about_visible`, and the
 normal-mode branch of `ui::view::view` in `src/ui/view.rs`, which wraps the base tree only while
 `about_visible && !shaded` holds.
@@ -1386,6 +1386,36 @@ normal-mode branch of `ui::view::view` in `src/ui/view.rs`, which wraps the base
 `toggle_about_while_shaded_restores_the_window_first` (`src/ui/tests/window_tests.rs`);
 `view_constructs_over_the_apps_full_input_space`, `view_constructs_when_the_window_is_shaded`, and
 `title_bar_constructs_for_both_about_states` (`src/ui/tests/view_tests.rs`).
+
+## File info panel
+
+**Guarantee.** Alt+3 flips a transient, unpersisted File info panel for the current track:
+
+- `shortcuts::file_info_shortcut` maps the top-row `3` (by physical key, `Location::Standard`) with
+  Alt held and Control, Shift, and Logo released to `Message::ToggleFileInfo`; Ctrl+Alt+3,
+  Shift+Alt+3, Logo+Alt+3, keypad 3 with Alt, and a plain `3` map to nothing.
+- `handlers::window::toggle_file_info` flips `WinampPlayer::file_info_visible`. Opening needs a
+  current track found in `known_tracks` (`WinampPlayer::current_known_track`); without one the flag
+  stays false. Opening clears `about_visible`, and opening About clears `file_info_visible`.
+  Opening while `shaded` holds first calls `toggle_window_shade` and returns that task.
+- While the flag holds outside shade mode and the track resolves, `views::view_file_info_overlay`
+  stacks `FILE INFO`, `Title: …`, `Artist: …` (left out for an empty artist), `Length: …`, and a
+  `Close` button over the base through `views::modal::modal_overlay`, the chrome About shares.
+  `Close` and the backdrop each publish one `Message::ToggleFileInfo`; a press on the panel's
+  chrome publishes `Message::Ignored`. The shade branch never draws the panel.
+
+**Enforced by.** `shortcuts::file_info_shortcut`, `handlers::window::toggle_file_info`,
+`views::file_info::view_file_info_overlay`, `views::modal::modal_overlay`, and the overlay branch
+of `ui::view::view`.
+
+**Pinned by.** `message_for_maps_alt_3_to_file_info` (`src/ui/shortcuts.rs`);
+`toggle_file_info_shows_and_hides_the_panel_without_touching_playback`,
+`toggle_file_info_needs_a_known_current_track`, `file_info_and_about_close_each_other`, and
+`toggle_file_info_while_shaded_restores_the_window_first` (`src/ui/tests/window_tests.rs`);
+`file_info_overlay_draws_the_title_artist_and_length` and
+`file_info_overlay_closes_from_close_and_backdrop_but_ignores_its_chrome`
+(`src/ui/views/tests/chrome.rs`); `view_constructs_when_the_window_is_shaded`
+(`src/ui/tests/view_tests.rs`).
 
 ## Song-list footer
 

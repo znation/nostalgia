@@ -137,6 +137,101 @@ fn toggle_about_while_shaded_restores_the_window_first() {
     assert!(player.about_visible);
 }
 
+/// Makes `song-1` the current track and records it in `known_tracks`.
+fn make_current_track_known(player: &mut WinampPlayer, state: &Arc<Mutex<AppState>>) {
+    player.known_tracks.insert(
+        "song-1".to_string(),
+        views::KnownTrack {
+            title: "Opening".to_string(),
+            artist: "The Sample Band".to_string(),
+            number: "1. ".to_string(),
+            time: "3:30".to_string(),
+            duration_ms: 210_000,
+        },
+    );
+    state.blocking_lock().current_track = Some("song-1".to_string());
+}
+
+#[test]
+fn toggle_file_info_shows_and_hides_the_panel_without_touching_playback() {
+    let (mut player, state) = test_player();
+    seed_browse_lists(&mut player);
+    make_current_track_known(&mut player, &state);
+    let playback = |state: &Arc<Mutex<AppState>>| {
+        let state = state.blocking_lock();
+        (
+            state.transport_mode(),
+            state.current_track.clone(),
+            state.volume(),
+            state.balance(),
+            state.eq_enabled,
+            state.eq_preamp(),
+            state.eq_bands(),
+            state.eq_preset(),
+            state.repeat,
+            state.shuffle,
+        )
+    };
+    let browse = |player: &WinampPlayer| {
+        (
+            player.artists.items.len(),
+            player.songs.items.len(),
+            player.artists.selected(),
+            player.songs.selected(),
+            player.search_query.clone(),
+            player.search_active,
+        )
+    };
+    let (playback_before, browse_before) = (playback(&state), browse(&player));
+    assert!(!player.file_info_visible);
+
+    assert_message_schedules_no_work(&mut player, Message::ToggleFileInfo);
+    assert!(player.file_info_visible);
+
+    assert_message_schedules_no_work(&mut player, Message::ToggleFileInfo);
+    assert!(!player.file_info_visible);
+
+    assert_eq!(playback(&state), playback_before);
+    assert_eq!(browse(&player), browse_before);
+}
+
+#[test]
+fn toggle_file_info_needs_a_known_current_track() {
+    let (mut player, state) = test_player();
+    assert_message_schedules_no_work(&mut player, Message::ToggleFileInfo);
+    assert!(!player.file_info_visible, "no current track");
+
+    state.blocking_lock().current_track = Some("missing".to_string());
+    assert_message_schedules_no_work(&mut player, Message::ToggleFileInfo);
+    assert!(!player.file_info_visible, "current id not in known_tracks");
+}
+
+#[test]
+fn file_info_and_about_close_each_other() {
+    let (mut player, state) = test_player();
+    make_current_track_known(&mut player, &state);
+
+    let _ = update(&mut player, Message::ToggleAbout);
+    let _ = update(&mut player, Message::ToggleFileInfo);
+    assert!(player.file_info_visible && !player.about_visible);
+
+    let _ = update(&mut player, Message::ToggleAbout);
+    assert!(player.about_visible && !player.file_info_visible);
+}
+
+#[test]
+fn toggle_file_info_while_shaded_restores_the_window_first() {
+    let (mut player, state) = player_with_window_id();
+    make_current_track_known(&mut player, &state);
+    player.shaded = true;
+    player.unshaded_size = Some(iced::Size::new(800.0, 600.0));
+
+    assert_message_schedules_work(&mut player, Message::ToggleFileInfo);
+
+    assert!(!player.shaded);
+    assert!(player.file_info_visible);
+}
+
 #[test]
 fn window_level_selects_always_on_top() {
     assert_eq!(

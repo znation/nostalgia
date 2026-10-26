@@ -165,6 +165,11 @@ pub(in crate::ui) struct WinampPlayer {
     /// not persisted. Opening it while [`Self::shaded`] holds restores the
     /// window first, and `view` never draws it in shade mode.
     pub(in crate::ui) about_visible: bool,
+    /// Whether the transient File info panel is drawn over the normal-mode
+    /// tree. `Message::ToggleFileInfo` flips it; it is closed at launch and
+    /// deliberately not persisted. At most one of this and
+    /// [`Self::about_visible`] holds.
+    pub(in crate::ui) file_info_visible: bool,
     /// The seek bar's in-progress drag, or `None` while the thumb follows the
     /// reported position. `Message::SeekPreviewChanged` stores the drag and
     /// `Message::SeekPreviewReleased` seeks to and clears it, so only a release
@@ -279,6 +284,7 @@ impl WinampPlayer {
             eq_panel_visible: true,
             library_panel_visible: true,
             about_visible: false,
+            file_info_visible: false,
             seek_preview: None,
             time_display: views::TimeDisplay::Elapsed,
             mixer_drag: None,

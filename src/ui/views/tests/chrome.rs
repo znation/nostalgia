@@ -250,3 +250,101 @@ fn title_band_centers_its_label_at_the_title_bar_height() {
         capture.size()
     );
 }
+
+fn file_info_element(track: &KnownTrack) -> Element<'_, Message> {
+    let base: Element<'_, Message> = iced::widget::Space::new()
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into();
+    super::super::view_file_info_overlay(base, track)
+}
+
+fn sample_known_track(artist: &str) -> KnownTrack {
+    KnownTrack {
+        title: "Opening".to_string(),
+        artist: artist.to_string(),
+        number: "1. ".to_string(),
+        time: "3:30".to_string(),
+        duration_ms: 210_000,
+    }
+}
+
+#[test]
+fn file_info_overlay_draws_the_title_artist_and_length() {
+    let track = sample_known_track("The Sample Band");
+    let mut element = file_info_element(&track);
+    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+    let texts: Vec<&str> = capture.texts().collect();
+    for expected in [
+        "FILE INFO",
+        "Title: Opening",
+        "Artist: The Sample Band",
+        "Length: 3:30",
+        "Close",
+    ] {
+        assert!(
+            texts.contains(&expected),
+            "the File info overlay must draw {expected:?}: {texts:?}"
+        );
+    }
+
+    let artistless = sample_known_track("");
+    let mut element = file_info_element(&artistless);
+    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+    assert!(
+        capture.texts().all(|text| !text.starts_with("Artist:")),
+        "an artist-less track must draw no Artist line"
+    );
+}
+
+#[test]
+fn file_info_overlay_closes_from_close_and_backdrop_but_ignores_its_chrome() {
+    let track = sample_known_track("The Sample Band");
+    let mut renderer = layout_capture::headless_renderer();
+    for target in ["Close", "Title: Opening", "BACKDROP"] {
+        let mut element = file_info_element(&track);
+        let capture = layout_capture::capture_text(&mut element, &renderer);
+        let point = if target == "BACKDROP" {
+            iced::Point::new(2.0, capture.size().height - 2.0)
+        } else {
+            let bounds = capture.find(target);
+            iced::Point::new(bounds.center_x(), bounds.center_y())
+        };
+        let mut user_interface = iced_runtime::user_interface::UserInterface::build(
+            element,
+            layout_capture::limits().max(),
+            iced_runtime::user_interface::Cache::new(),
+            &mut renderer,
+        );
+        let mut messages = Vec::new();
+        let mut clipboard = iced::advanced::clipboard::Null;
+        let _ = user_interface.update(
+            &[
+                iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
+                iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                    iced::mouse::Button::Left,
+                )),
+            ],
+            iced::mouse::Cursor::Available(point),
+            &mut renderer,
+            &mut clipboard,
+            &mut messages,
+        );
+        let toggles = messages
+            .iter()
+            .filter(|message| matches!(message, Message::ToggleFileInfo))
+            .count();
+        if target == "Title: Opening" {
+            assert_eq!(toggles, 0, "the panel's chrome must not dismiss it");
+            assert!(
+                matches!(messages.as_slice(), [Message::Ignored]),
+                "the panel must swallow the press with Ignored: {messages:?}"
+            );
+        } else {
+            assert_eq!(
+                toggles, 1,
+                "{target} must publish exactly one ToggleFileInfo: {messages:?}"
+            );
+        }
+    }
+}

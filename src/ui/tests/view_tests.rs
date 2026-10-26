@@ -152,6 +152,27 @@ fn view_constructs_when_the_window_is_shaded() {
         !texts.contains(&"ABOUT NOSTALGIA"),
         "shade mode must never draw the About panel: {texts:?}"
     );
+
+    // The same holds for a File info flag left set while shaded.
+    player.about_visible = false;
+    player.file_info_visible = true;
+    player.known_tracks.insert(
+        "song-1".to_string(),
+        views::KnownTrack {
+            title: "Opening".to_string(),
+            artist: String::new(),
+            number: String::new(),
+            time: "3:30".to_string(),
+            duration_ms: 210_000,
+        },
+    );
+    _state.blocking_lock().current_track = Some("song-1".to_string());
+    let shaded = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = shaded.texts().collect();
+    assert!(
+        !texts.contains(&"FILE INFO"),
+        "shade mode must never draw the File info panel: {texts:?}"
+    );
 }
 
 #[test]
