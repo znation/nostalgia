@@ -92,6 +92,7 @@ fn stereo_source(samples: Vec<f32>) -> rodio::buffer::SamplesBuffer {
 struct SeekableSource {
     samples: Vec<f32>,
     position: usize,
+    seek_fails: bool,
 }
 
 impl SeekableSource {
@@ -99,6 +100,17 @@ impl SeekableSource {
         Self {
             samples,
             position: 0,
+            seek_fails: false,
+        }
+    }
+
+    /// A source whose `try_seek` fails without moving, so an adapter's
+    /// failed-seek follow-up (or its absence) can be pinned.
+    fn failing(samples: Vec<f32>) -> Self {
+        Self {
+            samples,
+            position: 0,
+            seek_fails: true,
         }
     }
 }
@@ -138,6 +150,11 @@ impl Source for SeekableSource {
     }
 
     fn try_seek(&mut self, pos: Duration) -> Result<(), SeekError> {
+        if self.seek_fails {
+            return Err(SeekError::NotSupported {
+                underlying_source: "SeekableSource",
+            });
+        }
         // rodio seeks to a frame but leaves the next sample on the same
         // channel as before the seek, so land on the target frame plus
         // the current channel instead of a frame boundary.

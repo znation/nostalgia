@@ -80,6 +80,34 @@ fn meter_source_passes_samples_through_and_records_their_spectrum() {
     );
 }
 
+// A failed seek leaves playback where it was, so the meter must not clear the
+// window it recorded from the audio still playing. The source above always
+// seeks successfully, so nothing reached `try_seek`'s `?` and this pins that
+// the clear follows a successful inner seek rather than running first.
+#[test]
+fn meter_source_failed_seek_keeps_the_recorded_window() {
+    let samples = vec![0.5, -0.5, 0.25, -0.25];
+    let meter = Arc::new(SpectrumMeter::default());
+    let mut source = MeterSource::new(SeekableSource::failing(samples), Arc::clone(&meter));
+
+    let _: Vec<f32> = source.by_ref().take(4).collect();
+    let before = meter.recorded();
+    assert!(
+        !before.is_empty(),
+        "the meter must record the samples it pulled"
+    );
+
+    assert!(
+        source.try_seek(Duration::ZERO).is_err(),
+        "a failed inner seek must be reported to the caller"
+    );
+    assert_eq!(
+        meter.recorded(),
+        before,
+        "a failed seek must leave the recorded window intact"
+    );
+}
+
 // The meter ring keeps only the newest `SPECTRUM_WINDOW` mono samples, in
 // play order: once more samples arrive than fit, the oldest are overwritten
 // and `chronological` must start at the first sample still held rather than
@@ -441,6 +469,39 @@ fn eq_source_reports_inner_seek_result() {
     assert_eq!(
         source.try_seek(Duration::from_secs(1)).is_ok(),
         expected.is_ok()
+    );
+}
+
+// The filter state is cleared only after a successful inner seek, so a seek
+// the source rejects must not hide the audio still playing: the boosted band's
+// ringing continues into the next sample instead of the failed seek rebuilding
+// the filters. `eq_source_seek_clears_filter_state` covers the success path.
+#[test]
+fn eq_source_failed_seek_keeps_the_filter_state() {
+    let mut bands = [0.0; crate::equalizer::BAND_COUNT];
+    bands[4] = 12.0;
+    let settings = Arc::new(EqSettings::default());
+    settings.store(EqSnapshot {
+        enabled: true,
+        preamp_db: 0.0,
+        bands_db: bands,
+    });
+    let samples = vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    let mut source = EqSource::new(SeekableSource::failing(samples), settings);
+
+    // Consume the impulse and the right channel after it, leaving the left
+    // channel's boosted filter ringing.
+    let _ = source.next();
+    let _ = source.next();
+
+    assert!(
+        source.try_seek(Duration::ZERO).is_err(),
+        "a failed inner seek must be reported to the caller"
+    );
+    assert_ne!(
+        source.next(),
+        Some(0.0),
+        "a failed seek must not rebuild the filter and drop its ringing state"
     );
 }
 

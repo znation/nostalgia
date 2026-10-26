@@ -2061,7 +2061,9 @@ redirects and disables the proxy.
 worker actually pulls through `audio::meter::MeterSource`; those samples reach the equalizer,
 balance, and output unchanged. A band at or above Nyquist reads zero, as do silence and an empty
 window. A seek clears the recorded window without resetting the partial downmix frame, so the
-sample rodio leaves on the same channel stays in phase; a player that has not appended a preview
+sample rodio leaves on the same channel stays in phase; a seek the backend rejects leaves the
+recorded window untouched, so a failed seek does not blank the audio still playing. A player that
+has not appended a preview
 reports nothing, so Stop and a new selection cannot report the previous preview's spectrum. The
 silent fallback and a closed worker report `None`. The UI half stores that reply in
 `WinampPlayer::spectrum` and draws one fixed-width slot per band (`BAND_COUNT`) from it while
@@ -2095,6 +2097,7 @@ width, while `views::visible_spectrum` applies `WinampPlayer::visualizer_visible
 - `spectrum_bands_peak_at_the_matching_band_for_a_sine` (`src/audio/tests/sources.rs`)
 - `spectrum_bands_zero_a_band_at_or_above_nyquist` (`src/audio/tests/sources.rs`)
 - `meter_source_passes_samples_through_and_records_their_spectrum` (`src/audio/tests/sources.rs`)
+- `meter_source_failed_seek_keeps_the_recorded_window` (`src/audio/tests/sources.rs`)
 - `meter_source_seek_keeps_the_downmix_phase` (`src/audio/tests/sources.rs`)
 - `meter_window_keeps_the_newest_samples_in_play_order` (`src/audio/tests/sources.rs`)
 - `spectrum_query_returns_the_loaded_players_spectrum` (`src/audio/tests/worker.rs`)
