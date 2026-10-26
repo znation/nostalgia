@@ -167,4 +167,28 @@ mod tests {
         let viewport = PAD + 3.0 * ROW + ROW;
         assert_eq!(reveal_row_offset(3, 0.0, viewport), None);
     }
+
+    // A viewport shorter than one row cannot fit it, so both edges are out of
+    // view at once. The top check runs first, so a row scrolled past above the
+    // viewport is revealed at its top rather than its bottom.
+    #[test]
+    fn a_row_above_a_viewport_shorter_than_one_row_reveals_at_its_top() {
+        let scroll_top = PAD + 4.0 * ROW;
+        assert_eq!(
+            reveal_row_offset(3, scroll_top, ROW / 2.0),
+            Some(PAD + 3.0 * ROW)
+        );
+    }
+
+    // A row below a viewport shorter than one row cannot fit either; it is
+    // revealed with its bottom edge at the viewport's bottom, since the top
+    // check does not fire for a row below.
+    #[test]
+    fn a_row_below_a_viewport_shorter_than_one_row_reveals_at_its_bottom() {
+        let row_bottom = PAD + 2.0 * ROW + ROW;
+        assert_eq!(
+            reveal_row_offset(2, 0.0, ROW / 2.0),
+            Some(row_bottom - ROW / 2.0)
+        );
+    }
 }
