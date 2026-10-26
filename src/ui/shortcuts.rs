@@ -21,7 +21,7 @@ use super::Message;
 /// to its first and last rows, Page Up and Page Down to scroll it one page at
 /// a time, F5 to refetch the library and return to the Artists list, Ctrl+F
 /// to focus the `Search library` box, Ctrl+Z and Ctrl+B to play the first and
-/// last song of the showing list, Ctrl+R to reverse the showing list, Ctrl+Shift+1 to sort it by title
+/// last song of the showing list, Ctrl+R to reverse the showing list, Ctrl+Shift+R to shuffle it, Ctrl+Shift+1 to sort it by title
 /// (see [`playlist_sort_shortcut`]), and the system media keys
 /// (Play/Pause, Play, Pause, Stop, Next track, and Previous track) to the same
 /// transport messages as the on-screen controls
@@ -107,7 +107,7 @@ fn numpad_shortcut(key: &Key, location: Location, modifiers: Modifiers) -> Optio
 /// back or forward, and the system media keys (Play/Pause, Play, Pause, Stop,
 /// Next track, and Previous track) drive the transport. Apart from Ctrl+F,
 /// Ctrl+Z (play the first song), Ctrl+B (play the last song), and Ctrl+R
-/// (reverse the showing list; Ctrl+Shift+R stays unbound), a
+/// (reverse the showing list), Ctrl+Shift+R (shuffle it), a
 /// Control, Alt, or
 /// Logo chord is left to the OS and window manager, so those modifiers yield
 /// `None`; Shift is allowed, and the letter match ignores ASCII case, so
@@ -129,7 +129,7 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
     }
 
     // Ctrl+Z and Ctrl+B jump to the first and last song of the list Z and B
-    // step through, and Ctrl+R (without Shift) reverses the showing list,
+    // step through, and Ctrl+R reverses the showing list and Ctrl+Shift+R shuffles it,
     // under the same no-Alt, no-Logo rule as Ctrl+F.
     if modifiers.control() && !modifiers.alt() && !modifiers.logo() {
         match key {
@@ -143,6 +143,9 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
                 if character.eq_ignore_ascii_case("r") && !modifiers.shift() =>
             {
                 return Some(Message::ReverseBrowse);
+            }
+            Key::Character(character) if character.eq_ignore_ascii_case("r") => {
+                return Some(Message::RandomizeBrowse);
             }
             _ => {}
         }
@@ -510,7 +513,6 @@ mod tests {
             assert_maps!(Key::Character(letter.into()), Modifiers::CTRL => Message::ReverseBrowse);
         }
         for modifiers in [
-            Modifiers::CTRL | Modifiers::SHIFT,
             Modifiers::ALT,
             Modifiers::LOGO,
             Modifiers::CTRL | Modifiers::ALT,
@@ -521,6 +523,30 @@ mod tests {
                 "r with {modifiers:?} must not map"
             );
         }
+    }
+
+    #[test]
+    fn message_for_maps_ctrl_shift_r_to_randomize_the_list() {
+        for letter in ["r", "R"] {
+            assert_maps!(
+                Key::Character(letter.into()),
+                Modifiers::CTRL | Modifiers::SHIFT => Message::RandomizeBrowse
+            );
+        }
+        for modifiers in [
+            Modifiers::CTRL | Modifiers::SHIFT | Modifiers::ALT,
+            Modifiers::CTRL | Modifiers::SHIFT | Modifiers::LOGO,
+        ] {
+            assert!(
+                message_for(key_pressed(Key::Character("r".into()), modifiers)).is_none(),
+                "r with {modifiers:?} must not map"
+            );
+        }
+        // Shift alone still toggles Repeat.
+        assert!(!matches!(
+            message_for(key_pressed(Key::Character("R".into()), Modifiers::SHIFT)),
+            Some(Message::RandomizeBrowse)
+        ));
     }
 
     #[test]

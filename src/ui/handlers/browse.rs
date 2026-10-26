@@ -362,6 +362,24 @@ pub(in crate::ui) fn reverse_browse(player: &mut WinampPlayer) -> Task<Message> 
     Task::none()
 }
 
+/// Ctrl+Shift+R was pressed: shuffle the currently showing list's order.
+///
+/// Like [`reverse_browse`] the reorder is one-shot and local to the visible
+/// list, and returning to a shuffled parent restores its library order. One
+/// [`crate::ui::transport::shuffle_roll`] seeds the permutation.
+pub(in crate::ui) fn randomize_browse(player: &mut WinampPlayer) -> Task<Message> {
+    let seed = crate::ui::transport::shuffle_roll();
+    match player.current_view {
+        CurrentView::Artists => player.artists.shuffle_rows(seed),
+        CurrentView::Albums => player.albums.shuffle_rows(seed),
+        CurrentView::Songs => player.songs.shuffle_rows(seed),
+        CurrentView::AllSongs => player.all_songs.shuffle_rows(seed),
+        CurrentView::AllAlbums => player.all_albums.shuffle_rows(seed),
+        CurrentView::Playlists => player.playlists.shuffle_rows(seed),
+    }
+    Task::none()
+}
+
 /// The Reload button was pressed: refetch the top-level artists list and show
 /// it under the Artists view. Clearing an active search and returning to
 /// Artists make the reloaded list the one the user sees; the search box's

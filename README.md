@@ -128,7 +128,8 @@ and opening a list starts it at the top. A `Sort` button beside `Top` reorders t
 alphabetically by its rows' rendered text, ignoring case; the reorder is one-shot, so reopening
 the list restores the library's order; Ctrl+Shift+1 does the same sort from the keyboard, like
 Winamp's playlist editor. Ctrl+R reverses the showing list's order the same
-one-shot way, like Winamp's playlist editor. A `Reload` button beside `Sort` refetches the library's
+one-shot way, like Winamp's playlist editor, and Ctrl+Shift+R shuffles it into a random order the same
+one-shot way. A `Reload` button beside `Sort` refetches the library's
 artists list and returns to the Artists list, clearing any active search while leaving the typed
 query in the search box. The title bar's `M` button opens a transient About panel naming the app,
 showing its `v`-prefixed package version and the line `The classic Winamp look, rebuilt in

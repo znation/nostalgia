@@ -279,15 +279,16 @@ list is a no-op: it neither reorders rows nor bumps the epoch.
 Ctrl+Shift+1 (the top-row `1` by physical key, Control and Shift held, no Alt or Logo) sends the
 same `Message::SortBrowse` as the button.
 
-Ctrl+R (Control without Shift, Alt, or Logo; Ctrl+Shift+R stays unbound) reverses the showing
-list's order under the same rules: one-shot, epoch bumped, selection cleared, cached titles and
+Ctrl+R (Control without Shift, Alt, or Logo) reverses, and Ctrl+Shift+R (Control and Shift, no Alt
+or Logo) shuffles, the showing list's order under the same rules: one-shot, epoch bumped, selection cleared, cached titles and
 labels reordered with the rows, other lists, view, search, and playback unchanged, Back to the
-parent restoring library order (reversal and Sort compose), and a no-op on an empty, loading, or
+parent restoring library order (reversal, shuffle, and Sort compose), and a no-op on an empty, loading, or
 failed list.
 
 **Enforced by.** `BrowseList::reverse_rows` and the shared `BrowseList::apply_reorder` in
 `src/ui/browse.rs`, `browse::reverse_browse` in `src/ui/handlers/browse.rs` (routed from
-`Message::ReverseBrowse`), the Ctrl+R arm of `shortcut`, and `shortcuts::playlist_sort_shortcut` (Ctrl+Shift+1), both in
+`Message::ReverseBrowse`), `BrowseList::shuffle_rows` and `browse::shuffled_order` (seeded by `transport::shuffle_roll`) with
+`browse::randomize_browse` (routed from `Message::RandomizeBrowse`), the Ctrl+R and Ctrl+Shift+R arms of `shortcut`, and `shortcuts::playlist_sort_shortcut` (Ctrl+Shift+1), both in
 `src/ui/shortcuts.rs`.
 `BrowseList::sort_rows_by` in `src/ui/browse.rs` builds a stable index permutation
 from the lowercased row keys and rebuilds `items`, `titles`, and `labels` by it, bumping the epoch
@@ -330,6 +331,14 @@ draw beside Top.
 - `back_restores_a_reversed_then_sorted_albums_list_to_library_order`
 - `reverse_leaves_other_lists_view_search_and_playback_untouched`
 - `message_for_maps_ctrl_r_to_reverse_the_list` (in `src/ui/shortcuts.rs`)
+- `message_for_maps_ctrl_shift_r_to_randomize_the_list` (in `src/ui/shortcuts.rs`)
+- `shuffled_order_is_a_deterministic_permutation`
+- `shuffled_order_pins_a_known_seed`
+- `shuffled_order_varies_with_the_seed`
+- `shuffle_rows_moves_songs_with_their_cached_text`
+- `randomize_bumps_the_epoch_clears_the_selection_and_keeps_every_row`
+- `randomize_with_an_empty_or_loading_list_is_a_noop`
+- `back_restores_a_randomized_albums_list_to_library_order`
 - `message_for_maps_ctrl_shift_1_to_sort` (in `src/ui/shortcuts.rs`)
 - `ctrl_shift_1_needs_exactly_control_and_shift` (in `src/ui/shortcuts.rs`)
 - `ctrl_shift_1_sorts_the_showing_list_from_the_keyboard`

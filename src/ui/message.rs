@@ -196,6 +196,10 @@ pub(in crate::ui) enum Message {
     // handler bumps that list's epoch and leaves every other list and the
     // playback state alone.
     ReverseBrowse,
+    // Ctrl+Shift+R: shuffle the showing list's order, one-shot like Sort. The
+    // handler bumps that list's epoch and leaves every other list and the
+    // playback state alone.
+    RandomizeBrowse,
     // The browse view's Reload button: refetch the top-level artists list and
     // return to the Artists view, clearing an active search but not the search
     // box's typed text. It leaves playback and the other browse lists alone.

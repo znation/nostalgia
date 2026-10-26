@@ -1224,6 +1224,7 @@ mod jump_tests;
 mod loading_tests;
 mod mixer_tests;
 mod panels_tests;
+mod randomize_tests;
 mod readouts_tests;
 mod reverse_tests;
 mod scroll_tests;

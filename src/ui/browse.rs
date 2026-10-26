@@ -63,13 +63,13 @@ pub(super) struct BrowseList<T> {
     /// The row a single press last selected, or `None` while nothing is
     /// selected. Only [`Self::select_row`] sets it; every transition that
     /// changes the rows ([`Self::replace_rows`], [`Self::clear`],
-    /// [`Self::fail`]) or their order ([`Self::sort_rows_by`], [`Self::reverse_rows`],
+    /// [`Self::fail`]) or their order ([`Self::sort_rows_by`], [`Self::reverse_rows`], [`Self::shuffle_rows`],
     /// [`Self::restore_library_order`]) drops it, because the index it stores
     /// names a row in the previous list or order. The view paints the
     /// selected row with the blue `ROW_HIGHLIGHT` bar and white
     /// text; the `▶` marker stays tied to the playing track.
     selected: Option<usize>,
-    /// The permutation [`Self::sort_rows_by`] and [`Self::reverse_rows`] have applied to the rows, or
+    /// The permutation [`Self::sort_rows_by`], [`Self::reverse_rows`], and [`Self::shuffle_rows`] have applied to the rows, or
     /// `None` while they are in library order. Entry `i` is the library index
     /// of the row now at position `i`, so [`Self::restore_library_order`] can
     /// undo every reorder since the rows were stored. Any transition that
@@ -95,6 +95,26 @@ pub(super) struct BrowseList<T> {
     /// level is recognized as stale (see [`RequestGeneration`]) and does not
     /// overwrite the newer list.
     generation: Arc<AtomicU64>,
+}
+
+/// A permutation of `0..len` from a Fisher–Yates shuffle driven by splitmix64
+/// seeded with `seed`. Pure: the same `len` and `seed` always give the same
+/// order, and `len` 0 and 1 give `[]` and `[0]`.
+pub(super) fn shuffled_order(len: usize, seed: u64) -> Vec<usize> {
+    let mut state = seed;
+    let mut draw = move || {
+        state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    };
+    let mut order: Vec<usize> = (0..len).collect();
+    for i in (1..len).rev() {
+        let pick = draw().checked_rem(i as u64 + 1).unwrap_or(0) as usize;
+        order.swap(i, pick);
+    }
+    order
 }
 
 impl<T> BrowseList<T> {
@@ -277,6 +297,22 @@ impl<T> BrowseList<T> {
         self.apply_reorder((0..self.items.len()).rev().collect());
     }
 
+    /// Shuffles the loaded rows in place by [`shuffled_order`]`(len, seed)`,
+    /// one-shot like [`Self::reverse_rows`]: cached titles and labels follow
+    /// the rows, the epoch is bumped (even when the permutation happens to be
+    /// the identity), the selection is dropped, and the shuffle composes into
+    /// the permutation [`Self::restore_library_order`] undoes. A list with
+    /// fewer than two rows or one still loading or failed is a no-op.
+    pub(super) fn shuffle_rows(&mut self, seed: u64)
+    where
+        T: Clone,
+    {
+        if self.items.len() < 2 || self.loading || self.error.is_some() {
+            return;
+        }
+        self.apply_reorder(shuffled_order(self.items.len(), seed));
+    }
+
     /// Applies the permutation `order` (entry `i` names the current row that
     /// moves to position `i`) and records it for [`Self::restore_library_order`].
     fn apply_reorder(&mut self, order: Vec<usize>)
@@ -297,7 +333,7 @@ impl<T> BrowseList<T> {
         self.epoch = self.epoch.wrapping_add(1);
     }
 
-    /// Undoes every [`Self::sort_rows_by`] and [`Self::reverse_rows`] since the rows were stored, putting
+    /// Undoes every [`Self::sort_rows_by`], [`Self::reverse_rows`], and [`Self::shuffle_rows`] since the rows were stored, putting
     /// `items` (and the cached titles and labels) back in library order and
     /// bumping the epoch because the indices a rendered row emits now name
     /// other entries. A list that is not sorted — or whose rows have since
