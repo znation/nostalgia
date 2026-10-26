@@ -304,10 +304,15 @@ impl<T> BrowseList<T> {
     /// [`Self::restore_library_order`] undoes. With nothing selected, the
     /// selected row already at the edge it would move past, or the list
     /// loading or failed, nothing changes.
-    pub(super) fn move_selected(&mut self, down: bool)
-    where
-        T: Clone,
-    {
+    ///
+    /// The move swaps the row and its cached title and label in place, and
+    /// swaps the two entries in the saved library permutation, rather than
+    /// rebuilding the whole list through a permutation like Sort and Shuffle
+    /// do. Only the first move after a store allocates the identity
+    /// permutation it then keeps in step; every later move of a held key is a
+    /// constant number of swaps, so moving a row in a large library does not
+    /// deep-copy every row's strings on each key repeat.
+    pub(super) fn move_selected(&mut self, down: bool) {
         let Some(from) = self.selected else {
             return;
         };
@@ -322,11 +327,25 @@ impl<T> BrowseList<T> {
         if self.loading || self.error.is_some() || to >= self.items.len() {
             return;
         }
-        let mut order: Vec<usize> = (0..self.items.len()).collect();
-        order.swap(from, to);
-        self.apply_reorder(order);
-        // `apply_reorder` drops the selection; the moved row is now at `to`.
+        self.items.swap(from, to);
+        if !self.titles.is_empty() {
+            self.titles.swap(from, to);
+        }
+        if !self.labels.is_empty() {
+            self.labels.swap(from, to);
+        }
+        match &mut self.library_positions {
+            Some(positions) => positions.swap(from, to),
+            None => {
+                let mut positions: Vec<usize> = (0..self.items.len()).collect();
+                positions.swap(from, to);
+                self.library_positions = Some(positions);
+            }
+        }
+        // The moved row is now at `to`, and the epoch bump invalidates every
+        // press rendered from the old order.
         self.selected = Some(to);
+        self.epoch = self.epoch.wrapping_add(1);
     }
 
     /// Applies the permutation `order` computes from the rows, unless the list
@@ -483,6 +502,28 @@ mod tests {
         assert_eq!(list.selected(), Some(0));
         list.restore_library_order();
         assert_eq!(list.items, ["a", "b", "c"]);
+    }
+
+    #[test]
+    fn move_selected_swaps_cached_text_and_still_restores_library_order() {
+        let mut list = BrowseList::new(false);
+        list.store_with_row_text(
+            vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            |item| format!("title-{item}"),
+            |item| format!("label-{item}"),
+        );
+        list.selected = Some(2);
+        list.move_selected(false);
+        list.move_selected(false);
+        assert_eq!(list.items, ["c", "a", "b"]);
+        assert_eq!(list.titles, ["title-c", "title-a", "title-b"]);
+        assert_eq!(list.labels, ["label-c", "label-a", "label-b"]);
+
+        list.restore_library_order();
+
+        assert_eq!(list.items, ["a", "b", "c"]);
+        assert_eq!(list.titles, ["title-a", "title-b", "title-c"]);
+        assert_eq!(list.labels, ["label-a", "label-b", "label-c"]);
     }
 
     #[test]

@@ -316,6 +316,7 @@ draw beside Top.
 **Pinned by.**
 
 - `move_selected_swaps_with_the_neighbour_and_keeps_the_selection`
+- `move_selected_swaps_cached_text_and_still_restores_library_order`
 - `move_selected_is_a_noop_without_a_selection_at_an_edge_or_while_loading`
 - `message_for_maps_alt_arrows_to_move_the_selected_row`
 - the tests in `src/ui/tests/move_row_tests.rs`
