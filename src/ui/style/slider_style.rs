@@ -14,13 +14,15 @@ use super::{chrome_face, mix_channel, square_border};
 /// The sunken-groove / raised-thumb chrome style for a slider.
 ///
 /// The base skin's slider is a dark recess with a blocky chrome thumb. iced's
-/// [`slider::Rail`] paints a single-color [`Border`](iced::Border) and no shadow, so the
-/// sunken edge is the dark 1px outline around a near-black groove; the
-/// [`slider::Handle`] carries the light 1px border that reads as raised
-/// chrome, the same light-border trick [`chrome_button_style`](super::chrome_button_style) uses. The rail
-/// is uniform (`LCD_BACKGROUND` on both sides of the handle) because the thumb,
+/// [`slider::Rail`] paints a single-color [`Border`](iced::Border) and no
+/// shadow, so the sunken edge is the dark 1px outline around a near-black
+/// groove; the [`slider::Handle`] carries the light 1px border that reads as
+/// raised chrome, the same light-border trick
+/// [`chrome_button_style`](super::chrome_button_style) uses. The rail is
+/// uniform (`LCD_BACKGROUND` on both sides of the handle) because the thumb,
 /// not a fill color, marks the value. The handle face comes from
-/// [`chrome_face`], the same ladder [`chrome_button_style`](super::chrome_button_style) uses. Pure, so the
+/// [`chrome_face`], the same ladder
+/// [`chrome_button_style`](super::chrome_button_style) uses. Pure, so the
 /// color rule is testable without building a widget.
 pub fn chrome_slider_style(status: slider::Status) -> slider::Style {
     let face = chrome_face(

@@ -21,8 +21,10 @@ use super::Message;
 /// to its first and last rows, Page Up and Page Down to scroll it one page at
 /// a time, F5 to refetch the library and return to the Artists list, Ctrl+F
 /// to focus the `Search library` box, Ctrl+Z and Ctrl+B to play the first and
-/// last song of the showing list, Ctrl+R to reverse the showing list, Ctrl+Shift+R to shuffle it, Ctrl+W to toggle window-shade mode, Ctrl+J to flip the Jump to time panel, Ctrl+Shift+1 to sort it by title
-/// (see [`playlist_sort_shortcut`]), Alt+3 to flip the File info panel
+/// last song of the showing list, Ctrl+R to reverse the showing list,
+/// Ctrl+Shift+R to shuffle it, Ctrl+W to toggle window-shade mode, Ctrl+J to
+/// flip the Jump to time panel, Ctrl+Shift+1 to sort it by title (see
+/// [`playlist_sort_shortcut`]), Alt+3 to flip the File info panel
 /// (see [`file_info_shortcut`]), Alt+E and Alt+G to show or hide the library
 /// and equalizer panels (see [`panel_shortcut`]), and the system media keys
 /// (Play/Pause, Play, Pause, Stop, Next track, and Previous track) to the same
@@ -185,8 +187,9 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
     }
 
     // Ctrl+Z and Ctrl+B jump to the first and last song of the list Z and B
-    // step through, Ctrl+R reverses the showing list, Ctrl+Shift+R shuffles it, and
-    // Ctrl+W rolls the window up into shade mode and back, Ctrl+J flips the Jump to time panel, under the same no-Alt, no-Logo rule as Ctrl+F.
+    // step through, Ctrl+R reverses the showing list, Ctrl+Shift+R shuffles it,
+    // and Ctrl+W rolls the window up into shade mode and back, Ctrl+J flips the
+    // Jump to time panel, under the same no-Alt, no-Logo rule as Ctrl+F.
     if modifiers.control() && !modifiers.alt() && !modifiers.logo() {
         match key {
             Key::Character(character) if character.eq_ignore_ascii_case("z") => {

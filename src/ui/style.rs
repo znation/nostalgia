@@ -1,12 +1,12 @@
 //! Winamp widget chrome styles.
 //!
 //! Every iced widget this player dresses — buttons, the library search box,
-//! the preset pick list and its menu, sliders (in the `slider_style` submodule), playlist rows, the playlist
-//! scroll well, and the title bar — gets its base-skin colors and 1px chrome
-//! geometry here. Each style is a pure `Status` → `Style` builder, so its
-//! color rule is testable without building a widget. The reusable edge-color
-//! rule the buttons and search box draw from lives in the sibling `bevel`
-//! module.
+//! the preset pick list and its menu, sliders (in the `slider_style` submodule),
+//! playlist rows, the playlist scroll well, and the title bar — gets its
+//! base-skin colors and 1px chrome geometry here. Each style is a pure
+//! `Status` → `Style` builder, so its color rule is testable without building a
+//! widget. The reusable edge-color rule the buttons and search box draw from
+//! lives in the sibling `bevel` module.
 
 use iced::{
     Background, Border, Color, Shadow, Vector,

@@ -360,7 +360,8 @@ pub fn clamp_balance(balance: f32) -> f32 {
 pub const BALANCE_CENTER_SNAP: f32 = 0.1;
 
 /// The balance a slider change to `requested` stores, given the `current`
-/// position it moves from (a drag's previous requested value, else the stored balance): `requested` clamped by [`clamp_balance`], except that a move
+/// position it moves from (a drag's previous requested value, else the stored
+/// balance): `requested` clamped by [`clamp_balance`], except that a move
 /// toward center landing within [`BALANCE_CENTER_SNAP`] of it stores exactly
 /// `0.0`, like the classic player's center detent. Only an inward move snaps
 /// (the clamped magnitude must also be below `current.abs()`); otherwise the

@@ -257,11 +257,12 @@ pub(in crate::ui::views) fn list_with_count<'a>(
 /// position in `songs` and pairing it with the cached title and length at the
 /// same index (see [`song_row`]). `epoch` and `selected` reach
 /// [`scrollable_list`], so every row press selects and the selected row draws
-/// the blue bar. `placeholder` is the caller's [`text::browse_placeholder`] wording
-/// for an empty list; it differs between the two callers because only a search
-/// reads as "no matches". A non-empty list also appends the count-and-time
-/// footer ([`song_list_summary`], which includes the selected row's length) beneath its rows; an empty list returns only
-/// the scrollable so its loading, error, or empty placeholder stays alone.
+/// the blue bar. `placeholder` is the caller's [`text::browse_placeholder`]
+/// wording for an empty list; it differs between the two callers because only a
+/// search reads as "no matches". A non-empty list also appends the count-and-time
+/// footer ([`song_list_summary`], which includes the selected row's length)
+/// beneath its rows; an empty list returns only the scrollable so its loading,
+/// error, or empty placeholder stays alone.
 pub(in crate::ui::views) fn song_list<'a>(
     songs: &'a [Song],
     titles: &'a [String],

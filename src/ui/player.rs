@@ -149,9 +149,10 @@ pub(in crate::ui) struct WinampPlayer {
     /// Whether the normal-mode `NOSTALGIA EQUALIZER` band and equalizer panel
     /// are drawn. `Message::ToggleEqualizerPanel` flips it; it is open on a
     /// first launch and is saved and restored by `persist_settings_if_changed`
-    /// and `adopt_saved_settings`. It is a layout flag only: the EQ's on/off state, curve, and preset, and the
-    /// audio they forward, are untouched, and hiding the section hands its
-    /// height to the browse list without resizing the window.
+    /// and `adopt_saved_settings`. It is a layout flag only: the EQ's on/off
+    /// state, curve, and preset, and the audio they forward, are untouched, and
+    /// hiding the section hands its height to the browse list without resizing
+    /// the window.
     pub(in crate::ui) eq_panel_visible: bool,
     /// Whether the normal-mode library section — its `NOSTALGIA LIBRARY` band,
     /// browse buttons, search row, list, and footer — is drawn.

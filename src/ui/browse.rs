@@ -62,15 +62,16 @@ pub(super) struct BrowseList<T> {
     pub(super) epoch: u64,
     /// The row a single press last selected, or `None` while nothing is
     /// selected. Only [`Self::select_row`] sets it; every transition that
-    /// changes the rows ([`Self::replace_rows`], [`Self::clear`],
-    /// [`Self::fail`]) or their order ([`Self::sort_rows_by`], [`Self::reverse_rows`], [`Self::shuffle_rows`],
-    /// [`Self::restore_library_order`]) drops it, because the index it stores
-    /// names a row in the previous list or order. The view paints the
-    /// selected row with the blue `ROW_HIGHLIGHT` bar and white
-    /// text; the `▶` marker stays tied to the playing track.
+    /// changes the rows ([`Self::replace_rows`], [`Self::clear`], [`Self::fail`])
+    /// or their order ([`Self::sort_rows_by`], [`Self::reverse_rows`],
+    /// [`Self::shuffle_rows`], [`Self::restore_library_order`]) drops it, because
+    /// the index it stores names a row in the previous list or order. The view
+    /// paints the selected row with the blue `ROW_HIGHLIGHT` bar and white text;
+    /// the `▶` marker stays tied to the playing track.
     selected: Option<usize>,
-    /// The permutation [`Self::sort_rows_by`], [`Self::reverse_rows`], and [`Self::shuffle_rows`] have applied to the rows, or
-    /// `None` while they are in library order. Entry `i` is the library index
+    /// The permutation [`Self::sort_rows_by`], [`Self::reverse_rows`], and
+    /// [`Self::shuffle_rows`] have applied to the rows, or `None` while they are in
+    /// library order. Entry `i` is the library index
     /// of the row now at position `i`, so [`Self::restore_library_order`] can
     /// undo every reorder since the rows were stored. Any transition that
     /// replaces the rows ([`Self::store`], [`Self::store_with_row_text`],
@@ -388,8 +389,9 @@ impl<T> BrowseList<T> {
         self.epoch = self.epoch.wrapping_add(1);
     }
 
-    /// Undoes every [`Self::sort_rows_by`], [`Self::reverse_rows`], [`Self::shuffle_rows`], and [`Self::move_selected`] since the rows were stored, putting
-    /// `items` (and the cached titles and labels) back in library order and
+    /// Undoes every [`Self::sort_rows_by`], [`Self::reverse_rows`], [`Self::shuffle_rows`],
+    /// and [`Self::move_selected`] since the rows were stored, putting `items` (and
+    /// the cached titles and labels) back in library order and
     /// bumping the epoch because the indices a rendered row emits now name
     /// other entries. A list that is not sorted — or whose rows have since
     /// been replaced — is a no-op, so callers can restore unconditionally.
