@@ -9,5 +9,6 @@ and will tune it to this project.
 - Prefer the standard library over a new dependency.
 - Keep each file focused on one responsibility, and small enough to read in one sitting.
 - Every behavior change ships with a test.
+- Keep the usage reference (`docs/usage.md`) current: a change to what the player shows or how a control behaves updates it in the same change.
 - Small, complete, and correct beats big and half-done: one focused change per tick.
 - Keep external integrations behind a narrow seam so a stub can stand in until the real service lands.
