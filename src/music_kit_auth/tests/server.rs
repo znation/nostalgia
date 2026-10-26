@@ -387,3 +387,36 @@ fn a_transient_accept_failure_is_retried_instead_of_ending_the_flow() {
         );
     }
 }
+
+// The retry covers only the three transient kinds. A failure of the listener
+// itself still ends the flow: retrying it would spin until the flow's deadline
+// and hide the broken listener behind a timeout. The injected accept fails
+// once with a non-transient kind, and the call must return that exact error
+// after a single attempt instead of retrying it.
+#[test]
+fn a_listener_failure_is_returned_instead_of_being_retried() {
+    let mut pending = Vec::new();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut calls = 0;
+    let result = accept_pending_with(
+        || {
+            calls += 1;
+            Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "accept denied",
+            ))
+        },
+        &mut pending,
+        deadline,
+        Duration::from_secs(5),
+    );
+
+    let error = result.expect_err("a listener failure must end the flow");
+    assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+    assert_eq!(error.to_string(), "accept denied");
+    assert_eq!(calls, 1, "a listener failure must not be retried");
+    assert!(
+        pending.is_empty(),
+        "a failed accept must not add a connection to the pending list"
+    );
+}

@@ -1694,6 +1694,7 @@ reports a removal failure without failing the new sign-in.
 - `one_pass_takes_on_a_bounded_number_of_connections`
 - `an_expired_connection_is_dropped_even_when_its_request_has_arrived`
 - `a_transient_accept_failure_is_retried_instead_of_ending_the_flow`
+- `a_listener_failure_is_returned_instead_of_being_retried`
   (all in `src/music_kit_auth/tests/server.rs`)
 - `the_reader_reports_a_partial_request_as_incomplete`
   (in `src/music_kit_auth/tests/http_request.rs`)
