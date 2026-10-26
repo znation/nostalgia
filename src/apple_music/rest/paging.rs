@@ -43,16 +43,14 @@ pub(super) const MAX_PAGES: usize = 10;
 pub(super) const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 impl RestLibrary {
-    /// Fetches `url` and parses the collection envelope, following the
-    /// response's `next` link (up to [`MAX_PAGES`] pages) so a collection
-    /// larger than one 100-item page is read in full. A `next` link that does
-    /// not name a same-origin path is not followed (see [`absolute_next_url`]).
-    /// Each page's resources are passed to `map` as that page is read, so the
-    /// caller's validation runs per page rather than after the whole
-    /// collection is accumulated. The whole follow shares one
-    /// [`REQUEST_TIMEOUT`] budget — each page is requested with only the time
-    /// left — so a slow collection cannot outrun the UI's fetch timeout by a
-    /// multiple of the page bound.
+    /// Fetches `url` and parses the collection envelope, following the response's `next` link (up
+    /// to [`MAX_PAGES`] pages) so a collection larger than one 100-item page is read in full. A
+    /// `next` link that does not name a same-origin path is not followed (see
+    /// [`absolute_next_url`]). Each page's resources are passed to `map` as that page is read, so
+    /// the caller's validation runs per page rather than after the whole collection is accumulated.
+    /// The whole follow shares one [`REQUEST_TIMEOUT`] budget — each page is requested with only
+    /// the time left — so a slow collection cannot outrun the UI's fetch timeout by a multiple of
+    /// the page bound.
     ///
     /// A transport failure propagates as the transport's own cause, a parse
     /// failure names the parse, and a resource `map` rejects (a blank id or a
@@ -71,15 +69,13 @@ impl RestLibrary {
         self.fetch_parsed(url, session, parse_collection, map)
     }
 
-    /// Fetches `url` and follows its collection's `next` link (up to
-    /// [`MAX_PAGES`] pages), parsing each page with `parse` and mapping each
-    /// resource with `map`.
+    /// Fetches `url` and follows its collection's `next` link (up to [`MAX_PAGES`] pages), parsing
+    /// each page with `parse` and mapping each resource with `map`.
     ///
-    /// `parse` turns one page's body into its resources and `next` link, so a
-    /// caller whose collection is nested inside a larger response (the search
-    /// envelope) reuses the same pagination, deadline, and page-notice rules
-    /// as a top-level collection. See [`RestLibrary::fetch`] for the
-    /// pagination and error-reporting contract.
+    /// `parse` turns one page's body into its resources and `next` link, so a caller whose
+    /// collection is nested inside a larger response (the search envelope) reuses the same
+    /// pagination, deadline, and page-notice rules as a top-level collection. See
+    /// [`RestLibrary::fetch`] for the pagination and error-reporting contract.
     pub(super) fn fetch_parsed<T>(
         &self,
         url: &str,
@@ -174,13 +170,11 @@ pub(super) fn absolute_next_url(next: &str) -> Option<String> {
     }
 }
 
-/// The notice logged when a collection has more pages than [`MAX_PAGES`], so
-/// `fetch` stops with rows unread. `next` is server-controlled text headed for
-/// the terminal, so it is formatted with `Debug` — as
-/// [`crate::apple_music::playback::play::play_log_line`] formats an id — to escape a control
-/// character (`\u{1b}`) or a Unicode format character such as the
-/// right-to-left override `\u{202e}` instead of letting it reach the terminal
-/// raw.
+/// The notice logged when a collection has more pages than [`MAX_PAGES`], so `fetch` stops with
+/// rows unread. `next` is server-controlled text headed for the terminal, so it is formatted with
+/// `Debug` — as [`crate::apple_music::playback::play::play_log_line`] formats an id — to escape a
+/// control character (`\u{1b}`) or a Unicode format character such as the right-to-left override
+/// `\u{202e}` instead of letting it reach the terminal raw.
 pub(super) fn page_bound_notice(next: &str) -> String {
     format!(
         "Apple Music returned a next page {next:?} after {MAX_PAGES} pages; stopping at the page limit"

@@ -19,10 +19,10 @@ fn library_over(stub: &StubTransport) -> RestLibrary {
 
 /// The error message `query` reports when the transport answers with `body`.
 ///
-/// The malformed-body and rejected-resource tests all build the same
-/// single-page stub over `body` and reduce their query's error to its `Display`
-/// string; this runs that scaffold once. `query` names the browse method under
-/// test, so each test states only the response body and the expected report.
+/// The malformed-body and rejected-resource tests all build the same single-page stub over `body`
+/// and reduce their query's error to its `Display` string; this runs that scaffold once. `query`
+/// names the browse method under test, so each test states only the response body and the expected
+/// report.
 fn error_over<T>(
     body: &str,
     query: impl FnOnce(&RestLibrary) -> Result<T, AppleMusicError>,

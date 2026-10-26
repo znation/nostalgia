@@ -90,12 +90,10 @@ fn an_expired_deadline_fails_without_opening_a_connection() {
     );
 }
 
-/// Formats a complete HTTP/1.1 response around `body`: the `status_line`
-/// (e.g. `"200 OK"`), the `Content-Type` header, and the exact
-/// `Content-Length`, closed with `Connection: close`. The loopback tests
-/// either hand the result to [`serve_one_response`] or write it from a
-/// request-capturing thread, so the framing lives here rather than being
-/// rebuilt at each site.
+/// Formats a complete HTTP/1.1 response around `body`: the `status_line` (e.g. `"200 OK"`), the
+/// `Content-Type` header, and the exact `Content-Length`, closed with `Connection: close`. The
+/// loopback tests either hand the result to [`serve_one_response`] or write it from a
+/// request-capturing thread, so the framing lives here rather than being rebuilt at each site.
 fn http_response(status_line: &str, content_type: &str, body: &str) -> String {
     format!(
         "HTTP/1.1 {status_line}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",

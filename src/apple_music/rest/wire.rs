@@ -60,11 +60,11 @@ pub(super) fn parse_search_envelope(
         None => (Vec::new(), None),
     })
 }
-/// The `{ "data": [ ... ] }` envelope every Apple Music collection response
-/// carries. Apple caps a page at 100 items and links the next page in `next`;
+/// The `{ "data": [ ... ] }` envelope every Apple Music collection response carries. Apple caps a
+/// page at 100 items and links the next page in `next`;
 /// [`RestLibrary::fetch`](super::RestLibrary::fetch) follows that link (up to
-/// [`MAX_PAGES`](super::paging::MAX_PAGES) pages) so a
-/// larger library is read in full rather than truncated to its first page.
+/// [`MAX_PAGES`](super::paging::MAX_PAGES) pages) so a larger library is read in full rather than
+/// truncated to its first page.
 #[derive(Deserialize)]
 struct Envelope<T> {
     data: Vec<T>,
@@ -75,10 +75,9 @@ struct Envelope<T> {
     next: Option<String>,
 }
 
-/// The `{ "results": { ... } }` envelope an Apple Music search response
-/// carries. [`RestLibrary::search_library`](super::RestLibrary::search_library)
-/// parses the songs collection nested
-/// inside it through [`parse_search_envelope`].
+/// The `{ "results": { ... } }` envelope an Apple Music search response carries.
+/// [`RestLibrary::search_library`](super::RestLibrary::search_library) parses the songs collection
+/// nested inside it through [`parse_search_envelope`].
 #[derive(Deserialize)]
 struct SearchEnvelope {
     results: SearchResults,
@@ -94,8 +93,8 @@ struct SearchResults {
     library_songs: Option<SearchCollection>,
 }
 
-/// The `library-songs` collection of a search response: the same
-/// `{ "data": [...], "next": ... }` shape as a top-level browse collection.
+/// The `library-songs` collection of a search response: the same `{ "data": [...], "next": ... }`
+/// shape as a top-level browse collection.
 #[derive(Deserialize)]
 struct SearchCollection {
     data: Vec<Resource>,

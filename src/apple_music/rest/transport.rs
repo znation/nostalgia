@@ -70,18 +70,15 @@ pub trait HttpTransport: Send + Sync {
 
 /// The production [`HttpTransport`], backed by the blocking `ureq` client.
 ///
-/// Every request runs on one process-wide [`ureq::Agent`]: a fresh agent per
-/// request (`ureq::get`) would open a new TCP connection and TLS session each
-/// time, while the shared agent reuses the pooled connection across the
-/// library browse and search requests. The shared agent carries
-/// [`REQUEST_TIMEOUT`] as its global timeout, so a stalled server cannot block
-/// a request forever, and follows no redirects, so the `Music-User-Token`
-/// credential is only ever sent to the URL this client built (see
-/// [`crate::http::agent_with_timeout`]).
+/// Every request runs on one process-wide [`ureq::Agent`]: a fresh agent per request (`ureq::get`)
+/// would open a new TCP connection and TLS session each time, while the shared agent reuses the
+/// pooled connection across the library browse and search requests. The shared agent carries
+/// [`REQUEST_TIMEOUT`] as its global timeout, so a stalled server cannot block a request forever,
+/// and follows no redirects, so the `Music-User-Token` credential is only ever sent to the URL this
+/// client built (see [`crate::http::agent_with_timeout`]).
 ///
-/// The agent also disables `ureq`'s status-as-error shortcut
-/// (`http_status_as_error(false)`), so a 4xx/5xx response reaches
-/// [`UreqTransport::get`] with its body intact and the Apple Music error
+/// The agent also disables `ureq`'s status-as-error shortcut (`http_status_as_error(false)`), so a
+/// 4xx/5xx response reaches [`UreqTransport::get`] with its body intact and the Apple Music error
 /// detail can be surfaced instead of a bare status code.
 pub struct UreqTransport {
     agent: ureq::Agent,
@@ -113,10 +110,9 @@ impl Default for UreqTransport {
     }
 }
 
-/// The shared [`ureq::Agent`], built once on first use. `ureq` keeps idle
-/// connections per host for 15 seconds by default, so consecutive browse
-/// queries reuse the same TLS connection. Its global timeout is
-/// [`REQUEST_TIMEOUT`], so every request through it is bounded end to end.
+/// The shared [`ureq::Agent`], built once on first use. `ureq` keeps idle connections per host for
+/// 15 seconds by default, so consecutive browse queries reuse the same TLS connection. Its global
+/// timeout is [`REQUEST_TIMEOUT`], so every request through it is bounded end to end.
 pub(super) fn shared_agent() -> &'static ureq::Agent {
     static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
     AGENT.get_or_init(|| agent_with_timeout(REQUEST_TIMEOUT))

@@ -14,9 +14,8 @@ impl Resource {
     /// Maps this resource to an [`Artist`], moving its id and name into the
     /// model instead of cloning them out of the parsed response.
     ///
-    /// The id and name are required (see [`required_id`] and
-    /// [`required_name`]): a blank id can name nothing, and a nameless
-    /// resource would render as an empty row.
+    /// The id and name are required (see [`required_id`] and [`required_name`]): a blank id can
+    /// name nothing, and a nameless resource would render as an empty row.
     pub(in crate::apple_music::rest) fn into_artist(self) -> Result<Artist, AppleMusicError> {
         let Resource { id, attributes } = self;
         let id = required_id(id, "artist")?;
@@ -103,18 +102,16 @@ impl Resource {
     /// title, artist, album name, primary genre, track number, and preview
     /// URL into the model instead of cloning them.
     ///
-    /// The all-songs, playlist-track, and search collections carry no album
-    /// id, so those callers pass `""`; only an album's tracks pass a real id
-    /// (see [`RestLibrary::get_all_songs`](super::super::RestLibrary::get_all_songs),
-    /// [`get_songs_from_playlist`](super::super::RestLibrary::get_songs_from_playlist),
-    /// and [`RestLibrary::search_library`](super::super::RestLibrary::search_library)).
-    /// The id and title are required (see
-    /// [`required_id`] and [`required_name`]); the artist, album name,
-    /// genre, track number, duration, and preview URL fall back to their
-    /// "source supplied none" sentinels. The
-    /// whole-library path maps up to [`MAX_PAGES`](super::super::paging::MAX_PAGES) pages
-    /// of songs, so consuming the parsed resource avoids re-allocating every
-    /// string it already owns.
+    /// The all-songs, playlist-track, and search collections carry no album id, so those callers
+    /// pass `""`; only an album's tracks pass a real id (see
+    /// [`RestLibrary::get_all_songs`](super::super::RestLibrary::get_all_songs),
+    /// [`get_songs_from_playlist`](super::super::RestLibrary::get_songs_from_playlist), and
+    /// [`RestLibrary::search_library`](super::super::RestLibrary::search_library)). The id and
+    /// title are required (see [`required_id`] and [`required_name`]); the artist, album name,
+    /// genre, track number, duration, and preview URL fall back to their "source supplied none"
+    /// sentinels. The whole-library path maps up to [`MAX_PAGES`](super::super::paging::MAX_PAGES)
+    /// pages of songs, so consuming the parsed resource avoids re-allocating every string it
+    /// already owns.
     pub(in crate::apple_music::rest) fn into_song(
         self,
         album_id: &str,
@@ -177,13 +174,11 @@ impl Resource {
 
 /// The usable length in milliseconds an optional `durationInMillis` carries.
 ///
-/// An absent duration, a non-positive one, a fractional one, or one too large
-/// for `u64` is not a length any track can have, so it maps to `0` — the
-/// `Song::duration_ms` and `Album::duration_ms` "source supplied no duration"
-/// sentinel. One unusable value therefore never fails a whole collection
-/// response. Shared by [`Resource::into_song`] and
-/// [`Resource::into_album_duration`] so both drop a useless length the same
-/// way.
+/// An absent duration, a non-positive one, a fractional one, or one too large for `u64` is not a
+/// length any track can have, so it maps to `0` — the `Song::duration_ms` and `Album::duration_ms`
+/// "source supplied no duration" sentinel. One unusable value therefore never fails a whole
+/// collection response. Shared by [`Resource::into_song`] and [`Resource::into_album_duration`] so
+/// both drop a useless length the same way.
 fn duration_millis(duration: Option<serde_json::Number>) -> u64 {
     duration.and_then(|number| number.as_u64()).unwrap_or(0)
 }
@@ -191,12 +186,11 @@ fn duration_millis(duration: Option<serde_json::Number>) -> u64 {
 /// The release year at the start of an Apple Music `releaseDate`, or `None`
 /// when the date is absent or malformed.
 ///
-/// Apple documents `releaseDate` as `YYYY-MM-DD` but also returns `YYYY` and
-/// `YYYY-MM`, so only the first four bytes must be ASCII digits; the rest of
-/// the date does not affect the year. A blank, short, or non-numeric date has
-/// no usable year and maps to `None`, matching [`Song::year`]'s "source
-/// supplied none" sentinel. The date is trimmed first so surrounding
-/// whitespace does not hide a valid year.
+/// Apple documents `releaseDate` as `YYYY-MM-DD` but also returns `YYYY` and `YYYY-MM`, so only the
+/// first four bytes must be ASCII digits; the rest of the date does not affect the year. A blank,
+/// short, or non-numeric date has no usable year and maps to `None`, matching [`Song::year`]'s
+/// "source supplied none" sentinel. The date is trimmed first so surrounding whitespace does not
+/// hide a valid year.
 fn release_year(date: &str) -> Option<u16> {
     let year = date.trim().get(..4)?;
     if year.bytes().all(|byte| byte.is_ascii_digit()) {
@@ -216,12 +210,10 @@ fn artist_or_empty(name: Option<String>) -> String {
         .unwrap_or_default()
 }
 
-/// The first non-blank genre name an optional `genreNames` array carries,
-/// trimmed, or `""` when the array is absent, empty, or all blank —
-/// [`Song::genre`]'s "source supplied none" sentinel. Apple lists an umbrella
-/// genre alongside the specific one (`["Rock", "Music"]`), so only the first
-/// real entry is kept; skipping blank entries means a stray `""` never hides a
-/// later real genre.
+/// The first non-blank genre name an optional `genreNames` array carries, trimmed, or `""` when the
+/// array is absent, empty, or all blank — [`Song::genre`]'s "source supplied none" sentinel. Apple
+/// lists an umbrella genre alongside the specific one (`["Rock", "Music"]`), so only the first real
+/// entry is kept; skipping blank entries means a stray `""` never hides a later real genre.
 fn primary_genre(genres: Option<Vec<String>>) -> String {
     genres
         .into_iter()
