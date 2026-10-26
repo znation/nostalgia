@@ -114,4 +114,67 @@ in `jump.rs` and `shortcuts.rs`. Also `README.md` (the keys paragraph) and `docs
   `jump_time_visible` flag draws no `JUMP TO TIME` text in shade mode.
 - README and `docs/invariants.md` describe the key and the panel. `make check` passes.
 
+### Keep the row Alt+Up/Alt+Down moves in view, like Winamp's playlist editor (planned 2026-10-25 by the plan role)
+
+**Goal.** Alt+Up and Alt+Down move the selected browse row and keep it selected. They do not
+scroll, though. Repeated presses can carry the row past the viewport's top or bottom edge, and it
+keeps moving out of sight. In Winamp's playlist editor the list follows the moved entry. After a
+move, scroll the browse list only as far as needed to show the moved row fully. Leave the list
+alone when the row is already visible. A full jump to the row would jerk the list on every press,
+so do not use one.
+
+**Approach.**
+- `src/ui/handlers/browse/scroll.rs`:
+  - Add a pure `pub(in crate::ui) fn reveal_row_offset(index: usize, scroll_top: f32,
+    viewport_height: f32) -> Option<f32>`. It uses the same row geometry as
+    `scroll_browse_to_row`: `row_top = views::BROWSE_LIST_PADDING + index as f32 *
+    views::BROWSE_ROW_HEIGHT` and `row_bottom = row_top + views::BROWSE_ROW_HEIGHT`. It returns
+    `Some(row_top)` when `row_top < scroll_top`. Otherwise it returns
+    `Some(row_bottom - viewport_height)` when `row_bottom > scroll_top + viewport_height`.
+    Otherwise it returns `None`. Check the top edge first, so a viewport shorter than one row
+    shows the row's top.
+  - Add `pub(in crate::ui) fn reveal_browse_row(index: usize) -> Task<Message>`. Build it with
+    `iced::advanced::widget::operate` (the `advanced` feature is already on) around a small
+    private struct that implements `iced::advanced::widget::Operation<T>` for every `T`, following
+    iced's own `scroll_to` operation. In that impl, `traverse` calls `operate(self)`. `scrollable`
+    acts only when `id == Some(&Id::new(views::BROWSE_LIST_ID))`. Then it calls
+    `reveal_row_offset(index, translation.y, bounds.height)`, and on `Some(y)` it calls
+    `state.scroll_to(AbsoluteOffset { x: None, y: Some(y) })`. iced passes the scrollable's
+    current offset as `translation` and its viewport as `bounds`. In shade mode no browse list is
+    built, so the operation finds no target and does nothing. Update the module doc comment to
+    mention the reveal.
+- `src/ui/handlers/browse.rs` `move_selected_row`: read the showing list's `selected()` before
+  and after its `move_selected(down)` call. A small generic helper over `BrowseList<T: Clone>`
+  that returns `Option<usize>` (the new index only when it changed) keeps the six-arm `match`
+  flat. When the index changed, return `scroll::reveal_browse_row(new_index)`. Otherwise return
+  `Task::none()`, so a no-op press (no selection, at an edge, or a loading or failed list) still
+  schedules nothing. Update the doc comment.
+- `src/ui/tests/mod.rs`: give `browse_scroll_effects_by` `bounds: iced::Rectangle` and
+  `translation: iced::Vector` parameters in place of the defaults it passes to
+  `operation.scrollable`. Add an async `browse_scroll_effects_at(task, what, viewport_height,
+  scroll_top)` that drives a task the way `browse_scroll_effects` does, but passes a viewport of
+  that height and `Vector::new(0.0, scroll_top)`. Existing callers keep passing the defaults.
+- `docs/invariants.md` `## Browse row order`: extend the Alt+Up/Alt+Down paragraph. A move that
+  changes the selection scrolls the list only far enough to show the moved row, and a no-op
+  move schedules no task. Add the new function and tests to its Enforced/Tested lines. Also
+  update the README sentence on Alt+Up and Alt+Down.
+
+**Acceptance criteria.**
+- Inline unit tests in `scroll.rs` pin `reveal_row_offset`. A row above the viewport gives its
+  top. A row below gives `row_bottom - viewport_height`. A fully visible row gives `None`, and
+  so does a row whose bottom edge exactly meets the viewport's bottom.
+- `src/ui/tests/move_row_tests.rs` adds these tests:
+  - `a_move_past_the_viewport_bottom_scrolls_the_row_into_view`. Load 20 artists, select row 10,
+    and send `MoveSelectedRowDown`. Driven through `browse_scroll_effects_at` with a
+    5-row-high viewport at offset 0, the task scrolls to `y = Some(BROWSE_LIST_PADDING + 12.0 *
+    BROWSE_ROW_HEIGHT - 5.0 * BROWSE_ROW_HEIGHT)`, with `x: None`.
+  - `a_move_within_the_viewport_does_not_scroll`. Make the same move with a viewport tall enough
+    to show every row. The captured effects are empty.
+  - `a_move_above_the_viewport_top_scrolls_up_to_the_row`. Select row 10, send
+    `MoveSelectedRowUp`, and use an offset past row 9. The task scrolls to row 9's top.
+  - `a_no_op_move_schedules_no_task`. With no selection, `assert_no_task` holds for the
+    returned task.
+- The existing move-row, scroll, and shortcut tests pass unchanged except for the
+  `browse_scroll_effects_by` signature. `make check` passes.
+
 ## Done
