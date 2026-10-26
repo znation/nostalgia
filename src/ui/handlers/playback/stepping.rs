@@ -84,10 +84,10 @@ pub(super) fn forward_track_id(
 /// through to the step unchanged.
 pub(in crate::ui) fn step_track(player: &mut WinampPlayer, forward: bool) -> Task<Message> {
     if !forward
-        && player
-            .playback_position
-            .is_some_and(|position| position >= Duration::from_secs(PREVIOUS_RESTART_SECS))
         && player.apple_music_service.has_loaded_preview()
+        && let Some(position) = player
+            .playback_position
+            .filter(|position| *position >= Duration::from_secs(PREVIOUS_RESTART_SECS))
     {
         player.seek_preview = None;
         match player.apple_music_service.seek_output_to(Duration::ZERO) {
@@ -95,7 +95,13 @@ pub(in crate::ui) fn step_track(player: &mut WinampPlayer, forward: bool) -> Tas
                 player.position_epoch = player.position_epoch.wrapping_add(1);
                 player.playback_position = Some(Duration::ZERO);
             }
-            Err(error) => eprintln!("restarting the preview failed: {error}"),
+            Err(error) => {
+                let track = player.state.blocking_lock().current_track.clone();
+                eprintln!(
+                    "{}",
+                    restart_failure_report(track.as_deref(), position, &error)
+                );
+            }
         }
         return Task::none();
     }
@@ -148,6 +154,24 @@ pub(in crate::ui) fn step_track(player: &mut WinampPlayer, forward: bool) -> Tas
         },
         None => Task::none(),
     }
+}
+
+/// The report for a rejected Previous restart: names the track whose preview
+/// was being restarted and the position that triggered the restart, so a
+/// failed seek identifies the selection rather than only saying a seek failed.
+/// `track_id` is `None` only when shared state names no current track; the
+/// loaded preview still gets a report. The id is `Debug`-escaped, matching the
+/// play log, so a hostile library id cannot inject terminal output.
+pub(in crate::ui) fn restart_failure_report(
+    track_id: Option<&str>,
+    position: Duration,
+    error: &impl std::fmt::Display,
+) -> String {
+    let target = track_id.map_or_else(
+        || "the loaded preview".to_string(),
+        |id| format!("track {id:?}"),
+    );
+    format!("restarting {target} after {position:?} failed: {error}")
 }
 
 /// The task Ctrl+Z and Ctrl+B schedule: play the first (`last` false) or last

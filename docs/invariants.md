@@ -2064,8 +2064,9 @@ seconds restarts that preview from zero: exactly one absolute seek to zero, any 
 the readout position reset to zero, and the position epoch bumped so in-flight replies are dropped.
 The current track and transport mode stay unchanged. Earlier positions, a backend with no loaded
 preview, or no reported position step through the showing list as before, including Repeat's edge
-behavior and Shuffle's recorded-play retrace. A rejected restart seek is logged and leaves the
-track queued with its position and epoch unchanged; no step is scheduled. The decision uses the
+behavior and Shuffle's recorded-play retrace. A rejected restart seek is logged, naming the track
+and the position that triggered the restart, and leaves the track queued with its position and
+epoch unchanged; no step is scheduled. The decision uses the
 last reported position — the one the readout shows — not a fresh backend query.
 
 **Enforced by.** `handlers::playback::stepping::step_track` in
@@ -2081,6 +2082,8 @@ unchanged step paths.
 - `previous_steps_before_the_restart_threshold` (`src/ui/tests/stepping_tests.rs`)
 - `previous_with_shuffle_restarts_after_the_threshold_instead_of_retracing` (`src/ui/tests/stepping_tests.rs`)
 - `a_failed_previous_restart_leaves_the_track_queued` (`src/ui/tests/stepping_tests.rs`)
+- `a_failed_restart_report_names_the_track_and_position` (`src/ui/tests/stepping_tests.rs`)
+- `a_failed_restart_report_without_a_track_names_the_loaded_preview` (`src/ui/tests/stepping_tests.rs`)
 
 **History.** Added 2026-10-24 with the Previous restart plan, matching classic Winamp's rule that a
 late Previous restarts the track already playing instead of stepping back.

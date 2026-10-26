@@ -225,6 +225,41 @@ fn a_failed_previous_restart_leaves_the_track_queued() {
     );
 }
 
+// The rejected-restart log names the track and the position that triggered
+// the restart, so a developer can tell which preview failed. The id is
+// `Debug`-escaped like the play log, so a hostile library id cannot inject
+// terminal output.
+#[test]
+fn a_failed_restart_report_names_the_track_and_position() {
+    let report = crate::ui::handlers::playback::stepping::restart_failure_report(
+        Some("song\n1"),
+        Duration::from_secs(3),
+        &"the audio thread is gone",
+    );
+
+    assert_eq!(
+        report,
+        "restarting track \"song\\n1\" after 3s failed: the audio thread is gone"
+    );
+}
+
+// The restart branch works from the loaded preview even when shared state
+// names no current track, so the report still says which preview the failed
+// seek belonged to.
+#[test]
+fn a_failed_restart_report_without_a_track_names_the_loaded_preview() {
+    let report = crate::ui::handlers::playback::stepping::restart_failure_report(
+        None,
+        Duration::from_secs(5),
+        &"no seek",
+    );
+
+    assert_eq!(
+        report,
+        "restarting the loaded preview after 5s failed: no seek"
+    );
+}
+
 // Next and Previous can step the playing row outside the visible list, so
 // while a song list is showing each step reveals the landed row, scrolling
 // only as far as needed and not at all when it is already visible. From
