@@ -5,6 +5,20 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### A scoped IPv6 preview URL slips past the preview host guard (found by the bugfix role 2026-10-26) — fixed 2026-10-26 by the bugfix role
+
+A preview URL whose host is a scoped IPv6 literal — `https://[fe80::1%lo]/...`,
+including RFC 6874's `%25` spelling — was accepted by `preview_url_problem`:
+`std::net::IpAddr::parse` rejects the zone suffix, so the host fell through the
+"ordinary DNS name" branch and never reached `ip_is_internal`, even though the
+literal is link-local. The guard now refuses any host carrying `%` with the
+reason "must not carry a zone identifier"; the new test
+`preview_url_problem_rejects_a_scoped_ipv6_literal` failed before the fix and
+passes after.
+
+**Validation gap:** none — a unit test on the pure guard reproduced it; no
+other infrastructure was missing.
+
 ### A negative duration fails the whole album fetch (found by the bugfix role 2026-10-26) — fixed 2026-10-26 by the bugfix role
 
 A song resource whose `attributes.durationInMillis` was negative failed the

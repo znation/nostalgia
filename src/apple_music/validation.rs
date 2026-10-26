@@ -106,8 +106,12 @@ pub(super) fn ensure_preview_url_is_valid(
 /// an internal address (see [`crate::audio`]), so the name this pure guard
 /// cannot see is checked before the connection. A redirect to an internal
 /// address is refused at the audio agent, which follows no redirects (see
-/// [`crate::audio`]). A value carrying a control character is rejected too,
-/// matching
+/// [`crate::audio`]). An IPv6 literal carrying a zone identifier (`[fe80::1%lo]`,
+/// or RFC 6874's encoded `[fe80::1%25lo]`) is refused too: it scopes the
+/// literal to a local interface, and `IpAddr::parse` cannot read the suffix, so
+/// without this check it would fall through as an ordinary name instead of
+/// reaching the internal-address test. A value carrying a control character is
+/// rejected too, matching
 /// [`ensure_id_is_valid`]: a control character is never valid in a URL. The
 /// host may be any public name — Apple's preview CDN can move without a code
 /// change — so the check names what it refuses rather than pinning a host
@@ -131,6 +135,12 @@ pub(super) fn preview_url_problem(url: &str) -> Option<&'static str> {
     };
     if host.is_empty() {
         return Some("must name a host");
+    }
+    // A zone identifier scopes an IPv6 literal to a local interface. It is not
+    // part of a DNS name, and `IpAddr::parse` below cannot read it, so a scoped
+    // link-local literal would otherwise be treated as an ordinary host name.
+    if host.contains('%') {
+        return Some("must not carry a zone identifier");
     }
     let host = host.trim_end_matches('.').to_ascii_lowercase();
     if host == "localhost" || host.ends_with(".localhost") {

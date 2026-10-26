@@ -336,3 +336,23 @@ fn is_numeric_host_form_recognizes_legacy_spellings_and_leaves_names_alone() {
         );
     }
 }
+
+// A scoped IPv6 literal (`[fe80::1%lo]`, or RFC 6874's `%25` spelling) names
+// a link-local address, but `IpAddr::parse` cannot read the zone suffix, so the
+// host would otherwise fall through to the "ordinary name" branch and skip the
+// internal-address check. The guard must refuse it like any other link-local
+// literal.
+#[test]
+fn preview_url_problem_rejects_a_scoped_ipv6_literal() {
+    for url in [
+        "https://[fe80::1%lo]/preview.m4a",
+        "https://[fe80::1%25lo]/preview.m4a",
+        "https://[::1%25lo]/preview.m4a",
+    ] {
+        assert_eq!(
+            preview_url_problem(url),
+            Some("must not carry a zone identifier"),
+            "unexpected reason for {url:?}"
+        );
+    }
+}

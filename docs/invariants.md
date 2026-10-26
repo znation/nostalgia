@@ -1980,7 +1980,9 @@ stores the body the download produced.
 `ip_is_internal` does not classify as internal. The URL must be absolute `https` and carry no
 control character, its host must not be the local host name or a legacy numeric address form
 (`2130706433`, `0x7f000001`, `0177.0.0.1`, `127.1`), and every address a hostname resolves to —
-or an address literal the URL spells — must pass `ip_is_internal`. For IPv4 it refuses private,
+or an address literal the URL spells — must pass `ip_is_internal`. An IPv6 literal carrying a zone
+identifier (`%lo`, or RFC 6874's `%25lo`) is refused as well, because `IpAddr::parse` cannot read
+the suffix and the literal would otherwise pass as an ordinary name. For IPv4 it refuses private,
 loopback, link-local, unspecified, broadcast, documentation, multicast, `0.0.0.0/8`, shared
 (CGNAT), benchmarking (`198.18.0.0/15`), reserved (`240.0.0.0/4`), IETF protocol-assignment
 (`192.0.0.0/24`, the whole block, including the globally reachable `.9` and `.10` anycast
@@ -2001,6 +2003,7 @@ redirects and disables the proxy.
 - `ip_is_internal_refuses_every_internal_range_and_allows_public_addresses`
 - `preview_url_problem_unwraps_a_disguised_internal_host`
 - `preview_url_problem_rejects_a_url_without_a_usable_https_host`
+- `preview_url_problem_rejects_a_scoped_ipv6_literal`
 - `is_numeric_host_form_recognizes_legacy_spellings_and_leaves_names_alone`
   (all in `src/apple_music/tests/validation.rs`)
 - `the_preview_agent_refuses_a_hostname_that_resolves_to_loopback`
