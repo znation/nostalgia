@@ -1,5 +1,32 @@
 use super::*;
 
+/// Asserts a navigation button that hangs off the Artists list — All Songs,
+/// All Albums, or Playlists — opens `view` with an active search left behind:
+/// none of those lists is built from a search's results. Used by the three
+/// `show_*_clears_an_active_search` tests.
+fn assert_navigation_clears_the_search(message: Message, view: CurrentView) {
+    let (mut player, _state) = test_player();
+    player.search_active = true;
+    player.current_view = CurrentView::Songs;
+
+    let _ = update(&mut player, message);
+
+    assert!(!player.search_active);
+    assert_view(&player, view);
+}
+
+/// Asserts Back from `view` — one of the views that hangs off the Artists list
+/// — returns to Artists. Used by the three `back_from_*_returns_to_the_artists_list`
+/// tests.
+fn assert_back_returns_to_artists(view: CurrentView) {
+    let (mut player, _state) = test_player();
+    player.current_view = view;
+
+    let _ = update(&mut player, Message::Back);
+
+    assert_view(&player, CurrentView::Artists);
+}
+
 // The All Songs button fetches the whole library flat and shows it under its
 // own view: the sample path returns every song in library order, and the
 // buffer is the dedicated `all_songs` list rather than the browsed `songs`.
@@ -26,18 +53,9 @@ async fn show_all_songs_fetches_the_flat_list_and_switches_view() {
     assert_eq!(player.songs.items.len(), 3);
 }
 
-// The flat list hangs off the artists list, not off a search's results, so
-// opening it clears an active search.
 #[test]
 fn show_all_songs_clears_an_active_search() {
-    let (mut player, _state) = test_player();
-    player.search_active = true;
-    player.current_view = CurrentView::Songs;
-
-    let _ = update(&mut player, Message::ShowAllSongs);
-
-    assert!(!player.search_active);
-    assert_view(&player, CurrentView::AllSongs);
+    assert_navigation_clears_the_search(Message::ShowAllSongs, CurrentView::AllSongs);
 }
 
 // Reload replaces the artists list with a fresh fetch and returns there, but
@@ -91,12 +109,7 @@ async fn reload_library_returns_to_artists_and_refetches_them() {
 
 #[test]
 fn back_from_all_songs_returns_to_the_artists_list() {
-    let (mut player, _state) = test_player();
-    player.current_view = CurrentView::AllSongs;
-
-    let _ = update(&mut player, Message::Back);
-
-    assert_view(&player, CurrentView::Artists);
+    assert_back_returns_to_artists(CurrentView::AllSongs);
 }
 
 // The All Albums button fetches every library album flat and shows it under
@@ -161,28 +174,14 @@ fn playlists_loaded_stores_the_list() {
     assert!(!player.playlists.loading);
 }
 
-// The Playlists list hangs off the artists list, not off a search's results,
-// so opening it clears an active search.
 #[test]
 fn show_playlists_clears_an_active_search() {
-    let (mut player, _state) = test_player();
-    player.search_active = true;
-    player.current_view = CurrentView::Songs;
-
-    let _ = update(&mut player, Message::ShowPlaylists);
-
-    assert!(!player.search_active);
-    assert_view(&player, CurrentView::Playlists);
+    assert_navigation_clears_the_search(Message::ShowPlaylists, CurrentView::Playlists);
 }
 
 #[test]
 fn back_from_playlists_returns_to_the_artists_list() {
-    let (mut player, _state) = test_player();
-    player.current_view = CurrentView::Playlists;
-
-    let _ = update(&mut player, Message::Back);
-
-    assert_view(&player, CurrentView::Artists);
+    assert_back_returns_to_artists(CurrentView::Playlists);
 }
 
 // A playlist row press resolves against `playlists`, loads that playlist's
@@ -247,28 +246,14 @@ fn a_stale_playlist_press_issues_no_fetch_and_leaves_the_view_unchanged() {
     assert_eq!(player.songs.items.len(), 3);
 }
 
-// The flat album list hangs off the artists list, not off a search's
-// results, so opening it clears an active search.
 #[test]
 fn show_all_albums_clears_an_active_search() {
-    let (mut player, _state) = test_player();
-    player.search_active = true;
-    player.current_view = CurrentView::Songs;
-
-    let _ = update(&mut player, Message::ShowAllAlbums);
-
-    assert!(!player.search_active);
-    assert_view(&player, CurrentView::AllAlbums);
+    assert_navigation_clears_the_search(Message::ShowAllAlbums, CurrentView::AllAlbums);
 }
 
 #[test]
 fn back_from_all_albums_returns_to_the_artists_list() {
-    let (mut player, _state) = test_player();
-    player.current_view = CurrentView::AllAlbums;
-
-    let _ = update(&mut player, Message::Back);
-
-    assert_view(&player, CurrentView::Artists);
+    assert_back_returns_to_artists(CurrentView::AllAlbums);
 }
 
 // A row pressed in the flat All Albums view must resolve against `all_albums`,
