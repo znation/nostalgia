@@ -322,6 +322,7 @@ draw beside Top.
 
 - `move_selected_swaps_with_the_neighbour_and_keeps_the_selection`
 - `move_selected_swaps_cached_text_and_still_restores_library_order`
+- `a_moved_artist_keeps_its_cached_album_label_and_back_restores_it`
 - `reordering_moves_rows_without_cloning_them`
 - `sort_walks_disjoint_cycles_and_keeps_cached_text_aligned`
 - `move_selected_is_a_noop_without_a_selection_at_an_edge_or_while_loading`
@@ -582,7 +583,8 @@ those labels through `BrowseList::store_with_labels`, so `artist_row` can borrow
 - `artists_loaded_populates_list`
 - `sort_reorders_artists_and_keeps_their_cached_labels_aligned`
 - `back_restores_sorted_artists_and_their_cached_album_labels`
-  (all three in `src/ui/tests/`)
+- `a_moved_artist_keeps_its_cached_album_label_and_back_restores_it`
+  (all four in `src/ui/tests/`)
 - `sample_library_artists_carry_their_album_counts`
   (in `src/sample_library.rs`)
 - `get_favorite_artists_uses_the_rest_library_when_signed_in`

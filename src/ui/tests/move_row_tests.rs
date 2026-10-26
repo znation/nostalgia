@@ -79,6 +79,52 @@ fn back_restores_a_moved_artists_list_to_library_order() {
     assert_eq!(artist_names(&player), ["a", "b", "c"]);
 }
 
+// The Artists list caches only its album-count labels, not its titles, so a
+// move takes the labels-only path. A move that carried the labels on the same
+// condition as the titles would leave every artist showing a neighbour's
+// count. Pin the alignment through a move and through Back's restore.
+#[test]
+fn a_moved_artist_keeps_its_cached_album_label_and_back_restores_it() {
+    let mut player = player_in_albums();
+    let artist = |id: &str, name: &str, album_count: usize| Artist {
+        id: id.to_string(),
+        name: name.to_string(),
+        album_count,
+    };
+    let _ = update(
+        &mut player,
+        Message::ArtistsLoaded(vec![
+            artist("banana", "banana", 0),
+            artist("apple", "Apple", 2),
+            artist("cherry", "cherry", 1),
+        ]),
+    );
+    assert_eq!(player.artists.labels, ["", "2 albums", "1 album"]);
+    player.current_view = CurrentView::Artists;
+    let epoch = player.artists.epoch;
+    select(&mut player, epoch, 0);
+
+    let _ = update(&mut player, Message::MoveSelectedRowDown);
+
+    assert_eq!(artist_names(&player), ["Apple", "banana", "cherry"]);
+    assert_eq!(
+        player.artists.labels,
+        ["2 albums", "", "1 album"],
+        "each moved artist row keeps its own cached album count"
+    );
+    assert_eq!(player.artists.selected(), Some(1));
+
+    player.current_view = CurrentView::Albums;
+    let _ = update(&mut player, Message::Back);
+
+    assert_eq!(artist_names(&player), ["banana", "Apple", "cherry"]);
+    assert_eq!(
+        player.artists.labels,
+        ["", "2 albums", "1 album"],
+        "Back restores each artist's own cached album count"
+    );
+}
+
 #[test]
 fn a_move_leaves_the_view_and_the_other_lists_alone() {
     let (mut player, _state) = test_player();
