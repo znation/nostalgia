@@ -5,6 +5,17 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### A duration reply with no length leaves the Jump to time panel open but invisible (found by the bugfix role 2026-10-25) — fixed 2026-10-25 by the bugfix role
+
+With the panel open, a current `PlaybackDuration` reply of `None` cleared
+`playback_duration` but left `jump_time_visible` set; the view hides the panel
+without a length, so it stayed open unseen (the same symptom as the Stop case).
+Fixed in `playback_duration` (handlers/playback/preview.rs), which now closes
+the panel when the reply carries no length; test
+`a_duration_reply_without_a_length_closes_the_panel` failed before the fix.
+
+**Validation gap:** none — a unit test reproduced it directly.
+
 ### Stop leaves the Jump to time panel open but invisible (found by the bugfix role 2026-10-25) — fixed 2026-10-25 by the bugfix role
 
 Stop (or a new selection) cleared `playback_duration`, which the view needs to draw the Jump to time panel, but left `jump_time_visible` set. The panel vanished while the flag stayed true, so the next Ctrl+J only closed the invisible panel, and the panel reappeared with its old query once a later preview reported a length. `reset_position_readout` now clears the flag; regression test `stop_closes_the_panel_whose_preview_length_it_clears` in `src/ui/tests/jump_time_tests.rs` failed before the fix.

@@ -124,3 +124,22 @@ fn stop_closes_the_panel_whose_preview_length_it_clears() {
     assert!(player.playback_duration.is_none());
     assert!(!player.jump_time_visible);
 }
+
+#[test]
+fn a_duration_reply_without_a_length_closes_the_panel() {
+    let mut player = player_with_duration();
+    let _ = update(&mut player, Message::ToggleJumpTime);
+    assert!(player.jump_time_visible);
+
+    let epoch = player.position_epoch;
+    let _ = update(
+        &mut player,
+        Message::PlaybackDuration {
+            epoch,
+            duration: None,
+        },
+    );
+
+    assert!(player.playback_duration.is_none());
+    assert!(!player.jump_time_visible);
+}

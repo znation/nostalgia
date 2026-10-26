@@ -120,7 +120,8 @@ pub(in crate::ui) fn playback_format(
 }
 
 /// The duration query's reply: store the loaded preview's own length, or
-/// clear the seek bar's scale when the backend reports none. A reply that
+/// clear the seek bar's scale (and close the Jump to time panel) when the
+/// backend reports none. A reply that
 /// [`reply_is_current`] rejects is dropped, so a poll in flight across a Stop
 /// or a new selection cannot scale the bar to the previous preview, and
 /// neither can one that lands while a transport transition is still in flight.
@@ -131,6 +132,11 @@ pub(in crate::ui) fn playback_duration(
 ) -> Task<Message> {
     if reply_is_current(player, epoch) {
         player.playback_duration = duration;
+        // The Jump to time panel needs a known length (the view hides it
+        // without one), so it closes instead of lingering invisibly.
+        if duration.is_none() {
+            player.jump_time_visible = false;
+        }
     }
     Task::none()
 }
