@@ -276,7 +276,16 @@ library's order; no sort flag persists. A fresh reply that replaces the rows dro
 permutation, so a sort cannot reorder data stored after it. Sorting an empty, loading, or failed
 list is a no-op: it neither reorders rows nor bumps the epoch.
 
-**Enforced by.** `BrowseList::sort_rows_by` in `src/ui/browse.rs` builds a stable index permutation
+Ctrl+R (Control without Shift, Alt, or Logo; Ctrl+Shift+R stays unbound) reverses the showing
+list's order under the same rules: one-shot, epoch bumped, selection cleared, cached titles and
+labels reordered with the rows, other lists, view, search, and playback unchanged, Back to the
+parent restoring library order (reversal and Sort compose), and a no-op on an empty, loading, or
+failed list.
+
+**Enforced by.** `BrowseList::reverse_rows` and the shared `BrowseList::apply_reorder` in
+`src/ui/browse.rs`, `browse::reverse_browse` in `src/ui/handlers/browse.rs` (routed from
+`Message::ReverseBrowse`), and the Ctrl+R arm of `shortcut` in `src/ui/shortcuts.rs`.
+`BrowseList::sort_rows_by` in `src/ui/browse.rs` builds a stable index permutation
 from the lowercased row keys and rebuilds `items`, `titles`, and `labels` by it, bumping the epoch
 only when there are at least two rows and the list is neither loading nor failed; it also records the cumulative
 permutation back to library order, and `BrowseList::restore_library_order` inverts it so the rows
@@ -310,7 +319,14 @@ draw beside Top.
 - `back_from_songs_restores_a_sorted_albums_list_to_library_order`
 - `back_from_all_albums_songs_restores_a_sorted_flat_list_to_library_order`
 - `back_from_a_playlists_songs_restores_a_sorted_list_to_library_order`
-  (all in `src/ui/tests/`)
+- `reverse_flips_the_artists_list`
+- `reverse_flips_songs_and_keeps_their_cached_text_aligned`
+- `reverse_bumps_the_epoch_and_clears_the_selection`
+- `reverse_with_an_empty_or_loading_list_is_a_noop`
+- `back_restores_a_reversed_then_sorted_albums_list_to_library_order`
+- `reverse_leaves_other_lists_view_search_and_playback_untouched`
+- `message_for_maps_ctrl_r_to_reverse_the_list` (in `src/ui/shortcuts.rs`)
+  (the rest in `src/ui/tests/`)
 
 ## Browse playing-row visibility
 

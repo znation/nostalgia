@@ -344,6 +344,24 @@ pub(in crate::ui) fn sort_browse(player: &mut WinampPlayer) -> Task<Message> {
     Task::none()
 }
 
+/// Ctrl+R was pressed: reverse the currently showing list's order.
+///
+/// Like [`sort_browse`] the reorder is one-shot and local to the visible list:
+/// it bumps that list's epoch and clears its selection, and leaves every other
+/// list, the current view, the search state, and playback alone. Returning to
+/// a reversed parent restores its library order.
+pub(in crate::ui) fn reverse_browse(player: &mut WinampPlayer) -> Task<Message> {
+    match player.current_view {
+        CurrentView::Artists => player.artists.reverse_rows(),
+        CurrentView::Albums => player.albums.reverse_rows(),
+        CurrentView::Songs => player.songs.reverse_rows(),
+        CurrentView::AllSongs => player.all_songs.reverse_rows(),
+        CurrentView::AllAlbums => player.all_albums.reverse_rows(),
+        CurrentView::Playlists => player.playlists.reverse_rows(),
+    }
+    Task::none()
+}
+
 /// The Reload button was pressed: refetch the top-level artists list and show
 /// it under the Artists view. Clearing an active search and returning to
 /// Artists make the reloaded list the one the user sees; the search box's

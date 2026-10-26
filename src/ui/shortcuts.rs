@@ -21,7 +21,7 @@ use super::Message;
 /// to its first and last rows, Page Up and Page Down to scroll it one page at
 /// a time, F5 to refetch the library and return to the Artists list, Ctrl+F
 /// to focus the `Search library` box, Ctrl+Z and Ctrl+B to play the first and
-/// last song of the showing list, and the system media keys
+/// last song of the showing list, Ctrl+R to reverse the showing list, and the system media keys
 /// (Play/Pause, Play, Pause, Stop, Next track, and Previous track) to the same
 /// transport messages as the on-screen controls
 /// (the one Control chord Winamp-style play uses).
@@ -82,7 +82,8 @@ fn numpad_shortcut(key: &Key, location: Location, modifiers: Modifiers) -> Optio
 /// the volume, the left/right arrows seek five seconds
 /// back or forward, and the system media keys (Play/Pause, Play, Pause, Stop,
 /// Next track, and Previous track) drive the transport. Apart from Ctrl+F,
-/// Ctrl+Z (play the first song), and Ctrl+B (play the last song), a
+/// Ctrl+Z (play the first song), Ctrl+B (play the last song), and Ctrl+R
+/// (reverse the showing list; Ctrl+Shift+R stays unbound), a
 /// Control, Alt, or
 /// Logo chord is left to the OS and window manager, so those modifiers yield
 /// `None`; Shift is allowed, and the letter match ignores ASCII case, so
@@ -103,7 +104,8 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
     }
 
     // Ctrl+Z and Ctrl+B jump to the first and last song of the list Z and B
-    // step through, under the same no-Alt, no-Logo rule as Ctrl+F.
+    // step through, and Ctrl+R (without Shift) reverses the showing list,
+    // under the same no-Alt, no-Logo rule as Ctrl+F.
     if modifiers.control() && !modifiers.alt() && !modifiers.logo() {
         match key {
             Key::Character(character) if character.eq_ignore_ascii_case("z") => {
@@ -111,6 +113,11 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
             }
             Key::Character(character) if character.eq_ignore_ascii_case("b") => {
                 return Some(Message::LastTrack);
+            }
+            Key::Character(character)
+                if character.eq_ignore_ascii_case("r") && !modifiers.shift() =>
+            {
+                return Some(Message::ReverseBrowse);
             }
             _ => {}
         }
@@ -373,8 +380,8 @@ mod tests {
     #[test]
     fn shortcut_ignores_chord_modifiers() {
         // Control, Alt, and Logo chords belong to the OS and window manager;
-        // Ctrl+F, Ctrl+Z, and Ctrl+B are the Control exceptions, pinned by
-        // their own tests; Z and B stay unbound with Alt or Logo.
+        // Ctrl+F, Ctrl+Z, Ctrl+B, and Ctrl+R are the Control exceptions,
+        // pinned by their own tests; Z and B stay unbound with Alt or Logo.
         for modifiers in [Modifiers::ALT, Modifiers::LOGO] {
             for key in [Key::Character("z".into()), Key::Character("b".into())] {
                 assert!(
@@ -386,7 +393,6 @@ mod tests {
         for modifiers in [Modifiers::CTRL, Modifiers::ALT, Modifiers::LOGO] {
             for key in [
                 Key::Character("x".into()),
-                Key::Character("r".into()),
                 Key::Character("s".into()),
                 Key::Character("a".into()),
                 Key::Character("t".into()),
@@ -414,6 +420,30 @@ mod tests {
                     "{key:?} with {modifiers:?} must not map"
                 );
             }
+        }
+        // R is also bound with Control alone (see the Ctrl+R test), so only
+        // Alt and Logo are checked here.
+        for modifiers in [Modifiers::ALT, Modifiers::LOGO] {
+            assert!(shortcut(&Key::Character("r".into()), modifiers).is_none());
+        }
+    }
+
+    #[test]
+    fn message_for_maps_ctrl_r_to_reverse_the_list() {
+        for letter in ["r", "R"] {
+            assert_maps!(Key::Character(letter.into()), Modifiers::CTRL => Message::ReverseBrowse);
+        }
+        for modifiers in [
+            Modifiers::CTRL | Modifiers::SHIFT,
+            Modifiers::ALT,
+            Modifiers::LOGO,
+            Modifiers::CTRL | Modifiers::ALT,
+            Modifiers::CTRL | Modifiers::LOGO,
+        ] {
+            assert!(
+                message_for(key_pressed(Key::Character("r".into()), modifiers)).is_none(),
+                "r with {modifiers:?} must not map"
+            );
         }
     }
 

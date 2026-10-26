@@ -126,7 +126,8 @@ from songs opened through Playlists returns to Playlists, and Next/Previous step
 song list while it is showing. A `Top` button above every browse list returns it to its first row,
 and opening a list starts it at the top. A `Sort` button beside `Top` reorders the showing list
 alphabetically by its rows' rendered text, ignoring case; the reorder is one-shot, so reopening
-the list restores the library's order. A `Reload` button beside `Sort` refetches the library's
+the list restores the library's order. Ctrl+R reverses the showing list's order the same
+one-shot way, like Winamp's playlist editor. A `Reload` button beside `Sort` refetches the library's
 artists list and returns to the Artists list, clearing any active search while leaving the typed
 query in the search box. The title bar's `M` button opens a transient About panel naming the app,
 showing its `v`-prefixed package version and the line `The classic Winamp look, rebuilt in

@@ -63,16 +63,16 @@ pub(super) struct BrowseList<T> {
     /// The row a single press last selected, or `None` while nothing is
     /// selected. Only [`Self::select_row`] sets it; every transition that
     /// changes the rows ([`Self::replace_rows`], [`Self::clear`],
-    /// [`Self::fail`]) or their order ([`Self::sort_rows_by`],
+    /// [`Self::fail`]) or their order ([`Self::sort_rows_by`], [`Self::reverse_rows`],
     /// [`Self::restore_library_order`]) drops it, because the index it stores
     /// names a row in the previous list or order. The view paints the
     /// selected row with the blue `ROW_HIGHLIGHT` bar and white
     /// text; the `▶` marker stays tied to the playing track.
     selected: Option<usize>,
-    /// The permutation [`Self::sort_rows_by`] has applied to the rows, or
+    /// The permutation [`Self::sort_rows_by`] and [`Self::reverse_rows`] have applied to the rows, or
     /// `None` while they are in library order. Entry `i` is the library index
     /// of the row now at position `i`, so [`Self::restore_library_order`] can
-    /// undo every sort since the rows were stored. Any transition that
+    /// undo every reorder since the rows were stored. Any transition that
     /// replaces the rows ([`Self::store`], [`Self::store_with_row_text`],
     /// [`Self::store_with_labels`], [`Self::clear`], [`Self::fail`]) drops it:
     /// a freshly fetched list is already in library order.
@@ -259,9 +259,33 @@ impl<T> BrowseList<T> {
             .collect();
         let mut order: Vec<usize> = (0..self.items.len()).collect();
         order.sort_by(|&left, &right| keys[left].cmp(&keys[right]));
-        // Keep the total permutation back to library order: a later Sort
+        self.apply_reorder(order);
+    }
+
+    /// Reverses the loaded rows in place, one-shot like [`Self::sort_rows_by`]:
+    /// the cached titles and labels follow the rows, the epoch is bumped, the
+    /// selection is dropped, and the reversal composes into the permutation
+    /// [`Self::restore_library_order`] undoes. A list with fewer than two
+    /// rows or one still loading or failed is a no-op.
+    pub(super) fn reverse_rows(&mut self)
+    where
+        T: Clone,
+    {
+        if self.items.len() < 2 || self.loading || self.error.is_some() {
+            return;
+        }
+        self.apply_reorder((0..self.items.len()).rev().collect());
+    }
+
+    /// Applies the permutation `order` (entry `i` names the current row that
+    /// moves to position `i`) and records it for [`Self::restore_library_order`].
+    fn apply_reorder(&mut self, order: Vec<usize>)
+    where
+        T: Clone,
+    {
+        // Keep the total permutation back to library order: a later reorder
         // composes with it instead of overwriting it, so restoring after any
-        // number of sorts still yields the order the rows were stored in.
+        // number of reorders still yields the order the rows were stored in.
         self.library_positions = Some(match self.library_positions.take() {
             Some(positions) => order.iter().map(|&index| positions[index]).collect(),
             None => order.clone(),
@@ -273,7 +297,7 @@ impl<T> BrowseList<T> {
         self.epoch = self.epoch.wrapping_add(1);
     }
 
-    /// Undoes every [`Self::sort_rows_by`] since the rows were stored, putting
+    /// Undoes every [`Self::sort_rows_by`] and [`Self::reverse_rows`] since the rows were stored, putting
     /// `items` (and the cached titles and labels) back in library order and
     /// bumping the epoch because the indices a rendered row emits now name
     /// other entries. A list that is not sorted — or whose rows have since
@@ -304,7 +328,7 @@ impl<T> BrowseList<T> {
     /// Reorders `items`, and the cached `titles` and `labels` when they are
     /// populated, by the permutation `order`: entry `i` of each buffer takes
     /// the value that was at `order[i]`. Reordering all three together keeps
-    /// each row's cached title and label beside it. [`Self::sort_rows_by`] and
+    /// each row's cached title and label beside it. [`Self::apply_reorder`] and
     /// [`Self::restore_library_order`] both go through this, so neither can
     /// forget one of the caches.
     fn reorder_rows(&mut self, order: &[usize])
