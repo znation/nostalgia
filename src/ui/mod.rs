@@ -41,6 +41,7 @@ use timers::subscriptions;
 
 use crate::settings::Settings;
 use crate::settings::file_store::FileStore;
+use crate::settings::writer::BackgroundWriter;
 use crate::{apple_music::AppleMusicService, state::AppState};
 
 /// Runs the UI, blocking until the window is closed.
@@ -48,8 +49,9 @@ use crate::{apple_music::AppleMusicService, state::AppState};
 /// `service` is the [`AppleMusicService`] `main` built and ran the startup
 /// sign-in on; the UI stores a clone, so the session that sign-in stores is the
 /// session the UI later reads. `store` and `saved` are the settings file's
-/// writer and the snapshot `main` already restored into `state`; the player
-/// keeps both so `update` can save every later change, and
+/// store and the snapshot `main` already restored into `state`; the player
+/// keeps both so `update` can save every later change, with the blocking write
+/// on the `BackgroundWriter` worker rather than the update thread, and
 /// `adopt_saved_settings` also restores the player-owned elapsed/remaining
 /// readout mode from the snapshot. The iced window's title follows the current
 /// track: `WinampPlayer::window_title` names it, falling back to `nostalgia`
@@ -71,7 +73,7 @@ pub fn init_ui(
     iced::application(
         move || {
             let (mut player, task) = boot(state.clone(), service.clone());
-            player.settings_store = Some(Box::new(store.clone()));
+            player.settings_store = Some(Box::new(BackgroundWriter::new(store.clone())));
             player.adopt_saved_settings(saved.clone());
             (player, task)
         },

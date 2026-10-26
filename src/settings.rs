@@ -9,7 +9,8 @@
 //! panel choices, and always-on-top flag live on the UI's
 //! `WinampPlayer`, so the player sets them on its snapshot before saving and
 //! restores them after loading. The file-backed store and the writer seam
-//! live in [`file_store`].
+//! live in [`file_store`], and [`writer::BackgroundWriter`] runs the blocking
+//! write on a worker thread in production.
 //!
 //! [`file_store::FileStore`] loads the snapshot from a line-based text file
 //! at startup and rewrites it whenever the UI changes one of those values.
@@ -18,6 +19,7 @@
 //! deliberately not persisted.
 
 pub mod file_store;
+pub mod writer;
 
 use crate::equalizer::{self, Preset};
 use crate::state::AppState;

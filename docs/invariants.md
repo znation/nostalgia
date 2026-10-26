@@ -757,8 +757,10 @@ library column (2026-10-24).
 equalizer's on/off state, preamp, ten band gains, and selected preset, the large readout's
 elapsed/remaining choice, the visualizer's shown/hidden choice, the equalizer and library panels'
 shown/hidden choices, and the LCD strip's always-on-top choice — are loaded once before the
-first view is drawn and rewritten after any update that changes their snapshot. An update that
-leaves the snapshot unchanged writes nothing. Reads and writes go through the state's clamped
+first view is drawn and rewritten after any update that changes their snapshot, with the newest
+queued snapshot written once the worker is free: a burst of changes, such as a slider drag or key
+repeat, may collapse to its newest value instead of writing every intermediate one. An update that leaves the snapshot
+unchanged writes nothing. Reads and writes go through the state's clamped
 setters, so out-of-range values from a file cannot push shared state outside its documented ranges.
 A missing file, or a malformed line (including bytes that are not UTF-8, which are decoded lossily
 so they spoil only their own line), falls back per key without failing startup; an unreadable file
@@ -803,7 +805,11 @@ store to `WinampPlayer` and restores the snapshot through
 records the snapshot; `update` calls
 `WinampPlayer::persist_settings_if_changed` once after every message, and that method copies
 the five player-owned values into `Settings::from_state`, then compares that snapshot against the
-last one before calling `settings::file_store::SettingsWriter::save`. Boot's `WindowIdResolved` is
+last one before calling `settings::file_store::SettingsWriter::save`. Production wraps the store
+in `settings::writer::BackgroundWriter`, so that `save` stores the snapshot in a one-slot mailbox
+and wakes its worker instead of writing on the update thread; the worker writes the newest queued
+snapshot with the wrapped store's blocking `save`, and dropping the writer closes the mailbox,
+writes any pending snapshot, and joins the worker before returning. Boot's `WindowIdResolved` is
 handled by
 `handlers::window::window_id_resolved`, which applies the restored level through
 `window_level` once the id exists.
@@ -830,7 +836,10 @@ arm those controls press.
 `the_sweep_covers_a_bare_file_name_in_the_current_directory`,
 `saving_through_a_symlink_updates_its_target_and_keeps_mode`,
 `the_directory_sync_follows_a_symlink_to_the_target`, and
-`the_sweep_follows_a_symlink_to_the_targets_directory` (`src/settings/file_store.rs`), plus
+`the_sweep_follows_a_symlink_to_the_targets_directory` (`src/settings/file_store.rs`),
+`a_burst_of_saves_collapses_to_the_latest_snapshot`,
+`dropping_the_writer_flushes_the_pending_snapshot`, and
+`a_refused_writer_thread_falls_back_to_saving_on_the_caller` (`src/settings/writer.rs`), plus
 `a_changed_setting_is_saved_once_and_unchanged_updates_are_not`,
 `repeat_and_equalizer_changes_reach_the_saved_snapshot`,
 `toggle_time_display_reaches_the_saved_snapshot`,
@@ -855,7 +864,10 @@ while the stored spectrum and its poll stay transient. The equalizer and library
 shown/hidden choices joined it on 2026-10-24; both previously reopened on every launch. Saves
 became temp-then-rename the same day, after a failed write could truncate the only copy. On
 2026-10-25 a save began following a symlinked settings file to its target and keeping that target's
-mode, where replacing the link would have silently detached a dotfile setup.
+mode, where replacing the link would have silently detached a dotfile setup. On 2026-10-26 the
+production writer moved its blocking write to a background thread, because a slider drag changed
+the snapshot on every movement and each synchronous save fsyncs the file and its directory, so the
+update thread stalled on the disk repeatedly during a drag.
 
 ## Equalizer band tint
 
