@@ -98,8 +98,8 @@ one-shot way, like Winamp's playlist editor, and Ctrl+Shift+R shuffles it into a
 same one-shot way. Alt+Up and Alt+Down move the selected row of the showing list one place up or
 down, the same one-shot way, keeping the row selected and scrolling the list only as far as needed
 to keep it in view. Alt+3 opens a transient File info panel naming the current track's title,
-artist, album, year, and length, like Winamp (the album and year lines are left out when the source
-supplies none), plus a `Format:` line
+artist, album, year, genre, and length, like Winamp (the album, year, and genre lines are left out
+when the source supplies none), plus a `Format:` line
 (`256 KBPS  44 KHZ STEREO`) while a loaded preview reports its format and `44 KHZ MONO` when it
 reports no bitrate; its `Close` button, a click on the backdrop, or Alt+3 again closes it, and it
 opens only while a track is current. Ctrl+J opens a transient Jump to time panel: type seconds

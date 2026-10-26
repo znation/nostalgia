@@ -91,6 +91,7 @@ fn songs_from_album_maps_a_missing_duration_to_zero() {
             artist: String::new(),
             album: String::new(),
             year: None,
+            genre: String::new(),
             album_id: "album-9".to_string(),
             duration_ms: 0,
             preview_url: None,
@@ -192,6 +193,41 @@ fn song_from_attributes(attributes: &str) -> Song {
 // mapped `preview_url` here.
 fn preview_url_from(attributes: &str) -> Option<String> {
     song_from_attributes(attributes).preview_url
+}
+
+// The primary genre is optional on a song: `attributes.genreNames` maps onto
+// `Song::genre`, taking the first non-blank entry Apple lists so the umbrella
+// genre doesn't win, and a missing or all-blank array uses the same `""`
+// "source supplied none" sentinel as the artist.
+#[test]
+fn songs_from_album_maps_the_genre() {
+    assert_eq!(
+        song_from_attributes(r#"{"name":"Opening","genreNames":["Rock","Music"]}"#).genre,
+        "Rock"
+    );
+    // A non-blank entry keeps its trimmed form, not the surrounding whitespace.
+    assert_eq!(
+        song_from_attributes(r#"{"name":"Opening","genreNames":[" Rock "]}"#).genre,
+        "Rock"
+    );
+}
+
+#[test]
+fn songs_from_album_maps_a_missing_or_blank_genre_to_empty() {
+    for attributes in [
+        r#"{"name":"Opening"}"#,
+        r#"{"name":"Opening","genreNames":[]}"#,
+        r#"{"name":"Opening","genreNames":[""]}"#,
+        r#"{"name":"Opening","genreNames":["  "]}"#,
+    ] {
+        assert_eq!(song_from_attributes(attributes).genre, "");
+    }
+    // A blank entry is skipped rather than ending the search, so a later real
+    // genre still reaches the model.
+    assert_eq!(
+        song_from_attributes(r#"{"name":"Opening","genreNames":["","Rock"]}"#).genre,
+        "Rock"
+    );
 }
 
 #[test]
@@ -306,6 +342,7 @@ fn search_library_maps_the_search_envelope_and_percent_encodes_the_term() {
             artist: "The Sample Band".to_string(),
             album: String::new(),
             year: None,
+            genre: String::new(),
             album_id: String::new(),
             duration_ms: 210_000,
             preview_url: Some(PREVIEW_URL.to_string()),
@@ -432,6 +469,7 @@ fn get_all_songs_maps_the_library_songs_collection() {
             artist: "The Sample Band".to_string(),
             album: String::new(),
             year: None,
+            genre: String::new(),
             album_id: String::new(),
             duration_ms: 210_000,
             preview_url: Some(PREVIEW_URL.to_string()),
@@ -671,6 +709,7 @@ fn get_songs_from_playlist_maps_the_playlist_tracks_collection() {
             artist: "The Sample Band".to_string(),
             album: String::new(),
             year: None,
+            genre: String::new(),
             album_id: String::new(),
             duration_ms: 210_000,
             preview_url: Some(PREVIEW_URL.to_string()),

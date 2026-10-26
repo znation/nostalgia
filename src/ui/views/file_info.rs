@@ -1,6 +1,6 @@
 //! The transient File info panel: a modal overlay over the normal-mode screen
-//! naming the current track's title, artist, album, year, length, and — while
-//! the loaded preview reports one — its format.
+//! naming the current track's title, artist, album, year, genre, length, and —
+//! while the loaded preview reports one — its format.
 
 use iced::{
     Element,
@@ -28,6 +28,9 @@ const ALBUM_LABEL: &str = "Album: ";
 /// The label before the track's release year.
 const YEAR_LABEL: &str = "Year: ";
 
+/// The label before the track's primary genre.
+const GENRE_LABEL: &str = "Genre: ";
+
 /// The label before the track's formatted length.
 const LENGTH_LABEL: &str = "Length: ";
 
@@ -38,8 +41,9 @@ const FORMAT_LABEL: &str = "Format: ";
 ///
 /// The panel is modal (see [`modal_overlay`]): `Close` and the backdrop each
 /// publish [`Message::ToggleFileInfo`]. It lists the title, the artist, the
-/// album, and the release year (each left out when the source supplied none),
-/// the length, which is `--:--` for an unknown duration, and — after the length
+/// album, the release year, and the genre (each left out when the source
+/// supplied none), the length, which is `--:--` for an unknown duration, and —
+/// after the length
 /// and only while the loaded preview reports one (`format` is `Some`) — the
 /// format line built from the LCD status row's prefix and channel label, for
 /// example `Format: 256 KBPS  44 KHZ STEREO`. No state or playback is touched
@@ -64,6 +68,10 @@ pub fn view_file_info_overlay<'a>(
     }
     if let Some(year) = track.year {
         content = content.push(Text::new(format!("{YEAR_LABEL}{year}")).color(theme::TEXT));
+    }
+    if !track.genre.is_empty() {
+        content =
+            content.push(Text::new(format!("{GENRE_LABEL}{}", track.genre)).color(theme::TEXT));
     }
     content = content.push(Text::new(format!("{LENGTH_LABEL}{}", track.time)).color(theme::TEXT));
     if let Some(format) = format {

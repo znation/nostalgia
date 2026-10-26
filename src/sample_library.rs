@@ -116,6 +116,7 @@ impl SampleLibrary {
                 artist: "The Sample Band".to_string(),
                 album: "First Record".to_string(),
                 year: Some(2001),
+                genre: "Rock".to_string(),
                 album_id: "album-1".to_string(),
                 duration_ms: 210_000,
                 preview_url: None,
@@ -126,6 +127,7 @@ impl SampleLibrary {
                 artist: "The Sample Band".to_string(),
                 album: "First Record".to_string(),
                 year: Some(2001),
+                genre: "Rock".to_string(),
                 album_id: "album-1".to_string(),
                 duration_ms: 240_000,
                 preview_url: None,
@@ -136,6 +138,7 @@ impl SampleLibrary {
                 artist: "The Sample Band".to_string(),
                 album: "First Record".to_string(),
                 year: Some(2001),
+                genre: "Rock".to_string(),
                 album_id: "album-1".to_string(),
                 duration_ms: 180_000,
                 preview_url: None,
@@ -146,6 +149,7 @@ impl SampleLibrary {
                 artist: "The Sample Band".to_string(),
                 album: "Second Record".to_string(),
                 year: Some(2003),
+                genre: "Alternative".to_string(),
                 album_id: "album-2".to_string(),
                 duration_ms: 95_000,
                 preview_url: None,
@@ -156,6 +160,7 @@ impl SampleLibrary {
                 artist: "Echo Chamber".to_string(),
                 album: "Debut".to_string(),
                 year: Some(2005),
+                genre: "Electronic".to_string(),
                 album_id: "album-3".to_string(),
                 duration_ms: 200_000,
                 preview_url: None,
@@ -500,6 +505,31 @@ mod tests {
                 ("song-3", Some(2001)),
                 ("song-4", Some(2003)),
                 ("song-5", Some(2005)),
+            ]
+        );
+    }
+
+    // The File info panel draws a `Genre:` line from `Song::genre`, and
+    // `sample_library` is what the app browses when no Apple Music session is
+    // stored, so these values are user-visible. The index tests pin each song's
+    // id and title but never its genre, so a missing or wrong genre here would
+    // drop the line (or show a wrong one) while every existing test stayed
+    // green. Pin every song's genre, in library order.
+    #[test]
+    fn songs_carry_the_documented_genres() {
+        let library = sample_library();
+        let genres: Vec<(&str, &str)> = songs_in_library_order(library)
+            .map(|song| (song.id.as_str(), song.genre.as_str()))
+            .collect();
+
+        assert_eq!(
+            genres,
+            vec![
+                ("song-1", "Rock"),
+                ("song-2", "Rock"),
+                ("song-3", "Rock"),
+                ("song-4", "Alternative"),
+                ("song-5", "Electronic"),
             ]
         );
     }

@@ -163,6 +163,7 @@ fn view_constructs_when_the_window_is_shaded() {
             artist: String::new(),
             album: String::new(),
             year: None,
+            genre: String::new(),
             number: String::new(),
             time: "3:30".to_string(),
             duration_ms: 210_000,

@@ -643,6 +643,7 @@ fn a_failed_play_completion_clears_the_index_when_nothing_committed() {
         artist: "The Sample Band".to_string(),
         album: String::new(),
         year: None,
+        genre: String::new(),
         album_id: "album-1".to_string(),
         duration_ms: 0,
         preview_url: None,

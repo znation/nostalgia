@@ -38,6 +38,27 @@ fn known_tracks_record_the_played_songs_year() {
     );
 }
 
+// The File info panel reads the genre from the same `known_tracks` entry as
+// the title and year: `TrackSelected` must copy the played song's `genre`, not
+// drop it.
+#[test]
+fn known_tracks_record_the_played_songs_genre() {
+    let (mut player, _state) = test_player();
+    let mut songs = stepping_songs();
+    songs[0].genre = "Rock".to_string();
+    let _ = update(&mut player, Message::SongsLoaded(songs));
+
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+
+    assert_eq!(
+        player
+            .known_tracks
+            .get("song-1")
+            .map(|track| track.genre.as_str()),
+        Some("Rock")
+    );
+}
+
 // The number is the 1-based position of the row that selected the track, so
 // the first row records `"1. "` and the second `"2. "`.
 #[test]

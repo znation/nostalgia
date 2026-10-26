@@ -113,6 +113,10 @@ pub struct KnownTrack {
     /// `None` means the source supplied none, and the File info panel leaves
     /// the year line out.
     pub year: Option<u16>,
+    /// The track's primary genre, copied from [`crate::library::Song::genre`];
+    /// `""` means the source supplied none, and the File info panel leaves the
+    /// genre line out.
+    pub genre: String,
     /// The cached `"<n>. "` prefix naming the track's 1-based position in the
     /// list row that selected it; `""` when no number is known.
     pub number: String,

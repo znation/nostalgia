@@ -170,6 +170,10 @@ struct Attributes {
     /// omits it.
     #[serde(rename = "albumName")]
     album_name: Option<String>,
+    /// The genre names the API lists for the resource; absent when the API
+    /// omits them. [`primary_genre`] reduces them to the one the model keeps.
+    #[serde(rename = "genreNames")]
+    genre_names: Option<Vec<String>>,
     /// The resource's release date, normally `YYYY-MM-DD`; absent when the
     /// API omits it. [`release_year`] reduces it to the year the model keeps.
     #[serde(rename = "releaseDate")]
@@ -277,8 +281,8 @@ impl Resource {
     }
 
     /// Maps this resource to a [`Song`] linked to `album_id`, moving its id,
-    /// title, artist, album name, and preview URL into the model instead of
-    /// cloning them.
+    /// title, artist, album name, primary genre, and preview URL into the
+    /// model instead of cloning them.
     ///
     /// The all-songs, playlist-track, and search collections carry no album
     /// id, so those callers pass `""`; only an album's tracks pass a real id
@@ -287,25 +291,27 @@ impl Resource {
     /// and [`RestLibrary::search_library`](super::RestLibrary::search_library)).
     /// The id and title are required (see
     /// [`required_id`] and [`required_name`]); the artist, album name,
-    /// duration, and preview URL fall back to their "source supplied none"
-    /// sentinels. The
+    /// genre, duration, and preview URL fall back to their "source supplied
+    /// none" sentinels. The
     /// whole-library path maps up to [`MAX_PAGES`](super::paging::MAX_PAGES) pages
     /// of songs, so consuming the parsed resource avoids re-allocating every
     /// string it already owns.
     pub(super) fn into_song(self, album_id: &str) -> Result<Song, AppleMusicError> {
         let Resource { id, attributes } = self;
         let id = required_id(id, "song")?;
-        let (title, artist, album, release_date, duration_ms, previews) = match attributes {
-            Some(attributes) => (
-                attributes.name,
-                attributes.artist_name,
-                attributes.album_name,
-                attributes.release_date,
-                attributes.duration_in_millis,
-                attributes.previews,
-            ),
-            None => (None, None, None, None, None, None),
-        };
+        let (title, artist, album, genre_names, release_date, duration_ms, previews) =
+            match attributes {
+                Some(attributes) => (
+                    attributes.name,
+                    attributes.artist_name,
+                    attributes.album_name,
+                    attributes.genre_names,
+                    attributes.release_date,
+                    attributes.duration_in_millis,
+                    attributes.previews,
+                ),
+                None => (None, None, None, None, None, None, None),
+            };
         let title = required_name(title, &id, "song")?;
         let artist = artist_or_empty(artist);
         // An absent or whitespace-only album name is the same "source supplied
@@ -314,6 +320,7 @@ impl Resource {
         let album = album
             .filter(|album| !album.trim().is_empty())
             .unwrap_or_default();
+        let genre = primary_genre(genre_names);
         // A blank URL (empty or only whitespace) can play nothing, so skip it
         // in favor of a later preview; a non-blank URL is returned exactly as
         // the resource carried it.
@@ -328,6 +335,7 @@ impl Resource {
             artist,
             album,
             year: release_date.as_deref().and_then(release_year),
+            genre,
             album_id: album_id.to_string(),
             duration_ms: duration_ms.unwrap_or(0),
             preview_url,
@@ -360,6 +368,23 @@ fn release_year(date: &str) -> Option<u16> {
 /// drop a useless name the same way.
 fn artist_or_empty(name: Option<String>) -> String {
     name.filter(|name| !name.trim().is_empty())
+        .unwrap_or_default()
+}
+
+/// The first non-blank genre name an optional `genreNames` array carries,
+/// trimmed, or `""` when the array is absent, empty, or all blank —
+/// [`Song::genre`]'s "source supplied none" sentinel. Apple lists an umbrella
+/// genre alongside the specific one (`["Rock", "Music"]`), so only the first
+/// real entry is kept; skipping blank entries means a stray `""` never hides a
+/// later real genre.
+fn primary_genre(genres: Option<Vec<String>>) -> String {
+    genres
+        .into_iter()
+        .flatten()
+        .find_map(|genre| {
+            let genre = genre.trim();
+            (!genre.is_empty()).then(|| genre.to_string())
+        })
         .unwrap_or_default()
 }
 
