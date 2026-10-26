@@ -21,7 +21,8 @@ use super::Message;
 /// to its first and last rows, Page Up and Page Down to scroll it one page at
 /// a time, F5 to refetch the library and return to the Artists list, Ctrl+F
 /// to focus the `Search library` box, Ctrl+Z and Ctrl+B to play the first and
-/// last song of the showing list, Ctrl+R to reverse the showing list, and the system media keys
+/// last song of the showing list, Ctrl+R to reverse the showing list, Ctrl+Shift+1 to sort it by title
+/// (see [`playlist_sort_shortcut`]), and the system media keys
 /// (Play/Pause, Play, Pause, Stop, Next track, and Previous track) to the same
 /// transport messages as the on-screen controls
 /// (the one Control chord Winamp-style play uses).
@@ -34,11 +35,34 @@ pub(super) fn message_for(event: Event) -> Option<Message> {
         Event::KeyPressed {
             key,
             modifiers,
+            physical_key,
             location,
             ..
-        } => numpad_shortcut(&key, location, modifiers).or_else(|| shortcut(&key, modifiers)),
+        } => playlist_sort_shortcut(&physical_key, location, modifiers)
+            .or_else(|| numpad_shortcut(&key, location, modifiers))
+            .or_else(|| shortcut(&key, modifiers)),
         Event::KeyReleased { .. } | Event::ModifiersChanged(_) => None,
     }
+}
+
+/// Winamp's Ctrl+Shift+1, "Sort list by title", sending the same message as the
+/// `Sort` button. It matches the top-row `1` by physical key, not by logical
+/// character: with Shift held the logical key is `!` on US layouts and another
+/// character elsewhere, but the key position is the same. Control and Shift
+/// must both be held without Alt or Logo, and the keypad `1` (a different
+/// physical key at `Location::Numpad`) never matches.
+fn playlist_sort_shortcut(
+    physical_key: &key::Physical,
+    location: Location,
+    modifiers: Modifiers,
+) -> Option<Message> {
+    (modifiers.control()
+        && modifiers.shift()
+        && !modifiers.alt()
+        && !modifiers.logo()
+        && location == Location::Standard
+        && *physical_key == key::Physical::Code(key::Code::Digit1))
+    .then_some(Message::SortBrowse)
 }
 
 /// Winamp's numeric-keypad bindings, for keys pressed at `Location::Numpad`
@@ -90,7 +114,8 @@ fn numpad_shortcut(key: &Key, location: Location, modifiers: Modifiers) -> Optio
 /// Shift+Z steps back exactly like Z and Ctrl+Shift+F focuses the box too.
 /// Alt+F and Logo+F stay unbound because they are chords for the window
 /// manager, not the player. Keypad digits are handled by [`numpad_shortcut`],
-/// so top-row digits stay unbound here.
+/// so top-row digits stay unbound here (Ctrl+Shift+1 is handled by
+/// [`playlist_sort_shortcut`]).
 fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
     // Ctrl+F is the one Control chord the player claims. Alt or Logo held with
     // it stays a window-manager chord, so only plain Control (plus optional
@@ -200,6 +225,19 @@ mod tests {
             modified_key: key,
             physical_key: key::Physical::Code(key::Code::Numpad4),
             location: Location::Numpad,
+            modifiers,
+            text: None,
+            repeat: false,
+        }
+    }
+
+    /// Like `key_pressed`, but with an explicit physical key and location.
+    fn digit_pressed(key: Key, code: key::Code, location: Location, modifiers: Modifiers) -> Event {
+        Event::KeyPressed {
+            key: key.clone(),
+            modified_key: key,
+            physical_key: key::Physical::Code(code),
+            location,
             modifiers,
             text: None,
             repeat: false,
@@ -426,6 +464,44 @@ mod tests {
         for modifiers in [Modifiers::ALT, Modifiers::LOGO] {
             assert!(shortcut(&Key::Character("r".into()), modifiers).is_none());
         }
+    }
+
+    #[test]
+    fn message_for_maps_ctrl_shift_1_to_sort() {
+        for character in ["!", "1", "&"] {
+            let event = digit_pressed(
+                Key::Character(character.into()),
+                key::Code::Digit1,
+                Location::Standard,
+                Modifiers::CTRL | Modifiers::SHIFT,
+            );
+            assert!(matches!(message_for(event), Some(Message::SortBrowse)));
+        }
+    }
+
+    #[test]
+    fn ctrl_shift_1_needs_exactly_control_and_shift() {
+        let one = || Key::Character("1".into());
+        for modifiers in [
+            Modifiers::CTRL,
+            Modifiers::SHIFT,
+            Modifiers::NONE,
+            Modifiers::CTRL | Modifiers::SHIFT | Modifiers::ALT,
+            Modifiers::CTRL | Modifiers::SHIFT | Modifiers::LOGO,
+        ] {
+            let event = digit_pressed(one(), key::Code::Digit1, Location::Standard, modifiers);
+            assert!(message_for(event).is_none(), "1 with {modifiers:?}");
+        }
+        let both = Modifiers::CTRL | Modifiers::SHIFT;
+        let digit2 = digit_pressed(
+            Key::Character("2".into()),
+            key::Code::Digit2,
+            Location::Standard,
+            both,
+        );
+        assert!(message_for(digit2).is_none());
+        let keypad = digit_pressed(one(), key::Code::Numpad1, Location::Numpad, both);
+        assert!(message_for(keypad).is_none());
     }
 
     #[test]

@@ -277,3 +277,43 @@ async fn f5_reloads_the_library_from_the_keyboard() {
         assert!(shared.is_playing);
     }
 }
+
+// Ctrl+Shift+1 reaches the same sort as the `Sort` button: the logical key is
+// `!` with Shift held, so the mapping must come from the physical key.
+#[test]
+fn ctrl_shift_1_sorts_the_showing_list_from_the_keyboard() {
+    use iced::keyboard::{Event, Key, Location, Modifiers, key};
+
+    let (mut player, _state) = test_player();
+    player.artists.items = ["banana", "Apple", "cherry"]
+        .into_iter()
+        .map(|name| Artist {
+            id: name.to_lowercase(),
+            name: name.to_string(),
+            album_count: 0,
+        })
+        .collect();
+    player.artists.loading = false;
+
+    let key = Key::Character("!".into());
+    let event = Event::KeyPressed {
+        key: key.clone(),
+        modified_key: key,
+        physical_key: key::Physical::Code(key::Code::Digit1),
+        location: Location::Standard,
+        modifiers: Modifiers::CTRL | Modifiers::SHIFT,
+        text: None,
+        repeat: false,
+    };
+    let message = super::shortcuts::message_for(event).expect("Ctrl+Shift+1 is bound");
+    assert!(matches!(message, Message::SortBrowse));
+    let _ = update(&mut player, message);
+
+    let names: Vec<&str> = player
+        .artists
+        .items
+        .iter()
+        .map(|artist| artist.name.as_str())
+        .collect();
+    assert_eq!(names, ["Apple", "banana", "cherry"]);
+}
