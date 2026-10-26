@@ -756,10 +756,14 @@ A missing file, or a malformed line (including bytes that are not UTF-8, which a
 falls back the same way and prints one stderr line naming the path (`read_failure_message` in
 `src/settings/file_store.rs`, which stays silent for a missing file); an unwritable file is logged
 rather than crashing the player. Each save stages the whole snapshot in
-a sibling temp file, flushes it to disk, and renames it over the target and then syncs the directory, so a failed, interrupted,
+a sibling temp file of the file it writes, flushes it to disk, gives the staged file the existing
+target's mode, and renames it over that target and then syncs its directory, so a failed, interrupted,
 or crashed write leaves the previous file intact instead of a truncated one; a failed write or
 rename removes the temp file, and a load sweeps temp files a killed save left behind once they are
-old enough not to belong to an in-flight save. The readout mode, the visualizer's shown/hidden
+old enough not to belong to an in-flight save. A symlinked settings file stays a link: the save,
+the directory sync, and the stale-temp sweep all follow it to the file and directory it points at,
+so the link is never replaced; a dangling link or a missing file is used as the path given, and a
+new file takes the platform's default mode. The readout mode, the visualizer's shown/hidden
 choice, the two panel choices, and the always-on-top choice are the five persisted values not held
 in `AppState`: they live on `WinampPlayer::time_display`, `WinampPlayer::visualizer_visible`,
 `WinampPlayer::eq_panel_visible`, `WinampPlayer::library_panel_visible`, and
@@ -813,8 +817,11 @@ controls press.
 `a_failed_half_write_leaves_the_previous_settings_file_intact`,
 `staged_settings_are_synced_before_the_rename_and_a_failed_sync_keeps_the_old_file`,
 `file_store_keeps_the_previous_file_when_the_replacement_cannot_be_staged`,
-`file_store_sweeps_a_stale_temp_file_left_by_a_killed_save`, and
-`the_sweep_covers_a_bare_file_name_in_the_current_directory` (`src/settings/file_store.rs`), plus
+`file_store_sweeps_a_stale_temp_file_left_by_a_killed_save`,
+`the_sweep_covers_a_bare_file_name_in_the_current_directory`,
+`saving_through_a_symlink_updates_its_target_and_keeps_mode`,
+`the_directory_sync_follows_a_symlink_to_the_target`, and
+`the_sweep_follows_a_symlink_to_the_targets_directory` (`src/settings/file_store.rs`), plus
 `a_changed_setting_is_saved_once_and_unchanged_updates_are_not`,
 `repeat_and_equalizer_changes_reach_the_saved_snapshot`,
 `toggle_time_display_reaches_the_saved_snapshot`,
@@ -835,7 +842,9 @@ elapsed/remaining mode and the always-on-top choice joined the file later the sa
 visualizer's shown/hidden choice joined it with the same plan, restoring before the first view
 while the stored spectrum and its poll stay transient. The equalizer and library panels'
 shown/hidden choices joined it on 2026-10-24; both previously reopened on every launch. Saves
-became temp-then-rename the same day, after a failed write could truncate the only copy.
+became temp-then-rename the same day, after a failed write could truncate the only copy. On
+2026-10-25 a save began following a symlinked settings file to its target and keeping that target's
+mode, where replacing the link would have silently detached a dotfile setup.
 
 ## Equalizer band tint
 
