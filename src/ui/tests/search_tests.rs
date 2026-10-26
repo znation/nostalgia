@@ -23,6 +23,17 @@ fn ctrl_f_focuses_the_search_box_and_changes_no_browse_state() {
     use iced::advanced::Layout;
     use iced::advanced::widget::{Id, Tree, operation::Focusable, operation::Operation};
 
+    #[derive(Default)]
+    struct FocusCapture(Vec<(Option<Id>, bool)>);
+    impl Operation for FocusCapture {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+        fn focusable(&mut self, id: Option<&Id>, _bounds: Rectangle, state: &mut dyn Focusable) {
+            self.0.push((id.cloned(), state.is_focused()));
+        }
+    }
+
     let (mut player, state) = test_player();
     player.current_view = CurrentView::Albums;
     player.albums.items = vec![sample_album()];
@@ -61,17 +72,6 @@ fn ctrl_f_focuses_the_search_box_and_changes_no_browse_state() {
         .as_widget_mut()
         .operate(&mut tree, Layout::new(&node), &renderer, operation.as_mut());
 
-    #[derive(Default)]
-    struct FocusCapture(Vec<(Option<Id>, bool)>);
-    impl Operation for FocusCapture {
-        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
-            operate(self);
-        }
-        fn focusable(&mut self, id: Option<&Id>, _bounds: Rectangle, state: &mut dyn Focusable) {
-            self.0.push((id.cloned(), state.is_focused()));
-        }
-    }
-
     let mut capture = FocusCapture::default();
     element
         .as_widget_mut()
@@ -100,6 +100,23 @@ fn ctrl_f_is_a_noop_in_shade_mode() {
     use iced::advanced::Layout;
     use iced::advanced::widget::{Id, Tree, operation::Focusable, operation::Operation};
 
+    #[derive(Default)]
+    struct FocusCapture {
+        ids: Vec<Option<Id>>,
+        focused: Vec<Option<Id>>,
+    }
+    impl Operation for FocusCapture {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+            operate(self);
+        }
+        fn focusable(&mut self, id: Option<&Id>, _bounds: Rectangle, state: &mut dyn Focusable) {
+            self.ids.push(id.cloned());
+            if state.is_focused() {
+                self.focused.push(id.cloned());
+            }
+        }
+    }
+
     let (mut player, _state) = test_player();
     player.shaded = true;
 
@@ -117,23 +134,6 @@ fn ctrl_f_is_a_noop_in_shade_mode() {
     element
         .as_widget_mut()
         .operate(&mut tree, Layout::new(&node), &renderer, operation.as_mut());
-
-    #[derive(Default)]
-    struct FocusCapture {
-        ids: Vec<Option<Id>>,
-        focused: Vec<Option<Id>>,
-    }
-    impl Operation for FocusCapture {
-        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
-            operate(self);
-        }
-        fn focusable(&mut self, id: Option<&Id>, _bounds: Rectangle, state: &mut dyn Focusable) {
-            self.ids.push(id.cloned());
-            if state.is_focused() {
-                self.focused.push(id.cloned());
-            }
-        }
-    }
 
     let mut capture = FocusCapture::default();
     element

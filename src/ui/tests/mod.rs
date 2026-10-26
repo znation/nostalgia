@@ -711,13 +711,6 @@ fn root_scrollable_ids(player: &WinampPlayer) -> Vec<Option<iced::advanced::widg
         operation::{Operation, Scrollable},
     };
 
-    let renderer = layout_capture::headless_renderer();
-    let mut element = view(player);
-    let mut tree = Tree::new(element.as_widget());
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, &renderer, &layout_capture::limits());
-
     #[derive(Default)]
     struct ScrollCapture(Vec<Option<Id>>);
     impl Operation for ScrollCapture {
@@ -735,6 +728,13 @@ fn root_scrollable_ids(player: &WinampPlayer) -> Vec<Option<iced::advanced::widg
             self.0.push(id.cloned());
         }
     }
+
+    let renderer = layout_capture::headless_renderer();
+    let mut element = view(player);
+    let mut tree = Tree::new(element.as_widget());
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &layout_capture::limits());
 
     let mut capture = ScrollCapture::default();
     element

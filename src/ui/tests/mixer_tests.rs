@@ -251,10 +251,6 @@ fn a_balance_backend_failure_still_commits_the_state() {
 // the new curve without a new `Play`.
 #[test]
 fn equalizer_messages_forward_to_the_audio_backend() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (mut player, state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
-
     fn snapshot(state: &AppState) -> crate::audio::EqSnapshot {
         crate::audio::EqSnapshot {
             enabled: state.eq_enabled,
@@ -262,6 +258,10 @@ fn equalizer_messages_forward_to_the_audio_backend() {
             bands_db: state.eq_bands(),
         }
     }
+
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
 
     let mut expected = Vec::new();
 
