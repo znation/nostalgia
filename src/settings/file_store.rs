@@ -159,6 +159,8 @@ fn sweep_stale_temporaries(path: &Path) {
 }
 
 fn sweep_temporaries_older_than(path: &Path, max_age: Duration) {
+    // Saves stage beside the file a symlink points at, so sweep there.
+    let path = &resolve_symlink(path);
     // A bare file name such as `settings.ini` lives in the current directory.
     let parent = path
         .parent()
@@ -193,6 +195,13 @@ fn sweep_temporaries_older_than(path: &Path, max_age: Duration) {
     }
 }
 
+/// The file a symlink at `path` points at; a dangling link or a missing file
+/// keeps the path as given. Save and sweep both use it so they agree on the
+/// directory that holds temp files.
+fn resolve_symlink(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
 /// A sibling of `path` to stage a replacement in. The process id and a
 /// per-process counter keep concurrent saves (and concurrent processes) from
 /// staging into the same file.
@@ -210,7 +219,8 @@ fn temporary_sibling(path: &Path) -> PathBuf {
     path.with_file_name(name)
 }
 
-/// Replace `path` with `text` by writing a sibling temp file, syncing it, and
+/// Replace `path` (or, for a symlink, the file it points at) with `text` by
+/// writing a sibling temp file of that file, syncing it, and
 /// renaming it over the target, so a process killed mid-write leaves the
 /// previous file intact instead of a truncated one. A failed write, sync, or
 /// rename removes the temp file and reports the error. The containing
@@ -249,20 +259,34 @@ fn write_atomically_syncing(
     sync: impl FnOnce(&File) -> io::Result<()>,
     sync_directory: impl FnOnce(&Path) -> io::Result<()>,
 ) -> io::Result<()> {
-    write_atomically_with(path, |temporary| {
+    // Resolve once so the directory synced is the one the rename happened in.
+    let path = resolve_symlink(path);
+    write_atomically_with(&path, |temporary| {
         let mut file = File::create(temporary)?;
         file.write_all(text.as_bytes())?;
         sync(&file)
     })?;
-    sync_directory(path)
+    sync_directory(&path)
 }
 
 fn write_atomically_with(
     path: &Path,
     write_temporary: impl FnOnce(&Path) -> io::Result<()>,
 ) -> io::Result<()> {
+    // Rename over the file a symlink points at, not over the link itself; a
+    // dangling link or a missing file keeps the path as given.
+    let resolved = resolve_symlink(path);
+    let path = resolved.as_path();
     let temporary = temporary_sibling(path);
-    let result = write_temporary(&temporary).and_then(|()| std::fs::rename(&temporary, path));
+    let result = write_temporary(&temporary)
+        .and_then(|()| {
+            // Keep the existing file's mode, as writing in place would have.
+            match std::fs::metadata(path) {
+                Ok(existing) => std::fs::set_permissions(&temporary, existing.permissions()),
+                Err(_) => Ok(()),
+            }
+        })
+        .and_then(|()| std::fs::rename(&temporary, path));
     if result.is_err() {
         // Best effort: do not mask the write error with a cleanup error.
         let _ = std::fs::remove_file(&temporary);
@@ -435,6 +459,30 @@ mod tests {
         std::fs::remove_dir_all(&root).unwrap();
     }
 
+    // A symlinked settings file must stay a symlink: the save replaces the
+    // file it points at, and the previous file's mode carries over.
+    #[cfg(unix)]
+    #[test]
+    fn saving_through_a_symlink_updates_its_target_and_keeps_mode() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = temporary_root("symlink");
+        std::fs::create_dir_all(&root).unwrap();
+        let target = root.join("real.ini");
+        std::fs::write(&target, "volume=0.25\n").unwrap();
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o640)).unwrap();
+        let link = root.join("settings.ini");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        write_atomically(&link, "volume=0.9\n").unwrap();
+
+        assert!(std::fs::symlink_metadata(&link).unwrap().is_symlink());
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "volume=0.9\n");
+        let mode = std::fs::metadata(&target).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o640);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
     // The staged bytes are synced before the rename replaces the old file, and
     // a failing sync (a delayed-allocation ENOSPC) keeps the old file intact.
     #[test]
@@ -560,6 +608,57 @@ mod tests {
         assert!(!stale.exists());
         assert!(fresh.exists());
         assert_eq!(std::fs::read_dir(&root).unwrap().count(), 2);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    // The directory sync after a save through a symlink targets the file the
+    // rename replaced, not the link.
+    #[cfg(unix)]
+    #[test]
+    fn the_directory_sync_follows_a_symlink_to_the_target() {
+        let root = temporary_root("symlink-dir-sync");
+        std::fs::create_dir_all(&root).unwrap();
+        let target = root.join("real.ini");
+        std::fs::write(&target, "volume=0.25\n").unwrap();
+        let link = root.join("settings.ini");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        let mut synced = None;
+        write_atomically_syncing(&link, "volume=0.9\n", File::sync_all, |dir_target| {
+            synced = Some(dir_target.to_path_buf());
+            Ok(())
+        })
+        .unwrap();
+
+        assert_eq!(synced, Some(std::fs::canonicalize(&target).unwrap()));
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    // A killed save through a symlink leaves its temp beside the link's
+    // target, so a load through the link must sweep there.
+    #[cfg(unix)]
+    #[test]
+    fn the_sweep_follows_a_symlink_to_the_targets_directory() {
+        let root = temporary_root("symlink-sweep");
+        let target_dir = root.join("dotfiles");
+        let link_dir = root.join("config");
+        std::fs::create_dir_all(&target_dir).unwrap();
+        std::fs::create_dir_all(&link_dir).unwrap();
+        let target = target_dir.join("nostalgia.ini");
+        std::fs::write(&target, "volume=0.25\n").unwrap();
+        let link = link_dir.join("settings.ini");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+        let stale = target_dir.join(".nostalgia.ini.tmp-999-0");
+        std::fs::write(&stale, "volume=0.9\nre").unwrap();
+        age_file(&stale, 1200);
+        let fresh = target_dir.join(".nostalgia.ini.tmp-999-1");
+        std::fs::write(&fresh, "x").unwrap();
+
+        let store = FileStore::at(link);
+        assert_eq!(store.load(), Some(Settings::from_text("volume=0.25\n")));
+
+        assert!(!stale.exists());
+        assert!(fresh.exists());
         std::fs::remove_dir_all(&root).unwrap();
     }
 
