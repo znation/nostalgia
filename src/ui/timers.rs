@@ -13,7 +13,11 @@
 use iced::keyboard;
 use std::{io, time::Duration};
 
-use super::{Message, shortcuts::message_for, ticks};
+use super::{
+    Message,
+    shortcuts::{message_for, message_for_jump_file},
+    ticks,
+};
 
 /// How often the Now Playing title window advances one character while an
 /// overlong line scrolls. The timer runs only while the line is too long to
@@ -118,14 +122,24 @@ pub(super) fn marquee_thread_failure_report(error: &io::Error) -> String {
 /// The spectrum poll runs only while playback is running: a paused or stopped
 /// player keeps the last bars the view stored, so ticking would rebuild the
 /// whole screen for an unchanged strip.
+///
+/// Up and Down choose a Jump to File match only while that panel is open;
+/// otherwise they keep their normal volume bindings, so the keyboard mapper
+/// switches with `jump_file_open`.
 pub(super) fn subscriptions(
     marquee_needed: bool,
     position_needed: bool,
     spectrum_needed: bool,
     mixer_readout_showing: bool,
+    jump_file_open: bool,
 ) -> Vec<iced::Subscription<Message>> {
+    let keyboard_listener = if jump_file_open {
+        keyboard::listen().filter_map(message_for_jump_file)
+    } else {
+        keyboard::listen().filter_map(message_for)
+    };
     let mut subscriptions = vec![
-        keyboard::listen().filter_map(message_for),
+        keyboard_listener,
         iced::event::listen_with(mixer_key_message),
     ];
     if mixer_readout_showing {

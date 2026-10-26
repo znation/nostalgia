@@ -54,8 +54,8 @@ pub use browse::{
 };
 pub use equalizer::view_equalizer;
 pub use file_info::view_file_info_overlay;
-pub(crate) use jump_file::jump_file_matches;
 pub use jump_file::{JUMP_FILE_INPUT_ID, view_jump_file_overlay};
+pub(crate) use jump_file::{jump_file_highlighted, jump_file_matches};
 #[cfg(test)]
 pub(crate) use jump_file::{jump_file_row_label, jump_file_row_style};
 pub use jump_time::{JUMP_TIME_INPUT_ID, view_jump_time_overlay};

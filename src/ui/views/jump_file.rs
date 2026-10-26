@@ -28,6 +28,20 @@ pub(crate) fn jump_file_matches(titles: &[String], query: &str) -> Vec<usize> {
         .collect()
 }
 
+/// The source index the Jump to File panel highlights: `selected` when it is
+/// still one of the `matches`, otherwise the first match. `None` for an empty
+/// match list.
+///
+/// The view and the submit handler both call this one function, so the row
+/// drawn with the selection bar and the row Enter or `Jump` plays cannot
+/// drift. A selection that outlived a changed filter falls back to the first
+/// match, the same as `None`.
+pub(crate) fn jump_file_highlighted(matches: &[usize], selected: Option<usize>) -> Option<usize> {
+    selected
+        .filter(|index| matches.contains(index))
+        .or_else(|| matches.first().copied())
+}
+
 /// The label a Jump to File row draws for the source `index`: its 1-based
 /// position in the showing list, then a period, then its cached title.
 ///
@@ -38,18 +52,18 @@ pub(crate) fn jump_file_row_label(index: usize, title: &str) -> String {
     format!("{}. {title}", index + 1)
 }
 
-/// The style for a Jump to File row, colored by whether it is the default.
+/// The style for a Jump to File row, colored by whether it is highlighted.
 ///
-/// `is_default` marks the row Enter or `Jump` plays: it takes the browse
+/// `highlighted` marks the row Enter or `Jump` plays: it takes the browse
 /// selection style — the blue [`theme::ROW_HIGHLIGHT`] bar behind white
 /// [`theme::PLAYING_ROW_TEXT`] — while every other row keeps the flat green
 /// playlist-row colors. Pure, like `super::browse::rows::browse_row_style`, so
 /// the colors are testable without a renderer.
 pub(crate) fn jump_file_row_style(
-    is_default: bool,
+    highlighted: bool,
     status: iced::widget::button::Status,
 ) -> iced::widget::button::Style {
-    super::browse::rows::browse_row_style(status, false, is_default)
+    super::browse::rows::browse_row_style(status, false, highlighted)
 }
 
 /// Stacks the transient Jump to File panel over `base`.
@@ -59,19 +73,22 @@ pub(crate) fn jump_file_row_style(
 /// publish [`Message::JumpFileSubmitted`]. Each matching row publishes
 /// [`Message::JumpFileRowSelected`] with the `epoch` of the list that supplied
 /// `titles` and its source index. Every row is numbered with its source
-/// position by [`jump_file_row_label`]; the first match — the row Enter or
-/// `Jump` plays — carries the browse selection style through
-/// [`jump_file_row_style`]. An empty list reads `No songs`; a list with no
-/// match reads `No matching songs`. No state or playback is touched here.
+/// position by [`jump_file_row_label`]; the row [`jump_file_highlighted`]
+/// resolves from `selected` — the first match until the user moves it — is
+/// the row Enter or `Jump` plays and carries the browse selection style
+/// through [`jump_file_row_style`]. An empty list reads `No songs`; a list
+/// with no match reads `No matching songs`. No state or playback is touched
+/// here.
 pub fn view_jump_file_overlay<'a>(
     base: Element<'a, Message>,
     query: &'a str,
     titles: &'a [String],
     epoch: u64,
+    selected: Option<usize>,
 ) -> Element<'a, Message> {
     let matches = jump_file_matches(titles, query);
-    let first_match = matches.first().copied();
-    let has_matches = first_match.is_some();
+    let highlighted = jump_file_highlighted(&matches, selected);
+    let has_matches = highlighted.is_some();
     let mut rows = Column::new().spacing(2).padding(4);
     for index in matches {
         let label = jump_file_row_label(index, &titles[index]);
@@ -80,7 +97,7 @@ pub fn view_jump_file_overlay<'a>(
                 .width(Length::Fill)
                 .on_press(Message::JumpFileRowSelected { epoch, index })
                 .style(move |_theme, status| {
-                    jump_file_row_style(first_match == Some(index), status)
+                    jump_file_row_style(highlighted == Some(index), status)
                 }),
         );
     }

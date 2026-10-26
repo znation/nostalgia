@@ -2,16 +2,22 @@
 //! control publishes.
 
 use super::super::{
-    jump_file_matches, jump_file_row_label, jump_file_row_style, view_jump_file_overlay,
+    jump_file_highlighted, jump_file_matches, jump_file_row_label, jump_file_row_style,
+    view_jump_file_overlay,
 };
 use super::*;
 
-fn overlay<'a>(query: &'a str, titles: &'a [String], epoch: u64) -> Element<'a, Message> {
+fn overlay<'a>(
+    query: &'a str,
+    titles: &'a [String],
+    epoch: u64,
+    selected: Option<usize>,
+) -> Element<'a, Message> {
     let base: Element<'a, Message> = iced::widget::Space::new()
         .width(Length::Fill)
         .height(Length::Fill)
         .into();
-    view_jump_file_overlay(base, query, titles, epoch)
+    view_jump_file_overlay(base, query, titles, epoch, selected)
 }
 
 fn press_at(element: Element<'_, Message>, point: iced::Point) -> Vec<Message> {
@@ -40,7 +46,7 @@ fn press_at(element: Element<'_, Message>, point: iced::Point) -> Vec<Message> {
 }
 
 fn press_label(query: &str, titles: &[String], epoch: u64, label: &str) -> Vec<Message> {
-    let mut element = overlay(query, titles, epoch);
+    let mut element = overlay(query, titles, epoch, None);
     let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
     let bounds = capture.find(label);
     press_at(
@@ -73,7 +79,18 @@ fn jump_file_row_label_numbers_the_showing_list_position() {
 }
 
 #[test]
-fn jump_file_row_style_highlights_only_the_default_row() {
+fn jump_file_highlighted_prefers_a_selected_match_and_falls_back_to_first() {
+    let matches = [2, 5, 9];
+    assert_eq!(jump_file_highlighted(&matches, Some(5)), Some(5));
+    assert_eq!(jump_file_highlighted(&matches, None), Some(2));
+    // A selection that outlived a filter change falls back to the first match.
+    assert_eq!(jump_file_highlighted(&matches, Some(7)), Some(2));
+    assert_eq!(jump_file_highlighted(&[], Some(5)), None);
+    assert_eq!(jump_file_highlighted(&[], None), None);
+}
+
+#[test]
+fn jump_file_row_style_highlights_only_the_highlighted_row() {
     use iced::widget::button::Status;
 
     let default = jump_file_row_style(true, Status::Active);
@@ -101,7 +118,7 @@ fn overlay_draws_the_heading_matching_rows_and_buttons() {
         "Middle".to_string(),
         "Closing".to_string(),
     ];
-    let mut element = overlay("mid", &titles, 7);
+    let mut element = overlay("mid", &titles, 7, None);
     let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
     let texts: Vec<&str> = capture.texts().collect();
     for expected in ["JUMP TO FILE", "2. Middle", "Jump", "Close"] {
@@ -116,6 +133,27 @@ fn overlay_draws_the_heading_matching_rows_and_buttons() {
             "the filter must omit {omitted:?}: {texts:?}"
         );
     }
+}
+
+#[test]
+fn overlay_highlights_the_selected_row() {
+    let titles = vec![
+        "Opening".to_string(),
+        "Middle".to_string(),
+        "Closing".to_string(),
+    ];
+    let mut element = overlay("", &titles, 7, Some(2));
+    let mut renderer = layout_capture::headless_renderer();
+    let (capture, pixels) =
+        layout_capture::capture_text_and_pixels(&mut element, &mut renderer, &iced::Theme::Dark);
+    // The highlighted row draws the selection's white text; a plain row keeps
+    // the LCD green, whose red channel stays low.
+    let selected_red = pixels.max_red_in(capture.find("3. Closing"));
+    let plain_red = pixels.max_red_in(capture.find("1. Opening"));
+    assert!(
+        selected_red > plain_red,
+        "the selected row must draw the white selection text (selected red {selected_red}, plain red {plain_red})"
+    );
 }
 
 #[test]
@@ -138,7 +176,7 @@ fn row_and_buttons_publish_their_messages() {
         [Message::ToggleJumpFile]
     ));
 
-    let mut element = overlay("mid", &titles, 7);
+    let mut element = overlay("mid", &titles, 7, None);
     let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
     let backdrop = iced::Point::new(2.0, capture.size().height - 2.0);
     assert!(matches!(
@@ -150,14 +188,14 @@ fn row_and_buttons_publish_their_messages() {
 #[test]
 fn empty_and_no_match_lists_have_their_own_wording() {
     let empty: Vec<String> = Vec::new();
-    let mut element = overlay("", &empty, 0);
+    let mut element = overlay("", &empty, 0, None);
     let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
     let texts: Vec<&str> = capture.texts().collect();
     assert!(texts.contains(&"No songs"), "{texts:?}");
     assert!(!texts.contains(&"No matching songs"), "{texts:?}");
 
     let titles = vec!["Opening".to_string()];
-    let mut element = overlay("zzz", &titles, 0);
+    let mut element = overlay("zzz", &titles, 0, None);
     let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
     let texts: Vec<&str> = capture.texts().collect();
     assert!(texts.contains(&"No matching songs"), "{texts:?}");

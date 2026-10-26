@@ -319,9 +319,15 @@ pub(in crate::ui) enum Message {
     ToggleJumpFile,
     // A keystroke in the Jump to File box: stores the typed filter text.
     JumpFileChanged(String),
-    // Enter or the `Jump` button: plays the first matching row and closes the
-    // panel.
+    // Enter or the `Jump` button: plays the highlighted matching row and
+    // closes the panel.
     JumpFileSubmitted,
+    // Up while the Jump to File panel is open: moves the highlight to the
+    // previous match, stopping at the first. Changes no playback state.
+    JumpFileSelectionUp,
+    // Down while the Jump to File panel is open: moves the highlight to the
+    // next match, stopping at the last. Changes no playback state.
+    JumpFileSelectionDown,
     // A press on a Jump to File row: plays that row through `TrackSelected`
     // and closes the panel.
     JumpFileRowSelected {

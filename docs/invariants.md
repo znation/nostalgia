@@ -1598,9 +1598,13 @@ and `jump_time_overlay_buttons_and_backdrop_publish_their_messages`
 
 - `shortcuts::shortcut` maps plain `j` or `J`, with Shift allowed and Control, Alt, and Logo
   released, to `Message::ToggleJumpFile`; Ctrl+J still maps to `ToggleJumpTime`, and Ctrl+Shift+J
-  stays unbound. The panel's filter box holds focus, so a focused `TextInput` captures printable
-  keys (including `j`) and `keyboard::listen`'s ignored-only feed never turns them into
-  shortcuts; typing therefore filters, and `Close` or the backdrop closes the panel.
+  stays unbound. While the panel is open, `ui::timers` installs
+  `shortcuts::message_for_jump_file`, which maps Up and Down (Shift allowed, Control, Alt, and
+  Logo released) to `JumpFileSelectionUp`/`JumpFileSelectionDown` and falls through to
+  `message_for` for every other event; with the panel closed Up and Down still nudge the volume.
+  The panel's filter box holds focus, so a focused `TextInput` captures printable keys (including
+  `j`) and `keyboard::listen`'s ignored-only feed never turns them into shortcuts; typing
+  therefore filters, and `Close` or the backdrop closes the panel.
 - `handlers::jump::song_list` names the cached titles and epoch of the showing list: the browsed
   Songs buffer or the flat All Songs buffer, and no list on every other view. `toggle_jump_file`
   opens only when that list exists; opening clears the query, closes About, File info, and Jump to
@@ -1614,13 +1618,19 @@ and `jump_time_overlay_buttons_and_backdrop_publish_their_messages`
 - `views::jump_file::jump_file_row_label` prefixes a row with `index + 1`, the source position the
   same 0-based index has in the showing list, followed by `". "` and the cached title. Filtering
   therefore keeps each match's original number instead of renumbering the shown rows.
-- `views::jump_file::jump_file_row_style` draws the first match — the row Enter or `Jump` plays —
-  with the browse selection style, the blue `theme::ROW_HIGHLIGHT` bar behind white
+- `views::jump_file::jump_file_highlighted` resolves the highlighted match: `jump_file_selected`
+  when it is still one of the filtered matches, otherwise the first match, and `None` for an
+  empty match list. Opening the panel or typing a new query resets the selection to `None`, so
+  the first match is highlighted until Up or Down moves it; Up and Down clamp at the first and
+  last match without wrapping and store the match's source index.
+- `views::jump_file::jump_file_row_style` draws the highlighted row — the row Enter or `Jump`
+  plays — with the browse selection style, the blue `theme::ROW_HIGHLIGHT` bar behind white
   `theme::PLAYING_ROW_TEXT`; every other row keeps the flat green `style::playlist_row_style`
   colors and its hover/press face ladder.
-- `jump_file_submitted` plays the first match through `Message::TrackSelected { epoch, index }` and
-  closes the panel; no match changes nothing. `jump_file_row_selected` dispatches the clicked
-  source index the same way. The existing `TrackSelected` epoch/index guards reject a stale press.
+- `jump_file_submitted` plays the highlighted match through `Message::TrackSelected { epoch,
+  index }` and closes the panel; no match changes nothing. `jump_file_row_selected` dispatches the
+  clicked source index the same way. The existing `TrackSelected` epoch/index guards reject a
+  stale press.
 - `views::view_jump_file_overlay` stacks `JUMP TO FILE`, the `Filter songs` box, one numbered row per
   match, and `Jump` and `Close` buttons through `modal_overlay`. An empty list reads `No songs`; a
   list with no match reads `No matching songs`, and neither draws a row. `Close` and the backdrop
@@ -1628,16 +1638,19 @@ and `jump_time_overlay_buttons_and_backdrop_publish_their_messages`
   `JumpFileRowSelected`. The shade branch never draws it.
 
 **Enforced by.** `handlers::jump`, `handlers::browse`, `ui::timers`,
-`views::jump_file::view_jump_file_overlay`, and the jump-file branch of `ui::view::view`.
+`shortcuts::message_for_jump_file`, `views::jump_file::view_jump_file_overlay`, and the
+jump-file branch of `ui::view::view`.
 
 **Pinned by.** `matches_blank_all_case_insensitive_trimmed_in_order`,
 `jump_file_row_label_numbers_the_showing_list_position`,
-`jump_file_row_style_highlights_only_the_default_row`,
+`jump_file_highlighted_prefers_a_selected_match_and_falls_back_to_first`,
+`jump_file_row_style_highlights_only_the_highlighted_row`,
 `overlay_draws_the_heading_matching_rows_and_buttons`,
+`overlay_highlights_the_selected_row`,
 `row_and_buttons_publish_their_messages`, and
 `empty_and_no_match_lists_have_their_own_wording` (`src/ui/views/tests/jump_file.rs`);
-`message_for_maps_j_to_jump_file` and `message_for_maps_ctrl_j_to_jump_time`
-(`src/ui/shortcuts.rs`); the tests in
+`message_for_maps_j_to_jump_file`, `message_for_maps_ctrl_j_to_jump_time`, and
+`message_for_jump_file_maps_up_and_down_and_falls_back` (`src/ui/shortcuts.rs`); the tests in
 `src/ui/tests/jump_file_tests.rs`.
 
 ## Song-list footer

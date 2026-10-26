@@ -1,6 +1,6 @@
 //! The transient panels' jump handlers: Ctrl+J opens Jump to time, plain J
-//! opens Jump to File, each keystroke stores the typed text, and Enter or
-//! `Jump` seeks or plays the first match.
+//! opens Jump to File, each keystroke stores the typed text, Up and Down move
+//! the Jump to File highlight, and Enter or `Jump` seeks or plays it.
 
 use std::time::Duration;
 
@@ -108,6 +108,7 @@ pub(in crate::ui) fn jump_time_submitted(player: &mut WinampPlayer) -> Task<Mess
 pub(in crate::ui) fn toggle_jump_file(player: &mut WinampPlayer) -> Task<Message> {
     if player.jump_file_visible {
         player.jump_file_visible = false;
+        player.jump_file_selected = None;
         return Task::none();
     }
     if song_list(player).is_none() {
@@ -116,6 +117,7 @@ pub(in crate::ui) fn toggle_jump_file(player: &mut WinampPlayer) -> Task<Message
     player.close_transient_panels();
     player.jump_file_visible = true;
     player.jump_file_query.clear();
+    player.jump_file_selected = None;
     let focus = iced::widget::operation::focus(views::JUMP_FILE_INPUT_ID);
     if player.shaded {
         Task::batch([toggle_window_shade(player), focus])
@@ -125,28 +127,72 @@ pub(in crate::ui) fn toggle_jump_file(player: &mut WinampPlayer) -> Task<Message
 }
 
 /// A keystroke in the Jump to File filter box: store the typed text so the view
-/// re-filters live.
+/// re-filters live, and put the highlight back on the first match.
 pub(in crate::ui) fn jump_file_changed(player: &mut WinampPlayer, text: String) -> Task<Message> {
     player.jump_file_query = text;
+    player.jump_file_selected = None;
     Task::none()
 }
 
-/// Enter or `Jump`: with the panel open, play the first matching row from the
-/// showing list through `TrackSelected` and close the panel. No match leaves
-/// the panel and the query alone, so a typo does not dismiss it.
+/// Moves the Jump to File highlight one match up (`up`) or down, clamped to
+/// the first or last match without wrapping. No-op unless the panel is open;
+/// an empty match list clears the highlight. The highlight stores the match's
+/// source index, so a filtered row keeps its source-list number.
+fn move_jump_file_selection(player: &mut WinampPlayer, up: bool) -> Task<Message> {
+    if !player.jump_file_visible {
+        return Task::none();
+    }
+    let Some((titles, _)) = song_list(player) else {
+        return Task::none();
+    };
+    let matches = views::jump_file_matches(titles, &player.jump_file_query);
+    if matches.is_empty() {
+        player.jump_file_selected = None;
+        return Task::none();
+    }
+    let position = views::jump_file_highlighted(&matches, player.jump_file_selected)
+        .and_then(|selected| matches.iter().position(|&index| index == selected))
+        .unwrap_or(0);
+    let next = if up {
+        position.saturating_sub(1)
+    } else {
+        (position + 1).min(matches.len() - 1)
+    };
+    player.jump_file_selected = Some(matches[next]);
+    Task::none()
+}
+
+/// Up while the Jump to File panel is open: highlight the previous match,
+/// stopping at the first.
+pub(in crate::ui) fn jump_file_selection_up(player: &mut WinampPlayer) -> Task<Message> {
+    move_jump_file_selection(player, true)
+}
+
+/// Down while the Jump to File panel is open: highlight the next match,
+/// stopping at the last.
+pub(in crate::ui) fn jump_file_selection_down(player: &mut WinampPlayer) -> Task<Message> {
+    move_jump_file_selection(player, false)
+}
+
+/// Enter or `Jump`: with the panel open, play the highlighted row from the
+/// showing list through `TrackSelected` and close the panel. The highlight
+/// defaults to the first match, so a submit before any Up or Down behaves as
+/// before. No match leaves the panel and the query alone, so a typo does not
+/// dismiss it.
 pub(in crate::ui) fn jump_file_submitted(player: &mut WinampPlayer) -> Task<Message> {
     if !player.jump_file_visible {
         return Task::none();
     }
-    let first_match = song_list(player).and_then(|(titles, epoch)| {
-        views::jump_file_matches(titles, &player.jump_file_query)
-            .first()
-            .map(|&index| (epoch, index))
+    let target = song_list(player).and_then(|(titles, epoch)| {
+        let matches = views::jump_file_matches(titles, &player.jump_file_query);
+        views::jump_file_highlighted(&matches, player.jump_file_selected)
+            .map(|index| (epoch, index))
     });
-    let Some((epoch, index)) = first_match else {
+    let Some((epoch, index)) = target else {
         return Task::none();
     };
     player.jump_file_visible = false;
+    player.jump_file_selected = None;
     Task::done(Message::TrackSelected { epoch, index })
 }
 

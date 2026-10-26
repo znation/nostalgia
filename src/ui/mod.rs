@@ -90,6 +90,7 @@ pub fn init_ui(
             player.needs_position_poll(),
             player.needs_spectrum_poll(),
             player.mixer_drag.is_some(),
+            player.jump_file_visible,
         ))
     })
     .run()
@@ -273,6 +274,8 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::ToggleJumpFile => handlers::jump::toggle_jump_file(player),
         Message::JumpFileChanged(text) => handlers::jump::jump_file_changed(player, text),
         Message::JumpFileSubmitted => handlers::jump::jump_file_submitted(player),
+        Message::JumpFileSelectionUp => handlers::jump::jump_file_selection_up(player),
+        Message::JumpFileSelectionDown => handlers::jump::jump_file_selection_down(player),
         Message::JumpFileRowSelected { epoch, index } => {
             handlers::jump::jump_file_row_selected(player, epoch, index)
         }

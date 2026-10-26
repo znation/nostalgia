@@ -56,6 +56,34 @@ pub(super) fn message_for(event: Event) -> Option<Message> {
     }
 }
 
+/// The keyboard mapper used while the Jump to File panel is open: Up and Down
+/// move the panel's highlight instead of nudging the volume. A key press with
+/// Control, Alt, and Logo released maps `ArrowUp` and `ArrowDown` (Shift
+/// allowed, like the letter bindings) to [`Message::JumpFileSelectionUp`] and
+/// [`Message::JumpFileSelectionDown`]. Every other event falls through to
+/// [`message_for`], so J, Ctrl+J, and the rest keep their mappings. iced's
+/// `TextInput` leaves Up and Down to the listener, so the filter box keeps
+/// focus while they move the highlight.
+pub(super) fn message_for_jump_file(event: Event) -> Option<Message> {
+    match &event {
+        Event::KeyPressed {
+            key: Key::Named(key::Named::ArrowUp),
+            modifiers,
+            ..
+        } if !modifiers.control() && !modifiers.alt() && !modifiers.logo() => {
+            Some(Message::JumpFileSelectionUp)
+        }
+        Event::KeyPressed {
+            key: Key::Named(key::Named::ArrowDown),
+            modifiers,
+            ..
+        } if !modifiers.control() && !modifiers.alt() && !modifiers.logo() => {
+            Some(Message::JumpFileSelectionDown)
+        }
+        _ => message_for(event),
+    }
+}
+
 /// Winamp's Ctrl+Shift+1, "Sort list by title", sending the same message as the
 /// `Sort` button. It matches the top-row `1` by physical key, not by logical
 /// character: with Shift held the logical key is `!` on US layouts and another
@@ -665,6 +693,38 @@ mod tests {
             let event = key_pressed(Key::Character("j".into()), modifiers);
             assert!(message_for(event).is_none(), "{modifiers:?}");
         }
+    }
+
+    #[test]
+    fn message_for_jump_file_maps_up_and_down_and_falls_back() {
+        for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
+            assert!(matches!(
+                message_for_jump_file(key_pressed(Key::Named(key::Named::ArrowUp), modifiers)),
+                Some(Message::JumpFileSelectionUp)
+            ));
+            assert!(matches!(
+                message_for_jump_file(key_pressed(Key::Named(key::Named::ArrowDown), modifiers)),
+                Some(Message::JumpFileSelectionDown)
+            ));
+        }
+        // Everything else keeps `message_for`'s mapping: a plain J still opens
+        // the panel, and Alt+Up still moves a browse row.
+        assert!(matches!(
+            message_for_jump_file(key_pressed(Key::Character("j".into()), Modifiers::NONE)),
+            Some(Message::ToggleJumpFile)
+        ));
+        assert!(matches!(
+            message_for_jump_file(key_pressed(Key::Named(key::Named::ArrowUp), Modifiers::ALT)),
+            Some(Message::MoveSelectedRowUp)
+        ));
+        // A Control chord is left to the OS, as `message_for` leaves it.
+        assert!(
+            message_for_jump_file(key_pressed(
+                Key::Named(key::Named::ArrowUp),
+                Modifiers::CTRL
+            ))
+            .is_none()
+        );
     }
 
     #[test]

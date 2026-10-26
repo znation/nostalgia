@@ -188,6 +188,11 @@ pub(in crate::ui) struct WinampPlayer {
     pub(in crate::ui) jump_file_visible: bool,
     /// The Jump to File panel's typed filter text, cleared each time it opens.
     pub(in crate::ui) jump_file_query: String,
+    /// The Jump to File panel's highlighted match, as the source index of the
+    /// showing list. `None` means the first match, as on opening or after
+    /// typing a new filter; Up and Down move it within the filtered matches.
+    /// Layout-only and not persisted.
+    pub(in crate::ui) jump_file_selected: Option<usize>,
     /// The seek bar's in-progress drag, or `None` while the thumb follows the
     /// reported position. `Message::SeekPreviewChanged` stores the drag and
     /// `Message::SeekPreviewReleased` seeks to and clears it, so only a release
@@ -307,6 +312,7 @@ impl WinampPlayer {
             jump_time_query: String::new(),
             jump_file_visible: false,
             jump_file_query: String::new(),
+            jump_file_selected: None,
             seek_preview: None,
             time_display: views::TimeDisplay::Elapsed,
             mixer_drag: None,

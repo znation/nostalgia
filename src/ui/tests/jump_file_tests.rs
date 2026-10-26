@@ -71,6 +71,71 @@ fn submit_uses_the_all_songs_list_when_it_is_showing() {
 }
 
 #[test]
+fn down_and_up_move_the_selection_through_the_matches() {
+    let (mut player, _state) = player_in_songs();
+    // Closed, Up and Down change nothing.
+    assert_message_schedules_no_work(&mut player, Message::JumpFileSelectionDown);
+    assert_eq!(player.jump_file_selected, None);
+
+    let _ = update(&mut player, Message::ToggleJumpFile);
+    assert_eq!(player.jump_file_selected, None);
+
+    // Down selects the second match, then the last, and stops there.
+    assert_message_schedules_no_work(&mut player, Message::JumpFileSelectionDown);
+    assert_eq!(player.jump_file_selected, Some(1));
+    assert_message_schedules_no_work(&mut player, Message::JumpFileSelectionDown);
+    assert_eq!(player.jump_file_selected, Some(2));
+    assert_message_schedules_no_work(&mut player, Message::JumpFileSelectionDown);
+    assert_eq!(player.jump_file_selected, Some(2));
+
+    // Up walks back and stops at the first match.
+    assert_message_schedules_no_work(&mut player, Message::JumpFileSelectionUp);
+    assert_eq!(player.jump_file_selected, Some(1));
+    assert_message_schedules_no_work(&mut player, Message::JumpFileSelectionUp);
+    assert_eq!(player.jump_file_selected, Some(0));
+    assert_message_schedules_no_work(&mut player, Message::JumpFileSelectionUp);
+    assert_eq!(player.jump_file_selected, Some(0));
+
+    // Closing clears the highlight, so the next opening starts at the first.
+    let _ = update(&mut player, Message::ToggleJumpFile);
+    assert_eq!(player.jump_file_selected, None);
+    assert_message_schedules_no_work(&mut player, Message::JumpFileSelectionDown);
+    assert_eq!(player.jump_file_selected, None);
+}
+
+#[test]
+fn typing_a_filter_or_reopening_resets_the_selection_to_the_first_match() {
+    let (mut player, _state) = player_in_songs();
+    let _ = update(&mut player, Message::ToggleJumpFile);
+    assert_message_schedules_no_work(&mut player, Message::JumpFileSelectionDown);
+    assert_eq!(player.jump_file_selected, Some(1));
+
+    let _ = update(&mut player, Message::JumpFileChanged("two".to_string()));
+    assert_eq!(player.jump_file_selected, None);
+
+    assert_message_schedules_no_work(&mut player, Message::JumpFileSelectionDown);
+    assert_eq!(player.jump_file_selected, Some(1));
+    let _ = update(&mut player, Message::ToggleJumpFile);
+    let _ = update(&mut player, Message::ToggleJumpFile);
+    assert_eq!(player.jump_file_selected, None);
+}
+
+#[test]
+fn submit_plays_the_selected_match() {
+    let (mut player, _state) = player_in_songs();
+    let _ = update(&mut player, Message::ToggleJumpFile);
+    let epoch = player.songs.epoch;
+    let _ = update(&mut player, Message::JumpFileSelectionDown);
+    let _ = update(&mut player, Message::JumpFileSelectionDown);
+
+    let task = update(&mut player, Message::JumpFileSubmitted);
+
+    assert_track_selected(task, epoch, 2);
+    assert!(!player.jump_file_visible);
+    assert_eq!(player.jump_file_selected, None);
+}
+
+#[test]
 fn a_no_match_submit_keeps_the_panel_and_query() {
     let (mut player, _state) = player_in_songs();
     let _ = update(&mut player, Message::ToggleJumpFile);

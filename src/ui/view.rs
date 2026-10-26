@@ -324,12 +324,14 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
                 &player.jump_file_query,
                 &player.songs.titles,
                 player.songs.epoch,
+                player.jump_file_selected,
             ),
             CurrentView::AllSongs => views::view_jump_file_overlay(
                 base,
                 &player.jump_file_query,
                 &player.all_songs.titles,
                 player.all_songs.epoch,
+                player.jump_file_selected,
             ),
             _ => base,
         }

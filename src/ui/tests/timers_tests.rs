@@ -21,9 +21,9 @@ fn marquee_tick_advances_the_offset() {
 // subscription set is the two listeners until the line needs to scroll.
 #[test]
 fn the_marquee_timer_runs_only_while_the_line_needs_to_scroll() {
-    assert_eq!(subscriptions(false, false, false, false).len(), 2);
-    assert_eq!(subscriptions(true, false, false, false).len(), 3);
-    assert_eq!(subscriptions(false, false, false, true).len(), 3);
+    assert_eq!(subscriptions(false, false, false, false, false).len(), 2);
+    assert_eq!(subscriptions(true, false, false, false, false).len(), 3);
+    assert_eq!(subscriptions(false, false, false, true, false).len(), 3);
 }
 
 // The key listener that clears a mixer readout is always subscribed: a slider's
@@ -32,9 +32,9 @@ fn the_marquee_timer_runs_only_while_the_line_needs_to_scroll() {
 // scrolling rebuilds no screen.
 #[test]
 fn the_mixer_nudge_listener_is_always_subscribed() {
-    assert_eq!(subscriptions(false, false, false, false).len(), 2);
-    assert_eq!(subscriptions(true, true, true, false).len(), 5);
-    assert_eq!(subscriptions(false, false, false, true).len(), 3);
+    assert_eq!(subscriptions(false, false, false, false, false).len(), 2);
+    assert_eq!(subscriptions(true, true, true, false, false).len(), 5);
+    assert_eq!(subscriptions(false, false, false, true, false).len(), 3);
 }
 
 // The position poll has the same cost as the marquee: every tick and reply
@@ -45,8 +45,8 @@ fn the_mixer_nudge_listener_is_always_subscribed() {
 // still holds a preview whose position a seek can move.
 #[test]
 fn the_position_timer_runs_only_while_there_is_a_position_to_refresh() {
-    assert_eq!(subscriptions(false, true, false, false).len(), 3);
-    assert_eq!(subscriptions(true, true, false, false).len(), 4);
+    assert_eq!(subscriptions(false, true, false, false, false).len(), 3);
+    assert_eq!(subscriptions(true, true, false, false, false).len(), 4);
 
     let (mut player, state) = test_player();
     assert!(!player.needs_position_poll());
@@ -68,9 +68,9 @@ fn the_position_timer_runs_only_while_there_is_a_position_to_refresh() {
 // already stored.
 #[test]
 fn the_spectrum_timer_runs_only_while_playback_runs() {
-    assert_eq!(subscriptions(false, false, false, false).len(), 2);
-    assert_eq!(subscriptions(false, false, true, false).len(), 3);
-    assert_eq!(subscriptions(true, true, true, false).len(), 5);
+    assert_eq!(subscriptions(false, false, false, false, false).len(), 2);
+    assert_eq!(subscriptions(false, false, true, false, false).len(), 3);
+    assert_eq!(subscriptions(true, true, true, false, false).len(), 5);
 
     let (player, state) = test_player();
     assert!(!player.needs_spectrum_poll());
