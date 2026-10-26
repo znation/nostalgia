@@ -21,20 +21,128 @@ fn marquee_tick_advances_the_offset() {
 // subscription set is the two listeners until the line needs to scroll.
 #[test]
 fn the_marquee_timer_runs_only_while_the_line_needs_to_scroll() {
-    assert_eq!(subscriptions(false, false, false, false, false).len(), 2);
-    assert_eq!(subscriptions(true, false, false, false, false).len(), 3);
-    assert_eq!(subscriptions(false, false, false, true, false).len(), 3);
+    assert_eq!(
+        subscriptions(false, false, false, false, false, false).len(),
+        2
+    );
+    assert_eq!(
+        subscriptions(true, false, false, false, false, false).len(),
+        3
+    );
+    assert_eq!(
+        subscriptions(false, false, false, true, false, false).len(),
+        3
+    );
 }
 
 // The key listener that clears a mixer readout is always subscribed: a slider's
 // arrow-key change sets the readout during the very event the listener must
 // then see. The wheel listener joins only while a readout shows, so plain list
 // scrolling rebuilds no screen.
+// The Escape listener joins only while a transient panel is open, so Escape
+// outside a panel rebuilds no screen.
+#[test]
+fn the_escape_listener_runs_only_while_a_transient_panel_is_open() {
+    assert_eq!(
+        subscriptions(false, false, false, false, false, false).len(),
+        2
+    );
+    assert_eq!(
+        subscriptions(false, false, false, false, false, true).len(),
+        3
+    );
+}
+
+// A plain or Shift-held Escape press is the panel-dismiss key, and the status
+// is ignored so a focused text box that captures the press cannot swallow it.
+// Modifier chords, the release, and other keys send nothing and keep their
+// existing bindings.
+#[test]
+fn escape_key_message_maps_escape_but_not_its_chords_or_other_keys() {
+    use iced::{Event, event::Status, keyboard, window};
+    fn press(key: keyboard::Key, modifiers: keyboard::Modifiers) -> Event {
+        Event::Keyboard(keyboard::Event::KeyPressed {
+            key: key.clone(),
+            modified_key: key,
+            physical_key: keyboard::key::Physical::Unidentified(
+                keyboard::key::NativeCode::Unidentified,
+            ),
+            location: keyboard::Location::Standard,
+            modifiers,
+            text: None,
+            repeat: false,
+        })
+    }
+    let escape = keyboard::Key::Named(keyboard::key::Named::Escape);
+
+    assert!(matches!(
+        escape_key_message(
+            press(escape.clone(), keyboard::Modifiers::NONE),
+            Status::Captured,
+            window::Id::unique()
+        ),
+        Some(Message::EscapePressed)
+    ));
+    assert!(matches!(
+        escape_key_message(
+            press(escape.clone(), keyboard::Modifiers::SHIFT),
+            Status::Captured,
+            window::Id::unique()
+        ),
+        Some(Message::EscapePressed)
+    ));
+    for modifiers in [
+        keyboard::Modifiers::CTRL,
+        keyboard::Modifiers::ALT,
+        keyboard::Modifiers::LOGO,
+    ] {
+        assert!(
+            escape_key_message(
+                press(escape.clone(), modifiers),
+                Status::Ignored,
+                window::Id::unique()
+            )
+            .is_none()
+        );
+    }
+
+    let release = Event::Keyboard(keyboard::Event::KeyReleased {
+        key: escape.clone(),
+        modified_key: escape,
+        physical_key: keyboard::key::Physical::Unidentified(
+            keyboard::key::NativeCode::Unidentified,
+        ),
+        location: keyboard::Location::Standard,
+        modifiers: keyboard::Modifiers::NONE,
+    });
+    assert!(escape_key_message(release, Status::Ignored, window::Id::unique()).is_none());
+    assert!(
+        escape_key_message(
+            press(
+                keyboard::Key::Named(keyboard::key::Named::Enter),
+                keyboard::Modifiers::NONE
+            ),
+            Status::Ignored,
+            window::Id::unique()
+        )
+        .is_none()
+    );
+}
+
 #[test]
 fn the_mixer_nudge_listener_is_always_subscribed() {
-    assert_eq!(subscriptions(false, false, false, false, false).len(), 2);
-    assert_eq!(subscriptions(true, true, true, false, false).len(), 5);
-    assert_eq!(subscriptions(false, false, false, true, false).len(), 3);
+    assert_eq!(
+        subscriptions(false, false, false, false, false, false).len(),
+        2
+    );
+    assert_eq!(
+        subscriptions(true, true, true, false, false, false).len(),
+        5
+    );
+    assert_eq!(
+        subscriptions(false, false, false, true, false, false).len(),
+        3
+    );
 }
 
 // The position poll has the same cost as the marquee: every tick and reply
@@ -45,8 +153,14 @@ fn the_mixer_nudge_listener_is_always_subscribed() {
 // still holds a preview whose position a seek can move.
 #[test]
 fn the_position_timer_runs_only_while_there_is_a_position_to_refresh() {
-    assert_eq!(subscriptions(false, true, false, false, false).len(), 3);
-    assert_eq!(subscriptions(true, true, false, false, false).len(), 4);
+    assert_eq!(
+        subscriptions(false, true, false, false, false, false).len(),
+        3
+    );
+    assert_eq!(
+        subscriptions(true, true, false, false, false, false).len(),
+        4
+    );
 
     let (mut player, state) = test_player();
     assert!(!player.needs_position_poll());
@@ -68,9 +182,18 @@ fn the_position_timer_runs_only_while_there_is_a_position_to_refresh() {
 // already stored.
 #[test]
 fn the_spectrum_timer_runs_only_while_playback_runs() {
-    assert_eq!(subscriptions(false, false, false, false, false).len(), 2);
-    assert_eq!(subscriptions(false, false, true, false, false).len(), 3);
-    assert_eq!(subscriptions(true, true, true, false, false).len(), 5);
+    assert_eq!(
+        subscriptions(false, false, false, false, false, false).len(),
+        2
+    );
+    assert_eq!(
+        subscriptions(false, false, true, false, false, false).len(),
+        3
+    );
+    assert_eq!(
+        subscriptions(true, true, true, false, false, false).len(),
+        5
+    );
 
     let (player, state) = test_player();
     assert!(!player.needs_spectrum_poll());

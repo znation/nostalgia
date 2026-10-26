@@ -334,6 +334,11 @@ pub(in crate::ui) enum Message {
         epoch: u64,
         index: usize,
     },
+    // A plain or Shift-held Escape press while a transient panel is open:
+    // close the showing About, File info, Jump to time, or Jump to File panel
+    // by clearing only those four visibility flags. No other state changes and
+    // no work is scheduled; with no panel open the arm is a no-op.
+    EscapePressed,
     // The LCD strip's always-on-top toggle. The arm flips the flag and
     // schedules `iced::window::set_level` for the resolved window, which is a
     // no-op until the window id resolves.

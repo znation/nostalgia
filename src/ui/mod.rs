@@ -91,6 +91,7 @@ pub fn init_ui(
             player.needs_spectrum_poll(),
             player.mixer_drag.is_some(),
             player.jump_file_visible,
+            player.transient_panel_open(),
         ))
     })
     .run()
@@ -267,6 +268,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::ToggleWindowShade => handlers::window::toggle_window_shade(player),
         Message::WindowShadeMeasured(size) => handlers::window::window_shade_measured(player, size),
         Message::ToggleAbout => handlers::window::toggle_about(player),
+        Message::EscapePressed => handlers::window::escape_pressed(player),
         Message::ToggleFileInfo => handlers::window::toggle_file_info(player),
         Message::ToggleJumpTime => handlers::jump::toggle_jump_time(player),
         Message::JumpTimeChanged(text) => handlers::jump::jump_time_changed(player, text),

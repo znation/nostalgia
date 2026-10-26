@@ -1469,6 +1469,7 @@ About now restores the window first, so the panel never draws in shade mode (202
   `CARGO_PKG_VERSION`), `ABOUT NOSTALGIA`, the mockup tagline, and a `Close` button. `Close` and
   the full-window backdrop each publish one `Message::ToggleAbout`; a press on the panel's own
   chrome publishes `Message::Ignored` and leaves it open. The shade branch never draws the panel.
+- A plain or Shift-held Escape press also closes it (see `## Transient panel dismissal`).
 
 **Enforced by.** `views::title_bar::view_title_bar`, `views::about::view_about_overlay` (over
 `views::modal::modal_overlay`), `Message::ToggleAbout`, `handlers::window::toggle_about`,
@@ -1482,7 +1483,12 @@ which wraps the base tree only while `about_visible && !shaded` holds.
 `toggle_about_shows_and_hides_the_panel_without_touching_playback`
 and `toggle_about_while_shaded_restores_the_window_first` (`src/ui/tests/window_tests.rs`);
 `view_constructs_over_the_apps_full_input_space`, `view_constructs_when_the_window_is_shaded`, and
-`title_bar_constructs_for_both_about_states` (`src/ui/tests/view_tests.rs`).
+`title_bar_constructs_for_both_about_states` (`src/ui/tests/view_tests.rs`);
+`the_escape_listener_runs_only_while_a_transient_panel_is_open`,
+`escape_key_message_maps_escape_but_not_its_chords_or_other_keys`
+(`src/ui/tests/timers_tests.rs`), and
+`escape_closes_each_transient_panel_without_touching_anything_else`
+(`src/ui/tests/panels_tests.rs`) pin the Escape route.
 
 ## File info panel
 
@@ -1498,6 +1504,7 @@ and `toggle_about_while_shaded_restores_the_window_first` (`src/ui/tests/window_
   current track found in `known_tracks` (`WinampPlayer::current_known_track`); without one the flag
   stays false. Opening clears `about_visible`, and opening About clears `file_info_visible`.
   Opening while `shaded` holds first calls `toggle_window_shade` and returns that task.
+- A plain or Shift-held Escape press also closes it (see `## Transient panel dismissal`).
 - While the flag holds outside shade mode and the track resolves, `views::view_file_info_overlay`
   stacks `FILE INFO`, `Title: …`, `Artist: …` (left out for an empty artist), `Album: …` (left
   out for an empty album), `Year: …` (left out when `KnownTrack::year` is `None`), `Genre: …`
@@ -1562,7 +1569,12 @@ and `song_track_number_defaults_to_none_when_the_payload_omits_it` (`src/library
 (`src/apple_music/rest/tests/library.rs`); `songs_carry_the_documented_genres` and
 `songs_carry_the_documented_track_numbers`
 (`src/sample_library.rs`); `file_info_panel_draws_the_loaded_previews_format` and
-`view_constructs_when_the_window_is_shaded` (`src/ui/tests/view_tests.rs`).
+`view_constructs_when_the_window_is_shaded` (`src/ui/tests/view_tests.rs`);
+`the_escape_listener_runs_only_while_a_transient_panel_is_open`,
+`escape_key_message_maps_escape_but_not_its_chords_or_other_keys`
+(`src/ui/tests/timers_tests.rs`), and
+`escape_closes_each_transient_panel_without_touching_anything_else`
+(`src/ui/tests/panels_tests.rs`) pin the Escape route.
 
 ## Jump to time panel
 
@@ -1577,6 +1589,7 @@ preview:
   `about_visible`, `file_info_visible`, and `jump_file_visible`, and opening About, File info, or
   Jump to File clears `jump_time_visible`. Opening while `shaded` holds first calls
   `toggle_window_shade`.
+- A plain or Shift-held Escape press also closes it (see `## Transient panel dismissal`).
 - `handlers::jump::parse_jump_time` accepts ASCII-digit seconds or `M:SS`; `jump_time_submitted`
   seeks through `playback::preview::seek_preview_to` (clamped to the length), bumping
   `position_epoch`, and closes the panel. An unparsable query changes nothing and keeps it open.
@@ -1592,7 +1605,11 @@ preview:
 tests in `src/ui/tests/jump_time_tests.rs`; `jump_time_overlay_draws_its_heading_length_and_buttons`
 and `jump_time_overlay_buttons_and_backdrop_publish_their_messages`
 (`src/ui/views/tests/chrome.rs`); `view_constructs_when_the_window_is_shaded`
-(`src/ui/tests/view_tests.rs`).
+(`src/ui/tests/view_tests.rs`); `the_escape_listener_runs_only_while_a_transient_panel_is_open`,
+`escape_key_message_maps_escape_but_not_its_chords_or_other_keys`
+(`src/ui/tests/timers_tests.rs`), and
+`escape_closes_each_transient_panel_without_touching_anything_else`
+(`src/ui/tests/panels_tests.rs`) pin the Escape route.
 
 ## Jump to File panel
 
@@ -1613,7 +1630,8 @@ and `jump_time_overlay_buttons_and_backdrop_publish_their_messages`
   time, and while `shaded` first calls `toggle_window_shade`. Opening any of those panels closes
   Jump to File, and the flag is never persisted. Navigation that changes the showing view (Reload,
   Back, search, and the All Songs/All Albums/Playlists buttons) clears it, so a panel left open
-  cannot reappear over a later song list.
+  cannot reappear over a later song list. A plain or Shift-held Escape press also closes it (see
+  `## Transient panel dismissal`).
 - `views::jump_file::jump_file_matches` trims the query and compares it case-insensitively as a
   substring, matching every index for a blank query, in list order. The view and the submit handler
   call it, so the rows drawn and the row Enter plays agree.
@@ -1653,7 +1671,43 @@ jump-file branch of `ui::view::view`.
 `empty_and_no_match_lists_have_their_own_wording` (`src/ui/views/tests/jump_file.rs`);
 `message_for_maps_j_to_jump_file`, `message_for_maps_ctrl_j_to_jump_time`, and
 `message_for_jump_file_maps_up_and_down_and_falls_back` (`src/ui/shortcuts.rs`); the tests in
-`src/ui/tests/jump_file_tests.rs`.
+`src/ui/tests/jump_file_tests.rs`; `the_escape_listener_runs_only_while_a_transient_panel_is_open`,
+`escape_key_message_maps_escape_but_not_its_chords_or_other_keys`
+(`src/ui/tests/timers_tests.rs`), and
+`escape_closes_each_transient_panel_without_touching_anything_else`
+(`src/ui/tests/panels_tests.rs`) pin the Escape route.
+
+## Transient panel dismissal
+
+**Guarantee.** A plain or Shift-held Escape press closes whichever transient panel is showing —
+About, File info, Jump to time, or Jump to File — including while its filter or time box has focus.
+It changes only the four visibility flags; no query, selection, playback, transport, mixer, browse,
+or settings state changes, no work is scheduled, and nothing is persisted. Escape with Control,
+Alt, or Logo held, and Escape releases, map to nothing. With no panel open the listener is not
+subscribed, so Escape stays unbound there and a focused `Search library` box keeps it for clearing
+its own focus; `Message::EscapePressed` is still a no-op.
+
+- `WinampPlayer::transient_panel_open` is the read side of the four flags
+  `WinampPlayer::close_transient_panels` clears, so the subscription gate and the closer share one
+  set.
+- `ui::timers::escape_key_message` maps the press through `iced::event::listen_with`, ignoring the
+  event status so a focused `TextInput` that captures Escape cannot swallow it;
+  `ui::timers::subscriptions` adds that listener only while `transient_panel_open` holds.
+- `Message::EscapePressed` routes to `handlers::window::escape_pressed`, which calls
+  `close_transient_panels` and schedules nothing. It is not a toggle, so it never opens a panel.
+- `shortcuts::message_for` still returns `None` for a plain Escape press, leaving every existing
+  keyboard and media-key binding unchanged.
+
+**Enforced by.** `WinampPlayer::transient_panel_open`, `WinampPlayer::close_transient_panels`,
+`ui::timers::escape_key_message`, `ui::timers::subscriptions`, `Message::EscapePressed`, and
+`handlers::window::escape_pressed`.
+
+**Pinned by.** `the_escape_listener_runs_only_while_a_transient_panel_is_open` and
+`escape_key_message_maps_escape_but_not_its_chords_or_other_keys`
+(`src/ui/tests/timers_tests.rs`);
+`escape_closes_each_transient_panel_without_touching_anything_else`
+(`src/ui/tests/panels_tests.rs`); `message_for`'s plain-Escape case
+(`src/ui/shortcuts.rs`).
 
 ## Song-list footer
 

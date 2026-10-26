@@ -126,12 +126,18 @@ pub(super) fn marquee_thread_failure_report(error: &io::Error) -> String {
 /// Up and Down choose a Jump to File match only while that panel is open;
 /// otherwise they keep their normal volume bindings, so the keyboard mapper
 /// switches with `jump_file_open`.
+///
+/// The Escape listener joins only while a transient panel is open, so Escape
+/// outside a panel rebuilds no screen. It uses the event-with-status form
+/// because the panel boxes hold focus and the focused `TextInput` captures
+/// Escape, which `keyboard::listen`'s ignored-only feed would drop.
 pub(super) fn subscriptions(
     marquee_needed: bool,
     position_needed: bool,
     spectrum_needed: bool,
     mixer_readout_showing: bool,
     jump_file_open: bool,
+    transient_panel_open: bool,
 ) -> Vec<iced::Subscription<Message>> {
     let keyboard_listener = if jump_file_open {
         keyboard::listen().filter_map(message_for_jump_file)
@@ -154,7 +160,33 @@ pub(super) fn subscriptions(
     if spectrum_needed {
         subscriptions.push(spectrum_ticks());
     }
+    if transient_panel_open {
+        subscriptions.push(iced::event::listen_with(escape_key_message));
+    }
     subscriptions
+}
+
+/// Subscribed only while a transient panel is open. A plain or Shift-held
+/// Escape press maps to [`Message::EscapePressed`]; Escape with Control, Alt,
+/// or Logo held, an Escape release, and every other event map to nothing. The
+/// status is ignored deliberately: the press must be seen even when a focused
+/// `TextInput` captures Escape and clears its own focus.
+pub(super) fn escape_key_message(
+    event: iced::Event,
+    _status: iced::event::Status,
+    _window: iced::window::Id,
+) -> Option<Message> {
+    use keyboard::key::Named;
+    match event {
+        iced::Event::Keyboard(keyboard::Event::KeyPressed {
+            key: keyboard::Key::Named(Named::Escape),
+            modifiers,
+            ..
+        }) if !modifiers.control() && !modifiers.alt() && !modifiers.logo() => {
+            Some(Message::EscapePressed)
+        }
+        _ => None,
+    }
 }
 
 /// Always subscribed, since a slider's own change message sets the readout

@@ -337,6 +337,17 @@ impl WinampPlayer {
         self.jump_file_visible = false;
     }
 
+    /// Whether any transient panel — About, File info, Jump to time, or Jump
+    /// to File — is open. The read side of the same four flags
+    /// [`Self::close_transient_panels`] clears, so the subscription gate and
+    /// the closer cannot drift.
+    pub(in crate::ui) fn transient_panel_open(&self) -> bool {
+        self.about_visible
+            || self.file_info_visible
+            || self.jump_time_visible
+            || self.jump_file_visible
+    }
+
     /// Save the mixer and equalizer values when the current state differs from
     /// the last saved snapshot. `update` calls this once after every message,
     /// so a changed volume, balance, toggle, or equalizer value is written

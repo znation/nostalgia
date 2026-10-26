@@ -1,3 +1,4 @@
+use super::window_tests::make_current_track_known;
 use super::*;
 
 // Clicking the large readout switches it to the track's remaining time and
@@ -335,5 +336,69 @@ fn toggle_library_panel_hides_and_restores_the_library_section() {
         player.current_view,
         CurrentView::Artists,
         "the library panel toggle must not change the browse level"
+    );
+}
+
+// Escape closes whichever transient panel is showing, like its `Close` button
+// or the backdrop, without touching playback, transport, mixer, browse, or
+// selection state. With no panel open it is a no-op.
+#[test]
+fn escape_closes_each_transient_panel_without_touching_anything_else() {
+    let (mut player, state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    player.current_view = CurrentView::Songs;
+    make_current_track_known(&mut player, &state);
+    player.playback_duration = Some(Duration::from_secs(210));
+    let _ = update(&mut player, Message::SelectRow { epoch: 1, index: 0 });
+
+    assert!(!player.transient_panel_open());
+    assert_message_schedules_no_work(&mut player, Message::EscapePressed);
+    assert!(!player.transient_panel_open());
+
+    let before = {
+        let state = state.blocking_lock();
+        (
+            state.transport_mode(),
+            state.current_track.clone(),
+            state.volume(),
+            state.balance(),
+            state.repeat,
+            state.shuffle,
+            player.songs.selected(),
+        )
+    };
+
+    for toggle in [
+        Message::ToggleAbout,
+        Message::ToggleFileInfo,
+        Message::ToggleJumpTime,
+        Message::ToggleJumpFile,
+    ] {
+        let _ = update(&mut player, toggle);
+        assert!(player.transient_panel_open());
+        assert_message_schedules_no_work(&mut player, Message::EscapePressed);
+        assert!(!player.transient_panel_open());
+    }
+
+    let after = {
+        let state = state.blocking_lock();
+        (
+            state.transport_mode(),
+            state.current_track.clone(),
+            state.volume(),
+            state.balance(),
+            state.repeat,
+            state.shuffle,
+            player.songs.selected(),
+        )
+    };
+    assert_eq!(
+        after, before,
+        "Escape must close panels without changing playback, mixer, or browse state"
+    );
+    assert_eq!(
+        player.current_view,
+        CurrentView::Songs,
+        "Escape must not change the browse level"
     );
 }

@@ -120,7 +120,9 @@ while leaving the typed query in the search box. The title bar's `M` button (or 
 a transient About panel naming the app, showing its `v`-prefixed package version and the line
 `The classic Winamp look, rebuilt in Rust — with Apple Music as the library.`; `M` (through the
 backdrop over its slot), `Ctrl+F1`, the panel's `Close` button, or a click on the backdrop outside
-the panel closes it, and opening it while the window is rolled up restores the window first. Its
+the panel closes it, and opening it while the window is rolled up restores the window first. A
+plain or Shift-held Escape press closes whichever transient panel is open, like its `Close`
+button or the backdrop; with no panel open Escape keeps its existing behavior. Its
 shade button, a double-click on the bar, or a double-click on the rolled-up strip rolls the window
 up to the title bar plus a compact transport strip with Previous, Play/Pause, Stop, Next, the same
 elapsed-over-total time readout, a seek slider over the preview's own length, and a volume slider,
