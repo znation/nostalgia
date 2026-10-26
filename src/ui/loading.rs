@@ -114,7 +114,8 @@ where
 }
 
 /// Formats the browse-fetch failure report: names the fetch that failed
-/// (e.g. "loading albums for artist \"artist-1\"") and includes the underlying
+/// (e.g. "loading albums for artist \"The Sample Band\" (id \"artist-1\")")
+/// and includes the underlying
 /// error. The play path names the offending track; this names the offending
 /// query, so a failed browse tells the user which fetch failed and what it
 /// was fetching. The same report is both written to stderr and shown in the
@@ -238,9 +239,10 @@ fn play_timeout_report(track_id: &str, timeout: Duration) -> String {
 /// error or a timeout (after the cause is reported to stderr via
 /// [`fetch_failure_report`] or [`fetch_timeout_report`], whose report is the
 /// string handed to `failed`). `context` names the fetch —
-/// "loading favorite artists", "loading albums for artist \"artist-1\"",
-/// "loading songs from album \"album-1\"", or "searching the library for
-/// \"zzz\"" — so a failed browse reports *which*
+/// "loading favorite artists", "loading albums for artist \"The Sample Band\"
+/// (id \"artist-1\")", "loading songs from album \"The Sample Band - First
+/// Record\" (id \"album-1\")", or "searching the library for \"zzz\"" — so a
+/// failed browse reports *which*
 /// query failed and what it was fetching, not just that a fetch failed.
 /// `generation` names the request's place in its list's stream: when a newer
 /// request for the same list has been issued by the time this fetch completes,

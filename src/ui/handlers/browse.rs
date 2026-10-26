@@ -29,6 +29,16 @@ fn switch_view(player: &mut WinampPlayer, view: CurrentView) {
     player.jump_file_visible = false;
 }
 
+/// The context a browse fetch's failure report carries: the action, the row's
+/// human-readable name, and the id the request used. The id alone told the user
+/// nothing when the browse panel showed the report; the name says which row
+/// they opened, while the id keeps the exact query in the log. Both are
+/// formatted with `Debug`, so a control character in a remote-supplied name or
+/// id is escaped instead of reaching the panel or terminal raw.
+fn fetch_context(action: &str, name: &str, id: &str) -> String {
+    format!("{action} {name:?} (id {id:?})")
+}
+
 /// An artist's row was pressed: step down to the Albums level and fetch that
 /// artist's albums. As with `TrackSelected`, the row message carries the
 /// artist's index and its list's epoch. A mismatched epoch is a stale press
@@ -39,13 +49,11 @@ pub(in crate::ui) fn artist_selected(
     epoch: u64,
     index: usize,
 ) -> Task<Message> {
-    let Some(artist_id) = player
-        .artists
-        .select(epoch, index)
-        .map(|artist| artist.id.clone())
-    else {
+    let Some(artist) = player.artists.select(epoch, index) else {
         return Task::none();
     };
+    let context = fetch_context("loading albums for artist", &artist.name, &artist.id);
+    let artist_id = artist.id.clone();
     switch_view(player, CurrentView::Albums);
     // Drop the previous artist's albums before the new fetch lands:
     // otherwise the Albums view renders them, and a press during the
@@ -53,7 +61,7 @@ pub(in crate::ui) fn artist_selected(
     fetch_at_top(fetch_level(
         &mut player.albums,
         &player.apple_music_service,
-        format!("loading albums for artist {artist_id:?}"),
+        context,
         move |service| async move { service.get_albums_by_artist(&artist_id).await },
         Message::AlbumsLoaded,
         Message::AlbumsLoadFailed,
@@ -78,9 +86,15 @@ pub(in crate::ui) fn album_selected(
     } else {
         player.albums.select(epoch, index)
     };
-    let Some(album_id) = selected.map(|album| album.id.clone()) else {
+    let Some(album) = selected else {
         return Task::none();
     };
+    let context = fetch_context(
+        "loading songs from album",
+        &album.display_title(),
+        &album.id,
+    );
+    let album_id = album.id.clone();
     player.songs_origin = if from_all_albums {
         SongsOrigin::AllAlbums
     } else {
@@ -93,7 +107,7 @@ pub(in crate::ui) fn album_selected(
     fetch_at_top(fetch_level(
         &mut player.songs,
         &player.apple_music_service,
-        format!("loading songs from album {album_id:?}"),
+        context,
         move |service| async move { service.get_songs_from_album(&album_id).await },
         Message::SongsLoaded,
         Message::SongsLoadFailed,
@@ -188,13 +202,11 @@ pub(in crate::ui) fn playlist_selected(
     epoch: u64,
     index: usize,
 ) -> Task<Message> {
-    let Some(playlist_id) = player
-        .playlists
-        .select(epoch, index)
-        .map(|playlist| playlist.id.clone())
-    else {
+    let Some(playlist) = player.playlists.select(epoch, index) else {
         return Task::none();
     };
+    let context = fetch_context("loading songs from playlist", &playlist.name, &playlist.id);
+    let playlist_id = playlist.id.clone();
     player.songs_origin = SongsOrigin::Playlist;
     switch_view(player, CurrentView::Songs);
     // Clear the previous list before the fetch lands, as the album handler
@@ -203,7 +215,7 @@ pub(in crate::ui) fn playlist_selected(
     fetch_at_top(fetch_level(
         &mut player.songs,
         &player.apple_music_service,
-        format!("loading songs from playlist {playlist_id:?}"),
+        context,
         move |service| async move { service.get_songs_from_playlist(&playlist_id).await },
         Message::SongsLoaded,
         Message::SongsLoadFailed,

@@ -701,3 +701,78 @@ fn stop_and_track_selection_clear_the_playback_duration() {
     assert_eq!(player.playback_duration, None);
     assert_eq!(player.seek_preview, None);
 }
+
+/// A player over a signed-in service whose every REST request fails, so a
+/// browse handler's fetch takes its error path instead of answering from the
+/// sample library.
+fn failing_rest_player() -> (WinampPlayer, Arc<Mutex<AppState>>) {
+    let state = Arc::new(Mutex::new(AppState::default()));
+    let service =
+        AppleMusicService::with_transport(state.clone(), Box::new(StubTransport::failing("boom")));
+    service
+        .authenticate_with("dev-token", &|_| Ok(sign_in_session()))
+        .expect("the stub sign-in must store its session");
+    (WinampPlayer::new(state.clone(), service), state)
+}
+
+/// Asserts a failed browse fetch's report names both the row the user opened
+/// and the id the request used.
+fn assert_failure_names(error: &Option<String>, name: &str, id: &str) {
+    let report = error
+        .as_deref()
+        .expect("the failure must be stored for the panel");
+    assert!(
+        report.contains(name) && report.contains(id),
+        "the failure report must name {name:?} and its id {id:?}, got {report:?}"
+    );
+}
+
+// A browse fetch's failure report is what the panel shows, so it must name the
+// row the user opened rather than only the opaque id: "artist-1" says nothing
+// about which artist failed. Every row handler builds the context from the
+// selected row and keeps its id for the log.
+#[tokio::test]
+async fn failed_browse_fetches_name_the_row_they_opened() {
+    let (mut player, _state) = failing_rest_player();
+    player.artists.items = vec![sample_artist()];
+    let message = browse_reply(
+        task_output(
+            update(&mut player, Message::ArtistSelected { epoch: 0, index: 0 }),
+            "failed artist fetch",
+        )
+        .await,
+    );
+    let _ = update(&mut player, message);
+    assert_failure_names(&player.albums.error, "The Sample Band", "artist-1");
+
+    let (mut player, _state) = failing_rest_player();
+    player.albums.items = vec![sample_album()];
+    let message = browse_reply(
+        task_output(
+            update(&mut player, Message::AlbumSelected { epoch: 0, index: 0 }),
+            "failed album fetch",
+        )
+        .await,
+    );
+    let _ = update(&mut player, message);
+    assert_failure_names(
+        &player.songs.error,
+        "The Sample Band - First Record",
+        "album-1",
+    );
+
+    let (mut player, _state) = failing_rest_player();
+    player.playlists.items = vec![sample_playlist()];
+    let message = browse_reply(
+        task_output(
+            update(
+                &mut player,
+                Message::PlaylistSelected { epoch: 0, index: 0 },
+            ),
+            "failed playlist fetch",
+        )
+        .await,
+    );
+    let _ = update(&mut player, message);
+    assert_failure_names(&player.songs.error, "Morning Drive", "playlist-1");
+}
