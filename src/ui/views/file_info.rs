@@ -1,5 +1,5 @@
 //! The transient File info panel: a modal overlay over the normal-mode screen
-//! naming the current track's title, artist, and length.
+//! naming the current track's title, artist, album, and length.
 
 use iced::{
     Element,
@@ -16,15 +16,18 @@ const TITLE_LABEL: &str = "Title: ";
 /// The label before the track's artist.
 const ARTIST_LABEL: &str = "Artist: ";
 
+/// The label before the track's album.
+const ALBUM_LABEL: &str = "Album: ";
+
 /// The label before the track's formatted length.
 const LENGTH_LABEL: &str = "Length: ";
 
 /// Stacks the transient File info panel for `track` over `base`.
 ///
 /// The panel is modal (see [`modal_overlay`]): `Close` and the backdrop each
-/// publish [`Message::ToggleFileInfo`]. It lists the title, the artist (left
-/// out when the source supplied none), and the length, which is `--:--` for an
-/// unknown duration. No state or playback is touched here.
+/// publish [`Message::ToggleFileInfo`]. It lists the title, the artist and the
+/// album (each left out when the source supplied none), and the length, which
+/// is `--:--` for an unknown duration. No state or playback is touched here.
 pub fn view_file_info_overlay<'a>(
     base: Element<'a, Message>,
     track: &'a KnownTrack,
@@ -37,6 +40,10 @@ pub fn view_file_info_overlay<'a>(
     if !track.artist.is_empty() {
         content =
             content.push(Text::new(format!("{ARTIST_LABEL}{}", track.artist)).color(theme::TEXT));
+    }
+    if !track.album.is_empty() {
+        content =
+            content.push(Text::new(format!("{ALBUM_LABEL}{}", track.album)).color(theme::TEXT));
     }
     content = content
         .push(Text::new(format!("{LENGTH_LABEL}{}", track.time)).color(theme::TEXT))

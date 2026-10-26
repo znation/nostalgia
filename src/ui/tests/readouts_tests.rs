@@ -11,6 +11,13 @@ fn track_selected_records_the_played_tracks_title_and_time() {
     assert_eq!(track.title, "Two");
     assert_eq!(track.number, "2. ");
     assert_eq!(track.time, "2:05");
+    assert_eq!(track.album, "First Record");
+
+    // The first row records song-1's album alongside its title and time.
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+    let first = player.known_tracks.get("song-1").expect("song-1 recorded");
+    assert_eq!(first.title, "One");
+    assert_eq!(first.album, "First Record");
 }
 
 // The number is the 1-based position of the row that selected the track, so

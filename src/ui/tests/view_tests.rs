@@ -161,6 +161,7 @@ fn view_constructs_when_the_window_is_shaded() {
         views::KnownTrack {
             title: "Opening".to_string(),
             artist: String::new(),
+            album: String::new(),
             number: String::new(),
             time: "3:30".to_string(),
             duration_ms: 210_000,

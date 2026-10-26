@@ -66,6 +66,7 @@ fn songs_from_album_map_library_json_and_set_the_album_id() {
     assert_eq!(
         songs,
         vec![Song {
+            album: String::new(),
             album_id: "album-9".to_string(),
             ..sample_song()
         }]
@@ -88,6 +89,7 @@ fn songs_from_album_maps_a_missing_duration_to_zero() {
             id: "song-1".to_string(),
             title: "Opening".to_string(),
             artist: String::new(),
+            album: String::new(),
             album_id: "album-9".to_string(),
             duration_ms: 0,
             preview_url: None,
@@ -107,6 +109,29 @@ fn songs_from_album_maps_a_missing_or_blank_artist_to_empty() {
         r#"{"name":"Opening","artistName":"   "}"#,
     ] {
         assert_eq!(song_from_attributes(attributes).artist, "");
+    }
+}
+
+// The album name is optional on a song: `attributes.albumName` maps onto
+// `Song::album`, and a missing or blank name uses the same `""` "source
+// supplied none" sentinel as the artist, so the File info panel can omit the
+// album line.
+#[test]
+fn songs_from_album_maps_the_album_name() {
+    assert_eq!(
+        song_from_attributes(r#"{"name":"Opening","albumName":"First Record"}"#).album,
+        "First Record"
+    );
+}
+
+#[test]
+fn songs_from_album_maps_a_missing_or_blank_album_name_to_empty() {
+    for attributes in [
+        r#"{"name":"Opening"}"#,
+        r#"{"name":"Opening","albumName":""}"#,
+        r#"{"name":"Opening","albumName":"   "}"#,
+    ] {
+        assert_eq!(song_from_attributes(attributes).album, "");
     }
 }
 
@@ -247,6 +272,7 @@ fn search_library_maps_the_search_envelope_and_percent_encodes_the_term() {
             id: "song-1".to_string(),
             title: "Opening".to_string(),
             artist: "The Sample Band".to_string(),
+            album: String::new(),
             album_id: String::new(),
             duration_ms: 210_000,
             preview_url: Some(PREVIEW_URL.to_string()),
@@ -355,6 +381,7 @@ fn get_all_songs_maps_the_library_songs_collection() {
             id: "song-1".to_string(),
             title: "Opening".to_string(),
             artist: "The Sample Band".to_string(),
+            album: String::new(),
             album_id: String::new(),
             duration_ms: 210_000,
             preview_url: Some(PREVIEW_URL.to_string()),
@@ -617,6 +644,7 @@ fn get_songs_from_playlist_maps_the_playlist_tracks_collection() {
             id: "song-1".to_string(),
             title: "Opening".to_string(),
             artist: "The Sample Band".to_string(),
+            album: String::new(),
             album_id: String::new(),
             duration_ms: 210_000,
             preview_url: Some(PREVIEW_URL.to_string()),

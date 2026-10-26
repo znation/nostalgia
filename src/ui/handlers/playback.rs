@@ -292,9 +292,10 @@ pub(in crate::ui) fn track_selected(
     // A newly selected song starts its title at character zero; the
     // previous song's scroll position must not carry over.
     player.marquee_offset = 0;
-    // Record the played track's playlist number, title, artist, and formatted
-    // length before handing the id to the async play: the Now Playing bar
-    // resolves its number, label, artist, and time from `known_tracks`, and
+    // Record the played track's playlist number, title, artist, album, and
+    // formatted length before handing the id to the async play: the Now
+    // Playing bar resolves its number, label, artist, and time from
+    // `known_tracks`, and
     // the entry must survive a later browse to a different list (which
     // replaces the visible song buffer). Recording once per play — rather
     // than folding every song of every loaded list into the map — keeps the
@@ -308,6 +309,7 @@ pub(in crate::ui) fn track_selected(
         views::KnownTrack {
             title: song.title.clone(),
             artist: song.artist.clone(),
+            album: song.album.clone(),
             number: format!("{}. ", index + 1),
             time: views::format_track_time(song.duration_ms),
             duration_ms: song.duration_ms,

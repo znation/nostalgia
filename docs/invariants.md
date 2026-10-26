@@ -1434,7 +1434,8 @@ normal-mode branch of `ui::view::view` in `src/ui/view.rs`, which wraps the base
   stays false. Opening clears `about_visible`, and opening About clears `file_info_visible`.
   Opening while `shaded` holds first calls `toggle_window_shade` and returns that task.
 - While the flag holds outside shade mode and the track resolves, `views::view_file_info_overlay`
-  stacks `FILE INFO`, `Title: …`, `Artist: …` (left out for an empty artist), `Length: …`, and a
+  stacks `FILE INFO`, `Title: …`, `Artist: …` (left out for an empty artist), `Album: …` (left
+  out for an empty album), `Length: …`, and a
   `Close` button over the base through `views::modal::modal_overlay`, the chrome About shares.
   `Close` and the backdrop each publish one `Message::ToggleFileInfo`; a press on the panel's
   chrome publishes `Message::Ignored`. The shade branch never draws the panel.
@@ -1447,9 +1448,12 @@ of `ui::view::view`.
 `toggle_file_info_shows_and_hides_the_panel_without_touching_playback`,
 `toggle_file_info_needs_a_known_current_track`, `file_info_and_about_close_each_other`, and
 `toggle_file_info_while_shaded_restores_the_window_first` (`src/ui/tests/window_tests.rs`);
-`file_info_overlay_draws_the_title_artist_and_length` and
+`file_info_overlay_draws_the_title_artist_album_and_length`,
+`file_info_overlay_omits_the_album_line_when_the_source_supplied_none`, and
 `file_info_overlay_closes_from_close_and_backdrop_but_ignores_its_chrome`
-(`src/ui/views/tests/chrome.rs`); `view_constructs_when_the_window_is_shaded`
+(`src/ui/views/tests/chrome.rs`); `songs_from_album_maps_the_album_name` and
+`songs_from_album_maps_a_missing_or_blank_album_name_to_empty`
+(`src/apple_music/rest/tests/library.rs`); `view_constructs_when_the_window_is_shaded`
 (`src/ui/tests/view_tests.rs`).
 
 ## Jump to time panel

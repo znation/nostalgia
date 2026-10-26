@@ -354,6 +354,7 @@ fn rest_song() -> Song {
         id: REST_SONG_ID.to_string(),
         title: REST_SONG_TITLE.to_string(),
         artist: REST_SONG_ARTIST.to_string(),
+        album: String::new(),
         album_id: String::new(),
         duration_ms: 0,
         preview_url: None,

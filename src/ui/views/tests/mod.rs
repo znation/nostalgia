@@ -141,6 +141,7 @@ fn known_tracks(entries: &[(&str, &str, &str)]) -> HashMap<String, KnownTrack> {
                 KnownTrack {
                     title: title.to_string(),
                     artist: artist.to_string(),
+                    album: String::new(),
                     number: String::new(),
                     time: "--:--".to_string(),
                     duration_ms: 0,

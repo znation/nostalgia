@@ -108,6 +108,7 @@ fn the_player_knows_when_the_now_playing_line_needs_the_marquee() {
         views::KnownTrack {
             title: "One".to_string(),
             artist: "The Sample Band".to_string(),
+            album: String::new(),
             number: String::new(),
             time: "3:30".to_string(),
             duration_ms: 210_000,
@@ -128,6 +129,7 @@ fn the_player_knows_when_the_now_playing_line_needs_the_marquee() {
         views::KnownTrack {
             title: "A Title Too Long For The LCD".to_string(),
             artist: "The Sample Band".to_string(),
+            album: String::new(),
             number: "2. ".to_string(),
             time: "3:30".to_string(),
             duration_ms: 210_000,

@@ -83,6 +83,12 @@ pub struct Song {
     /// no artist. Browse song rows and the Now Playing bar render
     /// `<artist> - <title>` when it is non-empty.
     pub artist: String,
+    /// The album's title; `""` means the source supplied none. The File info
+    /// panel draws an `Album:` line only when it is non-empty.
+    /// `#[serde(default)]` keeps a payload without the field deserializable,
+    /// as an older or partial response may omit it.
+    #[serde(default)]
+    pub album: String,
     /// The [`Album::id`] of the album this song belongs to.
     pub album_id: String,
     /// The track's length in milliseconds; `0` means the source supplied no
@@ -176,6 +182,7 @@ mod tests {
             "id": "song-1",
             "title": "Opening",
             "artist": "The Sample Band",
+            "album": "First Record",
             "album_id": "album-1",
             "duration_ms": 210_000,
             "preview_url": null
@@ -183,10 +190,10 @@ mod tests {
     }
 
     /// The [`Song`] payload carrying every required field and omitting the
-    /// optional `preview_url`, so [`assert_every_field_required`] can remove
-    /// each key and see the parse fail. Passing [`song_payload`] instead would
-    /// clear the probe for `preview_url`: a `#[serde(default)]` field is
-    /// allowed to be missing.
+    /// optional `preview_url` and `album`, so [`assert_every_field_required`]
+    /// can remove each key and see the parse fail. Passing [`song_payload`]
+    /// instead would clear the probe for those fields: a `#[serde(default)]`
+    /// field is allowed to be missing.
     fn song_required_fields_payload() -> serde_json::Value {
         json!({ "id": "song-1", "title": "Opening", "artist": "The Sample Band", "album_id": "album-1", "duration_ms": 210_000 })
     }
@@ -314,6 +321,7 @@ mod tests {
                 "id": "song-1",
                 "title": "Opening",
                 "artist": "The Sample Band",
+                "album": "First Record",
                 "album_id": "album-1",
                 "duration_ms": 210_000,
                 "genre": "rock"
@@ -373,6 +381,15 @@ mod tests {
     #[test]
     fn playlist_deserialization_rejects_missing_required_fields() {
         assert_every_field_required::<Playlist>(playlist_payload());
+    }
+
+    #[test]
+    fn song_deserialization_defaults_a_missing_album_to_empty() {
+        // An older or partial payload may omit `album`; the model must still
+        // deserialize to the `""` "source supplied no album" sentinel.
+        let parsed: Song = serde_json::from_value(song_required_fields_payload())
+            .expect("a Song without album must deserialize");
+        assert_eq!(parsed.album, "");
     }
 
     #[test]

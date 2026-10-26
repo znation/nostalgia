@@ -106,6 +106,9 @@ pub struct KnownTrack {
     /// The performing artist's display name; `""` means the source supplied
     /// no artist, and the Now Playing bar falls back to the title alone.
     pub artist: String,
+    /// The album's title; `""` means the source supplied none, and the File
+    /// info panel leaves the album line out.
+    pub album: String,
     /// The cached `"<n>. "` prefix naming the track's 1-based position in the
     /// list row that selected it; `""` when no number is known.
     pub number: String,

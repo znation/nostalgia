@@ -263,6 +263,7 @@ fn sample_known_track(artist: &str) -> KnownTrack {
     KnownTrack {
         title: "Opening".to_string(),
         artist: artist.to_string(),
+        album: "First Record".to_string(),
         number: "1. ".to_string(),
         time: "3:30".to_string(),
         duration_ms: 210_000,
@@ -270,7 +271,7 @@ fn sample_known_track(artist: &str) -> KnownTrack {
 }
 
 #[test]
-fn file_info_overlay_draws_the_title_artist_and_length() {
+fn file_info_overlay_draws_the_title_artist_album_and_length() {
     let track = sample_known_track("The Sample Band");
     let mut element = file_info_element(&track);
     let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
@@ -279,6 +280,7 @@ fn file_info_overlay_draws_the_title_artist_and_length() {
         "FILE INFO",
         "Title: Opening",
         "Artist: The Sample Band",
+        "Album: First Record",
         "Length: 3:30",
         "Close",
     ] {
@@ -294,6 +296,18 @@ fn file_info_overlay_draws_the_title_artist_and_length() {
     assert!(
         capture.texts().all(|text| !text.starts_with("Artist:")),
         "an artist-less track must draw no Artist line"
+    );
+}
+
+#[test]
+fn file_info_overlay_omits_the_album_line_when_the_source_supplied_none() {
+    let mut track = sample_known_track("The Sample Band");
+    track.album = String::new();
+    let mut element = file_info_element(&track);
+    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+    assert!(
+        capture.texts().all(|text| !text.starts_with("Album:")),
+        "an album-less track must draw no Album line"
     );
 }
 

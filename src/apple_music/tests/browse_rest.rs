@@ -419,6 +419,7 @@ async fn get_songs_from_album_uses_the_rest_library_when_signed_in() {
     assert_eq!(
         songs,
         vec![Song {
+            album: String::new(),
             album_id: "album-9".to_string(),
             ..sample_song()
         }]

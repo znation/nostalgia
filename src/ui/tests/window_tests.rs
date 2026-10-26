@@ -144,6 +144,7 @@ pub(super) fn make_current_track_known(player: &mut WinampPlayer, state: &Arc<Mu
         views::KnownTrack {
             title: "Opening".to_string(),
             artist: "The Sample Band".to_string(),
+            album: "First Record".to_string(),
             number: "1. ".to_string(),
             time: "3:30".to_string(),
             duration_ms: 210_000,
@@ -337,6 +338,7 @@ fn window_title_names_the_current_track() {
         views::KnownTrack {
             title: "Opening".to_string(),
             artist: "The Sample Band".to_string(),
+            album: "First Record".to_string(),
             number: "1. ".to_string(),
             time: "3:30".to_string(),
             duration_ms: 210_000,

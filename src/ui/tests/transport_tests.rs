@@ -151,6 +151,7 @@ async fn track_selected_plays_the_songs_preview_url() {
         id: "song-1".to_string(),
         title: "One".to_string(),
         artist: "The Sample Band".to_string(),
+        album: String::new(),
         album_id: "album-1".to_string(),
         duration_ms: 210_000,
         preview_url: Some(PREVIEW_URL.to_string()),
