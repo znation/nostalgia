@@ -356,25 +356,41 @@ fn valid_json_that_is_not_the_search_envelope_names_the_search_envelope() {
     }
 }
 
+/// A two-page query is read in full: `first` answers the initial request and
+/// its same-origin `next` link is followed to `second`. The search and the
+/// three flat-list pagination tests all run this scaffold, differing only in
+/// the response bodies, the followed URL, and the expected ids.
+fn assert_follows_next_page<T>(
+    first: &str,
+    second: &str,
+    next_url: &str,
+    query: impl FnOnce(&RestLibrary) -> Result<Vec<T>, AppleMusicError>,
+    id: impl Fn(&T) -> &str,
+    expected: &[&str],
+) {
+    let stub = StubTransport::returning_bodies(&[first, second]);
+    let library = library_over(&stub);
+
+    let items = query(&library).unwrap();
+
+    assert_ids(&items, id, expected);
+    let calls = stub.calls();
+    assert_eq!(calls.len(), 2);
+    assert_eq!(calls[1].0, next_url);
+}
+
 // A search matching more than one page is read in full: the client follows
 // the same-origin `next` link with the same pagination rules as a browse
 // collection.
 #[test]
 fn search_library_follows_a_next_page() {
-    let stub = StubTransport::returning_bodies(&[
+    assert_follows_next_page(
         r#"{"results":{"library-songs":{"data":[{"id":"song-1","attributes":{"name":"Opening"}}],"next":"/v1/me/library/search?term=x&types=library-songs&limit=25&offset=25"}}}"#,
         r#"{"results":{"library-songs":{"data":[{"id":"song-2","attributes":{"name":"Second"}}]}}}"#,
-    ]);
-    let library = library_over(&stub);
-
-    let songs = library.search_library(&rest_session(), "x").unwrap();
-
-    assert_ids(&songs, |song| song.id.as_str(), &["song-1", "song-2"]);
-    let calls = stub.calls();
-    assert_eq!(calls.len(), 2);
-    assert_eq!(
-        calls[1].0,
-        "https://api.music.apple.com/v1/me/library/search?term=x&types=library-songs&limit=25&offset=25"
+        "https://api.music.apple.com/v1/me/library/search?term=x&types=library-songs&limit=25&offset=25",
+        |library| library.search_library(&rest_session(), "x"),
+        |song| song.id.as_str(),
+        &["song-1", "song-2"],
     );
 }
 
@@ -472,20 +488,13 @@ fn get_album_durations_groups_and_sums_library_songs() {
 // collection.
 #[test]
 fn get_all_songs_follows_a_next_page() {
-    let stub = StubTransport::returning_bodies(&[
+    assert_follows_next_page(
         r#"{"data":[{"id":"song-1","attributes":{"name":"Opening"}}],"next":"/v1/me/library/songs?offset=100"}"#,
         r#"{"data":[{"id":"song-2","attributes":{"name":"Second"}}]}"#,
-    ]);
-    let library = library_over(&stub);
-
-    let songs = library.get_all_songs(&rest_session()).unwrap();
-
-    assert_ids(&songs, |song| song.id.as_str(), &["song-1", "song-2"]);
-    let calls = stub.calls();
-    assert_eq!(calls.len(), 2);
-    assert_eq!(
-        calls[1].0,
-        "https://api.music.apple.com/v1/me/library/songs?offset=100"
+        "https://api.music.apple.com/v1/me/library/songs?offset=100",
+        |library| library.get_all_songs(&rest_session()),
+        |song| song.id.as_str(),
+        &["song-1", "song-2"],
     );
 }
 
@@ -566,20 +575,13 @@ fn get_all_albums_leaves_a_blank_album_artist_empty() {
 // browse collections.
 #[test]
 fn get_all_albums_follows_a_next_page() {
-    let stub = StubTransport::returning_bodies(&[
+    assert_follows_next_page(
         r#"{"data":[{"id":"album-1","attributes":{"name":"Opening"}}],"next":"/v1/me/library/albums?offset=100"}"#,
         r#"{"data":[{"id":"album-2","attributes":{"name":"Second"}}]}"#,
-    ]);
-    let library = library_over(&stub);
-
-    let albums = library.get_all_albums(&rest_session()).unwrap();
-
-    assert_ids(&albums, |album| album.id.as_str(), &["album-1", "album-2"]);
-    let calls = stub.calls();
-    assert_eq!(calls.len(), 2);
-    assert_eq!(
-        calls[1].0,
-        "https://api.music.apple.com/v1/me/library/albums?offset=100"
+        "https://api.music.apple.com/v1/me/library/albums?offset=100",
+        |library| library.get_all_albums(&rest_session()),
+        |album| album.id.as_str(),
+        &["album-1", "album-2"],
     );
 }
 
@@ -619,24 +621,13 @@ fn get_all_playlists_maps_the_library_playlists_collection() {
 // other browse collections.
 #[test]
 fn get_all_playlists_follows_a_next_page() {
-    let stub = StubTransport::returning_bodies(&[
+    assert_follows_next_page(
         r#"{"data":[{"id":"playlist-1","attributes":{"name":"Morning Drive"}}],"next":"/v1/me/library/playlists?offset=100"}"#,
         r#"{"data":[{"id":"playlist-2","attributes":{"name":"Focus"}}]}"#,
-    ]);
-    let library = library_over(&stub);
-
-    let playlists = library.get_all_playlists(&rest_session()).unwrap();
-
-    assert_ids(
-        &playlists,
+        "https://api.music.apple.com/v1/me/library/playlists?offset=100",
+        |library| library.get_all_playlists(&rest_session()),
         |playlist| playlist.id.as_str(),
         &["playlist-1", "playlist-2"],
-    );
-    let calls = stub.calls();
-    assert_eq!(calls.len(), 2);
-    assert_eq!(
-        calls[1].0,
-        "https://api.music.apple.com/v1/me/library/playlists?offset=100"
     );
 }
 
