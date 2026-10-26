@@ -8,6 +8,7 @@
 //! transitions, and the preview-end advance reuses their stepping and Stop
 //! paths.
 
+use std::fmt::Display;
 use std::time::Duration;
 
 use iced::Task;
@@ -264,6 +265,39 @@ pub(in crate::ui) fn seek_preview_to(player: &mut WinampPlayer, position: Durati
             player.position_epoch = player.position_epoch.wrapping_add(1);
             player.playback_position = Some(position);
         }
-        Err(error) => eprintln!("seeking the preview failed: {error}"),
+        Err(error) => eprintln!("{}", seek_to_failure_report(position, &error)),
+    }
+}
+
+/// The report for a rejected absolute seek: names the requested target and the
+/// backend's cause, so a failed seek-bar release or Jump to time says where it
+/// was trying to go instead of only that a seek failed. `error` is a `Display`
+/// so the absolute and relative UI seek paths share one wording.
+pub(in crate::ui) fn seek_to_failure_report(position: Duration, error: &impl Display) -> String {
+    format!("seeking the preview to {position:?} failed: {error}")
+}
+
+/// The report for a rejected relative seek: names the requested offset and the
+/// backend's cause. The UI knows only the distance and direction, not the
+/// absolute target the backend would compute, so the offset is what the log
+/// can name for a failed arrow-key or wheel nudge.
+pub(in crate::ui) fn seek_by_failure_report(offset_secs: i64, error: &impl Display) -> String {
+    format!("seeking the preview by {offset_secs}s failed: {error}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn seek_to_failure_report_names_the_target_and_the_cause() {
+        let report = seek_to_failure_report(Duration::from_secs(12), &"seek refused");
+        assert_eq!(report, "seeking the preview to 12s failed: seek refused");
+    }
+
+    #[test]
+    fn seek_by_failure_report_names_the_offset_and_the_cause() {
+        let report = seek_by_failure_report(-5, &"seek refused");
+        assert_eq!(report, "seeking the preview by -5s failed: seek refused");
     }
 }

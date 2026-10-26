@@ -16,6 +16,8 @@ use crate::state::AppState;
 use crate::ui::views;
 use crate::ui::{Message, WinampPlayer};
 
+use super::playback::preview::seek_by_failure_report;
+
 /// The volume slider's drag: sets the playback level.
 pub(in crate::ui) fn volume_change(player: &mut WinampPlayer, volume: f32) -> Task<Message> {
     player.mixer_drag = Some(views::MixerDrag::Volume);
@@ -204,7 +206,7 @@ fn mutate_balance(player: &WinampPlayer, mutation: impl FnOnce(&mut AppState)) -
 /// backend error is logged.
 fn seek_preview(player: &WinampPlayer, offset_secs: i64) -> Task<Message> {
     if let Err(error) = player.apple_music_service.seek_output(offset_secs) {
-        eprintln!("seeking the preview failed: {error}");
+        eprintln!("{}", seek_by_failure_report(offset_secs, &error));
     }
     Task::none()
 }
