@@ -683,6 +683,9 @@ refresh does not re-join and reformat every row.
   `-12 DB` scale, then the ten band sliders. The scale reads top to bottom beside the rail's top,
   middle, and bottom, and the preamp label shares the band labels' text row. The response curve
   above them starts at the first band, not over the preamp and scale.
+- The equalizer's preset pick list shows the applied preset's name, or `Custom` when
+  `AppState::eq_preset` is `None`, drawn in `theme::TEXT` so a hand-tuned curve reads as a value
+  rather than an empty control.
 - The root `view` draws the browse level named by `CurrentView` from that level's own buffer and
   cached row text, with its loading, failure, or empty-search placeholder chosen from that same
   level's flags, and marks the playing row only in the Songs and All Songs lists.
@@ -708,7 +711,9 @@ layout flags; `shortcuts::shortcut` in
 equalizer section only while that flag holds; `views::mini_transport::mini_transport_controls`
 projects the same glyph spec for the shade strip and the library footer.
 `views::equalizer::preamp_column`, `views::equalizer::db_scale_column`, and `views::view_equalizer`
-in `src/ui/views/equalizer.rs` build the equalizer band row and align the curve with it. The browse
+in `src/ui/views/equalizer.rs` build the equalizer band row and align the curve with it;
+`views::view_equalizer` passes `views::equalizer::CUSTOM_PRESET_LABEL` to the pick list's
+placeholder, which `style::chrome_pick_list_style` in `src/ui/style.rs` draws in `theme::TEXT`. The browse
 and transport layout tests lay out the whole root `view` through the test-only
 `src/ui/layout_capture.rs` harness; the equalizer layout test lays out `view_equalizer` directly.
 `view` in `src/ui/view.rs` matches on `CurrentView` and passes each arm that level's buffer, caches,
@@ -744,9 +749,10 @@ title bands and app bar, `transport_glyphs_match_the_mockup_order_and_widths`,
 `eq_panel_toggle_targets_the_visibility_flag`, and
 `library_panel_toggle_targets_the_visibility_flag` (`src/ui/views/tests/transport.rs`),
 `main_transport_and_shade_strip_share_glyphs_order_and_widths` (`src/ui/views/tests/shade.rs`),
-`equalizer_preamp_and_db_scale_sit_left_of_the_band_sliders` (`src/ui/views/tests/equalizer.rs`),
-and `toggle_button_style_sinks_while_on` (`src/ui/style.rs`) for the A, EQ,
-and PL toggles.
+`equalizer_preamp_and_db_scale_sit_left_of_the_band_sliders` and
+`equalizer_pick_list_shows_custom_for_a_hand_tuned_curve` (`src/ui/views/tests/equalizer.rs`),
+and `chrome_pick_list_style_sinks_the_face_when_opened` and `toggle_button_style_sinks_while_on`
+(`src/ui/style.rs`) for the pick-list label and the A, EQ, and PL toggles.
 
 **History.** Reconstructed from "Sort renders below Top instead of beside it, contradicting the
 documented layout" and "Transport buttons resize to their label text, so pressing Play/Pause

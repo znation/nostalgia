@@ -47,6 +47,19 @@ pub(super) fn eq_enabled_label(enabled: bool) -> &'static str {
     if enabled { "EQ: On" } else { "EQ: Off" }
 }
 
+/// The preset pick list's label when no named preset is applied. Classic
+/// Winamp names a hand-tuned curve `Custom`, so the closed control names the
+/// curve instead of showing an empty placeholder while `AppState::eq_preset`
+/// is `None`, including a fresh launch with a flat curve.
+pub(super) const CUSTOM_PRESET_LABEL: &str = "Custom";
+
+/// The equalizer pick list's closed label: an applied preset's name, or
+/// [`CUSTOM_PRESET_LABEL`] for a hand-tuned curve. `view_equalizer` passes it
+/// as the placeholder, which iced draws only while no preset is selected.
+pub(super) fn preset_pick_list_label(preset: Option<Preset>) -> &'static str {
+    preset.map_or(CUSTOM_PRESET_LABEL, |preset| preset.name)
+}
+
 /// Resolves the response curve's segment offsets from the stored band gains.
 ///
 /// The result holds exactly `columns` values, each the segment's height above
@@ -213,7 +226,7 @@ where
 ///
 /// `enabled` is the shared EQ on/off flag shown on the button and toggled by
 /// pressing it; `preset` is the applied curve the pick list shows (or `None`,
-/// drawn as the "(none)" custom-curve placeholder), and picking one emits
+/// drawn as [`CUSTOM_PRESET_LABEL`]), and picking one emits
 /// [`Message::EqPresetSelected`]; `preamp` and `bands` are the stored gains the
 /// sliders start from. Every slider spans `GAIN_MIN_DB..=GAIN_MAX_DB` in 1 dB steps and
 /// emits its own change message, so dragging one routes a clamped gain back
@@ -278,7 +291,7 @@ pub fn view_equalizer(
                         // array instead. The pick list only ever reads the options
                         // through `Borrow<[Preset]>`, so the slice is equivalent.
                         PickList::new(PRESETS.as_slice(), preset, Message::EqPresetSelected)
-                            .placeholder("(none)")
+                            .placeholder(preset_pick_list_label(preset))
                             .text_size(12)
                             .style(|_theme, status| style::chrome_pick_list_style(status))
                             .menu_style(|_theme| style::preset_menu_style()),

@@ -44,7 +44,9 @@ Play/Pause, Stop, and Next glyph controls with word tooltips, then the Repeat an
 toggles, a volume slider whose groove runs from green when silent through orange at half volume to
 red at full volume, a balance slider whose groove is green at center and reddens toward either side,
 an equalizer panel (an EQ on/off button, a preset pick list, a response curve above ten band
-sliders, with a vertical preamp slider and a `+12 dB` / `0 dB` / `-12 dB` scale to their left),
+sliders, with a vertical preamp slider and a `+12 dB` / `0 dB` / `-12 dB` scale to their left; its
+preset pick list names the applied preset and reads `Custom` when no preset is applied, whether
+on a fresh launch or after a slider move makes the curve your own),
 and a browse list whose song rows read `artist - title` (or the title alone when the source
 supplies no artist) and show each track's length at the right, whose album rows read
 `artist - title` (or the title alone when the source supplies no artist) and show the album's

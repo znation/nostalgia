@@ -298,6 +298,90 @@ fn eq_enabled_label_mirrors_enabled_state() {
     assert_eq!(eq_enabled_label(false), "EQ: Off");
 }
 
+// Classic Winamp names a hand-tuned curve `Custom` rather than showing an
+// empty pick list. Lay out the real panel for both states and compare its
+// closed pick list pixel for pixel with the same header row rendered for the
+// expected label: the helper alone cannot prove the panel uses it, and iced
+// paints the closed label straight through the renderer rather than as a text
+// operation.
+#[test]
+fn equalizer_pick_list_shows_custom_for_a_hand_tuned_curve() {
+    assert_eq!(preset_pick_list_label(None), "Custom");
+    assert_eq!(preset_pick_list_label(None), CUSTOM_PRESET_LABEL);
+    assert_eq!(preset_pick_list_label(Some(PRESETS[0])), PRESETS[0].name);
+    assert_ne!(
+        preset_pick_list_label(Some(PRESETS[0])),
+        CUSTOM_PRESET_LABEL
+    );
+
+    for preset in [None, Some(PRESETS[0])] {
+        let mut renderer = layout_capture::headless_renderer();
+        let mut element = view_equalizer(false, 0.0, &[0.0; BAND_COUNT], preset);
+        let (capture, pixels) = layout_capture::capture_text_and_pixels(
+            &mut element,
+            &mut renderer,
+            &iced::Theme::Dark,
+        );
+        let (expected, expected_pixels) =
+            reference_header_row(preset, preset_pick_list_label(preset));
+        let button = capture.find("EQ: Off");
+        let expected_button = expected.find("EQ: Off");
+        // Skip the panel's top bevel row and the row's fractional bottom
+        // edge, then compare the rest of the header row, including the closed
+        // pick list, pixel for pixel.
+        let region = iced::Rectangle {
+            x: expected_button.x,
+            y: 1.0,
+            width: expected.size().width.floor() - expected_button.x,
+            height: expected.size().height.floor() - 1.0,
+        };
+        let panel_region = iced::Rectangle {
+            x: region.x + button.x - expected_button.x,
+            y: region.y + button.y - expected_button.y,
+            ..region
+        };
+        assert_eq!(
+            pixels.region(panel_region),
+            expected_pixels.region(region),
+            "the panel must draw {preset:?}'s closed pick-list label"
+        );
+
+        if preset.is_none() {
+            let (_, none_pixels) = reference_header_row(preset, "(none)");
+            assert_ne!(
+                pixels.region(panel_region),
+                none_pixels.region(region),
+                "the hand-tuned curve must not draw the old empty-list placeholder"
+            );
+        }
+    }
+}
+
+/// Renders the header row `view_equalizer` builds — the EQ button, its spacer,
+/// and the closed preset pick list — so its pixels can be compared with the
+/// real panel's row for a given placeholder.
+fn reference_header_row(
+    selected: Option<crate::equalizer::Preset>,
+    placeholder: &str,
+) -> (layout_capture::TextCapture, layout_capture::PixelCapture) {
+    let mut element: iced::Element<'static, Message> = iced::widget::Row::new()
+        .push(labeled_button(
+            eq_enabled_label(false),
+            Message::ToggleEqualizer,
+        ))
+        .push(spacer(8.0))
+        .push(
+            iced::widget::PickList::new(PRESETS.as_slice(), selected, Message::EqPresetSelected)
+                .placeholder(placeholder)
+                .text_size(12)
+                .style(|_theme, status| style::chrome_pick_list_style(status))
+                .menu_style(|_theme| style::preset_menu_style()),
+        )
+        .into();
+    let mut renderer = layout_capture::headless_renderer();
+    layout_capture::capture_text_and_pixels(&mut element, &mut renderer, &iced::Theme::Dark)
+}
+
 #[test]
 fn equalizer_panel_constructs_for_both_states_and_gain_endpoints() {
     // `view()` passes the shared EQ flag, preamp, and band array straight

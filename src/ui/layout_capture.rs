@@ -126,6 +126,28 @@ impl PixelCapture {
         }
         value
     }
+
+    /// The RGBA bytes in `bounds`, row by row, clipped to the image's edges.
+    ///
+    /// Two captures of the same widget can be compared region by region even
+    /// when the renderer paints a label directly instead of through a text
+    /// operation, as iced's closed `PickList` does.
+    pub(crate) fn region(&self, bounds: Rectangle) -> Vec<u8> {
+        let width = self.size.width as f32;
+        let height = self.size.height as f32;
+        let x_start = bounds.x.max(0.0).floor() as u32;
+        let y_start = bounds.y.max(0.0).floor() as u32;
+        let x_end = (bounds.x + bounds.width).min(width).ceil() as u32;
+        let y_end = (bounds.y + bounds.height).min(height).ceil() as u32;
+        let mut bytes = Vec::new();
+        for y in y_start..y_end {
+            for x in x_start..x_end {
+                let index = ((y * self.size.width + x) * 4) as usize;
+                bytes.extend_from_slice(&self.pixels[index..index + 4]);
+            }
+        }
+        bytes
+    }
 }
 
 impl Operation for CapturedText {
@@ -380,5 +402,21 @@ mod tests {
             )),
             80
         );
+    }
+
+    // A region reads its RGBA bytes row by row and clips bounds that overhang
+    // an edge, so two captures can be compared without indexing out of range.
+    #[test]
+    fn region_reads_the_covered_pixels_in_row_order_and_clips() {
+        let capture = gradient_pixels();
+        let left = capture.region(Rectangle::new(Point::new(0.0, 0.0), Size::new(2.0, 1.0)));
+        assert_eq!(left, vec![255, 10, 255, 255, 255, 20, 255, 255]);
+
+        let whole = capture.region(Rectangle::new(
+            Point::new(-5.0, -5.0),
+            Size::new(50.0, 50.0),
+        ));
+        assert_eq!(whole.len(), 8 * 4);
+        assert_eq!(&whole[..4], &[255, 10, 255, 255]);
     }
 }

@@ -166,15 +166,15 @@ pub fn chrome_text_input_style(status: text_input::Status) -> text_input::Style 
 /// not lift the face — the base skin's combo boxes give no hover feedback —
 /// but opening the menu sinks the face to [`theme::BUTTON_FACE_PRESSED`]
 /// through [`chrome_face`], the same press shade the other chrome uses. The
-/// placeholder (the `(none)` custom-curve label) is drawn in the lighter
-/// [`theme::PANEL_EDGE_LIGHT`] so an unselected list reads as empty. Pure, so
-/// the color rule is testable without building a widget.
+/// placeholder (the `Custom` custom-curve label) is drawn in [`theme::TEXT`]
+/// like a selected preset, because it names a real curve rather than an empty
+/// control. Pure, so the color rule is testable without building a widget.
 pub fn chrome_pick_list_style(status: pick_list::Status) -> pick_list::Style {
     let opened = matches!(status, pick_list::Status::Opened { .. });
 
     pick_list::Style {
         text_color: theme::TEXT,
-        placeholder_color: theme::PANEL_EDGE_LIGHT,
+        placeholder_color: theme::TEXT,
         handle_color: theme::TEXT,
         background: Background::Color(chrome_face(false, opened)),
         border: square_border(theme::PANEL_EDGE_DARK),
@@ -569,7 +569,7 @@ mod tests {
         let active = chrome_pick_list_style(pick_list::Status::Active);
         assert_eq!(active.background, Background::Color(theme::BUTTON_FACE));
         assert_eq!(active.text_color, theme::TEXT);
-        assert_eq!(active.placeholder_color, theme::PANEL_EDGE_LIGHT);
+        assert_eq!(active.placeholder_color, theme::TEXT);
         assert_eq!(active.handle_color, theme::TEXT);
         assert_eq!(active.border.color, theme::PANEL_EDGE_DARK);
         assert_eq!(active.border.width, 1.0);
