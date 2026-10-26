@@ -92,6 +92,7 @@ fn songs_from_album_maps_a_missing_duration_to_zero() {
             album: String::new(),
             year: None,
             genre: String::new(),
+            track_number: None,
             album_id: "album-9".to_string(),
             duration_ms: 0,
             preview_url: None,
@@ -231,6 +232,28 @@ fn songs_from_album_maps_a_missing_or_blank_genre_to_empty() {
 }
 
 #[test]
+fn songs_from_album_maps_the_track_number() {
+    assert_eq!(
+        song_from_attributes(r#"{"name":"Opening","trackNumber":3}"#).track_number,
+        Some(3)
+    );
+}
+
+// A missing, null, or zero track number maps to the `None` "source supplied
+// none" sentinel so the File info panel omits the track-number line rather
+// than drawing a bogus position.
+#[test]
+fn songs_from_album_maps_a_missing_or_zero_track_number_to_none() {
+    for attributes in [
+        r#"{"name":"Opening"}"#,
+        r#"{"name":"Opening","trackNumber":null}"#,
+        r#"{"name":"Opening","trackNumber":0}"#,
+    ] {
+        assert_eq!(song_from_attributes(attributes).track_number, None);
+    }
+}
+
+#[test]
 fn songs_from_album_maps_the_first_preview_url() {
     assert_eq!(
         preview_url_from(&format!(
@@ -343,6 +366,7 @@ fn search_library_maps_the_search_envelope_and_percent_encodes_the_term() {
             album: String::new(),
             year: None,
             genre: String::new(),
+            track_number: None,
             album_id: String::new(),
             duration_ms: 210_000,
             preview_url: Some(PREVIEW_URL.to_string()),
@@ -470,6 +494,7 @@ fn get_all_songs_maps_the_library_songs_collection() {
             album: String::new(),
             year: None,
             genre: String::new(),
+            track_number: None,
             album_id: String::new(),
             duration_ms: 210_000,
             preview_url: Some(PREVIEW_URL.to_string()),
@@ -710,6 +735,7 @@ fn get_songs_from_playlist_maps_the_playlist_tracks_collection() {
             album: String::new(),
             year: None,
             genre: String::new(),
+            track_number: None,
             album_id: String::new(),
             duration_ms: 210_000,
             preview_url: Some(PREVIEW_URL.to_string()),

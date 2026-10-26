@@ -266,6 +266,7 @@ fn sample_known_track(artist: &str) -> KnownTrack {
         album: "First Record".to_string(),
         year: None,
         genre: String::new(),
+        track_number: None,
         number: "1. ".to_string(),
         time: "3:30".to_string(),
         duration_ms: 210_000,
@@ -377,6 +378,41 @@ fn file_info_overlay_omits_the_genre_line_when_the_source_supplied_none() {
     assert!(
         capture.texts().all(|text| !text.starts_with("Genre:")),
         "a track without a genre must draw no Genre line"
+    );
+}
+
+#[test]
+fn file_info_overlay_draws_the_tracks_track_number() {
+    let mut track = sample_known_track("The Sample Band");
+    track.year = Some(2001);
+    track.genre = "Rock".to_string();
+    track.track_number = Some(3);
+    let mut element = file_info_element(&track, None);
+    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+    let texts: Vec<&str> = capture.texts().collect();
+    let genre_at = texts
+        .iter()
+        .position(|text| *text == "Genre: Rock")
+        .unwrap();
+    let number_at = texts.iter().position(|text| *text == "Track #: 3").unwrap();
+    let length_at = texts
+        .iter()
+        .position(|text| *text == "Length: 3:30")
+        .unwrap();
+    assert!(
+        genre_at < number_at && number_at < length_at,
+        "the track-number line must sit between Genre and Length: {texts:?}"
+    );
+}
+
+#[test]
+fn file_info_overlay_omits_the_track_number_line_when_the_source_supplied_none() {
+    let track = sample_known_track("The Sample Band");
+    let mut element = file_info_element(&track, None);
+    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+    assert!(
+        capture.texts().all(|text| !text.starts_with("Track #:")),
+        "a track without a number must draw no Track # line"
     );
 }
 

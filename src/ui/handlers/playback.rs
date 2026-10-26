@@ -139,6 +139,7 @@ pub(in crate::ui) fn track_selected(
             album: song.album.clone(),
             year: song.year,
             genre: song.genre.clone(),
+            track_number: song.track_number,
             number: format!("{}. ", index + 1),
             time: views::format_track_time(song.duration_ms),
             duration_ms: song.duration_ms,

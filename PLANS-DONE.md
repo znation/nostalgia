@@ -5,6 +5,84 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
+### Show the current track's track number in the File info panel, like Winamp's ID3 panel (planned 2026-10-26 by the plan role) — done 2026-10-26 by the feature role
+
+**Goal.** Winamp's File info (ID3) dialog lists a track's number within its album beside its
+year and genre. Nostalgia's File info panel names the title, artist, album, year, genre, length,
+and loaded preview format, but `Song` carries no track number even though Apple Music reports
+one. Carry the source's `attributes.trackNumber` through `Song` and the `KnownTrack` cache and
+draw a `Track #: <n>` line between `Genre:` and `Length:` while the source supplies one. No new
+state, handlers, settings, or playback behavior.
+
+**Approach.**
+
+- `src/library.rs`: add `#[serde(default)] pub track_number: Option<u32>` to `Song`,
+  documented as the track's 1-based position on its album (`None` when the source supplied none
+  or reported a non-positive number). Add the `"track_number": null` key to the test
+  `song_payload`, and add `song_round_trips_its_track_number` (a `Some(3)` number serializes under
+  the `track_number` key and survives the round trip) and
+  `song_track_number_defaults_to_none_when_the_payload_omits_it` (a payload from
+  `song_required_fields_payload` parses with `None`), beside the existing year and genre tests.
+  Add `track_number` to every test-built `Song` literal the compiler reports, as the year and
+  genre plans did.
+- `src/apple_music/rest/wire.rs`: add `#[serde(rename = "trackNumber")] track_number:
+  Option<u32>` to the private `Attributes`, documented as the track's 1-based position on its
+  album with absence meaning the API omitted it. Carry it through `Resource::into_song`'s
+  destructure and set `Song::track_number` to `track_number.filter(|number| *number > 0)`, so an
+  absent number or an API-reported `0` (which no album can use) maps to the `None`
+  "source supplied none" sentinel. Update `into_song`'s doc comment to name the track number
+  among the fields it moves into the model.
+- `src/sample_library.rs`: give the five sample songs their album positions — `1`, `2`, and `3`
+  for Opening, Middle, and Ending on First Record, and `1` for B-side on Second Record and
+  Headliner on Debut — so the signed-out File info panel shows a number too. Add
+  `songs_carry_the_documented_track_numbers` beside `songs_carry_the_documented_genres`,
+  pinning every song's id and number in library order.
+- `src/ui/views/now_playing/text.rs`: add `pub track_number: Option<u32>` to `KnownTrack`,
+  documented as copied from `Song::track_number`, with `None` meaning the source supplied none.
+  `src/ui/handlers/playback.rs` records `track_number: song.track_number` in the `KnownTrack` it
+  inserts.
+- `src/ui/views/file_info.rs`: add `const TRACK_NUMBER_LABEL: &str = "Track #: ";` and push a
+  `Track #: <n>` line after the conditional genre line and before the `Length:` line only while
+  `track.track_number` is `Some`; no line otherwise. Update the module and view doc comments to
+  name the track number.
+- Tests: add `songs_from_album_maps_the_track_number` (attributes `"trackNumber":3` maps to
+  `Some(3)`) and `songs_from_album_maps_a_missing_or_zero_track_number_to_none` (absent, `0`, and
+  `null` all map to `None`) to `src/apple_music/rest/tests/library.rs` through the existing
+  `song_from_attributes` helper; a focused `known_tracks_record_the_played_songs_track_number` in
+  `src/ui/tests/readouts_tests.rs` that plays a song carrying `Some(3)` and asserts the recorded
+  `KnownTrack`; and `file_info_overlay_draws_the_tracks_track_number` (the line sits between the
+  genre and `Length:` lines) plus
+  `file_info_overlay_omits_the_track_number_line_when_the_source_supplied_none` in
+  `src/ui/views/tests/chrome.rs`. Add `track_number: None` to the `sample_known_track` fixture in
+  `src/ui/views/tests/mod.rs` and to every other `KnownTrack` test literal the compiler reports.
+- `docs/usage.md`: in the File info sentence, name the track-number line and say it is left out
+  when the source supplies none. `docs/invariants.md` `## File info panel`: add the `Track #: …`
+  line (after `Genre: …`, before `Length: …`, omitted when `KnownTrack::track_number` is `None`,
+  sourced from `Song::track_number`, itself taken from the resource's `attributes.trackNumber`
+  with absent and `0` mapped to `None`), name the new tests in `Pinned by`, and leave every other
+  guarantee unchanged.
+
+**Files touched.** `src/library.rs`, `src/apple_music/rest/wire.rs`,
+`src/apple_music/rest/tests/library.rs`, `src/sample_library.rs`, `src/test_support.rs`,
+`src/ui/views/now_playing/text.rs`, `src/ui/handlers/playback.rs`, `src/ui/views/file_info.rs`,
+`src/ui/views/tests/chrome.rs`, `src/ui/views/tests/mod.rs`, `src/ui/tests/readouts_tests.rs`
+(plus `track_number` in the other `Song`/`KnownTrack` test literals), `docs/usage.md`,
+`docs/invariants.md`.
+
+**Acceptance criteria.**
+
+- A REST song resource carrying `attributes.trackNumber` `3` maps to `Song::track_number ==
+  Some(3)`; an absent, `null`, or `0` track number maps to `None`, and a resource without the
+  attribute still parses.
+- Playing a song whose `Song::track_number` is `Some(3)` records `KnownTrack::track_number ==
+  Some(3)`.
+- The File info panel draws `Track #: 3` between the `Genre:` and `Length:` lines when the
+  number is present and draws no track-number line when it is `None`; the title, artist, album,
+  year, genre, length, format, `Close`, and backdrop behavior stay as they are.
+- The sample library's songs carry the documented album positions, so the signed-out panel shows
+  a track number.
+- `make check` passes.
+
 ### Number the Jump to File rows and mark the match Enter plays (planned 2026-10-26 by the plan role) — done 2026-10-26 by the feature role
 
 **Goal.** The Jump to File panel lists matching titles flat, with no indication of which row

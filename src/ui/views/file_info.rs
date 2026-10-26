@@ -1,6 +1,6 @@
 //! The transient File info panel: a modal overlay over the normal-mode screen
-//! naming the current track's title, artist, album, year, genre, length, and —
-//! while the loaded preview reports one — its format.
+//! naming the current track's title, artist, album, year, genre, track number,
+//! length, and — while the loaded preview reports one — its format.
 
 use iced::{
     Element,
@@ -31,6 +31,9 @@ const YEAR_LABEL: &str = "Year: ";
 /// The label before the track's primary genre.
 const GENRE_LABEL: &str = "Genre: ";
 
+/// The label before the track's 1-based album position.
+const TRACK_NUMBER_LABEL: &str = "Track #: ";
+
 /// The label before the track's formatted length.
 const LENGTH_LABEL: &str = "Length: ";
 
@@ -41,9 +44,9 @@ const FORMAT_LABEL: &str = "Format: ";
 ///
 /// The panel is modal (see [`modal_overlay`]): `Close` and the backdrop each
 /// publish [`Message::ToggleFileInfo`]. It lists the title, the artist, the
-/// album, the release year, and the genre (each left out when the source
-/// supplied none), the length, which is `--:--` for an unknown duration, and —
-/// after the length
+/// album, the release year, the genre, and the track number (each left out
+/// when the source supplied none), the length, which is `--:--` for an unknown
+/// duration, and — after the length
 /// and only while the loaded preview reports one (`format` is `Some`) — the
 /// format line built from the LCD status row's prefix and channel label, for
 /// example `Format: 256 KBPS  44 KHZ STEREO`. No state or playback is touched
@@ -72,6 +75,10 @@ pub fn view_file_info_overlay<'a>(
     if !track.genre.is_empty() {
         content =
             content.push(Text::new(format!("{GENRE_LABEL}{}", track.genre)).color(theme::TEXT));
+    }
+    if let Some(track_number) = track.track_number {
+        content = content
+            .push(Text::new(format!("{TRACK_NUMBER_LABEL}{track_number}")).color(theme::TEXT));
     }
     content = content.push(Text::new(format!("{LENGTH_LABEL}{}", track.time)).color(theme::TEXT));
     if let Some(format) = format {

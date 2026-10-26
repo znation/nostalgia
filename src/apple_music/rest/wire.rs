@@ -178,6 +178,11 @@ struct Attributes {
     /// API omits it. [`release_year`] reduces it to the year the model keeps.
     #[serde(rename = "releaseDate")]
     release_date: Option<String>,
+    /// The track's 1-based position on its album; absent when the API omits
+    /// it. A non-positive number is treated as absent when it reaches the
+    /// model.
+    #[serde(rename = "trackNumber")]
+    track_number: Option<u32>,
     /// The track's length in milliseconds; absent when the API omits it.
     #[serde(rename = "durationInMillis")]
     duration_in_millis: Option<u64>,
@@ -281,8 +286,8 @@ impl Resource {
     }
 
     /// Maps this resource to a [`Song`] linked to `album_id`, moving its id,
-    /// title, artist, album name, primary genre, and preview URL into the
-    /// model instead of cloning them.
+    /// title, artist, album name, primary genre, track number, and preview
+    /// URL into the model instead of cloning them.
     ///
     /// The all-songs, playlist-track, and search collections carry no album
     /// id, so those callers pass `""`; only an album's tracks pass a real id
@@ -291,15 +296,15 @@ impl Resource {
     /// and [`RestLibrary::search_library`](super::RestLibrary::search_library)).
     /// The id and title are required (see
     /// [`required_id`] and [`required_name`]); the artist, album name,
-    /// genre, duration, and preview URL fall back to their "source supplied
-    /// none" sentinels. The
+    /// genre, track number, duration, and preview URL fall back to their
+    /// "source supplied none" sentinels. The
     /// whole-library path maps up to [`MAX_PAGES`](super::paging::MAX_PAGES) pages
     /// of songs, so consuming the parsed resource avoids re-allocating every
     /// string it already owns.
     pub(super) fn into_song(self, album_id: &str) -> Result<Song, AppleMusicError> {
         let Resource { id, attributes } = self;
         let id = required_id(id, "song")?;
-        let (title, artist, album, genre_names, release_date, duration_ms, previews) =
+        let (title, artist, album, genre_names, release_date, track_number, duration_ms, previews) =
             match attributes {
                 Some(attributes) => (
                     attributes.name,
@@ -307,10 +312,11 @@ impl Resource {
                     attributes.album_name,
                     attributes.genre_names,
                     attributes.release_date,
+                    attributes.track_number,
                     attributes.duration_in_millis,
                     attributes.previews,
                 ),
-                None => (None, None, None, None, None, None, None),
+                None => (None, None, None, None, None, None, None, None),
             };
         let title = required_name(title, &id, "song")?;
         let artist = artist_or_empty(artist);
@@ -336,6 +342,9 @@ impl Resource {
             album,
             year: release_date.as_deref().and_then(release_year),
             genre,
+            // An API-reported `0` is not a usable album position, so it maps
+            // to the same `None` sentinel an absent number does.
+            track_number: track_number.filter(|number| *number > 0),
             album_id: album_id.to_string(),
             duration_ms: duration_ms.unwrap_or(0),
             preview_url,

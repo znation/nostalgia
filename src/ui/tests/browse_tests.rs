@@ -644,6 +644,7 @@ fn a_failed_play_completion_clears_the_index_when_nothing_committed() {
         album: String::new(),
         year: None,
         genre: String::new(),
+        track_number: None,
         album_id: "album-1".to_string(),
         duration_ms: 0,
         preview_url: None,

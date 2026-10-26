@@ -117,6 +117,7 @@ impl SampleLibrary {
                 album: "First Record".to_string(),
                 year: Some(2001),
                 genre: "Rock".to_string(),
+                track_number: Some(1),
                 album_id: "album-1".to_string(),
                 duration_ms: 210_000,
                 preview_url: None,
@@ -128,6 +129,7 @@ impl SampleLibrary {
                 album: "First Record".to_string(),
                 year: Some(2001),
                 genre: "Rock".to_string(),
+                track_number: Some(2),
                 album_id: "album-1".to_string(),
                 duration_ms: 240_000,
                 preview_url: None,
@@ -139,6 +141,7 @@ impl SampleLibrary {
                 album: "First Record".to_string(),
                 year: Some(2001),
                 genre: "Rock".to_string(),
+                track_number: Some(3),
                 album_id: "album-1".to_string(),
                 duration_ms: 180_000,
                 preview_url: None,
@@ -150,6 +153,7 @@ impl SampleLibrary {
                 album: "Second Record".to_string(),
                 year: Some(2003),
                 genre: "Alternative".to_string(),
+                track_number: Some(1),
                 album_id: "album-2".to_string(),
                 duration_ms: 95_000,
                 preview_url: None,
@@ -161,6 +165,7 @@ impl SampleLibrary {
                 album: "Debut".to_string(),
                 year: Some(2005),
                 genre: "Electronic".to_string(),
+                track_number: Some(1),
                 album_id: "album-3".to_string(),
                 duration_ms: 200_000,
                 preview_url: None,
@@ -530,6 +535,31 @@ mod tests {
                 ("song-3", "Rock"),
                 ("song-4", "Alternative"),
                 ("song-5", "Electronic"),
+            ]
+        );
+    }
+
+    // The File info panel draws a `Track #:` line from `Song::track_number`,
+    // and `sample_library` is what the app browses when no Apple Music session
+    // is stored, so these values are user-visible. The index tests pin each
+    // song's id and title but never its track number, so a missing or wrong
+    // number here would drop the line (or show a wrong one) while every
+    // existing test stayed green. Pin every song's number, in library order.
+    #[test]
+    fn songs_carry_the_documented_track_numbers() {
+        let library = sample_library();
+        let numbers: Vec<(&str, Option<u32>)> = songs_in_library_order(library)
+            .map(|song| (song.id.as_str(), song.track_number))
+            .collect();
+
+        assert_eq!(
+            numbers,
+            vec![
+                ("song-1", Some(1u32)),
+                ("song-2", Some(2)),
+                ("song-3", Some(3)),
+                ("song-4", Some(1)),
+                ("song-5", Some(1)),
             ]
         );
     }

@@ -154,6 +154,7 @@ async fn track_selected_plays_the_songs_preview_url() {
         album: String::new(),
         year: None,
         genre: String::new(),
+        track_number: None,
         album_id: "album-1".to_string(),
         duration_ms: 210_000,
         preview_url: Some(PREVIEW_URL.to_string()),

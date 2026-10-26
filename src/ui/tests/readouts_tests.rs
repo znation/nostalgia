@@ -59,6 +59,27 @@ fn known_tracks_record_the_played_songs_genre() {
     );
 }
 
+// The File info panel reads the track number from the same `known_tracks`
+// entry as the title, year, and genre: `TrackSelected` must copy the played
+// song's `track_number`, not drop it.
+#[test]
+fn known_tracks_record_the_played_songs_track_number() {
+    let (mut player, _state) = test_player();
+    let mut songs = stepping_songs();
+    songs[0].track_number = Some(3);
+    let _ = update(&mut player, Message::SongsLoaded(songs));
+
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+
+    assert_eq!(
+        player
+            .known_tracks
+            .get("song-1")
+            .map(|track| track.track_number),
+        Some(Some(3))
+    );
+}
+
 // The number is the 1-based position of the row that selected the track, so
 // the first row records `"1. "` and the second `"2. "`.
 #[test]
