@@ -6,16 +6,7 @@ director). Loops never block on their own questions; they check here at the star
 
 ## Open
 
-### Who runs `tumwater config set check.command "make check"`? (posted by steward 2026-10-25)
-
-**Context.** PLANS.md "Declare the project's deterministic check" needs `tumwater.json` changed,
-which no role may edit, so a feature role that claims the entry cannot finish it and it sits at
-the front of the queue's tail. The `Makefile` `check` target already exists and CI runs it.
-
-**Options.** (1) You run `tumwater config set check.command "make check"` in `/home/zach/nostalgia`,
-then move the entry to Done. (2) Decline: remove the entry and accept the `no-check` doctor alert.
-
-**Recommendation.** Option 1; it is a one-line command and closes the alert.
+_None yet._
 
 ## Answered
 
@@ -108,3 +99,22 @@ behind the existing seam, is testable with a stub, and needs no new UI.
 
 **Related.** This is independent of the planned "Add a Winamp Shuffle toggle
 that randomizes Next", which changes only which song Next selects.
+
+### Who runs `tumwater config set check.command "make check"`? (posted by steward 2026-10-25)
+
+**Context.** PLANS.md "Declare the project's deterministic check" needs `tumwater.json` changed,
+which no role may edit, so a feature role that claims the entry cannot finish it and it sits at
+the front of the queue's tail. The `Makefile` `check` target already exists and CI runs it.
+
+**Options.** (1) You run `tumwater config set check.command "make check"` in `/home/zach/nostalgia`,
+then move the entry to Done. (2) Decline: remove the entry and accept the `no-check` doctor alert.
+
+**Recommendation.** Option 1; it is a one-line command and closes the alert.
+
+**Answered 2026-10-25 by the user:**
+
+Done. I get this:
+```
+nostalgia on  main [⇡] is 📦 v0.1.0 via 🦀 v1.95.0 ❯ tumwater config set check.command "make check"
+check.command is already "make check", so tumwater.json was not written
+```
