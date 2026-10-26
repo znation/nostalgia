@@ -5,6 +5,22 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### A deprecated site-local IPv6 preview address slips past the guard (found by the bugfix role 2026-10-26) — fixed 2026-10-26 by the bugfix role
+
+`ip_is_internal` refused IPv6 unique-local (`fc00::/7`) and link-local
+(`fe80::/10`) addresses but not the deprecated site-local block (`fec0::/10`),
+so a preview hostname that resolved to a site-local address passed
+`PublicAddressResolver` and could reach a host routed inside the local site.
+The guard now refuses `fec0::/10` as well. The new table row
+`("fec0::1", true)` in
+`ip_is_internal_refuses_every_internal_range_and_allows_public_addresses`
+failed before the fix and passes after, and
+`preview_url_problem_unwraps_a_disguised_internal_host` now pins the URL
+spelling `https://[fec0::1]:443/preview.m4a` too.
+
+**Validation gap:** none — the existing range table reproduced it directly; no
+other infrastructure was missing.
+
 ### A scoped IPv6 preview URL slips past the preview host guard (found by the bugfix role 2026-10-26) — fixed 2026-10-26 by the bugfix role
 
 A preview URL whose host is a scoped IPv6 literal — `https://[fe80::1%lo]/...`,

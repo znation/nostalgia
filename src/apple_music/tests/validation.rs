@@ -109,6 +109,10 @@ fn preview_url_problem_unwraps_a_disguised_internal_host() {
             "must not target an internal address",
         ),
         (
+            "https://[fec0::1]:443/preview.m4a",
+            "must not target an internal address",
+        ),
+        (
             "https://127.0.0.1./preview.m4a",
             "must not target an internal address",
         ),
@@ -241,6 +245,10 @@ fn ip_is_internal_refuses_every_internal_range_and_allows_public_addresses() {
         ("fc00::1", true),
         ("fd12:3456::1", true),
         ("fe80::1", true),
+        // Deprecated site-local (`fec0::/10`) addresses are still routed inside
+        // a site, so a connection to one reaches an internal host just as a
+        // link-local address can.
+        ("fec0::1", true),
         ("::ffff:127.0.0.1", true),
         ("::ffff:10.0.0.1", true),
         // IPv6 internal via an IPv4-embedding transition prefix, which

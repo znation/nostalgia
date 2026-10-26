@@ -197,9 +197,9 @@ fn is_numeric_component(part: &str) -> bool {
 /// broadcast, documentation, multicast, `0.0.0.0/8`, shared (CGNAT),
 /// benchmarking, IETF protocol-assignment, 6to4 relay, and `240.0.0.0/4`
 /// reserved networks. IPv6: loopback, unspecified, multicast, unique-local,
-/// link-local, and a transition address embedding an internal IPv4 address.
-/// IPv6 documentation (`2001:db8::/32`) and benchmarking (`2001:2::/48`)
-/// addresses are allowed.
+/// link-local, deprecated site-local (`fec0::/10`), and a transition address
+/// embedding an internal IPv4 address. IPv6 documentation (`2001:db8::/32`)
+/// and benchmarking (`2001:2::/48`) addresses are allowed.
 ///
 /// Shared with [`crate::audio`], whose preview agent resolves a preview URL's
 /// hostname and rejects any internal address it resolves to — the check that
@@ -228,6 +228,10 @@ pub(crate) fn ip_is_internal(ip: std::net::IpAddr) -> bool {
                 || v6.is_multicast()
                 || (v6.segments()[0] & 0xfe00) == 0xfc00
                 || (v6.segments()[0] & 0xffc0) == 0xfe80
+                // Site-local (`fec0::/10`) was deprecated in favor of
+                // unique-local, but it can still be routed inside a site, so
+                // a connection to one is not a public destination.
+                || (v6.segments()[0] & 0xffc0) == 0xfec0
                 || v6
                     .to_ipv4()
                     .is_some_and(|v4| ip_is_internal(std::net::IpAddr::V4(v4)))
