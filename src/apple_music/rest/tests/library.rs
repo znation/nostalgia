@@ -253,6 +253,30 @@ fn songs_from_album_maps_a_missing_or_zero_track_number_to_none() {
     }
 }
 
+// A negative track number is just as unusable as zero, and `Song` documents
+// every non-positive number as `None`. It must not make the whole album fetch
+// fail: one bad position would hide every song on the album.
+#[test]
+fn songs_from_album_maps_a_negative_track_number_to_none() {
+    assert_eq!(
+        song_from_attributes(r#"{"name":"Opening","trackNumber":-1}"#).track_number,
+        None
+    );
+}
+
+// A track number too large for the model's `u32` is just as unusable as a
+// non-positive one, and must not fail the whole album fetch. The last value is
+// outside the `i64` range, so a signed wire field would reject it too.
+#[test]
+fn songs_from_album_maps_an_oversized_track_number_to_none() {
+    for attributes in [
+        r#"{"name":"Opening","trackNumber":4294967296}"#,
+        r#"{"name":"Opening","trackNumber":18446744073709551616}"#,
+    ] {
+        assert_eq!(song_from_attributes(attributes).track_number, None);
+    }
+}
+
 #[test]
 fn songs_from_album_maps_the_first_preview_url() {
     assert_eq!(

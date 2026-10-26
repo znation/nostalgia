@@ -179,10 +179,11 @@ struct Attributes {
     #[serde(rename = "releaseDate")]
     release_date: Option<String>,
     /// The track's 1-based position on its album; absent when the API omits
-    /// it. A non-positive number is treated as absent when it reaches the
-    /// model.
+    /// it. Parsed as a JSON number so an out-of-`u32` value, including an
+    /// integer beyond `i64`, maps to the model's `None` instead of failing the
+    /// whole response.
     #[serde(rename = "trackNumber")]
-    track_number: Option<u32>,
+    track_number: Option<serde_json::Number>,
     /// The track's length in milliseconds; absent when the API omits it.
     #[serde(rename = "durationInMillis")]
     duration_in_millis: Option<u64>,
@@ -342,9 +343,15 @@ impl Resource {
             album,
             year: release_date.as_deref().and_then(release_year),
             genre,
-            // An API-reported `0` is not a usable album position, so it maps
-            // to the same `None` sentinel an absent number does.
-            track_number: track_number.filter(|number| *number > 0),
+            // An API-reported non-positive number is not a usable album
+            // position, so it maps to the same `None` sentinel an absent
+            // number does. A value too large for the model's `u32` — or even
+            // outside `i64` — is just as unusable, and must not fail the whole
+            // response either.
+            track_number: track_number
+                .and_then(|number| number.as_u64())
+                .filter(|number| *number > 0)
+                .and_then(|number| u32::try_from(number).ok()),
             album_id: album_id.to_string(),
             duration_ms: duration_ms.unwrap_or(0),
             preview_url,

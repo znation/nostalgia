@@ -5,6 +5,21 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### A negative track number fails the whole album fetch (found by the bugfix role 2026-10-26) — fixed 2026-10-26 by the bugfix role
+
+A song resource whose `attributes.trackNumber` was negative failed the whole
+collection parse (`invalid value: integer \`-1\`, expected u32`), so loading
+the album returned an error instead of the songs, and the File info panel's
+documented "`None` for a non-positive number" rule never applied. The wire
+field now parses the track number as a JSON number and maps non-positive or
+above-`u32::MAX` values to `Song::track_number`'s `None` sentinel; the new
+tests `songs_from_album_maps_a_negative_track_number_to_none` and
+`songs_from_album_maps_an_oversized_track_number_to_none` failed before the fix
+and pass after.
+
+**Validation gap:** none — a direct unit test reproduced it; the existing
+mapping tests covered only absent, `null`, and `0`.
+
 ### A duration reply with no length leaves the Jump to time panel open but invisible (found by the bugfix role 2026-10-25) — fixed 2026-10-25 by the bugfix role
 
 With the panel open, a current `PlaybackDuration` reply of `None` cleared

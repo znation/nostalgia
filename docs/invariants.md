@@ -1510,8 +1510,8 @@ and `toggle_about_while_shaded_restores_the_window_first` (`src/ui/tests/window_
   resource's `attributes.genreNames` through `primary_genre` — the first non-blank entry, trimmed,
   or `""` when the array is absent, empty, or all blank.
   `KnownTrack::track_number` is copied from `Song::track_number`, which `Resource::into_song`
-  takes from the resource's `attributes.trackNumber` with an absent, `null`, or `0` number mapped
-  to `None`.
+  takes from the resource's `attributes.trackNumber` with an absent, `null`, non-positive, or
+  above-`u32::MAX` number mapped to `None`.
   Between `Length:` and `Close`, it also draws one `Format: …` line (`256 KBPS  44 KHZ STEREO`,
   or `44 KHZ MONO` when the backend reports no bitrate) only while
   `WinampPlayer::playback_format` is `Some`, formatted from
@@ -1549,8 +1549,10 @@ overlay branch of `ui::view::view`.
 `release_date_maps_to_the_song_year` and
 `release_date_absent_or_malformed_maps_to_no_year`, `songs_from_album_maps_the_genre`,
 `songs_from_album_maps_a_missing_or_blank_genre_to_empty`,
-`songs_from_album_maps_the_track_number`, and
-`songs_from_album_maps_a_missing_or_zero_track_number_to_none`
+`songs_from_album_maps_the_track_number`,
+`songs_from_album_maps_a_missing_or_zero_track_number_to_none`,
+`songs_from_album_maps_a_negative_track_number_to_none`, and
+`songs_from_album_maps_an_oversized_track_number_to_none`
 (`src/apple_music/rest/tests/library.rs`); `song_round_trips_its_year`,
 `song_year_defaults_to_none_when_the_payload_omits_it`, `song_round_trips_its_genre`, and
 `song_genre_defaults_to_empty_when_the_payload_omits_it`, `song_round_trips_its_track_number`,
