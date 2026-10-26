@@ -7,7 +7,7 @@
 //! update loop, so `init_ui` installs [`message_for`] as the window
 //! subscription's mapper. Its unit tests live in the `tests` submodule.
 
-use iced::keyboard::{Event, Key, Modifiers, key};
+use iced::keyboard::{Event, Key, Location, Modifiers, key};
 
 use super::Message;
 
@@ -27,11 +27,43 @@ use super::Message;
 /// (the one Control chord Winamp-style play uses).
 /// `init_ui` installs this as the window subscription's mapper, so the
 /// key-to-message table lives here once and the subscription stays a plain
-/// `filter_map`.
+/// `filter_map`. With `NumLock` on, the keypad digits 4, 5, 6, 7, 9, 8, and 2
+/// also drive the transport and volume (see [`numpad_shortcut`]).
 pub(super) fn message_for(event: Event) -> Option<Message> {
     match event {
-        Event::KeyPressed { key, modifiers, .. } => shortcut(&key, modifiers),
+        Event::KeyPressed {
+            key,
+            modifiers,
+            location,
+            ..
+        } => numpad_shortcut(&key, location, modifiers).or_else(|| shortcut(&key, modifiers)),
         Event::KeyReleased { .. } | Event::ModifiersChanged(_) => None,
+    }
+}
+
+/// Winamp's numeric-keypad bindings, for keys pressed at `Location::Numpad`
+/// with `NumLock` on: 4 previous, 5 play, 6 next, 7 seek five seconds back, 9
+/// seek five seconds forward, 8 volume up, and 2 volume down, sending the same
+/// messages as Z, X, B, and the arrows. Shift is allowed; Control, Alt, or Logo
+/// yields `None`. Keypad 0, 1, 3, and the operators stay unbound, and top-row
+/// digits never reach this function's bindings. With `NumLock` off the keypad
+/// sends arrow keys, which `shortcut` already handles.
+fn numpad_shortcut(key: &Key, location: Location, modifiers: Modifiers) -> Option<Message> {
+    if location != Location::Numpad || modifiers.control() || modifiers.alt() || modifiers.logo() {
+        return None;
+    }
+    let Key::Character(character) = key else {
+        return None;
+    };
+    match character.as_str() {
+        "4" => Some(Message::PreviousTrack),
+        "5" => Some(Message::Play),
+        "6" => Some(Message::NextTrack),
+        "7" => Some(Message::SeekBackward),
+        "9" => Some(Message::SeekForward),
+        "8" => Some(Message::VolumeUp),
+        "2" => Some(Message::VolumeDown),
+        _ => None,
     }
 }
 
@@ -53,7 +85,8 @@ pub(super) fn message_for(event: Event) -> Option<Message> {
 /// `None`; Shift is allowed, and the letter match ignores ASCII case, so
 /// Shift+Z steps back exactly like Z and Ctrl+Shift+F focuses the box too.
 /// Alt+F and Logo+F stay unbound because they are chords for the window
-/// manager, not the player.
+/// manager, not the player. Keypad digits are handled by [`numpad_shortcut`],
+/// so top-row digits stay unbound here.
 fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
     // Ctrl+F is the one Control chord the player claims. Alt or Logo held with
     // it stays a window-manager chord, so only plain Control (plus optional
@@ -144,6 +177,19 @@ mod tests {
             modified_key: key,
             physical_key: key::Physical::Code(key::Code::KeyA),
             location: iced::keyboard::Location::Standard,
+            modifiers,
+            text: None,
+            repeat: false,
+        }
+    }
+
+    /// Like `key_pressed`, but at `Location::Numpad`.
+    fn numpad_pressed(key: Key, modifiers: Modifiers) -> Event {
+        Event::KeyPressed {
+            key: key.clone(),
+            modified_key: key,
+            physical_key: key::Physical::Code(key::Code::Numpad4),
+            location: Location::Numpad,
             modifiers,
             text: None,
             repeat: false,
@@ -366,6 +412,49 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn message_for_maps_the_numpad_transport_digits() {
+        for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
+            let map =
+                |digit: &str| message_for(numpad_pressed(Key::Character(digit.into()), modifiers));
+            assert!(matches!(map("4"), Some(Message::PreviousTrack)));
+            assert!(matches!(map("5"), Some(Message::Play)));
+            assert!(matches!(map("6"), Some(Message::NextTrack)));
+            assert!(matches!(map("7"), Some(Message::SeekBackward)));
+            assert!(matches!(map("9"), Some(Message::SeekForward)));
+            assert!(matches!(map("8"), Some(Message::VolumeUp)));
+            assert!(matches!(map("2"), Some(Message::VolumeDown)));
+        }
+    }
+
+    #[test]
+    fn message_for_leaves_other_digits_unbound() {
+        for key in ["0", "1", "3", "+"] {
+            let event = numpad_pressed(Key::Character(key.into()), Modifiers::NONE);
+            assert!(message_for(event).is_none(), "keypad {key}");
+        }
+        for key in ["2", "4", "5", "6", "7", "8", "9"] {
+            let event = key_pressed(Key::Character(key.into()), Modifiers::NONE);
+            assert!(message_for(event).is_none(), "top-row {key}");
+        }
+    }
+
+    #[test]
+    fn message_for_ignores_numpad_chords() {
+        for modifiers in [Modifiers::CTRL, Modifiers::ALT, Modifiers::LOGO] {
+            let event = numpad_pressed(Key::Character("4".into()), modifiers);
+            assert!(message_for(event).is_none());
+        }
+    }
+
+    #[test]
+    fn message_for_maps_numpad_arrows_like_the_arrow_keys() {
+        let left = numpad_pressed(Key::Named(key::Named::ArrowLeft), Modifiers::NONE);
+        let up = numpad_pressed(Key::Named(key::Named::ArrowUp), Modifiers::NONE);
+        assert!(matches!(message_for(left), Some(Message::SeekBackward)));
+        assert!(matches!(message_for(up), Some(Message::VolumeUp)));
     }
 
     #[test]

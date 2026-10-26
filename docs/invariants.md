@@ -434,6 +434,25 @@ the showing list without reading shared state or touching the play history.
 
 **History.** Added with the Ctrl+Z / Ctrl+B list-edge shortcuts.
 
+## Numpad keys
+
+**Guarantee.** With the window focused and NumLock on, keypad 4, 5, 6, 7, 9, 8, and 2 (plain or
+with Shift) map to `PreviousTrack`, `Play`, `NextTrack`, `SeekBackward`, `SeekForward`, `VolumeUp`,
+and `VolumeDown` — the messages Z, X, B, and the arrows send, so they follow those messages' rules.
+Top-row digits, keypad 0/1/3 and the keypad operators, and Ctrl/Alt/Logo chords with the keypad
+stay unbound. With NumLock off the keypad sends arrow keys, which keep their arrow bindings.
+
+**Enforced by.** `shortcuts::numpad_shortcut` in `src/ui/shortcuts.rs` matches on
+`Location::Numpad`, and `shortcuts::message_for` tries it before `shortcut`.
+
+**Pinned by.**
+
+- `message_for_maps_the_numpad_transport_digits`, `message_for_leaves_other_digits_unbound`,
+  `message_for_ignores_numpad_chords`, and `message_for_maps_numpad_arrows_like_the_arrow_keys`
+  (`src/ui/shortcuts.rs`)
+
+**History.** Added with the Winamp numpad bindings.
+
 ## Browse row labels
 
 **Guarantee.** Each artist row shows the number of albums the loaded library holds for that
