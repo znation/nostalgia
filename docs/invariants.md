@@ -179,14 +179,14 @@ drill-in or playback on its second press; with no selected row, Enter is a no-op
 fetch or playback task. The search box's own Enter is captured by its `TextInput::on_submit` and
 remains `Message::SearchSubmitted` (the keyboard subscription receives only ignored events), so
 Enter in the box searches rather than opening a row. The selection is cleared whenever the rows are
-replaced, cleared, failed, sorted, or restored to library order, because the stored index then names
-a different row.
+replaced, cleared, failed, sorted, reversed, shuffled, or restored to library order, because the
+stored index then names a different row.
 
 **Enforced by.** `BrowseList::select_row` in `src/ui/browse.rs` validates the press through
 `BrowseList::select` and records it, returning `Some(true)` only for the second press on the
-selected row; `BrowseList::selected` exposes it to the view, and `replace_rows`, `clear`, `fail`,
-`sort_rows_by`, and `restore_library_order` (both in `src/ui/browse/ordering.rs`) clear it with the
-rows or order they change.
+selected row; `BrowseList::selected` exposes it to the view. `replace_rows`, `clear`, and `fail`
+in `src/ui/browse.rs`, and `sort_rows_by`, `reverse_rows`, `shuffle_rows`, and
+`restore_library_order` in `src/ui/browse/ordering.rs`, clear it with the rows or order they change.
 `browse::select_row` and `browse::open_selected` in `src/ui/handlers/browse.rs` route the two
 messages and share `browse::open_row`, which emits the existing `ArtistSelected`,
 `AlbumSelected`, `TrackSelected`, or `PlaylistSelected` message; `shortcuts::message_for` maps a
@@ -210,6 +210,8 @@ and applies that style to each one, and `views::view_open_button` (re-exported b
 - `open_selected_with_nothing_selected_is_a_noop`
 - `enter_opens_the_selected_song`
 - `replacing_or_sorting_rows_clears_the_selection`
+- `reverse_bumps_the_epoch_and_clears_the_selection`
+- `randomize_bumps_the_epoch_clears_the_selection_and_keeps_every_row`
 - `browse_open_button_sits_above_the_browse_list`
   (all in `src/ui/tests/`)
 - `message_for_maps_enter_to_open_selected`
