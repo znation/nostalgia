@@ -111,20 +111,18 @@ panel over the showing song list (a browsed album or playlist's songs, search re
 Songs): each row is numbered like the browse list, typing filters its cached row titles
 case-insensitively, and Enter or `Jump` plays the first match — the row drawn with the browse
 selection bar — or a row click plays that row, closing the panel; `Close` or a click on the
-backdrop closes it, and it opens only on those song lists. A `Reload` button beside `Sort` refetches the library's
-artists list and returns to the Artists list, clearing any active search while leaving the typed
-query in the search box. The title bar's `M` button (or `Ctrl+F1`) opens a transient About panel
-naming the app,
-showing its `v`-prefixed package version and the line `The classic Winamp look, rebuilt in
-Rust — with Apple Music as the library.`; `M` (through the backdrop over its slot), the panel's
-`Close` button, or a click on the backdrop outside the panel closes it, and opening it while the
-window is rolled up restores the window first. Its
+backdrop closes it, and it opens only on those song lists. A `Reload` button beside `Sort`
+refetches the library's artists list and returns to the Artists list, clearing any active search
+while leaving the typed query in the search box. The title bar's `M` button (or `Ctrl+F1`) opens
+a transient About panel naming the app, showing its `v`-prefixed package version and the line
+`The classic Winamp look, rebuilt in Rust — with Apple Music as the library.`; `M` (through the
+backdrop over its slot), `Ctrl+F1`, the panel's `Close` button, or a click on the backdrop outside
+the panel closes it, and opening it while the window is rolled up restores the window first. Its
 shade button, a double-click on the bar, or a double-click on the rolled-up strip rolls the window
-up to the title bar plus a compact
-transport strip with Previous, Play/Pause, Stop, Next, the same elapsed-over-total time readout, a
-seek slider over the preview's own length, and a volume slider, and back. Its `–` and `✕`
-buttons minimize and close. The window title
-(the name the desktop environment shows for the app) names the current track as
+up to the title bar plus a compact transport strip with Previous, Play/Pause, Stop, Next, the same
+elapsed-over-total time readout, a seek slider over the preview's own length, and a volume slider,
+and back. Its `–` and `✕` buttons minimize and close. The window title (the name the desktop
+environment shows for the app) names the current track as
 `<number>Artist - Title - nostalgia` (omitting the number or artist when empty), keeping the
 interrupted track's name across Stop and reading just `nostalgia` when no known track is current.
 With the window focused, the classic Winamp keys drive playback: Z and B step back and forward
