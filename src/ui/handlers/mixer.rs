@@ -100,8 +100,12 @@ pub(in crate::ui) fn toggle_equalizer_panel(player: &mut WinampPlayer) -> Task<M
 
 /// The player row's PL button: shows or hides the normal-mode library section.
 /// This is a layout-only toggle that changes no playback, equalizer, browse,
-/// search, or selection state and schedules no work.
+/// search, or selection state and schedules no work. Shade mode draws no PL
+/// button, so the Alt+E key does nothing there, like `toggle_equalizer_panel`.
 pub(in crate::ui) fn toggle_library_panel(player: &mut WinampPlayer) -> Task<Message> {
+    if player.shaded {
+        return Task::none();
+    }
     player.library_panel_visible = !player.library_panel_visible;
     Task::none()
 }

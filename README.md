@@ -151,7 +151,9 @@ With the window focused, the classic Winamp keys drive playback: Z and B step ba
 X plays, C pauses, V stops, R toggles Repeat and S toggles Shuffle, A toggles always-on-top and T
 switches the large readout between elapsed and remaining time (the same actions as the on-screen A
 controls and a readout click), E shows or hides the equalizer panel exactly like the `EQ` button
-beside the balance slider, and the up/down arrows nudge the volume while the left/right arrows
+beside the balance slider (Alt+E shows or hides the library section exactly like the `PL` button,
+and Alt+G the equalizer panel like `EQ`, as Winamp's Alt+E and Alt+G toggle its playlist editor and
+equalizer), and the up/down arrows nudge the volume while the left/right arrows
 seek five seconds back or forward. With NumLock on, keypad 4, 5, and 6 play the previous,
 current, and next song, 7 and 9 seek five seconds back or forward, and 8 and 2 nudge the volume,
 and 1 and 3 jump ten songs back or forward through the same list, stopping at its ends, like Winamp. Ctrl+Z plays the first song of the list Z and B step through

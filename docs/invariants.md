@@ -641,8 +641,9 @@ refresh does not re-join and reformat every row.
 - The main transport row's fixed-width `EQ` toggle follows the balance slider in every playback
   state and is sunken while the equalizer panel is shown, ordinary chrome while it is hidden.
   Plain or Shift-held `E` dispatches the same `Message::ToggleEqualizerPanel` from the keyboard;
-  Ctrl, Alt, and Logo chords with E stay unbound, and shade mode changes nothing because the
-  toggle leaves the flag alone while `WinampPlayer::shaded` holds. The root `view` draws the
+  Alt+G dispatches the same message by physical key; Ctrl, Alt, and Logo chords with E stay
+  unbound for the equalizer, and shade mode changes nothing because the toggle leaves the flag
+  alone while `WinampPlayer::shaded` holds. The root `view` draws the
   `NOSTALGIA EQUALIZER` band and `view_equalizer` exactly when
   `WinampPlayer::eq_panel_visible` holds. Hiding them moves the `NOSTALGIA LIBRARY` band and the
   browse list up into the freed height without resizing the window, and leaves the equalizer's
@@ -654,7 +655,10 @@ refresh does not re-join and reformat every row.
   the library footer — exactly when `WinampPlayer::library_panel_visible` holds. The library
   section is open on a first launch, the flag is saved per `## Settings persistence`, and hiding it keeps the title bar, Now
   Playing bar, seek bar, transport row, and equalizer section drawn without changing any
-  playback, equalizer, browse, search, selection, or window-size state.
+  playback, equalizer, browse, search, selection, or window-size state. Alt+E dispatches
+  `Message::ToggleLibraryPanel` by physical key, its other modifier chords stay unbound, and shade
+  mode changes nothing because the toggle leaves `library_panel_visible` alone while
+  `WinampPlayer::shaded` holds.
 - The equalizer band row puts the vertical preamp slider leftmost, then the `+12 DB` / `0 DB` /
   `-12 DB` scale, then the ten band sliders. The scale reads top to bottom beside the rail's top,
   middle, and bottom, and the preamp label shares the band labels' text row. The response curve
@@ -706,7 +710,10 @@ tiny-skia renderer.
 `toggle_equalizer_panel_hides_and_restores_the_section`,
 `toggle_library_panel_hides_and_restores_the_library_section`,
 `e_toggles_the_equalizer_panel_from_the_keyboard`,
-`e_in_shade_mode_leaves_the_equalizer_panel_alone`, and
+`e_in_shade_mode_leaves_the_equalizer_panel_alone`,
+`alt_e_toggles_the_library_panel_and_back`,
+`alt_e_in_shade_mode_leaves_the_library_panel_alone`,
+`alt_g_toggles_the_equalizer_panel`, and
 `shaded_root_view_draws_no_section_title_bands` (`src/ui/tests/`), plus
 `title_band_centers_its_label_at_the_title_bar_height` and
 `title_bar_centers_its_name_between_its_edge_controls` (`src/ui/views/tests/chrome.rs`) for the title

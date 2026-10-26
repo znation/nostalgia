@@ -345,3 +345,54 @@ fn ctrl_shift_1_sorts_the_showing_list_from_the_keyboard() {
         .collect();
     assert_eq!(names, ["Apple", "banana", "cherry"]);
 }
+
+fn alt_key_message(code: iced::keyboard::key::Code) -> Message {
+    use iced::keyboard::{Event, Key, Modifiers, key};
+
+    let event = Event::KeyPressed {
+        key: Key::Character("\u{b4}".into()),
+        modified_key: Key::Character("\u{b4}".into()),
+        physical_key: key::Physical::Code(code),
+        location: iced::keyboard::Location::Standard,
+        modifiers: Modifiers::ALT,
+        text: None,
+        repeat: false,
+    };
+    super::shortcuts::message_for(event).expect("Alt chord must map to a message")
+}
+
+#[test]
+fn alt_e_toggles_the_library_panel_and_back() {
+    let (mut player, _state) = test_player();
+    assert!(player.library_panel_visible);
+
+    for expected in [false, true] {
+        let message = alt_key_message(iced::keyboard::key::Code::KeyE);
+        assert!(matches!(message, Message::ToggleLibraryPanel));
+        assert_message_schedules_no_work(&mut player, message);
+        assert_eq!(player.library_panel_visible, expected);
+    }
+}
+
+#[test]
+fn alt_e_in_shade_mode_leaves_the_library_panel_alone() {
+    let (mut player, _state) = test_player();
+    player.shaded = true;
+    assert!(player.library_panel_visible);
+
+    let message = alt_key_message(iced::keyboard::key::Code::KeyE);
+    assert!(matches!(message, Message::ToggleLibraryPanel));
+    assert_message_schedules_no_work(&mut player, message);
+    assert!(player.library_panel_visible);
+}
+
+#[test]
+fn alt_g_toggles_the_equalizer_panel() {
+    let (mut player, _state) = test_player();
+    assert!(player.eq_panel_visible);
+
+    let message = alt_key_message(iced::keyboard::key::Code::KeyG);
+    assert!(matches!(message, Message::ToggleEqualizerPanel));
+    assert_message_schedules_no_work(&mut player, message);
+    assert!(!player.eq_panel_visible);
+}

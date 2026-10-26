@@ -23,7 +23,8 @@ use super::Message;
 /// to focus the `Search library` box, Ctrl+Z and Ctrl+B to play the first and
 /// last song of the showing list, Ctrl+R to reverse the showing list, Ctrl+Shift+R to shuffle it, Ctrl+W to toggle window-shade mode, Ctrl+J to flip the Jump to time panel, Ctrl+Shift+1 to sort it by title
 /// (see [`playlist_sort_shortcut`]), Alt+3 to flip the File info panel
-/// (see [`file_info_shortcut`]), and the system media keys
+/// (see [`file_info_shortcut`]), Alt+E and Alt+G to show or hide the library
+/// and equalizer panels (see [`panel_shortcut`]), and the system media keys
 /// (Play/Pause, Play, Pause, Stop, Next track, and Previous track) to the same
 /// transport messages as the on-screen controls
 /// (the one Control chord Winamp-style play uses).
@@ -42,6 +43,7 @@ pub(super) fn message_for(event: Event) -> Option<Message> {
             ..
         } => playlist_sort_shortcut(&physical_key, location, modifiers)
             .or_else(|| file_info_shortcut(&physical_key, location, modifiers))
+            .or_else(|| panel_shortcut(&physical_key, modifiers))
             .or_else(|| move_row_shortcut(&key, modifiers))
             .or_else(|| numpad_shortcut(&key, location, modifiers))
             .or_else(|| shortcut(&key, modifiers)),
@@ -85,6 +87,22 @@ fn file_info_shortcut(
         && location == Location::Standard
         && *physical_key == key::Physical::Code(key::Code::Digit3))
     .then_some(Message::ToggleFileInfo)
+}
+
+/// Winamp's Alt+E and Alt+G, showing or hiding the library section (its
+/// playlist editor) and the equalizer panel. The keys are matched by physical
+/// position, not logical character, because on macOS Alt+E and Alt+G produce
+/// other characters (a dead key, `©`). Alt must be held with Control, Shift,
+/// and Logo released.
+fn panel_shortcut(physical_key: &key::Physical, modifiers: Modifiers) -> Option<Message> {
+    if !modifiers.alt() || modifiers.control() || modifiers.shift() || modifiers.logo() {
+        return None;
+    }
+    match physical_key {
+        key::Physical::Code(key::Code::KeyE) => Some(Message::ToggleLibraryPanel),
+        key::Physical::Code(key::Code::KeyG) => Some(Message::ToggleEqualizerPanel),
+        _ => None,
+    }
 }
 
 /// Alt+Up and Alt+Down move the selected browse row one place up or down, like
@@ -568,6 +586,51 @@ mod tests {
             let event = key_pressed(Key::Character("j".into()), modifiers);
             assert!(message_for(event).is_none(), "{modifiers:?}");
         }
+    }
+
+    #[test]
+    fn message_for_maps_alt_e_and_alt_g_to_the_panel_toggles() {
+        for logical in ["e", "\u{b4}"] {
+            let event = digit_pressed(
+                Key::Character(logical.into()),
+                key::Code::KeyE,
+                Location::Standard,
+                Modifiers::ALT,
+            );
+            assert!(matches!(
+                message_for(event),
+                Some(Message::ToggleLibraryPanel)
+            ));
+        }
+        for logical in ["g", "\u{a9}"] {
+            let event = digit_pressed(
+                Key::Character(logical.into()),
+                key::Code::KeyG,
+                Location::Standard,
+                Modifiers::ALT,
+            );
+            assert!(matches!(
+                message_for(event),
+                Some(Message::ToggleEqualizerPanel)
+            ));
+        }
+        for code in [key::Code::KeyE, key::Code::KeyG] {
+            for modifiers in [
+                Modifiers::CTRL | Modifiers::ALT,
+                Modifiers::SHIFT | Modifiers::ALT,
+                Modifiers::LOGO | Modifiers::ALT,
+            ] {
+                let event = digit_pressed(
+                    Key::Character("x".into()),
+                    code,
+                    Location::Standard,
+                    modifiers,
+                );
+                assert!(message_for(event).is_none(), "{code:?} with {modifiers:?}");
+            }
+        }
+        assert_maps!(Key::Character("e".into()), Modifiers::NONE => Message::ToggleEqualizerPanel);
+        assert!(message_for(key_pressed(Key::Character("g".into()), Modifiers::NONE)).is_none());
     }
 
     #[test]
