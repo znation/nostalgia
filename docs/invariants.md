@@ -1119,13 +1119,13 @@ flight: every transport handler in `src/ui/handlers/playback.rs` that schedules 
 transition, and the completion that reports that same transition ends it; while the count is nonzero
 the `handlers::playback::preview` poll handlers issue no query and its reply handlers store no
 reply. `AppleMusicService::play_track` stops the backend's previous preview when a selection has no
-preview URL. `views::now_playing::lcd_indicator_strip` draws
-`views::now_playing::LCD_INDICATOR_LABELS` down the LCD's left edge in a fixed-width column; its
+preview URL. `views::now_playing::indicator::lcd_indicator_strip` draws
+`views::now_playing::indicator::LCD_INDICATOR_LABELS` down the LCD's left edge in a fixed-width column; its
 `A`, `I`, and `V` cells publish `Message::ToggleAlwaysOnTop`, `Message::ToggleFileInfo`, and
-`Message::ToggleVisualizer` through `views::now_playing::lcd_indicator_message`, while `O` and `D`
+`Message::ToggleVisualizer` through `views::now_playing::indicator::lcd_indicator_message`, while `O` and `D`
 publish nothing.
-`views::now_playing::visualizer_bar_heights` scales and clamps the stored spectrum, and
-`views::now_playing::now_playing_visualizer_row` draws its `BAND_COUNT` bars at fixed width inside
+`views::now_playing::visualizer::visualizer_bar_heights` scales and clamps the stored spectrum, and
+`views::now_playing::visualizer::now_playing_visualizer_row` draws its `BAND_COUNT` bars at fixed width inside
 the row `views::view_now_playing` places between the title and status rows. The `Spectrum` handler
 in `src/ui/handlers/playback/preview.rs` stores the reply under the same epoch and
 pending-transition guards as the position, format, and duration, `spectrum_tick` schedules the
@@ -1150,7 +1150,7 @@ byte count to `format_for_source` in `src/audio/player/format.rs`, which reads t
 from the decoded `rodio` source and computes the bitrate through `preview_bitrate_kbps` from the
 source's own total duration, and
 `views::now_playing::text::format_playback_prefix`/`text::channel_mode_label` format them, and
-`views::now_playing::CHANNEL_LABELS`/`channel_label_color`/`now_playing_status_row` render them in
+`views::now_playing::status::CHANNEL_LABELS`/`status::channel_label_color`/`status::now_playing_status_row` render them in
 the LCD's status row built by `views::view_now_playing`. The `PlaybackFormat` handler in
 `src/ui/handlers/playback/preview.rs` stores the reply beside the position under the same epoch and
 pending-transition guards, and `reset_position_readout` clears the format on Stop and a new
@@ -1463,7 +1463,7 @@ normal-mode branch of `ui::view::view` in `src/ui/view.rs`, which wraps the base
   `Message::ToggleFileInfo`; a press on the panel's
   chrome publishes `Message::Ignored`. The shade branch never draws the panel.
 
-**Enforced by.** `shortcuts::file_info_shortcut`, `views::now_playing::lcd_indicator_message`,
+**Enforced by.** `shortcuts::file_info_shortcut`, `views::now_playing::indicator::lcd_indicator_message`,
 `handlers::window::toggle_file_info`,
 `views::file_info::view_file_info_overlay`, `views::modal::modal_overlay`,
 `views::now_playing::format_playback_prefix`, `views::now_playing::channel_mode_label`, and the
@@ -1783,8 +1783,8 @@ in `src/audio.rs` defaults to `None`, and `RodioPlayer::spectrum` in
 `src/audio/player/rodio_player.rs` answers `Some` only once the player holds a preview's format,
 through the worker's `Command::Spectrum`
 handled beside `Command::PlaybackFormat`; `RodioOutput::spectrum` bounds the query like the other
-backend queries. On the UI side, `views::now_playing::visualizer_bar_heights` and
-`views::now_playing::now_playing_visualizer_row` scale and draw the bands,
+backend queries. On the UI side, `views::now_playing::visualizer::visualizer_bar_heights` and
+`views::now_playing::visualizer::now_playing_visualizer_row` scale and draw the bands,
 `views::visible_spectrum` applies `WinampPlayer::visualizer_visible`,
 `Message::ToggleVisualizer` and `handlers::playback::toggle_visualizer` flip that flag,
 `WinampPlayer::needs_spectrum_poll` gates the poll, `ui::timers::spectrum_ticks` feeds it, and

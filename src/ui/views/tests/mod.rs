@@ -16,15 +16,17 @@ use super::mini_transport::{
     MINI_SEEK_ID, MINI_TRANSPORT_HEIGHT, MINI_VOLUME_ID, MINI_VOLUME_WIDTH,
     mini_transport_controls, mini_transport_readout, mini_volume_spec, view_library_strip,
 };
+use super::now_playing::indicator::{lcd_indicator_message, lcd_indicator_strip};
+use super::now_playing::status::{CHANNEL_LABELS, channel_label_color, now_playing_status_row};
 use super::now_playing::text::{format_lcd_elapsed, format_lcd_remaining};
+use super::now_playing::visualizer::{
+    now_playing_visualizer_row, visible_spectrum, visualizer_bar_heights,
+};
 use super::now_playing::{
-    CHANNEL_LABELS, KnownTrack, MARQUEE_WIDTH, TimeDisplay, channel_label_color,
-    channel_mode_label, display_len, elapsed_readout_clickable, elapsed_readout_color,
-    format_playback_prefix, lcd_indicator_message, lcd_indicator_strip, marquee_text,
+    KnownTrack, MARQUEE_WIDTH, TimeDisplay, channel_mode_label, display_len,
+    elapsed_readout_clickable, elapsed_readout_color, format_playback_prefix, marquee_text,
     needs_marquee, now_playing_artist, now_playing_content, now_playing_elapsed, now_playing_label,
-    now_playing_number, now_playing_row, now_playing_status_row, now_playing_time,
-    now_playing_visualizer_row, transport_glyph, transport_glyph_color, visible_spectrum,
-    visualizer_bar_heights,
+    now_playing_number, now_playing_row, now_playing_time, transport_glyph, transport_glyph_color,
 };
 use super::seek_bar::seek_wheel_message;
 use super::shade::{SHADE_STRIP_HEIGHT, SHADED_HEIGHT, view_shade_strip};

@@ -13,8 +13,9 @@
 //! in `browse::rows` and pure row wording and labels in `browse::rows::text`),
 //! `title_bar`, `shade` (the rolled-up
 //! transport strip), `mini_transport` (the compact row the shade strip and the
-//! library footer share), `now_playing` (the LCD widgets, with its pure label, time,
-//! and marquee resolution in `now_playing::text`), `seek_bar`, `transport`, and `equalizer`
+//! library footer share), `now_playing` (the LCD well, title row, indicator strip, status row, and
+//! visualizer row, with its pure label, time, and marquee resolution in
+//! `now_playing::text`), `seek_bar`, `transport`, and `equalizer`
 //! — while the chrome helpers, slider specs, and track-length formatting the
 //! panels share ([`spacer`], [`labeled_button`], [`fixed_width_button`],
 //! [`chrome_slider`], and [`format_track_time`]) live here.
