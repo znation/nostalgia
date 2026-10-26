@@ -7,7 +7,7 @@
 
 use iced::Task;
 
-use super::{back, fetch_at_top};
+use super::{back, fetch_at_top, switch_view};
 use crate::ui::loading::fetch_level;
 use crate::ui::views;
 use crate::ui::{CurrentView, Message, WinampPlayer};
@@ -56,9 +56,10 @@ pub(in crate::ui) fn search_submitted(player: &mut WinampPlayer) -> Task<Message
         return Task::none();
     }
     player.search_query = query.clone();
+    // The search results replace the shared songs list, so switch to it as
+    // any navigation does, then mark the list as the search's results.
+    switch_view(player, CurrentView::Songs);
     player.search_active = true;
-    player.current_view = CurrentView::Songs;
-    player.jump_file_visible = false;
     // The search results reuse the songs buffer, so the previous list's
     // rows are dropped and a press during the fetch cannot resolve
     // against them (the same clear-before-fetch the navigation handlers do).
