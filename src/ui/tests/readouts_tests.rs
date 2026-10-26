@@ -461,55 +461,56 @@ fn playback_format_reply_stores_the_loaded_previews_format() {
 // way it could describe the previous player. A reply at the current epoch
 // with no transition pending is stored, so the drops above come from the
 // guards and not from the message being ignored entirely.
-#[test]
-fn playback_format_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped() {
+/// Drives one poll-reply field through the guard every poll reply shares: a
+/// reply from before a settled Stop is dropped, a reply at the current epoch
+/// is dropped while a Pause is pending, and stored once the transition settles.
+/// `reply` wraps a value in the field's message, `get`/`set` read and write the
+/// field, `stale` is the replied value, and `kept` is the value already held.
+fn assert_reply_dropped_while_stale_or_pending<T: Copy + PartialEq + std::fmt::Debug>(
+    reply: impl Fn(u64, T) -> Message,
+    get: impl Fn(&WinampPlayer) -> Option<T>,
+    set: impl Fn(&mut WinampPlayer, T),
+    stale: T,
+    kept: T,
+) {
     let (mut player, _current_track) = play_song_1_then_browse_to_album_2();
     let old_epoch = player.position_epoch;
 
     let _ = update(&mut player, Message::Stop);
     let _ = update(&mut player, Message::TransportSettled);
-    let stale = PlaybackFormat {
-        sample_rate_hz: 48_000,
-        channels: 2,
-        bitrate_kbps: None,
-    };
-    let _ = update(
-        &mut player,
-        Message::PlaybackFormat {
-            epoch: old_epoch,
-            format: Some(stale),
-        },
-    );
-    assert_eq!(player.playback_format, None);
+    let _ = update(&mut player, reply(old_epoch, stale));
+    assert_eq!(get(&player), None);
 
     // A pending transition drops even a reply at the current epoch.
     let current_epoch = player.position_epoch;
-    let kept = PlaybackFormat {
-        sample_rate_hz: 44_100,
-        channels: 1,
-        bitrate_kbps: None,
-    };
-    player.playback_format = Some(kept);
+    set(&mut player, kept);
     let _ = update(&mut player, Message::Pause);
-    let _ = update(
-        &mut player,
-        Message::PlaybackFormat {
-            epoch: current_epoch,
-            format: Some(stale),
-        },
-    );
-    assert_eq!(player.playback_format, Some(kept));
+    let _ = update(&mut player, reply(current_epoch, stale));
+    assert_eq!(get(&player), Some(kept));
 
     // Once the transition settles, the same reply is stored.
     let _ = update(&mut player, Message::TransportSettled);
-    let _ = update(
-        &mut player,
-        Message::PlaybackFormat {
-            epoch: current_epoch,
-            format: Some(stale),
+    let _ = update(&mut player, reply(current_epoch, stale));
+    assert_eq!(get(&player), Some(stale));
+}
+
+#[test]
+fn playback_format_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped() {
+    let format = |sample_rate_hz| PlaybackFormat {
+        sample_rate_hz,
+        channels: 2,
+        bitrate_kbps: None,
+    };
+    assert_reply_dropped_while_stale_or_pending(
+        |epoch, value| Message::PlaybackFormat {
+            epoch,
+            format: Some(value),
         },
+        |player| player.playback_format,
+        |player, value| player.playback_format = Some(value),
+        format(48_000),
+        format(44_100),
     );
-    assert_eq!(player.playback_format, Some(stale));
 }
 
 // Pause keeps the loaded preview's format on the status row, while Stop
@@ -565,47 +566,18 @@ fn spectrum_reply_stores_the_loaded_previews_spectrum() {
 // guards and not from the message being ignored entirely.
 #[test]
 fn spectrum_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped() {
-    let (mut player, _current_track) = play_song_1_then_browse_to_album_2();
-    let old_epoch = player.position_epoch;
-
-    let _ = update(&mut player, Message::Stop);
-    let _ = update(&mut player, Message::TransportSettled);
-    let stale = Spectrum {
-        bands: [0.25; BAND_COUNT],
-    };
-    let _ = update(
-        &mut player,
-        Message::Spectrum {
-            epoch: old_epoch,
-            spectrum: Some(stale),
+    assert_reply_dropped_while_stale_or_pending(
+        |epoch, value| Message::Spectrum {
+            epoch,
+            spectrum: Some(value),
         },
-    );
-    assert_eq!(player.spectrum, None);
-
-    // A pending transition drops even a reply at the current epoch.
-    let current_epoch = player.position_epoch;
-    let kept = recording_spectrum();
-    player.spectrum = Some(kept);
-    let _ = update(&mut player, Message::Pause);
-    let _ = update(
-        &mut player,
-        Message::Spectrum {
-            epoch: current_epoch,
-            spectrum: Some(stale),
+        |player| player.spectrum,
+        |player, value| player.spectrum = Some(value),
+        Spectrum {
+            bands: [0.25; BAND_COUNT],
         },
+        recording_spectrum(),
     );
-    assert_eq!(player.spectrum, Some(kept));
-
-    // Once the transition settles, the same reply is stored.
-    let _ = update(&mut player, Message::TransportSettled);
-    let _ = update(
-        &mut player,
-        Message::Spectrum {
-            epoch: current_epoch,
-            spectrum: Some(stale),
-        },
-    );
-    assert_eq!(player.spectrum, Some(stale));
 }
 
 // Pause keeps the loaded preview's bars frozen, while Stop clears them
@@ -656,43 +628,16 @@ fn playback_duration_reply_stores_the_loaded_previews_length() {
 // guards and not from the message being ignored entirely.
 #[test]
 fn playback_duration_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped() {
-    let (mut player, _current_track) = play_song_1_then_browse_to_album_2();
-    let old_epoch = player.position_epoch;
-
-    let _ = update(&mut player, Message::Stop);
-    let _ = update(&mut player, Message::TransportSettled);
-    let _ = update(
-        &mut player,
-        Message::PlaybackDuration {
-            epoch: old_epoch,
-            duration: Some(Duration::from_secs(5)),
+    assert_reply_dropped_while_stale_or_pending(
+        |epoch, value| Message::PlaybackDuration {
+            epoch,
+            duration: Some(value),
         },
+        |player| player.playback_duration,
+        |player, value| player.playback_duration = Some(value),
+        Duration::from_secs(5),
+        Duration::from_secs(30),
     );
-    assert_eq!(player.playback_duration, None);
-
-    // A pending transition drops even a reply at the current epoch.
-    let current_epoch = player.position_epoch;
-    player.playback_duration = Some(Duration::from_secs(30));
-    let _ = update(&mut player, Message::Pause);
-    let _ = update(
-        &mut player,
-        Message::PlaybackDuration {
-            epoch: current_epoch,
-            duration: Some(Duration::from_secs(5)),
-        },
-    );
-    assert_eq!(player.playback_duration, Some(Duration::from_secs(30)));
-
-    // Once the transition settles, the same reply is stored.
-    let _ = update(&mut player, Message::TransportSettled);
-    let _ = update(
-        &mut player,
-        Message::PlaybackDuration {
-            epoch: current_epoch,
-            duration: Some(Duration::from_secs(5)),
-        },
-    );
-    assert_eq!(player.playback_duration, Some(Duration::from_secs(5)));
 }
 
 // Dragging the seek bar stores the thumb value in seconds and sends nothing
