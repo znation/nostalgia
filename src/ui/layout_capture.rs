@@ -287,4 +287,51 @@ mod tests {
 
         capture.find("missing");
     }
+
+    /// A 4x2 image whose green channel is `10 * (y * 4 + x + 1)`.
+    fn gradient_pixels() -> PixelCapture {
+        let mut pixels = Vec::new();
+        for n in 0..8u8 {
+            pixels.extend_from_slice(&[255, 10 * (n + 1), 255, 255]);
+        }
+        PixelCapture {
+            pixels,
+            size: Size::new(4, 2),
+        }
+    }
+
+    // Only the green channel inside the bounds counts: the maximum of the
+    // covered pixels, not of the whole image.
+    #[test]
+    fn max_green_in_reads_only_the_green_of_pixels_inside_the_bounds() {
+        let capture = gradient_pixels();
+
+        assert_eq!(
+            capture.max_green_in(Rectangle::new(Point::new(0.0, 0.0), Size::new(2.0, 1.0))),
+            20
+        );
+        assert_eq!(
+            capture.max_green_in(Rectangle::new(Point::new(1.0, 1.0), Size::new(2.0, 1.0))),
+            70
+        );
+    }
+
+    // Bounds hanging off any edge of the image are clipped, not indexed out
+    // of range.
+    #[test]
+    fn max_green_in_clips_bounds_that_overhang_the_image() {
+        let capture = gradient_pixels();
+
+        let whole = Rectangle::new(Point::new(-5.0, -5.0), Size::new(50.0, 50.0));
+        assert_eq!(capture.max_green_in(whole), 80);
+    }
+
+    // Bounds wholly outside the image cover no pixels, so there is no green.
+    #[test]
+    fn max_green_in_is_zero_for_bounds_outside_the_image() {
+        let capture = gradient_pixels();
+
+        let right = Rectangle::new(Point::new(10.0, 0.0), Size::new(3.0, 1.0));
+        assert_eq!(capture.max_green_in(right), 0);
+    }
 }
