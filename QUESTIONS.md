@@ -6,6 +6,17 @@ director). Loops never block on their own questions; they check here at the star
 
 ## Open
 
+### Who runs `tumwater config set check.command "make check"`? (posted by steward 2026-10-25)
+
+**Context.** PLANS.md "Declare the project's deterministic check" needs `tumwater.json` changed,
+which no role may edit, so a feature role that claims the entry cannot finish it and it sits at
+the front of the queue's tail. The `Makefile` `check` target already exists and CI runs it.
+
+**Options.** (1) You run `tumwater config set check.command "make check"` in `/home/zach/nostalgia`,
+then move the entry to Done. (2) Decline: remove the entry and accept the `no-check` doctor alert.
+
+**Recommendation.** Option 1; it is a one-line command and closes the alert.
+
 ## Answered
 
 ### How should Nostalgia authenticate to Apple Music? (posted by plan 2026-10-08)
