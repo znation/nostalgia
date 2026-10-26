@@ -191,7 +191,7 @@ fn the_root_view_draws_only_the_filtered_row_in_the_panel() {
     let capture = captured_root_view_text_bounds(&player);
     let texts: Vec<&str> = capture.texts().collect();
     assert!(texts.contains(&"JUMP TO FILE"), "{texts:?}");
-    assert!(texts.contains(&"The Sample Band - Two"), "{texts:?}");
-    assert!(!texts.contains(&"The Sample Band - One"), "{texts:?}");
-    assert!(!texts.contains(&"The Sample Band - Three"), "{texts:?}");
+    assert!(texts.contains(&"2. The Sample Band - Two"), "{texts:?}");
+    assert!(!texts.contains(&"1. The Sample Band - One"), "{texts:?}");
+    assert!(!texts.contains(&"3. The Sample Band - Three"), "{texts:?}");
 }

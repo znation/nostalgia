@@ -1,7 +1,9 @@
 //! The Jump to File overlay: its filter, its rows, and the messages each
 //! control publishes.
 
-use super::super::{jump_file_matches, view_jump_file_overlay};
+use super::super::{
+    jump_file_matches, jump_file_row_label, jump_file_row_style, view_jump_file_overlay,
+};
 use super::*;
 
 fn overlay<'a>(query: &'a str, titles: &'a [String], epoch: u64) -> Element<'a, Message> {
@@ -62,6 +64,37 @@ fn matches_blank_all_case_insensitive_trimmed_in_order() {
 }
 
 #[test]
+fn jump_file_row_label_numbers_the_showing_list_position() {
+    assert_eq!(jump_file_row_label(0, "Opening"), "1. Opening");
+    assert_eq!(jump_file_row_label(1, "Middle"), "2. Middle");
+    assert_eq!(jump_file_row_label(9, "Closing"), "10. Closing");
+    // A title that already carries a number gains exactly one new prefix.
+    assert_eq!(jump_file_row_label(1, "2. Middle"), "2. 2. Middle");
+}
+
+#[test]
+fn jump_file_row_style_highlights_only_the_default_row() {
+    use iced::widget::button::Status;
+
+    let default = jump_file_row_style(true, Status::Active);
+    assert_eq!(
+        default.background,
+        Some(iced::Background::Color(theme::ROW_HIGHLIGHT))
+    );
+    assert_eq!(default.text_color, theme::PLAYING_ROW_TEXT);
+
+    let plain = jump_file_row_style(false, Status::Active);
+    assert_eq!(plain.background, None);
+    assert_eq!(plain.text_color, theme::LCD_GREEN);
+
+    let hovered = jump_file_row_style(false, Status::Hovered);
+    assert_eq!(
+        hovered.background,
+        style::playlist_row_style(Status::Hovered).background
+    );
+}
+
+#[test]
 fn overlay_draws_the_heading_matching_rows_and_buttons() {
     let titles = vec![
         "Opening".to_string(),
@@ -71,13 +104,13 @@ fn overlay_draws_the_heading_matching_rows_and_buttons() {
     let mut element = overlay("mid", &titles, 7);
     let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
     let texts: Vec<&str> = capture.texts().collect();
-    for expected in ["JUMP TO FILE", "Middle", "Jump", "Close"] {
+    for expected in ["JUMP TO FILE", "2. Middle", "Jump", "Close"] {
         assert!(
             texts.contains(&expected),
             "the Jump to File overlay must draw {expected:?}: {texts:?}"
         );
     }
-    for omitted in ["Opening", "Closing"] {
+    for omitted in ["1. Opening", "3. Closing"] {
         assert!(
             !texts.contains(&omitted),
             "the filter must omit {omitted:?}: {texts:?}"
@@ -93,7 +126,7 @@ fn row_and_buttons_publish_their_messages() {
         "Closing".to_string(),
     ];
     assert!(matches!(
-        press_label("mid", &titles, 7, "Middle").as_slice(),
+        press_label("mid", &titles, 7, "2. Middle").as_slice(),
         [Message::JumpFileRowSelected { epoch: 7, index: 1 }]
     ));
     assert!(matches!(

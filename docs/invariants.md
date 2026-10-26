@@ -1591,19 +1591,28 @@ and `jump_time_overlay_buttons_and_backdrop_publish_their_messages`
 - `views::jump_file::jump_file_matches` trims the query and compares it case-insensitively as a
   substring, matching every index for a blank query, in list order. The view and the submit handler
   call it, so the rows drawn and the row Enter plays agree.
+- `views::jump_file::jump_file_row_label` prefixes a row with `index + 1`, the source position the
+  same 0-based index has in the showing list, followed by `". "` and the cached title. Filtering
+  therefore keeps each match's original number instead of renumbering the shown rows.
+- `views::jump_file::jump_file_row_style` draws the first match — the row Enter or `Jump` plays —
+  with the browse selection style, the blue `theme::ROW_HIGHLIGHT` bar behind white
+  `theme::PLAYING_ROW_TEXT`; every other row keeps the flat green `style::playlist_row_style`
+  colors and its hover/press face ladder.
 - `jump_file_submitted` plays the first match through `Message::TrackSelected { epoch, index }` and
   closes the panel; no match changes nothing. `jump_file_row_selected` dispatches the clicked
   source index the same way. The existing `TrackSelected` epoch/index guards reject a stale press.
-- `views::view_jump_file_overlay` stacks `JUMP TO FILE`, the `Filter songs` box, one row per match,
-  and `Jump` and `Close` buttons through `modal_overlay`. An empty list reads `No songs`; a list with
-  no match reads `No matching songs`. `Close` and the backdrop publish `ToggleJumpFile`, `Jump`
-  publishes `JumpFileSubmitted`, and each row publishes `JumpFileRowSelected`. The shade branch never
-  draws it.
+- `views::view_jump_file_overlay` stacks `JUMP TO FILE`, the `Filter songs` box, one numbered row per
+  match, and `Jump` and `Close` buttons through `modal_overlay`. An empty list reads `No songs`; a
+  list with no match reads `No matching songs`, and neither draws a row. `Close` and the backdrop
+  publish `ToggleJumpFile`, `Jump` publishes `JumpFileSubmitted`, and each row publishes
+  `JumpFileRowSelected`. The shade branch never draws it.
 
 **Enforced by.** `handlers::jump`, `handlers::browse`, `ui::timers`,
 `views::jump_file::view_jump_file_overlay`, and the jump-file branch of `ui::view::view`.
 
 **Pinned by.** `matches_blank_all_case_insensitive_trimmed_in_order`,
+`jump_file_row_label_numbers_the_showing_list_position`,
+`jump_file_row_style_highlights_only_the_default_row`,
 `overlay_draws_the_heading_matching_rows_and_buttons`,
 `row_and_buttons_publish_their_messages`, and
 `empty_and_no_match_lists_have_their_own_wording` (`src/ui/views/tests/jump_file.rs`);

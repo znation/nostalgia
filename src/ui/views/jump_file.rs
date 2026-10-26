@@ -28,14 +28,41 @@ pub(crate) fn jump_file_matches(titles: &[String], query: &str) -> Vec<usize> {
         .collect()
 }
 
+/// The label a Jump to File row draws for the source `index`: its 1-based
+/// position in the showing list, then a period, then its cached title.
+///
+/// `index` is the same 0-based source index [`jump_file_matches`] returns and
+/// a row press dispatches, so a filtered list keeps the number its source list
+/// shows instead of renumbering the matches.
+pub(crate) fn jump_file_row_label(index: usize, title: &str) -> String {
+    format!("{}. {title}", index + 1)
+}
+
+/// The style for a Jump to File row, colored by whether it is the default.
+///
+/// `is_default` marks the row Enter or `Jump` plays: it takes the browse
+/// selection style — the blue [`theme::ROW_HIGHLIGHT`] bar behind white
+/// [`theme::PLAYING_ROW_TEXT`] — while every other row keeps the flat green
+/// playlist-row colors. Pure, like `super::browse::rows::browse_row_style`, so
+/// the colors are testable without a renderer.
+pub(crate) fn jump_file_row_style(
+    is_default: bool,
+    status: iced::widget::button::Status,
+) -> iced::widget::button::Style {
+    super::browse::rows::browse_row_style(status, false, is_default)
+}
+
 /// Stacks the transient Jump to File panel over `base`.
 ///
 /// The panel is modal (see [`modal_overlay`]): `Close` and the backdrop each
 /// publish [`Message::ToggleJumpFile`], while `Jump` and Enter in the box
 /// publish [`Message::JumpFileSubmitted`]. Each matching row publishes
 /// [`Message::JumpFileRowSelected`] with the `epoch` of the list that supplied
-/// `titles` and its source index. An empty list reads `No songs`; a list with
-/// no match reads `No matching songs`. No state or playback is touched here.
+/// `titles` and its source index. Every row is numbered with its source
+/// position by [`jump_file_row_label`]; the first match — the row Enter or
+/// `Jump` plays — carries the browse selection style through
+/// [`jump_file_row_style`]. An empty list reads `No songs`; a list with no
+/// match reads `No matching songs`. No state or playback is touched here.
 pub fn view_jump_file_overlay<'a>(
     base: Element<'a, Message>,
     query: &'a str,
@@ -43,14 +70,18 @@ pub fn view_jump_file_overlay<'a>(
     epoch: u64,
 ) -> Element<'a, Message> {
     let matches = jump_file_matches(titles, query);
-    let has_matches = !matches.is_empty();
+    let first_match = matches.first().copied();
+    let has_matches = first_match.is_some();
     let mut rows = Column::new().spacing(2).padding(4);
     for index in matches {
+        let label = jump_file_row_label(index, &titles[index]);
         rows = rows.push(
-            Button::new(Text::new(titles[index].as_str()).size(18))
+            Button::new(Text::new(label).size(18))
                 .width(Length::Fill)
                 .on_press(Message::JumpFileRowSelected { epoch, index })
-                .style(|_theme, status| style::playlist_row_style(status)),
+                .style(move |_theme, status| {
+                    jump_file_row_style(first_match == Some(index), status)
+                }),
         );
     }
     if titles.is_empty() {

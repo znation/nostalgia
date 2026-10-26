@@ -107,9 +107,10 @@ opens only while a track is current. Ctrl+J opens a transient Jump to time panel
 length) and close the panel; `Close`, a click on the backdrop, or Ctrl+J again closes it, and it
 opens only while a preview with a known length is loaded. Plain `J` opens a transient Jump to File
 panel over the showing song list (a browsed album or playlist's songs, search results, or All
-Songs): typing filters its cached row titles case-insensitively, and Enter or `Jump` plays the first
-match or a row click plays that row, closing the panel; `Close` or a click on the backdrop closes
-it, and it opens only on those song lists. A `Reload` button beside `Sort` refetches the library's
+Songs): each row is numbered like the browse list, typing filters its cached row titles
+case-insensitively, and Enter or `Jump` plays the first match — the row drawn with the browse
+selection bar — or a row click plays that row, closing the panel; `Close` or a click on the
+backdrop closes it, and it opens only on those song lists. A `Reload` button beside `Sort` refetches the library's
 artists list and returns to the Artists list, clearing any active search while leaving the typed
 query in the search box. The title bar's `M` button (or `Ctrl+F1`) opens a transient About panel
 naming the app,
