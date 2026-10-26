@@ -748,6 +748,25 @@ fn seek_preview_released_backend_failure_leaves_the_position_alone() {
     assert_eq!(player.playback_position, Some(Duration::from_secs(4)));
 }
 
+/// Fires one `PositionTick` and returns the epoch it was issued at with every
+/// reply its batched queries emit.
+fn tick_replies(player: &mut WinampPlayer) -> (u64, Vec<Message>) {
+    let epoch = player.position_epoch;
+    let replies = task_outputs(update(player, Message::PositionTick), "position tick");
+    (epoch, replies)
+}
+
+/// Asserts the tick's replies include a position query at `epoch`.
+fn assert_position_queried(replies: &[Message], epoch: u64) {
+    assert!(
+        replies.iter().any(|message| matches!(
+            message,
+            Message::PlaybackPosition { epoch: reply_epoch, .. } if *reply_epoch == epoch
+        )),
+        "the tick must query the position: {replies:?}"
+    );
+}
+
 #[test]
 fn position_tick_schedules_a_query() {
     let (mut player, _state) = test_player();
@@ -764,16 +783,9 @@ fn position_tick_schedules_a_query() {
 #[test]
 fn position_tick_queries_position_and_format() {
     let (mut player, _state) = test_player();
-    let epoch = player.position_epoch;
-    let replies = task_outputs(update(&mut player, Message::PositionTick), "position tick");
+    let (epoch, replies) = tick_replies(&mut player);
 
-    assert!(
-        replies.iter().any(|message| matches!(
-            message,
-            Message::PlaybackPosition { epoch: reply_epoch, .. } if *reply_epoch == epoch
-        )),
-        "the tick must query the position: {replies:?}"
-    );
+    assert_position_queried(&replies, epoch);
     assert!(
         replies.iter().any(|message| matches!(
             message,
@@ -791,16 +803,9 @@ fn position_tick_queries_position_and_duration() {
     let recording = Arc::new(RecordingAudio::default());
     let (mut player, _state) =
         player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
-    let epoch = player.position_epoch;
-    let replies = task_outputs(update(&mut player, Message::PositionTick), "position tick");
+    let (epoch, replies) = tick_replies(&mut player);
 
-    assert!(
-        replies.iter().any(|message| matches!(
-            message,
-            Message::PlaybackPosition { epoch: reply_epoch, .. } if *reply_epoch == epoch
-        )),
-        "the tick must query the position: {replies:?}"
-    );
+    assert_position_queried(&replies, epoch);
     assert!(
         replies.iter().any(|message| matches!(
             message,
@@ -822,8 +827,7 @@ fn position_tick_queries_preview_finished() {
         player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
     for finished in [true, false] {
         recording.set_finished(finished);
-        let epoch = player.position_epoch;
-        let replies = task_outputs(update(&mut player, Message::PositionTick), "position tick");
+        let (epoch, replies) = tick_replies(&mut player);
 
         assert!(
             replies.iter().any(|message| matches!(
@@ -897,16 +901,9 @@ fn position_tick_skips_the_format_and_length_once_both_are_known() {
         bitrate_kbps: Some(256),
     });
     player.playback_duration = Some(Duration::from_secs(30));
-    let epoch = player.position_epoch;
-    let replies = task_outputs(update(&mut player, Message::PositionTick), "position tick");
+    let (epoch, replies) = tick_replies(&mut player);
 
-    assert!(
-        replies.iter().any(|message| matches!(
-            message,
-            Message::PlaybackPosition { epoch: reply_epoch, .. } if *reply_epoch == epoch
-        )),
-        "the tick must still query the position: {replies:?}"
-    );
+    assert_position_queried(&replies, epoch);
     assert!(
         !replies.iter().any(|message| matches!(
             message,
@@ -929,8 +926,7 @@ fn position_tick_queries_only_the_missing_value() {
         channels: 2,
         bitrate_kbps: Some(256),
     });
-    let epoch = player.position_epoch;
-    let replies = task_outputs(update(&mut player, Message::PositionTick), "position tick");
+    let (epoch, replies) = tick_replies(&mut player);
     assert!(
         replies.iter().any(|message| matches!(
             message,
@@ -948,8 +944,7 @@ fn position_tick_queries_only_the_missing_value() {
 
     player.playback_format = None;
     player.playback_duration = Some(Duration::from_secs(30));
-    let epoch = player.position_epoch;
-    let replies = task_outputs(update(&mut player, Message::PositionTick), "position tick");
+    let (epoch, replies) = tick_replies(&mut player);
     assert!(
         replies.iter().any(|message| matches!(
             message,
