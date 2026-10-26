@@ -188,6 +188,39 @@ fn view_constructs_when_the_window_is_shaded() {
 }
 
 #[test]
+fn file_info_panel_draws_the_loaded_previews_format() {
+    let (mut player, state) = test_player();
+    seed_current_title(&mut player, &state, "Opening");
+    player.file_info_visible = true;
+    player.playback_format = Some(PlaybackFormat {
+        sample_rate_hz: 44_100,
+        channels: 2,
+        bitrate_kbps: Some(256),
+    });
+
+    let loaded = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = loaded.texts().collect();
+    assert!(
+        texts.contains(&"Format: 256 KBPS  44 KHZ STEREO"),
+        "the File info panel must draw the loaded preview's format: {texts:?}"
+    );
+
+    // Stop clears the format (see `handlers::playback::reset_position_readout`);
+    // the panel then keeps its other lines but drops the Format line.
+    player.playback_format = None;
+    let stopped = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = stopped.texts().collect();
+    assert!(
+        texts.contains(&"Title: Opening"),
+        "the panel must keep its title without a loaded preview: {texts:?}"
+    );
+    assert!(
+        texts.iter().all(|text| !text.starts_with("Format:")),
+        "the panel must drop the Format line once no preview is loaded: {texts:?}"
+    );
+}
+
+#[test]
 fn title_bar_constructs_for_both_about_states() {
     // iced `Element`s expose no tree introspection, so the observable
     // contract is that the title bar builds for both About states — the

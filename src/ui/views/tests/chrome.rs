@@ -251,12 +251,12 @@ fn title_band_centers_its_label_at_the_title_bar_height() {
     );
 }
 
-fn file_info_element(track: &KnownTrack) -> Element<'_, Message> {
+fn file_info_element(track: &KnownTrack, format: Option<PlaybackFormat>) -> Element<'_, Message> {
     let base: Element<'_, Message> = iced::widget::Space::new()
         .width(Length::Fill)
         .height(Length::Fill)
         .into();
-    super::super::view_file_info_overlay(base, track)
+    super::super::view_file_info_overlay(base, track, format)
 }
 
 fn sample_known_track(artist: &str) -> KnownTrack {
@@ -273,7 +273,7 @@ fn sample_known_track(artist: &str) -> KnownTrack {
 #[test]
 fn file_info_overlay_draws_the_title_artist_album_and_length() {
     let track = sample_known_track("The Sample Band");
-    let mut element = file_info_element(&track);
+    let mut element = file_info_element(&track, None);
     let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
     let texts: Vec<&str> = capture.texts().collect();
     for expected in [
@@ -291,7 +291,7 @@ fn file_info_overlay_draws_the_title_artist_album_and_length() {
     }
 
     let artistless = sample_known_track("");
-    let mut element = file_info_element(&artistless);
+    let mut element = file_info_element(&artistless, None);
     let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
     assert!(
         capture.texts().all(|text| !text.starts_with("Artist:")),
@@ -303,7 +303,7 @@ fn file_info_overlay_draws_the_title_artist_album_and_length() {
 fn file_info_overlay_omits_the_album_line_when_the_source_supplied_none() {
     let mut track = sample_known_track("The Sample Band");
     track.album = String::new();
-    let mut element = file_info_element(&track);
+    let mut element = file_info_element(&track, None);
     let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
     assert!(
         capture.texts().all(|text| !text.starts_with("Album:")),
@@ -312,11 +312,63 @@ fn file_info_overlay_omits_the_album_line_when_the_source_supplied_none() {
 }
 
 #[test]
+fn file_info_overlay_draws_the_loaded_previews_format() {
+    let track = sample_known_track("The Sample Band");
+    let stereo = PlaybackFormat {
+        sample_rate_hz: 44_100,
+        channels: 2,
+        bitrate_kbps: Some(256),
+    };
+    let mut element = file_info_element(&track, Some(stereo));
+    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+    let texts: Vec<&str> = capture.texts().collect();
+    let format_line = "Format: 256 KBPS  44 KHZ STEREO";
+    assert!(
+        texts.contains(&format_line),
+        "a loaded stereo preview must draw {format_line:?}: {texts:?}"
+    );
+    let format_at = texts.iter().position(|text| *text == format_line).unwrap();
+    let length_at = texts
+        .iter()
+        .position(|text| *text == "Length: 3:30")
+        .unwrap();
+    let close_at = texts.iter().position(|text| *text == "Close").unwrap();
+    assert!(
+        length_at < format_at && format_at < close_at,
+        "the format line must sit after Length and before Close: {texts:?}"
+    );
+
+    let mono = PlaybackFormat {
+        sample_rate_hz: 48_000,
+        channels: 1,
+        bitrate_kbps: None,
+    };
+    let mut element = file_info_element(&track, Some(mono));
+    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+    let texts: Vec<&str> = capture.texts().collect();
+    assert!(
+        texts.contains(&"Format: 48 KHZ MONO"),
+        "a mono preview without a computed bitrate must omit the bitrate: {texts:?}"
+    );
+}
+
+#[test]
+fn file_info_overlay_omits_the_format_line_without_a_loaded_preview() {
+    let track = sample_known_track("The Sample Band");
+    let mut element = file_info_element(&track, None);
+    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+    assert!(
+        capture.texts().all(|text| !text.starts_with("Format:")),
+        "without a loaded preview the panel must draw no Format line"
+    );
+}
+
+#[test]
 fn file_info_overlay_closes_from_close_and_backdrop_but_ignores_its_chrome() {
     let track = sample_known_track("The Sample Band");
     let mut renderer = layout_capture::headless_renderer();
     for target in ["Close", "Title: Opening", "BACKDROP"] {
-        let mut element = file_info_element(&track);
+        let mut element = file_info_element(&track, None);
         let capture = layout_capture::capture_text(&mut element, &renderer);
         let point = if target == "BACKDROP" {
             iced::Point::new(2.0, capture.size().height - 2.0)

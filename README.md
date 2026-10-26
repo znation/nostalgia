@@ -132,7 +132,10 @@ Winamp's playlist editor. Ctrl+R reverses the showing list's order the same
 one-shot way, like Winamp's playlist editor, and Ctrl+Shift+R shuffles it into a random order the same
 one-shot way. Alt+Up and Alt+Down move the selected row of the showing list one place up or down,
 the same one-shot way, keeping the row selected and scrolling the list only as far as needed to keep it in view. Alt+3 opens a transient File info panel naming the current track's title, artist, album, and length, like
-Winamp (the album line is left out when the source supplies none); its `Close` button, a click on the backdrop, or Alt+3 again closes it, and it opens only while a track is current. Ctrl+J opens a transient Jump to time panel: type seconds (`95`) or `M:SS` (`1:35`) and press Enter or `Jump` to seek the loaded preview there (clamped to its length) and close the panel; `Close`, a click on the backdrop, or Ctrl+J again closes it, and it opens only while a preview with a known length is loaded. A `Reload` button beside `Sort` refetches the library's
+Winamp (the album line is left out when the source supplies none), plus a `Format:` line
+(`256 KBPS  44 KHZ STEREO`) while a loaded preview reports its format and `44 KHZ MONO` when it
+reports no bitrate; its `Close` button, a click on the backdrop, or Alt+3 again closes it, and it
+opens only while a track is current. Ctrl+J opens a transient Jump to time panel: type seconds (`95`) or `M:SS` (`1:35`) and press Enter or `Jump` to seek the loaded preview there (clamped to its length) and close the panel; `Close`, a click on the backdrop, or Ctrl+J again closes it, and it opens only while a preview with a known length is loaded. A `Reload` button beside `Sort` refetches the library's
 artists list and returns to the Artists list, clearing any active search while leaving the typed
 query in the search box. The title bar's `M` button opens a transient About panel naming the app,
 showing its `v`-prefixed package version and the line `The classic Winamp look, rebuilt in

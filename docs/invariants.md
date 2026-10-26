@@ -1453,13 +1453,19 @@ normal-mode branch of `ui::view::view` in `src/ui/view.rs`, which wraps the base
   stacks `FILE INFO`, `Title: …`, `Artist: …` (left out for an empty artist), `Album: …` (left
   out for an empty album), `Length: …`, and a
   `Close` button over the base through `views::modal::modal_overlay`, the chrome About shares.
-  `Close` and the backdrop each publish one `Message::ToggleFileInfo`; a press on the panel's
+  Between `Length:` and `Close`, it also draws one `Format: …` line (`256 KBPS  44 KHZ STEREO`,
+  or `44 KHZ MONO` when the backend reports no bitrate) only while
+  `WinampPlayer::playback_format` is `Some`, formatted from
+  `views::now_playing::format_playback_prefix` and `views::now_playing::channel_mode_label`;
+  with `None` the panel draws no format line. `Close` and the backdrop each publish one
+  `Message::ToggleFileInfo`; a press on the panel's
   chrome publishes `Message::Ignored`. The shade branch never draws the panel.
 
 **Enforced by.** `shortcuts::file_info_shortcut`, `views::now_playing::lcd_indicator_message`,
 `handlers::window::toggle_file_info`,
-`views::file_info::view_file_info_overlay`, `views::modal::modal_overlay`, and the overlay branch
-of `ui::view::view`.
+`views::file_info::view_file_info_overlay`, `views::modal::modal_overlay`,
+`views::now_playing::format_playback_prefix`, `views::now_playing::channel_mode_label`, and the
+overlay branch of `ui::view::view`.
 
 **Pinned by.** `message_for_maps_alt_3_to_file_info` (`src/ui/shortcuts.rs`);
 `lcd_indicator_message_arms_a_i_and_v_and_leaves_o_d_inert` and
@@ -1469,12 +1475,14 @@ of `ui::view::view`.
 `toggle_file_info_needs_a_known_current_track`, `file_info_and_about_close_each_other`, and
 `toggle_file_info_while_shaded_restores_the_window_first` (`src/ui/tests/window_tests.rs`);
 `file_info_overlay_draws_the_title_artist_album_and_length`,
-`file_info_overlay_omits_the_album_line_when_the_source_supplied_none`, and
+`file_info_overlay_omits_the_album_line_when_the_source_supplied_none`,
+`file_info_overlay_draws_the_loaded_previews_format`,
+`file_info_overlay_omits_the_format_line_without_a_loaded_preview`, and
 `file_info_overlay_closes_from_close_and_backdrop_but_ignores_its_chrome`
 (`src/ui/views/tests/chrome.rs`); `songs_from_album_maps_the_album_name` and
 `songs_from_album_maps_a_missing_or_blank_album_name_to_empty`
-(`src/apple_music/rest/tests/library.rs`); `view_constructs_when_the_window_is_shaded`
-(`src/ui/tests/view_tests.rs`).
+(`src/apple_music/rest/tests/library.rs`); `file_info_panel_draws_the_loaded_previews_format` and
+`view_constructs_when_the_window_is_shaded` (`src/ui/tests/view_tests.rs`).
 
 ## Jump to time panel
 

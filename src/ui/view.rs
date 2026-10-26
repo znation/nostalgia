@@ -307,7 +307,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
         views::view_about_overlay(base)
     } else if player.file_info_visible && !player.shaded {
         match player.current_known_track() {
-            Some(track) => views::view_file_info_overlay(base, track),
+            Some(track) => views::view_file_info_overlay(base, track, player.playback_format),
             None => base,
         }
     } else if player.jump_time_visible && !player.shaded {
