@@ -235,6 +235,22 @@ fn sort_reorders_playlists_by_name() {
     assert_eq!(names, ["Apple", "banana", "cherry"]);
 }
 
+/// Asserts a sorted `stepping_songs()` list holds its rows in title order with each row's cached
+/// title and running time still beside it.
+fn assert_sorted_stepping_songs(list: &BrowseList<Song>) {
+    let ids: Vec<&str> = list.items.iter().map(|song| song.id.as_str()).collect();
+    assert_eq!(ids, ["song-1", "song-3", "song-2"]);
+    assert_eq!(
+        list.titles,
+        [
+            "The Sample Band - One",
+            "The Sample Band - Three",
+            "The Sample Band - Two"
+        ]
+    );
+    assert_eq!(list.labels, ["3:30", "1:35", "2:05"]);
+}
+
 #[test]
 fn sort_reorders_songs_and_keeps_their_cached_text_aligned() {
     let (mut player, _state) = test_player();
@@ -243,22 +259,7 @@ fn sort_reorders_songs_and_keeps_their_cached_text_aligned() {
 
     let _ = update(&mut player, Message::SortBrowse);
 
-    let ids: Vec<&str> = player
-        .songs
-        .items
-        .iter()
-        .map(|song| song.id.as_str())
-        .collect();
-    assert_eq!(ids, ["song-1", "song-3", "song-2"]);
-    assert_eq!(
-        player.songs.titles,
-        [
-            "The Sample Band - One",
-            "The Sample Band - Three",
-            "The Sample Band - Two"
-        ]
-    );
-    assert_eq!(player.songs.labels, ["3:30", "1:35", "2:05"]);
+    assert_sorted_stepping_songs(&player.songs);
 }
 
 #[test]
@@ -269,22 +270,7 @@ fn sort_reorders_all_songs_and_keeps_their_cached_text_aligned() {
 
     let _ = update(&mut player, Message::SortBrowse);
 
-    let ids: Vec<&str> = player
-        .all_songs
-        .items
-        .iter()
-        .map(|song| song.id.as_str())
-        .collect();
-    assert_eq!(ids, ["song-1", "song-3", "song-2"]);
-    assert_eq!(
-        player.all_songs.titles,
-        [
-            "The Sample Band - One",
-            "The Sample Band - Three",
-            "The Sample Band - Two"
-        ]
-    );
-    assert_eq!(player.all_songs.labels, ["3:30", "1:35", "2:05"]);
+    assert_sorted_stepping_songs(&player.all_songs);
 }
 
 #[test]
