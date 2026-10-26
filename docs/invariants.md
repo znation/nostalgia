@@ -1720,7 +1720,9 @@ browser's `POST /token` callback behind it:
 - A bootstrap directory left in the temp dir by a process that died before its guard could remove it
   is swept by the next sign-in once it is older than `BOOTSTRAP_STALE_AFTER` (twice `AUTH_TIMEOUT`).
   A fresher bootstrap directory (which may belong to another running instance), an entry with a
-  different name, and a non-directory entry are left alone; a symlink is not followed.
+  different name, and a non-directory entry are left alone; a symlink is not followed. A removal
+  failure is reported with the directory name escaped, so an attacker-chosen control character in
+  a shared temp-directory name cannot reach the terminal raw.
 - A transient `accept` failure — `Interrupted` (a signal arrived before a connection could be
   accepted), `ConnectionAborted`, or `ConnectionReset` (a queued peer reset its connection; the
   platform chooses which kind to report) — does not end the flow: the accept loop retries it within
@@ -1757,6 +1759,7 @@ reports a removal failure without failing the new sign-in.
   (in `src/music_kit_auth/tests/http_request.rs`)
 - `the_bootstrap_sweep_removes_only_old_bootstrap_directories`
 - `the_bootstrap_sweep_skips_a_symlink_instead_of_following_it`
+- `the_bootstrap_sweep_escapes_a_hostile_directory_name_in_its_report`
 - `a_new_bootstrap_write_sweeps_a_stale_directory_from_a_crashed_flow`
   (all in `src/music_kit_auth/tests/bootstrap.rs`)
 

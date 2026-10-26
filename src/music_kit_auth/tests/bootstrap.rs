@@ -156,6 +156,48 @@ fn the_bootstrap_sweep_removes_only_old_bootstrap_directories() {
     std::fs::remove_dir_all(&root).expect("remove the sweep scratch root");
 }
 
+// A bootstrap directory's name comes from the shared temp directory, where any
+// local user can create an aged entry carrying the prefix. A removal failure is
+// reported, and the report must escape that attacker-chosen name: the sticky
+// bit keeps another user's directory from being removed, so the failure path is
+// reachable, and a raw control character in the name would otherwise reach the
+// terminal.
+#[cfg(unix)]
+#[test]
+fn the_bootstrap_sweep_escapes_a_hostile_directory_name_in_its_report() {
+    let root = std::env::temp_dir().join(format!("nostalgia-sweep-report-{}", random_nonce()));
+    std::fs::create_dir(&root).expect("create the sweep scratch root");
+    let hostile = root.join(format!("{BOOTSTRAP_DIR_PREFIX}\u{1b}]0;pwned\u{7}"));
+    std::fs::create_dir(&hostile).expect("create the hostile directory");
+    let now = std::time::SystemTime::now();
+    std::fs::File::open(&hostile)
+        .expect("open the hostile directory")
+        .set_modified(now - Duration::from_secs(3600))
+        .expect("age the hostile directory");
+
+    let reports = Mutex::new(Vec::new());
+    sweep_stale_bootstrap_dirs_with(
+        &root,
+        now,
+        BOOTSTRAP_STALE_AFTER,
+        |_path| Err(io::Error::new(io::ErrorKind::PermissionDenied, "denied")),
+        |report| reports.lock().expect("report lock").push(report),
+    );
+    let reports = reports.into_inner().expect("report lock");
+    assert_eq!(reports.len(), 1, "the failed removal must be reported once");
+    let report = &reports[0];
+    assert!(
+        !report.contains('\u{1b}') && !report.contains('\u{7}'),
+        "a control character in the directory name must not reach the terminal raw, got: {report:?}"
+    );
+    assert!(
+        report.contains("\\u{1b}") && report.contains("\\u{7}"),
+        "the report must show the name's control characters escaped, got: {report:?}"
+    );
+
+    std::fs::remove_dir_all(&root).expect("remove the sweep scratch root");
+}
+
 // A symlink carrying the bootstrap prefix must be skipped by its own type, not
 // followed to its target's metadata: an aged target would otherwise make the
 // sweep treat the link as a stale bootstrap directory and remove it.

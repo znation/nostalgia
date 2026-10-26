@@ -51,6 +51,27 @@ pub(super) const BOOTSTRAP_STALE_AFTER: Duration = Duration::from_secs(600);
 /// left alone. A failed removal is reported and does not stop the sweep or the
 /// sign-in: the new bootstrap needs a new, differently named directory.
 pub(super) fn sweep_stale_bootstrap_dirs(root: &Path, now: SystemTime, stale_after: Duration) {
+    sweep_stale_bootstrap_dirs_with(
+        root,
+        now,
+        stale_after,
+        |path| fs::remove_dir_all(path),
+        |report| {
+            eprintln!("{report}");
+        },
+    );
+}
+
+/// [`sweep_stale_bootstrap_dirs`] with its removal and reporter injected, so a
+/// test can force a removal failure and observe the report without capturing
+/// stderr.
+pub(super) fn sweep_stale_bootstrap_dirs_with(
+    root: &Path,
+    now: SystemTime,
+    stale_after: Duration,
+    remove: impl Fn(&Path) -> io::Result<()>,
+    report: impl Fn(String),
+) {
     let Some(cutoff) = now.checked_sub(stale_after) else {
         return;
     };
@@ -85,13 +106,21 @@ pub(super) fn sweep_stale_bootstrap_dirs(root: &Path, now: SystemTime, stale_aft
         if modified > cutoff {
             continue;
         }
-        if let Err(error) = fs::remove_dir_all(&path) {
-            eprintln!(
-                "could not remove the stale sign-in page directory {}: {error}",
-                path.display()
-            );
+        if let Err(error) = remove(&path) {
+            report(sweep_removal_failure_report(&path, &error));
         }
     }
+}
+
+/// The report for a stale bootstrap directory the sweep could not remove.
+///
+/// `path` comes from an entry name in the shared temp directory, which any
+/// local user can create, so it is formatted with `Debug` to escape a terminal
+/// control character (`\u{1b}`) rather than pass the attacker-chosen name to
+/// the terminal raw, matching the notices for server-controlled pagination
+/// links in `apple_music::rest::paging`.
+fn sweep_removal_failure_report(path: &Path, error: &io::Error) -> String {
+    format!("could not remove the stale sign-in page directory {path:?}: {error}")
 }
 
 impl BootstrapPage {
