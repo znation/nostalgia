@@ -1040,11 +1040,15 @@ its internal id, whenever the id is in the known-track index:
   dropped. The poll asks for the format and the preview length only while the value it supplies is
   missing, so a steady preview's tick queries the position and the finished state alone: both are
   read once from the decoded source, and Stop or a new selection clears them.
-- The LCD's visualizer row draws exactly `BAND_COUNT` green bars, left to right in band order,
-  bottom-aligned inside a fixed-height strip between the title and the status row. The bar heights
+- The LCD's visualizer row draws one fixed-width slot per band (`BAND_COUNT`), left to right in
+  band order, bottom-aligned inside a fixed-height strip between the title and the status row.
+  Each non-empty bar is shaded bottom to top in up to twelve 2 px ramp steps, from dark green at
+  the rail through yellow to orange at its peak; the step is an absolute row above the rail, so
+  the color follows the bar's height rather than being stretched over the bar. The bar heights
   come from the loaded preview's stored spectrum, each band clamped to `0.0..=1.0`; no reported
   spectrum, including the silent fallback, draws zero-height bars while keeping the row's height,
-  so loading a preview does not move the title or status text. The row is a mouse area whose
+  so loading a preview does not move the title or status text. A silent band still reserves its
+  fixed-width slot and simply draws no ramp segment. The row is a mouse area whose
   left press publishes `Message::ToggleVisualizer` (the same message as the `V` letter) whether the
   bars are shown or hidden, pinned by `visualizer_row_press_publishes_toggle_visualizer`. The bars
   are drawn only while `WinampPlayer::visualizer_visible` holds; hiding them changes only what the
@@ -1308,8 +1312,12 @@ rather than the panic unwinding the event loop.
 - `marquee_tick_advances_the_offset`
 - `marquee_ticks_keep_ticking_when_the_receiver_falls_behind`
 - `visualizer_bar_heights_scale_and_clamp_the_reported_bands`
+- `visualizer_bar_heights_maps_a_nan_band_to_empty` (`src/ui/views/tests/lcd_display.rs`)
+- `visualizer_bar_segments_ramp_from_dark_green_to_orange` (`src/ui/views/tests/lcd_display.rs`)
 - `now_playing_content_keeps_the_visualizer_height_with_and_without_a_spectrum`
-- `now_playing_visualizer_row_keeps_its_height_without_a_spectrum`
+- `now_playing_visualizer_row_keeps_its_height_without_a_spectrum` (`src/ui/views/tests/lcd_display.rs`)
+- `now_playing_visualizer_row_draws_one_fixed_width_bar_per_band` (`src/ui/views/tests/lcd_display.rs`)
+- `now_playing_visualizer_row_paints_its_ramp_from_green_to_orange` (`src/ui/views/tests/lcd_display.rs`)
 - `spectrum_reply_stores_the_loaded_previews_spectrum`
 - `spectrum_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped`
 - `stop_clears_the_spectrum_while_pause_keeps_it`
@@ -1857,11 +1865,13 @@ window. A seek clears the recorded window without resetting the partial downmix 
 sample rodio leaves on the same channel stays in phase; a player that has not appended a preview
 reports nothing, so Stop and a new selection cannot report the previous preview's spectrum. The
 silent fallback and a closed worker report `None`. The UI half stores that reply in
-`WinampPlayer::spectrum` and draws exactly `BAND_COUNT` bars from it while
-`WinampPlayer::visualizer_visible` holds; the indicator strip's `V` hides and shows them without
-clearing the stored spectrum or stopping the poll. Their heights clamp to the fixed visualizer
-row, Pause freezes them, Stop and a new selection clear them, stale or pre-transition replies
-are dropped, and the poll runs only while playing.
+`WinampPlayer::spectrum` and draws one fixed-width slot per band (`BAND_COUNT`) from it while
+`WinampPlayer::visualizer_visible` holds; each bar's color follows its height above the rail in
+absolute 2 px ramp steps from dark green through yellow to orange, while the bar heights, widths,
+gaps, row height, and visible/hidden behavior stay unchanged. The indicator strip's `V` hides and
+shows them without clearing the stored spectrum or stopping the poll. Their heights clamp to the
+fixed visualizer row, Pause freezes them, Stop and a new selection clear them, stale or
+pre-transition replies are dropped, and the poll runs only while playing.
 
 **Enforced by.** `audio::meter::spectrum_bands` (the pure ten-band Goertzel analysis) and
 `audio::meter::SpectrumMeter` (`push` downmixes and fills the fixed ring, `take` copies it and
@@ -1873,8 +1883,9 @@ in `src/audio.rs` defaults to `None`, and `RodioPlayer::spectrum` in
 through the worker's `Command::Spectrum`
 handled beside `Command::PlaybackFormat`; `RodioOutput::spectrum` bounds the query like the other
 backend queries. On the UI side, `views::now_playing::visualizer::visualizer_bar_heights` and
-`views::now_playing::visualizer::now_playing_visualizer_row` scale and draw the bands,
-`views::visible_spectrum` applies `WinampPlayer::visualizer_visible`,
+`views::now_playing::visualizer::visualizer_bar_segments` scale the bands and split each bar into
+ramp steps, and `views::now_playing::visualizer::now_playing_visualizer_row` draws them at fixed
+width, while `views::visible_spectrum` applies `WinampPlayer::visualizer_visible`,
 `Message::ToggleVisualizer` and `handlers::playback::toggle_visualizer` flip that flag,
 `WinampPlayer::needs_spectrum_poll` gates the poll, `ui::timers::spectrum_ticks` feeds it, and
 `handlers::playback::preview::spectrum_tick`/`spectrum` issue and guard the query while
@@ -1898,9 +1909,11 @@ backend queries. On the UI side, `views::now_playing::visualizer::visualizer_bar
 - `playback_spectrum_forwards_the_audio_output_spectrum` (`src/apple_music/tests/audio_forwarding.rs`)
 - `visualizer_bar_heights_scale_and_clamp_the_reported_bands`
 - `visualizer_bar_heights_maps_a_nan_band_to_empty` (`src/ui/views/tests/lcd_display.rs`)
+- `visualizer_bar_segments_ramp_from_dark_green_to_orange` (`src/ui/views/tests/lcd_display.rs`)
 - `now_playing_content_keeps_the_visualizer_height_with_and_without_a_spectrum`
 - `now_playing_visualizer_row_keeps_its_height_without_a_spectrum` (`src/ui/views/tests/lcd_display.rs`)
 - `now_playing_visualizer_row_draws_one_fixed_width_bar_per_band` (`src/ui/views/tests/lcd_display.rs`)
+- `now_playing_visualizer_row_paints_its_ramp_from_green_to_orange` (`src/ui/views/tests/lcd_display.rs`)
 - `visible_spectrum_hides_the_stored_bars_while_the_visualizer_is_off` (`src/ui/views/tests/now_playing.rs`)
 - `lcd_indicator_strip_publishes_always_on_top_on_a_visualizer_on_v_and_file_info_on_i`
   (`src/ui/views/tests/now_playing.rs`)

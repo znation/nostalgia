@@ -95,20 +95,36 @@ impl PixelCapture {
     /// over the label's bounds recovers the fill it was drawn with without
     /// depending on any single glyph pixel.
     pub(crate) fn max_green_in(&self, bounds: Rectangle) -> u8 {
+        self.max_channel_in(bounds, 1)
+    }
+
+    /// The strongest red channel value drawn inside `bounds`.
+    ///
+    /// Used where a fill's hue rather than its brightness carries the claim,
+    /// such as the visualizer's ramp running from dark green to orange. Like
+    /// [`Self::max_green_in`], it returns the maximum over the covered pixels
+    /// so an antialiased edge cannot hide the fill color.
+    pub(crate) fn max_red_in(&self, bounds: Rectangle) -> u8 {
+        self.max_channel_in(bounds, 0)
+    }
+
+    /// The strongest `channel` (0 = red, 1 = green, 2 = blue) value drawn
+    /// inside `bounds`, clipped to the image's edges.
+    fn max_channel_in(&self, bounds: Rectangle, channel: usize) -> u8 {
         let width = self.size.width as f32;
         let height = self.size.height as f32;
         let x_start = bounds.x.max(0.0).floor() as u32;
         let y_start = bounds.y.max(0.0).floor() as u32;
         let x_end = (bounds.x + bounds.width).min(width).ceil() as u32;
         let y_end = (bounds.y + bounds.height).min(height).ceil() as u32;
-        let mut green = 0;
+        let mut value = 0;
         for y in y_start..y_end {
             for x in x_start..x_end {
-                let index = ((y * self.size.width + x) * 4 + 1) as usize;
-                green = green.max(self.pixels[index]);
+                let index = ((y * self.size.width + x) * 4 + channel as u32) as usize;
+                value = value.max(self.pixels[index]);
             }
         }
-        green
+        value
     }
 }
 
@@ -300,6 +316,18 @@ mod tests {
         }
     }
 
+    /// A 4x2 image whose red channel is `10 * (y * 4 + x + 1)`.
+    fn red_gradient_pixels() -> PixelCapture {
+        let mut pixels = Vec::new();
+        for n in 0..8u8 {
+            pixels.extend_from_slice(&[10 * (n + 1), 255, 255, 255]);
+        }
+        PixelCapture {
+            pixels,
+            size: Size::new(4, 2),
+        }
+    }
+
     // Only the green channel inside the bounds counts: the maximum of the
     // covered pixels, not of the whole image.
     #[test]
@@ -333,5 +361,24 @@ mod tests {
 
         let right = Rectangle::new(Point::new(10.0, 0.0), Size::new(3.0, 1.0));
         assert_eq!(capture.max_green_in(right), 0);
+    }
+
+    // The red channel gets its own maximum so a fill's hue can be told apart
+    // from its brightness; the same bounds clipping applies to it.
+    #[test]
+    fn max_red_in_reads_only_the_red_of_pixels_inside_the_bounds() {
+        let capture = red_gradient_pixels();
+
+        assert_eq!(
+            capture.max_red_in(Rectangle::new(Point::new(0.0, 0.0), Size::new(2.0, 1.0))),
+            20
+        );
+        assert_eq!(
+            capture.max_red_in(Rectangle::new(
+                Point::new(-5.0, -5.0),
+                Size::new(50.0, 50.0)
+            )),
+            80
+        );
     }
 }

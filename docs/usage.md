@@ -23,8 +23,9 @@ appear at the left of a small status row beneath the title, with `MONO` and `STE
 at its right; the reported mode is lit green and the other dim. The prefix (`256 KBPS  44 KHZ`)
 appears only when the backend reports a format, falling back to the sample rate alone (`44 KHZ`)
 when it cannot compute the bitrate; with no reported format both labels stay dim and the prefix is
-absent. A loaded preview also drives a small green ten-bar spectrum visualizer beneath the
-title, updating about four times a second while playback runs; Pause freezes the bars at their
+absent. A loaded preview also drives a small ten-bar spectrum visualizer beneath the
+title, shaded from dark green at the rail through yellow to orange at its peaks and updating
+about four times a second while playback runs; Pause freezes the bars at their
 last levels, Stop and a new selection clear them, and the strip stays blank (with its height)
 when no preview reports a spectrum. The strip's `V` hides the bars and shows them again from the
 still-stored spectrum, so the poll keeps running while they are hidden; a click on the bars'

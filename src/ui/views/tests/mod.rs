@@ -20,7 +20,7 @@ use super::now_playing::indicator::{lcd_indicator_message, lcd_indicator_strip};
 use super::now_playing::status::{CHANNEL_LABELS, channel_label_color, now_playing_status_row};
 use super::now_playing::text::{format_lcd_elapsed, format_lcd_remaining};
 use super::now_playing::visualizer::{
-    now_playing_visualizer_row, visible_spectrum, visualizer_bar_heights,
+    now_playing_visualizer_row, visible_spectrum, visualizer_bar_heights, visualizer_bar_segments,
 };
 use super::now_playing::{
     KnownTrack, MARQUEE_WIDTH, TimeDisplay, channel_mode_label, display_len,
@@ -67,7 +67,8 @@ use std::time::Duration;
 
 /// The bounds of every container a built widget draws, collected through a
 /// widget operation. The visualizer's bars are borderless containers with no
-/// text, so counting their containers is how a test pins the bar count.
+/// text, so the bar segments are what a test groups by their x position to pin
+/// the bar count and each bar's height.
 #[derive(Default)]
 struct CapturedContainers(Vec<Rectangle>);
 

@@ -170,6 +170,71 @@ fn visualizer_bar_heights_maps_a_nan_band_to_empty() {
     );
 }
 
+// A bar's color follows its height above the rail in absolute 2 px rows, so a
+// short bar stays green while only a full-height bar reaches orange. The exact
+// mockup colors are pinned here; other tests only prove the drawing uses them.
+#[test]
+fn visualizer_bar_segments_ramp_from_dark_green_to_orange() {
+    let expected = [
+        Color::from_rgb8(24, 132, 8),
+        Color::from_rgb8(41, 148, 0),
+        Color::from_rgb8(49, 156, 8),
+        Color::from_rgb8(57, 181, 16),
+        Color::from_rgb8(50, 190, 16),
+        Color::from_rgb8(41, 206, 16),
+        Color::from_rgb8(148, 222, 33),
+        Color::from_rgb8(189, 222, 41),
+        Color::from_rgb8(214, 181, 33),
+        Color::from_rgb8(222, 165, 24),
+        Color::from_rgb8(198, 123, 8),
+        Color::from_rgb8(214, 115, 0),
+    ];
+
+    let full = visualizer_bar_segments(24.0);
+    assert_eq!(full.len(), 12, "a full bar reaches every ramp step");
+    for ((shown, color), expected) in full.iter().zip(expected) {
+        assert_eq!(*shown, 2.0, "each step is one 2 px row");
+        assert_eq!(*color, expected, "the ramp runs bottom to top");
+    }
+    assert_eq!(
+        full.iter().map(|(shown, _)| shown).sum::<f32>(),
+        24.0,
+        "the steps must sum to the bar's full height"
+    );
+
+    assert_eq!(
+        visualizer_bar_segments(3.0),
+        vec![(2.0, expected[0]), (1.0, expected[1])],
+        "a short bar stops at the steps its height reaches"
+    );
+    for height in [0.0, -1.0, f32::NAN] {
+        assert!(
+            visualizer_bar_segments(height).is_empty(),
+            "a {height} height must draw no segments"
+        );
+    }
+
+    let fractional = visualizer_bar_segments(12.5);
+    assert_eq!(
+        fractional.len(),
+        7,
+        "12.5 px reaches six full steps and a bit"
+    );
+    assert!(
+        (fractional.iter().map(|(shown, _)| shown).sum::<f32>() - 12.5).abs() < 0.001,
+        "a fractional height keeps its measured size: {fractional:?}"
+    );
+    assert!(
+        fractional.iter().all(|(shown, _)| *shown <= 2.0),
+        "no step may exceed the ramp step height: {fractional:?}"
+    );
+    assert_eq!(
+        fractional.last().copied(),
+        Some((0.5, expected[6])),
+        "the partial top step keeps its own color, not a stretched ramp"
+    );
+}
+
 /// Lays out the LCD content for `spectrum` and returns the text fragments it
 /// would draw, each fragment's bounds, the height the content occupies, and
 /// the bounds of every container it draws.
@@ -270,16 +335,19 @@ fn now_playing_content_keeps_the_visualizer_height_with_and_without_a_spectrum()
     // The bars themselves, not just the extra height, must sit between the
     // title and status text. Moving the visualizer row above the title or
     // below the status row leaves the spacing above intact, so check the bar
-    // containers' own bounds as well.
+    // segments' own bounds as well. A non-empty bar draws several stacked
+    // segment containers, so group them by x rather than counting them.
     let bars: Vec<Rectangle> = reporting_containers
         .iter()
         .copied()
-        .filter(|bounds| bounds.width == 8.0)
+        .filter(|bounds| bounds.width == 8.0 && bounds.height <= 2.01)
         .collect();
-    assert_eq!(
-        bars.len(),
-        BAND_COUNT,
-        "the visualizer row must draw one bar per band: {bars:?}"
+    let mut bar_xs: Vec<f32> = bars.iter().map(|bounds| bounds.x).collect();
+    bar_xs.sort_by(f32::total_cmp);
+    bar_xs.dedup();
+    assert!(
+        !bar_xs.is_empty(),
+        "the visualizer row must draw its bar segments: {bars:?}"
     );
     assert!(
         bars.iter().all(|bar| bar.y >= title_y),
@@ -314,45 +382,129 @@ fn now_playing_visualizer_row_keeps_its_height_without_a_spectrum() {
     }
 }
 
-// The row draws exactly one fixed-width bar per band, scaled by the band
-// level, so a refactor cannot collapse the visualizer to a single bar while
-// the pure height helper stays tested. The bands include zeros because a real
-// spectrum does: iced's `Row` drops a `Fixed(0.0)`-height child, so this is
-// the state that would silently lose the silent bars.
+// The row draws one fixed-width slot per band, each bar shaded by the ramp
+// step its height reaches. A non-empty bar is several stacked segment
+// containers, so group them by x; a silent band keeps its slot and only draws
+// no segment. The bands here all have whole 2 px heights, so each segment is
+// one ramp step and its rendered color can be checked exactly.
 #[test]
 fn now_playing_visualizer_row_draws_one_fixed_width_bar_per_band() {
     let mut bands = [0.0; BAND_COUNT];
     for (index, band) in bands.iter_mut().enumerate() {
-        *band = (index % 3) as f32 * 0.25;
+        *band = ((index + 1) as f32 * 2.0) / 24.0;
     }
-    let mut element: iced::Element<'_, Message, iced::Theme, ()> =
+    let ramp: Vec<Color> = visualizer_bar_segments(24.0)
+        .into_iter()
+        .map(|(_, color)| color)
+        .collect();
+    let (bounds, containers) = captured_visualizer_row(Some(Spectrum { bands }));
+    // Each band's fixed slot draws a full-height container, and its ramp
+    // segments are the short containers stacked inside it.
+    let slots: Vec<Rectangle> = containers
+        .iter()
+        .copied()
+        .filter(|bounds| bounds.width == 8.0 && (bounds.height - 24.0).abs() < 0.01)
+        .collect();
+    let bars: Vec<Rectangle> = containers
+        .iter()
+        .copied()
+        .filter(|bounds| bounds.width == 8.0 && bounds.height <= 2.01)
+        .collect();
+    let mut bar_xs: Vec<f32> = slots.iter().map(|slot| slot.x).collect();
+    bar_xs.sort_by(f32::total_cmp);
+    bar_xs.dedup_by(|a, b| (*a - *b).abs() < 0.01);
+    assert_eq!(
+        bar_xs.len(),
+        BAND_COUNT,
+        "the row must draw one bar slot per band, including silent bands: {bar_xs:?}"
+    );
+
+    let mut renderer = layout_capture::headless_renderer();
+    let mut element: iced::Element<'_, Message, iced::Theme, iced::Renderer> =
         now_playing_visualizer_row(Some(Spectrum { bands })).into();
+    let (_text, pixels) =
+        layout_capture::capture_text_and_pixels(&mut element, &mut renderer, &iced::Theme::Dark);
+    for (index, x) in bar_xs.iter().enumerate() {
+        let mut segments: Vec<Rectangle> = bars
+            .iter()
+            .copied()
+            .filter(|bar| (bar.x - x).abs() < 0.01)
+            .collect();
+        segments.sort_by(|a, b| a.y.total_cmp(&b.y));
+        let shown: f32 = segments.iter().map(|bar| bar.height).sum();
+        assert!(
+            (shown - bands[index] * 24.0).abs() < 0.01,
+            "band {index} must keep its measured height: segments {segments:?}"
+        );
+        assert!(
+            segments.iter().all(|bar| bar.height <= 2.0 + 0.01),
+            "no segment may exceed one 2 px ramp step: {segments:?}"
+        );
+        for (offset, segment) in segments.iter().enumerate() {
+            let expected = ramp[segments.len() - 1 - offset];
+            let expected_red = (expected.r * 255.0).round() as u8;
+            assert_eq!(
+                pixels.max_red_in(*segment),
+                expected_red,
+                "band {index}'s step {offset} from the top must use the ramp's color: \
+                 {segment:?}"
+            );
+        }
+    }
+
+    // Silent bands still reserve an 8 px slot and a 3 px gap, so the row keeps
+    // its fixed width instead of collapsing around the drawn segments.
+    let (silent_bounds, _silent_containers) = captured_visualizer_row(Some(Spectrum {
+        bands: [0.0; BAND_COUNT],
+    }));
+    let expected_width = BAND_COUNT as f32 * 8.0 + (BAND_COUNT - 1) as f32 * 3.0;
+    assert!(
+        (silent_bounds.width - expected_width).abs() < 0.01,
+        "the row must keep every band's slot: bounds {silent_bounds:?}, expected width {expected_width}"
+    );
+    assert!(
+        (bounds.width - expected_width).abs() < 0.01,
+        "a live row keeps the same width: bounds {bounds:?}"
+    );
+}
+
+/// Lays out the visualizer row for `spectrum` and returns its bounds and every
+/// container it draws.
+fn captured_visualizer_row(spectrum: Option<Spectrum>) -> (Rectangle, Vec<Rectangle>) {
+    let mut element: iced::Element<'_, Message, iced::Theme, ()> =
+        now_playing_visualizer_row(spectrum).into();
     let mut tree = Tree::new(element.as_widget());
     let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
     let node = element.as_widget_mut().layout(&mut tree, &(), &limits);
-
+    let bounds = node.bounds();
     let mut captured = CapturedContainers::default();
     element
         .as_widget_mut()
         .operate(&mut tree, Layout::new(&node), &(), &mut captured);
-    let bars: Vec<_> = captured
-        .0
-        .iter()
-        .filter(|bounds| bounds.width == 8.0)
-        .collect();
-    assert_eq!(
-        bars.len(),
-        BAND_COUNT,
-        "the row must draw one bar per band, including silent bands"
+    (bounds, captured.0)
+}
+
+// The drawing really walks the ramp: a full-height bar is orange at its top
+// and dark green at its bottom, rather than one flat green fill.
+#[test]
+fn now_playing_visualizer_row_paints_its_ramp_from_green_to_orange() {
+    let mut bands = [0.0; BAND_COUNT];
+    bands[0] = 1.0;
+    let mut renderer = layout_capture::headless_renderer();
+    let mut element: iced::Element<'_, Message, iced::Theme, iced::Renderer> =
+        now_playing_visualizer_row(Some(Spectrum { bands })).into();
+    let (_text, pixels) =
+        layout_capture::capture_text_and_pixels(&mut element, &mut renderer, &iced::Theme::Dark);
+
+    let top = Rectangle::new(iced::Point::new(0.0, 0.0), Size::new(8.0, 2.0));
+    let bottom = Rectangle::new(iced::Point::new(0.0, 22.0), Size::new(8.0, 2.0));
+    let top_red = pixels.max_red_in(top);
+    let bottom_red = pixels.max_red_in(bottom);
+    assert!(
+        top_red > bottom_red + 100,
+        "a full bar must be orange at its top and dark green at its bottom: \
+         top red {top_red}, bottom red {bottom_red}"
     );
-    for (bar, band) in bars.iter().zip(bands) {
-        assert_eq!(bar.width, 8.0, "each bar keeps its fixed width: {bar:?}");
-        assert_eq!(
-            bar.height,
-            band * 24.0,
-            "a {band} band draws a proportionally tall bar: {bar:?}"
-        );
-    }
 }
 
 // The seek bar's thumb never exceeds the preview's own length, and a missing
