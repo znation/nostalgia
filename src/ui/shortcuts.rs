@@ -45,7 +45,8 @@ pub(super) fn message_for(event: Event) -> Option<Message> {
 /// with `NumLock` on: 4 previous, 5 play, 6 next, 7 seek five seconds back, 9
 /// seek five seconds forward, 8 volume up, and 2 volume down, sending the same
 /// messages as Z, X, B, and the arrows. Shift is allowed; Control, Alt, or Logo
-/// yields `None`. Keypad 0, 1, 3, and the operators stay unbound, and top-row
+/// yields `None`. Keypad 1 and 3 jump ten songs back or forward. Keypad 0 and
+/// the operators stay unbound, and top-row
 /// digits never reach this function's bindings. With `NumLock` off the keypad
 /// sends arrow keys, which `shortcut` already handles.
 fn numpad_shortcut(key: &Key, location: Location, modifiers: Modifiers) -> Option<Message> {
@@ -63,6 +64,8 @@ fn numpad_shortcut(key: &Key, location: Location, modifiers: Modifiers) -> Optio
         "9" => Some(Message::SeekForward),
         "8" => Some(Message::VolumeUp),
         "2" => Some(Message::VolumeDown),
+        "1" => Some(Message::JumpTracksBack),
+        "3" => Some(Message::JumpTracksForward),
         _ => None,
     }
 }
@@ -426,16 +429,18 @@ mod tests {
             assert!(matches!(map("9"), Some(Message::SeekForward)));
             assert!(matches!(map("8"), Some(Message::VolumeUp)));
             assert!(matches!(map("2"), Some(Message::VolumeDown)));
+            assert!(matches!(map("1"), Some(Message::JumpTracksBack)));
+            assert!(matches!(map("3"), Some(Message::JumpTracksForward)));
         }
     }
 
     #[test]
     fn message_for_leaves_other_digits_unbound() {
-        for key in ["0", "1", "3", "+"] {
+        for key in ["0", "+"] {
             let event = numpad_pressed(Key::Character(key.into()), Modifiers::NONE);
             assert!(message_for(event).is_none(), "keypad {key}");
         }
-        for key in ["2", "4", "5", "6", "7", "8", "9"] {
+        for key in ["1", "2", "3", "4", "5", "6", "7", "8", "9"] {
             let event = key_pressed(Key::Character(key.into()), Modifiers::NONE);
             assert!(message_for(event).is_none(), "top-row {key}");
         }

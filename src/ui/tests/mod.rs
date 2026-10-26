@@ -1220,6 +1220,7 @@ fn root_view_draws(player: &WinampPlayer, fragment: &str) -> bool {
 
 mod browse_tests;
 mod flat_lists_tests;
+mod jump_tests;
 mod loading_tests;
 mod mixer_tests;
 mod panels_tests;

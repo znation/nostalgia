@@ -129,6 +129,10 @@ pub(in crate::ui) enum Message {
     FirstTrack,
     // Ctrl+B: play the last song of the showing list, whatever Shuffle and Repeat say.
     LastTrack,
+    // Keypad 1: play the song ten before the current one in the showing list, clamped to its first.
+    JumpTracksBack,
+    // Keypad 3: play the song ten after the current one in the showing list, clamped to its last.
+    JumpTracksForward,
     // A browse row's single press: select that row (the view paints the
     // selection bar) without opening it. A second press on the row that is
     // already selected opens it, so a double-click reaches the existing

@@ -244,6 +244,27 @@ pub(in crate::ui) fn jump_to_edge_track(player: &mut WinampPlayer, last: bool) -
     ])
 }
 
+/// The task keypad 1 (`forward` false) and 3 schedule: play the song ten
+/// places before or after the current track in the list the current view
+/// shows, clamped to its first or last song, and scroll the list to that row.
+/// Like `jump_to_edge_track` it ignores Shuffle, Repeat, and the Previous
+/// restart rule and leaves `play_history` alone; an empty list schedules
+/// nothing.
+pub(in crate::ui) fn jump_ten_tracks(player: &mut WinampPlayer, forward: bool) -> Task<Message> {
+    let (items, epoch) = showing_songs(player);
+    let index = {
+        let state = player.state.blocking_lock();
+        transport::jumped_track_index(items, state.current_track.as_deref(), forward)
+    };
+    let Some(index) = index else {
+        return Task::none();
+    };
+    Task::batch([
+        Task::done(Message::TrackSelected { epoch, index }),
+        super::browse::scroll::scroll_browse_to_playing_row(player, index),
+    ])
+}
+
 /// The play request: the message carries the pressed row's index plus the
 /// epoch of the list that rendered it. The Songs view draws from `songs`
 /// and the flat All Songs view draws from `all_songs`, so resolve the press

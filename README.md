@@ -149,7 +149,7 @@ controls and a readout click), E shows or hides the equalizer panel exactly like
 beside the balance slider, and the up/down arrows nudge the volume while the left/right arrows
 seek five seconds back or forward. With NumLock on, keypad 4, 5, and 6 play the previous,
 current, and next song, 7 and 9 seek five seconds back or forward, and 8 and 2 nudge the volume,
-like Winamp. Ctrl+Z plays the first song of the list Z and B step through
+and 1 and 3 jump ten songs back or forward through the same list, stopping at its ends, like Winamp. Ctrl+Z plays the first song of the list Z and B step through
 and Ctrl+B plays its last song. Backspace steps the browse list back one level exactly like the
 `Back` button, and does nothing at the Artists list; Home snaps the browse list to its first row
 and End to its last, like `Top`, and Page Up and Page Down scroll it one page at a time in the

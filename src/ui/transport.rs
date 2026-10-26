@@ -91,6 +91,28 @@ pub fn previous_track_id(songs: &[Song], current: Option<&str>, repeat: bool) ->
     stepped_track_id(songs, current, false, repeat)
 }
 
+/// How many songs the keypad 1 and 3 jumps move through the list.
+pub const JUMP_TRACK_COUNT: usize = 10;
+
+/// The index of the song a ten-song jump lands on: `JUMP_TRACK_COUNT` after
+/// (`forward`) or before `current` in `songs`, clamped to the list's first and
+/// last songs and never wrapping. `None` for an empty list; with no `current`
+/// (or an unknown one), index 0 forward and the last index backward, the same
+/// entry points as [`next_track_id`] and [`previous_track_id`].
+///
+/// `#[must_use]`: the returned index is the call's entire purpose.
+#[must_use]
+pub fn jumped_track_index(songs: &[Song], current: Option<&str>, forward: bool) -> Option<usize> {
+    let last = songs.len().checked_sub(1)?;
+    let position = current.and_then(|id| songs.iter().position(|song| song.id == id));
+    Some(match (position, forward) {
+        (Some(index), true) => index.saturating_add(JUMP_TRACK_COUNT).min(last),
+        (Some(index), false) => index.saturating_sub(JUMP_TRACK_COUNT),
+        (None, true) => 0,
+        (None, false) => last,
+    })
+}
+
 /// The id of the song to play when Next is pressed with Shuffle on: a pick
 /// from `songs` that is not `current`, so Next never re-lands on the song
 /// already playing. `roll` selects among the candidates (taken modulo their
@@ -344,5 +366,44 @@ mod tests {
             varied,
             "shuffle_roll returned {first} for sixteen calls, so Shuffle could not vary its pick"
         );
+    }
+
+    fn numbered_songs(count: usize) -> Vec<Song> {
+        (0..count)
+            .map(|number| Song {
+                id: format!("song-{number}"),
+                title: format!("Song {number}"),
+                ..crate::test_support::sample_song()
+            })
+            .collect()
+    }
+
+    fn jumped(current: Option<&str>, forward: bool) -> Option<usize> {
+        jumped_track_index(&numbered_songs(25), current, forward)
+    }
+
+    #[test]
+    fn jump_moves_ten_songs_either_way() {
+        assert_eq!(jumped(Some("song-2"), true), Some(12));
+        assert_eq!(jumped(Some("song-12"), false), Some(2));
+    }
+
+    #[test]
+    fn jump_clamps_at_the_list_ends() {
+        assert_eq!(jumped(Some("song-20"), true), Some(24));
+        assert_eq!(jumped(Some("song-4"), false), Some(0));
+    }
+
+    #[test]
+    fn jump_without_a_known_current_uses_the_step_entry_points() {
+        assert_eq!(jumped(None, true), Some(0));
+        assert_eq!(jumped(None, false), Some(24));
+        assert_eq!(jumped(Some("missing"), true), Some(0));
+        assert_eq!(jumped(Some("missing"), false), Some(24));
+    }
+
+    #[test]
+    fn jump_over_an_empty_list_is_none() {
+        assert_eq!(jumped_track_index(&[], Some("song-1"), true), None);
     }
 }

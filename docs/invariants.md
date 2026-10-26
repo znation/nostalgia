@@ -434,12 +434,38 @@ the showing list without reading shared state or touching the play history.
 
 **History.** Added with the Ctrl+Z / Ctrl+B list-edge shortcuts.
 
+## Ten-song jumps
+
+**Guarantee.** `JumpTracksBack` (keypad 1) and `JumpTracksForward` (keypad 3) play the song ten places
+before or after the current track in the list the current view draws from (`all_songs` in the flat
+All Songs view, `songs` otherwise), clamped to its first or last song and never wrapping, and scroll
+the list to that row. With no current track, or one not in the list, forward plays the first song and
+backward the last. Shuffle, Repeat, and the playback position do not change the result, and
+`play_history` is untouched. An empty list schedules nothing.
+
+**Enforced by.** `transport::jumped_track_index` computes the index; `handlers::playback::jump_ten_tracks`
+reads the current track under the state lock and schedules the selection and scroll.
+
+**Pinned by.**
+
+- `jump_moves_ten_songs_either_way`, `jump_clamps_at_the_list_ends`,
+  `jump_without_a_known_current_uses_the_step_entry_points`, and `jump_over_an_empty_list_is_none`
+  (`src/ui/transport.rs`)
+- `jump_forward_selects_ten_songs_on`, `jump_back_selects_ten_songs_back`,
+  `jumps_clamp_at_the_list_ends`, `jumps_ignore_shuffle_and_repeat`,
+  `jumps_with_no_songs_loaded_do_nothing`, and `jumps_in_all_songs_use_the_flat_list`
+  (`src/ui/tests/jump_tests.rs`)
+- `message_for_maps_the_numpad_transport_digits` (`src/ui/shortcuts.rs`)
+
+**History.** Added with the keypad 1 / 3 ten-song jumps.
+
 ## Numpad keys
 
-**Guarantee.** With the window focused and NumLock on, keypad 4, 5, 6, 7, 9, 8, and 2 (plain or
+**Guarantee.** With the window focused and NumLock on, keypad 4, 5, 6, 7, 9, 8, 2, 1, and 3 (plain or
 with Shift) map to `PreviousTrack`, `Play`, `NextTrack`, `SeekBackward`, `SeekForward`, `VolumeUp`,
-and `VolumeDown` — the messages Z, X, B, and the arrows send, so they follow those messages' rules.
-Top-row digits, keypad 0/1/3 and the keypad operators, and Ctrl/Alt/Logo chords with the keypad
+`VolumeDown`, `JumpTracksBack`, and `JumpTracksForward` — the first seven are the messages Z, X, B,
+and the arrows send, so they follow those messages' rules (see `## Ten-song jumps` for the last two).
+Top-row digits, keypad 0 and the keypad operators, and Ctrl/Alt/Logo chords with the keypad
 stay unbound. With NumLock off the keypad sends arrow keys, which keep their arrow bindings.
 
 **Enforced by.** `shortcuts::numpad_shortcut` in `src/ui/shortcuts.rs` matches on
