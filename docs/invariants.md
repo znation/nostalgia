@@ -1834,6 +1834,7 @@ bytes.
 - `a_compressed_preview_larger_than_the_cap_is_rejected` (`src/audio/tests/preview_download.rs`)
 - `a_preview_with_more_wire_bytes_than_the_cap_is_rejected` (`src/audio/tests/preview_download.rs`)
 - `a_preview_of_exactly_the_cap_reaches_the_decoder` (`src/audio/tests/preview_download.rs`)
+- `a_downloaded_preview_decodes_and_reports_its_encoded_length` (`src/audio/tests/preview_download.rs`)
 
 **History.** Added 2026-10-23 after the wire-byte cap was found to let a small gzip body expand
 past 10 MiB before decoding; the decoded-byte fix keeps the original wire cap alongside it. The
@@ -1857,6 +1858,7 @@ stores the body the download produced.
 
 - `preview_cache_replays_the_same_url_without_loading_it_again` (`src/audio/tests/preview_download.rs`)
 - `preview_cache_keeps_only_the_last_url_and_never_caches_a_failed_load` (`src/audio/tests/preview_download.rs`)
+- `a_cached_preview_replays_the_same_decodable_body_without_the_server` (`src/audio/tests/preview_download.rs`)
 
 ## Preview host guard
 

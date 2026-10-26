@@ -484,3 +484,72 @@ fn a_cached_fetch_does_not_replay_a_body_that_failed_to_decode() {
         "the retry should have gone back to the network, got: {second}"
     );
 }
+
+/// A short, decodable M4A (AAC-LC, mono, 44.1 kHz): the CC0 1.0
+/// `scratch_002.ogg` interface sound from Kenney (<https://kenney.nl/assets/interface-sounds>),
+/// encoded to M4A. It gives the success-path tests below a real preview body
+/// to decode, which the encrypted and invalid bodies elsewhere cannot.
+const DECODABLE_PREVIEW: &[u8] = include_bytes!("fixtures/chew-scratch.m4a");
+
+/// A `200 OK` response carrying `body` as an MP4 preview.
+fn preview_response(body: &[u8]) -> Vec<u8> {
+    let mut response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: audio/mp4\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
+    )
+    .into_bytes();
+    response.extend_from_slice(body);
+    response
+}
+
+// Every other download test stops at a decode error, so the successful
+// composition was untested: a decodable body must come back as a source that
+// yields samples, with `encoded_bytes` equal to the body's length (the LCD
+// bitrate readout divides by it) and with the same body kept for a replay.
+#[test]
+fn a_downloaded_preview_decodes_and_reports_its_encoded_length() {
+    let address = serve_one_response_bytes(&preview_response(DECODABLE_PREVIEW));
+    let agent = agent_with_timeout(Duration::from_secs(5));
+    let url = format!("http://{address}/preview.m4a");
+
+    let mut preview = download_and_decode(&agent, &url).expect("the fixture is a decodable M4A");
+    assert_eq!(
+        preview.encoded_bytes,
+        u64::try_from(DECODABLE_PREVIEW.len()).unwrap()
+    );
+    assert_eq!(preview.body.as_ref(), DECODABLE_PREVIEW);
+    assert_eq!(preview.source.sample_rate().get(), 44_100);
+    assert_eq!(preview.source.channels().get(), 1);
+    assert!(
+        preview.source.next().is_some(),
+        "the fixture must decode to at least one sample"
+    );
+}
+
+// The cache's replay path through the worker's fetch: the first play downloads
+// and decodes the fixture, and the second play of the same URL decodes the
+// stored body even though the one-shot server is gone. The generic cache tests
+// above use a fake decoder, so this pins the real decode composition and the
+// replayed body's encoded length that the worker uses.
+#[test]
+fn a_cached_preview_replays_the_same_decodable_body_without_the_server() {
+    let address = serve_one_response_bytes(&preview_response(DECODABLE_PREVIEW));
+    let agent = agent_with_timeout(Duration::from_secs(5));
+    let url = format!("http://{address}/preview.m4a");
+    let cache = PreviewCache::default();
+
+    let mut first = download_and_decode_cached(&cache, &agent, &url)
+        .expect("the first play downloads and decodes the fixture");
+    assert_eq!(
+        first.encoded_bytes,
+        u64::try_from(DECODABLE_PREVIEW.len()).unwrap()
+    );
+    assert_eq!(first.body.as_ref(), DECODABLE_PREVIEW);
+    assert!(first.source.next().is_some());
+
+    let mut second = download_and_decode_cached(&cache, &agent, &url)
+        .expect("the replay decodes the cached body after the one-shot server is gone");
+    assert_eq!(second.encoded_bytes, first.encoded_bytes);
+    assert_eq!(second.body.as_ref(), DECODABLE_PREVIEW);
+    assert!(second.source.next().is_some());
+}
