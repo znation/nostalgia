@@ -29,7 +29,8 @@ pub(crate) const SEEK_BAR_ID: &str = "now-playing-seek";
 /// Maps a wheel roll over a drawn seek slider to a seek: a positive `y`
 /// (iced's wheel-up direction, as in `volume_wheel_message`) seeks forward by
 /// [`SEEK_STEP_SECS`], a negative `y` seeks back, and a horizontal-only, zero,
-/// or non-finite roll is [`Message::Ignored`].
+/// or NaN roll is [`Message::Ignored`]; an infinite roll keeps its sign's
+/// direction.
 ///
 /// [`SEEK_STEP_SECS`]: super::SEEK_STEP_SECS
 pub(super) fn seek_wheel_message(delta: ScrollDelta) -> Message {

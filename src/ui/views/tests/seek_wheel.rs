@@ -38,6 +38,27 @@ fn seek_wheel_message_ignores_a_horizontal_only_roll() {
     }
 }
 
+// An infinite roll is comparable, so it seeks by sign like any other; only
+// NaN (incomparable) is ignored.
+#[test]
+fn seek_wheel_message_gives_an_infinite_roll_its_signs_direction() {
+    use iced::mouse::ScrollDelta::{Lines, Pixels};
+    assert!(matches!(
+        seek_wheel_message(Lines {
+            x: 0.0,
+            y: f32::INFINITY
+        }),
+        Message::SeekForward
+    ));
+    assert!(matches!(
+        seek_wheel_message(Pixels {
+            x: 0.0,
+            y: f32::NEG_INFINITY
+        }),
+        Message::SeekBackward
+    ));
+}
+
 // The shade strip's drawn seek slider seeks on a wheel roll, and the roll
 // does not also reach the volume.
 #[test]
