@@ -41,6 +41,19 @@ pub(in crate::ui) enum Message {
     // list is deliberately outside the area that publishes it, so its own
     // scrollable keeps the wheel.
     VolumeWheel(f32),
+    // The mouse wheel's vertical direction over the balance slider: positive
+    // moves it right, negative left, and zero is a no-op. Moves only the
+    // balance by one `views::BALANCE_STEP` and does not set `mixer_drag`.
+    BalanceWheel(f32),
+    // The mouse wheel's vertical direction over the equalizer's preamp slider:
+    // positive raises the gain, negative lowers it, zero is a no-op. Moves only
+    // the preamp by one `views::EQ_STEP` and does not set `mixer_drag`.
+    EqPreampWheel(f32),
+    // The mouse wheel's vertical direction over equalizer band `usize`:
+    // positive raises that band's gain, negative lowers it, zero is a no-op.
+    // Moves only that band by one `views::EQ_STEP` and does not set
+    // `mixer_drag`; an out-of-range index is a no-op.
+    EqBandWheel(usize, f32),
     // Arrow-key seek nudges: one `views::SEEK_STEP_SECS` back or forward.
     SeekBackward,
     SeekForward,

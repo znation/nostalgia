@@ -4,7 +4,7 @@
 
 use iced::{
     Element, Length,
-    mouse::Interaction,
+    mouse::{Interaction, ScrollDelta},
     widget::{
         Column, Container, MouseArea, PickList, Row, Space, Text, VerticalSlider, container, slider,
     },
@@ -25,6 +25,18 @@ const BAND_ROW_SPACING: f32 = 6.0;
 /// The height of every equalizer slider's rail, in pixels. The preamp, the dB
 /// scale, and the band sliders share it so their labels land on one row.
 pub(super) const EQ_SLIDER_HEIGHT: f32 = 100.0;
+
+/// The preamp slider's container id, used only by the layout tests to find the
+/// laid-out slider and publish a wheel roll over it.
+#[cfg(test)]
+pub(crate) const EQ_PREAMP_SLIDER_ID: &str = "equalizer-preamp";
+
+/// The container id for equalizer band `index`, the test-only counterpart of
+/// [`EQ_PREAMP_SLIDER_ID`].
+#[cfg(test)]
+pub(crate) fn eq_band_slider_id(index: usize) -> String {
+    format!("equalizer-band-{index}")
+}
 
 /// The response curve's horizontal resolution: one green segment per column,
 /// so the line reads as a smooth trace over the ten band sliders.
@@ -134,20 +146,27 @@ fn scale_label(label: &'static str, gain: f32) -> MouseArea<'static, Message> {
 ///
 /// `style` receives the slider's interaction status and returns the chrome
 /// style to paint, so the preamp and each band pass their own gain tint
-/// through [`style::band_slider_style`].
+/// through [`style::band_slider_style`]. `on_scroll` receives a plain wheel
+/// roll over the slider and returns that slider's wheel message; the slider's
+/// own Ctrl+wheel step still runs first and keeps the wheel when it captures
+/// it.
 fn eq_slider_column<'a>(
     value: f32,
     label: &'a str,
     on_change: impl Fn(f32) -> Message + 'a,
+    on_scroll: impl Fn(ScrollDelta) -> Message + 'a,
     style: impl Fn(slider::Status) -> slider::Style + 'a,
 ) -> Column<'a, Message> {
     Column::new()
         .push(
-            VerticalSlider::new(GAIN_MIN_DB..=GAIN_MAX_DB, value, on_change)
-                .step(EQ_STEP)
-                .on_release(Message::MixerReleased)
-                .height(Length::Fixed(EQ_SLIDER_HEIGHT))
-                .style(move |_theme, status| style(status)),
+            MouseArea::new(
+                VerticalSlider::new(GAIN_MIN_DB..=GAIN_MAX_DB, value, on_change)
+                    .step(EQ_STEP)
+                    .on_release(Message::MixerReleased)
+                    .height(Length::Fixed(EQ_SLIDER_HEIGHT))
+                    .style(move |_theme, status| style(status)),
+            )
+            .on_scroll(on_scroll),
         )
         .push(Text::new(label).size(12))
 }
@@ -157,9 +176,13 @@ fn eq_slider_column<'a>(
 /// The slider spans `GAIN_MIN_DB..=GAIN_MAX_DB` in [`EQ_STEP`] increments and
 /// takes the same gain tint as every band slider, from the stored preamp.
 pub(super) fn preamp_column(preamp: f32) -> Column<'static, Message> {
-    eq_slider_column(preamp, "Preamp", Message::EqPreampChange, move |status| {
-        preamp_slider_style(preamp, status)
-    })
+    eq_slider_column(
+        preamp,
+        "Preamp",
+        Message::EqPreampChange,
+        super::eq_preamp_wheel_message,
+        move |status| preamp_slider_style(preamp, status),
+    )
 }
 
 /// The preamp slider's paint style: exactly the band tint for the preamp's
@@ -245,17 +268,24 @@ pub fn view_equalizer(
     let mut bands_row = Row::new().spacing(BAND_ROW_SPACING);
     for (index, frequency) in BAND_FREQUENCIES.iter().enumerate() {
         let gain = bands[index];
-        bands_row = bands_row.push(eq_slider_column(
+        let column = eq_slider_column(
             gain,
             frequency,
             move |gain| Message::EqBandChange(index, gain),
+            move |delta| super::eq_band_wheel_message(index, delta),
             move |status| style::band_slider_style(gain, status),
-        ));
+        );
+        #[cfg(test)]
+        let column = Container::new(column).id(eq_band_slider_id(index));
+        bands_row = bands_row.push(column);
     }
 
+    let preamp = preamp_column(preamp);
+    #[cfg(test)]
+    let preamp = Container::new(preamp).id(EQ_PREAMP_SLIDER_ID);
     let preamp_and_scale = Row::new()
         .spacing(BAND_ROW_SPACING)
-        .push(preamp_column(preamp))
+        .push(preamp)
         .push(db_scale_column());
 
     // The curve spans only the band area: the left column's curve-height

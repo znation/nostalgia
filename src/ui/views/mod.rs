@@ -73,12 +73,16 @@ pub use transport::view_transport_controls;
 #[cfg(test)]
 pub(super) use browse::BROWSE_VIEWS;
 #[cfg(test)]
+pub(super) use equalizer::{EQ_PREAMP_SLIDER_ID, eq_band_slider_id};
+#[cfg(test)]
 pub(crate) use mini_transport::{MINI_SEEK_ID, MINI_VOLUME_ID};
 #[cfg(test)]
 pub(super) use seek_bar::{SEEK_BAR_ID, SEEK_STRIP_ID, seek_bar_value};
 pub(super) use shade::SHADED_HEIGHT;
 #[cfg(test)]
 pub(super) use title_bar::TITLE_BAR_HEIGHT;
+#[cfg(test)]
+pub(super) use transport::BALANCE_SLIDER_ID;
 
 #[cfg(test)]
 mod tests;
@@ -168,27 +172,50 @@ const VOLUME_MAX: f32 = 1.0;
 /// step.
 pub(super) const VOLUME_STEP: f32 = 0.01;
 
-/// Maps a wheel roll over the player panels to the volume direction it asks
-/// for: `1.0` raises, `-1.0` lowers, and `0.0` is a no-op for a horizontal-only
-/// roll.
+/// Maps a wheel roll to the slider direction it asks for: `1.0` raises,
+/// `-1.0` lowers, and `0.0` is a no-op for a horizontal-only or zero roll.
 ///
 /// iced passes winit's wheel deltas, whose positive `y` is the direction that
 /// scrolls up. Only the sign matters, so one event becomes one slider step
 /// regardless of whether the backend reports lines or pixels — just like one
-/// arrow press. The browse list sits outside the area that publishes this, so
-/// its own `Scrollable` keeps the wheel there.
-pub(super) fn volume_wheel_message(delta: ScrollDelta) -> Message {
+/// arrow press. A `NaN` vertical delta compares false both ways, so it is the
+/// no-op too.
+pub(super) fn wheel_direction(delta: ScrollDelta) -> f32 {
     let y = match delta {
         ScrollDelta::Lines { y, .. } | ScrollDelta::Pixels { y, .. } => y,
     };
-    let direction = if y > 0.0 {
+    if y > 0.0 {
         1.0
     } else if y < 0.0 {
         -1.0
     } else {
         0.0
-    };
-    Message::VolumeWheel(direction)
+    }
+}
+
+/// Maps a wheel roll over the player panels to the volume direction it asks
+/// for. The browse list sits outside the area that publishes this, so its own
+/// `Scrollable` keeps the wheel there; the balance, preamp, and band sliders
+/// are their own exceptions (see the sibling helpers below).
+pub(super) fn volume_wheel_message(delta: ScrollDelta) -> Message {
+    Message::VolumeWheel(wheel_direction(delta))
+}
+
+/// Maps a wheel roll over the balance slider to the balance direction it asks
+/// for, using the same sign mapping as [`volume_wheel_message`].
+pub(super) fn balance_wheel_message(delta: ScrollDelta) -> Message {
+    Message::BalanceWheel(wheel_direction(delta))
+}
+
+/// Maps a wheel roll over the equalizer's preamp slider to its gain direction.
+pub(super) fn eq_preamp_wheel_message(delta: ScrollDelta) -> Message {
+    Message::EqPreampWheel(wheel_direction(delta))
+}
+
+/// Maps a wheel roll over equalizer band `index` to that band's gain
+/// direction.
+pub(super) fn eq_band_wheel_message(index: usize, delta: ScrollDelta) -> Message {
+    Message::EqBandWheel(index, wheel_direction(delta))
 }
 
 /// The left and right arrows' seek granularity: classic Winamp seeks five
@@ -206,12 +233,15 @@ const BALANCE_MIN: f32 = -1.0;
 const BALANCE_MAX: f32 = 1.0;
 
 /// The balance slider's drag granularity: one percent of the scale per step,
-/// matching the volume slider's step.
-const BALANCE_STEP: f32 = 0.01;
+/// matching the volume slider's step. `pub(super)` so the wheel handler in
+/// `handlers::mixer` nudges by the slider's own step.
+pub(super) const BALANCE_STEP: f32 = 0.01;
 
 /// The equalizer sliders' drag granularity: one decibel, so every preamp and
 /// band slider lands on a whole-dB gain within `GAIN_MIN_DB..=GAIN_MAX_DB`.
-const EQ_STEP: f32 = 1.0;
+/// `pub(super)` so the wheel handlers in `handlers::mixer` nudge by the
+/// sliders' own step.
+pub(super) const EQ_STEP: f32 = 1.0;
 
 /// Builds one horizontal chrome slider: it spans `min..=max`, starts at
 /// `value`, steps by `step`, is `width` pixels wide, and paints both halves of

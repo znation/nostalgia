@@ -3,9 +3,11 @@
 //! PL panel toggles, plus the pure glyph, word, and button-label helpers they
 //! use.
 
+#[cfg(test)]
+use iced::widget::Container;
 use iced::{
     Element,
-    widget::{Button, Row, Text, Tooltip, tooltip},
+    widget::{Button, MouseArea, Row, Text, Tooltip, tooltip},
 };
 
 use crate::ui::{Message, style};
@@ -158,6 +160,11 @@ fn panel_toggle_button(
         .style(move |_theme, status| style::toggle_button_style(open, status))
 }
 
+/// The balance slider's container id, used only by the layout tests to find
+/// the laid-out slider and publish a wheel roll over it, like `SEEK_BAR_ID`.
+#[cfg(test)]
+pub(crate) const BALANCE_SLIDER_ID: &str = "transport-balance";
+
 /// The transport row: the Previous, Play/Pause, Stop, Next, Repeat, and
 /// Shuffle buttons, the volume slider, the balance slider, and the fixed-width
 /// `EQ` and `PL` panel toggles. `volume` and `balance` are the sliders' current
@@ -182,7 +189,7 @@ pub fn view_transport_controls(
     for button in transport_buttons(is_playing, repeat, shuffle) {
         row = row.push(button).push(spacer(20.0));
     }
-    row.push(chrome_slider(
+    row = row.push(chrome_slider(
         VOLUME_MIN,
         VOLUME_MAX,
         volume,
@@ -190,8 +197,11 @@ pub fn view_transport_controls(
         100.0,
         style::volume_level_color(volume),
         Message::VolumeChange,
-    ))
-    .push(chrome_slider(
+    ));
+    // The balance slider's own wheel handling wraps the slider inside the
+    // player-panel area, so a plain roll moves the balance instead of the
+    // volume while the slider's own Ctrl+wheel step still runs first.
+    let balance_slider = MouseArea::new(chrome_slider(
         BALANCE_MIN,
         BALANCE_MAX,
         balance,
@@ -200,11 +210,16 @@ pub fn view_transport_controls(
         style::balance_level_color(balance),
         Message::BalanceChange,
     ))
-    .push(spacer(20.0))
-    .push(panel_toggle_button(eq_panel_toggle(), eq_panel_visible))
-    .push(panel_toggle_button(
-        library_panel_toggle(),
-        library_panel_visible,
-    ))
-    .into()
+    .on_scroll(super::balance_wheel_message);
+    #[cfg(test)]
+    let balance_slider = Container::new(balance_slider).id(BALANCE_SLIDER_ID);
+    row = row
+        .push(balance_slider)
+        .push(spacer(20.0))
+        .push(panel_toggle_button(eq_panel_toggle(), eq_panel_visible))
+        .push(panel_toggle_button(
+            library_panel_toggle(),
+            library_panel_visible,
+        ));
+    row.into()
 }

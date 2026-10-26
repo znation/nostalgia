@@ -223,6 +223,38 @@ fn volume_wheel_message_follows_only_the_vertical_sign() {
     );
 }
 
+// The balance wheel shares the volume wheel's sign mapping: both delta kinds,
+// both signs, and a horizontal-only, zero, or NaN roll as the no-op.
+#[test]
+fn balance_wheel_message_maps_a_vertical_roll_to_a_direction() {
+    use iced::mouse::ScrollDelta::{Lines, Pixels};
+
+    fn direction(message: Message) -> f32 {
+        match message {
+            Message::BalanceWheel(direction) => direction,
+            other => panic!("expected a balance wheel message, got {other:?}"),
+        }
+    }
+
+    for (delta, expected) in [
+        (Lines { x: 0.0, y: 3.0 }, 1.0),
+        (Lines { x: 0.0, y: -2.0 }, -1.0),
+        (Pixels { x: 0.0, y: 120.0 }, 1.0),
+        (Pixels { x: 0.0, y: -45.0 }, -1.0),
+        (Lines { x: 4.0, y: 0.0 }, 0.0),
+        (Pixels { x: 30.0, y: 0.0 }, 0.0),
+        (
+            Lines {
+                x: 5.0,
+                y: f32::NAN,
+            },
+            0.0,
+        ),
+    ] {
+        assert_eq!(direction(balance_wheel_message(delta)), expected);
+    }
+}
+
 // The balance twin of the volume spec: the balance slider's range must
 // equal the range `set_balance`/`clamp_balance` store, so a drag to either
 // end lands exactly on the stored extreme, and its step is pinned so it

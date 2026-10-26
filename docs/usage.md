@@ -165,7 +165,9 @@ volume slider and the up/down arrows set the audio backend's playback
 level, and rolling the mouse wheel over the player panels nudges
 the volume by one slider step in the roll's vertical direction, except that a roll over the drawn
 seek slider, in the Now Playing bar or the shade strip, seeks five seconds forward or back instead;
-over the browse list the wheel keeps scrolling the list instead. The balance slider sets its stereo
+a roll over the balance slider moves the balance by one step, and a roll over the equalizer's
+preamp or a band moves that gain by one step; over the browse list the wheel keeps scrolling the
+list instead. The balance slider sets its stereo
 balance; a drag moving back toward the middle snaps to exact center within 10% of it. While a volume
 or balance slider is dragged, the LCD shows its level (`Volume: 72%`,
 `Balance: 31% Left`) in place of the title until release; an equalizer band or preamp drag does

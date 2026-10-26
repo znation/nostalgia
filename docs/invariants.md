@@ -955,13 +955,16 @@ through `handlers::mixer::volume_down`, and both go through `AppState::nudge_vol
 audio-backend forward as the arrow keys, so the clamp and the step cannot drift from them. Only
 the sign of the delta matters, so one line or pixel event is one step. The browse list is outside
 that area, so its `Scrollable` keeps the wheel and the volume is unchanged; a horizontal-only
-roll or a zero direction changes no volume and schedules no work. A drawn seek slider is the
-exception: it seeks instead (see `## Seek wheel`).
+roll or a zero direction changes no volume and schedules no work. A drawn seek slider is one
+exception: it seeks instead (see `## Seek wheel`). The balance slider, the equalizer preamp, and
+each equalizer band are the others: a roll over one moves that slider instead (see
+`## Slider wheel`).
 
-**Enforced by.** `views::volume_wheel_message` in `src/ui/views/mod.rs` (the sign mapping),
-`Message::VolumeWheel` in `src/ui/message.rs`, `handlers::mixer::volume_wheel` in
-`src/ui/handlers/mixer.rs` (the zero/NaN no-op), and the two `MouseArea::on_scroll` wrappers in
-`src/ui/view.rs` (the normal and shaded trees).
+**Enforced by.** `views::volume_wheel_message` and its `views::wheel_direction` sign mapping in
+`src/ui/views/mod.rs`, `Message::VolumeWheel` in `src/ui/message.rs`,
+`handlers::mixer::volume_wheel` in `src/ui/handlers/mixer.rs` (the zero/NaN no-op), and the two
+`MouseArea::on_scroll` wrappers in `src/ui/view.rs` (the normal and shaded trees), which the
+balance, preamp, and band wrappers nest inside.
 
 **Pinned by.** `volume_wheel_message_maps_a_vertical_roll_to_a_direction` and
 `volume_wheel_message_zeroes_a_horizontal_only_roll` in `src/ui/views/tests/transport.rs`, plus
@@ -986,6 +989,40 @@ position or no preview length) and every other player panel keep the volume nudg
 `wheel_over_the_shade_seek_slider_seeks` (also in `seek_wheel.rs`), plus
 `wheel_over_the_root_seek_slider_seeks_without_nudging_the_volume`
 and `wheel_over_a_blank_seek_strip_still_nudges_the_volume` in `src/ui/tests/mixer_tests.rs`.
+
+## Slider wheel
+
+**Guarantee.** A plain wheel roll over the balance slider moves the balance by exactly one
+`views::BALANCE_STEP` in the roll's vertical direction; a roll over the equalizer's preamp or any
+band moves only that gain by exactly one `views::EQ_STEP` the same way. The sign mapping is
+`views::wheel_direction`, so a positive `y` raises/moves right, a negative `y` lowers/moves left,
+and a magnitude never counts as more than one step. Each move goes through the same clamped
+setter and audio-backend forward as that slider's drag, so it cannot drift from the drag's range
+or granularity; a hand move also clears the equalizer preset selection, as a drag does. These
+rolls never set `WinampPlayer::mixer_drag`, so the LCD keeps its title and shows no readout. A
+zero, horizontal-only, or `NaN` roll and an out-of-range band index are no-ops that schedule no
+work, and these wrappers keep the roll from reaching the volume area around them. Every other
+player panel still nudges the volume (see `## Volume wheel`), and the drawn seek slider still
+seeks (see `## Seek wheel`).
+
+**Enforced by.** `views::balance_wheel_message`, `views::eq_preamp_wheel_message`, and
+`views::eq_band_wheel_message` (all through `views::wheel_direction`) in
+`src/ui/views/mod.rs`; the `BalanceWheel`, `EqPreampWheel`, and `EqBandWheel` variants in
+`src/ui/message.rs`; `handlers::mixer::{balance_wheel, eq_preamp_wheel, eq_band_wheel}` in
+`src/ui/handlers/mixer.rs`; and the `MouseArea::on_scroll` wrappers around the balance slider in
+`src/ui/views/transport.rs` and around the preamp and band sliders in
+`src/ui/views/equalizer.rs`.
+
+**Pinned by.** `balance_wheel_message_maps_a_vertical_roll_to_a_direction`
+(`src/ui/views/tests/transport.rs`), `equalizer_wheel_messages_map_the_roll_direction_and_band`
+(`src/ui/views/tests/equalizer.rs`), and
+`balance_wheel_nudges_by_one_step_and_ignores_zero_and_nan`,
+`eq_preamp_wheel_nudges_by_one_db_and_ignores_zero_and_nan`,
+`eq_band_wheel_nudges_only_its_band_and_ignores_zero_nan_and_an_out_of_range_index`,
+`slider_wheels_forward_their_new_values_to_the_audio_backend`,
+`wheel_over_the_balance_slider_nudges_the_balance_not_the_volume`, and
+`wheel_over_the_preamp_and_every_band_nudges_that_slider_not_the_volume` in
+`src/ui/tests/mixer_tests.rs`.
 
 ## Now Playing label
 

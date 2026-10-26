@@ -39,6 +39,39 @@ fn pressing_a_db_scale_label_sets_every_band_to_its_gain() {
     }
 }
 
+// The equalizer's wheel messages carry the same vertical sign as the volume
+// wheel and name the slider they came from: the preamp, or the exact band
+// index, including a no-op zero roll.
+#[test]
+fn equalizer_wheel_messages_map_the_roll_direction_and_band() {
+    use iced::mouse::ScrollDelta::{Lines, Pixels};
+
+    for (delta, expected) in [
+        (Lines { x: 0.0, y: 2.0 }, 1.0),
+        (Pixels { x: 0.0, y: -90.0 }, -1.0),
+        (Lines { x: 7.0, y: 0.0 }, 0.0),
+        (
+            Pixels {
+                x: 0.0,
+                y: f32::NAN,
+            },
+            0.0,
+        ),
+    ] {
+        match eq_preamp_wheel_message(delta) {
+            Message::EqPreampWheel(direction) => assert_eq!(direction, expected),
+            other => panic!("expected a preamp wheel message, got {other:?}"),
+        }
+        match eq_band_wheel_message(3, delta) {
+            Message::EqBandWheel(index, direction) => {
+                assert_eq!(index, 3);
+                assert_eq!(direction, expected);
+            }
+            other => panic!("expected a band wheel message, got {other:?}"),
+        }
+    }
+}
+
 // The mockup draws the preamp as a vertical slider in the band row with a dB
 // scale beside it, not as a horizontal slider above the curve. Lay out the
 // real panel and pin the scale's top-to-bottom order, the preamp label's

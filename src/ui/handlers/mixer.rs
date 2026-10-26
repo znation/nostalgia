@@ -50,7 +50,20 @@ pub(in crate::ui) fn volume_wheel(player: &mut WinampPlayer, direction: f32) -> 
     }
 }
 
-/// The balance slider's drag: sets the stereo balance. A move toward center
+/// The balance slider's wheel roll: nudges the balance by one
+/// [`views::BALANCE_STEP`] in the roll's vertical direction, through the same
+/// clamped setter and backend forward as a drag. Unlike a drag it leaves
+/// `mixer_drag` alone, so the LCD keeps its title. A zero or `NaN` direction
+/// is a no-op.
+pub(in crate::ui) fn balance_wheel(player: &mut WinampPlayer, direction: f32) -> Task<Message> {
+    if direction == 0.0 || direction.is_nan() {
+        return Task::none();
+    }
+    mutate_balance(player, |state| {
+        state.set_balance(state.balance() + direction.signum() * views::BALANCE_STEP)
+    })
+}
+
 /// that lands near it snaps to exactly center (see
 /// [`crate::state::snap_balance_to_center`]); "toward" is judged against the
 /// drag's previous requested value, so a drag continuing inward through the
@@ -121,6 +134,38 @@ pub(in crate::ui) fn toggle_equalizer(player: &mut WinampPlayer) -> Task<Message
 pub(in crate::ui) fn eq_preamp_change(player: &mut WinampPlayer, gain: f32) -> Task<Message> {
     player.mixer_drag = Some(views::MixerDrag::EqPreamp);
     mutate_equalizer(player, |state| state.set_eq_preamp(gain))
+}
+
+/// The preamp slider's wheel roll: nudges the preamp by one
+/// [`views::EQ_STEP`] in the roll's vertical direction, through the same
+/// clamped setter and backend forward as a drag, but without setting
+/// `mixer_drag`. A zero or `NaN` direction is a no-op.
+pub(in crate::ui) fn eq_preamp_wheel(player: &mut WinampPlayer, direction: f32) -> Task<Message> {
+    if direction == 0.0 || direction.is_nan() {
+        return Task::none();
+    }
+    mutate_equalizer(player, |state| {
+        state.set_eq_preamp(state.eq_preamp() + direction.signum() * views::EQ_STEP)
+    })
+}
+
+/// A band slider's wheel roll: nudges only band `band` by one
+/// [`views::EQ_STEP`] in the roll's vertical direction, through the same
+/// clamped setter and backend forward as a drag, but without setting
+/// `mixer_drag`. A zero or `NaN` direction, or an out-of-range band, is a no-op
+/// before the state lock.
+pub(in crate::ui) fn eq_band_wheel(
+    player: &mut WinampPlayer,
+    band: usize,
+    direction: f32,
+) -> Task<Message> {
+    if band >= BAND_COUNT || direction == 0.0 || direction.is_nan() {
+        return Task::none();
+    }
+    mutate_equalizer(player, |state| {
+        let gain = state.eq_bands()[band] + direction.signum() * views::EQ_STEP;
+        state.set_eq_band(band, gain)
+    })
 }
 
 /// A band slider's drag.

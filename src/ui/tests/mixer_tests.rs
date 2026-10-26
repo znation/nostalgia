@@ -125,6 +125,108 @@ fn volume_wheel_clamps_at_the_ends() {
 }
 
 #[test]
+fn balance_wheel_nudges_by_one_step_and_ignores_zero_and_nan() {
+    let (mut player, state) = test_player();
+
+    let start = state.blocking_lock().balance();
+    assert_message_schedules_no_work(&mut player, Message::BalanceWheel(1.0));
+    let raised = state.blocking_lock().balance();
+    assert!((raised - (start + views::BALANCE_STEP)).abs() < f32::EPSILON);
+
+    assert_message_schedules_no_work(&mut player, Message::BalanceWheel(-1.0));
+    let lowered = state.blocking_lock().balance();
+    assert!((lowered - start).abs() < f32::EPSILON);
+
+    for no_op in [0.0, f32::NAN] {
+        assert_message_schedules_no_work(&mut player, Message::BalanceWheel(no_op));
+        assert!((state.blocking_lock().balance() - start).abs() < f32::EPSILON);
+    }
+
+    for _ in 0..200 {
+        assert_message_schedules_no_work(&mut player, Message::BalanceWheel(1.0));
+    }
+    assert_eq!(state.blocking_lock().balance(), 1.0);
+    assert_eq!(player.mixer_drag, None);
+
+    for _ in 0..300 {
+        assert_message_schedules_no_work(&mut player, Message::BalanceWheel(-1.0));
+    }
+    assert_eq!(state.blocking_lock().balance(), -1.0);
+    assert_eq!(player.mixer_drag, None);
+}
+
+#[test]
+fn eq_preamp_wheel_nudges_by_one_db_and_ignores_zero_and_nan() {
+    let (mut player, state) = test_player();
+
+    let start = state.blocking_lock().eq_preamp();
+    assert_message_schedules_no_work(&mut player, Message::EqPreampWheel(1.0));
+    let raised = state.blocking_lock().eq_preamp();
+    assert!((raised - (start + views::EQ_STEP)).abs() < f32::EPSILON);
+
+    assert_message_schedules_no_work(&mut player, Message::EqPreampWheel(-1.0));
+    let lowered = state.blocking_lock().eq_preamp();
+    assert!((lowered - start).abs() < f32::EPSILON);
+
+    for no_op in [0.0, f32::NAN] {
+        assert_message_schedules_no_work(&mut player, Message::EqPreampWheel(no_op));
+        assert!((state.blocking_lock().eq_preamp() - start).abs() < f32::EPSILON);
+    }
+
+    for _ in 0..200 {
+        assert_message_schedules_no_work(&mut player, Message::EqPreampWheel(1.0));
+    }
+    assert_eq!(state.blocking_lock().eq_preamp(), GAIN_MAX_DB);
+    assert_eq!(player.mixer_drag, None);
+
+    for _ in 0..200 {
+        assert_message_schedules_no_work(&mut player, Message::EqPreampWheel(-1.0));
+    }
+    assert_eq!(state.blocking_lock().eq_preamp(), GAIN_MIN_DB);
+    assert_eq!(player.mixer_drag, None);
+}
+
+#[test]
+fn eq_band_wheel_nudges_only_its_band_and_ignores_zero_nan_and_an_out_of_range_index() {
+    let (mut player, state) = test_player();
+
+    assert_message_schedules_no_work(&mut player, Message::EqBandWheel(1, 1.0));
+    let bands = state.blocking_lock().eq_bands();
+    assert!((bands[1] - views::EQ_STEP).abs() < f32::EPSILON);
+    assert!(
+        bands
+            .iter()
+            .enumerate()
+            .all(|(index, gain)| index == 1 || *gain == 0.0),
+        "only band 1 moves: {bands:?}"
+    );
+
+    assert_message_schedules_no_work(&mut player, Message::EqBandWheel(1, -1.0));
+    assert!((state.blocking_lock().eq_bands()[1] - 0.0).abs() < f32::EPSILON);
+
+    for no_op in [
+        Message::EqBandWheel(1, 0.0),
+        Message::EqBandWheel(1, f32::NAN),
+        Message::EqBandWheel(BAND_COUNT, 1.0),
+        Message::EqBandWheel(BAND_COUNT + 5, -1.0),
+    ] {
+        assert_message_schedules_no_work(&mut player, no_op);
+        let bands = state.blocking_lock().eq_bands();
+        assert!(
+            bands.iter().all(|gain| *gain == 0.0),
+            "no band moves: {bands:?}"
+        );
+    }
+
+    for _ in 0..200 {
+        assert_message_schedules_no_work(&mut player, Message::EqBandWheel(0, 1.0));
+    }
+    assert_eq!(state.blocking_lock().eq_bands()[0], GAIN_MAX_DB);
+    assert_eq!(state.blocking_lock().eq_bands()[1], 0.0);
+    assert_eq!(player.mixer_drag, None);
+}
+
+#[test]
 fn volume_change_clamps_value_before_storing() {
     // Out-of-range slider values are clamped by the update arm.
     assert_message_clamps(Message::VolumeChange(1.5), |state| state.volume(), 1.0);
@@ -205,6 +307,38 @@ fn balance_messages_forward_to_the_audio_backend() {
             AudioCall::SetBalance(1.0),
             AudioCall::SetBalance(0.0),
         ]
+    );
+}
+
+// The three new wheel paths must reach the injected backend, not just shared
+// state, exactly like the drags they mirror. Drive each through `update` over a
+// recording backend and pin the forwarded value.
+#[test]
+fn slider_wheels_forward_their_new_values_to_the_audio_backend() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, _state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+
+    assert_message_schedules_no_work(&mut player, Message::BalanceWheel(1.0));
+    assert_message_schedules_no_work(&mut player, Message::EqPreampWheel(1.0));
+    assert_message_schedules_no_work(&mut player, Message::EqBandWheel(2, 1.0));
+
+    let calls = recording.calls();
+    assert_eq!(calls.len(), 3, "one forward per roll: {calls:?}");
+    assert!(
+        matches!(calls[0], AudioCall::SetBalance(balance)
+            if (balance - views::BALANCE_STEP).abs() < f32::EPSILON),
+        "the balance roll forwards its new balance: {calls:?}"
+    );
+    assert!(
+        matches!(calls[1], AudioCall::SetEqualizer(snapshot)
+            if snapshot.preamp_db == views::EQ_STEP),
+        "the preamp roll forwards the curve: {calls:?}"
+    );
+    assert!(
+        matches!(calls[2], AudioCall::SetEqualizer(snapshot)
+            if snapshot.bands_db[2] == views::EQ_STEP),
+        "the band roll forwards the moved band: {calls:?}"
     );
 }
 
@@ -369,6 +503,101 @@ fn wheel_over_a_blank_seek_strip_still_nudges_the_volume() {
             .any(|m| matches!(m, Message::SeekForward | Message::SeekBackward)),
         "a blank strip must not seek: {messages:?}"
     );
+}
+
+// A plain roll over the balance slider moves the balance instead of the
+// volume, in both directions.
+#[test]
+fn wheel_over_the_balance_slider_nudges_the_balance_not_the_volume() {
+    let (player, _state) = test_player();
+    let slider = captured_root_view_container(&player, views::BALANCE_SLIDER_ID)
+        .expect("the balance slider is laid out");
+
+    for (y, expected) in [(1.0, 1.0), (-1.0, -1.0)] {
+        let messages = root_wheel_messages(&player, slider, y);
+        let wheels: Vec<&f32> = messages
+            .iter()
+            .filter_map(|message| match message {
+                Message::BalanceWheel(direction) => Some(direction),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            wheels.len(),
+            1,
+            "exactly one balance roll expected: {messages:?}"
+        );
+        assert_eq!(*wheels[0], expected);
+        assert!(
+            !messages
+                .iter()
+                .any(|message| matches!(message, Message::VolumeWheel(_))),
+            "the roll must not nudge the volume: {messages:?}"
+        );
+    }
+}
+
+// A plain roll over the equalizer's preamp or any band moves that slider
+// instead of the volume.
+#[test]
+fn wheel_over_the_preamp_and_every_band_nudges_that_slider_not_the_volume() {
+    let (mut player, _state) = test_player();
+    player.eq_panel_visible = true;
+
+    let preamp = captured_root_view_container(&player, views::EQ_PREAMP_SLIDER_ID)
+        .expect("the preamp slider is laid out");
+    // The slider itself is 16px wide at the column's left, narrower than the
+    // band label that sets the column's width, so aim at the slider's centre
+    // rather than the container's.
+    let slider_area = |bounds: iced::Rectangle| iced::Rectangle {
+        width: 16.0,
+        height: 100.0,
+        ..bounds
+    };
+    let messages = root_wheel_messages(&player, slider_area(preamp), 1.0);
+    let preamp_wheels: Vec<&f32> = messages
+        .iter()
+        .filter_map(|message| match message {
+            Message::EqPreampWheel(direction) => Some(direction),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        preamp_wheels.len(),
+        1,
+        "exactly one preamp roll expected: {messages:?}"
+    );
+    assert_eq!(*preamp_wheels[0], 1.0);
+    assert!(
+        !messages
+            .iter()
+            .any(|message| matches!(message, Message::VolumeWheel(_))),
+        "the preamp roll must not nudge the volume: {messages:?}"
+    );
+
+    for index in 0..BAND_COUNT {
+        let band = captured_root_view_container(&player, &views::eq_band_slider_id(index))
+            .unwrap_or_else(|| panic!("band {index} is laid out"));
+        let messages = root_wheel_messages(&player, slider_area(band), 1.0);
+        let band_wheels: Vec<(usize, f32)> = messages
+            .iter()
+            .filter_map(|message| match message {
+                Message::EqBandWheel(moved, direction) => Some((*moved, *direction)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            band_wheels,
+            vec![(index, 1.0)],
+            "only band {index} moves: {messages:?}"
+        );
+        assert!(
+            !messages
+                .iter()
+                .any(|message| matches!(message, Message::VolumeWheel(_))),
+            "the band roll must not nudge the volume: {messages:?}"
+        );
+    }
 }
 
 // Dragging the volume slider swaps the LCD title for the live level, and the
