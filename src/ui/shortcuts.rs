@@ -23,7 +23,9 @@ use super::Message;
 /// to focus the `Search library` box, Ctrl+Z and Ctrl+B to play the first and
 /// last song of the showing list, Ctrl+R to reverse the showing list,
 /// Ctrl+Shift+R to shuffle it, Ctrl+W to toggle window-shade mode, Ctrl+J to
-/// flip the Jump to time panel, plain J to flip the Jump to File panel,
+/// flip the Jump to time panel, Ctrl+A and Ctrl+T to repeat the classic
+/// always-on-top and elapsed/remaining toggles, Ctrl+F1 to open the About
+/// panel, plain J to flip the Jump to File panel,
 /// Ctrl+Shift+1 to sort it by title (see [`playlist_sort_shortcut`]), Alt+3
 /// to flip the File info panel
 /// (see [`file_info_shortcut`]), Alt+E and Alt+G to show or hide the library
@@ -165,8 +167,9 @@ fn numpad_shortcut(key: &Key, location: Location, modifiers: Modifiers) -> Optio
 /// Next track, and Previous track) drive the transport. Apart from Ctrl+F,
 /// Ctrl+Z (play the first song), Ctrl+B (play the last song), and Ctrl+R
 /// (reverse the showing list), Ctrl+Shift+R (shuffle it), Ctrl+J (flip the Jump to
-/// time panel), and Ctrl+W (toggle
-/// window-shade mode), a
+/// time panel), Ctrl+W (toggle window-shade mode), Ctrl+A and Ctrl+T (repeat
+/// the classic always-on-top and elapsed/remaining toggles), and Ctrl+F1 (open
+/// the About panel), a
 /// Control, Alt, or
 /// Logo chord is left to the OS and window manager, so those modifiers yield
 /// `None`; Shift is allowed, and the letter match ignores ASCII case, so
@@ -191,7 +194,9 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
     // Ctrl+Z and Ctrl+B jump to the first and last song of the list Z and B
     // step through, Ctrl+R reverses the showing list, Ctrl+Shift+R shuffles it,
     // and Ctrl+W rolls the window up into shade mode and back, Ctrl+J flips the
-    // Jump to time panel, under the same no-Alt, no-Logo rule as Ctrl+F.
+    // Jump to time panel, Ctrl+A and Ctrl+T repeat the classic always-on-top and
+    // elapsed/remaining toggles, and Ctrl+F1 opens the About panel, under the
+    // same no-Alt, no-Logo rule as Ctrl+F.
     if modifiers.control() && !modifiers.alt() && !modifiers.logo() {
         match key {
             Key::Character(character) if character.eq_ignore_ascii_case("z") => {
@@ -215,6 +220,15 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
                 if character.eq_ignore_ascii_case("j") && !modifiers.shift() =>
             {
                 return Some(Message::ToggleJumpTime);
+            }
+            Key::Character(character) if character.eq_ignore_ascii_case("a") => {
+                return Some(Message::ToggleAlwaysOnTop);
+            }
+            Key::Character(character) if character.eq_ignore_ascii_case("t") => {
+                return Some(Message::ToggleTimeDisplay);
+            }
+            Key::Named(key::Named::F1) => {
+                return Some(Message::ToggleAbout);
             }
             _ => {}
         }
@@ -421,6 +435,56 @@ mod tests {
     }
 
     #[test]
+    fn message_for_maps_ctrl_a_and_ctrl_t_to_the_classic_toggles() {
+        // Winamp's Ctrl+A and Ctrl+T repeat the plain A and T toggles, with or
+        // without Shift and regardless of the character's case.
+        for modifiers in [Modifiers::CTRL, Modifiers::CTRL | Modifiers::SHIFT] {
+            for character in ["a", "A"] {
+                assert_maps!(Key::Character(character.into()), modifiers => Message::ToggleAlwaysOnTop);
+            }
+            for character in ["t", "T"] {
+                assert_maps!(Key::Character(character.into()), modifiers => Message::ToggleTimeDisplay);
+            }
+        }
+
+        // Alt or Logo held with Control stays a window-manager chord.
+        for modifiers in [
+            Modifiers::CTRL | Modifiers::ALT,
+            Modifiers::CTRL | Modifiers::LOGO,
+        ] {
+            for character in ["a", "t"] {
+                assert!(
+                    message_for(key_pressed(Key::Character(character.into()), modifiers)).is_none(),
+                    "{character} with {modifiers:?} must stay unbound"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn message_for_maps_ctrl_f1_to_about() {
+        // Winamp's Ctrl+F1 opens the About box, with or without Shift.
+        for modifiers in [Modifiers::CTRL, Modifiers::CTRL | Modifiers::SHIFT] {
+            assert_maps!(Key::Named(key::Named::F1), modifiers => Message::ToggleAbout);
+        }
+
+        // Plain F1 and the Alt/Logo chords stay unbound, as do Control+Alt and
+        // Control+Logo.
+        for modifiers in [
+            Modifiers::NONE,
+            Modifiers::ALT,
+            Modifiers::LOGO,
+            Modifiers::CTRL | Modifiers::ALT,
+            Modifiers::CTRL | Modifiers::LOGO,
+        ] {
+            assert!(
+                message_for(key_pressed(Key::Named(key::Named::F1), modifiers)).is_none(),
+                "F1 with {modifiers:?} must stay unbound"
+            );
+        }
+    }
+
+    #[test]
     fn message_for_maps_ctrl_f_to_focus_search() {
         // Control plus F focuses the search box, with or without Shift and
         // regardless of the character's case.
@@ -507,8 +571,6 @@ mod tests {
             for key in [
                 Key::Character("x".into()),
                 Key::Character("s".into()),
-                Key::Character("a".into()),
-                Key::Character("t".into()),
                 Key::Character("e".into()),
                 Key::Named(key::Named::Enter),
                 Key::Named(key::Named::Backspace),
@@ -528,6 +590,16 @@ mod tests {
                 Key::Named(key::Named::MediaTrackNext),
                 Key::Named(key::Named::MediaTrackPrevious),
             ] {
+                assert!(
+                    shortcut(&key, modifiers).is_none(),
+                    "{key:?} with {modifiers:?} must not map"
+                );
+            }
+        }
+        // A and T are also bound with Control alone (see the Ctrl+A/Ctrl+T
+        // test), so only Alt and Logo are checked here.
+        for modifiers in [Modifiers::ALT, Modifiers::LOGO] {
+            for key in [Key::Character("a".into()), Key::Character("t".into())] {
                 assert!(
                     shortcut(&key, modifiers).is_none(),
                     "{key:?} with {modifiers:?} must not map"

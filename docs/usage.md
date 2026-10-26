@@ -98,7 +98,8 @@ Winamp (the album line is left out when the source supplies none), plus a `Forma
 reports no bitrate; its `Close` button, a click on the backdrop, or Alt+3 again closes it, and it
 opens only while a track is current. Ctrl+J opens a transient Jump to time panel: type seconds (`95`) or `M:SS` (`1:35`) and press Enter or `Jump` to seek the loaded preview there (clamped to its length) and close the panel; `Close`, a click on the backdrop, or Ctrl+J again closes it, and it opens only while a preview with a known length is loaded. Plain `J` opens a transient Jump to File panel over the showing song list (a browsed album or playlist's songs, search results, or All Songs): typing filters its cached row titles case-insensitively, and Enter or `Jump` plays the first match or a row click plays that row, closing the panel; `Close` or a click on the backdrop closes it, and it opens only on those song lists. A `Reload` button beside `Sort` refetches the library's
 artists list and returns to the Artists list, clearing any active search while leaving the typed
-query in the search box. The title bar's `M` button opens a transient About panel naming the app,
+query in the search box. The title bar's `M` button (or `Ctrl+F1`) opens a transient About panel
+naming the app,
 showing its `v`-prefixed package version and the line `The classic Winamp look, rebuilt in
 Rust — with Apple Music as the library.`; `M` (through the backdrop over its slot), the panel's
 `Close` button, or a click on the backdrop outside the panel closes it, and opening it while the
@@ -113,8 +114,9 @@ buttons minimize and close. The window title
 interrupted track's name across Stop and reading just `nostalgia` when no known track is current.
 With the window focused, the classic Winamp keys drive playback: Z and B step back and forward
 (a Z press restarts the loaded preview from its start once it has played at least three seconds),
-X plays, C pauses, V stops, R toggles Repeat and S toggles Shuffle, A toggles always-on-top and T
-switches the large readout between elapsed and remaining time (the same actions as the on-screen A
+X plays, C pauses, V stops, R toggles Repeat and S toggles Shuffle, A (or Ctrl+A) toggles
+always-on-top and T (or Ctrl+T) switches the large readout between elapsed and remaining time (the
+same actions as the on-screen A
 controls and a readout click), E shows or hides the equalizer panel exactly like the `EQ` button
 beside the balance slider (Alt+E shows or hides the library section exactly like the `PL` button,
 and Alt+G the equalizer panel like `EQ`, as Winamp's Alt+E and Alt+G toggle its playlist editor and

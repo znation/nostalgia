@@ -781,9 +781,9 @@ in `AppState`: they live on `WinampPlayer::time_display`, `WinampPlayer::visuali
 `persist_settings_if_changed` copies them into the snapshot before comparing and saving. A missing
 or malformed `time_display` line falls back to elapsed, a missing or malformed `always_on_top` line
 falls back to unpinned, and a missing or malformed `visualizer_visible`, `eq_panel_visible`, or
-`library_panel_visible` line falls back to shown. The classic `A` key reaches the same
-`Message::ToggleAlwaysOnTop` arm through `shortcuts::message_for`, so it flips the flag and
-schedules the same window-level call as the on-screen A controls. The saved always-on-top level
+`library_panel_visible` line falls back to shown. The classic `A` key and Winamp's Ctrl+A reach
+the same `Message::ToggleAlwaysOnTop` arm through `shortcuts::message_for`, so they flip the flag
+and schedule the same window-level call as the on-screen A controls. The saved always-on-top level
 waits for the window id every other window action uses: `window_id_resolved` stores the id, then
 schedules `iced::window::set_level` when the restored flag holds. It is still not window placement:
 the window's size, position, and shade state are not persisted. Playback position, the browse level,
@@ -810,8 +810,8 @@ handled by
 `settings::file_store::FileStore`'s `SettingsWriter` impl creates the parent directory, stages the
 text with `write_atomically`, and logs a failed create or write.
 With no store attached the method returns before taking the state lock, so tests keep the default
-no-op behavior. `shortcuts::message_for` maps `A` to `Message::ToggleAlwaysOnTop`, the arm those
-controls press.
+no-op behavior. `shortcuts::message_for` maps `A` and Ctrl+A to `Message::ToggleAlwaysOnTop`, the
+arm those controls press.
 
 **Pinned by.** `to_text_round_trips_every_field`,
 `time_display_round_trips_both_words_and_ignores_unknown_values`,
@@ -843,7 +843,9 @@ controls press.
 `saved_always_on_top_is_restored_on_boot`,
 `window_level_selects_always_on_top`, and
 `window_id_resolved_applies_a_saved_always_on_top_level` (`src/ui/tests/`). The classic `A` key
-reaching the same arm is pinned by `a_toggles_always_on_top_from_the_keyboard` (`src/ui/tests/`).
+and Ctrl+A reaching the same arm are pinned by `a_toggles_always_on_top_from_the_keyboard`
+(`src/ui/tests/`) and `message_for_maps_ctrl_a_and_ctrl_t_to_the_classic_toggles`
+(`src/ui/shortcuts.rs`).
 
 **History.** Added with the settings-persistence plan on 2026-10-23; the player previously kept
 these values in memory only and started every launch at `AppState::default()`. The readout's
@@ -1009,8 +1011,8 @@ its internal id, whenever the id is in the known-track index:
   and any unknown or absent track read `--:--` at the left. The right edge keeps the plain total in
   both modes. The compact readouts in the library footer and the shade strip share this mode and
   its `views::now_playing::elapsed_readout_clickable` stopped guard, so clicking either can flip
-  elapsed and remaining while playing or paused. The classic `T` key reaches the same
-  `Message::ToggleTimeDisplay` through `shortcuts::message_for` in every transport state; the
+  elapsed and remaining while playing or paused. The classic `T` key and Winamp's Ctrl+T reach the
+  same `Message::ToggleTimeDisplay` through `shortcuts::message_for` in every transport state; the
   stopped readout's click guard makes only the readout inert, not the key.
 - The LCD's small status row always draws both `MONO` and `STEREO` labels side by side in that
   order at its right edge and keeps its fixed height. A loaded preview whose backend reports a
@@ -1147,8 +1149,8 @@ when it scrolls). `views::now_playing::marquee_text` windows an overlong line, a
 `WinampPlayer::marquee_offset` carries the advance through `Message::MarqueeTick`. The
 `WinampPlayer::time_display` field holds the readout's mode, and
 `handlers::playback::toggle_time_display` (routed from `Message::ToggleTimeDisplay`, pressed by the
-`MouseArea` wrapping the readout in `now_playing_row` and mapped from the classic `T` key by
-`shortcuts::message_for`) flips it without touching playback state.
+`MouseArea` wrapping the readout in `now_playing_row` and mapped from the classic `T` key (and
+Ctrl+T) by `shortcuts::message_for`) flips it without touching playback state.
 `views::now_playing::display_len` and `views::now_playing::needs_marquee` measure the line, and
 `ui::timers::subscriptions` subscribes `marquee_ticks` only while that measure exceeds
 `MARQUEE_WIDTH`, and `position_ticks` only while `WinampPlayer::needs_position_poll` reports a
@@ -1424,6 +1426,9 @@ About now restores the window first, so the panel never draws in shade mode (202
 - `views::view_title_bar` draws `M` in the left slot and publishes `Message::ToggleAbout` on a
   press. The LCD strip's `A` keeps publishing `Message::ToggleAlwaysOnTop`; the title bar no
   longer has an always-on-top control.
+- `shortcuts::shortcut` maps Ctrl+F1 (Control with optional Shift, no Alt or Logo) to
+  `Message::ToggleAbout`, so About has a keyboard route like the `M` button; Ctrl+Alt+F1 and
+  Ctrl+Logo+F1 stay unbound.
 - `handlers::window::toggle_about` flips `WinampPlayer::about_visible`. Opening it while
   `WinampPlayer::shaded` holds first calls `toggle_window_shade` and returns that task, so the
   window restores before the panel draws; the flag is layout-only and not persisted.
@@ -1439,9 +1444,10 @@ About now restores the window first, so the panel never draws in shade mode (202
 which wraps the base tree only while `about_visible && !shaded` holds.
 
 **Pinned by.** `title_bar_m_button_publishes_toggle_about`,
-`about_overlay_draws_the_name_version_and_tagline`, and
+`about_overlay_draws_the_name_version_and_tagline`,
 `about_overlay_closes_from_close_and_backdrop_but_ignores_its_chrome`
-(`src/ui/views/tests/chrome.rs`); `toggle_about_shows_and_hides_the_panel_without_touching_playback`
+(`src/ui/views/tests/chrome.rs`); `message_for_maps_ctrl_f1_to_about` (`src/ui/shortcuts.rs`);
+`toggle_about_shows_and_hides_the_panel_without_touching_playback`
 and `toggle_about_while_shaded_restores_the_window_first` (`src/ui/tests/window_tests.rs`);
 `view_constructs_over_the_apps_full_input_space`, `view_constructs_when_the_window_is_shaded`, and
 `title_bar_constructs_for_both_about_states` (`src/ui/tests/view_tests.rs`).
