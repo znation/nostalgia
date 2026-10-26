@@ -100,6 +100,21 @@ fn songs_from_album_maps_a_missing_duration_to_zero() {
     );
 }
 
+// A negative, fractional, or above-`u64` duration is as unusable as an absent
+// one. Like a missing duration it must map to the model's `0` sentinel instead
+// of failing the whole album response, which would hide every song on the
+// album.
+#[test]
+fn songs_from_album_maps_an_unusable_duration_to_zero() {
+    for attributes in [
+        r#"{"name":"Opening","durationInMillis":-1}"#,
+        r#"{"name":"Opening","durationInMillis":1234.5}"#,
+        r#"{"name":"Opening","durationInMillis":18446744073709551616}"#,
+    ] {
+        assert_eq!(song_from_attributes(attributes).duration_ms, 0);
+    }
+}
+
 // A track the API returns without `attributes.artistName` (or with a blank
 // one) must map to the model's `""` "no artist supplied" sentinel rather than
 // failing the whole response, so the Now Playing bar falls back to the title
@@ -568,6 +583,31 @@ fn get_album_durations_groups_and_sums_library_songs() {
         ])
     );
     assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/songs");
+}
+
+// The album running-time request reads the same duration field. An unusable
+// value must count as zero for its album instead of failing the whole songs
+// response, which would also break both album lists.
+#[test]
+fn get_album_durations_counts_an_unusable_duration_as_zero() {
+    let stub = StubTransport::returning(
+        r#"{"data":[
+            {"id":"song-1","attributes":{"name":"Opening","artistName":"The Sample Band","albumName":"First Record","durationInMillis":-1}},
+            {"id":"song-2","attributes":{"name":"Middle","artistName":"The Sample Band","albumName":"First Record","durationInMillis":1234.5}},
+            {"id":"song-3","attributes":{"name":"Closing","artistName":"The Sample Band","albumName":"First Record","durationInMillis":18446744073709551616}}
+        ]}"#,
+    );
+    let library = library_over(&stub);
+
+    let durations = library.get_album_durations(&rest_session()).unwrap();
+
+    assert_eq!(
+        durations,
+        std::collections::HashMap::from([(
+            ("First Record".to_string(), "The Sample Band".to_string()),
+            0,
+        )])
+    );
 }
 
 // A library larger than one page is read in full: the flat list follows the

@@ -5,6 +5,22 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### A negative duration fails the whole album fetch (found by the bugfix role 2026-10-26) — fixed 2026-10-26 by the bugfix role
+
+A song resource whose `attributes.durationInMillis` was negative failed the
+whole collection parse (`invalid value: integer \`-1\`, expected u64`), so
+loading the album returned an error instead of its songs, and the album
+running-time request failed the same way. The wire field now parses the
+duration as a JSON number and maps a non-positive, fractional, or above-`u64`
+value to the model's `0` "no duration supplied" sentinel through
+`duration_millis`; the new tests
+`songs_from_album_maps_an_unusable_duration_to_zero` and
+`get_album_durations_counts_an_unusable_duration_as_zero` failed before the fix
+and pass after.
+
+**Validation gap:** none — a direct unit test reproduced it; the existing
+mapping tests covered only an absent duration.
+
 ### A negative track number fails the whole album fetch (found by the bugfix role 2026-10-26) — fixed 2026-10-26 by the bugfix role
 
 A song resource whose `attributes.trackNumber` was negative failed the whole

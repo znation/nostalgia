@@ -185,8 +185,11 @@ struct Attributes {
     #[serde(rename = "trackNumber")]
     track_number: Option<serde_json::Number>,
     /// The track's length in milliseconds; absent when the API omits it.
+    /// Parsed as a JSON number so a negative value — or an integer beyond
+    /// `u64` — maps to the model's `0` "no duration supplied" sentinel
+    /// instead of failing the whole response.
     #[serde(rename = "durationInMillis")]
-    duration_in_millis: Option<u64>,
+    duration_in_millis: Option<serde_json::Number>,
     /// The preview assets the API offers for the resource; absent when the
     /// API omits them.
     previews: Option<Vec<Preview>>,
@@ -266,7 +269,7 @@ impl Resource {
         Some((
             album_name,
             artist,
-            attributes.duration_in_millis.unwrap_or(0),
+            duration_millis(attributes.duration_in_millis),
         ))
     }
 
@@ -353,10 +356,23 @@ impl Resource {
                 .filter(|number| *number > 0)
                 .and_then(|number| u32::try_from(number).ok()),
             album_id: album_id.to_string(),
-            duration_ms: duration_ms.unwrap_or(0),
+            duration_ms: duration_millis(duration_ms),
             preview_url,
         })
     }
+}
+
+/// The usable length in milliseconds an optional `durationInMillis` carries.
+///
+/// An absent duration, a non-positive one, a fractional one, or one too large
+/// for `u64` is not a length any track can have, so it maps to `0` — the
+/// `Song::duration_ms` and `Album::duration_ms` "source supplied no duration"
+/// sentinel. One unusable value therefore never fails a whole collection
+/// response. Shared by [`Resource::into_song`] and
+/// [`Resource::into_album_duration`] so both drop a useless length the same
+/// way.
+fn duration_millis(duration: Option<serde_json::Number>) -> u64 {
+    duration.and_then(|number| number.as_u64()).unwrap_or(0)
 }
 
 /// The release year at the start of an Apple Music `releaseDate`, or `None`

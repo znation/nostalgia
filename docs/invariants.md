@@ -604,8 +604,9 @@ signed-in service reads the album collection first and the whole-library songs c
 (one extra paginated request), groups the songs by exact `(album title, artist display name)`,
 and sums their durations with `saturating_add`; a song without a non-blank `albumName` is
 skipped, an album with no matching song is `0`, and a failure in either request surfaces as the
-existing album-load failure and its Retry path. `Album::duration_ms` is derived data, not an
-Apple Music album field: it is skipped by serde and deserializes to `0`.
+existing album-load failure and its Retry path. An absent or unusable duration — negative,
+fractional, or above `u64` — counts as `0` instead of failing the response. `Album::duration_ms`
+is derived data, not an Apple Music album field: it is skipped by serde and deserializes to `0`.
 
 **Enforced by.** `Album::duration_ms` in `src/library.rs`; `SampleLibrary::new` in
 `src/sample_library.rs` derives each sample album's total from its indexed songs;
@@ -634,7 +635,8 @@ refresh does not re-join and reformat every row.
 - `album_duration_is_not_serialized_and_defaults_to_zero`
   (in `src/library.rs`)
 - `get_album_durations_groups_and_sums_library_songs`
-  (in `src/apple_music/rest/tests/library.rs`)
+- `get_album_durations_counts_an_unusable_duration_as_zero`
+  (both in `src/apple_music/rest/tests/library.rs`)
 - `get_albums_by_artist_uses_the_rest_library_when_signed_in`
 - `get_albums_by_artist_fails_when_the_albums_request_fails`
 - `get_albums_by_artist_fails_when_the_album_durations_request_fails`
