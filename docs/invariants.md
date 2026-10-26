@@ -1656,9 +1656,10 @@ single time string when the total is unknown;
 readout in `MouseArea::on_double_click(Message::Ignored)` so it captures a press with a no-op;
 `views::mini_transport::MINI_TRANSPORT_HEIGHT`, `MINI_VOLUME_WIDTH`, and
 `MINI_VOLUME_ID` own the geometry and test seam. The normal branch of `ui::view::view` builds the
-footer into the library column and pushes that column only while
-`WinampPlayer::library_panel_visible` holds, with clones of the LCD's elapsed and total strings;
-its shaded branch returns before that push.
+library column, including the footer, and pushes it onto the screen only while
+`WinampPlayer::library_panel_visible` holds — hiding the panel skips building the whole column,
+so an unseen browse list of any length costs nothing per frame — with clones of the LCD's elapsed
+and total strings; its shaded branch returns before that push.
 
 **Pinned by.** `view_library_strip_keeps_its_fixed_height`,
 `library_strip_draws_the_four_controls_time_and_right_edge_volume`,
