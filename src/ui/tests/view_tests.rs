@@ -509,28 +509,42 @@ fn browse_open_button_sits_above_the_browse_list() {
 // index * BROWSE_ROW_HEIGHT`, so that constant must equal the pitch the browse
 // list actually lays its rows out at. A stale constant would scroll a later
 // row out of position. Lay the root view out with the stepping album showing
-// — its first title far too long for one line if it wrapped — and measure the
-// distance between the first two row prefixes. The same long title must stay
-// inside its own column instead of drawing under the right-aligned length.
-#[test]
-fn browse_row_height_matches_the_laid_out_row_pitch() {
+// and its first title replaced by `title` — far too long for one line if it
+// wrapped — so a test can measure the distance between the first two row
+// prefixes. Returns the capture and the first row's full `display_title`, so a
+// caller can find the title fragment the row draws.
+fn capture_songs_list_with_first_title(title: &str) -> (layout_capture::TextCapture, String) {
     let (mut player, _state) = player_stepping_from(None);
     player.current_view = CurrentView::Songs;
-    player.songs.items[0].title = "A very long title ".repeat(20);
-    let long_title = player.songs.items[0].display_title().into_owned();
+    player.songs.items[0].title = title.to_string();
+    let display_title = player.songs.items[0].display_title().into_owned();
+    (captured_root_view_text_bounds(&player), display_title)
+}
 
-    let capture = captured_root_view_text_bounds(&player);
+// Assert that the first two song rows sit one `BROWSE_ROW_HEIGHT` apart,
+// naming `context` so a failure says which title shape broke the pitch.
+fn assert_first_song_row_pitch(capture: &layout_capture::TextCapture, context: &str) {
     let first = capture.find("1. ");
     let second = capture.find("2. ");
-    let title = capture.find(&long_title);
-    let label = capture.find("3:30");
     let pitch = second.y - first.y;
-
     assert!(
         (pitch - views::BROWSE_ROW_HEIGHT).abs() < 0.01,
-        "row pitch {pitch} must equal BROWSE_ROW_HEIGHT {}; rows at {first:?} and {second:?}",
+        "row pitch {pitch} must equal BROWSE_ROW_HEIGHT {} {context}; rows at {first:?} and {second:?}",
         views::BROWSE_ROW_HEIGHT
     );
+}
+
+// The same long title must stay inside its own column instead of drawing
+// under the right-aligned length.
+#[test]
+fn browse_row_height_matches_the_laid_out_row_pitch() {
+    let long_title = "A very long title ".repeat(20);
+
+    let (capture, display_title) = capture_songs_list_with_first_title(&long_title);
+    let title = capture.find(&display_title);
+    let label = capture.find("3:30");
+
+    assert_first_song_row_pitch(&capture, "with a long title");
     assert!(
         title.x + title.width <= label.x,
         "the title must be clipped to its column, not drawn under the label: {title:?} ends after {label:?} begins"
@@ -543,20 +557,9 @@ fn browse_row_height_matches_the_laid_out_row_pitch() {
 // a title carrying one keeps the same row pitch as any other.
 #[test]
 fn a_hard_line_break_in_a_title_does_not_change_the_row_pitch() {
-    let (mut player, _state) = player_stepping_from(None);
-    player.current_view = CurrentView::Songs;
-    player.songs.items[0].title = "One\nTwo".to_string();
+    let (capture, _) = capture_songs_list_with_first_title("One\nTwo");
 
-    let capture = captured_root_view_text_bounds(&player);
-    let first = capture.find("1. ");
-    let second = capture.find("2. ");
-    let pitch = second.y - first.y;
-
-    assert!(
-        (pitch - views::BROWSE_ROW_HEIGHT).abs() < 0.01,
-        "row pitch {pitch} must equal BROWSE_ROW_HEIGHT {} despite the title's line break; rows at {first:?} and {second:?}",
-        views::BROWSE_ROW_HEIGHT
-    );
+    assert_first_song_row_pitch(&capture, "despite the title's line break");
 }
 
 // The row flattener replaces both halves of a line break with spaces. A
@@ -566,20 +569,9 @@ fn a_hard_line_break_in_a_title_does_not_change_the_row_pitch() {
 // two spaces for the same reason.
 #[test]
 fn a_carriage_return_in_a_title_does_not_change_the_row_pitch() {
-    let (mut player, _state) = player_stepping_from(None);
-    player.current_view = CurrentView::Songs;
-    player.songs.items[0].title = "One\rTwo".to_string();
+    let (capture, _) = capture_songs_list_with_first_title("One\rTwo");
 
-    let capture = captured_root_view_text_bounds(&player);
-    let first = capture.find("1. ");
-    let second = capture.find("2. ");
-    let pitch = second.y - first.y;
-
-    assert!(
-        (pitch - views::BROWSE_ROW_HEIGHT).abs() < 0.01,
-        "row pitch {pitch} must equal BROWSE_ROW_HEIGHT {} despite the title's carriage return; rows at {first:?} and {second:?}",
-        views::BROWSE_ROW_HEIGHT
-    );
+    assert_first_song_row_pitch(&capture, "despite the title's carriage return");
     assert!(
         capture
             .fragments()
@@ -596,20 +588,9 @@ fn a_carriage_return_in_a_title_does_not_change_the_row_pitch() {
 // control character or starting a second `BufferLine`.
 #[test]
 fn a_crlf_in_a_title_does_not_change_the_row_pitch() {
-    let (mut player, _state) = player_stepping_from(None);
-    player.current_view = CurrentView::Songs;
-    player.songs.items[0].title = "One\r\nTwo".to_string();
+    let (capture, _) = capture_songs_list_with_first_title("One\r\nTwo");
 
-    let capture = captured_root_view_text_bounds(&player);
-    let first = capture.find("1. ");
-    let second = capture.find("2. ");
-    let pitch = second.y - first.y;
-
-    assert!(
-        (pitch - views::BROWSE_ROW_HEIGHT).abs() < 0.01,
-        "row pitch {pitch} must equal BROWSE_ROW_HEIGHT {} despite the title's CRLF; rows at {first:?} and {second:?}",
-        views::BROWSE_ROW_HEIGHT
-    );
+    assert_first_song_row_pitch(&capture, "despite the title's CRLF");
     assert!(
         capture
             .fragments()
