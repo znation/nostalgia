@@ -387,8 +387,9 @@ column, so every row keeps that pitch and stays inside its column;
 list's current offset and viewport height and schedules the minimal absolute offset computed by
 `reveal_row_offset`, and `handlers::browse::scroll::scroll_browse_to_playing_row` gates it on the
 current view.
-`handlers::playback::step_track`, `handlers::playback::jump_to_edge_track`,
-`handlers::playback::jump_ten_tracks`, and
+`handlers::playback::stepping::step_track`,
+`handlers::playback::stepping::jump_to_edge_track`,
+`handlers::playback::stepping::jump_ten_tracks`, and
 `handlers::playback::preview::playback_finished` batch that reveal with their `TrackSelected`,
 so Next, Previous, a shuffled retrace, an edge jump, a ten-song jump, and a natural preview end
 all follow the landed row.
@@ -476,7 +477,7 @@ the current track, and the playback position are, and scroll the list to that ro
 schedules nothing. Plain and Shift Z/B keep stepping, and Alt or Logo chords with them stay unbound.
 
 **Enforced by.** `shortcuts::shortcut` in `src/ui/shortcuts.rs` checks the two Control chords
-before its chord guard; `handlers::playback::jump_to_edge_track` picks the edge row and epoch from
+before its chord guard; `handlers::playback::stepping::jump_to_edge_track` picks the edge row and epoch from
 the showing list without reading shared state or touching the play history.
 
 **Pinned by.**
@@ -499,7 +500,7 @@ the list to that row. With no current track, or one not in the list, forward pla
 backward the last. Shuffle, Repeat, and the playback position do not change the result, and
 `play_history` is untouched. An empty list schedules nothing.
 
-**Enforced by.** `transport::jumped_track_index` computes the index; `handlers::playback::jump_ten_tracks`
+**Enforced by.** `transport::jumped_track_index` computes the index; `handlers::playback::stepping::jump_ten_tracks`
 reads the current track under the state lock and schedules the selection and scroll.
 
 **Pinned by.**
@@ -1830,7 +1831,8 @@ like the other backend queries, mapping a missing reply to false.
 answer without touching shared state. `handlers::playback::preview::position_tick` schedules the
 finished query, `Message::PlaybackFinished` carries its reply, and
 `handlers::playback::preview::playback_finished` advances the transport;
-`handlers::playback::forward_track_id` (shared with `handlers::playback::step_track`) applies the
+`handlers::playback::stepping::forward_track_id` (shared with
+`handlers::playback::stepping::step_track`) applies the
 same list/Shuffle/Repeat rules as Next, and the no-next-song case reuses `handlers::playback::stop`.
 
 **Pinned by.**
@@ -1896,7 +1898,7 @@ behavior and Shuffle's recorded-play retrace. A rejected restart seek is logged 
 track queued with its position and epoch unchanged; no step is scheduled. The decision uses the
 last reported position — the one the readout shows — not a fresh backend query.
 
-**Enforced by.** `handlers::playback::step_track` in `src/ui/handlers/playback.rs` applies the
+**Enforced by.** `handlers::playback::stepping::step_track` in `src/ui/handlers/playback/stepping.rs` applies the
 restart branch before the stepping arithmetic, consulting
 `AppleMusicService::has_loaded_preview` and `AppleMusicService::seek_output_to`;
 `transport::previous_track_id` in `src/ui/transport.rs` and `transport::PlayHistory` in

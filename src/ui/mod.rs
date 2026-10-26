@@ -117,10 +117,11 @@ fn boot(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> (WinampPlaye
 }
 
 /// Routes each [`Message`] to the handler that owns its behavior: the
-/// transport buttons and keys, the track stepping, the play request and its
-/// completion, the elapsed/remaining toggle, and the marquee tick in
-/// `handlers::playback`; the seek drag and release and the backend polls in
-/// `handlers::playback::preview`; the volume, balance, seek nudges, the
+/// transport buttons and keys, the play request and its completion, the
+/// elapsed/remaining toggle, and the marquee tick in `handlers::playback`; the
+/// track stepping and the edge and ten-song jumps in
+/// `handlers::playback::stepping`; the seek drag and release and the backend
+/// polls in `handlers::playback::preview`; the volume, balance, seek nudges, the
 /// equalizer, and the equalizer panel's show/hide toggle in `handlers::mixer`;
 /// the browse hierarchy, the Back, Open, Top, Sort, and Reload navigation in
 /// `handlers::browse`, the library search with its Clear button in
@@ -152,12 +153,12 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::EqBandChange(band, gain) => handlers::mixer::eq_band_change(player, band, gain),
         Message::EqBandsSetAll(gain) => handlers::mixer::eq_bands_set_all(player, gain),
         Message::EqPresetSelected(preset) => handlers::mixer::eq_preset_selected(player, preset),
-        Message::NextTrack => handlers::playback::step_track(player, true),
-        Message::PreviousTrack => handlers::playback::step_track(player, false),
-        Message::FirstTrack => handlers::playback::jump_to_edge_track(player, false),
-        Message::LastTrack => handlers::playback::jump_to_edge_track(player, true),
-        Message::JumpTracksBack => handlers::playback::jump_ten_tracks(player, false),
-        Message::JumpTracksForward => handlers::playback::jump_ten_tracks(player, true),
+        Message::NextTrack => handlers::playback::stepping::step_track(player, true),
+        Message::PreviousTrack => handlers::playback::stepping::step_track(player, false),
+        Message::FirstTrack => handlers::playback::stepping::jump_to_edge_track(player, false),
+        Message::LastTrack => handlers::playback::stepping::jump_to_edge_track(player, true),
+        Message::JumpTracksBack => handlers::playback::stepping::jump_ten_tracks(player, false),
+        Message::JumpTracksForward => handlers::playback::stepping::jump_ten_tracks(player, true),
         Message::MarqueeTick => handlers::playback::marquee_tick(player),
         // The position poll asks the backend in tasks, as the service's
         // backend queries bound their own wait; `update` stays non-blocking.

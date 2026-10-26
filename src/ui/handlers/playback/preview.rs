@@ -15,7 +15,8 @@ use iced::Task;
 use crate::state::TransportMode;
 use crate::ui::{Message, WinampPlayer};
 
-use super::{forward_track_id, showing_songs, stop};
+use super::stepping::{forward_track_id, showing_songs};
+use super::stop;
 
 /// The position poll's tick: schedule a query of the loaded preview's
 /// position and of whether it has reached its end; while its sample rate and

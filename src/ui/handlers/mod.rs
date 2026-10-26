@@ -2,9 +2,10 @@
 //! concern.
 //!
 //! `crate::ui`'s dispatch table routes each `Message` variant to the handler
-//! that owns it: the transport buttons and keys, the track stepping, the play
-//! request and its completion, the elapsed/remaining toggle, the marquee
-//! tick in `playback`; the seek drag and release and the backend polls in
+//! that owns it: the transport buttons and keys, the play request and its
+//! completion, the elapsed/remaining toggle, the marquee tick in `playback`;
+//! the track stepping and the edge and ten-song jumps in
+//! `playback::stepping`; the seek drag and release and the backend polls in
 //! `playback::preview`; the volume, balance, seek nudges, the equalizer, and
 //! the equalizer panel's show/hide toggle in `mixer`; the browse hierarchy,
 //! the Back, Open, Top, Sort, and Reload navigation in `browse`; the library
