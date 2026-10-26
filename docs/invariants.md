@@ -2020,7 +2020,8 @@ loopback, link-local, unspecified, broadcast, documentation, multicast, `0.0.0.0
 (`192.0.0.0/24`, the whole block, including the globally reachable `.9` and `.10` anycast
 addresses), and 6to4 relay (`192.88.99.0/24`) ranges. For IPv6 it refuses loopback, unspecified,
 multicast, unique-local, link-local, and the IPv4 address embedded in an IPv6 transition prefix
-(6to4, NAT64 `/96` and `/48`, and Teredo); it refuses deprecated site-local
+(6to4, NAT64 `/96` and `/48`, and Teredo); for Teredo it checks both the plain server IPv4 in
+bytes 4..8 and the complemented client IPv4 in bytes 12..16. It refuses deprecated site-local
 (`fec0::/10`) addresses too, because they are still routed inside a site. It does not refuse IPv6 documentation
 (`2001:db8::/32`) or benchmarking (`2001:2::/48`) addresses. Redirects are not followed, and a
 proxy cannot take over resolution.

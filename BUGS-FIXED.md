@@ -5,6 +5,25 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### A Teredo preview address with an internal server slips past the guard (found by the bugfix role 2026-10-26) — fixed 2026-10-26 by the bugfix role
+
+`ip_is_internal` treated Teredo's server IPv4 (bytes 4..8 of
+`2001:0000::/32`) as bitwise-complemented like the client field, but RFC 4380
+stores the server in plain form and obfuscates only the client. A preview
+hostname resolving to `2001:0:7f00:1:0:0:f7f7:f7f7` (server 127.0.0.1, client
+8.8.8.8) therefore passed `PublicAddressResolver`, and a public Teredo server
+whose complement lands in an internal block (128.255.255.254 complements to the
+loopback 127.0.0.1) was wrongly refused. The server field is now read plain and
+only the client field complemented. The new row
+`("2001:0:7f00:1:0:0:f7f7:f7f7", true)` in
+`ip_is_internal_refuses_every_internal_range_and_allows_public_addresses`
+failed before the fix and passes after, and the new row
+`("2001:0:80ff:fffe:0:0:f7f7:fbfb", false)` pins the public-server case the
+old complement read would have refused.
+
+**Validation gap:** none — the existing range table reproduced it directly; no
+other infrastructure was missing.
+
 ### A deprecated site-local IPv6 preview address slips past the guard (found by the bugfix role 2026-10-26) — fixed 2026-10-26 by the bugfix role
 
 `ip_is_internal` refused IPv6 unique-local (`fc00::/7`) and link-local

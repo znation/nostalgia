@@ -251,10 +251,10 @@ pub(crate) fn ip_is_internal(ip: std::net::IpAddr) -> bool {
 /// refused: 6to4 (`2002::/16`, the IPv4 in bytes 2..6), NAT64
 /// (`64:ff9b::/96`, the IPv4 in the last 32 bits, and `64:ff9b:1::/48`, whose
 /// RFC 6052 `/48` layout splits the IPv4 address around the reserved octet), and
-/// Teredo (`2001:0000::/32`, whose server IPv4 in bytes 4..8 and client IPv4
-/// in bytes 12..16 are each stored as the bitwise complement of the address; a
-/// connection goes to the server and then to the client, so an internal either
-/// way is refused).
+/// Teredo (`2001:0000::/32`, whose server IPv4 in bytes 4..8 is stored in plain
+/// form and whose client IPv4 in bytes 12..16 is stored as the bitwise
+/// complement of the address; a connection goes to the server and then to the
+/// client, so an internal either way is refused).
 fn v6_embeds_internal_ipv4(v6: std::net::Ipv6Addr) -> bool {
     let octets = v6.octets();
     let internal = |a: u8, b: u8, c: u8, d: u8| {
@@ -275,9 +275,10 @@ fn v6_embeds_internal_ipv4(v6: std::net::Ipv6Addr) -> bool {
         }
         return internal(octets[12], octets[13], octets[14], octets[15]);
     }
-    // Teredo: 2001:0000::/32.
+    // Teredo: 2001:0000::/32. The server IPv4 is plain; only the client IPv4
+    // is bitwise-complemented (RFC 4380).
     if octets[0] == 0x20 && octets[1] == 0x01 && octets[2] == 0x00 && octets[3] == 0x00 {
-        return internal(!octets[4], !octets[5], !octets[6], !octets[7])
+        return internal(octets[4], octets[5], octets[6], octets[7])
             || internal(!octets[12], !octets[13], !octets[14], !octets[15]);
     }
     false

@@ -251,11 +251,12 @@ fn ip_is_internal_refuses_every_internal_range_and_allows_public_addresses() {
         ("fec0::1", true),
         ("::ffff:127.0.0.1", true),
         ("::ffff:10.0.0.1", true),
-        // IPv6 internal via an IPv4-embedding transition prefix, which
+        // IPv6 via an IPv4-embedding transition prefix, which
         // `to_ipv4` does not decode: 6to4 (2002::/16), NAT64 (64:ff9b::/96
-        // and 64:ff9b:1::/48), and Teredo (2001:0000::/32, server IPv4 in
-        // bytes 4..8 and client IPv4 in bytes 12..16, each XORed with
-        // 0xFFFFFFFF). Each embeds 127.0.0.1 or 169.254.169.254.
+        // and 64:ff9b:1::/48), and Teredo (2001:0000::/32). A Teredo address
+        // carries its server IPv4 in bytes 4..8 in plain form and its client
+        // IPv4 in bytes 12..16 XORed with 0xFFFFFFFF. The internal rows
+        // embed a loopback or link-local IPv4 address.
         ("2002:7f00:1::", true),
         ("2002:a9fe:a9fe::", true),
         ("64:ff9b::7f00:1", true),
@@ -266,10 +267,17 @@ fn ip_is_internal_refuses_every_internal_range_and_allows_public_addresses() {
         // 8.8.8.8, so a last-32-bits decode would call it public.
         ("64:ff9b:1:7f00:0:100:808:808", true),
         ("64:ff9b:1:a9fe:0:a9fe:0:0", true),
-        // Teredo with an internal client (127.0.0.1) and a public server.
-        ("2001:0:f7f7:f7f7:0:0:80ff:fffe", true),
-        // Teredo with an internal server (127.0.0.1) and a public client.
-        ("2001:0:80ff:fffe:0:0:f7f7:f7f7", true),
+        // Teredo with an internal client (127.0.0.1) and a public server
+        // (8.8.8.8).
+        ("2001:0:808:808:0:0:80ff:fffe", true),
+        // Teredo with a plain internal server (127.0.0.1) and a public client
+        // (8.8.8.8, XORed to f7f7:f7f7). The server field is not obfuscated,
+        // so complementing it would read a public address here.
+        ("2001:0:7f00:1:0:0:f7f7:f7f7", true),
+        // Teredo with a public server (128.255.255.254) whose complement is
+        // the internal 127.0.0.1, and a public client (8.8.4.4). Reading the
+        // server field as obfuscated would wrongly refuse this address.
+        ("2001:0:80ff:fffe:0:0:f7f7:fbfb", false),
         // IPv6 public: a public v4-mapped address, ordinary public v6, a
         // 6to4 address embedding 8.8.8.8, a NAT64 address embedding 8.8.8.8,
         // and a Teredo address whose server and client are both public.
@@ -279,7 +287,7 @@ fn ip_is_internal_refuses_every_internal_range_and_allows_public_addresses() {
         ("2002:808:808::", false),
         ("64:ff9b::808:808", false),
         ("64:ff9b:1:808:0:808:808:808", false),
-        ("2001:0:f7f7:f7f7:0:0:f7f7:fbfb", false),
+        ("2001:0:808:808:0:0:f7f7:fbfb", false),
     ] {
         let ip: std::net::IpAddr = text
             .parse()
