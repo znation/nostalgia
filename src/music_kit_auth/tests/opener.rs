@@ -274,3 +274,47 @@ fn spawn_opener_names_the_missing_program_in_its_error() {
         "the error should name the program, got {error:?}"
     );
 }
+
+// The success path of `spawn_opener` is what every real sign-in takes, yet the
+// tests above only reach its failure branch. It must run the program with the
+// arguments exactly as given — the bootstrap path can contain spaces, so it
+// must arrive as one argument, never split by a shell — and return Ok without
+// waiting for the opener. A `sh` stand-in writes the arguments it received to a
+// file, which the test polls for.
+#[cfg(unix)]
+#[test]
+fn spawn_opener_runs_the_program_with_each_argument_intact() {
+    let dir = env::temp_dir().join(format!("nostalgia-opener-{}", random_nonce()));
+    std::fs::create_dir(&dir).unwrap();
+    let out = dir.join("args.txt");
+    let out_arg = out.to_str().unwrap();
+
+    spawn_opener(
+        "sh",
+        &[
+            "-c",
+            "printf '%s|%s' \"$1\" \"$2\" > \"$0\"",
+            out_arg,
+            "a path with spaces.html",
+            "second",
+        ],
+    )
+    .expect("a runnable opener must spawn");
+
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let written = loop {
+        if let Ok(text) = std::fs::read_to_string(&out)
+            && !text.is_empty()
+        {
+            break text;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the opener never wrote its arguments"
+        );
+        thread::sleep(Duration::from_millis(10));
+    };
+    std::fs::remove_dir_all(&dir).unwrap();
+
+    assert_eq!(written, "a path with spaces.html|second");
+}
