@@ -88,8 +88,8 @@ restarting the app; F5 later became its keyboard route.
 focus to the `Search library` box without submitting a search. Focusing changes no browse view,
 list rows or order, selection, typed query, search-active flag, or playback state; typing into the
 focused box edits the query exactly as a click does. Plain F and the Alt+F and Logo+F chords stay
-unbound, and every other Control chord except the player's own (Ctrl+Z, Ctrl+B, Ctrl+R, Ctrl+W) remains the window manager's. Shade mode builds no search
-box, so Ctrl+F there is a no-op.
+unbound, and every other Control chord except the player's own (Ctrl+Z, Ctrl+B, Ctrl+R, Ctrl+W)
+remains the window manager's. Shade mode builds no search box, so Ctrl+F there is a no-op.
 
 **Enforced by.** `views::browse::BROWSE_SEARCH_ID` in `src/ui/views/browse.rs`, applied with
 `.id(BROWSE_SEARCH_ID)` by `views::browse::view_search_box` (used by the re-exported
@@ -280,10 +280,10 @@ Ctrl+Shift+1 (the top-row `1` by physical key, Control and Shift held, no Alt or
 same `Message::SortBrowse` as the button.
 
 Ctrl+R (Control without Shift, Alt, or Logo) reverses, and Ctrl+Shift+R (Control and Shift, no Alt
-or Logo) shuffles, the showing list's order under the same rules: one-shot, epoch bumped, selection cleared, cached titles and
-labels reordered with the rows, other lists, view, search, and playback unchanged, Back to the
-parent restoring library order (reversal, shuffle, and Sort compose), and a no-op on an empty, loading, or
-failed list.
+or Logo) shuffles, the showing list's order under the same rules: one-shot, epoch bumped, selection
+cleared, cached titles and labels reordered with the rows, other lists, view, search, and playback
+unchanged, Back to the parent restoring library order (reversal, shuffle, and Sort compose), and a
+no-op on an empty, loading, or failed list.
 
 Alt+Up and Alt+Down (logical arrow keys with Alt held and Control, Shift, and Logo released) move
 the showing list's selected row one place up or down. The move is one-shot like the others: cached
@@ -296,15 +296,16 @@ fully (and not at all when it is already visible); a no-op move schedules no tas
 **Enforced by.** `BrowseList::move_selected` in `src/ui/browse.rs`, `scroll::reveal_row_offset` and
 `scroll::reveal_browse_row` in `src/ui/handlers/browse/scroll.rs`, `browse::move_selected_row`
 in `src/ui/handlers/browse.rs` (routed from `Message::MoveSelectedRowUp` and
-`Message::MoveSelectedRowDown`), and `shortcuts::move_row_shortcut` in `src/ui/shortcuts.rs`. `BrowseList::reverse_rows` and the shared `BrowseList::apply_reorder` in
+`Message::MoveSelectedRowDown`), and `shortcuts::move_row_shortcut` in `src/ui/shortcuts.rs`.
+`BrowseList::reverse_rows` and the shared `BrowseList::apply_reorder` in
 `src/ui/browse.rs`, `browse::reverse_browse` in `src/ui/handlers/browse.rs` (routed from
-`Message::ReverseBrowse`), `BrowseList::shuffle_rows` and `browse::shuffled_order` (seeded by `transport::shuffle_roll`) with
-`browse::randomize_browse` (routed from `Message::RandomizeBrowse`), the Ctrl+R and Ctrl+Shift+R arms of `shortcut`, and `shortcuts::playlist_sort_shortcut` (Ctrl+Shift+1), both in
-`src/ui/shortcuts.rs`.
-`BrowseList::sort_rows_by` in `src/ui/browse.rs` builds a stable index permutation
-from the lowercased row keys and reorders `items`, `titles`, and `labels` in place by
-it, bumping the epoch only when there are at least two rows and the list is neither
-loading nor failed; it also records the cumulative permutation back to library order,
+`Message::ReverseBrowse`), `BrowseList::shuffle_rows` and `browse::shuffled_order` (seeded by
+`transport::shuffle_roll`) with `browse::randomize_browse` (routed from `Message::RandomizeBrowse`),
+the Ctrl+R and Ctrl+Shift+R arms of `shortcut`, and `shortcuts::playlist_sort_shortcut`
+(Ctrl+Shift+1), both in `src/ui/shortcuts.rs`. `BrowseList::sort_rows_by` in `src/ui/browse.rs`
+builds a stable index permutation from the lowercased row keys and reorders `items`, `titles`, and
+`labels` in place by it, bumping the epoch only when there are at least two rows and the list is
+neither loading nor failed; it also records the cumulative permutation back to library order,
 and `BrowseList::restore_library_order` inverts it so the rows
 (and their cached text) return to the order they were stored in, bumping the epoch as any index
 change must. `browse::sort_browse` in `src/ui/handlers/browse.rs` matches the current view onto
@@ -371,9 +372,9 @@ loop reveals that row in the browse list — scrolling only as far as needed to 
 the row's top when the row is above the viewport, to its bottom edge when it is below, and not at
 all when it is already fully visible — in addition to scheduling the existing `TrackSelected`.
 Row `index` spans from `BROWSE_LIST_PADDING + index * BROWSE_ROW_HEIGHT` for one
-`BROWSE_ROW_HEIGHT`. `BROWSE_ROW_HEIGHT` is the laid-out vertical pitch between consecutive browse rows:
-every shared row title stays on one line — hard line breaks are flattened to spaces and a title
-wider than its column is clipped there — so no title can make its row taller or draw under the
+`BROWSE_ROW_HEIGHT`. `BROWSE_ROW_HEIGHT` is the laid-out vertical pitch between consecutive browse
+rows: every shared row title stays on one line — hard line breaks are flattened to spaces and a
+title wider than its column is clipped there — so no title can make its row taller or draw under the
 right-aligned label. `BROWSE_LIST_PADDING` is the list's top padding, which the row geometry
 includes. A later row therefore cannot drift out of view from a stale constant; iced clamps a
 reveal that would pass the list's top or end. A direct row press does not scroll — the pressed row
@@ -480,8 +481,8 @@ the current track, and the playback position are, and scroll the list to that ro
 schedules nothing. Plain and Shift Z/B keep stepping, and Alt or Logo chords with them stay unbound.
 
 **Enforced by.** `shortcuts::shortcut` in `src/ui/shortcuts.rs` checks the two Control chords
-before its chord guard; `handlers::playback::stepping::jump_to_edge_track` picks the edge row and epoch from
-the showing list without reading shared state or touching the play history.
+before its chord guard; `handlers::playback::stepping::jump_to_edge_track` picks the edge row and
+epoch from the showing list without reading shared state or touching the play history.
 
 **Pinned by.**
 
@@ -496,15 +497,16 @@ the showing list without reading shared state or touching the play history.
 
 ## Ten-song jumps
 
-**Guarantee.** `JumpTracksBack` (keypad 1) and `JumpTracksForward` (keypad 3) play the song ten places
-before or after the current track in the list the current view draws from (`all_songs` in the flat
-All Songs view, `songs` otherwise), clamped to its first or last song and never wrapping, and scroll
-the list to that row. With no current track, or one not in the list, forward plays the first song and
-backward the last. Shuffle, Repeat, and the playback position do not change the result, and
+**Guarantee.** `JumpTracksBack` (keypad 1) and `JumpTracksForward` (keypad 3) play the song ten
+places before or after the current track in the list the current view draws from (`all_songs` in the
+flat All Songs view, `songs` otherwise), clamped to its first or last song and never wrapping, and
+scroll the list to that row. With no current track, or one not in the list, forward plays the first
+song and backward the last. Shuffle, Repeat, and the playback position do not change the result, and
 `play_history` is untouched. An empty list schedules nothing.
 
-**Enforced by.** `transport::jumped_track_index` computes the index; `handlers::playback::stepping::jump_ten_tracks`
-reads the current track under the state lock and schedules the selection and scroll.
+**Enforced by.** `transport::jumped_track_index` computes the index;
+`handlers::playback::stepping::jump_ten_tracks` reads the current track under the state lock and
+schedules the selection and scroll.
 
 **Pinned by.**
 
@@ -521,12 +523,13 @@ reads the current track under the state lock and schedules the selection and scr
 
 ## Numpad keys
 
-**Guarantee.** With the window focused and NumLock on, keypad 4, 5, 6, 7, 9, 8, 2, 1, and 3 (plain or
-with Shift) map to `PreviousTrack`, `Play`, `NextTrack`, `SeekBackward`, `SeekForward`, `VolumeUp`,
-`VolumeDown`, `JumpTracksBack`, and `JumpTracksForward` — the first seven are the messages Z, X, B,
-and the arrows send, so they follow those messages' rules (see `## Ten-song jumps` for the last two).
-Top-row digits, keypad 0 and the keypad operators, and Ctrl/Alt/Logo chords with the keypad
-stay unbound. With NumLock off the keypad sends arrow keys, which keep their arrow bindings.
+**Guarantee.** With the window focused and NumLock on, keypad 4, 5, 6, 7, 9, 8, 2, 1, and 3 (plain
+or with Shift) map to `PreviousTrack`, `Play`, `NextTrack`, `SeekBackward`, `SeekForward`,
+`VolumeUp`, `VolumeDown`, `JumpTracksBack`, and `JumpTracksForward` — the first seven are the
+messages Z, X, B, and the arrows send, so they follow those messages' rules (see `## Ten-song jumps`
+for the last two). Top-row digits, keypad 0 and the keypad operators, and Ctrl/Alt/Logo chords with
+the keypad stay unbound. With NumLock off the keypad sends arrow keys, which keep their arrow
+bindings.
 
 **Enforced by.** `shortcuts::numpad_shortcut` in `src/ui/shortcuts.rs` matches on
 `Location::Numpad`, and `shortcuts::message_for` tries it before `shortcut`.
@@ -666,11 +669,11 @@ refresh does not re-join and reformat every row.
   `view` draws the whole normal-mode library column — the `NOSTALGIA LIBRARY` band, the
   Back/Retry/Open/Top/Sort/Reload and flat-list buttons, the search row, the browse list, and
   the library footer — exactly when `WinampPlayer::library_panel_visible` holds. The library
-  section is open on a first launch, the flag is saved per `## Settings persistence`, and hiding it keeps the title bar, Now
-  Playing bar, seek bar, transport row, and equalizer section drawn without changing any
-  playback, equalizer, browse, search, selection, or window-size state. Alt+E dispatches
-  `Message::ToggleLibraryPanel` by physical key, its other modifier chords stay unbound, and shade
-  mode changes nothing because the toggle leaves `library_panel_visible` alone while
+  section is open on a first launch, the flag is saved per `## Settings persistence`, and hiding it
+  keeps the title bar, Now Playing bar, seek bar, transport row, and equalizer section drawn without
+  changing any playback, equalizer, browse, search, selection, or window-size state. Alt+E
+  dispatches `Message::ToggleLibraryPanel` by physical key, its other modifier chords stay unbound,
+  and shade mode changes nothing because the toggle leaves `library_panel_visible` alone while
   `WinampPlayer::shaded` holds.
 - The equalizer band row puts the vertical preamp slider leftmost, then the `+12 DB` / `0 DB` /
   `-12 DB` scale, then the ten band sliders. The scale reads top to bottom beside the rail's top,
@@ -698,15 +701,16 @@ in `src/ui/style.rs` sinks while its panel is shown,
 `handlers::mixer::toggle_equalizer_panel` and `handlers::mixer::toggle_library_panel` flip the
 layout flags; `shortcuts::shortcut` in
 `src/ui/shortcuts.rs` maps plain and Shift-held E to that same message; `view` pushes the
-equalizer section only while that flag holds; `views::mini_transport::mini_transport_controls` projects the same glyph
-spec for the shade strip and the library footer. `views::equalizer::preamp_column`,
-`views::equalizer::db_scale_column`, and `views::view_equalizer` in `src/ui/views/equalizer.rs`
-build the equalizer band row and align the curve with it. The browse and transport layout tests lay
-out the whole root `view` through the test-only `src/ui/layout_capture.rs` harness; the equalizer
-layout test lays out `view_equalizer` directly. `view` in `src/ui/view.rs` matches on `CurrentView`
-and passes each arm that level's buffer, caches, and current-track id, and gates its Back, Retry,
-and flat-list buttons on `can_go_back`, `can_retry_artists`, and a `CurrentView::Artists` match.
-`views::view_title_band` and `views::title_bar::title_tape` in `src/ui/views/title_bar.rs` build the
+equalizer section only while that flag holds; `views::mini_transport::mini_transport_controls`
+projects the same glyph spec for the shade strip and the library footer.
+`views::equalizer::preamp_column`, `views::equalizer::db_scale_column`, and `views::view_equalizer`
+in `src/ui/views/equalizer.rs` build the equalizer band row and align the curve with it. The browse
+and transport layout tests lay out the whole root `view` through the test-only
+`src/ui/layout_capture.rs` harness; the equalizer layout test lays out `view_equalizer` directly.
+`view` in `src/ui/view.rs` matches on `CurrentView` and passes each arm that level's buffer, caches,
+and current-track id, and gates its Back, Retry, and flat-list buttons on `can_go_back`,
+`can_retry_artists`, and a `CurrentView::Artists` match. `views::view_title_band` and
+`views::title_bar::title_tape` in `src/ui/views/title_bar.rs` build the
 section bands and the app bar's tape/label row from `theme::TITLE_TAPE` and
 `theme::TITLE_TAPE_SHADOW`; `view` in `src/ui/view.rs` pushes the two bands into the normal-mode
 column only. The harness records each drawn text fragment's absolute bounds with iced's headless
@@ -729,8 +733,8 @@ tiny-skia renderer.
 `alt_g_toggles_the_equalizer_panel`, and
 `shaded_root_view_draws_no_section_title_bands` (`src/ui/tests/`), plus
 `title_band_centers_its_label_at_the_title_bar_height` and
-`title_bar_centers_its_name_between_its_edge_controls` (`src/ui/views/tests/chrome.rs`) for the title
-bands and app bar, `transport_glyphs_match_the_mockup_order_and_widths`,
+`title_bar_centers_its_name_between_its_edge_controls` (`src/ui/views/tests/chrome.rs`) for the
+title bands and app bar, `transport_glyphs_match_the_mockup_order_and_widths`,
 `transport_buttons_keep_a_fixed_width_across_label_changes`,
 `transport_buttons_keep_their_measured_face_widths`,
 `eq_panel_toggle_targets_the_visibility_flag`, and
@@ -751,23 +755,24 @@ library column (2026-10-24).
 
 **Guarantee.** The values the user sets that outlive a track — volume, balance, Repeat, Shuffle, the
 equalizer's on/off state, preamp, ten band gains, and selected preset, the large readout's
-elapsed/remaining choice, the visualizer's shown/hidden choice, the equalizer and library panels' shown/hidden choices,
-and the LCD strip's always-on-top choice — are loaded once before the
+elapsed/remaining choice, the visualizer's shown/hidden choice, the equalizer and library panels'
+shown/hidden choices, and the LCD strip's always-on-top choice — are loaded once before the
 first view is drawn and rewritten after any update that changes their snapshot. An update that
 leaves the snapshot unchanged writes nothing. Reads and writes go through the state's clamped
 setters, so out-of-range values from a file cannot push shared state outside its documented ranges.
-A missing file, or a malformed line (including bytes that are not UTF-8, which are decoded lossily so they spoil only their own line), falls back per key without failing startup; an unreadable file
+A missing file, or a malformed line (including bytes that are not UTF-8, which are decoded lossily
+so they spoil only their own line), falls back per key without failing startup; an unreadable file
 falls back the same way and prints one stderr line naming the path (`read_failure_message` in
 `src/settings/file_store.rs`, which stays silent for a missing file); an unwritable file is logged
 rather than crashing the player. Each save stages the whole snapshot in
 a sibling temp file of the file it writes, flushes it to disk, gives the staged file the existing
-target's mode, and renames it over that target and then syncs its directory, so a failed, interrupted,
-or crashed write leaves the previous file intact instead of a truncated one; a failed write or
-rename removes the temp file, and a load sweeps temp files a killed save left behind once they are
-old enough not to belong to an in-flight save. A symlinked settings file stays a link: the save,
-the directory sync, and the stale-temp sweep all follow it to the file and directory it points at,
-so the link is never replaced; a dangling link or a missing file is used as the path given, and a
-new file takes the platform's default mode. The readout mode, the visualizer's shown/hidden
+target's mode, and renames it over that target and then syncs its directory, so a failed,
+interrupted, or crashed write leaves the previous file intact instead of a truncated one; a failed
+write or rename removes the temp file, and a load sweeps temp files a killed save left behind once
+they are old enough not to belong to an in-flight save. A symlinked settings file stays a link: the
+save, the directory sync, and the stale-temp sweep all follow it to the file and directory it points
+at, so the link is never replaced; a dangling link or a missing file is used as the path given, and
+a new file takes the platform's default mode. The readout mode, the visualizer's shown/hidden
 choice, the two panel choices, and the always-on-top choice are the five persisted values not held
 in `AppState`: they live on `WinampPlayer::time_display`, `WinampPlayer::visualizer_visible`,
 `WinampPlayer::eq_panel_visible`, `WinampPlayer::library_panel_visible`, and
@@ -775,14 +780,14 @@ in `AppState`: they live on `WinampPlayer::time_display`, `WinampPlayer::visuali
 `WinampPlayer::adopt_saved_settings` (which restores all five before the first view), and
 `persist_settings_if_changed` copies them into the snapshot before comparing and saving. A missing
 or malformed `time_display` line falls back to elapsed, a missing or malformed `always_on_top` line
-falls back to unpinned, and a missing or malformed `visualizer_visible`, `eq_panel_visible`, or `library_panel_visible` line falls back to shown.
-The classic `A` key reaches the same `Message::ToggleAlwaysOnTop` arm through
-`shortcuts::message_for`, so it flips the flag and schedules the same window-level call as the
-on-screen A controls. The saved always-on-top level waits for the window id every other window
-action uses: `window_id_resolved` stores the id, then schedules `iced::window::set_level` when the
-restored flag holds. It is still not window placement: the window's size, position, and shade state
-are not persisted. Playback position, the browse level, the search box, the current track, and
-window placement are deliberately not persisted.
+falls back to unpinned, and a missing or malformed `visualizer_visible`, `eq_panel_visible`, or
+`library_panel_visible` line falls back to shown. The classic `A` key reaches the same
+`Message::ToggleAlwaysOnTop` arm through `shortcuts::message_for`, so it flips the flag and
+schedules the same window-level call as the on-screen A controls. The saved always-on-top level
+waits for the window id every other window action uses: `window_id_resolved` stores the id, then
+schedules `iced::window::set_level` when the restored flag holds. It is still not window placement:
+the window's size, position, and shade state are not persisted. Playback position, the browse level,
+the search box, the current track, and window placement are deliberately not persisted.
 
 **Enforced by.** `src/main.rs` resolves the path with
 `settings::file_store::FileStore::from_environment`, loads it once with `FileStore::load`, applies
@@ -793,8 +798,8 @@ file's text is parsed by `Settings::from_text`, which ignores unknown keys and m
 per key, and `apply_to` writes through `AppState::set_volume`, `set_balance`, `set_eq_preamp`, and
 `set_eq_band` before restoring a preset through `apply_eq_preset`. `ui::init_ui` attaches the
 store to `WinampPlayer` and restores the snapshot through
-`WinampPlayer::adopt_saved_settings`, which restores `time_display`, `visualizer_visible`, `eq_panel_visible`,
-`library_panel_visible`, and `always_on_top` and
+`WinampPlayer::adopt_saved_settings`, which restores `time_display`, `visualizer_visible`,
+`eq_panel_visible`, `library_panel_visible`, and `always_on_top` and
 records the snapshot; `update` calls
 `WinampPlayer::persist_settings_if_changed` once after every message, and that method copies
 the five player-owned values into `Settings::from_state`, then compares that snapshot against the
@@ -859,14 +864,15 @@ side of the thumb. A gain outside the range clamps to the matching end stop, and
 renders the flat yellow instead of an invalid color. The vertical preamp slider's groove in the band
 row takes the same tint from the stored preamp gain.
 
-**Enforced by.** `style::band_gain_color` and `style::band_slider_style` in `src/ui/style/slider_style.rs`,
-used by `views::view_equalizer` and `views::equalizer::preamp_slider_style` in
-`src/ui/views/equalizer.rs`.
+**Enforced by.** `style::band_gain_color` and `style::band_slider_style` in
+`src/ui/style/slider_style.rs`, used by `views::view_equalizer` and
+`views::equalizer::preamp_slider_style` in `src/ui/views/equalizer.rs`.
 
 **Pinned by.** `preamp_slider_style_matches_the_band_tint_for_its_gain` in
 `src/ui/views/tests/equalizer.rs`, `band_gain_color_runs_green_through_yellow_to_red`,
 `band_gain_color_clamps_and_maps_nan_to_flat`, and
-`band_slider_style_paints_both_rail_halves_and_keeps_the_chrome_thumb` in `src/ui/style/slider_style.rs`.
+`band_slider_style_paints_both_rail_halves_and_keeps_the_chrome_thumb` in
+`src/ui/style/slider_style.rs`.
 
 **History.** The tint is presentation-only: it reads the same stored gains the sliders and
 `BandFilter` use but does not change the curve the audio filter applies.
@@ -877,8 +883,8 @@ used by `views::view_equalizer` and `views::equalizer::preamp_slider_style` in
 label's clamped gain in all ten bands, clears the preset selection, leaves the preamp, the on/off
 flag and the LCD readout untouched, and forwards the curve to the audio backend.
 
-**Enforced by.** `db_scale_column` in `src/ui/views/equalizer.rs`, `handlers::mixer::eq_bands_set_all`,
-and `AppState::set_all_eq_bands`.
+**Enforced by.** `db_scale_column` in `src/ui/views/equalizer.rs`,
+`handlers::mixer::eq_bands_set_all`, and `AppState::set_all_eq_bands`.
 
 **Pinned by.** `set_all_eq_bands_clamps_every_band_and_clears_the_preset` in `src/state.rs`,
 `eq_scale_click_sets_every_band_and_keeps_the_preamp` in `src/ui/tests/mixer_tests.rs`, and
@@ -897,14 +903,14 @@ The chrome thumb, the 4px rail width, the 1px dark rail border, and the square g
 unchanged from `chrome_slider_style`, and hover and drag still change only the handle face. The
 seek bar keeps the neutral `theme::LCD_BACKGROUND` groove.
 
-**Enforced by.** `style::level_slider_style` in `src/ui/style/slider_style.rs`, used by `views::chrome_slider`
-in `src/ui/views/mod.rs` (the transport row and shade strip pass their fills there), with the
-fills computed in `src/ui/style/level_tint.rs`.
+**Enforced by.** `style::level_slider_style` in `src/ui/style/slider_style.rs`, used by
+`views::chrome_slider` in `src/ui/views/mod.rs` (the transport row and shade strip pass their fills
+there), with the fills computed in `src/ui/style/level_tint.rs`.
 
 **Pinned by.** `base_skin_colors_keep_their_documented_literal_values` in `src/ui/theme.rs` and
-`level_slider_style_paints_both_rail_halves_and_keeps_the_chrome_thumb` in `src/ui/style/slider_style.rs`, and
-in `src/ui/style/level_tint.rs` the tests `volume_color_hits_its_three_stops_exactly`,
-`volume_color_clamps_and_maps_nan_to_silence`,
+`level_slider_style_paints_both_rail_halves_and_keeps_the_chrome_thumb` in
+`src/ui/style/slider_style.rs`, and in `src/ui/style/level_tint.rs` the tests
+`volume_color_hits_its_three_stops_exactly`, `volume_color_clamps_and_maps_nan_to_silence`,
 `volume_color_between_stops_lies_between_neighbours`,
 `balance_color_is_green_at_center_and_red_at_the_sides`, `balance_color_is_symmetric`, and
 `level_colors_are_opaque`.
@@ -950,7 +956,8 @@ position or no preview length) and every other player panel keep the volume nudg
 
 **Pinned by.** `seek_wheel_message_maps_a_vertical_roll_to_a_direction`,
 `seek_wheel_message_ignores_a_horizontal_only_roll` in `src/ui/views/tests/seek_wheel.rs`, and
-`wheel_over_the_shade_seek_slider_seeks` (also in `seek_wheel.rs`), plus `wheel_over_the_root_seek_slider_seeks_without_nudging_the_volume`
+`wheel_over_the_shade_seek_slider_seeks` (also in `seek_wheel.rs`), plus
+`wheel_over_the_root_seek_slider_seeks_without_nudging_the_volume`
 and `wheel_over_a_blank_seek_strip_still_nudges_the_volume` in `src/ui/tests/mixer_tests.rs`.
 
 ## Now Playing label
@@ -1024,12 +1031,12 @@ its internal id, whenever the id is in the known-track index:
   spectrum, including the silent fallback, draws zero-height bars while keeping the row's height,
   so loading a preview does not move the title or status text. The row is a mouse area whose
   left press publishes `Message::ToggleVisualizer` (the same message as the `V` letter) whether the
-  bars are shown or hidden, pinned by `visualizer_row_press_publishes_toggle_visualizer`. The bars are drawn only while
-  `WinampPlayer::visualizer_visible` holds; hiding them changes only what the LCD draws, keeping
-  both the stored spectrum and the poll, so showing them again draws the current bars. Pause
-  keeps the last bars frozen, while Stop and a new selection clear them. A spectrum reply issued
-  before a Stop or a new selection, or landing while a transport transition is in flight, is
-  dropped. The spectrum poll is subscribed only while playback is running.
+  bars are shown or hidden, pinned by `visualizer_row_press_publishes_toggle_visualizer`. The bars
+  are drawn only while `WinampPlayer::visualizer_visible` holds; hiding them changes only what the
+  LCD draws, keeping both the stored spectrum and the poll, so showing them again draws the current
+  bars. Pause keeps the last bars frozen, while Stop and a new selection clear them. A spectrum
+  reply issued before a Stop or a new selection, or landing while a transport transition is in
+  flight, is dropped. The spectrum poll is subscribed only while playback is running.
 - The LCD's left edge always draws the five classic indicator letters `O`, `A`, `I`, `D`, `V`,
   in that order, at a fixed width, in every playback state including the empty `--:--` bar. `A`,
   `I`, and `V` are mouse areas: pressing `A` publishes `Message::ToggleAlwaysOnTop` (the LCD
@@ -1060,13 +1067,15 @@ its internal id, whenever the id is in the known-track index:
   `elapsed_readout_color_keeps_the_placeholder_visible_while_stopped`,
   `elapsed_readout_is_clickable_only_while_not_stopped`,
   `elapsed_readout_toggles_only_while_not_stopped`,
-  and `now_playing_row_keeps_the_elapsed_bounds_when_the_blink_hides_it` in `src/ui/views/tests/now_playing.rs`,
-  and `compact_readout_toggles_time_display_only_while_not_stopped` in `src/ui/views/tests/shade.rs`;
+  and `now_playing_row_keeps_the_elapsed_bounds_when_the_blink_hides_it` in
+  `src/ui/views/tests/now_playing.rs`, and
+  `compact_readout_toggles_time_display_only_while_not_stopped` in `src/ui/views/tests/shade.rs`;
   `lcd_indicator_message_arms_a_i_and_v_and_leaves_o_d_inert` and
-  `lcd_indicator_strip_publishes_always_on_top_on_a_visualizer_on_v_and_file_info_on_i` in `src/ui/views/tests/now_playing.rs`;
-  `toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum` in `src/ui/tests/panels_tests.rs`;
-  `position_tick_blinks_the_elapsed_readout_only_while_paused` in `src/ui/tests/`; and
-  `toggle_playing_switches_between_playing_and_paused` and
+  `lcd_indicator_strip_publishes_always_on_top_on_a_visualizer_on_v_and_file_info_on_i` in
+  `src/ui/views/tests/now_playing.rs`;
+  `toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum` in
+  `src/ui/tests/panels_tests.rs`; `position_tick_blinks_the_elapsed_readout_only_while_paused` in
+  `src/ui/tests/`; and `toggle_playing_switches_between_playing_and_paused` and
   `pause_sets_the_paused_mode_while_play_and_stop_clear_it` in `src/state.rs`; and
   `pause_stops_playing_but_keeps_current_track`,
   `pause_without_a_loaded_preview_leaves_the_transport_stopped`,
@@ -1120,17 +1129,16 @@ transition, and the completion that reports that same transition ends it; while 
 the `handlers::playback::preview` poll handlers issue no query and its reply handlers store no
 reply. `AppleMusicService::play_track` stops the backend's previous preview when a selection has no
 preview URL. `views::now_playing::indicator::lcd_indicator_strip` draws
-`views::now_playing::indicator::LCD_INDICATOR_LABELS` down the LCD's left edge in a fixed-width column; its
-`A`, `I`, and `V` cells publish `Message::ToggleAlwaysOnTop`, `Message::ToggleFileInfo`, and
-`Message::ToggleVisualizer` through `views::now_playing::indicator::lcd_indicator_message`, while `O` and `D`
-publish nothing.
-`views::now_playing::visualizer::visualizer_bar_heights` scales and clamps the stored spectrum, and
-`views::now_playing::visualizer::now_playing_visualizer_row` draws its `BAND_COUNT` bars at fixed width inside
-the row `views::view_now_playing` places between the title and status rows. The `Spectrum` handler
-in `src/ui/handlers/playback/preview.rs` stores the reply under the same epoch and
-pending-transition guards as the position, format, and duration, `spectrum_tick` schedules the
-backend query, and `reset_position_readout` clears the bars on Stop and a new selection.
-`ui::timers::subscriptions` subscribes `spectrum_ticks` only while
+`views::now_playing::indicator::LCD_INDICATOR_LABELS` down the LCD's left edge in a fixed-width
+column; its `A`, `I`, and `V` cells publish `Message::ToggleAlwaysOnTop`, `Message::ToggleFileInfo`,
+and `Message::ToggleVisualizer` through `views::now_playing::indicator::lcd_indicator_message`,
+while `O` and `D` publish nothing. `views::now_playing::visualizer::visualizer_bar_heights` scales
+and clamps the stored spectrum, and `views::now_playing::visualizer::now_playing_visualizer_row`
+draws its `BAND_COUNT` bars at fixed width inside the row `views::view_now_playing` places between
+the title and status rows. The `Spectrum` handler in `src/ui/handlers/playback/preview.rs` stores
+the reply under the same epoch and pending-transition guards as the position, format, and duration,
+`spectrum_tick` schedules the backend query, and `reset_position_readout` clears the bars on Stop
+and a new selection. `ui::timers::subscriptions` subscribes `spectrum_ticks` only while
 `WinampPlayer::needs_spectrum_poll` reports that playback is running.
 `views::now_playing::now_playing_number` resolves `KnownTrack::number`,
 `handlers::playback::track_selected` records the selecting row's 1-based number, and
@@ -1150,10 +1158,10 @@ byte count to `format_for_source` in `src/audio/player/format.rs`, which reads t
 from the decoded `rodio` source and computes the bitrate through `preview_bitrate_kbps` from the
 source's own total duration, and
 `views::now_playing::text::format_playback_prefix`/`text::channel_mode_label` format them, and
-`views::now_playing::status::CHANNEL_LABELS`/`status::channel_label_color`/`status::now_playing_status_row` render them in
-the LCD's status row built by `views::view_now_playing`. The `PlaybackFormat` handler in
-`src/ui/handlers/playback/preview.rs` stores the reply beside the position under the same epoch and
-pending-transition guards, and `reset_position_readout` clears the format on Stop and a new
+`views::now_playing::status::CHANNEL_LABELS`/`status::channel_label_color`/`status::now_playing_status_row`
+render them in the LCD's status row built by `views::view_now_playing`. The `PlaybackFormat` handler
+in `src/ui/handlers/playback/preview.rs` stores the reply beside the position under the same epoch
+and pending-transition guards, and `reset_position_readout` clears the format on Stop and a new
 selection; `position_tick` queries the position and the finished state on every tick, and the format
 and the preview's length only while each is still unknown. `views::seek_bar::seek_bar_value`
 resolves the thumb and scale from the position and the `playback_duration` field, and
@@ -1313,7 +1321,8 @@ rather than the panic unwinding the event loop.
 
 - Ctrl+W (Control, with optional Shift, and without Alt or Logo) publishes
   `Message::ToggleWindowShade`, the same message as the shade button; plain W stays unbound.
-  Pinned by `message_for_maps_ctrl_w_to_toggle_window_shade` and `ctrl_w_rolls_the_window_up_and_back`.
+  Pinned by `message_for_maps_ctrl_w_to_toggle_window_shade` and
+  `ctrl_w_rolls_the_window_up_and_back`.
 
 - Shade mode builds exactly the title bar over the compact transport strip, and the window is
   resized to that same height (`SHADED_HEIGHT = TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT`). The
@@ -1424,16 +1433,16 @@ About now restores the window first, so the panel never draws in shade mode (202
   the full-window backdrop each publish one `Message::ToggleAbout`; a press on the panel's own
   chrome publishes `Message::Ignored` and leaves it open. The shade branch never draws the panel.
 
-**Enforced by.** `views::title_bar::view_title_bar`, `views::about::view_about_overlay` (over `views::modal::modal_overlay`),
-`Message::ToggleAbout`, `handlers::window::toggle_about`, `WinampPlayer::about_visible`, and the
-normal-mode branch of `ui::view::view` in `src/ui/view.rs`, which wraps the base tree only while
-`about_visible && !shaded` holds.
+**Enforced by.** `views::title_bar::view_title_bar`, `views::about::view_about_overlay` (over
+`views::modal::modal_overlay`), `Message::ToggleAbout`, `handlers::window::toggle_about`,
+`WinampPlayer::about_visible`, and the normal-mode branch of `ui::view::view` in `src/ui/view.rs`,
+which wraps the base tree only while `about_visible && !shaded` holds.
 
 **Pinned by.** `title_bar_m_button_publishes_toggle_about`,
 `about_overlay_draws_the_name_version_and_tagline`, and
-`about_overlay_closes_from_close_and_backdrop_but_ignores_its_chrome` (`src/ui/views/tests/chrome.rs`);
-`toggle_about_shows_and_hides_the_panel_without_touching_playback` and
-`toggle_about_while_shaded_restores_the_window_first` (`src/ui/tests/window_tests.rs`);
+`about_overlay_closes_from_close_and_backdrop_but_ignores_its_chrome`
+(`src/ui/views/tests/chrome.rs`); `toggle_about_shows_and_hides_the_panel_without_touching_playback`
+and `toggle_about_while_shaded_restores_the_window_first` (`src/ui/tests/window_tests.rs`);
 `view_constructs_over_the_apps_full_input_space`, `view_constructs_when_the_window_is_shaded`, and
 `title_bar_constructs_for_both_about_states` (`src/ui/tests/view_tests.rs`).
 
@@ -1463,8 +1472,8 @@ normal-mode branch of `ui::view::view` in `src/ui/view.rs`, which wraps the base
   `Message::ToggleFileInfo`; a press on the panel's
   chrome publishes `Message::Ignored`. The shade branch never draws the panel.
 
-**Enforced by.** `shortcuts::file_info_shortcut`, `views::now_playing::indicator::lcd_indicator_message`,
-`handlers::window::toggle_file_info`,
+**Enforced by.** `shortcuts::file_info_shortcut`,
+`views::now_playing::indicator::lcd_indicator_message`, `handlers::window::toggle_file_info`,
 `views::file_info::view_file_info_overlay`, `views::modal::modal_overlay`,
 `views::now_playing::format_playback_prefix`, `views::now_playing::channel_mode_label`, and the
 overlay branch of `ui::view::view`.
@@ -1488,7 +1497,8 @@ overlay branch of `ui::view::view`.
 
 ## Jump to time panel
 
-**Guarantee.** Ctrl+J flips a transient, unpersisted Jump to time panel that seeks the loaded preview:
+**Guarantee.** Ctrl+J flips a transient, unpersisted Jump to time panel that seeks the loaded
+preview:
 
 - `shortcuts::shortcut` maps `j` or `J` with Control held and Shift, Alt, and Logo released to
   `Message::ToggleJumpTime`; Ctrl+Shift+J, Ctrl+Alt+J, and Ctrl+Logo+J map to nothing (plain
@@ -1511,8 +1521,9 @@ overlay branch of `ui::view::view`.
 **Pinned by.** `parses_seconds_and_minutes_seconds` and `rejects_malformed_times`
 (`src/ui/handlers/jump.rs`); `message_for_maps_ctrl_j_to_jump_time` (`src/ui/shortcuts.rs`); the
 tests in `src/ui/tests/jump_time_tests.rs`; `jump_time_overlay_draws_its_heading_length_and_buttons`
-and `jump_time_overlay_buttons_and_backdrop_publish_their_messages` (`src/ui/views/tests/chrome.rs`);
-`view_constructs_when_the_window_is_shaded` (`src/ui/tests/view_tests.rs`).
+and `jump_time_overlay_buttons_and_backdrop_publish_their_messages`
+(`src/ui/views/tests/chrome.rs`); `view_constructs_when_the_window_is_shaded`
+(`src/ui/tests/view_tests.rs`).
 
 ## Jump to File panel
 
@@ -1663,14 +1674,14 @@ browser's `POST /token` callback behind it:
 in a `Vec` of `PendingConnection`, which is defined in `src/music_kit_auth/server.rs`. The loop's
 helpers live in `src/music_kit_auth/server.rs`: every pass calls `serve_pending`, which polls each
 pending connection through `http::RequestReader::poll` and serves the ones whose request has
-arrived, and then `accept_pending`, which takes on the connections that are waiting. `accept_pending`
-delegates the loop to `accept_pending_with` so a test can inject a transient failure; its
-`accept_error_is_transient` check retries `Interrupted`, `ConnectionAborted`, and `ConnectionReset`
-and returns every other error.
-`http::RequestReader` owns a non-blocking socket and parses the request from the bytes received so
-far, so polling a silent peer reports "nothing yet" instead of waiting for it; `serve_pending` drops
-a connection whose budget is spent. `BootstrapPage::write` in `src/music_kit_auth/bootstrap.rs`
-calls `sweep_stale_bootstrap_dirs` before creating the new owner-only directory; the sweep reads one
+arrived, and then `accept_pending`, which takes on the connections that are waiting.
+`accept_pending` delegates the loop to `accept_pending_with` so a test can inject a transient
+failure; its `accept_error_is_transient` check retries `Interrupted`, `ConnectionAborted`, and
+`ConnectionReset` and returns every other error. `http::RequestReader` owns a non-blocking socket
+and parses the request from the bytes received so far, so polling a silent peer reports "nothing
+yet" instead of waiting for it; `serve_pending` drops a connection whose budget is spent.
+`BootstrapPage::write` in `src/music_kit_auth/bootstrap.rs` calls `sweep_stale_bootstrap_dirs`
+before creating the new owner-only directory; the sweep reads one
 level of the temp dir, removes only aged directories whose names carry `BOOTSTRAP_DIR_PREFIX`, and
 reports a removal failure without failing the new sign-in.
 
@@ -1969,9 +1980,9 @@ behavior and Shuffle's recorded-play retrace. A rejected restart seek is logged 
 track queued with its position and epoch unchanged; no step is scheduled. The decision uses the
 last reported position — the one the readout shows — not a fresh backend query.
 
-**Enforced by.** `handlers::playback::stepping::step_track` in `src/ui/handlers/playback/stepping.rs` applies the
-restart branch before the stepping arithmetic, consulting
-`AppleMusicService::has_loaded_preview` and `AppleMusicService::seek_output_to`;
+**Enforced by.** `handlers::playback::stepping::step_track` in
+`src/ui/handlers/playback/stepping.rs` applies the restart branch before the stepping arithmetic,
+consulting `AppleMusicService::has_loaded_preview` and `AppleMusicService::seek_output_to`;
 `transport::previous_track_id` in `src/ui/transport.rs` and `transport::PlayHistory` in
 `src/ui/transport/history.rs` implement the
 unchanged step paths.
@@ -1988,31 +1999,35 @@ late Previous restarts the track already playing instead of stepping back.
 
 ## Mixer drag readout
 
-**Guarantee.** While a volume or balance `chrome_slider`, or an equalizer band or preamp slider, is held,
-the Now Playing LCD draws that slider's live level (`Volume: 72%`, `Balance: Center`,
+**Guarantee.** While a volume or balance `chrome_slider`, or an equalizer band or preamp slider, is
+held, the Now Playing LCD draws that slider's live level (`Volume: 72%`, `Balance: Center`,
 `Balance: 31% Left`, `EQ: 60HZ +3 DB`, `Preamp: -12 DB`) in place of the
-`Now Playing: ` caption and title; dragging the seek slider likewise reads `Seek to: 00:12/00:30 (41%)`
-(target over the preview's `playback_duration`, floored percent) while `seek_preview` is held, and a mixer
-drag wins if both were set; without a `playback_duration` the title stays; the glyph, elapsed readout, and total stay. The release shows the
-title again. The EQ on/off button and preset picks never set the readout. The global arrow-key handlers and wheel never set the readout; a slider's own
-arrow-key or Ctrl+wheel change message does. `timers::mixer_key_message` turns a navigation key press
+`Now Playing: ` caption and title; dragging the seek slider likewise reads `Seek to: 00:12/00:30
+(41%)` (target over the preview's `playback_duration`, floored percent) while `seek_preview` is
+held, and a mixer drag wins if both were set; without a `playback_duration` the title stays; the
+glyph, elapsed readout, and total stay. The release shows the
+title again. The EQ on/off button and preset picks never set the readout. The global arrow-key
+handlers and wheel never set the readout; a slider's own arrow-key or Ctrl+wheel change message
+does. `timers::mixer_key_message` turns a navigation key press
 (arrows, Home/End, Page) into `MixerReleased` and is always subscribed, because the slider sets the
 readout during the event it must then see; other keys send nothing. `timers::mixer_wheel_message`
-does the same for a wheel roll but is subscribed only while a readout shows (the `mixer_readout_showing`
-argument of `subscriptions`), so plain list scrolling rebuilds no screen. Known limit: the Ctrl+wheel
-change that sets a readout leaves it until the next wheel roll or navigation key. The marquee timer is off during
-a drag, seek drags included. Nothing is persisted. Known limit: iced sends no release if a slider is removed mid-drag, so
+does the same for a wheel roll but is subscribed only while a readout shows (the
+`mixer_readout_showing` argument of `subscriptions`), so plain list scrolling rebuilds no screen.
+Known limit: the Ctrl+wheel change that sets a readout leaves it until the next wheel roll or
+navigation key. The marquee timer is off during a drag, seek drags included. Nothing is persisted.
+Known limit: iced sends no release if a slider is removed mid-drag, so
 the readout would then stay until the next mixer-slider release.
 
-**Enforced by.** `handlers::mixer::{volume_change, balance_change, eq_preamp_change, eq_band_change, mixer_released}`,
-`eq_slider_column`'s `on_release`,
-`WinampPlayer::mixer_drag` and `needs_marquee`, `chrome_slider`'s `on_release`, and
-`views::mixer_readout_text` / `views::seek_readout_text` / `now_playing_row`'s `mixer_readout` parameter.
+**Enforced by.** `handlers::mixer::{volume_change, balance_change, eq_preamp_change, eq_band_change,
+mixer_released}`, `eq_slider_column`'s `on_release`, `WinampPlayer::mixer_drag` and `needs_marquee`,
+`chrome_slider`'s `on_release`, and `views::mixer_readout_text` / `views::seek_readout_text` /
+`now_playing_row`'s `mixer_readout` parameter.
 
 **Pinned by.**
 
 - `volume_readout_rounds_to_whole_percent`, `balance_readout_names_the_side`,
-  `eq_readouts_show_the_band_label_and_signed_gain`, `seek_readout_shows_target_length_and_floored_percent`
+  `eq_readouts_show_the_band_label_and_signed_gain`,
+  `seek_readout_shows_target_length_and_floored_percent`
   (`src/ui/views/now_playing/mixer_readout.rs`)
 - `now_playing_row_with_a_readout_replaces_the_title` (`src/ui/views/tests/now_playing.rs`)
 - `a_key_or_wheel_event_ends_a_mixer_readout` (`src/ui/tests/mixer_tests.rs`)
@@ -2020,8 +2035,8 @@ the readout would then stay until the next mixer-slider release.
   `volume_keys_and_wheel_do_not_show_the_readout`, `the_marquee_pauses_during_a_mixer_drag`,
   `dragging_an_eq_band_shows_its_gain_until_release`, `dragging_the_preamp_shows_its_gain`,
   `eq_toggle_and_preset_do_not_show_the_readout`, `an_out_of_range_eq_band_shows_no_readout`,
-  `dragging_the_seek_slider_shows_the_target_until_release`, `a_seek_drag_without_a_duration_shows_no_seek_text`,
-  `the_marquee_pauses_during_a_seek_drag`
+  `dragging_the_seek_slider_shows_the_target_until_release`,
+  `a_seek_drag_without_a_duration_shows_no_seek_text`, `the_marquee_pauses_during_a_seek_drag`
   (`src/ui/tests/mixer_tests.rs`)
 
 **History.** Added 2026-10-24 with the mixer readout plan.
@@ -2030,8 +2045,10 @@ the readout would then stay until the next mixer-slider release.
 
 **Guarantee.** A `BalanceChange` that moves toward center and lands with magnitude below
 `BALANCE_CENTER_SNAP` (0.1) stores exactly `0.0`; the boundary value and any move away from
-center are stored as clamped ("toward" is judged against the drag's previous requested value, cleared on release, so a continuous inward drag stays snapped), so the slider's arrow keys can still leave center. Settings
-restore (`adopt_saved_settings`) goes through `AppState::set_balance` and is never snapped.
+center are stored as clamped ("toward" is judged against the drag's previous requested value,
+cleared on release, so a continuous inward drag stays snapped), so the slider's arrow keys can still
+leave center. Settings restore (`adopt_saved_settings`) goes through `AppState::set_balance` and is
+never snapped.
 
 **Enforced by.** `state::snap_balance_to_center` and `handlers::mixer::balance_change`.
 
