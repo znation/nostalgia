@@ -58,6 +58,7 @@ pub(in crate::ui) fn search_submitted(player: &mut WinampPlayer) -> Task<Message
     player.search_query = query.clone();
     player.search_active = true;
     player.current_view = CurrentView::Songs;
+    player.jump_file_visible = false;
     // The search results reuse the songs buffer, so the previous list's
     // rows are dropped and a press during the fetch cannot resolve
     // against them (the same clear-before-fetch the navigation handlers do).

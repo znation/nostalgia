@@ -98,6 +98,7 @@ pub(in crate::ui) fn toggle_about(player: &mut WinampPlayer) -> Task<Message> {
     if opening {
         player.file_info_visible = false;
         player.jump_time_visible = false;
+        player.jump_file_visible = false;
     }
     if opening && player.shaded {
         toggle_window_shade(player)
@@ -121,6 +122,7 @@ pub(in crate::ui) fn toggle_file_info(player: &mut WinampPlayer) -> Task<Message
     if opening {
         player.about_visible = false;
         player.jump_time_visible = false;
+        player.jump_file_visible = false;
     }
     if opening && player.shaded {
         toggle_window_shade(player)

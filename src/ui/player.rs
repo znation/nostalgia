@@ -174,10 +174,20 @@ pub(in crate::ui) struct WinampPlayer {
     /// Whether the transient Jump to time panel is drawn over the normal-mode
     /// tree. `Message::ToggleJumpTime` flips it; it is closed at launch and
     /// deliberately not persisted. At most one of this,
-    /// [`Self::about_visible`], and [`Self::file_info_visible`] holds.
+    /// [`Self::about_visible`], [`Self::file_info_visible`], and
+    /// [`Self::jump_file_visible`] holds.
     pub(in crate::ui) jump_time_visible: bool,
     /// The Jump to time panel's typed text, cleared each time it opens.
     pub(in crate::ui) jump_time_query: String,
+    /// Whether the transient Jump to File panel is drawn over the normal-mode
+    /// showing song list. `Message::ToggleJumpFile` flips it; it is closed at
+    /// launch and deliberately not persisted. At most one of this,
+    /// [`Self::about_visible`], [`Self::file_info_visible`], and
+    /// [`Self::jump_time_visible`] holds. Navigation that changes the showing
+    /// list clears it, so a panel left open cannot reappear over the next list.
+    pub(in crate::ui) jump_file_visible: bool,
+    /// The Jump to File panel's typed filter text, cleared each time it opens.
+    pub(in crate::ui) jump_file_query: String,
     /// The seek bar's in-progress drag, or `None` while the thumb follows the
     /// reported position. `Message::SeekPreviewChanged` stores the drag and
     /// `Message::SeekPreviewReleased` seeks to and clears it, so only a release
@@ -295,6 +305,8 @@ impl WinampPlayer {
             file_info_visible: false,
             jump_time_visible: false,
             jump_time_query: String::new(),
+            jump_file_visible: false,
+            jump_file_query: String::new(),
             seek_preview: None,
             time_display: views::TimeDisplay::Elapsed,
             mixer_drag: None,

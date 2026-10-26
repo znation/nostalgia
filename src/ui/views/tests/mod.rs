@@ -166,6 +166,7 @@ fn assert_slider_range_matches_clamp(clamp: fn(f32) -> f32, min: f32, max: f32, 
 mod browse;
 mod chrome;
 mod equalizer;
+mod jump_file;
 mod lcd_display;
 mod now_playing;
 mod seek_wheel;

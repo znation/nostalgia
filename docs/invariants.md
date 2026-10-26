@@ -1491,11 +1491,13 @@ overlay branch of `ui::view::view`.
 **Guarantee.** Ctrl+J flips a transient, unpersisted Jump to time panel that seeks the loaded preview:
 
 - `shortcuts::shortcut` maps `j` or `J` with Control held and Shift, Alt, and Logo released to
-  `Message::ToggleJumpTime`; Ctrl+Shift+J, Ctrl+Alt+J, Ctrl+Logo+J, and a plain `j` map to nothing.
+  `Message::ToggleJumpTime`; Ctrl+Shift+J, Ctrl+Alt+J, and Ctrl+Logo+J map to nothing (plain
+  `j`/`J` opens Jump to File instead, see `## Jump to File panel`).
 - `handlers::jump::toggle_jump_time` flips `WinampPlayer::jump_time_visible`. Opening needs
   `playback_duration` to be `Some`; without it the flag stays false. Opening clears the query,
-  `about_visible`, and `file_info_visible`, and opening About or File info clears
-  `jump_time_visible`. Opening while `shaded` holds first calls `toggle_window_shade`.
+  `about_visible`, `file_info_visible`, and `jump_file_visible`, and opening About, File info, or
+  Jump to File clears `jump_time_visible`. Opening while `shaded` holds first calls
+  `toggle_window_shade`.
 - `handlers::jump::parse_jump_time` accepts ASCII-digit seconds or `M:SS`; `jump_time_submitted`
   seeks through `playback::preview::seek_preview_to` (clamped to the length), bumping
   `position_epoch`, and closes the panel. An unparsable query changes nothing and keeps it open.
@@ -1511,6 +1513,45 @@ overlay branch of `ui::view::view`.
 tests in `src/ui/tests/jump_time_tests.rs`; `jump_time_overlay_draws_its_heading_length_and_buttons`
 and `jump_time_overlay_buttons_and_backdrop_publish_their_messages` (`src/ui/views/tests/chrome.rs`);
 `view_constructs_when_the_window_is_shaded` (`src/ui/tests/view_tests.rs`).
+
+## Jump to File panel
+
+**Guarantee.** Plain J flips a transient, unpersisted Jump to File panel over the showing song list:
+
+- `shortcuts::shortcut` maps plain `j` or `J`, with Shift allowed and Control, Alt, and Logo
+  released, to `Message::ToggleJumpFile`; Ctrl+J still maps to `ToggleJumpTime`, and Ctrl+Shift+J
+  stays unbound. The panel's filter box holds focus, so a focused `TextInput` captures printable
+  keys (including `j`) and `keyboard::listen`'s ignored-only feed never turns them into
+  shortcuts; typing therefore filters, and `Close` or the backdrop closes the panel.
+- `handlers::jump::song_list` names the cached titles and epoch of the showing list: the browsed
+  Songs buffer or the flat All Songs buffer, and no list on every other view. `toggle_jump_file`
+  opens only when that list exists; opening clears the query, closes About, File info, and Jump to
+  time, and while `shaded` first calls `toggle_window_shade`. Opening any of those panels closes
+  Jump to File, and the flag is never persisted. Navigation that changes the showing view (Reload,
+  Back, search, and the All Songs/All Albums/Playlists buttons) clears it, so a panel left open
+  cannot reappear over a later song list.
+- `views::jump_file::jump_file_matches` trims the query and compares it case-insensitively as a
+  substring, matching every index for a blank query, in list order. The view and the submit handler
+  call it, so the rows drawn and the row Enter plays agree.
+- `jump_file_submitted` plays the first match through `Message::TrackSelected { epoch, index }` and
+  closes the panel; no match changes nothing. `jump_file_row_selected` dispatches the clicked
+  source index the same way. The existing `TrackSelected` epoch/index guards reject a stale press.
+- `views::view_jump_file_overlay` stacks `JUMP TO FILE`, the `Filter songs` box, one row per match,
+  and `Jump` and `Close` buttons through `modal_overlay`. An empty list reads `No songs`; a list with
+  no match reads `No matching songs`. `Close` and the backdrop publish `ToggleJumpFile`, `Jump`
+  publishes `JumpFileSubmitted`, and each row publishes `JumpFileRowSelected`. The shade branch never
+  draws it.
+
+**Enforced by.** `handlers::jump`, `handlers::browse`, `ui::timers`,
+`views::jump_file::view_jump_file_overlay`, and the jump-file branch of `ui::view::view`.
+
+**Pinned by.** `matches_blank_all_case_insensitive_trimmed_in_order`,
+`overlay_draws_the_heading_matching_rows_and_buttons`,
+`row_and_buttons_publish_their_messages`, and
+`empty_and_no_match_lists_have_their_own_wording` (`src/ui/views/tests/jump_file.rs`);
+`message_for_maps_j_to_jump_file` and `message_for_maps_ctrl_j_to_jump_time`
+(`src/ui/shortcuts.rs`); the tests in
+`src/ui/tests/jump_file_tests.rs`.
 
 ## Song-list footer
 

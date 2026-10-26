@@ -23,8 +23,9 @@ use super::Message;
 /// to focus the `Search library` box, Ctrl+Z and Ctrl+B to play the first and
 /// last song of the showing list, Ctrl+R to reverse the showing list,
 /// Ctrl+Shift+R to shuffle it, Ctrl+W to toggle window-shade mode, Ctrl+J to
-/// flip the Jump to time panel, Ctrl+Shift+1 to sort it by title (see
-/// [`playlist_sort_shortcut`]), Alt+3 to flip the File info panel
+/// flip the Jump to time panel, plain J to flip the Jump to File panel,
+/// Ctrl+Shift+1 to sort it by title (see [`playlist_sort_shortcut`]), Alt+3
+/// to flip the File info panel
 /// (see [`file_info_shortcut`]), Alt+E and Alt+G to show or hide the library
 /// and equalizer panels (see [`panel_shortcut`]), and the system media keys
 /// (Play/Pause, Play, Pause, Stop, Next track, and Previous track) to the same
@@ -170,6 +171,7 @@ fn numpad_shortcut(key: &Key, location: Location, modifiers: Modifiers) -> Optio
 /// Logo chord is left to the OS and window manager, so those modifiers yield
 /// `None`; Shift is allowed, and the letter match ignores ASCII case, so
 /// Shift+Z steps back exactly like Z and Ctrl+Shift+F focuses the box too.
+/// Plain J opens the transient Jump to File panel.
 /// Alt+F and Logo+F stay unbound because they are chords for the window
 /// manager, not the player. Keypad digits are handled by [`numpad_shortcut`],
 /// so top-row digits stay unbound here (Ctrl+Shift+1 is handled by
@@ -223,6 +225,9 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
     }
 
     match key {
+        Key::Character(character) if character.eq_ignore_ascii_case("j") => {
+            Some(Message::ToggleJumpFile)
+        }
         Key::Character(character) if character.eq_ignore_ascii_case("z") => {
             Some(Message::PreviousTrack)
         }
@@ -584,10 +589,22 @@ mod tests {
             Modifiers::CTRL | Modifiers::SHIFT,
             Modifiers::CTRL | Modifiers::ALT,
             Modifiers::CTRL | Modifiers::LOGO,
-            Modifiers::NONE,
         ] {
             let event = key_pressed(Key::Character("j".into()), modifiers);
             assert!(message_for(event).is_none(), "{modifiers:?}");
+        }
+    }
+
+    #[test]
+    fn message_for_maps_j_to_jump_file() {
+        for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
+            for character in ["j", "J"] {
+                let event = key_pressed(Key::Character(character.into()), modifiers);
+                assert!(
+                    matches!(message_for(event), Some(Message::ToggleJumpFile)),
+                    "{modifiers:?}+{character} must open Jump to File"
+                );
+            }
         }
     }
 

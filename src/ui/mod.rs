@@ -268,6 +268,12 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::ToggleJumpTime => handlers::jump::toggle_jump_time(player),
         Message::JumpTimeChanged(text) => handlers::jump::jump_time_changed(player, text),
         Message::JumpTimeSubmitted => handlers::jump::jump_time_submitted(player),
+        Message::ToggleJumpFile => handlers::jump::toggle_jump_file(player),
+        Message::JumpFileChanged(text) => handlers::jump::jump_file_changed(player, text),
+        Message::JumpFileSubmitted => handlers::jump::jump_file_submitted(player),
+        Message::JumpFileRowSelected { epoch, index } => {
+            handlers::jump::jump_file_row_selected(player, epoch, index)
+        }
         Message::ToggleAlwaysOnTop => handlers::window::toggle_always_on_top(player),
         Message::Ignored => handlers::browse::fetch::ignored(player),
         Message::TransportSettled => handlers::playback::transport_settled(player),

@@ -312,6 +312,22 @@ pub(in crate::ui) enum Message {
     JumpTimeChanged(String),
     // Enter or the `Jump` button: seeks to the typed time and closes the panel.
     JumpTimeSubmitted,
+    // Plain J: flips the transient Jump to File panel. Opening needs a showing
+    // song list (Songs or All Songs), closes About, File info, and Jump to
+    // time, and while shaded first restores the window. The flag is not
+    // persisted.
+    ToggleJumpFile,
+    // A keystroke in the Jump to File box: stores the typed filter text.
+    JumpFileChanged(String),
+    // Enter or the `Jump` button: plays the first matching row and closes the
+    // panel.
+    JumpFileSubmitted,
+    // A press on a Jump to File row: plays that row through `TrackSelected`
+    // and closes the panel.
+    JumpFileRowSelected {
+        epoch: u64,
+        index: usize,
+    },
     // The LCD strip's always-on-top toggle. The arm flips the flag and
     // schedules `iced::window::set_level` for the resolved window, which is a
     // no-op until the window id resolves.

@@ -315,6 +315,22 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
             Some(length) => views::view_jump_time_overlay(base, &player.jump_time_query, length),
             None => base,
         }
+    } else if player.jump_file_visible && !player.shaded {
+        match player.current_view {
+            CurrentView::Songs => views::view_jump_file_overlay(
+                base,
+                &player.jump_file_query,
+                &player.songs.titles,
+                player.songs.epoch,
+            ),
+            CurrentView::AllSongs => views::view_jump_file_overlay(
+                base,
+                &player.jump_file_query,
+                &player.all_songs.titles,
+                player.all_songs.epoch,
+            ),
+            _ => base,
+        }
     } else {
         base
     }

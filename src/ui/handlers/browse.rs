@@ -37,6 +37,7 @@ pub(in crate::ui) fn artist_selected(
         return Task::none();
     };
     player.current_view = CurrentView::Albums;
+    player.jump_file_visible = false;
     // Entering a browse level leaves any active search: the songs list
     // the search filled is about to be replaced, so Back must not
     // treat it as a searched list any more.
@@ -81,6 +82,7 @@ pub(in crate::ui) fn album_selected(
         SongsOrigin::Album
     };
     player.current_view = CurrentView::Songs;
+    player.jump_file_visible = false;
     player.search_active = false;
     // The songs twin of the artist handler above: clear the previous
     // album's songs so they cannot be shown or pressed while the new
@@ -192,6 +194,7 @@ pub(in crate::ui) fn playlist_selected(
     };
     player.songs_origin = SongsOrigin::Playlist;
     player.current_view = CurrentView::Songs;
+    player.jump_file_visible = false;
     player.search_active = false;
     // Clear the previous list before the fetch lands, as the album handler
     // does, so a press during the fetch cannot resolve against stale
@@ -239,6 +242,7 @@ pub(in crate::ui) fn back(player: &mut WinampPlayer) -> Task<Message> {
         };
     }
     if stepping_up {
+        player.jump_file_visible = false;
         // A parent list stays in memory while a child is open, so Back does
         // not refetch it. Sort is one-shot, so returning to it undoes any
         // sort and shows the library's order again.
@@ -264,6 +268,7 @@ pub(in crate::ui) fn back(player: &mut WinampPlayer) -> Task<Message> {
 pub(in crate::ui) fn show_all_songs(player: &mut WinampPlayer) -> Task<Message> {
     player.search_active = false;
     player.current_view = CurrentView::AllSongs;
+    player.jump_file_visible = false;
     // Clear the previous flat list before the new fetch lands, so a
     // press during the fetch cannot resolve against stale rows (the
     // same clear-before-fetch the navigation handlers do).
@@ -284,6 +289,7 @@ pub(in crate::ui) fn show_all_songs(player: &mut WinampPlayer) -> Task<Message> 
 pub(in crate::ui) fn show_all_albums(player: &mut WinampPlayer) -> Task<Message> {
     player.search_active = false;
     player.current_view = CurrentView::AllAlbums;
+    player.jump_file_visible = false;
     // Clear the previous flat list before the new fetch lands, so a
     // press during the fetch cannot resolve against stale rows.
     fetch_at_top(fetch_level(
@@ -303,6 +309,7 @@ pub(in crate::ui) fn show_all_albums(player: &mut WinampPlayer) -> Task<Message>
 pub(in crate::ui) fn show_playlists(player: &mut WinampPlayer) -> Task<Message> {
     player.search_active = false;
     player.current_view = CurrentView::Playlists;
+    player.jump_file_visible = false;
     // Clear the previous list before the new fetch lands, so a press
     // during the fetch cannot resolve against stale rows.
     fetch_at_top(fetch_level(
@@ -419,6 +426,7 @@ fn move_in<T: Clone>(list: &mut BrowseList<T>, down: bool) -> Option<usize> {
 pub(in crate::ui) fn reload_library(player: &mut WinampPlayer) -> Task<Message> {
     player.search_active = false;
     player.current_view = CurrentView::Artists;
+    player.jump_file_visible = false;
     fetch_at_top(fetch::load_artists(player))
 }
 

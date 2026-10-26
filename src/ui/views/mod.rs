@@ -18,7 +18,8 @@
 //! `now_playing::text`), `seek_bar`, `transport`, and `equalizer`
 //! — while the chrome helpers, slider specs, and track-length formatting the
 //! panels share ([`spacer`], [`labeled_button`], [`fixed_width_button`],
-//! [`chrome_slider`], and [`format_track_time`]) live here.
+//! [`chrome_slider`], and [`format_track_time`]) live here. The transient
+//! overlays are `about`, `file_info`, `jump_time`, and `jump_file`.
 
 use iced::{
     Color, Element, Length,
@@ -32,6 +33,7 @@ mod about;
 mod browse;
 mod equalizer;
 mod file_info;
+mod jump_file;
 mod jump_time;
 mod mini_transport;
 mod modal;
@@ -52,6 +54,8 @@ pub use browse::{
 };
 pub use equalizer::view_equalizer;
 pub use file_info::view_file_info_overlay;
+pub(crate) use jump_file::jump_file_matches;
+pub use jump_file::{JUMP_FILE_INPUT_ID, view_jump_file_overlay};
 pub use jump_time::{JUMP_TIME_INPUT_ID, view_jump_time_overlay};
 pub use mini_transport::view_library_strip;
 pub use now_playing::{
