@@ -3,6 +3,11 @@
 
 use super::window_tests::make_current_track_known;
 use super::*;
+use crate::ui::handlers::jump::jump_file_row_top;
+use crate::ui::views::{
+    JUMP_FILE_LIST_HEIGHT, JUMP_FILE_LIST_ID, JUMP_FILE_LIST_PADDING, JUMP_FILE_ROW_HEIGHT,
+    JUMP_FILE_ROW_SPACING,
+};
 
 fn player_in_songs() -> (WinampPlayer, Arc<Mutex<AppState>>) {
     let (mut player, state) = test_player();
@@ -80,20 +85,21 @@ fn down_and_up_move_the_selection_through_the_matches() {
     let _ = update(&mut player, Message::ToggleJumpFile);
     assert_eq!(player.jump_file_selected, None);
 
-    // Down selects the second match, then the last, and stops there.
-    assert_message_schedules_no_work(&mut player, Message::JumpFileSelectionDown);
+    // Down selects the second match, then the last, and stops there. Every
+    // move asks the panel to reveal its landed row.
+    assert_message_schedules_work(&mut player, Message::JumpFileSelectionDown);
     assert_eq!(player.jump_file_selected, Some(1));
-    assert_message_schedules_no_work(&mut player, Message::JumpFileSelectionDown);
+    assert_message_schedules_work(&mut player, Message::JumpFileSelectionDown);
     assert_eq!(player.jump_file_selected, Some(2));
-    assert_message_schedules_no_work(&mut player, Message::JumpFileSelectionDown);
+    assert_message_schedules_work(&mut player, Message::JumpFileSelectionDown);
     assert_eq!(player.jump_file_selected, Some(2));
 
     // Up walks back and stops at the first match.
-    assert_message_schedules_no_work(&mut player, Message::JumpFileSelectionUp);
+    assert_message_schedules_work(&mut player, Message::JumpFileSelectionUp);
     assert_eq!(player.jump_file_selected, Some(1));
-    assert_message_schedules_no_work(&mut player, Message::JumpFileSelectionUp);
+    assert_message_schedules_work(&mut player, Message::JumpFileSelectionUp);
     assert_eq!(player.jump_file_selected, Some(0));
-    assert_message_schedules_no_work(&mut player, Message::JumpFileSelectionUp);
+    assert_message_schedules_work(&mut player, Message::JumpFileSelectionUp);
     assert_eq!(player.jump_file_selected, Some(0));
 
     // Closing clears the highlight, so the next opening starts at the first.
@@ -104,16 +110,143 @@ fn down_and_up_move_the_selection_through_the_matches() {
 }
 
 #[test]
+fn page_up_and_down_move_the_highlight_by_one_page_and_clamp() {
+    let (mut player, _state) = test_player();
+    let songs: Vec<Song> = (0..12)
+        .map(|index| {
+            let mut song = stepping_songs()[0].clone();
+            song.id = format!("song-{index}");
+            song.title = format!("Track {index}");
+            song
+        })
+        .collect();
+    let _ = update(&mut player, Message::SongsLoaded(songs));
+    player.current_view = CurrentView::Songs;
+
+    // Closed, the page keys leave the highlight alone and schedule nothing.
+    assert_message_schedules_no_work(&mut player, Message::JumpFileSelectionPageDown);
+    assert_message_schedules_no_work(&mut player, Message::JumpFileSelectionPageUp);
+    assert_eq!(player.jump_file_selected, None);
+
+    let _ = update(&mut player, Message::ToggleJumpFile);
+    assert_eq!(player.jump_file_selected, None);
+
+    // Page Down starts from the first match and moves five rows a page.
+    assert_message_schedules_work(&mut player, Message::JumpFileSelectionPageDown);
+    assert_eq!(player.jump_file_selected, Some(5));
+    assert_message_schedules_work(&mut player, Message::JumpFileSelectionPageDown);
+    assert_eq!(player.jump_file_selected, Some(10));
+    // A page past the last match clamps there.
+    assert_message_schedules_work(&mut player, Message::JumpFileSelectionPageDown);
+    assert_eq!(player.jump_file_selected, Some(11));
+
+    // Page Up walks back by one page and clamps at the first match.
+    assert_message_schedules_work(&mut player, Message::JumpFileSelectionPageUp);
+    assert_eq!(player.jump_file_selected, Some(6));
+    assert_message_schedules_work(&mut player, Message::JumpFileSelectionPageUp);
+    assert_eq!(player.jump_file_selected, Some(1));
+    assert_message_schedules_work(&mut player, Message::JumpFileSelectionPageUp);
+    assert_eq!(player.jump_file_selected, Some(0));
+    assert_message_schedules_work(&mut player, Message::JumpFileSelectionPageUp);
+    assert_eq!(player.jump_file_selected, Some(0));
+}
+
+#[test]
+fn jump_file_row_top_starts_at_the_padding_and_steps_by_one_row_and_gap() {
+    let pitch = JUMP_FILE_ROW_HEIGHT + JUMP_FILE_ROW_SPACING;
+    assert_eq!(jump_file_row_top(0), JUMP_FILE_LIST_PADDING);
+    assert_eq!(jump_file_row_top(3), JUMP_FILE_LIST_PADDING + 3.0 * pitch);
+}
+
+/// Drives a Jump to File highlight move's task until it runs its scroll
+/// operation and applies that operation to a match list scrolled to
+/// `scroll_top`, asserting it touches only the match list's id.
+async fn jump_file_scroll_effects(task: Task<Message>, scroll_top: f32) -> BrowseScrollEffects {
+    use iced::advanced::widget::Id;
+
+    let bounds = iced::Rectangle {
+        height: JUMP_FILE_LIST_HEIGHT,
+        ..iced::Rectangle::default()
+    };
+    let translation = iced::Vector::new(0.0, scroll_top);
+    let mut operation = widget_operation(task, "a Jump to File highlight move").await;
+    let effects = browse_scroll_effects_by(
+        &mut *operation,
+        &Id::new(JUMP_FILE_LIST_ID),
+        bounds,
+        translation,
+    );
+    let unrelated = browse_scroll_effects_by(
+        &mut *operation,
+        &Id::new("not-the-jump-file-list"),
+        bounds,
+        translation,
+    );
+    assert!(
+        !unrelated.any(),
+        "a Jump to File highlight move must scroll only the match list id"
+    );
+    effects
+}
+
+#[test]
+fn a_highlight_move_reveals_only_the_landed_row_in_the_match_list() {
+    use iced::advanced::widget::operation::scrollable::AbsoluteOffset;
+
+    let (mut player, _state) = test_player();
+    let songs: Vec<Song> = (0..12)
+        .map(|index| {
+            let mut song = stepping_songs()[0].clone();
+            song.id = format!("song-{index}");
+            song.title = format!("Track {index}");
+            song
+        })
+        .collect();
+    let _ = update(&mut player, Message::SongsLoaded(songs));
+    player.current_view = CurrentView::Songs;
+    let _ = update(&mut player, Message::ToggleJumpFile);
+
+    // Page Down lands on row 5, below the fixed-height list, so the task
+    // scrolls the match list to that row's bottom edge and nothing else.
+    let effects = futures::executor::block_on(jump_file_scroll_effects(
+        update(&mut player, Message::JumpFileSelectionPageDown),
+        0.0,
+    ));
+    assert_eq!(player.jump_file_selected, Some(5));
+    let expected = jump_file_row_top(5) + JUMP_FILE_ROW_HEIGHT - JUMP_FILE_LIST_HEIGHT;
+    assert_eq!(
+        effects.scrolled,
+        Some(AbsoluteOffset {
+            x: None,
+            y: Some(expected),
+        })
+    );
+    assert_eq!(effects.snapped, None);
+    assert_eq!(effects.scrolled_by, None);
+
+    // From row 5 to row 4 stays inside the view the first scroll left, so the
+    // move asks for no scroll at all.
+    let effects = futures::executor::block_on(jump_file_scroll_effects(
+        update(&mut player, Message::JumpFileSelectionUp),
+        expected,
+    ));
+    assert_eq!(player.jump_file_selected, Some(4));
+    assert_eq!(effects.scrolled, None);
+    assert_eq!(effects.snapped, None);
+    assert_eq!(effects.scrolled_by, None);
+}
+
+#[test]
 fn typing_a_filter_or_reopening_resets_the_selection_to_the_first_match() {
     let (mut player, _state) = player_in_songs();
     let _ = update(&mut player, Message::ToggleJumpFile);
-    assert_message_schedules_no_work(&mut player, Message::JumpFileSelectionDown);
+    assert_message_schedules_work(&mut player, Message::JumpFileSelectionDown);
     assert_eq!(player.jump_file_selected, Some(1));
 
     let _ = update(&mut player, Message::JumpFileChanged("two".to_string()));
     assert_eq!(player.jump_file_selected, None);
 
-    assert_message_schedules_no_work(&mut player, Message::JumpFileSelectionDown);
+    assert_message_schedules_work(&mut player, Message::JumpFileSelectionDown);
     assert_eq!(player.jump_file_selected, Some(1));
     let _ = update(&mut player, Message::ToggleJumpFile);
     let _ = update(&mut player, Message::ToggleJumpFile);

@@ -1,6 +1,7 @@
 //! The transient panels' jump handlers: Ctrl+J opens Jump to time, plain J
-//! opens Jump to File, each keystroke stores the typed text, Up and Down move
-//! the Jump to File highlight, and Enter or `Jump` seeks or plays it.
+//! opens Jump to File, each keystroke stores the typed text, Up, Down, Page Up,
+//! and Page Down move the Jump to File highlight, and Enter or `Jump` seeks or
+//! plays it.
 
 use std::time::Duration;
 
@@ -134,11 +135,13 @@ pub(in crate::ui) fn jump_file_changed(player: &mut WinampPlayer, text: String) 
     Task::none()
 }
 
-/// Moves the Jump to File highlight one match up (`up`) or down, clamped to
-/// the first or last match without wrapping. No-op unless the panel is open;
-/// an empty match list clears the highlight. The highlight stores the match's
-/// source index, so a filtered row keeps its source-list number.
-fn move_jump_file_selection(player: &mut WinampPlayer, up: bool) -> Task<Message> {
+/// Moves the Jump to File highlight `step` matches from its current position
+/// (a `None` selection starts from the first match), clamped to the first or
+/// last match without wrapping. No-op unless the panel is open; an empty match
+/// list clears the highlight. The highlight stores the match's source index,
+/// so a filtered row keeps its source-list number, and the returned task
+/// scrolls the match list only as far as needed to show the landed row.
+fn move_jump_file_selection(player: &mut WinampPlayer, step: isize) -> Task<Message> {
     if !player.jump_file_visible {
         return Task::none();
     }
@@ -153,25 +156,86 @@ fn move_jump_file_selection(player: &mut WinampPlayer, up: bool) -> Task<Message
     let position = views::jump_file_highlighted(&matches, player.jump_file_selected)
         .and_then(|selected| matches.iter().position(|&index| index == selected))
         .unwrap_or(0);
-    let next = if up {
-        position.saturating_sub(1)
-    } else {
-        (position + 1).min(matches.len() - 1)
-    };
+    let next = (position as isize + step).clamp(0, matches.len() as isize - 1) as usize;
     player.jump_file_selected = Some(matches[next]);
-    Task::none()
+    reveal_jump_file_row(next)
 }
 
 /// Up while the Jump to File panel is open: highlight the previous match,
 /// stopping at the first.
 pub(in crate::ui) fn jump_file_selection_up(player: &mut WinampPlayer) -> Task<Message> {
-    move_jump_file_selection(player, true)
+    move_jump_file_selection(player, -1)
 }
 
 /// Down while the Jump to File panel is open: highlight the next match,
 /// stopping at the last.
 pub(in crate::ui) fn jump_file_selection_down(player: &mut WinampPlayer) -> Task<Message> {
-    move_jump_file_selection(player, false)
+    move_jump_file_selection(player, 1)
+}
+
+/// Page Up while the Jump to File panel is open: highlight the match one page
+/// of visible rows above, stopping at the first.
+pub(in crate::ui) fn jump_file_selection_page_up(player: &mut WinampPlayer) -> Task<Message> {
+    move_jump_file_selection(player, -views::JUMP_FILE_PAGE_ROWS)
+}
+
+/// Page Down while the Jump to File panel is open: highlight the match one
+/// page of visible rows below, stopping at the last.
+pub(in crate::ui) fn jump_file_selection_page_down(player: &mut WinampPlayer) -> Task<Message> {
+    move_jump_file_selection(player, views::JUMP_FILE_PAGE_ROWS)
+}
+
+/// The top edge of the Jump to File row at `position`, measured from the top
+/// of the match list's scrollable. It counts the list padding and each row's
+/// drawn height plus the gap before it.
+pub(in crate::ui) fn jump_file_row_top(position: usize) -> f32 {
+    views::JUMP_FILE_LIST_PADDING
+        + position as f32 * (views::JUMP_FILE_ROW_HEIGHT + views::JUMP_FILE_ROW_SPACING)
+}
+
+/// Scrolls the Jump to File match list only as far as needed to show the row
+/// at `position` fully, and not at all when it is already visible. It reads
+/// the match list's current offset and viewport from the widget operation and
+/// touches only that list's scroll offset.
+fn reveal_jump_file_row(position: usize) -> Task<Message> {
+    use iced::advanced::widget::operation::Scrollable;
+    use iced::advanced::widget::{Id, Operation};
+
+    struct Reveal {
+        position: usize,
+    }
+
+    impl<T> Operation<T> for Reveal {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<T>)) {
+            operate(self);
+        }
+
+        fn scrollable(
+            &mut self,
+            id: Option<&Id>,
+            bounds: iced::Rectangle,
+            _content_bounds: iced::Rectangle,
+            translation: iced::Vector,
+            state: &mut dyn Scrollable,
+        ) {
+            if id != Some(&Id::new(views::JUMP_FILE_LIST_ID)) {
+                return;
+            }
+            if let Some(y) = super::browse::scroll::reveal_offset(
+                jump_file_row_top(self.position),
+                views::JUMP_FILE_ROW_HEIGHT,
+                translation.y,
+                bounds.height,
+            ) {
+                state.scroll_to(iced::widget::scrollable::AbsoluteOffset {
+                    x: None,
+                    y: Some(y),
+                });
+            }
+        }
+    }
+
+    iced::advanced::widget::operate(Reveal { position })
 }
 
 /// Enter or `Jump`: with the panel open, play the highlighted row from the

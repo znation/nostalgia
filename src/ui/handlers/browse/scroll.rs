@@ -80,20 +80,20 @@ pub(in crate::ui) fn scroll_browse_to_playing_row(
     }
 }
 
-/// The scroll offset that shows row `index` fully in a viewport of
+/// The scroll offset that shows a row fully in a viewport of
 /// `viewport_height` currently scrolled to `scroll_top`, or `None` when the
-/// row is already fully visible. Row `index` spans from
-/// [`views::BROWSE_LIST_PADDING`] plus `index` times
-/// [`views::BROWSE_ROW_HEIGHT`] for one [`views::BROWSE_ROW_HEIGHT`]. The top
-/// edge is checked first, so a viewport shorter than one row shows the row's
-/// top.
-pub(in crate::ui) fn reveal_row_offset(
-    index: usize,
+/// row is already fully visible. The row spans `row_height` pixels from
+/// `row_top`. The top edge is checked first, so a viewport shorter than one
+/// row shows the row's top. The browse list and the Jump to File list share
+/// this minimal-reveal rule through [`reveal_row_offset`] and the Jump to
+/// File handler's `reveal_jump_file_row`.
+pub(in crate::ui) fn reveal_offset(
+    row_top: f32,
+    row_height: f32,
     scroll_top: f32,
     viewport_height: f32,
 ) -> Option<f32> {
-    let row_top = views::BROWSE_LIST_PADDING + index as f32 * views::BROWSE_ROW_HEIGHT;
-    let row_bottom = row_top + views::BROWSE_ROW_HEIGHT;
+    let row_bottom = row_top + row_height;
     if row_top < scroll_top {
         Some(row_top)
     } else if row_bottom > scroll_top + viewport_height {
@@ -101,6 +101,25 @@ pub(in crate::ui) fn reveal_row_offset(
     } else {
         None
     }
+}
+
+/// The scroll offset that shows browse row `index` fully in a viewport of
+/// `viewport_height` currently scrolled to `scroll_top`, or `None` when the
+/// row is already fully visible. Row `index` spans from
+/// [`views::BROWSE_LIST_PADDING`] plus `index` times
+/// [`views::BROWSE_ROW_HEIGHT`] for one [`views::BROWSE_ROW_HEIGHT`].
+pub(in crate::ui) fn reveal_row_offset(
+    index: usize,
+    scroll_top: f32,
+    viewport_height: f32,
+) -> Option<f32> {
+    let row_top = views::BROWSE_LIST_PADDING + index as f32 * views::BROWSE_ROW_HEIGHT;
+    reveal_offset(
+        row_top,
+        views::BROWSE_ROW_HEIGHT,
+        scroll_top,
+        viewport_height,
+    )
 }
 
 /// Scrolls the browse list only as far as needed to show row `index` fully,

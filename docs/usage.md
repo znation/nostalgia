@@ -111,8 +111,10 @@ length) and close the panel; `Close`, a click on the backdrop, or Ctrl+J again c
 opens only while a preview with a known length is loaded. Plain `J` opens a transient Jump to File
 panel over the showing song list (a browsed album or playlist's songs, search results, or All
 Songs): each row is numbered like the browse list, typing filters its cached row titles
-case-insensitively, Up and Down move the browse selection bar through the matches (the first
-match until you move it), and Enter or `Jump` plays the highlighted row — or a row click plays
+case-insensitively, Up and Down move the selection bar through the matches (the first
+match until you move it), and Page Up and Page Down move it one page of visible matches at a
+time, clamped like Up and Down; every highlight move scrolls the panel's list only as far as
+needed to keep the row in view, and Enter or `Jump` plays the highlighted row — or a row click plays
 that row — closing the panel; `Close` or a click on the backdrop closes it, and it opens only on
 those song lists. A `Reload` button beside `Sort`
 refetches the library's artists list and returns to the Artists list, clearing any active search

@@ -54,10 +54,13 @@ pub use browse::{
 };
 pub use equalizer::view_equalizer;
 pub use file_info::view_file_info_overlay;
-pub use jump_file::{JUMP_FILE_INPUT_ID, view_jump_file_overlay};
-pub(crate) use jump_file::{jump_file_highlighted, jump_file_matches};
+pub use jump_file::{
+    JUMP_FILE_INPUT_ID, JUMP_FILE_LIST_ID, JUMP_FILE_LIST_PADDING, JUMP_FILE_PAGE_ROWS,
+    JUMP_FILE_ROW_HEIGHT, JUMP_FILE_ROW_SPACING, view_jump_file_overlay,
+};
 #[cfg(test)]
-pub(crate) use jump_file::{jump_file_row_label, jump_file_row_style};
+pub(crate) use jump_file::{JUMP_FILE_LIST_HEIGHT, jump_file_row_label, jump_file_row_style};
+pub(crate) use jump_file::{jump_file_highlighted, jump_file_matches};
 pub use jump_time::{JUMP_TIME_INPUT_ID, view_jump_time_overlay};
 pub use mini_transport::view_library_strip;
 pub use now_playing::{

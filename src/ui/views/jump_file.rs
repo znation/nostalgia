@@ -13,6 +13,29 @@ use super::{labeled_button, modal::modal_overlay};
 /// The Jump to File box's widget id, so `J` can focus it on opening.
 pub const JUMP_FILE_INPUT_ID: &str = "nostalgia-jump-file";
 
+/// The Jump to File match list's widget id, so a highlight move can reveal
+/// its row.
+pub const JUMP_FILE_LIST_ID: &str = "nostalgia-jump-file-list";
+
+/// A Jump to File row's drawn height, matching the label's vertical button
+/// padding so the reveal arithmetic follows the list's real row pitch.
+pub const JUMP_FILE_ROW_HEIGHT: f32 = 32.0;
+
+/// The vertical gap between two Jump to File rows.
+pub const JUMP_FILE_ROW_SPACING: f32 = 2.0;
+
+/// The match list's padding on every side; its top edge offsets the first
+/// row from the scrollable's top.
+pub const JUMP_FILE_LIST_PADDING: f32 = 4.0;
+
+/// The match list's fixed height, which a page of matches fits without
+/// clipping a row.
+pub const JUMP_FILE_LIST_HEIGHT: f32 = 180.0;
+
+/// How many matches Page Up and Page Down move the highlight by: the rows
+/// that fit the fixed-height match list.
+pub const JUMP_FILE_PAGE_ROWS: isize = 5;
+
 /// The source indices of the `titles` matching `query`, in list order.
 ///
 /// The query is trimmed and compared case-insensitively as a substring; an
@@ -89,12 +112,15 @@ pub fn view_jump_file_overlay<'a>(
     let matches = jump_file_matches(titles, query);
     let highlighted = jump_file_highlighted(&matches, selected);
     let has_matches = highlighted.is_some();
-    let mut rows = Column::new().spacing(2).padding(4);
+    let mut rows = Column::new()
+        .spacing(JUMP_FILE_ROW_SPACING)
+        .padding(JUMP_FILE_LIST_PADDING);
     for index in matches {
         let label = jump_file_row_label(index, &titles[index]);
         rows = rows.push(
             Button::new(Text::new(label).size(18))
                 .width(Length::Fill)
+                .height(Length::Fixed(JUMP_FILE_ROW_HEIGHT))
                 .on_press(Message::JumpFileRowSelected { epoch, index })
                 .style(move |_theme, status| {
                     jump_file_row_style(highlighted == Some(index), status)
@@ -119,8 +145,9 @@ pub fn view_jump_file_overlay<'a>(
         .push(input)
         .push(
             Scrollable::new(rows)
+                .id(JUMP_FILE_LIST_ID)
                 .width(Length::Fill)
-                .height(Length::Fixed(180.0))
+                .height(Length::Fixed(JUMP_FILE_LIST_HEIGHT))
                 .style(|_theme, _status| style::playlist_scrollable_style()),
         )
         .push(

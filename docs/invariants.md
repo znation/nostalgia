@@ -1659,12 +1659,14 @@ and `jump_time_overlay_buttons_and_backdrop_publish_their_messages`
 - `shortcuts::shortcut` maps plain `j` or `J`, with Shift allowed and Control, Alt, and Logo
   released, to `Message::ToggleJumpFile`; Ctrl+J still maps to `ToggleJumpTime`, and Ctrl+Shift+J
   stays unbound. While the panel is open, `ui::timers` installs
-  `shortcuts::message_for_jump_file`, which maps Up and Down (Shift allowed, Control, Alt, and
-  Logo released) to `JumpFileSelectionUp`/`JumpFileSelectionDown` and falls through to
-  `message_for` for every other event; with the panel closed Up and Down still nudge the volume.
-  The panel's filter box holds focus, so a focused `TextInput` captures printable keys (including
-  `j`) and `keyboard::listen`'s ignored-only feed never turns them into shortcuts; typing
-  therefore filters, and `Close` or the backdrop closes the panel.
+  `shortcuts::message_for_jump_file`, which maps Up, Down, Page Up, and Page Down (Shift allowed,
+  Control, Alt, and Logo released) to `JumpFileSelectionUp`/`JumpFileSelectionDown` and
+  `JumpFileSelectionPageUp`/`JumpFileSelectionPageDown`, and falls through to `message_for` for
+  every other event; with the panel closed those keys keep their volume and browse-scroll
+  mappings, and Home and End stay with the focused filter box. The panel's filter box holds
+  focus, so a focused `TextInput` captures printable keys (including `j`) and
+  `keyboard::listen`'s ignored-only feed never turns them into shortcuts; typing therefore
+  filters, and `Close` or the backdrop closes the panel.
 - `handlers::jump::song_list` names the cached titles and epoch of the showing list: the browsed
   Songs buffer or the flat All Songs buffer, and no list on every other view. `toggle_jump_file`
   opens only when that list exists; opening clears the query, closes About, File info, and Jump to
@@ -1682,8 +1684,16 @@ and `jump_time_overlay_buttons_and_backdrop_publish_their_messages`
 - `views::jump_file::jump_file_highlighted` resolves the highlighted match: `jump_file_selected`
   when it is still one of the filtered matches, otherwise the first match, and `None` for an
   empty match list. Opening the panel or typing a new query resets the selection to `None`, so
-  the first match is highlighted until Up or Down moves it; Up and Down clamp at the first and
-  last match without wrapping and store the match's source index.
+  the first match is highlighted until Up, Down, Page Up, or Page Down moves it; Up and Down move
+  one match and Page Up and Page Down move `views::JUMP_FILE_PAGE_ROWS` matches (five, the rows
+  that fit the fixed `JUMP_FILE_LIST_HEIGHT`), all clamped at the first and last match without
+  wrapping and storing the match's source index.
+- Every highlight move returns `reveal_jump_file_row`, which scrolls the match list only as far
+  as needed to show the landed row and not at all when the row is already fully visible. The row
+  geometry comes from `views::JUMP_FILE_LIST_PADDING`, `JUMP_FILE_ROW_HEIGHT`, and
+  `JUMP_FILE_ROW_SPACING`, and the minimal-reveal arithmetic is the browse list's shared
+  `handlers::browse::scroll::reveal_offset`, so the list is not scrolled past what the move needs.
+  A closed panel or an empty match list schedules no scroll.
 - `views::jump_file::jump_file_row_style` draws the highlighted row — the row Enter or `Jump`
   plays — with the browse selection style, the blue `theme::ROW_HIGHLIGHT` bar behind white
   `theme::PLAYING_ROW_TEXT`; every other row keeps the flat green `style::playlist_row_style`
@@ -1698,7 +1708,8 @@ and `jump_time_overlay_buttons_and_backdrop_publish_their_messages`
   publish `ToggleJumpFile`, `Jump` publishes `JumpFileSubmitted`, and each row publishes
   `JumpFileRowSelected`. The shade branch never draws it.
 
-**Enforced by.** `handlers::jump`, `handlers::browse`, `ui::timers`,
+**Enforced by.** `handlers::jump`, `handlers::browse`,
+`handlers::browse::scroll::reveal_offset`, `ui::timers`,
 `shortcuts::message_for_jump_file`, `views::jump_file::view_jump_file_overlay`, and the
 jump-file branch of `ui::view::view`.
 
@@ -1706,12 +1717,16 @@ jump-file branch of `ui::view::view`.
 `jump_file_row_label_numbers_the_showing_list_position`,
 `jump_file_highlighted_prefers_a_selected_match_and_falls_back_to_first`,
 `jump_file_row_style_highlights_only_the_highlighted_row`,
+`jump_file_page_step_fits_the_visible_list`,
 `overlay_draws_the_heading_matching_rows_and_buttons`,
 `overlay_highlights_the_selected_row`,
 `row_and_buttons_publish_their_messages`, and
 `empty_and_no_match_lists_have_their_own_wording` (`src/ui/views/tests/jump_file.rs`);
 `message_for_maps_j_to_jump_file`, `message_for_maps_ctrl_j_to_jump_time`, and
-`message_for_jump_file_maps_up_and_down_and_falls_back` (`src/ui/shortcuts.rs`); the tests in
+`message_for_jump_file_maps_up_and_down_and_falls_back` (`src/ui/shortcuts.rs`);
+`page_up_and_down_move_the_highlight_by_one_page_and_clamp`,
+`a_highlight_move_reveals_only_the_landed_row_in_the_match_list`,
+`jump_file_row_top_starts_at_the_padding_and_steps_by_one_row_and_gap`, and the other tests in
 `src/ui/tests/jump_file_tests.rs`; `the_escape_listener_runs_only_while_a_transient_panel_is_open`,
 `escape_key_message_maps_escape_but_not_its_chords_or_other_keys`
 (`src/ui/tests/timers_tests.rs`), and

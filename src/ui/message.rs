@@ -341,6 +341,14 @@ pub(in crate::ui) enum Message {
     // Down while the Jump to File panel is open: moves the highlight to the
     // next match, stopping at the last. Changes no playback state.
     JumpFileSelectionDown,
+    // Page Up while the Jump to File panel is open: moves the highlight one
+    // page of visible matches back, stopping at the first. Requests only the
+    // match list scroll needed to show the landed row.
+    JumpFileSelectionPageUp,
+    // Page Down while the Jump to File panel is open: moves the highlight one
+    // page of visible matches forward, stopping at the last. Requests only the
+    // match list scroll needed to show the landed row.
+    JumpFileSelectionPageDown,
     // A press on a Jump to File row: plays that row through `TrackSelected`
     // and closes the panel.
     JumpFileRowSelected {

@@ -1,7 +1,9 @@
 //! The Jump to File overlay: its filter, its rows, and the messages each
 //! control publishes.
 
+use super::super::jump_file::JUMP_FILE_LIST_HEIGHT;
 use super::super::{
+    JUMP_FILE_LIST_PADDING, JUMP_FILE_PAGE_ROWS, JUMP_FILE_ROW_HEIGHT, JUMP_FILE_ROW_SPACING,
     jump_file_highlighted, jump_file_matches, jump_file_row_label, jump_file_row_style,
     view_jump_file_overlay,
 };
@@ -67,6 +69,22 @@ fn matches_blank_all_case_insensitive_trimmed_in_order() {
     assert_eq!(jump_file_matches(&titles, " MID "), vec![1]);
     assert_eq!(jump_file_matches(&titles, "ing"), vec![0, 2]);
     assert_eq!(jump_file_matches(&titles, "zzz"), Vec::<usize>::new());
+}
+
+#[test]
+fn jump_file_page_step_fits_the_visible_list() {
+    let page_height = JUMP_FILE_PAGE_ROWS as f32 * JUMP_FILE_ROW_HEIGHT
+        + (JUMP_FILE_PAGE_ROWS as f32 - 1.0) * JUMP_FILE_ROW_SPACING
+        + 2.0 * JUMP_FILE_LIST_PADDING;
+    assert!(
+        page_height <= JUMP_FILE_LIST_HEIGHT,
+        "a page of {JUMP_FILE_PAGE_ROWS} rows must fit the {JUMP_FILE_LIST_HEIGHT}px list, but it needs {page_height}px"
+    );
+    let with_one_more_row = page_height + JUMP_FILE_ROW_HEIGHT + JUMP_FILE_ROW_SPACING;
+    assert!(
+        with_one_more_row > JUMP_FILE_LIST_HEIGHT,
+        "one more row must overflow the {JUMP_FILE_LIST_HEIGHT}px list, but {with_one_more_row}px would fit"
+    );
 }
 
 #[test]

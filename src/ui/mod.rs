@@ -283,6 +283,8 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::JumpFileSubmitted => handlers::jump::jump_file_submitted(player),
         Message::JumpFileSelectionUp => handlers::jump::jump_file_selection_up(player),
         Message::JumpFileSelectionDown => handlers::jump::jump_file_selection_down(player),
+        Message::JumpFileSelectionPageUp => handlers::jump::jump_file_selection_page_up(player),
+        Message::JumpFileSelectionPageDown => handlers::jump::jump_file_selection_page_down(player),
         Message::JumpFileRowSelected { epoch, index } => {
             handlers::jump::jump_file_row_selected(player, epoch, index)
         }

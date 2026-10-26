@@ -57,13 +57,17 @@ pub(super) fn message_for(event: Event) -> Option<Message> {
 }
 
 /// The keyboard mapper used while the Jump to File panel is open: Up and Down
-/// move the panel's highlight instead of nudging the volume. A key press with
-/// Control, Alt, and Logo released maps `ArrowUp` and `ArrowDown` (Shift
-/// allowed, like the letter bindings) to [`Message::JumpFileSelectionUp`] and
-/// [`Message::JumpFileSelectionDown`]. Every other event falls through to
-/// [`message_for`], so J, Ctrl+J, and the rest keep their mappings. iced's
-/// `TextInput` leaves Up and Down to the listener, so the filter box keeps
-/// focus while they move the highlight.
+/// move the panel's highlight instead of nudging the volume, and Page Up and
+/// Page Down move it one page instead of scrolling the browse list behind the
+/// panel. A key press with Control, Alt, and Logo released maps `ArrowUp`,
+/// `ArrowDown`, `PageUp`, and `PageDown` (Shift allowed, like the letter
+/// bindings) to [`Message::JumpFileSelectionUp`],
+/// [`Message::JumpFileSelectionDown`], [`Message::JumpFileSelectionPageUp`],
+/// and [`Message::JumpFileSelectionPageDown`]. Every other event falls through
+/// to [`message_for`], so J, Ctrl+J, and the rest keep their mappings; Home and
+/// End stay with the focused filter box. iced's `TextInput` leaves Up, Down,
+/// Page Up, and Page Down to the listener, so the filter box keeps focus while
+/// they move the highlight.
 pub(super) fn message_for_jump_file(event: Event) -> Option<Message> {
     match &event {
         Event::KeyPressed {
@@ -79,6 +83,20 @@ pub(super) fn message_for_jump_file(event: Event) -> Option<Message> {
             ..
         } if !modifiers.control() && !modifiers.alt() && !modifiers.logo() => {
             Some(Message::JumpFileSelectionDown)
+        }
+        Event::KeyPressed {
+            key: Key::Named(key::Named::PageUp),
+            modifiers,
+            ..
+        } if !modifiers.control() && !modifiers.alt() && !modifiers.logo() => {
+            Some(Message::JumpFileSelectionPageUp)
+        }
+        Event::KeyPressed {
+            key: Key::Named(key::Named::PageDown),
+            modifiers,
+            ..
+        } if !modifiers.control() && !modifiers.alt() && !modifiers.logo() => {
+            Some(Message::JumpFileSelectionPageDown)
         }
         _ => message_for(event),
     }
@@ -706,6 +724,14 @@ mod tests {
                 message_for_jump_file(key_pressed(Key::Named(key::Named::ArrowDown), modifiers)),
                 Some(Message::JumpFileSelectionDown)
             ));
+            assert!(matches!(
+                message_for_jump_file(key_pressed(Key::Named(key::Named::PageUp), modifiers)),
+                Some(Message::JumpFileSelectionPageUp)
+            ));
+            assert!(matches!(
+                message_for_jump_file(key_pressed(Key::Named(key::Named::PageDown), modifiers)),
+                Some(Message::JumpFileSelectionPageDown)
+            ));
         }
         // Everything else keeps `message_for`'s mapping: a plain J still opens
         // the panel, and Alt+Up still moves a browse row.
@@ -725,6 +751,14 @@ mod tests {
             ))
             .is_none()
         );
+        for modifiers in [Modifiers::CTRL, Modifiers::ALT, Modifiers::LOGO] {
+            for key in [key::Named::PageUp, key::Named::PageDown] {
+                assert!(
+                    message_for_jump_file(key_pressed(Key::Named(key), modifiers)).is_none(),
+                    "{key:?} with {modifiers:?}"
+                );
+            }
+        }
     }
 
     #[test]
