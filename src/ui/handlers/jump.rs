@@ -65,11 +65,9 @@ pub(in crate::ui) fn toggle_jump_time(player: &mut WinampPlayer) -> Task<Message
     if player.playback_duration.is_none() {
         return Task::none();
     }
+    player.close_transient_panels();
     player.jump_time_visible = true;
     player.jump_time_query.clear();
-    player.about_visible = false;
-    player.file_info_visible = false;
-    player.jump_file_visible = false;
     let focus = iced::widget::operation::focus(views::JUMP_TIME_INPUT_ID);
     if player.shaded {
         Task::batch([toggle_window_shade(player), focus])
@@ -115,11 +113,9 @@ pub(in crate::ui) fn toggle_jump_file(player: &mut WinampPlayer) -> Task<Message
     if song_list(player).is_none() {
         return Task::none();
     }
+    player.close_transient_panels();
     player.jump_file_visible = true;
     player.jump_file_query.clear();
-    player.about_visible = false;
-    player.file_info_visible = false;
-    player.jump_time_visible = false;
     let focus = iced::widget::operation::focus(views::JUMP_FILE_INPUT_ID);
     if player.shaded {
         Task::batch([toggle_window_shade(player), focus])

@@ -93,14 +93,13 @@ pub(in crate::ui) fn window_shade_measured(
 /// that task, so the window restores before the panel draws; closing it never
 /// touches the window. The flag is layout-only and not persisted.
 pub(in crate::ui) fn toggle_about(player: &mut WinampPlayer) -> Task<Message> {
-    let opening = !player.about_visible;
-    player.about_visible = opening;
-    if opening {
-        player.file_info_visible = false;
-        player.jump_time_visible = false;
-        player.jump_file_visible = false;
+    if player.about_visible {
+        player.about_visible = false;
+        return Task::none();
     }
-    if opening && player.shaded {
+    player.close_transient_panels();
+    player.about_visible = true;
+    if player.shaded {
         toggle_window_shade(player)
     } else {
         Task::none()
@@ -114,17 +113,16 @@ pub(in crate::ui) fn toggle_about(player: &mut WinampPlayer) -> Task<Message> {
 /// shaded first restores the window exactly as [`toggle_about`] does. The flag
 /// is layout-only and not persisted.
 pub(in crate::ui) fn toggle_file_info(player: &mut WinampPlayer) -> Task<Message> {
-    let opening = !player.file_info_visible;
-    if opening && player.current_known_track().is_none() {
+    if player.file_info_visible {
+        player.file_info_visible = false;
         return Task::none();
     }
-    player.file_info_visible = opening;
-    if opening {
-        player.about_visible = false;
-        player.jump_time_visible = false;
-        player.jump_file_visible = false;
+    if player.current_known_track().is_none() {
+        return Task::none();
     }
-    if opening && player.shaded {
+    player.close_transient_panels();
+    player.file_info_visible = true;
+    if player.shaded {
         toggle_window_shade(player)
     } else {
         Task::none()

@@ -319,6 +319,18 @@ impl WinampPlayer {
         }
     }
 
+    /// Close every transient panel — About, File info, Jump to time, and Jump
+    /// to File — so that at most one is open (the invariant the `*_visible`
+    /// fields document). A toggle handler that opens its panel calls this
+    /// first, then sets its own flag, so the full set of panels lives here
+    /// instead of being listed again in each opener.
+    pub(in crate::ui) fn close_transient_panels(&mut self) {
+        self.about_visible = false;
+        self.file_info_visible = false;
+        self.jump_time_visible = false;
+        self.jump_file_visible = false;
+    }
+
     /// Save the mixer and equalizer values when the current state differs from
     /// the last saved snapshot. `update` calls this once after every message,
     /// so a changed volume, balance, toggle, or equalizer value is written
