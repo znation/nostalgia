@@ -523,6 +523,57 @@ fn finished_query_reports_none_when_nothing_is_loaded() {
     assert_unloaded_query_reports_none("finished query", Command::Finished);
 }
 
+// A failed download leaves no player for a selection the UI already shows as
+// playing, so the finished query reports it ended instead of `None` (which
+// the UI reads as "not finished" forever). A Stop afterwards clears that.
+#[test]
+fn finished_query_reports_true_after_a_failed_download_until_stop() {
+    let (sender, receiver) = mpsc::channel();
+    let create_player = || -> RecordingPlayer {
+        panic!("a failed download must not create a player");
+    };
+    let fetch = |_url: &str| -> Result<(), AppleMusicError> {
+        Err(AppleMusicError::new("the preview download failed"))
+    };
+    let (failed_reply, failed_replies) = mpsc::channel();
+    let (stopped_reply, stopped_replies) = mpsc::channel();
+
+    sender.send(Command::Play("first".to_string())).unwrap();
+    sender.send(Command::Finished(failed_reply)).unwrap();
+    sender.send(Command::Stop).unwrap();
+    sender.send(Command::Finished(stopped_reply)).unwrap();
+    drop(sender);
+    serve_commands(receiver, create_player, fetch);
+
+    assert_eq!(failed_replies.recv().unwrap(), Some(true));
+    assert_eq!(stopped_replies.recv().unwrap(), None);
+}
+
+// Repeat would otherwise re-Play a failing song on every poll forever, so the
+// finished query stops reporting the failure after a bounded run of them.
+#[test]
+fn finished_query_stops_reporting_failures_after_a_bounded_run() {
+    let (sender, receiver) = mpsc::channel();
+    let create_player = || -> RecordingPlayer {
+        panic!("a failed download must not create a player");
+    };
+    let fetch = |_url: &str| -> Result<(), AppleMusicError> {
+        Err(AppleMusicError::new("the preview download failed"))
+    };
+    let (reply, replies) = mpsc::channel();
+    for _ in 0..8 {
+        sender.send(Command::Play("loop".to_string())).unwrap();
+        sender.send(Command::Finished(reply.clone())).unwrap();
+    }
+    drop(sender);
+    drop(reply);
+    serve_commands(receiver, create_player, fetch);
+
+    let answers: Vec<Option<bool>> = replies.iter().collect();
+    assert_eq!(answers.iter().filter(|a| **a == Some(true)).count(), 5);
+    assert_eq!(answers[5..], [None, None, None]);
+}
+
 // With no player installed, a spectrum query reports `None` instead of
 // inventing bars for a preview that is not loaded.
 #[test]

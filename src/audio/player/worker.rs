@@ -17,6 +17,10 @@ use super::super::preview::{PreviewCache, download_and_decode_cached, preview_ag
 use super::super::{EqSnapshot, PlaybackFormat, Spectrum};
 use super::rodio_player::RodioPlayer;
 
+/// How many `Play` downloads in a row may fail before a finished query stops
+/// reporting the missing player as ended.
+const MAX_CONSECUTIVE_FETCH_FAILURES: u32 = 5;
+
 /// A command sent from [`RodioOutput`](super::RodioOutput) to its worker thread.
 pub(in crate::audio) enum Command {
     /// Download, decode, and play the URL, replacing the current player.
@@ -214,7 +218,11 @@ fn with_player<P>(player: &Option<P>, act: impl FnOnce(&P)) {
 /// seam's `play` returned `Ok` when it queued this command, so the caller
 /// cannot observe the asynchronous failure and roll the state back; silencing
 /// the old player is what keeps the audio consistent with the committed
-/// state.
+/// state. The failure is still observable afterwards: until the next `Play`
+/// or `Stop`, a finished query answers `Some(true)` with no player installed,
+/// so the UI's end-of-preview poll moves on. After
+/// [`MAX_CONSECUTIVE_FETCH_FAILURES`] failures in a row it answers `None`
+/// again, so Repeat cannot keep re-downloading unreachable previews.
 ///
 /// A download runs on this thread, so any command the caller issues meanwhile
 /// waits in the channel. Once a download finishes, [`handle_play`] drains those
@@ -236,6 +244,10 @@ pub(in crate::audio) fn serve_commands<P, D>(
     // once it finishes. A later `Play` or `Stop` among them supersedes the
     // preview the download produced.
     let mut queued: VecDeque<Command> = VecDeque::new();
+    // Consecutive `Play` downloads that failed, each leaving no player for a
+    // selection the UI already shows as playing. Reset by a `Play` that does
+    // not fail or a `Stop`.
+    let mut failed_fetches: u32 = 0;
     loop {
         let command = match queued.pop_front() {
             Some(command) => command,
@@ -245,20 +257,24 @@ pub(in crate::audio) fn serve_commands<P, D>(
             },
         };
         match command {
-            Command::Play(url) => handle_play(
-                &url,
-                &receiver,
-                &mut queued,
-                &mut player,
-                settings,
-                &create_player,
-                &fetch,
-            ),
+            Command::Play(url) => {
+                let failed = handle_play(
+                    &url,
+                    &receiver,
+                    &mut queued,
+                    &mut player,
+                    settings,
+                    &create_player,
+                    &fetch,
+                );
+                failed_fetches = if failed { failed_fetches + 1 } else { 0 };
+            }
             Command::Pause => with_player(&player, WorkerPlayer::pause),
             Command::Resume => with_player(&player, WorkerPlayer::play),
             Command::Stop => {
                 with_player(&player, WorkerPlayer::stop);
                 player = None;
+                failed_fetches = 0;
             }
             Command::SetVolume(new_volume) => {
                 settings.volume = new_volume;
@@ -287,7 +303,18 @@ pub(in crate::audio) fn serve_commands<P, D>(
                 let _ = reply.send(player.as_ref().and_then(WorkerPlayer::spectrum));
             }
             Command::Finished(reply) => {
-                let _ = reply.send(player.as_ref().map(WorkerPlayer::is_finished));
+                // A selection whose download failed has no player, but the UI
+                // committed it as playing; report it as ended so the UI moves
+                // on instead of showing a track that will never advance. Past
+                // MAX_CONSECUTIVE_FETCH_FAILURES it stops, so Repeat cannot
+                // cycle a list of unreachable previews forever.
+                let finished = match player.as_ref() {
+                    Some(player) => Some(player.is_finished()),
+                    None => (1..=MAX_CONSECUTIVE_FETCH_FAILURES)
+                        .contains(&failed_fetches)
+                        .then_some(true),
+                };
+                let _ = reply.send(finished);
             }
             Command::SetEqualizer(new_equalizer) => {
                 settings.equalizer = new_equalizer;
@@ -306,7 +333,8 @@ pub(in crate::audio) fn serve_commands<P, D>(
 /// has already committed a newer state, so the just-downloaded preview is
 /// dropped rather than played under the newer track's name. A failed fetch
 /// stops and drops the previous player (as `Command::Stop` does), so the old
-/// preview is not left audible under the new track's name.
+/// preview is not left audible under the new track's name. Returns whether the
+/// fetch failed.
 fn handle_play<P, D>(
     url: &str,
     receiver: &Receiver<Command>,
@@ -315,7 +343,8 @@ fn handle_play<P, D>(
     settings: PlaybackSettings,
     create_player: &impl Fn() -> P,
     fetch: &impl Fn(&str) -> Result<D, AppleMusicError>,
-) where
+) -> bool
+where
     P: WorkerPlayer<Preview = D>,
 {
     let preview = match fetch(url) {
@@ -329,7 +358,7 @@ fn handle_play<P, D>(
             }
             *player = None;
             eprintln!("audio playback failed for {url:?}: {error}");
-            return;
+            return true;
         }
     };
 
@@ -345,7 +374,7 @@ fn handle_play<P, D>(
         .iter()
         .any(|command| matches!(command, Command::Play(_) | Command::Stop))
     {
-        return;
+        return false;
     }
 
     // A fresh player per track replaces the previous one, so a new selection
@@ -357,4 +386,5 @@ fn handle_play<P, D>(
     next.set_equalizer(settings.equalizer);
     next.append(preview);
     *player = Some(next);
+    false
 }
