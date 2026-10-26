@@ -580,6 +580,66 @@ mod tests {
     }
 
     #[test]
+    fn sort_walks_disjoint_cycles_and_keeps_cached_text_aligned() {
+        // The sort key sends each row to a position with this source order:
+        // [0, 3, 1, 2, 5, 4, 6] — fixed points at 0 and 6, a 3-cycle over
+        // 1..=3, and a 2-cycle over 4 and 5. A reorder that swapped each slot
+        // with `order[slot]` once instead of walking the cycles would leave
+        // this list wrong, even though smaller single-cycle reorders pass.
+        let rank = |item: &str| match item {
+            "a" => 0,
+            "c" => 2,
+            "d" => 3,
+            "b" => 1,
+            "f" => 5,
+            "e" => 4,
+            "g" => 6,
+            other => panic!("unexpected item {other}"),
+        };
+        let mut list = BrowseList::new(false);
+        list.store_with_row_text(
+            vec!["a", "c", "d", "b", "f", "e", "g"]
+                .into_iter()
+                .map(str::to_string)
+                .collect(),
+            |item| format!("title-{item}"),
+            |item| format!("label-{item}"),
+        );
+
+        list.sort_rows_by(|item| rank(item).to_string());
+
+        assert_eq!(list.items, ["a", "b", "c", "d", "e", "f", "g"]);
+        assert_eq!(
+            list.titles,
+            [
+                "title-a", "title-b", "title-c", "title-d", "title-e", "title-f", "title-g"
+            ]
+        );
+        assert_eq!(
+            list.labels,
+            [
+                "label-a", "label-b", "label-c", "label-d", "label-e", "label-f", "label-g"
+            ]
+        );
+
+        list.restore_library_order();
+
+        assert_eq!(list.items, ["a", "c", "d", "b", "f", "e", "g"]);
+        assert_eq!(
+            list.titles,
+            [
+                "title-a", "title-c", "title-d", "title-b", "title-f", "title-e", "title-g"
+            ]
+        );
+        assert_eq!(
+            list.labels,
+            [
+                "label-a", "label-c", "label-d", "label-b", "label-f", "label-e", "label-g"
+            ]
+        );
+    }
+
+    #[test]
     fn move_selected_is_a_noop_without_a_selection_at_an_edge_or_while_loading() {
         let mut list = loaded(&["a", "b", "c"]);
         let epoch = list.epoch;

@@ -320,6 +320,7 @@ draw beside Top.
 - `move_selected_swaps_with_the_neighbour_and_keeps_the_selection`
 - `move_selected_swaps_cached_text_and_still_restores_library_order`
 - `reordering_moves_rows_without_cloning_them`
+- `sort_walks_disjoint_cycles_and_keeps_cached_text_aligned`
 - `move_selected_is_a_noop_without_a_selection_at_an_edge_or_while_loading`
 - `message_for_maps_alt_arrows_to_move_the_selected_row`
 - the tests in `src/ui/tests/move_row_tests.rs`
