@@ -40,7 +40,8 @@ time (`-02:37`) and back; the choice stays until clicked again. The compact read
 footer and the shade strip are click targets too while playing or paused, switching the same mode;
 a stopped readout ignores the click. The bar sits above Previous,
 Play/Pause, Stop, and Next glyph controls with word tooltips, then the Repeat and Shuffle
-toggles, a volume slider whose groove runs from green when silent through orange at half volume to red at full volume, a balance slider whose groove is green at center and reddens toward either side,
+toggles, a volume slider whose groove runs from green when silent through orange at half volume to
+red at full volume, a balance slider whose groove is green at center and reddens toward either side,
 an equalizer panel (an EQ on/off button, a preset pick list, a response curve above ten band
 sliders, with a vertical preamp slider and a `+12 dB` / `0 dB` / `-12 dB` scale to their left),
 and a browse list whose song rows read `artist - title` (or the title alone when the source
@@ -50,13 +51,15 @@ total running time at the right (`10:30`, or `--:--` when the source supplied no
 artist rows show their album count at the right (`2 albums`, `1 album`, and no count for an
 artist with none), with each song list showing its song count and total playing time beneath
 the rows (while a song row is selected, the footer shows that song's length before the total,
-`2 songs - 3:30/4:15`, like Winamp's playlist editor) and artist, album, and playlist lists showing their item count beneath theirs. An `EQ`
-button beside the balance slider shows and hides the equalizer panel, which is open on a first launch and then reopens as last left;
+`2 songs - 3:30/4:15`, like Winamp's playlist editor) and artist, album, and playlist lists
+showing their item count beneath theirs. An `EQ` button beside the balance slider shows and
+hides the equalizer panel, which is open on a first launch and then reopens as last left;
 hiding it gives its height to the browse list without changing EQ processing. A `PL` button
 directly beside `EQ` shows and hides the whole library section — its `NOSTALGIA LIBRARY` band,
 browse controls, search box, list, and footer — while the title bar, Now Playing bar, seek bar,
-transport row, and equalizer stay drawn; the library is open on a first launch and then reopens as last left, the toggle changes no
-playback, equalizer, browse, or search state, and it does not resize the window. A
+transport row, and equalizer stay drawn; the library is open on a first
+launch and then reopens as last left, the toggle changes no playback,
+equalizer, browse, or search state, and it does not resize the window. A
 compact transport strip sits beneath the browse list with Previous, Play/Pause, Stop, Next,
 an elapsed-over-total time readout, and a volume slider — the window-shade strip's controls
 without its seek slider. The readout shows the elapsed (or remaining) time over the track's
@@ -90,13 +93,22 @@ and opening a list starts it at the top. A `Sort` button beside `Top` reorders t
 alphabetically by its rows' rendered text, ignoring case; the reorder is one-shot, so reopening
 the list restores the library's order; Ctrl+Shift+1 does the same sort from the keyboard, like
 Winamp's playlist editor. Ctrl+R reverses the showing list's order the same
-one-shot way, like Winamp's playlist editor, and Ctrl+Shift+R shuffles it into a random order the same
-one-shot way. Alt+Up and Alt+Down move the selected row of the showing list one place up or down,
-the same one-shot way, keeping the row selected and scrolling the list only as far as needed to keep it in view. Alt+3 opens a transient File info panel naming the current track's title, artist, album, year, and length, like
-Winamp (the album and year lines are left out when the source supplies none), plus a `Format:` line
+one-shot way, like Winamp's playlist editor, and Ctrl+Shift+R shuffles it into a random order the
+same one-shot way. Alt+Up and Alt+Down move the selected row of the showing list one place up or
+down, the same one-shot way, keeping the row selected and scrolling the list only as far as needed
+to keep it in view. Alt+3 opens a transient File info panel naming the current track's title,
+artist, album, year, and length, like Winamp (the album and year lines are left out when the source
+supplies none), plus a `Format:` line
 (`256 KBPS  44 KHZ STEREO`) while a loaded preview reports its format and `44 KHZ MONO` when it
 reports no bitrate; its `Close` button, a click on the backdrop, or Alt+3 again closes it, and it
-opens only while a track is current. Ctrl+J opens a transient Jump to time panel: type seconds (`95`) or `M:SS` (`1:35`) and press Enter or `Jump` to seek the loaded preview there (clamped to its length) and close the panel; `Close`, a click on the backdrop, or Ctrl+J again closes it, and it opens only while a preview with a known length is loaded. Plain `J` opens a transient Jump to File panel over the showing song list (a browsed album or playlist's songs, search results, or All Songs): typing filters its cached row titles case-insensitively, and Enter or `Jump` plays the first match or a row click plays that row, closing the panel; `Close` or a click on the backdrop closes it, and it opens only on those song lists. A `Reload` button beside `Sort` refetches the library's
+opens only while a track is current. Ctrl+J opens a transient Jump to time panel: type seconds
+(`95`) or `M:SS` (`1:35`) and press Enter or `Jump` to seek the loaded preview there (clamped to its
+length) and close the panel; `Close`, a click on the backdrop, or Ctrl+J again closes it, and it
+opens only while a preview with a known length is loaded. Plain `J` opens a transient Jump to File
+panel over the showing song list (a browsed album or playlist's songs, search results, or All
+Songs): typing filters its cached row titles case-insensitively, and Enter or `Jump` plays the first
+match or a row click plays that row, closing the panel; `Close` or a click on the backdrop closes
+it, and it opens only on those song lists. A `Reload` button beside `Sort` refetches the library's
 artists list and returns to the Artists list, clearing any active search while leaving the typed
 query in the search box. The title bar's `M` button (or `Ctrl+F1`) opens a transient About panel
 naming the app,
@@ -123,8 +135,10 @@ and Alt+G the equalizer panel like `EQ`, as Winamp's Alt+E and Alt+G toggle its 
 equalizer), and the up/down arrows nudge the volume while the left/right arrows
 seek five seconds back or forward. With NumLock on, keypad 4, 5, and 6 play the previous,
 current, and next song, 7 and 9 seek five seconds back or forward, and 8 and 2 nudge the volume,
-and 1 and 3 jump ten songs back or forward through the same list, stopping at its ends, like Winamp. Ctrl+Z plays the first song of the list Z and B step through
-and Ctrl+B plays its last song. Ctrl+W rolls the window up into shade mode and back, like the title bar's shade button. Backspace steps the browse list back one level exactly like the
+and 1 and 3 jump ten songs back or forward through the same list, stopping at its ends, like Winamp.
+Ctrl+Z plays the first song of the list Z and B step through
+and Ctrl+B plays its last song. Ctrl+W rolls the window up into shade mode and back, like the title
+bar's shade button. Backspace steps the browse list back one level exactly like the
 `Back` button, and does nothing at the Artists list; Home snaps the browse list to its first row
 and End to its last, like `Top`, and Page Up and Page Down scroll it one page at a time in the
 matching direction; while the `Search library` box is focused it keeps Backspace,
@@ -140,17 +154,19 @@ that; with Shuffle on, such an earlier Previous retraces the
 tracks actually played before the current one instead of stepping one row backward in the list.
 While a song list is showing, Next, Previous (including a shuffled retrace), the preview-end
 advance, Ctrl+Z/Ctrl+B edge jumps, and keypad 1/3 ten-song jumps scroll that list only as far as
-needed to keep the landed row in view, like Winamp's playlist editor. The volume slider and the up/down arrows
-set the audio backend's playback level, and rolling the mouse wheel over the player panels nudges
+needed to keep the landed row in view, like Winamp's playlist editor. The
+volume slider and the up/down arrows set the audio backend's playback
+level, and rolling the mouse wheel over the player panels nudges
 the volume by one slider step in the roll's vertical direction, except that a roll over the drawn
 seek slider, in the Now Playing bar or the shade strip, seeks five seconds forward or back instead;
 over the browse list the wheel keeps scrolling the list instead. The balance slider sets its stereo
-balance; a drag moving back toward the middle snaps to exact center within 10% of it. While a volume or balance slider is dragged, the LCD shows its level (`Volume: 72%`,
-`Balance: 31% Left`) in place of the title until release; an equalizer band or preamp drag does the same
-(`EQ: 60HZ +3 DB`, `Preamp: -12 DB`), and dragging the seek slider shows the target
+balance; a drag moving back toward the middle snaps to exact center within 10% of it. While a volume
+or balance slider is dragged, the LCD shows its level (`Volume: 72%`,
+`Balance: 31% Left`) in place of the title until release; an equalizer band or preamp drag does
+the same (`EQ: 60HZ +3 DB`, `Preamp: -12 DB`), and dragging the seek slider shows the target
 (`Seek to: 01:23/03:30 (39%)`) the same way. The equalizer panel's on/off button,
-sliders, and presets change the playing preview's curve live; clicking `+12 DB`, `0 DB`, or `-12 DB` sets all ten bands to that gain and
-leaves the preamp alone; the volume and balance are
+sliders, and presets change the playing preview's curve live; clicking `+12 DB`, `0 DB`, or
+`-12 DB` sets all ten bands to that gain and leaves the preamp alone; the volume and balance are
 remembered for the next track. Setting
 `APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a browser-based MusicKit sign-in: browse and search
 queries then read your Apple Music library through the REST API, and fall back to the built-in
@@ -163,9 +179,13 @@ showing list: to the next song, to the first song with Repeat on at the end, or,
 a shuffled song when another exists. With Repeat off on the last song it stops instead and keeps
 that song queued for Play. The volume, balance, Repeat and Shuffle flags, the equalizer's on/off
 state, curve, and preset, the elapsed/remaining readout choice, the visualizer's shown/hidden
-choice, the equalizer and library panels' shown/hidden choices, and the always-on-top choice are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or
-`$HOME/.config/nostalgia/settings.ini`) and restored at the next launch; `NOSTALGIA_SETTINGS_PATH`
-overrides the path. A missing or malformed entry falls back to its default (a byte that is not UTF-8 spoils only its own
-line), and a settings file that exists but cannot be read falls back to defaults with one line on stderr naming the file. Each save replaces the file atomically; a symlinked settings file stays a link, with the write going to the file it points at and that file's mode kept. The always-on-top choice
+choice, the equalizer and library panels' shown/hidden choices, and the always-on-top choice are
+saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or `$HOME/.config/nostalgia/settings.ini`)
+and restored at the next launch; `NOSTALGIA_SETTINGS_PATH`
+overrides the path. A missing or malformed entry falls back to its default (a byte that
+is not UTF-8 spoils only its own line), and a settings file that exists but cannot be
+read falls back to defaults with one line on stderr naming the file. Each save replaces
+the file atomically; a symlinked settings file stays a link, with the write going to
+the file it points at and that file's mode kept. The always-on-top choice
 (the LCD strip's `A` or the `A` key) is remembered for the next launch, and a saved-on launch starts
 with the window pinned once boot resolves its window id. There are no CLI flags yet.
