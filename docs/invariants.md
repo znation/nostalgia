@@ -290,9 +290,11 @@ the showing list's selected row one place up or down. The move is one-shot like 
 titles and labels follow the rows, the epoch is bumped, and it composes with Sort, reverse, and
 shuffle so Back restores library order. Unlike them the moved row stays selected at its new index.
 It is a no-op with no selection, at the edge the row would move past, or on a loading or failed
-list.
+list. A move that changes the selection scrolls the list only far enough to show the moved row
+fully (and not at all when it is already visible); a no-op move schedules no task.
 
-**Enforced by.** `BrowseList::move_selected` in `src/ui/browse.rs`, `browse::move_selected_row`
+**Enforced by.** `BrowseList::move_selected` in `src/ui/browse.rs`, `scroll::reveal_row_offset` and
+`scroll::reveal_browse_row` in `src/ui/handlers/browse/scroll.rs`, `browse::move_selected_row`
 in `src/ui/handlers/browse.rs` (routed from `Message::MoveSelectedRowUp` and
 `Message::MoveSelectedRowDown`), and `shortcuts::move_row_shortcut` in `src/ui/shortcuts.rs`. `BrowseList::reverse_rows` and the shared `BrowseList::apply_reorder` in
 `src/ui/browse.rs`, `browse::reverse_browse` in `src/ui/handlers/browse.rs` (routed from

@@ -1,5 +1,6 @@
 //! The browse list's scroll operations: the Top/Home and End/End-key snaps,
-//! the Page Up and Page Down steps, and the row and playing-row scrolls.
+//! the Page Up and Page Down steps, the row and playing-row scrolls, and the
+//! minimal reveal of a moved row.
 //!
 //! Each handler is a pure `iced` scroll task against the list's stable widget
 //! id. They touch only the list's scroll offset — never its rows, selection,
@@ -88,5 +89,92 @@ pub(in crate::ui) fn scroll_browse_to_playing_row(
     match player.current_view {
         CurrentView::Songs | CurrentView::AllSongs => scroll_browse_to_row(index),
         _ => Task::none(),
+    }
+}
+
+/// The scroll offset that shows row `index` fully in a viewport of
+/// `viewport_height` currently scrolled to `scroll_top`, or `None` when the
+/// row is already fully visible. It uses the row geometry of
+/// [`scroll_browse_to_row`]. The top edge is checked first, so a viewport
+/// shorter than one row shows the row's top.
+pub(in crate::ui) fn reveal_row_offset(
+    index: usize,
+    scroll_top: f32,
+    viewport_height: f32,
+) -> Option<f32> {
+    let row_top = views::BROWSE_LIST_PADDING + index as f32 * views::BROWSE_ROW_HEIGHT;
+    let row_bottom = row_top + views::BROWSE_ROW_HEIGHT;
+    if row_top < scroll_top {
+        Some(row_top)
+    } else if row_bottom > scroll_top + viewport_height {
+        Some(row_bottom - viewport_height)
+    } else {
+        None
+    }
+}
+
+/// Scrolls the browse list only as far as needed to show row `index` fully,
+/// and not at all when it is already visible. It reads the list's current
+/// offset and viewport from the widget operation, touches only the scroll
+/// offset, and has no target in shade mode, where no browse list is built.
+pub(in crate::ui) fn reveal_browse_row(index: usize) -> Task<Message> {
+    use iced::advanced::widget::operation::Scrollable;
+    use iced::advanced::widget::{Id, Operation};
+
+    struct Reveal {
+        index: usize,
+    }
+
+    impl<T> Operation<T> for Reveal {
+        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation<T>)) {
+            operate(self);
+        }
+
+        fn scrollable(
+            &mut self,
+            id: Option<&Id>,
+            bounds: iced::Rectangle,
+            _content_bounds: iced::Rectangle,
+            translation: iced::Vector,
+            state: &mut dyn Scrollable,
+        ) {
+            if id != Some(&Id::new(views::BROWSE_LIST_ID)) {
+                return;
+            }
+            if let Some(y) = reveal_row_offset(self.index, translation.y, bounds.height) {
+                state.scroll_to(iced::widget::scrollable::AbsoluteOffset {
+                    x: None,
+                    y: Some(y),
+                });
+            }
+        }
+    }
+
+    iced::advanced::widget::operate(Reveal { index })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const ROW: f32 = views::BROWSE_ROW_HEIGHT;
+    const PAD: f32 = views::BROWSE_LIST_PADDING;
+
+    #[test]
+    fn a_row_above_the_viewport_reveals_at_its_top() {
+        assert_eq!(reveal_row_offset(2, 500.0, 100.0), Some(PAD + 2.0 * ROW));
+    }
+
+    #[test]
+    fn a_row_below_the_viewport_reveals_at_its_bottom() {
+        let bottom = PAD + 10.0 * ROW + ROW;
+        assert_eq!(reveal_row_offset(10, 0.0, 100.0), Some(bottom - 100.0));
+    }
+
+    #[test]
+    fn a_visible_row_needs_no_scroll() {
+        assert_eq!(reveal_row_offset(1, 0.0, 1000.0), None);
+        let viewport = PAD + 3.0 * ROW + ROW;
+        assert_eq!(reveal_row_offset(3, 0.0, viewport), None);
     }
 }

@@ -11,6 +11,7 @@
 
 use iced::Task;
 
+use crate::ui::browse::BrowseList;
 use crate::ui::loading::fetch_level;
 use crate::ui::{CurrentView, Message, SongsOrigin, WinampPlayer};
 
@@ -384,16 +385,28 @@ pub(in crate::ui) fn randomize_browse(player: &mut WinampPlayer) -> Task<Message
 /// place up or down (`down`). Like [`reverse_browse`] the reorder is one-shot
 /// and local to the visible list, and returning to a moved parent restores its
 /// library order; the row stays selected so repeated presses keep moving it.
+/// A move that changes the selection scrolls the list only as far as needed
+/// to show the moved row; a no-op move schedules no task.
 pub(in crate::ui) fn move_selected_row(player: &mut WinampPlayer, down: bool) -> Task<Message> {
-    match player.current_view {
-        CurrentView::Artists => player.artists.move_selected(down),
-        CurrentView::Albums => player.albums.move_selected(down),
-        CurrentView::Songs => player.songs.move_selected(down),
-        CurrentView::AllSongs => player.all_songs.move_selected(down),
-        CurrentView::AllAlbums => player.all_albums.move_selected(down),
-        CurrentView::Playlists => player.playlists.move_selected(down),
-    }
-    Task::none()
+    let moved_to = match player.current_view {
+        CurrentView::Artists => move_in(&mut player.artists, down),
+        CurrentView::Albums => move_in(&mut player.albums, down),
+        CurrentView::Songs => move_in(&mut player.songs, down),
+        CurrentView::AllSongs => move_in(&mut player.all_songs, down),
+        CurrentView::AllAlbums => move_in(&mut player.all_albums, down),
+        CurrentView::Playlists => move_in(&mut player.playlists, down),
+    };
+    moved_to.map_or_else(Task::none, scroll::reveal_browse_row)
+}
+
+/// Moves `list`'s selected row and returns its new index, or `None` when the
+/// selection did not change (nothing selected, an edge, or a loading or
+/// failed list).
+fn move_in<T: Clone>(list: &mut BrowseList<T>, down: bool) -> Option<usize> {
+    let before = list.selected();
+    list.move_selected(down);
+    let after = list.selected();
+    if after == before { None } else { after }
 }
 
 /// The Reload button was pressed: refetch the top-level artists list and show

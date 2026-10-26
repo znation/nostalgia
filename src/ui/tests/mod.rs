@@ -376,6 +376,8 @@ impl BrowseScrollEffects {
 fn browse_scroll_effects_by(
     operation: &mut dyn iced::advanced::widget::Operation<()>,
     id: &iced::advanced::widget::Id,
+    bounds: iced::Rectangle,
+    translation: iced::Vector,
 ) -> BrowseScrollEffects {
     use iced::advanced::widget::operation::scrollable::{
         AbsoluteOffset, RelativeOffset, Scrollable as ScrollableOperation,
@@ -408,9 +410,9 @@ fn browse_scroll_effects_by(
     let mut capture = Capture::default();
     operation.scrollable(
         Some(id),
+        bounds,
         iced::Rectangle::default(),
-        iced::Rectangle::default(),
-        iced::Vector::default(),
+        translation,
         &mut capture,
     );
     capture.effects
@@ -424,6 +426,36 @@ fn browse_scroll_effects_by(
 /// emit non-widget actions first, so they are skipped rather than treated as
 /// the scroll.
 async fn browse_scroll_effects(task: Task<Message>, what: &str) -> BrowseScrollEffects {
+    browse_scroll_effects_in(
+        task,
+        what,
+        iced::Rectangle::default(),
+        iced::Vector::default(),
+    )
+    .await
+}
+
+/// Like [`browse_scroll_effects`], but the list reports a viewport of
+/// `viewport_height` scrolled to `scroll_top`, for operations that read them.
+async fn browse_scroll_effects_at(
+    task: Task<Message>,
+    what: &str,
+    viewport_height: f32,
+    scroll_top: f32,
+) -> BrowseScrollEffects {
+    let bounds = iced::Rectangle {
+        height: viewport_height,
+        ..iced::Rectangle::default()
+    };
+    browse_scroll_effects_in(task, what, bounds, iced::Vector::new(0.0, scroll_top)).await
+}
+
+async fn browse_scroll_effects_in(
+    task: Task<Message>,
+    what: &str,
+    bounds: iced::Rectangle,
+    translation: iced::Vector,
+) -> BrowseScrollEffects {
     use futures::StreamExt;
     use iced::advanced::widget::Id;
 
@@ -436,8 +468,18 @@ async fn browse_scroll_effects(task: Task<Message>, what: &str) -> BrowseScrollE
         let iced_runtime::Action::Widget(mut operation) = action else {
             continue;
         };
-        let matching = browse_scroll_effects_by(&mut operation, &Id::new(BROWSE_LIST_ID));
-        let unrelated = browse_scroll_effects_by(&mut operation, &Id::new("not-the-browse-list"));
+        let matching = browse_scroll_effects_by(
+            &mut operation,
+            &Id::new(BROWSE_LIST_ID),
+            bounds,
+            translation,
+        );
+        let unrelated = browse_scroll_effects_by(
+            &mut operation,
+            &Id::new("not-the-browse-list"),
+            bounds,
+            translation,
+        );
         assert!(
             !unrelated.any(),
             "{what} must scroll only the browse list id"
