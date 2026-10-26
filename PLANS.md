@@ -6,7 +6,7 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 > **Steward drift note (2026-10-06; condensed 2026-10-23 by the steward role).** This note
 > tracked the initial prompt's two commitments — a "very close if not pixel-perfect" classic
 > Winamp UI and Apple Music as the library — while the build caught up. Both are now reflected
-> in the shipped app and the README's Usage section: the Winamp chrome (base-skin palette,
+> in the shipped app and the usage reference: the Winamp chrome (base-skin palette,
 > bevel layer, custom title bar, title bands, Now Playing LCD, browse selection and row
 > styling, compact and mini transport strips) and the Apple Music library (REST browse and
 > search behind the `AppleMusicService` seam with the sample library as fallback, and preview
@@ -14,8 +14,9 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 > here; `PLANS-DONE.md` holds the individual entries, and no current brief-vs-build drift is
 > known. Standing lesson: the chrome arrived piecemeal, so later changes should reuse the
 > existing vocabulary — `bevel::lcd_well`, `bevel::raised_panel`, and the shared style
-> helpers — rather than inventing new chrome. Record any new drift here rather than appending
-> another note.
+> helpers — rather than inventing new chrome. The README's detailed Usage reference moved to
+> `docs/usage.md` on 2026-10-26, so plans that change usage prose edit that file, not the README.
+> Record any new drift here rather than appending another note.
 
 ## Planned
 
@@ -60,11 +61,11 @@ state, handlers, views, settings, or playback behavior.
   (Control with optional Shift, no Alt or Logo) to `Message::ToggleAbout`, and add
   `message_for_maps_ctrl_f1_to_about` to its `Pinned by` list. Leave every guarantee otherwise
   unchanged.
-- `README.md` (Usage, outside the brief markers): in the classic-keys paragraph, read
+- `docs/usage.md` (the keyboard sections): in the classic-keys paragraph, read
   `A (or Ctrl+A) toggles always-on-top and T (or Ctrl+T) switches …`, and in the About sentence,
   read ``The title bar's `M` button (or `Ctrl+F1`) opens …``. Leave the rest of the prose alone.
 
-**Files touched.** `src/ui/shortcuts.rs`, `docs/invariants.md`, `README.md`.
+**Files touched.** `src/ui/shortcuts.rs`, `docs/invariants.md`, `docs/usage.md`.
 
 **Acceptance criteria.**
 
@@ -76,7 +77,7 @@ state, handlers, views, settings, or playback behavior.
 - `Ctrl+Alt` and `Ctrl+Logo` with `a` or `t` stay unbound, plain `F1`, `Alt+F1`, and `Logo+F1` stay
   unbound, and existing plain letters, Ctrl+R/Ctrl+Shift+R, Ctrl+W, Ctrl+J, Ctrl+Z, Ctrl+B, and
   Ctrl+F keep their current mappings.
-- README and `docs/invariants.md` name the three chords and the new tests, and `make check`
-  passes.
+- `docs/usage.md` and `docs/invariants.md` name the three chords and the new tests, and
+  `make check` passes.
 
 ## Done
