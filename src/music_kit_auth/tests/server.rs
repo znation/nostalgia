@@ -341,3 +341,49 @@ fn an_expired_connection_is_dropped_even_when_its_request_has_arrived() {
         "the expired connection must be dropped from the pending list"
     );
 }
+
+// A transient `accept` failure does not end the sign-in: a signal can
+// interrupt the call, and a client that connects and resets before it is
+// accepted makes `accept` report `ConnectionAborted` on some platforms and
+// `ConnectionReset` on Windows. Any used to be returned as a fatal error, so
+// one local client could abort a sign-in the user was still completing. For
+// each kind, the injected accept call fails once and then reports an empty
+// queue, proving the failure is retried rather than returned.
+#[test]
+fn a_transient_accept_failure_is_retried_instead_of_ending_the_flow() {
+    for kind in [
+        io::ErrorKind::Interrupted,
+        io::ErrorKind::ConnectionAborted,
+        io::ErrorKind::ConnectionReset,
+    ] {
+        let mut pending = Vec::new();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let mut calls = 0;
+        let result = accept_pending_with(
+            || {
+                calls += 1;
+                if calls == 1 {
+                    Err(io::Error::from(kind))
+                } else {
+                    Err(io::Error::from(io::ErrorKind::WouldBlock))
+                }
+            },
+            &mut pending,
+            deadline,
+            Duration::from_secs(5),
+        );
+
+        assert!(
+            result.is_ok(),
+            "an {kind:?} accept failure must not end the flow, got: {result:?}"
+        );
+        assert_eq!(
+            calls, 2,
+            "the accept call must be retried after an {kind:?} failure"
+        );
+        assert!(
+            pending.is_empty(),
+            "a failed accept must not add a connection to the pending list"
+        );
+    }
+}

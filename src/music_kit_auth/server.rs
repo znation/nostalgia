@@ -113,8 +113,25 @@ pub(super) fn serve_pending(
 /// spent, so a flood cannot displace a connection the server has already
 /// accepted. Each accepted connection is bounded by the per-connection budget
 /// from the moment it is accepted, with the flow's deadline as the outer bound.
+///
+/// A transient `accept` failure — a signal interrupting the call, or a peer
+/// that reset after being queued but before it was accepted — is retried
+/// within the same pass, up to `MAX_ACCEPTS_PER_PASS`, instead of ending the
+/// flow, so one local client cannot abort a sign-in the user is still
+/// completing. A failure of the listener itself is still returned.
 pub(super) fn accept_pending(
     listener: &TcpListener,
+    pending: &mut Vec<PendingConnection>,
+    deadline: Instant,
+    connection_budget: Duration,
+) -> io::Result<()> {
+    accept_pending_with(|| listener.accept(), pending, deadline, connection_budget)
+}
+
+/// [`accept_pending`] with the `accept` call injected, so a test can drive
+/// transient failures without relying on the OS to produce one.
+pub(super) fn accept_pending_with(
+    mut accept: impl FnMut() -> io::Result<(TcpStream, std::net::SocketAddr)>,
     pending: &mut Vec<PendingConnection>,
     deadline: Instant,
     connection_budget: Duration,
@@ -126,9 +143,13 @@ pub(super) fn accept_pending(
         if pending.len() >= MAX_PENDING_CONNECTIONS {
             return Ok(());
         }
-        let (stream, _address) = match listener.accept() {
+        let (stream, _address) = match accept() {
             Ok(accepted) => accepted,
             Err(ref error) if error.kind() == io::ErrorKind::WouldBlock => return Ok(()),
+            // An interruption or a reset of a queued connection says nothing
+            // about the listener, so retry it (bounded by
+            // `MAX_ACCEPTS_PER_PASS`) instead of failing the sign-in.
+            Err(ref error) if accept_error_is_transient(error) => continue,
             Err(error) => return Err(error),
         };
         let reader = match RequestReader::new(stream) {
@@ -144,6 +165,24 @@ pub(super) fn accept_pending(
         });
     }
     Ok(())
+}
+
+/// Whether an `accept` failure is a transient interruption the loop will
+/// retry, rather than a failure of the listener.
+///
+/// `Interrupted` means a signal arrived before a connection could be accepted,
+/// while `ConnectionAborted` and `ConnectionReset` both mean a peer queued for
+/// acceptance reset its connection first (the platform chooses which kind to
+/// report). None says anything about the listener, so treating any as fatal
+/// would let one local client (or one signal) end a sign-in the user is still
+/// completing.
+fn accept_error_is_transient(error: &io::Error) -> bool {
+    matches!(
+        error.kind(),
+        io::ErrorKind::Interrupted
+            | io::ErrorKind::ConnectionAborted
+            | io::ErrorKind::ConnectionReset
+    )
 }
 
 /// What serving the connections decided for the overall flow.

@@ -1612,12 +1612,20 @@ browser's `POST /token` callback behind it:
   is swept by the next sign-in once it is older than `BOOTSTRAP_STALE_AFTER` (twice `AUTH_TIMEOUT`).
   A fresher bootstrap directory (which may belong to another running instance), an entry with a
   different name, and a non-directory entry are left alone; a symlink is not followed.
+- A transient `accept` failure — `Interrupted` (a signal arrived before a connection could be
+  accepted), `ConnectionAborted`, or `ConnectionReset` (a queued peer reset its connection; the
+  platform chooses which kind to report) — does not end the flow: the accept loop retries it within
+  the pass, up to `MAX_ACCEPTS_PER_PASS`, instead of returning it. Only a failure of the listener
+  itself is returned.
 
 **Enforced by.** `authorize_with_bounds` in `src/music_kit_auth.rs` keeps the accepted connections
 in a `Vec` of `PendingConnection`, which is defined in `src/music_kit_auth/server.rs`. The loop's
 helpers live in `src/music_kit_auth/server.rs`: every pass calls `serve_pending`, which polls each
 pending connection through `http::RequestReader::poll` and serves the ones whose request has
-arrived, and then `accept_pending`, which takes on the connections that are waiting.
+arrived, and then `accept_pending`, which takes on the connections that are waiting. `accept_pending`
+delegates the loop to `accept_pending_with` so a test can inject a transient failure; its
+`accept_error_is_transient` check retries `Interrupted`, `ConnectionAborted`, and `ConnectionReset`
+and returns every other error.
 `http::RequestReader` owns a non-blocking socket and parses the request from the bytes received so
 far, so polling a silent peer reports "nothing yet" instead of waiting for it; `serve_pending` drops
 a connection whose budget is spent. `BootstrapPage::write` in `src/music_kit_auth/bootstrap.rs`
@@ -1633,6 +1641,7 @@ reports a removal failure without failing the new sign-in.
 - `the_pending_list_is_capped_without_displacing_an_accepted_connection`
 - `one_pass_takes_on_a_bounded_number_of_connections`
 - `an_expired_connection_is_dropped_even_when_its_request_has_arrived`
+- `a_transient_accept_failure_is_retried_instead_of_ending_the_flow`
   (all in `src/music_kit_auth/tests/server.rs`)
 - `the_reader_reports_a_partial_request_as_incomplete`
   (in `src/music_kit_auth/tests/http_request.rs`)
