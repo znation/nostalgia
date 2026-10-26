@@ -112,3 +112,15 @@ fn toggle_while_shaded_restores_the_window_first() {
     assert!(!player.shaded);
     assert!(player.jump_time_visible);
 }
+
+#[test]
+fn stop_closes_the_panel_whose_preview_length_it_clears() {
+    let mut player = player_with_duration();
+    let _ = update(&mut player, Message::ToggleJumpTime);
+    assert!(player.jump_time_visible);
+
+    let _ = update(&mut player, Message::Stop);
+
+    assert!(player.playback_duration.is_none());
+    assert!(!player.jump_time_visible);
+}

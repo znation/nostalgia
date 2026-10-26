@@ -416,6 +416,9 @@ fn reset_position_readout(player: &mut WinampPlayer) {
     player.playback_position = None;
     player.playback_format = None;
     player.playback_duration = None;
+    // The Jump to time panel needs a known length (the view hides it without
+    // one), so it closes with the length instead of lingering invisibly.
+    player.jump_time_visible = false;
     player.spectrum = None;
     player.seek_preview = None;
 }
