@@ -17,9 +17,9 @@ pub struct AppState {
     /// lists mark its row; [`AppState::stop`] leaves it set so the bar keeps
     /// showing the interrupted track's title.
     pub current_track: Option<String>,
-    /// Whether playback is running. The transport row's Play/Pause button
-    /// reads it to choose its "Pause"/"Play" label, and [`AppState::stop`]
-    /// clears it without clearing the current track.
+    /// Whether playback is running. The LCD's transport glyph, through
+    /// [`AppState::transport_mode`], reads it, and [`AppState::stop`] clears it
+    /// without clearing the current track.
     pub is_playing: bool,
     /// Whether the loaded preview is paused: true only between Pause and the
     /// next Play or Stop, and false while playing or stopped. Together with
@@ -110,8 +110,8 @@ impl Default for AppState {
 
 impl AppState {
     /// Flip the play/pause flag in place.
-    /// `AppleMusicService::toggle_play_pause` is its only caller — the UI's
-    /// Play/Pause button reaches it through that service method — so keeping
+    /// `AppleMusicService::toggle_play_pause` is its only caller — the system
+    /// media Play/Pause key reaches it through that service method — so keeping
     /// the flip here (rather than inlined at the call site) puts the toggling
     /// semantics next to the field they mutate.
     pub fn toggle_playing(&mut self) {
@@ -148,11 +148,12 @@ impl AppState {
     }
 
     /// Set the playback flag, leaving `current_track` in place so the Now
-    /// Playing bar keeps naming the track. The keyboard's X key calls this
-    /// (through `Message::Play`); unlike [`AppState::toggle_playing`] it is an
-    /// explicit, idempotent set, so a second X press keeps playing rather
-    /// than pausing. It also clears [`AppState::paused`], so Play after Pause
-    /// reports `Playing` rather than `Paused`.
+    /// Playing bar keeps naming the track. The on-screen Play buttons and the
+    /// keyboard's X key call this (through `Message::Play`); unlike
+    /// [`AppState::toggle_playing`] it is an explicit, idempotent set, so a
+    /// second press keeps playing rather than pausing. It also clears
+    /// [`AppState::paused`], so Play after Pause reports `Playing` rather
+    /// than `Paused`.
     pub fn play(&mut self) {
         self.is_playing = true;
         self.paused = false;
@@ -160,10 +161,10 @@ impl AppState {
 
     /// Clear the playback flag and set [`AppState::paused`], leaving
     /// `current_track` in place so the Now Playing bar keeps showing the
-    /// interrupted track's title (matching Winamp). The keyboard's C key calls
-    /// this (through `Message::Pause`); unlike [`AppState::toggle_playing`] it
-    /// is an explicit, idempotent set, so a second C press keeps the player
-    /// paused rather than resuming.
+    /// interrupted track's title (matching Winamp). The on-screen Pause
+    /// buttons and the keyboard's C key call this (through `Message::Pause`);
+    /// unlike [`AppState::toggle_playing`] it is an explicit, idempotent set,
+    /// so a second press keeps the player paused rather than resuming.
     pub fn pause(&mut self) {
         self.is_playing = false;
         self.paused = true;

@@ -22,9 +22,10 @@ use crate::ui::{CurrentView, Message, WinampPlayer};
 pub(in crate::ui) mod preview;
 pub(in crate::ui) mod stepping;
 
-/// The Play/Pause button: toggles the preview between playing and paused.
-/// A track with no loaded preview stops instead, since there is nothing to
-/// pause.
+/// The system media Play/Pause key: toggles the preview between playing and
+/// paused. A track with no loaded preview stops instead, since there is
+/// nothing to pause. The transport row's Play and Pause buttons use the
+/// explicit [`play`] and [`pause`] instead.
 pub(in crate::ui) fn play_pause(player: &mut WinampPlayer) -> Task<Message> {
     begin_position_transition(player);
     transport_into(
@@ -34,8 +35,8 @@ pub(in crate::ui) fn play_pause(player: &mut WinampPlayer) -> Task<Message> {
     )
 }
 
-/// The keyboard's X key: an explicit play rather than the button's toggle.
-/// X resumes (or restarts) the preview.
+/// The transport row's Play button and the keyboard's X key: an explicit play
+/// rather than the media key's toggle. Play resumes (or restarts) the preview.
 pub(in crate::ui) fn play(player: &mut WinampPlayer) -> Task<Message> {
     begin_position_transition(player);
     transport_into(&player.apple_music_service, "play", |service| async move {
@@ -43,9 +44,9 @@ pub(in crate::ui) fn play(player: &mut WinampPlayer) -> Task<Message> {
     })
 }
 
-/// The keyboard's C key: an explicit pause rather than the button's toggle.
-/// C pauses a loaded preview; with none loaded it stops the transport, since
-/// there is nothing to pause.
+/// The transport row's Pause button and the keyboard's C key: an explicit
+/// pause rather than the media key's toggle. Pause pauses a loaded preview;
+/// with none loaded it stops the transport, since there is nothing to pause.
 pub(in crate::ui) fn pause(player: &mut WinampPlayer) -> Task<Message> {
     begin_position_transition(player);
     transport_into(&player.apple_music_service, "pause", |service| async move {

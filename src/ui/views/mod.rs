@@ -133,14 +133,14 @@ fn spacer(width: f32) -> Space {
 /// The browse Back, Open, Top, Sort, Reload, Clear, All Songs, All Albums,
 /// Playlists, and Retry buttons and the equalizer panel's on/off button call
 /// this directly;
-/// the transport row's six buttons (Play/Pause, Stop, Previous, Next, Repeat,
-/// Shuffle), the four in each compact strip (the shade strip and the library
-/// footer), and the title bar's shade, minimize, and close buttons reach it
-/// through [`fixed_width_button`]. They all build the same
+/// the transport row's seven buttons (Previous, Play, Pause, Stop, Next,
+/// Repeat, Shuffle), the five in each compact strip (the shade strip and the
+/// library footer), and the title bar's shade, minimize, and close buttons
+/// reach it through [`fixed_width_button`]. They all build the same
 /// `Button::new(Text::new(..)).on_press(..)` widget, so that expression lives
 /// here once instead of being repeated at every call site. The label is
 /// `'static` — a literal, or a `&'static str` such as
-/// [`play_pause_glyph`](transport::play_pause_glyph) returns — so the
+/// [`transport_glyphs`](transport::transport_glyphs) returns — so the
 /// resulting button is `'static` like the view builders that
 /// push it.
 fn labeled_button(label: &'static str, message: Message) -> Button<'static, Message> {

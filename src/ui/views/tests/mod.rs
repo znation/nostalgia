@@ -37,8 +37,7 @@ use super::shade::{SHADE_STRIP_HEIGHT, SHADED_HEIGHT, view_shade_strip};
 use super::title_bar::{TITLE_BAR_BUTTON_WIDTH, TITLE_BAR_LEFT_BUTTON_WIDTH};
 use super::transport::{
     EQ_PANEL_BUTTON_WIDTH, LIBRARY_PANEL_BUTTON_WIDTH, eq_panel_toggle, library_panel_toggle,
-    play_pause_glyph, play_pause_word, repeat_label, shuffle_label, transport_buttons,
-    transport_glyphs,
+    repeat_label, shuffle_label, transport_buttons, transport_glyphs,
 };
 use super::{
     BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, EQ_STEP, TITLE_BAR_HEIGHT, VOLUME_MAX, VOLUME_MIN,

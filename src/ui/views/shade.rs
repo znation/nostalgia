@@ -1,5 +1,5 @@
 //! The compact transport strip shown while the window is rolled up in shade
-//! mode: Previous, Play/Pause, Stop, Next, the elapsed-over-total readout, a
+//! mode: Previous, Play, Pause, Stop, Next, the elapsed-over-total readout, a
 //! preview seek slider, and a volume slider.
 //!
 //! The strip draws the shared
@@ -53,10 +53,11 @@ pub(crate) const SHADED_HEIGHT: f32 = TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT;
 /// through its own no-op handler, so it too cannot restore by accident. The
 /// chrome and [`SHADE_STRIP_HEIGHT`] geometry are unchanged.
 ///
-/// `mode` chooses the Play/Pause glyph and, while playing or paused, makes the
-/// time readout publish [`Message::ToggleTimeDisplay`], so the shade strip is
-/// the only time toggle available while the LCD is hidden; a stopped readout
-/// stays inert. `volume` is the slider's value, and dragging it emits
+/// `mode` decides whether the time readout publishes
+/// [`Message::ToggleTimeDisplay`], so the shade strip is the only time toggle
+/// available while the LCD is hidden: while playing or paused it is a click
+/// target, and a stopped readout stays inert. `volume` is the slider's value,
+/// and dragging it emits
 /// [`Message::VolumeChange`]. `elapsed` and `total` are the same strings
 /// [`WinampPlayer::now_playing_elapsed`] and [`WinampPlayer::now_playing_time`]
 /// give the Now Playing bar, so its elapsed/remaining choice and the track's

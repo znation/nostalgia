@@ -25,15 +25,15 @@ fn shuffle_label_mirrors_shuffle_state() {
 // volume endpoints the update arm can store, and both repeat states.
 
 // The label-reflow test above pins only that every transport button is
-// fixed-width and that its width is independent of the play, repeat, and
-// shuffle state; a zeroed, widened, or otherwise wrong width literal would
-// clear it while the glyph clipped or the row moved. Pin the face widths in
-// row order: Previous 34, Play/Pause 30, Stop 30, Next 34, Repeat 104,
-// Shuffle 112. Each is the width of that button's widest face, so a
-// deliberate glyph or width change must update this pin.
+// fixed-width and that its width is independent of the repeat and shuffle
+// state; a zeroed, widened, or otherwise wrong width literal would clear it
+// while the glyph clipped or the row moved. Pin the face widths in row order:
+// Previous 34, Play 30, Pause 30, Stop 30, Next 34, Repeat 104, Shuffle 112.
+// Each is the width of that button's widest face, so a deliberate glyph or
+// width change must update this pin.
 #[test]
 fn transport_buttons_keep_their_measured_face_widths() {
-    let widths: Vec<Length> = transport_buttons(false, false, false)
+    let widths: Vec<Length> = transport_buttons(false, false)
         .iter()
         .map(|button| button.as_widget().size().width)
         .collect();
@@ -43,6 +43,7 @@ fn transport_buttons_keep_their_measured_face_widths() {
             Length::Fixed(34.0),
             Length::Fixed(30.0),
             Length::Fixed(30.0),
+            Length::Fixed(30.0),
             Length::Fixed(34.0),
             Length::Fixed(104.0),
             Length::Fixed(112.0),
@@ -50,59 +51,46 @@ fn transport_buttons_keep_their_measured_face_widths() {
     );
 }
 
-// The four glyph buttons' shared spec, in the mockup's order: Previous,
-// Play/Pause, Stop, Next. Pin each glyph, tooltip word, width, and message so
-// a swapped face or reordered pair fails here.
+// The five glyph buttons' shared spec, in the mockup's order: Previous, Play,
+// Pause, Stop, Next. Pin each glyph, tooltip word, width, and message so a
+// swapped face or reordered pair fails here.
 #[test]
 fn transport_glyphs_match_the_mockup_order_and_widths() {
-    let stopped = transport_glyphs(false);
-    let glyphs: Vec<&str> = stopped.iter().map(|(glyph, _, _, _)| *glyph).collect();
-    assert_eq!(glyphs, ["◀◀", "▶", "■", "▶▶"]);
-    let words: Vec<&str> = stopped.iter().map(|(_, word, _, _)| *word).collect();
-    assert_eq!(words, ["Previous", "Play", "Stop", "Next"]);
-    let widths: Vec<f32> = stopped.iter().map(|(_, _, width, _)| *width).collect();
-    assert_eq!(widths, [34.0, 30.0, 30.0, 34.0]);
-    assert!(matches!(stopped[0].3, Message::PreviousTrack));
-    assert!(matches!(stopped[1].3, Message::PlayPause));
-    assert!(matches!(stopped[2].3, Message::Stop));
-    assert!(matches!(stopped[3].3, Message::NextTrack));
-
-    let playing = transport_glyphs(true);
-    let playing_glyphs: Vec<&str> = playing.iter().map(|(glyph, _, _, _)| *glyph).collect();
-    assert_eq!(playing_glyphs, ["◀◀", "II", "■", "▶▶"]);
-    let playing_words: Vec<&str> = playing.iter().map(|(_, word, _, _)| *word).collect();
-    assert_eq!(playing_words, ["Previous", "Pause", "Stop", "Next"]);
-    let playing_widths: Vec<f32> = playing.iter().map(|(_, _, width, _)| *width).collect();
-    assert_eq!(
-        playing_widths, widths,
-        "the glyph swap must not resize a button"
-    );
+    let glyphs = transport_glyphs();
+    let labels: Vec<&str> = glyphs.iter().map(|(glyph, _, _, _)| *glyph).collect();
+    assert_eq!(labels, ["◀◀", "▶", "II", "■", "▶▶"]);
+    let words: Vec<&str> = glyphs.iter().map(|(_, word, _, _)| *word).collect();
+    assert_eq!(words, ["Previous", "Play", "Pause", "Stop", "Next"]);
+    let widths: Vec<f32> = glyphs.iter().map(|(_, _, width, _)| *width).collect();
+    assert_eq!(widths, [34.0, 30.0, 30.0, 30.0, 34.0]);
+    assert!(matches!(glyphs[0].3, Message::PreviousTrack));
+    assert!(matches!(glyphs[1].3, Message::Play));
+    assert!(matches!(glyphs[2].3, Message::Pause));
+    assert!(matches!(glyphs[3].3, Message::Stop));
+    assert!(matches!(glyphs[4].3, Message::NextTrack));
 }
 
 #[test]
-fn transport_controls_construct_for_both_play_states_volume_endpoints_and_repeat_states() {
-    // `view()` passes the shared state's `is_playing`, clamped `volume`,
-    // `balance`, `repeat`, and `shuffle`, plus the player's EQ-panel and
-    // library-panel visibility, straight through, so build the transport row
-    // for every value the update arms can store, in every play, repeat,
-    // shuffle, and panel-visibility state.
+fn transport_controls_construct_for_volume_endpoints_and_repeat_states() {
+    // `view()` passes the shared state's clamped `volume`, `balance`,
+    // `repeat`, and `shuffle`, plus the player's EQ-panel and library-panel
+    // visibility, straight through, so build the transport row for every
+    // value the update arms can store, in every repeat, shuffle, and
+    // panel-visibility state.
     for volume in [0.0, 0.5, 1.0] {
         for balance in [-1.0, 0.0, 1.0] {
-            for is_playing in [false, true] {
-                for repeat in [false, true] {
-                    for shuffle in [false, true] {
-                        for eq_panel_visible in [false, true] {
-                            for library_panel_visible in [false, true] {
-                                let _controls = view_transport_controls(
-                                    is_playing,
-                                    volume,
-                                    balance,
-                                    repeat,
-                                    shuffle,
-                                    eq_panel_visible,
-                                    library_panel_visible,
-                                );
-                            }
+            for repeat in [false, true] {
+                for shuffle in [false, true] {
+                    for eq_panel_visible in [false, true] {
+                        for library_panel_visible in [false, true] {
+                            let _controls = view_transport_controls(
+                                volume,
+                                balance,
+                                repeat,
+                                shuffle,
+                                eq_panel_visible,
+                                library_panel_visible,
+                            );
                         }
                     }
                 }
@@ -266,19 +254,16 @@ fn balance_slider_spec_matches_the_state_clamp_and_pins_its_granularity() {
     assert_eq!(BALANCE_STEP, 0.01);
 }
 
-// The transport row is rebuilt every frame, and the Play/Pause, Repeat,
-// and Shuffle labels change with state. A button that sizes to its text
-// resizes when its label changes, reflowing every widget after it in the
-// row (the qa reproduction measured a 14-15px shift when Play swapped to
-// the wider Pause). Pin that every transport button requests a fixed width
-// and that the widths do not depend on the play, repeat, or shuffle state,
-// so a label swap cannot move the row.
+// The transport row is rebuilt every frame, and the Repeat and Shuffle labels
+// change with state. A button that sizes to its text resizes when its label
+// changes, reflowing every widget after it in the row. Pin that every
+// transport button requests a fixed width and that the widths do not depend
+// on the repeat or shuffle state, so a label swap cannot move the row.
 #[test]
 fn transport_buttons_keep_a_fixed_width_across_label_changes() {
-    let stopped = transport_buttons(false, false, false);
-    let playing = transport_buttons(true, false, false);
-    let repeat_on = transport_buttons(false, true, false);
-    let shuffle_on = transport_buttons(false, false, true);
+    let stopped = transport_buttons(false, false);
+    let repeat_on = transport_buttons(true, false);
+    let shuffle_on = transport_buttons(false, true);
 
     for (index, button) in stopped.iter().enumerate() {
         assert!(
@@ -286,21 +271,10 @@ fn transport_buttons_keep_a_fixed_width_across_label_changes() {
             "transport button {index} is not fixed-width"
         );
     }
-    for (a, b) in stopped.iter().zip(playing.iter()) {
-        assert_eq!(a.as_widget().size().width, b.as_widget().size().width);
-    }
     for (a, b) in stopped.iter().zip(repeat_on.iter()) {
         assert_eq!(a.as_widget().size().width, b.as_widget().size().width);
     }
     for (a, b) in stopped.iter().zip(shuffle_on.iter()) {
         assert_eq!(a.as_widget().size().width, b.as_widget().size().width);
     }
-}
-
-#[test]
-fn play_pause_glyph_and_word_mirror_playing_state() {
-    assert_eq!(play_pause_glyph(true), "II");
-    assert_eq!(play_pause_glyph(false), "▶");
-    assert_eq!(play_pause_word(true), "Pause");
-    assert_eq!(play_pause_word(false), "Play");
 }

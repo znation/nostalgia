@@ -375,7 +375,7 @@ fn shade_strip_draws_only_while_shaded() {
 }
 
 // In normal mode the library footer sits beneath the browse list, with the
-// same four glyphs, time readout, and right-edge volume slider as the shade
+// same five glyphs, time readout, and right-edge volume slider as the shade
 // strip. A builder-only test cannot catch the root dropping the footer, so
 // lay out the whole window and measure it.
 #[test]
@@ -637,35 +637,49 @@ fn a_crlf_in_a_title_does_not_change_the_row_pitch() {
     );
 }
 
-// The transport row is rebuilt every frame and the Play/Pause glyph changes
-// with playback. A text-sized Play button once widened to Pause and moved
-// every control after it; this lays out the whole root `view` in both states
-// and asserts the Repeat and Shuffle toggles keep the same absolute x, which
-// only holds while the glyph row's faces stay fixed.
+// The transport row draws both Play and Pause in every playback state, so
+// the row is playback-independent. Lay out the whole root `view` while
+// stopped and while playing and assert the Play and Pause glyphs keep the
+// same bounds, alongside the Previous/Next markers that bracket the row.
 #[test]
-fn transport_row_does_not_reflow_when_the_play_glyph_changes() {
+fn transport_row_keeps_play_and_pause_glyphs_fixed_across_playback_states() {
+    use iced::Rectangle;
+
     let (player, state) = test_player();
+    let row_glyphs = |capture: &layout_capture::TextCapture| {
+        let previous = capture.find("◀◀");
+        let next = capture.find("▶▶");
+        capture
+            .fragments()
+            .iter()
+            .filter(|(text, bounds)| {
+                bounds.y == previous.y
+                    && bounds.x >= previous.x
+                    && bounds.x <= next.x + next.width
+                    && ["◀◀", "▶", "II", "■", "▶▶"].contains(&text.as_str())
+            })
+            .map(|(text, bounds)| (text.clone(), *bounds))
+            .collect::<Vec<(String, Rectangle)>>()
+    };
 
     state.blocking_lock().is_playing = false;
     let stopped = captured_root_view_text_bounds(&player);
-    let stopped_repeat = stopped.find("Repeat: Off");
-    let stopped_shuffle = stopped.find("Shuffle: Off");
+    let stopped_glyphs = row_glyphs(&stopped);
 
     state.blocking_lock().is_playing = true;
     let playing = captured_root_view_text_bounds(&player);
-    let playing_repeat = playing.find("Repeat: Off");
-    let playing_shuffle = playing.find("Shuffle: Off");
+    let playing_glyphs = row_glyphs(&playing);
 
-    assert_eq!(
-        stopped_repeat.x,
-        playing_repeat.x,
-        "the Repeat button must not move when Play becomes Pause: {:?}",
-        playing.fragments()
+    assert!(
+        stopped_glyphs.iter().any(|(text, _)| text == "▶")
+            && stopped_glyphs.iter().any(|(text, _)| text == "II"),
+        "the transport row must draw both Play and Pause: {:?}",
+        stopped.fragments()
     );
     assert_eq!(
-        stopped_shuffle.x,
-        playing_shuffle.x,
-        "the Shuffle button must not move when Play becomes Pause: {:?}",
+        stopped_glyphs,
+        playing_glyphs,
+        "the transport row must not move or change when playback starts: {:?}",
         playing.fragments()
     );
 }

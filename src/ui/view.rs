@@ -85,7 +85,6 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
             playback_format,
             spectrum,
             transport_mode,
-            is_playing,
             volume,
             balance,
             repeat,
@@ -105,7 +104,6 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
                 player.playback_format,
                 player.spectrum,
                 state.transport_mode(),
-                state.is_playing,
                 state.volume(),
                 state.balance(),
                 state.repeat,
@@ -164,7 +162,6 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
                 player.playback_duration,
             ))
             .push(views::view_transport_controls(
-                is_playing,
                 volume,
                 balance,
                 repeat,

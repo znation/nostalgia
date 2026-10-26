@@ -30,8 +30,9 @@ use super::Message;
 /// to flip the File info panel
 /// (see [`file_info_shortcut`]), Alt+E and Alt+G to show or hide the library
 /// and equalizer panels (see [`panel_shortcut`]), and the system media keys
-/// (Play/Pause, Play, Pause, Stop, Next track, and Previous track) to the same
-/// transport messages as the on-screen controls
+/// (Play/Pause, Play, Pause, Stop, Next track, and Previous track) to their
+/// transport messages: Play, Pause, Stop, Next, and Previous match the
+/// on-screen controls and classic letters, while Play/Pause is its own toggle
 /// (the one Control chord Winamp-style play uses).
 /// `init_ui` installs this as the window subscription's mapper, so the
 /// key-to-message table lives here once and the subscription stays a plain
@@ -460,8 +461,9 @@ mod tests {
 
     #[test]
     fn message_for_maps_media_keys_to_the_transport() {
-        // The system media keys drive the same transport messages as the
-        // on-screen controls and classic letters, plain or with Shift held.
+        // The system media keys drive the same explicit Play, Pause, Stop,
+        // Next, and Previous messages as the on-screen controls and classic
+        // letters, plus their own Play/Pause toggle, plain or with Shift held.
         for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
             assert_maps!(Key::Named(key::Named::MediaPlayPause), modifiers => Message::PlayPause);
             assert_maps!(Key::Named(key::Named::MediaPlay), modifiers => Message::Play);

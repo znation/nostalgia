@@ -42,7 +42,9 @@ Clicking the large elapsed readout while playing or paused switches it to the tr
 time (`-02:37`) and back; the choice stays until clicked again. The compact readouts in the library
 footer and the shade strip are click targets too while playing or paused, switching the same mode;
 a stopped readout ignores the click. The bar sits above Previous,
-Play/Pause, Stop, and Next glyph controls with word tooltips, then the Repeat and Shuffle
+Play, Pause, Stop, and Next glyph controls with word tooltips: Play starts or resumes
+the loaded preview and Pause pauses it (stopping a track whose source supplied no preview),
+then the Repeat and Shuffle
 toggles, a volume slider whose groove runs from green when silent through orange at half volume to
 red at full volume, a balance slider whose groove is green at center and reddens toward either side,
 an equalizer panel (an EQ on/off button, a preset pick list, a response curve that eases smoothly
@@ -67,9 +69,9 @@ browse controls, search box, list, and footer — while the title bar, Now Playi
 transport row, and equalizer stay drawn; the library is open on a first
 launch and then reopens as last left, the toggle changes no playback,
 equalizer, browse, or search state, and it does not resize the window. A
-compact transport strip sits beneath the browse list with Previous, Play/Pause, Stop, Next,
+compact transport strip sits beneath the browse list with Previous, Play, Pause, Stop, Next,
 an elapsed-over-total time readout, and a volume slider — the window-shade strip's controls
-without its seek slider. The readout shows the elapsed (or remaining) time over the track's
+without its seek slider. Play starts or resumes and Pause pauses, like the main row. The readout shows the elapsed (or remaining) time over the track's
 total (`00:53/3:30`) and shows just the elapsed string when no total is known, so the empty
 state reads the plain `--:--`.
 Each
@@ -130,9 +132,9 @@ the panel closes it, and opening it while the window is rolled up restores the w
 plain or Shift-held Escape press closes whichever transient panel is open, like its `Close`
 button or the backdrop; with no panel open Escape keeps its existing behavior. Its
 shade button, a double-click on the bar, or a double-click on the rolled-up strip rolls the window
-up to the title bar plus a compact transport strip with Previous, Play/Pause, Stop, Next, the same
+up to the title bar plus a compact transport strip with Previous, Play, Pause, Stop, Next, the same
 elapsed-over-total time readout, a seek slider over the preview's own length, and a volume slider,
-and back. Its `–` and `✕` buttons minimize and close. The window title (the name the desktop
+where Play starts or resumes and Pause pauses, and back. Its `–` and `✕` buttons minimize and close. The window title (the name the desktop
 environment shows for the app) names the current track as
 `<number>Artist - Title - nostalgia` (omitting the number or artist when empty), keeping the
 interrupted track's name across Stop and reading just `nostalgia` when no known track is current.
@@ -159,8 +161,9 @@ Home, and End for editing its query instead of navigating. Ctrl+F moves keyboard
 view, list, selection, or typed query, and the box then takes typed keys as usual; in window-shade
 mode there is no search box, so Ctrl+F does nothing. F5 refetches the library and returns to the
 Artists list, exactly like the `Reload` button. While the window is focused, the system media
-keys Play/Pause, Play, Pause, Stop, Next track, and Previous track drive those same transport
-controls. Previous — the button, the Z key, and the system Previous track key — restarts the
+keys Play/Pause, Play, Pause, Stop, Next track, and Previous track drive the transport: Play,
+Pause, Stop, Next track, and Previous track match the on-screen controls, while Play/Pause
+toggles a loaded preview and stops a track with none. Previous — the button, the Z key, and the system Previous track key — restarts the
 loaded preview from its start once it has played at least three seconds, and steps back before
 that; with Shuffle on, such an earlier Previous retraces the
 tracks actually played before the current one instead of stepping one row backward in the list.

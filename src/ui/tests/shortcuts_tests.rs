@@ -1,8 +1,8 @@
 use super::*;
 
-// The system media Play/Pause key dispatches the same toggle as the on-screen
-// button and the X/C pair: it pauses a playing preview and resumes it. The
-// second press holds Shift, pinning that the media keys ignore that modifier.
+// The system media Play/Pause key dispatches its own toggle: it pauses a
+// playing preview and resumes it. The second press holds Shift, pinning that
+// the media keys ignore that modifier.
 #[tokio::test]
 async fn media_play_pause_key_toggles_playback() {
     use iced::keyboard::{Event, Key, Modifiers, key};

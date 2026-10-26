@@ -2,55 +2,46 @@ use super::*;
 
 // The main row and both compact strips must share one spec: same glyphs in the
 // same order, same fixed widths, same messages. Pin the compact projection
-// against `transport_glyphs` in both playback states.
+// against `transport_glyphs`.
 #[test]
 fn main_transport_and_shade_strip_share_glyphs_order_and_widths() {
-    for is_playing in [false, true] {
-        let full = transport_glyphs(is_playing);
-        let shade = mini_transport_controls(is_playing);
-        let full_spec: Vec<(&str, f32)> = full
-            .iter()
-            .map(|(glyph, _, width, _)| (*glyph, *width))
-            .collect();
-        let shade_spec: Vec<(&str, f32)> = shade
-            .iter()
-            .map(|(glyph, width, _)| (*glyph, *width))
-            .collect();
-        assert_eq!(full_spec, shade_spec);
-        for ((_, _, _, full_message), (_, _, shade_message)) in full.iter().zip(shade.iter()) {
-            assert_eq!(
-                std::mem::discriminant(full_message),
-                std::mem::discriminant(shade_message)
-            );
-        }
+    let full = transport_glyphs();
+    let shade = mini_transport_controls();
+    let full_spec: Vec<(&str, f32)> = full
+        .iter()
+        .map(|(glyph, _, width, _)| (*glyph, *width))
+        .collect();
+    let shade_spec: Vec<(&str, f32)> = shade
+        .iter()
+        .map(|(glyph, width, _)| (*glyph, *width))
+        .collect();
+    assert_eq!(full_spec, shade_spec);
+    for ((_, _, _, full_message), (_, _, shade_message)) in full.iter().zip(shade.iter()) {
+        assert_eq!(
+            std::mem::discriminant(full_message),
+            std::mem::discriminant(shade_message)
+        );
     }
 }
 
-// The four compact buttons must emit the same messages as their full
-// transport-row twins, and each keeps a fixed width so the glyph swap cannot
-// reflow the strip. Pin both, in row order.
+// The five compact buttons must emit the same messages as their full
+// transport-row twins, and each keeps a fixed width so the row cannot reflow.
+// Pin both, in row order.
 #[test]
 fn shade_controls_map_to_transport_messages_and_keep_fixed_widths() {
-    let stopped = mini_transport_controls(false);
-    let playing = mini_transport_controls(true);
+    let controls = mini_transport_controls();
 
-    let labels: Vec<&str> = stopped.iter().map(|(label, _, _)| *label).collect();
-    assert_eq!(labels, vec!["◀◀", "▶", "■", "▶▶"]);
-    let widths: Vec<f32> = stopped.iter().map(|(_, width, _)| *width).collect();
-    assert_eq!(widths, vec![34.0, 30.0, 30.0, 34.0]);
+    let labels: Vec<&str> = controls.iter().map(|(label, _, _)| *label).collect();
+    assert_eq!(labels, vec!["◀◀", "▶", "II", "■", "▶▶"]);
+    let widths: Vec<f32> = controls.iter().map(|(_, width, _)| *width).collect();
+    assert_eq!(widths, vec![34.0, 30.0, 30.0, 30.0, 34.0]);
 
-    let messages: Vec<&Message> = stopped.iter().map(|(_, _, message)| message).collect();
+    let messages: Vec<&Message> = controls.iter().map(|(_, _, message)| message).collect();
     assert!(matches!(messages[0], Message::PreviousTrack));
-    assert!(matches!(messages[1], Message::PlayPause));
-    assert!(matches!(messages[2], Message::Stop));
-    assert!(matches!(messages[3], Message::NextTrack));
-
-    assert_eq!(playing[1].0, "II");
-    let playing_widths: Vec<f32> = playing.iter().map(|(_, width, _)| *width).collect();
-    assert_eq!(
-        playing_widths, widths,
-        "the glyph swap must not resize a button"
-    );
+    assert!(matches!(messages[1], Message::Play));
+    assert!(matches!(messages[2], Message::Pause));
+    assert!(matches!(messages[3], Message::Stop));
+    assert!(matches!(messages[4], Message::NextTrack));
 }
 
 // The rolled-up window is exactly the title bar plus the strip; both the
@@ -162,8 +153,8 @@ fn shade_strip_double_click_restores_the_window() {
 
 // The strip's own controls keep the presses that a double-click would
 // otherwise turn into a restore: the stopped readout, whose time toggle is
-// inert, the Play/Pause button, and both sliders. Each double-click publishes
-// its control's message and none publishes `ToggleWindowShade`.
+// inert, the Play button, and both sliders. Each double-click publishes its
+// control's message and none publishes `ToggleWindowShade`.
 #[test]
 fn shade_strip_double_clicks_on_controls_do_not_restore_the_window() {
     #[derive(Default)]
@@ -253,7 +244,7 @@ fn shade_strip_double_clicks_on_controls_do_not_restore_the_window() {
                 .all(|message| matches!(message, Message::Ignored)),
             "play button" => messages
                 .iter()
-                .any(|message| matches!(message, Message::PlayPause)),
+                .any(|message| matches!(message, Message::Play)),
             "seek slider" => messages
                 .iter()
                 .any(|message| matches!(message, Message::SeekPreviewChanged(_))),
@@ -555,28 +546,46 @@ fn view_library_strip_keeps_its_fixed_height() {
     }
 }
 
-// The footer's four glyphs, time readout, and right-edge volume slider must
+// The footer's five glyphs, time readout, and right-edge volume slider must
 // actually reach the laid-out row, in the same order and geometry as the
 // shade strip's.
 #[test]
-fn library_strip_draws_the_four_controls_time_and_right_edge_volume() {
+fn library_strip_draws_the_five_controls_time_and_right_edge_volume() {
     for time in ["00:53", "-02:37"] {
         let (texts, slider, size) = captured_library_strip(time, "3:30");
         let glyphs: Vec<&str> = texts
             .iter()
             .map(String::as_str)
-            .filter(|text| ["◀◀", "▶", "■", "▶▶"].contains(text))
+            .filter(|text| ["◀◀", "▶", "II", "■", "▶▶"].contains(text))
             .collect();
-        assert_eq!(glyphs, vec!["◀◀", "▶", "■", "▶▶"]);
+        assert_eq!(glyphs, vec!["◀◀", "▶", "II", "■", "▶▶"]);
         assert_readout_and_right_edge_volume(&texts, slider, size, time, "footer");
     }
 }
 
-// The shade strip's Play/Pause face is the compact twin of the transport
-// row's glyph: it switches with playback so the rolled-up window still shows
-// what pressing it will do.
+// The row draws both Play and Pause in every playback state: neither face is
+// chosen at build time, so the compact strip keeps the same five glyphs while
+// stopped, playing, and paused.
 #[test]
-fn shade_play_pause_glyph_switches_with_playback_state() {
-    assert_eq!(play_pause_glyph(false), "▶");
-    assert_eq!(play_pause_glyph(true), "II");
+fn transport_controls_draw_play_and_pause_in_every_playback_state() {
+    for mode in [
+        TransportMode::Stopped,
+        TransportMode::Playing,
+        TransportMode::Paused,
+    ] {
+        let (texts, _, _) = captured_mini_strip(view_shade_strip(
+            mode,
+            0.5,
+            Cow::Borrowed("00:53"),
+            Cow::Borrowed("3:30"),
+            None,
+            None,
+        ));
+        for glyph in ["▶", "II"] {
+            assert!(
+                texts.iter().any(|text| text == glyph),
+                "the {glyph:?} button must be drawn in {mode:?} mode: {texts:?}"
+            );
+        }
+    }
 }

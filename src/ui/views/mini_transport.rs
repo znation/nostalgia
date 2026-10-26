@@ -1,4 +1,4 @@
-//! The shared compact transport row: Previous, Play/Pause, Stop, Next, the
+//! The shared compact transport row: Previous, Play, Pause, Stop, Next, the
 //! elapsed-over-total time readout, and a volume slider.
 //!
 //! The window-shade strip and the library footer both build this one row, so
@@ -33,7 +33,7 @@ use super::{
 pub(crate) const MINI_TRANSPORT_HEIGHT: f32 = 28.0;
 
 /// The compact row's volume slider width in px: narrow enough to leave the
-/// time readout and four buttons room.
+/// time readout and five buttons room.
 pub(super) const MINI_VOLUME_WIDTH: f32 = 80.0;
 
 /// The id of the compact row's volume-slider container. Only one strip is in
@@ -51,15 +51,15 @@ pub(crate) const MINI_VOLUME_ID: &str = "mini-transport-volume";
 /// [`Id`]: iced::advanced::widget::Id
 pub(crate) const MINI_SEEK_ID: &str = "mini-transport-seek";
 
-/// The compact row's four chrome buttons, in row order: Previous, Play/Pause,
-/// Stop, and Next. It drops the tooltip words from [`transport_glyphs`] so
-/// both compact strips and the full transport row share one glyph, order,
-/// width, and message spec.
+/// The compact row's five chrome buttons, in row order: Previous, Play,
+/// Pause, Stop, and Next. It drops the tooltip words from
+/// [`transport_glyphs`] so both compact strips and the full transport row
+/// share one glyph, order, width, and message spec.
 ///
 /// Returned as plain `(label, width, message)` tuples rather than widgets, so
 /// the labels, messages, and widths are testable without an iced renderer.
-pub(super) fn mini_transport_controls(is_playing: bool) -> [(&'static str, f32, Message); 4] {
-    transport_glyphs(is_playing).map(|(glyph, _word, width, message)| (glyph, width, message))
+pub(super) fn mini_transport_controls() -> [(&'static str, f32, Message); 5] {
+    transport_glyphs().map(|(glyph, _word, width, message)| (glyph, width, message))
 }
 
 /// The compact row's volume slider parameters, in `chrome_slider` order: the
@@ -93,15 +93,15 @@ pub(super) fn mini_transport_readout<'a>(
     }
 }
 
-/// One full-width compact row: the four fixed-width buttons separated by a
+/// One full-width compact row: the five fixed-width buttons separated by a
 /// 6px gap, the elapsed-over-total time readout, a fill spacer, and the volume
 /// slider pinned to the row's right edge.
 ///
-/// `mode` chooses the Play/Pause glyph and, while playing or paused, makes the
-/// readout a click target that publishes [`Message::ToggleTimeDisplay`]; a
-/// stopped readout stays inert but still captures the press, so an ancestor
-/// double-click target (the shade strip's restore) never sees one. `volume` is
-/// the slider's value; `elapsed` and
+/// `mode` decides whether the readout is a click target; while playing or
+/// paused it publishes [`Message::ToggleTimeDisplay`], and a stopped readout
+/// stays inert but still captures the press, so an ancestor double-click
+/// target (the shade strip's restore) never sees one. `volume` is the
+/// slider's value; `elapsed` and
 /// `total` are the same strings [`WinampPlayer::now_playing_elapsed`] and
 /// [`WinampPlayer::now_playing_time`] give the Now Playing bar, so the
 /// elapsed/remaining choice and the track's total are shown here too. When the
@@ -151,7 +151,7 @@ pub(super) fn mini_transport_row_with_seek<'a>(
     mini_transport_row_with_optional_seek(mode, volume, elapsed, total, seek)
 }
 
-/// Builds the compact row's shared leading controls — the four buttons and the
+/// Builds the compact row's shared leading controls — the five buttons and the
 /// elapsed-over-total readout — then the optional seek slider or the fill
 /// spacer, and finally the right-edge volume slider.
 fn mini_transport_row_with_optional_seek<'a>(
@@ -161,9 +161,8 @@ fn mini_transport_row_with_optional_seek<'a>(
     total: Cow<'a, str>,
     seek: Option<Element<'a, Message>>,
 ) -> Row<'a, Message> {
-    let is_playing = mode == TransportMode::Playing;
     let mut row: Row<'a, Message> = Row::new().width(Length::Fill).align_y(Vertical::Center);
-    for (label, width, message) in mini_transport_controls(is_playing) {
+    for (label, width, message) in mini_transport_controls() {
         // The button is `'static`; shorten it to the row's lifetime so the
         // borrowed time readout can share the row.
         let button: Element<'static, Message> = fixed_width_button(label, width, message).into();

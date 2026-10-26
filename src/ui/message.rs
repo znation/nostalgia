@@ -15,9 +15,13 @@ use crate::library::{Album, Artist, Playlist, Song};
 /// state they change.
 #[derive(Debug, Clone)]
 pub(in crate::ui) enum Message {
+    // The system media Play/Pause key: toggles a loaded preview. The
+    // on-screen transport row uses the explicit Play and Pause variants
+    // below instead, like the X and C keys.
     PlayPause,
-    // The explicit Play and Pause bindings (X and C, and the system media
-    // Play and Pause keys). Unlike `PlayPause`
+    // The explicit Play and Pause controls (the transport row's Play and
+    // Pause buttons, the X and C keys, and the system media Play and Pause
+    // keys). Unlike `PlayPause`
     // they are idempotent: pressing X always plays, while C pauses a loaded
     // preview and stops a track whose source supplied none.
     Play,

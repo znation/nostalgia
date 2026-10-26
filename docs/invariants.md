@@ -459,12 +459,14 @@ extended with the Page Up and Page Down one-page scrolling.
 ## Media keys
 
 **Guarantee.** A plain or Shift-held system media Play/Pause key press maps to
-`Message::PlayPause`, Play to `Message::Play`, Pause to `Message::Pause`, Stop to
+`Message::PlayPause`; Play to `Message::Play`, Pause to `Message::Pause`, Stop to
 `Message::Stop`, Next track to `Message::NextTrack`, and Previous track to
-`Message::PreviousTrack` — the same messages the on-screen controls and the classic letters send,
-so each key obeys that control's existing Shuffle, Repeat, and end-of-list rules and changes no
-browse, search, or LCD state beyond what the control already changes. Ctrl/Alt/Logo chords with
-these keys stay unbound, and a key release binds nothing.
+`Message::PreviousTrack`. The Play, Pause, Stop, Next, and Previous mappings are the same
+explicit messages the on-screen controls and the classic X, C, V, B, and Z letters send, so each
+of those keys obeys that control's existing Shuffle, Repeat, and end-of-list rules and changes no
+browse, search, or LCD state beyond what the control already changes; the media Play/Pause key
+instead toggles playback through `Message::PlayPause`, which no on-screen control or letter
+dispatches. Ctrl/Alt/Logo chords with these keys stay unbound, and a key release binds nothing.
 
 **Enforced by.** `shortcuts::shortcut` in `src/ui/shortcuts.rs` maps the six `key::Named::Media…`
 variants to those messages after its Control/Alt/Logo chord guard.
@@ -655,12 +657,14 @@ refresh does not re-join and reformat every row.
 - The browse navigation row lays Sort and Reload beside Top, not stacked below them: all three
   share the same `y`, Sort starts at or after Top's right edge, and Reload starts at or after
   Sort's right edge.
-- The transport row draws, in order, Previous, Play/Pause, Stop, and Next as the compact glyphs
-  `◀◀`, `▶`/`II`, `■`, and `▶▶`, each with a word hover tooltip (`Previous`, `Play`/`Pause`,
-  `Stop`, `Next`). The four glyph buttons are pinned to fixed widths 34, 30, 30, and 34 px, so
-  the Play/Pause glyph swap cannot reflow the row. Repeat and Shuffle remain the `Repeat:
+- The transport row draws, in order, Previous, Play, Pause, Stop, and Next as the compact glyphs
+  `◀◀`, `▶`, `II`, `■`, and `▶▶`, each with a word hover tooltip (`Previous`, `Play`, `Pause`,
+  `Stop`, `Next`). Play dispatches `Message::Play` and Pause `Message::Pause`, the same explicit
+  calls as the X and C keys; no drawn glyph dispatches `Message::PlayPause`. The five glyph
+  buttons are pinned to fixed widths 34, 30, 30, 30, and 34 px, and the row is playback-independent,
+  so it cannot reflow when playback starts. Repeat and Shuffle remain the `Repeat:
   Off/On` and `Shuffle: Off/On` text toggles, pinned to 104 and 112 px, so their label swaps
-  cannot reflow it either. The shade strip and the library footer build their four buttons
+  cannot reflow it either. The shade strip and the library footer build their five buttons
   from the same glyph spec.
 - The main transport row's fixed-width `EQ` toggle follows the balance slider in every playback
   state and is sunken while the equalizer panel is shown, ordinary chrome while it is hidden.
@@ -739,7 +743,7 @@ tiny-skia renderer.
 
 **Pinned by.** `browse_nav_buttons_place_sort_beside_top`,
 `browse_nav_buttons_place_reload_beside_sort`,
-`transport_row_does_not_reflow_when_the_play_glyph_changes`,
+`transport_row_keeps_play_and_pause_glyphs_fixed_across_playback_states`,
 `root_view_draws_the_transport_glyph_row`,
 `root_view_offers_back_retry_and_flat_list_buttons_only_where_they_belong`,
 `root_view_draws_the_current_browse_levels_own_rows`,
@@ -776,7 +780,9 @@ gap; the shared harness closes it. The E key joined the `EQ` toggle as the same 
 (2026-10-24). The `PL` toggle joined the row beside `EQ` as a layout-only gate on the whole
 library column (2026-10-24). The response curve gained its dim 0 dB and band guide behind the
 trace (2026-10-26). Its spans are eased between adjacent bands with a cubic smoothstep, so the
-trace meets every band at a zero slope (2026-10-26).
+trace meets every band at a zero slope (2026-10-26). The transport row's combined Play/Pause
+glyph split into separate Play and Pause buttons that dispatch the explicit messages the X and C
+keys use, leaving the row playback-independent (2026-10-26).
 
 ## Settings persistence
 
@@ -1424,15 +1430,15 @@ rather than the panic unwinding the event loop.
   resized to that same height (`SHADED_HEIGHT = TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT`). The
   strip keeps a fixed `SHADE_STRIP_HEIGHT`, which aliases the shared
   `MINI_TRANSPORT_HEIGHT`, and normal mode builds no shade strip.
-- The strip shows Previous, Play/Pause, Stop, Next, the elapsed-over-total time readout, a seek
-  slider while a preview position and length are known, and a volume slider. Its four buttons
+- The strip shows Previous, Play, Pause, Stop, Next, the elapsed-over-total time readout, a seek
+  slider while a preview position and length are known, and a volume slider. Its five buttons
   emit the same messages as their full transport-row twins
-  (`Message::PreviousTrack`, `Message::PlayPause`, `Message::Stop`, `Message::NextTrack`), each
-  pinned to a fixed width so the glyph swap cannot reflow the strip. The strip builds them from
-  the shared compact row's `mini_transport_controls`, which projects the full row's
+  (`Message::PreviousTrack`, `Message::Play`, `Message::Pause`, `Message::Stop`,
+  `Message::NextTrack`), each pinned to a fixed width so the row cannot reflow. The strip builds
+  them from the shared compact row's `mini_transport_controls`, which projects the full row's
   `transport_glyphs` spec, so the shade strip, the library footer, and the full row share the
-  same glyphs, order, widths, and messages; the Play/Pause glyph is `"▶"` while stopped and
-  `"II"` while playing. Without a seek slider a fill spacer pushes the volume slider to the right
+  same glyphs, order, widths, and messages; the row is playback-independent and always draws
+  both `▶` and `II`. Without a seek slider a fill spacer pushes the volume slider to the right
   edge, after the left-aligned buttons and time readout.
 - The time readout joins the same `WinampPlayer::now_playing_elapsed` and
   `WinampPlayer::now_playing_time` strings the Now Playing bar draws as `<elapsed>/<total>`, so
@@ -1457,7 +1463,7 @@ rather than the panic unwinding the event loop.
 - A double-click on the strip's blank chrome publishes the same
   `Message::ToggleWindowShade` as the title bar's double-click and the shade button, restoring the
   window through `handlers::window::toggle_window_shade`; a single click publishes nothing. The
-  strip's four buttons, time readout, seek slider, and volume slider keep their own presses,
+  strip's five buttons, time readout, seek slider, and volume slider keep their own presses,
   drags, toggles, and wheel behavior because `MouseArea` forwards events to its content first and
   stops when the content captures them; the inert stopped readout swallows the double-click
   through its own no-op handler instead of restoring, and the strip keeps `SHADE_STRIP_HEIGHT` and
@@ -1471,7 +1477,7 @@ rather than the panic unwinding the event loop.
 `MouseArea::on_double_click(Message::ToggleWindowShade)` (the library footer keeps
 `mini_transport_strip`, which builds no seek slider);
 `views::mini_transport::mini_transport_controls` projects
-`views::transport::transport_glyphs` (including `views::transport::play_pause_glyph`) into the
+`views::transport::transport_glyphs` into the
 compact buttons; `views::mini_transport::mini_transport_readout` joins the elapsed and total
 strings and keeps a single time string when the total is unknown;
 `views::mini_transport::mini_transport_row_with_seek` tags its seek container
@@ -1489,7 +1495,7 @@ bar; the shaded branch of `ui::view::view` stacks the bar and strip; and
 `handlers::window::resize_to_shade` resizes to `handlers::window::shade_target_size`, which reads
 `SHADED_HEIGHT`. `views::view_shade_strip` is re-exported by `src/ui/views/mod.rs`.
 
-**Pinned by.** `shade_play_pause_glyph_switches_with_playback_state`,
+**Pinned by.** `transport_controls_draw_play_and_pause_in_every_playback_state`,
 `shade_controls_map_to_transport_messages_and_keep_fixed_widths`,
 `main_transport_and_shade_strip_share_glyphs_order_and_widths`,
 `shade_height_pins_the_rolled_up_window`,
@@ -1812,9 +1818,10 @@ column, so hiding it drops this footer with the rest of the section. The footer 
 
 - The row is exactly `MINI_TRANSPORT_HEIGHT` tall and sits on the window face's raised chrome
   below the browse list.
-- It shows Previous, Play/Pause, Stop, Next, the elapsed-over-total time readout, and a volume
-  slider. The four buttons emit `Message::PreviousTrack`, `Message::PlayPause`, `Message::Stop`,
-  and `Message::NextTrack`, and the Play/Pause glyph follows `is_playing`. The time label joins
+- It shows Previous, Play, Pause, Stop, Next, the elapsed-over-total time readout, and a volume
+  slider. The five buttons emit `Message::PreviousTrack`, `Message::Play`, `Message::Pause`,
+  `Message::Stop`, and `Message::NextTrack`, and the row is playback-independent, drawing both
+  `▶` and `II` in every mode. The time label joins
   the same `WinampPlayer::now_playing_elapsed` and `WinampPlayer::now_playing_time` strings the
   LCD shows as `<elapsed>/<total>`, so the elapsed/remaining choice and the total cannot disagree
   between the two; when the total is the `--:--` placeholder the readout is just the elapsed
@@ -1849,7 +1856,7 @@ so an unseen browse list of any length costs nothing per frame — with clones o
 and total strings; its shaded branch returns before that push.
 
 **Pinned by.** `view_library_strip_keeps_its_fixed_height`,
-`library_strip_draws_the_four_controls_time_and_right_edge_volume`,
+`library_strip_draws_the_five_controls_time_and_right_edge_volume`,
 `mini_transport_readout_appends_the_known_total`,
 `compact_readout_toggles_time_display_only_while_not_stopped`, and
 `main_transport_and_shade_strip_share_glyphs_order_and_widths` (`src/ui/views/tests/shade.rs`);
