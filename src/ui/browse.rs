@@ -98,6 +98,38 @@ pub(super) struct BrowseList<T> {
     generation: Arc<AtomicU64>,
 }
 
+/// Applies the permutation `order` to `values` in place: entry `i` takes the
+/// value that was at `order[i]`. Each cycle is walked once, swapping the
+/// values into place, so no element is cloned; `visited` is scratch marking
+/// the slots already placed and is reset before each buffer. The caller passes
+/// the same `order` for the rows and their cached text, so all three stay
+/// index-aligned.
+///
+/// `order` must be a permutation of `0..values.len()`; every caller builds one
+/// (a stable sort's index order, a reversal, [`shuffled_order`], or the
+/// composition/inverse of those in [`BrowseList::apply_reorder`] and
+/// [`BrowseList::restore_library_order`]).
+fn apply_permutation<T>(values: &mut [T], order: &[usize], visited: &mut [bool]) {
+    debug_assert_eq!(values.len(), order.len());
+    debug_assert_eq!(values.len(), visited.len());
+    visited.fill(false);
+    for start in 0..values.len() {
+        if visited[start] {
+            continue;
+        }
+        let mut current = start;
+        loop {
+            visited[current] = true;
+            let source = order[current];
+            if source == start {
+                break;
+            }
+            values.swap(current, source);
+            current = source;
+        }
+    }
+}
+
 /// A permutation of `0..len` from a Fisher–Yates shuffle driven by splitmix64
 /// seeded with `seed`. Pure: the same `len` and `seed` always give the same
 /// order, and `len` 0 and 1 give `[]` and `[0]`.
@@ -252,7 +284,7 @@ impl<T> BrowseList<T> {
     /// lowercased so the order ignores case, and keeps library order for keys
     /// that compare equal (the sort is stable).
     ///
-    /// The cached row titles and labels are rebuilt by the same permutation
+    /// The cached row titles and labels are reordered by the same permutation
     /// (see [`Self::reorder_rows`]) whenever they are populated, so a
     /// reordered song list still shows each track's own title and length. The
     /// epoch is bumped like
@@ -260,10 +292,7 @@ impl<T> BrowseList<T> {
     /// different entries; `loading`, `error`, and the request generation are
     /// left alone, and a list with fewer than two rows or one still loading or
     /// failed is a no-op.
-    pub(super) fn sort_rows_by(&mut self, key: impl Fn(&T) -> String)
-    where
-        T: Clone,
-    {
+    pub(super) fn sort_rows_by(&mut self, key: impl Fn(&T) -> String) {
         self.reorder_with(|items| {
             let keys: Vec<String> = items.iter().map(|item| key(item).to_lowercase()).collect();
             let mut order: Vec<usize> = (0..items.len()).collect();
@@ -277,10 +306,7 @@ impl<T> BrowseList<T> {
     /// selection is dropped, and the reversal composes into the permutation
     /// [`Self::restore_library_order`] undoes. A list with fewer than two
     /// rows or one still loading or failed is a no-op.
-    pub(super) fn reverse_rows(&mut self)
-    where
-        T: Clone,
-    {
+    pub(super) fn reverse_rows(&mut self) {
         self.reorder_with(|items| (0..items.len()).rev().collect());
     }
 
@@ -290,10 +316,7 @@ impl<T> BrowseList<T> {
     /// the identity), the selection is dropped, and the shuffle composes into
     /// the permutation [`Self::restore_library_order`] undoes. A list with
     /// fewer than two rows or one still loading or failed is a no-op.
-    pub(super) fn shuffle_rows(&mut self, seed: u64)
-    where
-        T: Clone,
-    {
+    pub(super) fn shuffle_rows(&mut self, seed: u64) {
         self.reorder_with(|items| shuffled_order(items.len(), seed));
     }
 
@@ -352,10 +375,7 @@ impl<T> BrowseList<T> {
     /// Applies the permutation `order` computes from the rows, unless the list
     /// has fewer than two rows or is still loading or failed, in which case
     /// nothing changes.
-    fn reorder_with(&mut self, order: impl FnOnce(&[T]) -> Vec<usize>)
-    where
-        T: Clone,
-    {
+    fn reorder_with(&mut self, order: impl FnOnce(&[T]) -> Vec<usize>) {
         // A loading list's rows are being replaced by a fetch, so reordering
         // them would be undone (or raced) by the reply; the documented
         // guarantee is that Sort while loading changes nothing. The app's
@@ -371,10 +391,7 @@ impl<T> BrowseList<T> {
 
     /// Applies the permutation `order` (entry `i` names the current row that
     /// moves to position `i`) and records it for [`Self::restore_library_order`].
-    fn apply_reorder(&mut self, order: Vec<usize>)
-    where
-        T: Clone,
-    {
+    fn apply_reorder(&mut self, order: Vec<usize>) {
         // Keep the total permutation back to library order: a later reorder
         // composes with it instead of overwriting it, so restoring after any
         // number of reorders still yields the order the rows were stored in.
@@ -395,10 +412,7 @@ impl<T> BrowseList<T> {
     /// bumping the epoch because the indices a rendered row emits now name
     /// other entries. A list that is not sorted — or whose rows have since
     /// been replaced — is a no-op, so callers can restore unconditionally.
-    pub(super) fn restore_library_order(&mut self)
-    where
-        T: Clone,
-    {
+    pub(super) fn restore_library_order(&mut self) {
         let Some(positions) = self.library_positions.take() else {
             return;
         };
@@ -424,25 +438,19 @@ impl<T> BrowseList<T> {
     /// each row's cached title and label beside it. [`Self::apply_reorder`] and
     /// [`Self::restore_library_order`] both go through this, so neither can
     /// forget one of the caches.
-    fn reorder_rows(&mut self, order: &[usize])
-    where
-        T: Clone,
-    {
-        self.items = order
-            .iter()
-            .map(|&index| self.items[index].clone())
-            .collect();
+    ///
+    /// The rows move through the permutation's cycles in place. The earlier
+    /// rebuild cloned every row and both cached strings, so a sort or Back's
+    /// restore of a whole-library list deep-copied every owned field (each
+    /// song's id, title, artist, album, and preview URL) just to reorder it.
+    fn reorder_rows(&mut self, order: &[usize]) {
+        let mut visited = vec![false; order.len()];
+        apply_permutation(&mut self.items, order, &mut visited);
         if !self.titles.is_empty() {
-            self.titles = order
-                .iter()
-                .map(|&index| self.titles[index].clone())
-                .collect();
+            apply_permutation(&mut self.titles, order, &mut visited);
         }
         if !self.labels.is_empty() {
-            self.labels = order
-                .iter()
-                .map(|&index| self.labels[index].clone())
-                .collect();
+            apply_permutation(&mut self.labels, order, &mut visited);
         }
     }
 
@@ -526,6 +534,49 @@ mod tests {
         assert_eq!(list.items, ["a", "b", "c"]);
         assert_eq!(list.titles, ["title-a", "title-b", "title-c"]);
         assert_eq!(list.labels, ["label-a", "label-b", "label-c"]);
+    }
+
+    #[test]
+    fn reordering_moves_rows_without_cloning_them() {
+        // Reorder paths used to rebuild every buffer by cloning each row, so
+        // they required `T: Clone`. A row that deliberately does not implement
+        // Clone proves they now move the rows through the permutation instead.
+        #[derive(Debug, PartialEq)]
+        struct Unclonable(String);
+
+        let mut list = BrowseList::new(false);
+        list.store_with_row_text(
+            vec![
+                Unclonable("b".to_string()),
+                Unclonable("a".to_string()),
+                Unclonable("c".to_string()),
+            ],
+            |row| format!("title-{}", row.0),
+            |row| format!("label-{}", row.0),
+        );
+
+        list.sort_rows_by(|row| row.0.clone());
+        assert_eq!(
+            list.items,
+            ["a", "b", "c"].map(|value| Unclonable(value.to_string()))
+        );
+        assert_eq!(list.titles, ["title-a", "title-b", "title-c"]);
+        assert_eq!(list.labels, ["label-a", "label-b", "label-c"]);
+
+        list.reverse_rows();
+        assert_eq!(
+            list.items,
+            ["c", "b", "a"].map(|value| Unclonable(value.to_string()))
+        );
+        assert_eq!(list.titles, ["title-c", "title-b", "title-a"]);
+
+        list.restore_library_order();
+        assert_eq!(
+            list.items,
+            ["b", "a", "c"].map(|value| Unclonable(value.to_string()))
+        );
+        assert_eq!(list.titles, ["title-b", "title-a", "title-c"]);
+        assert_eq!(list.labels, ["label-b", "label-a", "label-c"]);
     }
 
     #[test]

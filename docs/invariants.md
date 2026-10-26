@@ -302,9 +302,10 @@ in `src/ui/handlers/browse.rs` (routed from `Message::MoveSelectedRowUp` and
 `browse::randomize_browse` (routed from `Message::RandomizeBrowse`), the Ctrl+R and Ctrl+Shift+R arms of `shortcut`, and `shortcuts::playlist_sort_shortcut` (Ctrl+Shift+1), both in
 `src/ui/shortcuts.rs`.
 `BrowseList::sort_rows_by` in `src/ui/browse.rs` builds a stable index permutation
-from the lowercased row keys and rebuilds `items`, `titles`, and `labels` by it, bumping the epoch
-only when there are at least two rows and the list is neither loading nor failed; it also records the cumulative
-permutation back to library order, and `BrowseList::restore_library_order` inverts it so the rows
+from the lowercased row keys and reorders `items`, `titles`, and `labels` in place by
+it, bumping the epoch only when there are at least two rows and the list is neither
+loading nor failed; it also records the cumulative permutation back to library order,
+and `BrowseList::restore_library_order` inverts it so the rows
 (and their cached text) return to the order they were stored in, bumping the epoch as any index
 change must. `browse::sort_browse` in `src/ui/handlers/browse.rs` matches the current view onto
 its list and key, routed from `Message::SortBrowse` in the `update` dispatch table;
@@ -317,6 +318,7 @@ draw beside Top.
 
 - `move_selected_swaps_with_the_neighbour_and_keeps_the_selection`
 - `move_selected_swaps_cached_text_and_still_restores_library_order`
+- `reordering_moves_rows_without_cloning_them`
 - `move_selected_is_a_noop_without_a_selection_at_an_edge_or_while_loading`
 - `message_for_maps_alt_arrows_to_move_the_selected_row`
 - the tests in `src/ui/tests/move_row_tests.rs`
