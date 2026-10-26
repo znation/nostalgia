@@ -295,3 +295,49 @@ fn one_pass_takes_on_a_bounded_number_of_connections() {
         "the next pass must take on the connections the first one left"
     );
 }
+
+// A connection's budget is a hard bound, not a limit on how long it may stall
+// before finishing: one whose complete request arrived after its deadline was
+// spent must still be dropped, never routed. The callback here carries the
+// right nonce and a malformed user token, so serving it would end the flow
+// with `Rejected`; an expired connection must answer `Continue` with the
+// pending list emptied instead.
+#[test]
+fn an_expired_connection_is_dropped_even_when_its_request_has_arrived() {
+    const NONCE: &str = "0123456789abcdef";
+    let listener = TcpListener::bind(("127.0.0.1", 0)).expect("bind the listener");
+    let port = listener
+        .local_addr()
+        .expect("the listener has an address")
+        .port();
+    listener.set_nonblocking(true).expect("poll the listener");
+    let mut client = TcpStream::connect(("127.0.0.1", port)).expect("connect a client");
+    let body = format!("state={NONCE}&userToken=bad");
+    let request = format!(
+        "POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: {}\r\n\r\n{body}",
+        body.len()
+    );
+    client
+        .write_all(request.as_bytes())
+        .expect("write a complete callback");
+
+    let mut pending = Vec::new();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    // A zero per-connection budget makes this connection's deadline its
+    // acceptance instant, so the sleep below puts it past that bound.
+    accept_pending(&listener, &mut pending, deadline, Duration::ZERO)
+        .expect("accept the waiting connection");
+    assert_eq!(pending.len(), 1, "the connection must be taken on first");
+    thread::sleep(Duration::from_millis(1));
+
+    let outcome = serve_pending(&mut pending, SAMPLE_DEVELOPER_TOKEN, NONCE);
+
+    assert!(
+        matches!(outcome, Connection::Continue),
+        "an expired connection must not be routed, so its malformed callback cannot end the flow"
+    );
+    assert!(
+        pending.is_empty(),
+        "the expired connection must be dropped from the pending list"
+    );
+}
