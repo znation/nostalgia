@@ -273,12 +273,23 @@ fn sample_known_track(artist: &str) -> KnownTrack {
     }
 }
 
+fn file_info_texts(track: &KnownTrack, format: Option<PlaybackFormat>) -> Vec<String> {
+    let mut element = file_info_element(track, format);
+    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+    capture.texts().map(str::to_owned).collect()
+}
+
+fn assert_no_file_info_line(texts: &[String], prefix: &str) {
+    assert!(
+        texts.iter().all(|text| !text.starts_with(prefix)),
+        "the panel must draw no {prefix:?} line: {texts:?}"
+    );
+}
+
 #[test]
 fn file_info_overlay_draws_the_title_artist_album_and_length() {
     let track = sample_known_track("The Sample Band");
-    let mut element = file_info_element(&track, None);
-    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
-    let texts: Vec<&str> = capture.texts().collect();
+    let texts = file_info_texts(&track, None);
     for expected in [
         "FILE INFO",
         "Title: Opening",
@@ -288,47 +299,37 @@ fn file_info_overlay_draws_the_title_artist_album_and_length() {
         "Close",
     ] {
         assert!(
-            texts.contains(&expected),
+            texts.iter().any(|text| text == expected),
             "the File info overlay must draw {expected:?}: {texts:?}"
         );
     }
 
     let artistless = sample_known_track("");
-    let mut element = file_info_element(&artistless, None);
-    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
-    assert!(
-        capture.texts().all(|text| !text.starts_with("Artist:")),
-        "an artist-less track must draw no Artist line"
-    );
+    let texts = file_info_texts(&artistless, None);
+    assert_no_file_info_line(&texts, "Artist:");
 }
 
 #[test]
 fn file_info_overlay_omits_the_album_line_when_the_source_supplied_none() {
     let mut track = sample_known_track("The Sample Band");
     track.album = String::new();
-    let mut element = file_info_element(&track, None);
-    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
-    assert!(
-        capture.texts().all(|text| !text.starts_with("Album:")),
-        "an album-less track must draw no Album line"
-    );
+    let texts = file_info_texts(&track, None);
+    assert_no_file_info_line(&texts, "Album:");
 }
 
 #[test]
 fn file_info_overlay_draws_the_tracks_year() {
     let mut track = sample_known_track("The Sample Band");
     track.year = Some(2001);
-    let mut element = file_info_element(&track, None);
-    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
-    let texts: Vec<&str> = capture.texts().collect();
+    let texts = file_info_texts(&track, None);
     let album_at = texts
         .iter()
-        .position(|text| *text == "Album: First Record")
+        .position(|text| text == "Album: First Record")
         .unwrap();
-    let year_at = texts.iter().position(|text| *text == "Year: 2001").unwrap();
+    let year_at = texts.iter().position(|text| text == "Year: 2001").unwrap();
     let length_at = texts
         .iter()
-        .position(|text| *text == "Length: 3:30")
+        .position(|text| text == "Length: 3:30")
         .unwrap();
     assert!(
         album_at < year_at && year_at < length_at,
@@ -339,12 +340,8 @@ fn file_info_overlay_draws_the_tracks_year() {
 #[test]
 fn file_info_overlay_omits_the_year_line_without_one() {
     let track = sample_known_track("The Sample Band");
-    let mut element = file_info_element(&track, None);
-    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
-    assert!(
-        capture.texts().all(|text| !text.starts_with("Year:")),
-        "a track without a year must draw no Year line"
-    );
+    let texts = file_info_texts(&track, None);
+    assert_no_file_info_line(&texts, "Year:");
 }
 
 #[test]
@@ -352,17 +349,12 @@ fn file_info_overlay_draws_the_tracks_genre() {
     let mut track = sample_known_track("The Sample Band");
     track.year = Some(2001);
     track.genre = "Rock".to_string();
-    let mut element = file_info_element(&track, None);
-    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
-    let texts: Vec<&str> = capture.texts().collect();
-    let year_at = texts.iter().position(|text| *text == "Year: 2001").unwrap();
-    let genre_at = texts
-        .iter()
-        .position(|text| *text == "Genre: Rock")
-        .unwrap();
+    let texts = file_info_texts(&track, None);
+    let year_at = texts.iter().position(|text| text == "Year: 2001").unwrap();
+    let genre_at = texts.iter().position(|text| text == "Genre: Rock").unwrap();
     let length_at = texts
         .iter()
-        .position(|text| *text == "Length: 3:30")
+        .position(|text| text == "Length: 3:30")
         .unwrap();
     assert!(
         year_at < genre_at && genre_at < length_at,
@@ -373,12 +365,8 @@ fn file_info_overlay_draws_the_tracks_genre() {
 #[test]
 fn file_info_overlay_omits_the_genre_line_when_the_source_supplied_none() {
     let track = sample_known_track("The Sample Band");
-    let mut element = file_info_element(&track, None);
-    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
-    assert!(
-        capture.texts().all(|text| !text.starts_with("Genre:")),
-        "a track without a genre must draw no Genre line"
-    );
+    let texts = file_info_texts(&track, None);
+    assert_no_file_info_line(&texts, "Genre:");
 }
 
 #[test]
@@ -387,17 +375,12 @@ fn file_info_overlay_draws_the_tracks_track_number() {
     track.year = Some(2001);
     track.genre = "Rock".to_string();
     track.track_number = Some(3);
-    let mut element = file_info_element(&track, None);
-    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
-    let texts: Vec<&str> = capture.texts().collect();
-    let genre_at = texts
-        .iter()
-        .position(|text| *text == "Genre: Rock")
-        .unwrap();
-    let number_at = texts.iter().position(|text| *text == "Track #: 3").unwrap();
+    let texts = file_info_texts(&track, None);
+    let genre_at = texts.iter().position(|text| text == "Genre: Rock").unwrap();
+    let number_at = texts.iter().position(|text| text == "Track #: 3").unwrap();
     let length_at = texts
         .iter()
-        .position(|text| *text == "Length: 3:30")
+        .position(|text| text == "Length: 3:30")
         .unwrap();
     assert!(
         genre_at < number_at && number_at < length_at,
@@ -408,12 +391,8 @@ fn file_info_overlay_draws_the_tracks_track_number() {
 #[test]
 fn file_info_overlay_omits_the_track_number_line_when_the_source_supplied_none() {
     let track = sample_known_track("The Sample Band");
-    let mut element = file_info_element(&track, None);
-    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
-    assert!(
-        capture.texts().all(|text| !text.starts_with("Track #:")),
-        "a track without a number must draw no Track # line"
-    );
+    let texts = file_info_texts(&track, None);
+    assert_no_file_info_line(&texts, "Track #:");
 }
 
 #[test]
@@ -424,20 +403,18 @@ fn file_info_overlay_draws_the_loaded_previews_format() {
         channels: 2,
         bitrate_kbps: Some(256),
     };
-    let mut element = file_info_element(&track, Some(stereo));
-    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
-    let texts: Vec<&str> = capture.texts().collect();
+    let texts = file_info_texts(&track, Some(stereo));
     let format_line = "Format: 256 KBPS  44 KHZ STEREO";
     assert!(
-        texts.contains(&format_line),
+        texts.iter().any(|text| text == format_line),
         "a loaded stereo preview must draw {format_line:?}: {texts:?}"
     );
-    let format_at = texts.iter().position(|text| *text == format_line).unwrap();
+    let format_at = texts.iter().position(|text| text == format_line).unwrap();
     let length_at = texts
         .iter()
-        .position(|text| *text == "Length: 3:30")
+        .position(|text| text == "Length: 3:30")
         .unwrap();
-    let close_at = texts.iter().position(|text| *text == "Close").unwrap();
+    let close_at = texts.iter().position(|text| text == "Close").unwrap();
     assert!(
         length_at < format_at && format_at < close_at,
         "the format line must sit after Length and before Close: {texts:?}"
@@ -448,11 +425,9 @@ fn file_info_overlay_draws_the_loaded_previews_format() {
         channels: 1,
         bitrate_kbps: None,
     };
-    let mut element = file_info_element(&track, Some(mono));
-    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
-    let texts: Vec<&str> = capture.texts().collect();
+    let texts = file_info_texts(&track, Some(mono));
     assert!(
-        texts.contains(&"Format: 48 KHZ MONO"),
+        texts.iter().any(|text| text == "Format: 48 KHZ MONO"),
         "a mono preview without a computed bitrate must omit the bitrate: {texts:?}"
     );
 }
@@ -460,12 +435,8 @@ fn file_info_overlay_draws_the_loaded_previews_format() {
 #[test]
 fn file_info_overlay_omits_the_format_line_without_a_loaded_preview() {
     let track = sample_known_track("The Sample Band");
-    let mut element = file_info_element(&track, None);
-    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
-    assert!(
-        capture.texts().all(|text| !text.starts_with("Format:")),
-        "without a loaded preview the panel must draw no Format line"
-    );
+    let texts = file_info_texts(&track, None);
+    assert_no_file_info_line(&texts, "Format:");
 }
 
 #[test]
