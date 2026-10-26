@@ -185,20 +185,11 @@ fn marquee_ticks_keep_ticking_when_the_receiver_falls_behind() {
 // app keeps running with a Now Playing title that no longer scrolls.
 #[test]
 fn a_refused_marquee_thread_ends_the_tick_stream_instead_of_panicking() {
-    use futures::StreamExt;
-
-    let mut ticks = marquee_tick_stream_with(|_work| {
-        Err(std::io::Error::other("the OS refused another thread"))
-    });
-
-    let next = futures::executor::block_on(await_or_timeout(
-        "the marquee stream after a refused thread",
-        TASK_TIMEOUT,
-        ticks.next(),
-    ));
-    assert!(
-        next.is_none(),
-        "a refused marquee thread must end the tick stream, not tick or panic"
+    assert_refused_thread_ends_the_tick_stream(
+        "marquee",
+        marquee_tick_stream_with(|_work| {
+            Err(std::io::Error::other("the OS refused another thread"))
+        }),
     );
 }
 
@@ -209,14 +200,7 @@ fn a_refused_marquee_thread_ends_the_tick_stream_instead_of_panicking() {
 fn a_refused_marquee_thread_reports_the_cause_and_the_loss() {
     let report = marquee_thread_failure_report(&std::io::Error::other("no threads left"));
 
-    assert!(
-        report.contains("no threads left"),
-        "the report must name the cause, got: {report}"
-    );
-    assert!(
-        report.contains("will not scroll"),
-        "the report must say what the user loses, got: {report}"
-    );
+    assert_report_names_the_cause_and_the_loss(&report, "no threads left", "will not scroll");
 }
 
 // The timer thread carries a name, like the audio and REST workers, so a
@@ -224,17 +208,10 @@ fn a_refused_marquee_thread_reports_the_cause_and_the_loss() {
 // from the production constant, so renaming the constant fails this test.
 #[test]
 fn the_marquee_thread_is_named_nostalgia_marquee() {
-    let (sender, receiver) = std::sync::mpsc::channel();
-
-    spawn_marquee_thread(Box::new(move || {
-        let _ = sender.send(std::thread::current().name().map(str::to_string));
-    }))
-    .expect("the marquee thread starts");
-
-    let name = receiver
-        .recv_timeout(TASK_TIMEOUT)
-        .expect("the marquee thread reports its name");
-    assert_eq!(name.as_deref(), Some("nostalgia-marquee"));
+    assert_eq!(
+        reported_thread_name(spawn_marquee_thread).as_deref(),
+        Some("nostalgia-marquee")
+    );
 }
 
 // A newly selected song must start its title at character zero rather than
@@ -290,20 +267,11 @@ fn position_tick_stream_emits_position_ticks() {
 // running with an elapsed readout that no longer advances.
 #[test]
 fn a_refused_position_thread_ends_the_tick_stream_instead_of_panicking() {
-    use futures::StreamExt;
-
-    let mut ticks = position_tick_stream_with(|_work| {
-        Err(std::io::Error::other("the OS refused another thread"))
-    });
-
-    let next = futures::executor::block_on(await_or_timeout(
-        "the position stream after a refused thread",
-        TASK_TIMEOUT,
-        ticks.next(),
-    ));
-    assert!(
-        next.is_none(),
-        "a refused position thread must end the tick stream, not tick or panic"
+    assert_refused_thread_ends_the_tick_stream(
+        "position",
+        position_tick_stream_with(|_work| {
+            Err(std::io::Error::other("the OS refused another thread"))
+        }),
     );
 }
 
@@ -314,14 +282,7 @@ fn a_refused_position_thread_ends_the_tick_stream_instead_of_panicking() {
 fn a_refused_position_thread_reports_the_cause_and_the_loss() {
     let report = position_thread_failure_report(&std::io::Error::other("no threads left"));
 
-    assert!(
-        report.contains("no threads left"),
-        "the report must name the cause, got: {report}"
-    );
-    assert!(
-        report.contains("will not update"),
-        "the report must say what the user loses, got: {report}"
-    );
+    assert_report_names_the_cause_and_the_loss(&report, "no threads left", "will not update");
 }
 
 // The poll thread carries a name, like the audio and REST workers, so a panic
@@ -329,17 +290,10 @@ fn a_refused_position_thread_reports_the_cause_and_the_loss() {
 // the production constant, so renaming the constant fails this test.
 #[test]
 fn the_position_thread_is_named_nostalgia_position_poll() {
-    let (sender, receiver) = std::sync::mpsc::channel();
-
-    spawn_position_thread(Box::new(move || {
-        let _ = sender.send(std::thread::current().name().map(str::to_string));
-    }))
-    .expect("the position thread starts");
-
-    let name = receiver
-        .recv_timeout(TASK_TIMEOUT)
-        .expect("the position thread reports its name");
-    assert_eq!(name.as_deref(), Some("nostalgia-position-poll"));
+    assert_eq!(
+        reported_thread_name(spawn_position_thread).as_deref(),
+        Some("nostalgia-position-poll")
+    );
 }
 
 // The spectrum poll's stream emits the tick its `update` arm turns into a
@@ -366,20 +320,11 @@ fn spectrum_tick_stream_emits_spectrum_ticks() {
 // a visualizer that stops updating.
 #[test]
 fn a_refused_spectrum_thread_ends_the_tick_stream_instead_of_panicking() {
-    use futures::StreamExt;
-
-    let mut ticks = spectrum_tick_stream_with(|_work| {
-        Err(std::io::Error::other("the OS refused another thread"))
-    });
-
-    let next = futures::executor::block_on(await_or_timeout(
-        "the spectrum stream after a refused thread",
-        TASK_TIMEOUT,
-        ticks.next(),
-    ));
-    assert!(
-        next.is_none(),
-        "a refused spectrum thread must end the tick stream, not tick or panic"
+    assert_refused_thread_ends_the_tick_stream(
+        "spectrum",
+        spectrum_tick_stream_with(|_work| {
+            Err(std::io::Error::other("the OS refused another thread"))
+        }),
     );
 }
 
@@ -390,14 +335,7 @@ fn a_refused_spectrum_thread_ends_the_tick_stream_instead_of_panicking() {
 fn a_refused_spectrum_thread_reports_the_cause_and_the_loss() {
     let report = spectrum_thread_failure_report(&std::io::Error::other("no threads left"));
 
-    assert!(
-        report.contains("no threads left"),
-        "the report must name the cause, got: {report}"
-    );
-    assert!(
-        report.contains("will not update"),
-        "the report must say what the user loses, got: {report}"
-    );
+    assert_report_names_the_cause_and_the_loss(&report, "no threads left", "will not update");
 }
 
 // The spectrum poll thread carries a name, like the audio, REST, and other
@@ -405,15 +343,61 @@ fn a_refused_spectrum_thread_reports_the_cause_and_the_loss() {
 // here rather than read from the production constant, so renaming it fails.
 #[test]
 fn the_spectrum_thread_is_named_nostalgia_spectrum_poll() {
+    assert_eq!(
+        reported_thread_name(spawn_spectrum_thread).as_deref(),
+        Some("nostalgia-spectrum-poll")
+    );
+}
+
+/// Asserts that a tick stream whose thread spawn was refused ends quietly
+/// instead of panicking the UI thread. The three timer streams (`marquee`,
+/// `position`, and `spectrum`) all share this contract; `what` names the
+/// stream in the failure messages.
+fn assert_refused_thread_ends_the_tick_stream(
+    what: &str,
+    ticks: impl futures::Stream<Item = Message> + Unpin,
+) {
+    use futures::StreamExt;
+
+    let mut ticks = ticks;
+    let stream = format!("the {what} stream after a refused thread");
+    let next = futures::executor::block_on(await_or_timeout(&stream, TASK_TIMEOUT, ticks.next()));
+    assert!(
+        next.is_none(),
+        "a refused {what} thread must end the tick stream, not tick or panic"
+    );
+}
+
+/// Asserts that a timer thread's failure report names the cause it was given
+/// and says what the user loses; the three timer reports pair a cause with
+/// what stops updating (the title scroll, the position readout, or the
+/// spectrum).
+fn assert_report_names_the_cause_and_the_loss(report: &str, cause: &str, loss: &str) {
+    assert!(
+        report.contains(cause),
+        "the report must name the cause, got: {report}"
+    );
+    assert!(
+        report.contains(loss),
+        "the report must say what the user loses, got: {report}"
+    );
+}
+
+/// Runs `spawn`'s thread just long enough to capture the name it registers,
+/// so a test can pin the name spelled out rather than read from the production
+/// constant. `spawn` is one of the timer spawners (`spawn_marquee_thread`,
+/// `spawn_position_thread`, or `spawn_spectrum_thread`).
+fn reported_thread_name(
+    spawn: fn(Box<dyn FnOnce() + Send>) -> std::io::Result<()>,
+) -> Option<String> {
     let (sender, receiver) = std::sync::mpsc::channel();
 
-    spawn_spectrum_thread(Box::new(move || {
+    spawn(Box::new(move || {
         let _ = sender.send(std::thread::current().name().map(str::to_string));
     }))
-    .expect("the spectrum thread starts");
+    .expect("the timer thread starts");
 
-    let name = receiver
+    receiver
         .recv_timeout(TASK_TIMEOUT)
-        .expect("the spectrum thread reports its name");
-    assert_eq!(name.as_deref(), Some("nostalgia-spectrum-poll"));
+        .expect("the timer thread reports its name")
 }
