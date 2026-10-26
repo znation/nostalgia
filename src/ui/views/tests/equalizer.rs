@@ -166,9 +166,9 @@ fn equalizer_band_labels_leave_a_gap_between_frequencies() {
 
 // The response curve is the panel's only readout of the whole stored shape,
 // so its pure offset helper must trace the same gains the sliders show: flat
-// in the middle, the extremes at the plot's edges, and linear between the ten
-// bands. Pin the exact values, the endpoint correspondence, and the two
-// degenerate column counts.
+// in the middle, the extremes at the plot's edges, and eased between the ten
+// bands. Pin the exact values, the endpoint correspondence, the eased span,
+// and the two degenerate column counts.
 #[test]
 fn response_curve_offsets_follow_the_band_gains() {
     assert!(
@@ -218,6 +218,28 @@ fn response_curve_offsets_follow_the_band_gains() {
         three,
         vec![0.0, 0.5, 1.0],
         "columns interpolate between bands"
+    );
+
+    let mut ease_curve = [0.0; BAND_COUNT];
+    ease_curve[4] = GAIN_MIN_DB;
+    ease_curve[5] = GAIN_MAX_DB;
+    let eased = response_curve_offsets(&ease_curve, (BAND_COUNT - 1) * 4 + 1);
+    for (index, gain) in ease_curve.iter().enumerate() {
+        assert_eq!(
+            eased[index * 4],
+            (clamp_gain(*gain) - GAIN_MIN_DB) / (GAIN_MAX_DB - GAIN_MIN_DB),
+            "column {} still sits exactly on band {index}'s gain",
+            index * 4
+        );
+    }
+    assert_eq!(
+        &eased[17..=19],
+        &[0.15625, 0.5, 0.84375],
+        "the span between bands 4 and 5 is eased, not linear"
+    );
+    assert!(
+        eased.iter().all(|offset| (0.0..=1.0).contains(offset)),
+        "a full-span rise stays inside the plot: {eased:?}"
     );
 }
 

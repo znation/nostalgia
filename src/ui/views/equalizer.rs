@@ -83,10 +83,14 @@ pub(super) fn preset_pick_list_label(preset: Option<Preset>) -> &'static str {
 /// The result holds exactly `columns` values, each the segment's height above
 /// the plot's bottom: `0.0` at [`GAIN_MIN_DB`], `0.5` at `0.0`, and `1.0` at
 /// [`GAIN_MAX_DB`]. Column 0 sits on the first band and the last column on the
-/// last band; every intermediate column linearly interpolates between the two
-/// adjacent bands, so the line follows the same gains the sliders and
-/// `BandFilter` use. Each band passes through [`clamp_gain`] first, so a NaN or
-/// out-of-range stored gain cannot leave the plot.
+/// last band; each span between adjacent bands is eased with the cubic
+/// smoothstep `f * f * (3 - 2f)`, so the line meets every band at a zero slope
+/// instead of leaving a corner. The curve still passes exactly through each
+/// band's gain, so it follows the same gains the sliders and `BandFilter` use.
+/// A flat, all-minimum, or all-maximum curve is unchanged. Each band passes
+/// through [`clamp_gain`] first, so a NaN or out-of-range stored gain cannot
+/// leave the plot; the smoothstep is monotone and the endpoint offsets are
+/// clamped, so no eased value leaves `0.0..=1.0` either.
 ///
 /// `columns == 0` returns an empty vector, and `columns == 1` returns the first
 /// band's offset rather than dividing by zero. Pure so the shape is testable
@@ -114,7 +118,8 @@ pub(super) fn response_curve_offsets(bands: &[f32; BAND_COUNT], columns: usize) 
                 return offsets[lower];
             }
             let fraction = position - lower as f32;
-            offsets[lower] + fraction * (offsets[lower + 1] - offsets[lower])
+            let eased = fraction * fraction * (3.0 - 2.0 * fraction);
+            offsets[lower] + eased * (offsets[lower + 1] - offsets[lower])
         })
         .collect()
 }

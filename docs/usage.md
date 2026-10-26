@@ -45,7 +45,8 @@ a stopped readout ignores the click. The bar sits above Previous,
 Play/Pause, Stop, and Next glyph controls with word tooltips, then the Repeat and Shuffle
 toggles, a volume slider whose groove runs from green when silent through orange at half volume to
 red at full volume, a balance slider whose groove is green at center and reddens toward either side,
-an equalizer panel (an EQ on/off button, a preset pick list, a response curve above ten band
+an equalizer panel (an EQ on/off button, a preset pick list, a response curve that eases smoothly
+between the stored band gains above ten band
 sliders, with a vertical preamp slider and a `+12 dB` / `0 dB` / `-12 dB` scale to their left; the
 plot marks the 0 dB midline and the ten bands with dim guides behind the green trace, and its
 preset pick list names the applied preset and reads `Custom` when no preset is applied, whether
