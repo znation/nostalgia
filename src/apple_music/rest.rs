@@ -8,9 +8,10 @@
 //! and playlist queries, once a `MusicKit` session is stored.
 //!
 //! `transport` holds the HTTP seam and its `ureq` implementation, `wire` holds
-//! the API's response shapes and their mapping onto the model, `paging` holds
-//! the paginated fetch and the URL helpers, and this module holds the query
-//! methods that tie them together.
+//! the API's response shapes and the parsing that decodes them, `wire::mapping`
+//! translates a decoded resource onto the model, `paging` holds the paginated
+//! fetch and the URL helpers, and this module holds the query methods that tie
+//! them together.
 
 use std::collections::HashMap;
 
