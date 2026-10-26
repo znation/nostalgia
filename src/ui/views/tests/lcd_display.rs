@@ -257,6 +257,7 @@ fn captured_content_with_spectrum(
         TransportMode::Playing,
         true,
         None,
+        IndicatorModes::default(),
     )
     .into();
     let capture = layout_capture::capture_text(&mut element, &());

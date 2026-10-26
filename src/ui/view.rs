@@ -153,6 +153,11 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
                             .zip(player.playback_duration)
                             .map(|(target, length)| views::seek_readout_text(target, length))
                     }),
+                views::IndicatorModes {
+                    always_on_top: player.always_on_top,
+                    file_info_visible: player.file_info_visible,
+                    visualizer_visible: player.visualizer_visible,
+                },
             ))
             .push(views::view_seek_bar(
                 player.readout_position(),

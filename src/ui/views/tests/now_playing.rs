@@ -267,12 +267,130 @@ fn marquee_text_counts_characters_not_bytes() {
 /// Lays out the indicator strip (with its live `A`, `I`, and `V` controls) and
 /// returns the text fragments it would draw and the width the column occupies.
 fn captured_indicator_texts() -> (Vec<String>, f32) {
-    let mut element: iced::Element<'_, Message, iced::Theme, ()> = lcd_indicator_strip().into();
+    let mut element: iced::Element<'_, Message, iced::Theme, ()> =
+        lcd_indicator_strip(IndicatorModes::default()).into();
     let capture = layout_capture::capture_text(&mut element, &());
     (
         capture.texts().map(str::to_string).collect(),
         capture.size().width,
     )
+}
+
+/// Lays the indicator strip out with the headless renderer for `modes` and
+/// returns the text fragments it draws and the pixels it paints.
+fn captured_indicator(
+    modes: IndicatorModes,
+) -> (layout_capture::TextCapture, layout_capture::PixelCapture) {
+    let mut renderer = layout_capture::headless_renderer();
+    let mut element: iced::Element<'_, Message, iced::Theme, iced::Renderer> =
+        lcd_indicator_strip(modes).into();
+    layout_capture::capture_text_and_pixels(&mut element, &mut renderer, &iced::Theme::Dark)
+}
+
+// Each live letter lights only for its own mode: A for always-on-top, I for
+// File info, and V for the visualizer. Every other case stays dim, including
+// the decorative O and D under every combination.
+#[test]
+fn indicator_label_color_lights_only_the_active_mode() {
+    for label in LCD_INDICATOR_LABELS {
+        assert_eq!(
+            indicator_label_color(label, IndicatorModes::default()),
+            theme::LCD_GREEN_DIM,
+            "no mode on must leave {label} dim"
+        );
+    }
+
+    let all_on = IndicatorModes {
+        always_on_top: true,
+        file_info_visible: true,
+        visualizer_visible: true,
+    };
+    for label in LCD_INDICATOR_LABELS {
+        let expected = if matches!(label, "A" | "I" | "V") {
+            theme::LCD_GREEN
+        } else {
+            theme::LCD_GREEN_DIM
+        };
+        assert_eq!(
+            indicator_label_color(label, all_on),
+            expected,
+            "all modes on must leave only the live letters lit: {label}"
+        );
+    }
+
+    for (modes, lit) in [
+        (
+            IndicatorModes {
+                always_on_top: true,
+                ..Default::default()
+            },
+            "A",
+        ),
+        (
+            IndicatorModes {
+                file_info_visible: true,
+                ..Default::default()
+            },
+            "I",
+        ),
+        (
+            IndicatorModes {
+                visualizer_visible: true,
+                ..Default::default()
+            },
+            "V",
+        ),
+    ] {
+        for label in LCD_INDICATOR_LABELS {
+            let expected = if label == lit {
+                theme::LCD_GREEN
+            } else {
+                theme::LCD_GREEN_DIM
+            };
+            assert_eq!(
+                indicator_label_color(label, modes),
+                expected,
+                "only {lit} must light under {modes:?}, not {label}"
+            );
+        }
+    }
+}
+
+// The drawn strip really renders the active letters brighter than the dim
+// ones, rather than only exposing the right colors: lay it out all-off and
+// all-on and compare the green of each letter's pixels.
+#[test]
+fn lcd_indicator_strip_lights_the_active_letters_and_dims_the_rest() {
+    let (dim_capture, dim_pixels) = captured_indicator(IndicatorModes::default());
+    for label in LCD_INDICATOR_LABELS {
+        let green = dim_pixels.max_green_in(dim_capture.find(label));
+        assert!(
+            green < 128,
+            "every letter must be dim with no mode on: {label} green {green}"
+        );
+    }
+
+    let (lit_capture, lit_pixels) = captured_indicator(IndicatorModes {
+        always_on_top: true,
+        file_info_visible: true,
+        visualizer_visible: true,
+    });
+    assert_eq!(
+        lit_capture.texts().collect::<Vec<_>>(),
+        vec!["O", "A", "I", "D", "V"],
+        "lighting the letters must not change their order"
+    );
+    for lit in ["A", "I", "V"] {
+        let lit_green = lit_pixels.max_green_in(lit_capture.find(lit));
+        for dim in ["O", "D"] {
+            let dim_green = lit_pixels.max_green_in(lit_capture.find(dim));
+            assert!(
+                lit_green > dim_green + 100,
+                "{lit} must be lit and {dim} dim: {lit} green {lit_green}, \
+                 {dim} green {dim_green}"
+            );
+        }
+    }
 }
 
 // The LCD's left edge draws the five classic indicator letters in the
@@ -318,7 +436,7 @@ fn lcd_indicator_strip_publishes_always_on_top_on_a_visualizer_on_v_and_file_inf
     let mut renderer = layout_capture::headless_renderer();
     for label in ["A", "I", "V", "O"] {
         let mut element: iced::Element<'_, Message, iced::Theme, iced::Renderer> =
-            lcd_indicator_strip().into();
+            lcd_indicator_strip(IndicatorModes::default()).into();
         let capture = layout_capture::capture_text(&mut element, &renderer);
         let letter = capture.find(label);
         let messages = layout_capture::publish_at(
@@ -426,6 +544,7 @@ fn now_playing_content_draws_the_indicator_strip_beside_the_title() {
         TransportMode::Playing,
         true,
         None,
+        IndicatorModes::default(),
     )
     .into();
     let capture = layout_capture::capture_text(&mut element, &());

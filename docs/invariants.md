@@ -1112,8 +1112,11 @@ its internal id, whenever the id is in the known-track index:
   `I`, and `V` are mouse areas: pressing `A` publishes `Message::ToggleAlwaysOnTop` (the LCD
   strip's own always-on-top control), pressing `I` publishes `Message::ToggleFileInfo` (the same
   panel as Alt+3), and pressing `V` publishes `Message::ToggleVisualizer`, which flips only
-  the LCD's display flag. `O` and `D` stay decorative and publish nothing. The strip keeps
-  its fixed width and letter order, so the content beside it does not move.
+  the LCD's display flag. `O` and `D` stay decorative and publish nothing. Each live letter
+  draws `theme::LCD_GREEN` exactly while its mode holds (`A` for `WinampPlayer::always_on_top`,
+  `I` for `file_info_visible`, `V` for `visualizer_visible`), and every other letter, including
+  the decorative `O` and `D` and an inactive live letter, draws `theme::LCD_GREEN_DIM`. The strip
+  keeps its fixed width and letter order, so the content beside it does not move.
 - A transport glyph leads the row in a fixed `LCD_TRANSPORT_WIDTH` slot before the large elapsed
   readout, so the readout keeps its x position as the glyph changes: green `▶` while playing, green
   `II` while paused, and red `■` while stopped. Pause of a loaded preview sets the shared paused
@@ -1201,8 +1204,11 @@ the `handlers::playback::preview` poll handlers issue no query and its reply han
 reply. `AppleMusicService::play_track` stops the backend's previous preview when a selection has no
 preview URL. `views::now_playing::indicator::lcd_indicator_strip` draws
 `views::now_playing::indicator::LCD_INDICATOR_LABELS` down the LCD's left edge in a fixed-width
-column; its `A`, `I`, and `V` cells publish `Message::ToggleAlwaysOnTop`, `Message::ToggleFileInfo`,
-and `Message::ToggleVisualizer` through `views::now_playing::indicator::lcd_indicator_message`,
+column, coloring each letter through `views::now_playing::indicator::indicator_label_color` from
+the `views::now_playing::indicator::IndicatorModes` flags `views::view_now_playing` passes
+(`always_on_top`, `file_info_visible`, and `visualizer_visible`); its `A`, `I`, and `V` cells
+publish `Message::ToggleAlwaysOnTop`, `Message::ToggleFileInfo`, and
+`Message::ToggleVisualizer` through `views::now_playing::indicator::lcd_indicator_message`,
 while `O` and `D` publish nothing. `views::now_playing::visualizer::visualizer_bar_heights` scales
 and clamps the stored spectrum, and `views::now_playing::visualizer::now_playing_visualizer_row`
 draws its `BAND_COUNT` bars at fixed width inside the row `views::view_now_playing` places between
@@ -1332,6 +1338,8 @@ rather than the panic unwinding the event loop.
 - `channel_label_color_lights_only_the_reported_mode`
 - `now_playing_status_row_lights_the_reported_channel_mode` (`src/ui/views/tests/lcd_display.rs`)
 - `lcd_indicator_strip_draws_each_label_in_order_at_a_fixed_width`
+- `indicator_label_color_lights_only_the_active_mode`
+- `lcd_indicator_strip_lights_the_active_letters_and_dims_the_rest`
 - `now_playing_content_draws_the_indicator_strip_beside_the_title`
   (`src/ui/views/tests/now_playing.rs`)
 - `seek_bar_value_clamps_the_thumb_and_hides_without_a_length`

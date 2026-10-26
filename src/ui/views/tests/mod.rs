@@ -17,7 +17,10 @@ use super::mini_transport::{
     MINI_SEEK_ID, MINI_TRANSPORT_HEIGHT, MINI_VOLUME_ID, MINI_VOLUME_WIDTH,
     mini_transport_controls, mini_transport_readout, mini_volume_spec, view_library_strip,
 };
-use super::now_playing::indicator::{lcd_indicator_message, lcd_indicator_strip};
+use super::now_playing::indicator::{
+    IndicatorModes, LCD_INDICATOR_LABELS, indicator_label_color, lcd_indicator_message,
+    lcd_indicator_strip,
+};
 use super::now_playing::status::{CHANNEL_LABELS, channel_label_color, now_playing_status_row};
 use super::now_playing::text::{format_lcd_elapsed, format_lcd_remaining};
 use super::now_playing::visualizer::{

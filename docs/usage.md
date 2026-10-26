@@ -8,7 +8,9 @@ project's summary, status, screenshots, and build instructions stay in
 Build and run with `cargo run`; the player opens an iced window showing the Now Playing bar (a
 small `O A I D V` strip down the LCD's left edge, whose `A` toggles always-on-top, whose `I`
 opens the File info panel, and whose `V` hides and restores the visualizer while `O` and `D` stay
-decorative; then a large elapsed-time readout at the left for a loaded preview, shown while
+decorative; each live letter is lit while its mode is on (`A` for always-on-top, `I` while File
+info is open, `V` while the visualizer is shown) and dim otherwise, and `O` and `D` stay dim;
+then a large elapsed-time readout at the left for a loaded preview, shown while
 playing or paused and blank
 (though it keeps its space)
 while stopped, except that the `--:--` placeholder stays visible when stopped with no current

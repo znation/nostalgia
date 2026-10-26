@@ -570,6 +570,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         TransportMode::Stopped,
         true,
         None,
+        IndicatorModes::default(),
     );
     let _bar = view_now_playing(
         "00:53".into(),
@@ -589,6 +590,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         TransportMode::Paused,
         true,
         None,
+        IndicatorModes::default(),
     );
     let _overlong = view_now_playing(
         "03:12".into(),
@@ -602,6 +604,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         TransportMode::Playing,
         true,
         None,
+        IndicatorModes::default(),
     );
     let _back = view_back_button();
     let _retry = view_retry_button();

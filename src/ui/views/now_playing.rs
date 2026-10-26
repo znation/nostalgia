@@ -23,7 +23,7 @@ pub(super) mod status;
 pub(super) mod text;
 pub(super) mod visualizer;
 
-use indicator::lcd_indicator_strip;
+pub use indicator::{IndicatorModes, lcd_indicator_strip};
 pub use mixer_readout::{MixerDrag, mixer_readout_text, seek_readout_text};
 use status::now_playing_status_row;
 pub use text::{
@@ -70,7 +70,9 @@ const LCD_TRANSPORT_WIDTH: f32 = 16.0;
 /// [`Cow`]s: the borrowed cases keep the strings owned by the caller's index
 /// (no allocation), while the owned fallbacks are moved into the widget, so
 /// the built element never borrows a temporary; the scrolling branch allocates
-/// only its window, as the fitting branch allocates nothing.
+/// only its window, as the fitting branch allocates nothing. `modes` carries
+/// the three flags the indicator strip lights (always-on-top, File info, and
+/// the visualizer).
 // The resolved LCD readouts and playback state; grouping them into a wrapper
 // would add a concept without making the call site clearer, as in `view_songs`.
 #[allow(clippy::too_many_arguments)]
@@ -86,6 +88,7 @@ pub fn view_now_playing<'a>(
     mode: TransportMode,
     elapsed_visible: bool,
     mixer_readout: Option<String>,
+    modes: IndicatorModes,
 ) -> Element<'a, Message> {
     bevel::lcd_well(now_playing_content(
         elapsed,
@@ -99,12 +102,13 @@ pub fn view_now_playing<'a>(
         mode,
         elapsed_visible,
         mixer_readout,
+        modes,
     ))
 }
 
 /// Builds the content [`view_now_playing`] wraps in the LCD well: the
-/// indicator strip, then the elapsed/title row and status row in a
-/// filling column so the total stays at the right edge. Generic over the
+/// indicator strip lit by `modes`, then the elapsed/title row and status row
+/// in a filling column so the total stays at the right edge. Generic over the
 /// theme and renderer, unlike the concrete well wrapper, so the tests can lay
 /// it out with iced's null renderer and read back the text it would draw.
 // Mirrors `view_now_playing`'s arguments (without the well wrapper) so the
@@ -122,6 +126,7 @@ pub(super) fn now_playing_content<'a, Theme, Renderer>(
     mode: TransportMode,
     elapsed_visible: bool,
     mixer_readout: Option<String>,
+    modes: IndicatorModes,
 ) -> Row<'a, Message, Theme, Renderer>
 where
     Theme: iced::widget::text::Catalog + iced::widget::container::Catalog + 'a,
@@ -130,7 +135,7 @@ where
         From<iced::widget::container::StyleFn<'a, Theme>>,
     Renderer: iced::advanced::text::Renderer + 'a,
 {
-    Row::new().push(lcd_indicator_strip()).push(
+    Row::new().push(lcd_indicator_strip(modes)).push(
         Column::new()
             .width(Length::Fill)
             .push(now_playing_row(
