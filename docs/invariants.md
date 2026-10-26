@@ -686,7 +686,10 @@ refresh does not re-join and reformat every row.
 - The equalizer band row puts the vertical preamp slider leftmost, then the `+12 DB` / `0 DB` /
   `-12 DB` scale, then the ten band sliders. The scale reads top to bottom beside the rail's top,
   middle, and bottom, and the preamp label shares the band labels' text row. The response curve
-  above them starts at the first band, not over the preamp and scale.
+  above them starts at the first band, not over the preamp and scale, and draws a dim
+  `theme::LCD_GREEN_DIM` guide behind its `theme::LCD_GREEN` trace: a dotted line on the 0 dB
+  midline and one full-height marker at each band position, evenly spaced from the plot's left
+  edge to its right edge.
 - The equalizer's preset pick list shows the applied preset's name, or `Custom` when
   `AppState::eq_preset` is `None`, drawn in `theme::TEXT` so a hand-tuned curve reads as a value
   rather than an empty control.
@@ -714,7 +717,8 @@ layout flags; `shortcuts::shortcut` in
 `src/ui/shortcuts.rs` maps plain and Shift-held E to that same message; `view` pushes the
 equalizer section only while that flag holds; `views::mini_transport::mini_transport_controls`
 projects the same glyph spec for the shade strip and the library footer.
-`views::equalizer::preamp_column`, `views::equalizer::db_scale_column`, and `views::view_equalizer`
+`views::equalizer::preamp_column`, `views::equalizer::db_scale_column`,
+`views::equalizer::response_curve_row`, and `views::view_equalizer`
 in `src/ui/views/equalizer.rs` build the equalizer band row and align the curve with it;
 `views::view_equalizer` passes `views::equalizer::CUSTOM_PRESET_LABEL` to the pick list's
 placeholder, which `style::chrome_pick_list_style` in `src/ui/style.rs` draws in `theme::TEXT`. The browse
@@ -755,6 +759,8 @@ title bands and app bar, `transport_glyphs_match_the_mockup_order_and_widths`,
 `main_transport_and_shade_strip_share_glyphs_order_and_widths` (`src/ui/views/tests/shade.rs`),
 `equalizer_preamp_and_db_scale_sit_left_of_the_band_sliders` and
 `equalizer_pick_list_shows_custom_for_a_hand_tuned_curve` (`src/ui/views/tests/equalizer.rs`),
+`response_curve_guide_draws_the_zero_db_line_and_band_markers_behind_the_trace`
+(`src/ui/views/tests/equalizer.rs`),
 and `chrome_pick_list_style_sinks_the_face_when_opened` and `toggle_button_style_sinks_while_on`
 (`src/ui/style.rs`) for the pick-list label and the A, EQ, and PL toggles.
 
@@ -763,7 +769,8 @@ documented layout" and "Transport buttons resize to their label text, so pressin
 reflows the whole control row" in `BUGS-FIXED.md`. Both carried a `real-run-needed` validation
 gap; the shared harness closes it. The E key joined the `EQ` toggle as the same message
 (2026-10-24). The `PL` toggle joined the row beside `EQ` as a layout-only gate on the whole
-library column (2026-10-24).
+library column (2026-10-24). The response curve gained its dim 0 dB and band guide behind the
+trace (2026-10-26).
 
 ## Settings persistence
 

@@ -293,6 +293,137 @@ fn response_curve_row_keeps_its_height_and_draws_one_segment_per_column() {
     );
 }
 
+// The plot carries a dim reference grid behind the bright trace: a dotted
+// line on the 0 dB midline and one full-height marker per band. Lay out a
+// shaped curve to pin the guide's geometry, then render it to check the dim
+// guide and the trace's draw order in pixels.
+#[test]
+fn response_curve_guide_draws_the_zero_db_line_and_band_markers_behind_the_trace() {
+    let mut bands = [0.0; BAND_COUNT];
+    for gain in &mut bands[..BAND_COUNT / 2] {
+        *gain = GAIN_MIN_DB;
+    }
+    for gain in &mut bands[BAND_COUNT / 2..] {
+        *gain = GAIN_MAX_DB;
+    }
+
+    let mut renderer = layout_capture::headless_renderer();
+    let mut element: iced::Element<'_, Message, iced::Theme, iced::Renderer> =
+        response_curve_row(&bands);
+    let mut tree = Tree::new(element.as_widget());
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, &renderer, &layout_capture::limits());
+    assert_eq!(node.bounds().height, RESPONSE_CURVE_HEIGHT);
+
+    let mut captured = CapturedContainers::default();
+    element
+        .as_widget_mut()
+        .operate(&mut tree, Layout::new(&node), &renderer, &mut captured);
+    let dots: Vec<Rectangle> = captured
+        .0
+        .iter()
+        .filter(|bounds| {
+            bounds.width == RESPONSE_CURVE_GUIDE_THICKNESS
+                && bounds.height == RESPONSE_CURVE_GUIDE_THICKNESS
+        })
+        .copied()
+        .collect();
+    assert_eq!(
+        dots.len(),
+        RESPONSE_CURVE_COLUMNS,
+        "one guide dot per column"
+    );
+    let markers: Vec<Rectangle> = captured
+        .0
+        .iter()
+        .filter(|bounds| {
+            bounds.width == RESPONSE_CURVE_GUIDE_THICKNESS && bounds.height == RESPONSE_CURVE_HEIGHT
+        })
+        .copied()
+        .collect();
+    assert_eq!(markers.len(), BAND_COUNT, "one full-height marker per band");
+
+    let plot = node.bounds();
+    let midline = plot.y + RESPONSE_CURVE_HEIGHT / 2.0;
+    assert!(
+        dots.iter()
+            .all(|dot| (dot.y + dot.height / 2.0 - midline).abs() <= 1.0),
+        "every guide dot centers on the 0 dB midline: {dots:?}"
+    );
+
+    let first = markers[0];
+    let last = markers[BAND_COUNT - 1];
+    assert_eq!(first.x, plot.x, "the first marker sits on the left edge");
+    assert_eq!(
+        last.x + last.width,
+        plot.x + plot.width,
+        "the last marker sits on the right edge"
+    );
+    let step = (last.x - first.x) / (BAND_COUNT - 1) as f32;
+    for (index, marker) in markers.iter().enumerate() {
+        let expected = first.x + step * index as f32;
+        assert!(
+            (marker.x - expected).abs() <= 0.5,
+            "markers must be evenly spaced: marker {index} at {}, expected {expected}",
+            marker.x
+        );
+    }
+
+    let (_, pixels) =
+        layout_capture::capture_text_and_pixels(&mut element, &mut renderer, &iced::Theme::Dark);
+    let marker_top = Rectangle {
+        x: markers[0].x,
+        y: plot.y,
+        width: RESPONSE_CURVE_GUIDE_THICKNESS,
+        height: 4.0,
+    };
+    let background_top = Rectangle {
+        x: markers[0].x + 40.0,
+        y: plot.y,
+        width: RESPONSE_CURVE_GUIDE_THICKNESS,
+        height: 4.0,
+    };
+    let marker_green = pixels.max_green_in(marker_top);
+    let background_green = pixels.max_green_in(background_top);
+    assert!(
+        marker_green > background_green,
+        "a band marker must stand out from the background: marker green {marker_green}, \
+         background green {background_green}"
+    );
+
+    let trace = Rectangle {
+        x: plot.x,
+        y: plot.y + RESPONSE_CURVE_HEIGHT - RESPONSE_CURVE_LINE_HEIGHT,
+        width: 8.0,
+        height: RESPONSE_CURVE_LINE_HEIGHT,
+    };
+    let trace_green = pixels.max_green_in(trace);
+    let dot_green = pixels.max_green_in(dots[0]);
+    assert!(
+        trace_green > dot_green,
+        "the trace must be brighter than the dim guide: trace green {trace_green}, \
+         guide green {dot_green}"
+    );
+
+    let mut flat_element: iced::Element<'_, Message, iced::Theme, iced::Renderer> =
+        response_curve_row(&[0.0; BAND_COUNT]);
+    let (_, flat_pixels) = layout_capture::capture_text_and_pixels(
+        &mut flat_element,
+        &mut renderer,
+        &iced::Theme::Dark,
+    );
+    // Sample the guide dot itself, not a strip around it: a guide drawn over
+    // the trace would dim the dot's pixels, while a trace drawn last paints
+    // them at the trace's full brightness.
+    let flat_green = flat_pixels.max_green_in(dots[0]);
+    assert!(
+        flat_green >= trace_green,
+        "a flat curve's trace must cover the guide: flat green {flat_green}, trace green \
+         {trace_green}, guide green {dot_green}"
+    );
+}
+
 #[test]
 fn preamp_slider_style_matches_the_band_tint_for_its_gain() {
     use iced::Background;

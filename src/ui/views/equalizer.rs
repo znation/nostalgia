@@ -1,6 +1,6 @@
 //! The equalizer panel: the on/off button, the preset pick list, the response
-//! curve, and one row of a vertical preamp slider, a dB scale, and the
-//! [`BAND_COUNT`] vertical band sliders.
+//! curve with its dim 0 dB and band guides, and one row of a vertical preamp
+//! slider, a dB scale, and the [`BAND_COUNT`] vertical band sliders.
 
 use iced::{
     Element, Length,
@@ -50,6 +50,12 @@ pub(super) const RESPONSE_CURVE_HEIGHT: f32 = 24.0;
 /// The height of one response-curve segment, in pixels. Adjacent segments
 /// touch, so the dots read as one continuous line.
 pub(super) const RESPONSE_CURVE_LINE_HEIGHT: f32 = 2.0;
+
+/// The thickness of the response curve's reference guide, in pixels: the size
+/// of each dot on the 0 dB line and the width of each band marker. It is kept
+/// distinct from [`RESPONSE_CURVE_LINE_HEIGHT`] so the trace's height filter
+/// still counts only trace segments.
+pub(super) const RESPONSE_CURVE_GUIDE_THICKNESS: f32 = 1.0;
 
 /// The equalizer on/off button's label: "EQ: On" while the equalizer is
 /// engaged, "EQ: Off" when it is off. Pure so the label logic is testable
@@ -193,11 +199,15 @@ pub(super) fn preamp_slider_style(preamp: f32, status: slider::Status) -> slider
 
 /// Builds the response curve row: one green line segment per
 /// [`RESPONSE_CURVE_COLUMNS`] column, placed at the height
-/// [`response_curve_offsets`] gives for the stored band gains. The row keeps
-/// the fixed [`RESPONSE_CURVE_HEIGHT`] for every curve, flat included, so the
-/// band sliders below keep their places. The preamp is not plotted: it is a
-/// uniform gain offset, not a bend in the curve. Generic over the theme and
-/// renderer so the tests can lay it out with iced's null renderer.
+/// [`response_curve_offsets`] gives for the stored band gains. Behind the trace
+/// it draws a dim reference grid: a dotted line on the 0 dB midline and one
+/// full-height marker at each band's `i / (BAND_COUNT - 1)` position, from the
+/// plot's left edge to its right edge, both in [`theme::LCD_GREEN_DIM`]. The
+/// trace draws last, over the guide. The row keeps the fixed
+/// [`RESPONSE_CURVE_HEIGHT`] for every curve, flat included, so the band
+/// sliders below keep their places. The preamp is not plotted: it is a uniform
+/// gain offset, not a bend in the curve. Generic over the theme and renderer so
+/// the tests can lay it out with iced's null renderer.
 pub(super) fn response_curve_row<'a, Theme, Renderer>(
     bands: &[f32; BAND_COUNT],
 ) -> Element<'a, Message, Theme, Renderer>
@@ -207,6 +217,42 @@ where
         From<iced::widget::container::StyleFn<'a, Theme>>,
     Renderer: iced::advanced::Renderer + 'a,
 {
+    let guide_style = |_theme: &Theme| container::Style {
+        background: Some(theme::LCD_GREEN_DIM.into()),
+        ..container::Style::default()
+    };
+
+    let mut markers = Row::new().width(Length::Fill).height(Length::Fill);
+    for index in 0..BAND_COUNT {
+        markers = markers.push(
+            Container::new(Space::new())
+                .width(Length::Fixed(RESPONSE_CURVE_GUIDE_THICKNESS))
+                .height(Length::Fill)
+                .style(guide_style),
+        );
+        if index + 1 < BAND_COUNT {
+            markers = markers.push(Space::new().width(Length::Fill));
+        }
+    }
+
+    let mut zero_guide = Row::new()
+        .width(Length::Fill)
+        .height(Length::Fixed(RESPONSE_CURVE_GUIDE_THICKNESS));
+    for _ in 0..RESPONSE_CURVE_COLUMNS {
+        let dot = Container::new(Space::new())
+            .width(Length::Fixed(RESPONSE_CURVE_GUIDE_THICKNESS))
+            .height(Length::Fixed(RESPONSE_CURVE_GUIDE_THICKNESS))
+            .style(guide_style);
+        zero_guide = zero_guide.push(Container::new(dot).center_x(Length::Fill));
+    }
+    let guide_half = (RESPONSE_CURVE_HEIGHT - RESPONSE_CURVE_GUIDE_THICKNESS) / 2.0;
+    let zero_guide = Column::new()
+        .width(Length::Fill)
+        .height(Length::Fixed(RESPONSE_CURVE_HEIGHT))
+        .push(Space::new().height(Length::Fixed(guide_half)))
+        .push(zero_guide)
+        .push(Space::new().height(Length::Fixed(guide_half)));
+
     let line_span = RESPONSE_CURVE_HEIGHT - RESPONSE_CURVE_LINE_HEIGHT;
     let mut row = Row::new().width(Length::Fill).height(Length::Fill);
     for offset in response_curve_offsets(bands, RESPONSE_CURVE_COLUMNS) {
@@ -231,7 +277,11 @@ where
         );
     }
 
-    Container::new(row)
+    let stack = iced::widget::stack([markers.into(), zero_guide.into(), row.into()])
+        .width(Length::Fill)
+        .height(Length::Fixed(RESPONSE_CURVE_HEIGHT));
+
+    Container::new(stack)
         .width(Length::Fill)
         .height(Length::Fixed(RESPONSE_CURVE_HEIGHT))
         .style(|_theme| container::Style {

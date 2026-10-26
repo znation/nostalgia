@@ -9,9 +9,9 @@ use super::browse::{
     view_search_row,
 };
 use super::equalizer::{
-    CUSTOM_PRESET_LABEL, EQ_SLIDER_HEIGHT, RESPONSE_CURVE_COLUMNS, RESPONSE_CURVE_HEIGHT,
-    RESPONSE_CURVE_LINE_HEIGHT, eq_enabled_label, preamp_slider_style, preset_pick_list_label,
-    response_curve_offsets, response_curve_row,
+    CUSTOM_PRESET_LABEL, EQ_SLIDER_HEIGHT, RESPONSE_CURVE_COLUMNS, RESPONSE_CURVE_GUIDE_THICKNESS,
+    RESPONSE_CURVE_HEIGHT, RESPONSE_CURVE_LINE_HEIGHT, eq_enabled_label, preamp_slider_style,
+    preset_pick_list_label, response_curve_offsets, response_curve_row,
 };
 use super::mini_transport::{
     MINI_SEEK_ID, MINI_TRANSPORT_HEIGHT, MINI_VOLUME_ID, MINI_VOLUME_WIDTH,
