@@ -6,7 +6,9 @@ use super::equalizer::{EqSettings, EqSource};
 use super::meter::{MeterSource, SPECTRUM_WINDOW, SpectrumMeter, spectrum_bands};
 use super::player::format::{duration_for_source, format_for_source, preview_bitrate_kbps};
 use super::player::rodio_player::RodioPlayer;
-use super::player::seek::{SeekablePlayer, clamp_seek, seek_player, seek_target};
+use super::player::seek::{
+    SeekablePlayer, clamp_seek, seek_failure_report, seek_player, seek_target,
+};
 use super::player::worker::{Command, WorkerPlayer, await_device_ready, serve_commands};
 use super::player::{DEVICE_OPEN_TIMEOUT, WORKER_QUERY_TIMEOUT};
 use super::preview::{

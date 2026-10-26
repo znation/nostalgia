@@ -2,6 +2,7 @@
 //! relative target computation, clamping to the preview's length, and the
 //! small [`SeekablePlayer`] seam that makes the composition testable.
 
+use std::fmt::Display;
 use std::time::Duration;
 
 use rodio::source::SeekError;
@@ -47,10 +48,22 @@ impl SeekablePlayer for rodio::Player {
 }
 
 /// Seeks `player` by `offset_secs` from its current position, logging a
-/// rejected seek without changing any state.
+/// rejected seek with the target it tried and without changing any state.
+///
+/// The target is computed before the call so the failure report can name it:
+/// a rejected relative seek otherwise reads only as "seeking the preview
+/// failed", leaving the direction and distance out of the log.
 pub(in crate::audio) fn seek_player(player: &impl SeekablePlayer, offset_secs: i64) {
-    let position = player.position();
-    if let Err(error) = player.seek_to(seek_target(position, offset_secs)) {
-        eprintln!("seeking the preview failed: {error}");
+    let target = seek_target(player.position(), offset_secs);
+    if let Err(error) = player.seek_to(target) {
+        eprintln!("{}", seek_failure_report(target, &error));
     }
+}
+
+/// The report for a rejected seek: names the absolute target and the backend's
+/// cause, so a failed arrow-key seek or seek-bar release says where it was
+/// trying to go instead of only that a seek failed. `error` is a `Display` so
+/// both the relative and absolute seek paths share the wording.
+pub(in crate::audio) fn seek_failure_report(target: Duration, error: &impl Display) -> String {
+    format!("seeking the preview to {target:?} failed: {error}")
 }

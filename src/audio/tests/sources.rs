@@ -307,6 +307,18 @@ fn seek_player_seeks_relative_to_the_players_position() {
     );
 }
 
+// A rejected seek's report must name the absolute target as well as the
+// backend's cause; the target is what distinguishes a failed forward step
+// from a failed backward one or a seek-bar release, and the bare cause alone
+// cannot. `15s` is `Duration`'s `Debug` form, which the report uses.
+#[test]
+fn seek_failure_report_names_the_target_and_the_cause() {
+    assert_eq!(
+        seek_failure_report(Duration::from_secs(15), &"seek refused"),
+        "seeking the preview to 15s failed: seek refused"
+    );
+}
+
 #[test]
 fn balance_source_centered_leaves_samples_unchanged() {
     let channels = ChannelCount::new(2).unwrap();

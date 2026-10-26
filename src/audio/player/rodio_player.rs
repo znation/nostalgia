@@ -18,7 +18,7 @@ use super::super::meter::{MeterSource, SpectrumMeter};
 use super::super::preview::DecodedPreview;
 use super::super::{PlaybackFormat, Spectrum};
 use super::format::{duration_for_source, format_for_source};
-use super::seek::{clamp_seek, seek_player};
+use super::seek::{clamp_seek, seek_failure_report, seek_player};
 use super::worker::WorkerPlayer;
 
 /// Reports `meter`'s live spectrum only once the player holds a preview.
@@ -133,7 +133,7 @@ impl WorkerPlayer for RodioPlayer {
     fn seek_to(&self, position: Duration) {
         let target = clamp_seek(position, self.duration());
         if let Err(error) = self.player.try_seek(target) {
-            eprintln!("seeking the preview failed: {error}");
+            eprintln!("{}", seek_failure_report(target, &error));
         }
     }
 
