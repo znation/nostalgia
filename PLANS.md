@@ -21,34 +21,6 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 _None yet._
 
-
-### Declare the project's deterministic check (planned 2026-10-25 by the plan role)
-
-**Declares the project check**
-
-**Goal.** Tumwater's doctor reports the `no-check` alert because the project declares no
-deterministic check, so merges run without the safety gate. The project already has one: the
-`Makefile`'s `check` target (`fmt lint docs test test-one-guard-test`), which the README's
-Development section names as the landing gate and `.github/workflows/ci.yml` runs on every push.
-Declare that exact command to tumwater.
-
-**Approach.**
-- Command: `make check`, run from the project root (it needs the ALSA headers the README's
-  Development section names).
-- Route: `check.command`. There is no `package.json` at the project root or above it (it is a
-  Cargo crate), so the package.json `test`/`typecheck`/`build` script route does not apply. Set it
-  from the team root with `tumwater config set check.command "make check"` (run in
-  `/home/zach/nostalgia`; it writes `tumwater.json`, which roles must not edit, so this step is
-  the user's or tumwater's own).
-- Change no source, `Makefile`, or CI file: the gate already exists.
-
-**Files touched.** `tumwater.json` (via `tumwater config set` only); nothing in the crate.
-
-**Acceptance criteria.**
-- `tumwater config get check.command` prints `make check`.
-- `tumwater doctor` shows its `check` row as ok, and the `no-check` alert is gone.
-- `make check` still exits 0 on main.
-
 ### Keypad 1 and 3 jump ten songs back or forward, like Winamp (planned 2026-10-25 by the plan role)
 
 **Goal.** Winamp's keypad 1 jumps ten songs back in the playlist and keypad 3 ten songs forward.
