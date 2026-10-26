@@ -30,7 +30,8 @@ use super::Message;
 /// `init_ui` installs this as the window subscription's mapper, so the
 /// key-to-message table lives here once and the subscription stays a plain
 /// `filter_map`. With `NumLock` on, the keypad digits 4, 5, 6, 7, 9, 8, and 2
-/// also drive the transport and volume (see [`numpad_shortcut`]).
+/// also drive the transport and volume (see [`numpad_shortcut`]), and Alt+Up
+/// and Alt+Down move the selected browse row (see [`move_row_shortcut`]).
 pub(super) fn message_for(event: Event) -> Option<Message> {
     match event {
         Event::KeyPressed {
@@ -41,6 +42,7 @@ pub(super) fn message_for(event: Event) -> Option<Message> {
             ..
         } => playlist_sort_shortcut(&physical_key, location, modifiers)
             .or_else(|| file_info_shortcut(&physical_key, location, modifiers))
+            .or_else(|| move_row_shortcut(&key, modifiers))
             .or_else(|| numpad_shortcut(&key, location, modifiers))
             .or_else(|| shortcut(&key, modifiers)),
         Event::KeyReleased { .. } | Event::ModifiersChanged(_) => None,
@@ -83,6 +85,20 @@ fn file_info_shortcut(
         && location == Location::Standard
         && *physical_key == key::Physical::Code(key::Code::Digit3))
     .then_some(Message::ToggleFileInfo)
+}
+
+/// Alt+Up and Alt+Down move the selected browse row one place up or down, like
+/// Winamp's playlist editor. The logical arrow key is matched wherever it sits,
+/// and Control, Shift, and Logo must be released; plain arrows stay volume.
+fn move_row_shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
+    if !modifiers.alt() || modifiers.control() || modifiers.shift() || modifiers.logo() {
+        return None;
+    }
+    match key {
+        Key::Named(key::Named::ArrowUp) => Some(Message::MoveSelectedRowUp),
+        Key::Named(key::Named::ArrowDown) => Some(Message::MoveSelectedRowDown),
+        _ => None,
+    }
 }
 
 /// Winamp's numeric-keypad bindings, for keys pressed at `Location::Numpad`
@@ -621,6 +637,28 @@ mod tests {
             message_for(key_pressed(Key::Character("R".into()), Modifiers::SHIFT)),
             Some(Message::RandomizeBrowse)
         ));
+    }
+
+    #[test]
+    fn message_for_maps_alt_arrows_to_move_the_selected_row() {
+        assert_maps!(Key::Named(key::Named::ArrowUp), Modifiers::ALT => Message::MoveSelectedRowUp);
+        assert_maps!(
+            Key::Named(key::Named::ArrowDown), Modifiers::ALT => Message::MoveSelectedRowDown
+        );
+        for modifiers in [
+            Modifiers::ALT | Modifiers::CTRL,
+            Modifiers::ALT | Modifiers::SHIFT,
+            Modifiers::ALT | Modifiers::LOGO,
+        ] {
+            for named in [key::Named::ArrowUp, key::Named::ArrowDown] {
+                assert!(
+                    message_for(key_pressed(Key::Named(named), modifiers)).is_none(),
+                    "{named:?} with {modifiers:?} must not map"
+                );
+            }
+        }
+        assert_maps!(Key::Named(key::Named::ArrowUp), Modifiers::NONE => Message::VolumeUp);
+        assert_maps!(Key::Named(key::Named::ArrowDown), Modifiers::NONE => Message::VolumeDown);
     }
 
     #[test]

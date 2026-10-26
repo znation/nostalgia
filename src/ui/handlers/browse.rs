@@ -380,6 +380,22 @@ pub(in crate::ui) fn randomize_browse(player: &mut WinampPlayer) -> Task<Message
     Task::none()
 }
 
+/// Alt+Up or Alt+Down was pressed: move the showing list's selected row one
+/// place up or down (`down`). Like [`reverse_browse`] the reorder is one-shot
+/// and local to the visible list, and returning to a moved parent restores its
+/// library order; the row stays selected so repeated presses keep moving it.
+pub(in crate::ui) fn move_selected_row(player: &mut WinampPlayer, down: bool) -> Task<Message> {
+    match player.current_view {
+        CurrentView::Artists => player.artists.move_selected(down),
+        CurrentView::Albums => player.albums.move_selected(down),
+        CurrentView::Songs => player.songs.move_selected(down),
+        CurrentView::AllSongs => player.all_songs.move_selected(down),
+        CurrentView::AllAlbums => player.all_albums.move_selected(down),
+        CurrentView::Playlists => player.playlists.move_selected(down),
+    }
+    Task::none()
+}
+
 /// The Reload button was pressed: refetch the top-level artists list and show
 /// it under the Artists view. Clearing an active search and returning to
 /// Artists make the reloaded list the one the user sees; the search box's

@@ -296,6 +296,39 @@ impl<T> BrowseList<T> {
         self.reorder_with(|items| shuffled_order(items.len(), seed));
     }
 
+    /// Moves the selected row one place up (`down` false) or down, keeping it
+    /// selected at its new index so repeated calls keep moving it. One-shot
+    /// like [`Self::reverse_rows`]: cached titles and labels follow the rows,
+    /// the epoch is bumped, and the swap composes with [`Self::sort_rows_by`],
+    /// [`Self::reverse_rows`], and [`Self::shuffle_rows`] into the permutation
+    /// [`Self::restore_library_order`] undoes. With nothing selected, the
+    /// selected row already at the edge it would move past, or the list
+    /// loading or failed, nothing changes.
+    pub(super) fn move_selected(&mut self, down: bool)
+    where
+        T: Clone,
+    {
+        let Some(from) = self.selected else {
+            return;
+        };
+        let to = if down {
+            from.saturating_add(1)
+        } else {
+            match from.checked_sub(1) {
+                Some(to) => to,
+                None => return,
+            }
+        };
+        if self.loading || self.error.is_some() || to >= self.items.len() {
+            return;
+        }
+        let mut order: Vec<usize> = (0..self.items.len()).collect();
+        order.swap(from, to);
+        self.apply_reorder(order);
+        // `apply_reorder` drops the selection; the moved row is now at `to`.
+        self.selected = Some(to);
+    }
+
     /// Applies the permutation `order` computes from the rows, unless the list
     /// has fewer than two rows or is still loading or failed, in which case
     /// nothing changes.
@@ -336,7 +369,7 @@ impl<T> BrowseList<T> {
         self.epoch = self.epoch.wrapping_add(1);
     }
 
-    /// Undoes every [`Self::sort_rows_by`], [`Self::reverse_rows`], and [`Self::shuffle_rows`] since the rows were stored, putting
+    /// Undoes every [`Self::sort_rows_by`], [`Self::reverse_rows`], [`Self::shuffle_rows`], and [`Self::move_selected`] since the rows were stored, putting
     /// `items` (and the cached titles and labels) back in library order and
     /// bumping the epoch because the indices a rendered row emits now name
     /// other entries. A list that is not sorted — or whose rows have since
@@ -435,6 +468,40 @@ mod tests {
         let mut list = BrowseList::new(false);
         list.store(items.iter().map(|item| item.to_string()).collect());
         list
+    }
+
+    #[test]
+    fn move_selected_swaps_with_the_neighbour_and_keeps_the_selection() {
+        let mut list = loaded(&["a", "b", "c"]);
+        list.selected = Some(1);
+        list.move_selected(true);
+        assert_eq!(list.items, ["a", "c", "b"]);
+        assert_eq!(list.selected(), Some(2));
+        list.move_selected(false);
+        list.move_selected(false);
+        assert_eq!(list.items, ["b", "a", "c"]);
+        assert_eq!(list.selected(), Some(0));
+        list.restore_library_order();
+        assert_eq!(list.items, ["a", "b", "c"]);
+    }
+
+    #[test]
+    fn move_selected_is_a_noop_without_a_selection_at_an_edge_or_while_loading() {
+        let mut list = loaded(&["a", "b", "c"]);
+        let epoch = list.epoch;
+        list.move_selected(true);
+        assert_eq!((list.epoch, list.selected()), (epoch, None));
+        list.selected = Some(0);
+        list.move_selected(false);
+        list.selected = Some(2);
+        list.move_selected(true);
+        assert_eq!(list.items, ["a", "b", "c"]);
+        assert_eq!((list.epoch, list.selected()), (epoch, Some(2)));
+        list.selected = Some(1);
+        list.loading = true;
+        list.move_selected(true);
+        assert_eq!(list.items, ["a", "b", "c"]);
+        assert_eq!((list.epoch, list.selected()), (epoch, Some(1)));
     }
 
     #[test]

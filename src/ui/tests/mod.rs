@@ -1223,6 +1223,7 @@ mod flat_lists_tests;
 mod jump_tests;
 mod loading_tests;
 mod mixer_tests;
+mod move_row_tests;
 mod panels_tests;
 mod randomize_tests;
 mod readouts_tests;

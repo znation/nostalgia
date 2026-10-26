@@ -200,6 +200,12 @@ pub(in crate::ui) enum Message {
     // handler bumps that list's epoch and leaves every other list and the
     // playback state alone.
     RandomizeBrowse,
+    // Alt+Up: move the showing list's selected row one place up, one-shot like
+    // Sort. The handler bumps that list's epoch, keeps the row selected, and
+    // leaves every other list and the playback state alone.
+    MoveSelectedRowUp,
+    // Alt+Down: like `MoveSelectedRowUp`, one place down.
+    MoveSelectedRowDown,
     // The browse view's Reload button: refetch the top-level artists list and
     // return to the Artists view, clearing an active search but not the search
     // box's typed text. It leaves playback and the other browse lists alone.

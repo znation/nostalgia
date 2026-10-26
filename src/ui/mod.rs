@@ -210,6 +210,8 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::SortBrowse => handlers::browse::sort_browse(player),
         Message::ReverseBrowse => handlers::browse::reverse_browse(player),
         Message::RandomizeBrowse => handlers::browse::randomize_browse(player),
+        Message::MoveSelectedRowUp => handlers::browse::move_selected_row(player, false),
+        Message::MoveSelectedRowDown => handlers::browse::move_selected_row(player, true),
         Message::ReloadLibrary => handlers::browse::reload_library(player),
         Message::ShowAllSongs => handlers::browse::show_all_songs(player),
         Message::ShowAllAlbums => handlers::browse::show_all_albums(player),

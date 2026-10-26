@@ -285,7 +285,16 @@ labels reordered with the rows, other lists, view, search, and playback unchange
 parent restoring library order (reversal, shuffle, and Sort compose), and a no-op on an empty, loading, or
 failed list.
 
-**Enforced by.** `BrowseList::reverse_rows` and the shared `BrowseList::apply_reorder` in
+Alt+Up and Alt+Down (logical arrow keys with Alt held and Control, Shift, and Logo released) move
+the showing list's selected row one place up or down. The move is one-shot like the others: cached
+titles and labels follow the rows, the epoch is bumped, and it composes with Sort, reverse, and
+shuffle so Back restores library order. Unlike them the moved row stays selected at its new index.
+It is a no-op with no selection, at the edge the row would move past, or on a loading or failed
+list.
+
+**Enforced by.** `BrowseList::move_selected` in `src/ui/browse.rs`, `browse::move_selected_row`
+in `src/ui/handlers/browse.rs` (routed from `Message::MoveSelectedRowUp` and
+`Message::MoveSelectedRowDown`), and `shortcuts::move_row_shortcut` in `src/ui/shortcuts.rs`. `BrowseList::reverse_rows` and the shared `BrowseList::apply_reorder` in
 `src/ui/browse.rs`, `browse::reverse_browse` in `src/ui/handlers/browse.rs` (routed from
 `Message::ReverseBrowse`), `BrowseList::shuffle_rows` and `browse::shuffled_order` (seeded by `transport::shuffle_roll`) with
 `browse::randomize_browse` (routed from `Message::RandomizeBrowse`), the Ctrl+R and Ctrl+Shift+R arms of `shortcut`, and `shortcuts::playlist_sort_shortcut` (Ctrl+Shift+1), both in
@@ -304,6 +313,10 @@ draw beside Top.
 
 **Pinned by.**
 
+- `move_selected_swaps_with_the_neighbour_and_keeps_the_selection`
+- `move_selected_is_a_noop_without_a_selection_at_an_edge_or_while_loading`
+- `message_for_maps_alt_arrows_to_move_the_selected_row`
+- the tests in `src/ui/tests/move_row_tests.rs`
 - `browse_nav_buttons_place_sort_beside_top`
 - `browse_nav_buttons_place_reload_beside_sort`
 - `sort_reorders_artists_case_insensitively`
