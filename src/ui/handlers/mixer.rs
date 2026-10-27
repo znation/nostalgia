@@ -64,6 +64,7 @@ pub(in crate::ui) fn balance_wheel(player: &mut WinampPlayer, direction: f32) ->
     })
 }
 
+/// The balance slider's drag: sets the stereo balance. A move toward center
 /// that lands near it snaps to exactly center (see
 /// [`crate::state::snap_balance_to_center`]); "toward" is judged against the
 /// drag's previous requested value, so a drag continuing inward through the

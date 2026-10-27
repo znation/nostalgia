@@ -5,6 +5,25 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### A balance-drag doc comment starts mid-sentence after its first line was dropped (found by the bugfix role 2026-10-26) — fixed 2026-10-26 by the bugfix role
+
+`balance_change`'s doc comment in `src/ui/handlers/mixer.rs` began with
+"`/// that lands near it snaps to exactly center`", a sentence fragment: the
+handler reordering in `2b684add9` dropped the first line, "The balance
+slider's drag: sets the stereo balance. A move toward center". Rustdoc
+rendered the handler's documentation starting mid-sentence, so the comment no
+longer said what the drag does.
+
+**Reproduce:** compare `git show de72c2e95:src/ui/handlers/mixer.rs` (the full
+comment) with the current file; it opens at `that` instead.
+
+**Fix:** restored the dropped line above the existing fragment.
+
+**Validation gap:** no-observability (closest fit) — no check reads private
+doc prose, so the truncated comment left no failing trace; comparing the
+current source with the commit history confirmed it. No behavior changed, so
+no behavior regression test applies.
+
 ### A NaN settings value starts the player muted instead of at its default (found by the bugfix role 2026-10-26) — fixed 2026-10-26 by the bugfix role
 
 A settings file line such as `volume=NaN` was accepted: `f32::from_str` reads
