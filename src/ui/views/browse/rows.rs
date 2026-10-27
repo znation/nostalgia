@@ -22,7 +22,9 @@ use super::super::spacer;
 mod lazy;
 pub(in crate::ui::views) mod text;
 
-use self::lazy::LazyRow;
+// Shared with the Jump to File panel's match list, so both heavy row lists use
+// the same build-on-key-change cache.
+pub(in crate::ui::views) use self::lazy::LazyRow;
 
 use self::text::{album_row, list_count_summary, row_prefix, song_list_summary, song_row};
 

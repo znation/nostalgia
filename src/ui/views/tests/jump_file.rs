@@ -1,7 +1,7 @@
 //! The Jump to File overlay: its filter, its rows, and the messages each
 //! control publishes.
 
-use super::super::jump_file::JUMP_FILE_LIST_HEIGHT;
+use super::super::jump_file::{JUMP_FILE_LIST_HEIGHT, match_list_build_count};
 use super::super::{
     JUMP_FILE_LIST_PADDING, JUMP_FILE_PAGE_ROWS, JUMP_FILE_ROW_HEIGHT, JUMP_FILE_ROW_SPACING,
     jump_file_highlighted, jump_file_matches, jump_file_row_label, jump_file_row_style,
@@ -128,6 +128,55 @@ fn overlay_draws_the_heading_matching_rows_and_buttons() {
             "the filter must omit {omitted:?}: {texts:?}"
         );
     }
+}
+
+#[test]
+fn the_match_list_reuses_its_rows_until_the_filter_or_highlight_changes() {
+    let titles = vec![
+        "Opening".to_string(),
+        "Middle".to_string(),
+        "Closing".to_string(),
+    ];
+    let before = match_list_build_count();
+    let first = overlay("", &titles, 7, None);
+    let mut tree = Tree::new(first.as_widget());
+    assert_eq!(
+        match_list_build_count() - before,
+        1,
+        "the first view builds the match list once"
+    );
+
+    let same = overlay("", &titles, 7, None);
+    tree.diff(same.as_widget());
+    assert_eq!(
+        match_list_build_count() - before,
+        1,
+        "an unchanged filter and highlight reuses the built rows"
+    );
+
+    let filtered = overlay("ing", &titles, 7, None);
+    tree.diff(filtered.as_widget());
+    assert_eq!(
+        match_list_build_count() - before,
+        2,
+        "a changed query rebuilds the list"
+    );
+
+    let highlighted = overlay("ing", &titles, 7, Some(2));
+    tree.diff(highlighted.as_widget());
+    assert_eq!(
+        match_list_build_count() - before,
+        3,
+        "a moved highlight rebuilds the list"
+    );
+
+    let reloaded = overlay("ing", &titles, 8, Some(2));
+    tree.diff(reloaded.as_widget());
+    assert_eq!(
+        match_list_build_count() - before,
+        4,
+        "a new list epoch rebuilds the list"
+    );
 }
 
 #[test]

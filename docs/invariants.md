@@ -1892,7 +1892,11 @@ and `jump_time_overlay_buttons_and_backdrop_publish_their_messages`
   match, and `Jump` and `Close` buttons through `modal_overlay`. An empty list reads `No songs`; a
   list with no match reads `No matching songs`, and neither draws a row. `Close` and the backdrop
   publish `ToggleJumpFile`, `Jump` publishes `JumpFileSubmitted`, and each row publishes
-  `JumpFileRowSelected`. The shade branch never draws it.
+  `JumpFileRowSelected`. The shade branch never draws it. The match rows are built through
+  `views::browse::rows::lazy::LazyRow`, keyed by `MatchListKey` (list epoch, hash of the typed
+  query, title count, and the highlighted selection), so a view rebuild caused by a playback poll
+  or marquee tick reuses the built rows instead of re-filtering every title and formatting every
+  row; a changed filter, list epoch, or highlight rebuilds the list.
 
 **Enforced by.** `handlers::jump`, `handlers::browse`,
 `handlers::browse::scroll::reveal_offset`, `ui::subscriptions`,
@@ -1908,6 +1912,8 @@ jump-file branch of `ui::view::view`.
 `overlay_highlights_the_selected_row`,
 `row_and_buttons_publish_their_messages`, and
 `empty_and_no_match_lists_have_their_own_wording` (`src/ui/views/tests/jump_file.rs`);
+`the_match_list_reuses_its_rows_until_the_filter_or_highlight_changes`
+(`src/ui/views/tests/jump_file.rs`) pins the match-row cache;
 `message_for_maps_j_to_jump_file`, `message_for_maps_ctrl_j_to_jump_time`, and
 `message_for_jump_file_maps_up_and_down_and_falls_back` (`src/ui/shortcuts.rs`);
 `page_up_and_down_move_the_highlight_by_one_page_and_clamp`,

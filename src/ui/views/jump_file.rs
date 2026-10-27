@@ -8,6 +8,7 @@ use iced::{
 
 use crate::ui::{Message, style, theme};
 
+use super::browse::rows::LazyRow;
 use super::{labeled_button, modal::modal_overlay};
 
 /// The Jump to File box's widget id, so `J` can focus it on opening.
@@ -89,6 +90,80 @@ pub(crate) fn jump_file_row_style(
     super::browse::rows::browse_row_style(status, false, highlighted)
 }
 
+// Counts match-list builds on the current test thread, so a test can prove
+// the panel reuses its built rows across view refreshes.
+#[cfg(test)]
+thread_local! {
+    static MATCH_LIST_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many Jump to File match lists the current test thread has built.
+#[cfg(test)]
+pub(super) fn match_list_build_count() -> usize {
+    MATCH_LIST_BUILDS.with(std::cell::Cell::get)
+}
+
+/// The cached match list's dependency: everything that changes the rows it
+/// builds. The list reuses its built buttons while these hash the same, so a
+/// view rebuild driven by a playback poll or marquee tick does not re-filter
+/// the whole song list or rebuild every match row. Production lists bump
+/// `epoch` whenever their titles change (see `BrowseList`); `title_count`
+/// keeps the empty-list wording honest for any caller that does not.
+#[derive(Clone, Copy, Hash)]
+struct MatchListKey {
+    epoch: u64,
+    query: u64,
+    title_count: usize,
+    selected: Option<usize>,
+}
+
+/// A stable hash of the typed query, so an unchanged filter reuses the built
+/// rows without comparing (or re-filtering) the whole title list.
+fn query_hash(query: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    query.hash(&mut hasher);
+    hasher.finish()
+}
+
+/// Builds one row per title matching `query`, numbered by its source position,
+/// with the row [`jump_file_highlighted`] resolves from `key.selected` drawn
+/// highlighted. Called by the row cache only when [`MatchListKey`] changes, so
+/// the labels are formatted once per filter or highlight change rather than
+/// once per view refresh.
+fn match_rows(query: &str, titles: &[String], key: &MatchListKey) -> Column<'static, Message> {
+    #[cfg(test)]
+    MATCH_LIST_BUILDS.with(|count| count.set(count.get() + 1));
+
+    let matches = jump_file_matches(titles, query);
+    let highlighted = jump_file_highlighted(&matches, key.selected);
+    let mut rows = Column::new()
+        .spacing(JUMP_FILE_ROW_SPACING)
+        .padding(JUMP_FILE_LIST_PADDING);
+    for index in matches {
+        let label = jump_file_row_label(index, &titles[index]);
+        rows = rows.push(
+            Button::new(Text::new(label).size(18))
+                .width(Length::Fill)
+                .height(Length::Fixed(JUMP_FILE_ROW_HEIGHT))
+                .on_press(Message::JumpFileRowSelected {
+                    epoch: key.epoch,
+                    index,
+                })
+                .style(move |_theme, status| {
+                    jump_file_row_style(highlighted == Some(index), status)
+                }),
+        );
+    }
+    if titles.is_empty() {
+        rows = rows.push(Text::new("No songs").size(18).color(theme::TEXT));
+    } else if highlighted.is_none() {
+        rows = rows.push(Text::new("No matching songs").size(18).color(theme::TEXT));
+    }
+    rows
+}
+
 /// Stacks the transient Jump to File panel over `base`.
 ///
 /// The panel is modal (see [`modal_overlay`]): `Close` and the backdrop each
@@ -102,6 +177,10 @@ pub(crate) fn jump_file_row_style(
 /// through [`jump_file_row_style`]. An empty list reads `No songs`; a list
 /// with no match reads `No matching songs`. No state or playback is touched
 /// here.
+///
+/// The rows are wrapped in a [`LazyRow`] keyed by [`MatchListKey`], so the
+/// panel's own rows — the heaviest part of this overlay — are reused across
+/// view refreshes whose filter, list epoch, and highlight are unchanged.
 pub fn view_jump_file_overlay<'a>(
     base: Element<'a, Message>,
     query: &'a str,
@@ -109,29 +188,15 @@ pub fn view_jump_file_overlay<'a>(
     epoch: u64,
     selected: Option<usize>,
 ) -> Element<'a, Message> {
-    let matches = jump_file_matches(titles, query);
-    let highlighted = jump_file_highlighted(&matches, selected);
-    let has_matches = highlighted.is_some();
-    let mut rows = Column::new()
-        .spacing(JUMP_FILE_ROW_SPACING)
-        .padding(JUMP_FILE_LIST_PADDING);
-    for index in matches {
-        let label = jump_file_row_label(index, &titles[index]);
-        rows = rows.push(
-            Button::new(Text::new(label).size(18))
-                .width(Length::Fill)
-                .height(Length::Fixed(JUMP_FILE_ROW_HEIGHT))
-                .on_press(Message::JumpFileRowSelected { epoch, index })
-                .style(move |_theme, status| {
-                    jump_file_row_style(highlighted == Some(index), status)
-                }),
-        );
-    }
-    if titles.is_empty() {
-        rows = rows.push(Text::new("No songs").size(18).color(theme::TEXT));
-    } else if !has_matches {
-        rows = rows.push(Text::new("No matching songs").size(18).color(theme::TEXT));
-    }
+    let rows = LazyRow::new(
+        MatchListKey {
+            epoch,
+            query: query_hash(query),
+            title_count: titles.len(),
+            selected,
+        },
+        move |key| match_rows(query, titles, key),
+    );
 
     let input = TextInput::new("Filter songs", query)
         .id(JUMP_FILE_INPUT_ID)
