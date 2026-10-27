@@ -291,15 +291,13 @@ async fn play_track_rollback_leaves_a_newer_plays_flag_alone() {
     assert_eq!(calls.get(), 2);
 }
 
-// `play_track` starts the preview only after the backend accepts the starting
-// volume: `set_volume` and `play` are chained, so a backend that cannot set the
-// gain must not start the preview at rodio's full-volume default. Pin both the
-// surfaced error and the exact command sequence — a regression that issued
-// `play` anyway (or set the volume best-effort) would sound the preview while
-// reporting failure, and only the recorded calls can catch that.
-#[tokio::test]
-async fn play_track_does_not_start_the_preview_when_the_volume_cannot_be_set() {
-    let audio = Arc::new(RejectingAudio::new(RejectedCommand::SetVolume));
+// Plays "song-1" against a backend that rejects `command`, asserts the play
+// fails with the backend's error and rolled back to "song-1 selected, not
+// playing", and hands back the backend, service and state for further checks.
+async fn play_rejected_by(
+    command: RejectedCommand,
+) -> (Arc<RejectingAudio>, AppleMusicService, Arc<Mutex<AppState>>) {
+    let audio = Arc::new(RejectingAudio::new(command));
     let (service, state) = service_with_audio(Arc::clone(&audio) as Arc<dyn AudioOutput>);
 
     let error = service
@@ -309,6 +307,19 @@ async fn play_track_does_not_start_the_preview_when_the_volume_cannot_be_set() {
 
     assert_eq!(error.to_string(), "the audio device is gone");
     assert_playback_state(&state, Some("song-1"), false).await;
+    (audio, service, state)
+}
+
+// `play_track` starts the preview only after the backend accepts the starting
+// volume: `set_volume` and `play` are chained, so a backend that cannot set the
+// gain must not start the preview at rodio's full-volume default. Pin both the
+// surfaced error and the exact command sequence — a regression that issued
+// `play` anyway (or set the volume best-effort) would sound the preview while
+// reporting failure, and only the recorded calls can catch that.
+#[tokio::test]
+async fn play_track_does_not_start_the_preview_when_the_volume_cannot_be_set() {
+    let (audio, _service, _state) = play_rejected_by(RejectedCommand::SetVolume).await;
+
     assert_eq!(audio.calls(), vec![AudioCall::SetVolume(0.5)]);
 }
 
@@ -323,21 +334,13 @@ async fn play_track_does_not_start_the_preview_when_the_volume_cannot_be_set() {
 // resume and cannot claim playback the backend never produced.
 #[tokio::test]
 async fn play_track_does_not_start_the_preview_when_the_balance_cannot_be_set() {
-    let audio = Arc::new(RejectingAudio::new(RejectedCommand::SetBalance));
-    let (service, state) = service_with_audio(Arc::clone(&audio) as Arc<dyn AudioOutput>);
+    let (audio, service, state) = play_rejected_by(RejectedCommand::SetBalance).await;
 
-    let error = service
-        .play_track("song-1", Some(PREVIEW_URL), || true)
-        .await
-        .unwrap_err();
-
-    assert_eq!(error.to_string(), "the audio device is gone");
     assert_eq!(
         audio.calls(),
         vec![AudioCall::SetVolume(0.5), AudioCall::SetBalance(0.0)],
         "the start chain must stop at the rejected balance"
     );
-    assert_playback_state(&state, Some("song-1"), false).await;
 
     service.resume().await.unwrap();
     assert_playback_state(&state, Some("song-1"), false).await;
@@ -355,15 +358,8 @@ async fn play_track_does_not_start_the_preview_when_the_balance_cannot_be_set() 
 // failure tests share.
 #[tokio::test]
 async fn play_track_does_not_start_the_preview_when_the_equalizer_cannot_be_set() {
-    let audio = Arc::new(RejectingAudio::new(RejectedCommand::SetEqualizer));
-    let (service, state) = service_with_audio(Arc::clone(&audio) as Arc<dyn AudioOutput>);
+    let (audio, _service, _state) = play_rejected_by(RejectedCommand::SetEqualizer).await;
 
-    let error = service
-        .play_track("song-1", Some(PREVIEW_URL), || true)
-        .await
-        .unwrap_err();
-
-    assert_eq!(error.to_string(), "the audio device is gone");
     assert_eq!(
         audio.calls(),
         vec![
@@ -373,7 +369,6 @@ async fn play_track_does_not_start_the_preview_when_the_equalizer_cannot_be_set(
         ],
         "the start chain must stop at the rejected equalizer"
     );
-    assert_playback_state(&state, Some("song-1"), false).await;
 }
 
 // The test above plays once from the default (no track), so it only
