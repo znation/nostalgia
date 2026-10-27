@@ -197,6 +197,46 @@ fn the_reader_reports_a_partial_request_as_incomplete() {
     );
 }
 
+#[test]
+fn the_reader_preserves_a_partial_body_between_polls() {
+    let (server, mut client) = connected_pair();
+    client
+        .write_all(b"POST /token?nonce=test HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 11\r\n\r\nhello")
+        .expect("write headers and the first body fragment");
+    server
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .expect("bound the readiness check");
+    // Ensure the first poll has bytes to consume, rather than merely polling
+    // an empty socket before both fragments arrive together.
+    assert_eq!(
+        server.peek(&mut [0u8; 1]).expect("first fragment arrived"),
+        1
+    );
+    let mut reader = http::RequestReader::new(server).expect("wrap the server side");
+    assert!(reader.poll().expect("read the first fragment").is_none());
+    assert!(
+        reader
+            .poll()
+            .expect("poll the stalled body again")
+            .is_none()
+    );
+
+    client.write_all(b" world").expect("finish the body");
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let request = loop {
+        if let Some(request) = reader.poll().expect("resume the partial request") {
+            break request;
+        }
+        assert!(Instant::now() < deadline, "the completed request was lost");
+        thread::sleep(Duration::from_millis(1));
+    };
+    assert_eq!(request.method, "POST");
+    assert_eq!(request.path, "/token");
+    assert_eq!(request.query.as_deref(), Some("nonce=test"));
+    assert_eq!(request.host.as_deref(), Some("127.0.0.1"));
+    assert_eq!(request.body, b"hello world");
+}
+
 // A request whose headers declare a `Content-Length` but whose body closes
 // before that many bytes arrive must be ignored, not returned with the bytes
 // that did arrive. `authorize_survives_a_connection_that_closes_early` pins
