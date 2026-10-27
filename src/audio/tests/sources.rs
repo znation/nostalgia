@@ -347,6 +347,17 @@ fn seek_failure_report_names_the_target_and_the_cause() {
     );
 }
 
+/// Runs `samples` through a `BalanceSource` set to `balance` and returns the output.
+fn balanced(channels: u16, samples: Vec<f32>, balance: f32) -> Vec<f32> {
+    let raw = rodio::buffer::SamplesBuffer::new(
+        ChannelCount::new(channels).unwrap(),
+        SampleRate::new(44_100).unwrap(),
+        samples,
+    );
+    let balance = Arc::new(AtomicU32::new(balance.to_bits()));
+    BalanceSource::new(raw, balance).collect()
+}
+
 #[test]
 fn balance_source_centered_leaves_samples_unchanged() {
     let channels = ChannelCount::new(2).unwrap();
@@ -364,67 +375,27 @@ fn balance_source_centered_leaves_samples_unchanged() {
 
 #[test]
 fn balance_source_hard_left_silences_the_right_channel() {
-    let raw = rodio::buffer::SamplesBuffer::new(
-        ChannelCount::new(2).unwrap(),
-        SampleRate::new(44_100).unwrap(),
-        vec![0.5_f32, 0.25],
-    );
-    let balance = Arc::new(AtomicU32::new((-1.0_f32).to_bits()));
-    let source = BalanceSource::new(raw, balance);
-
-    assert_eq!(source.collect::<Vec<_>>(), vec![0.5, 0.0]);
+    assert_eq!(balanced(2, vec![0.5_f32, 0.25], -1.0_f32), vec![0.5, 0.0]);
 }
 
 #[test]
 fn balance_source_hard_right_silences_the_left_channel() {
-    let raw = rodio::buffer::SamplesBuffer::new(
-        ChannelCount::new(2).unwrap(),
-        SampleRate::new(44_100).unwrap(),
-        vec![0.5_f32, 0.25],
-    );
-    let balance = Arc::new(AtomicU32::new(1.0_f32.to_bits()));
-    let source = BalanceSource::new(raw, balance);
-
-    assert_eq!(source.collect::<Vec<_>>(), vec![0.0, 0.25]);
+    assert_eq!(balanced(2, vec![0.5_f32, 0.25], 1.0_f32), vec![0.0, 0.25]);
 }
 
 #[test]
 fn balance_source_partial_right_attenuates_the_left_channel() {
-    let raw = rodio::buffer::SamplesBuffer::new(
-        ChannelCount::new(2).unwrap(),
-        SampleRate::new(44_100).unwrap(),
-        vec![0.5_f32, 0.25],
-    );
-    let balance = Arc::new(AtomicU32::new(0.5_f32.to_bits()));
-    let source = BalanceSource::new(raw, balance);
-
-    assert_eq!(source.collect::<Vec<_>>(), vec![0.25, 0.25]);
+    assert_eq!(balanced(2, vec![0.5_f32, 0.25], 0.5_f32), vec![0.25, 0.25]);
 }
 
 #[test]
 fn balance_source_partial_left_attenuates_the_right_channel() {
-    let raw = rodio::buffer::SamplesBuffer::new(
-        ChannelCount::new(2).unwrap(),
-        SampleRate::new(44_100).unwrap(),
-        vec![0.5_f32, 0.25],
-    );
-    let balance = Arc::new(AtomicU32::new((-0.5_f32).to_bits()));
-    let source = BalanceSource::new(raw, balance);
-
-    assert_eq!(source.collect::<Vec<_>>(), vec![0.5, 0.125]);
+    assert_eq!(balanced(2, vec![0.5_f32, 0.25], -0.5_f32), vec![0.5, 0.125]);
 }
 
 #[test]
 fn balance_source_attenuates_a_mono_source() {
-    let raw = rodio::buffer::SamplesBuffer::new(
-        ChannelCount::new(1).unwrap(),
-        SampleRate::new(44_100).unwrap(),
-        vec![0.5_f32, -0.5],
-    );
-    let balance = Arc::new(AtomicU32::new(0.5_f32.to_bits()));
-    let source = BalanceSource::new(raw, balance);
-
-    assert_eq!(source.collect::<Vec<_>>(), vec![0.25, -0.25]);
+    assert_eq!(balanced(1, vec![0.5_f32, -0.5], 0.5_f32), vec![0.25, -0.25]);
 }
 
 #[test]
