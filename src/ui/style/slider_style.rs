@@ -1,5 +1,4 @@
-//! Slider chrome styles: the base groove-and-thumb style plus the tinted
-//! variants built on it.
+//! Slider chrome styles: the base groove-and-thumb style plus the tinted variants built on it.
 //!
 //! [`chrome_slider_style`] is the sunken-groove / raised-thumb base;
 //! [`level_slider_style`] and [`band_slider_style`] repaint only its rail fill
@@ -13,17 +12,15 @@ use super::{chrome_face, mix_channel, square_border};
 
 /// The sunken-groove / raised-thumb chrome style for a slider.
 ///
-/// The base skin's slider is a dark recess with a blocky chrome thumb. iced's
-/// [`slider::Rail`] paints a single-color [`Border`](iced::Border) and no
-/// shadow, so the sunken edge is the dark 1px outline around a near-black
-/// groove; the [`slider::Handle`] carries the light 1px border that reads as
-/// raised chrome, the same light-border trick
-/// [`chrome_button_style`](super::chrome_button_style) uses. The rail is
-/// uniform (`LCD_BACKGROUND` on both sides of the handle) because the thumb,
-/// not a fill color, marks the value. The handle face comes from
-/// [`chrome_face`], the same ladder
-/// [`chrome_button_style`](super::chrome_button_style) uses. Pure, so the
-/// color rule is testable without building a widget.
+/// The base skin's slider is a dark recess with a blocky chrome thumb. iced's [`slider::Rail`]
+/// paints a single-color [`Border`](iced::Border) and no shadow, so the sunken edge is the dark 1px
+/// outline around a near-black groove; the [`slider::Handle`] carries the light 1px border that
+/// reads as raised chrome, the same light-border trick
+/// [`chrome_button_style`](super::chrome_button_style) uses. The rail is uniform
+/// (`LCD_BACKGROUND` on both sides of the handle) because the thumb, not a fill color, marks the
+/// value. The handle face comes from [`chrome_face`], the same ladder
+/// [`chrome_button_style`](super::chrome_button_style) uses. Pure, so the color rule is testable
+/// without building a widget.
 pub fn chrome_slider_style(status: slider::Status) -> slider::Style {
     let face = chrome_face(
         matches!(status, slider::Status::Hovered),
@@ -51,10 +48,9 @@ pub fn chrome_slider_style(status: slider::Status) -> slider::Style {
     }
 }
 
-/// The equalizer band tint for `gain`: green at
-/// [`GAIN_MIN_DB`](crate::equalizer::GAIN_MIN_DB), yellow at
-/// `0.0`, and red at [`GAIN_MAX_DB`](crate::equalizer::GAIN_MAX_DB),
-/// interpolated in between.
+/// The equalizer band tint for `gain`: green at [`GAIN_MIN_DB`](crate::equalizer::GAIN_MIN_DB),
+/// yellow at `0.0`, and red at [`GAIN_MAX_DB`](crate::equalizer::GAIN_MAX_DB), interpolated in
+/// between.
 ///
 /// `gain` passes through [`clamp_gain`](crate::equalizer::clamp_gain) first, so
 /// an out-of-range value lands on the matching end stop and a NaN maps to the
@@ -84,28 +80,25 @@ pub fn band_gain_color(gain: f32) -> Color {
 
 /// The chrome slider style with both rail halves tinted by the band's `gain`.
 ///
-/// iced paints `backgrounds.0` from the range start to the thumb and
-/// `backgrounds.1` from the thumb to the range end, so both halves must carry
-/// [`band_gain_color`]; tinting only one would leave a gray segment whose
-/// extent moves with the value. The rail width and border and the whole handle
-/// stay exactly [`chrome_slider_style`]'s, so the tint changes only the
-/// groove's color. Delegates the rail-fill rule to [`level_slider_style`], so
-/// the two styles cannot drift apart. Pure, so the rule is testable without
-/// building a widget.
+/// iced paints `backgrounds.0` from the range start to the thumb and `backgrounds.1` from the thumb
+/// to the range end, so both halves must carry [`band_gain_color`]; tinting only one would leave a
+/// gray segment whose extent moves with the value. The rail width and border and the whole handle
+/// stay exactly [`chrome_slider_style`]'s, so the tint changes only the groove's color. Delegates
+/// the rail-fill rule to [`level_slider_style`], so the two styles cannot drift apart. Pure, so the
+/// rule is testable without building a widget.
 pub fn band_slider_style(gain: f32, status: slider::Status) -> slider::Style {
     level_slider_style(band_gain_color(gain), status)
 }
 
 /// The chrome slider style with both rail halves painted `fill`.
 ///
-/// This is the level sliders' style (transport volume and balance, shade
-/// volume), and [`band_slider_style`] reuses it with the band's gain color as
-/// the fill: iced paints `backgrounds.0` from the range start to the thumb and
-/// `backgrounds.1` from the thumb to the range end, so both halves carry the
-/// fill and no gray segment remains on either side. The rail width and border
-/// and the whole handle stay exactly [`chrome_slider_style`]'s, so the fill
-/// changes only the groove's color while hover and drag still swap only the
-/// handle face. Pure, so the rule is testable without building a widget.
+/// This is the level sliders' style (transport volume and balance, shade volume), and
+/// [`band_slider_style`] reuses it with the band's gain color as the fill: iced paints
+/// `backgrounds.0` from the range start to the thumb and `backgrounds.1` from the thumb to the
+/// range end, so both halves carry the fill and no gray segment remains on either side. The rail
+/// width and border and the whole handle stay exactly [`chrome_slider_style`]'s, so the fill
+/// changes only the groove's color while hover and drag still swap only the handle face. Pure, so
+/// the rule is testable without building a widget.
 pub fn level_slider_style(fill: Color, status: slider::Status) -> slider::Style {
     let mut style = chrome_slider_style(status);
     let fill = Background::Color(fill);
@@ -121,10 +114,10 @@ mod tests {
     /// Asserts `status`'s chrome slider handle keeps `active`'s shape and 1px
     /// border.
     ///
-    /// Interaction statuses change the handle face; they must not change the
-    /// thumb's geometry or border. The Hovered and Dragged assertions in
-    /// `chrome_slider_style_hovered_and_dragged_only_swap_the_handle_face`
-    /// each pin that, so the contract lives here once.
+    /// Interaction statuses change the handle face; they must not change the thumb's geometry or
+    /// border. The Hovered and Dragged assertions in
+    /// `chrome_slider_style_hovered_and_dragged_only_swap_the_handle_face` each pin that, so the
+    /// contract lives here once.
     fn assert_same_handle_geometry(active: &slider::Style, status: &slider::Style) {
         assert_eq!(status.handle.shape, active.handle.shape);
         assert_eq!(status.handle.border_width, active.handle.border_width);
@@ -237,8 +230,8 @@ mod tests {
         assert_eq!(band_gain_color(f32::NAN), theme::EQ_GAIN_MID);
     }
 
-    /// Asserts `style_for` paints both rail halves `fill` at every slider
-    /// status while keeping the chrome slider's rail geometry and thumb.
+    /// Asserts `style_for` paints both rail halves `fill` at every slider status while keeping the
+    /// chrome slider's rail geometry and thumb.
     fn assert_fills_rail_and_keeps_chrome_thumb(
         fill: Color,
         style_for: impl Fn(slider::Status) -> slider::Style,

@@ -17,9 +17,8 @@ fn mix(start: Color, end: Color, t: f32) -> Color {
 /// silent, the mockup's orange ([`theme::VOLUME_SLIDER_FILL`]) at half volume,
 /// and red ([`theme::EQ_GAIN_HIGH`]) at full volume, interpolated in between.
 ///
-/// `volume` passes through [`crate::state::clamp_volume`] first, so an
-/// out-of-range value lands on an end stop and a NaN maps to silence. Alpha is
-/// `1.0`.
+/// `volume` passes through [`crate::state::clamp_volume`] first, so an out-of-range value lands on
+/// an end stop and a NaN maps to silence. Alpha is `1.0`.
 pub fn volume_level_color(volume: f32) -> Color {
     let v = crate::state::clamp_volume(volume);
     if v <= 0.5 {
@@ -33,9 +32,8 @@ pub fn volume_level_color(volume: f32) -> Color {
     }
 }
 
-/// The balance groove tint for `balance`: the mockup's green
-/// ([`theme::BALANCE_SLIDER_FILL`]) at center, reddening to
-/// [`theme::EQ_GAIN_HIGH`] at either extreme, symmetric left and right.
+/// The balance groove tint for `balance`: the mockup's green ([`theme::BALANCE_SLIDER_FILL`]) at
+/// center, reddening to [`theme::EQ_GAIN_HIGH`] at either extreme, symmetric left and right.
 ///
 /// `balance` passes through [`crate::state::clamp_balance`] first, so a NaN
 /// maps to center. Alpha is `1.0`.

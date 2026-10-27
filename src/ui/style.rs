@@ -1,12 +1,11 @@
 //! Winamp widget chrome styles.
 //!
-//! Every iced widget this player dresses — buttons, the library search box,
-//! the preset pick list and its menu, sliders (in the `slider_style` submodule),
-//! playlist rows, the playlist scroll well, and the title bar — gets its
-//! base-skin colors and 1px chrome geometry here. Each style is a pure
-//! `Status` → `Style` builder, so its color rule is testable without building a
-//! widget. The reusable edge-color rule the buttons and search box draw from
-//! lives in the sibling `bevel` module.
+//! Every iced widget this player dresses — buttons, the library search box, the preset pick list
+//! and its menu, sliders (in the `slider_style` submodule), playlist rows, the playlist scroll
+//! well, and the title bar — gets its base-skin colors and 1px chrome geometry here. Each style is
+//! a pure `Status` → `Style` builder, so its color rule is testable without building a widget. The
+//! reusable edge-color rule the buttons and search box draw from lives in the sibling `bevel`
+//! module.
 
 use iced::{
     Background, Border, Color, Shadow, Vector,
@@ -57,14 +56,12 @@ fn square_shadow(color: Color) -> Shadow {
     }
 }
 
-/// The chrome face shade for an interaction state: pressed when `pressed`,
-/// hovered when `hovered`, and the resting shade otherwise. The button, search
-/// box, preset pick list, and slider map their own status enums onto this same
-/// ladder — the button by Active/Hovered/Pressed, the search box by
-/// Active/Hovered/Focused, the pick list by Active/Opened, and the slider by
-/// Active/Hovered/Dragged — so the ladder lives here once and they stay in
-/// lockstep. `pressed` wins when both are true, though no current status is
-/// both. Pure, so it needs no widget to test.
+/// The chrome face shade for an interaction state: pressed when `pressed`, hovered when `hovered`,
+/// and the resting shade otherwise. The button, search box, preset pick list, and slider map their
+/// own status enums onto this same ladder — the button by Active/Hovered/Pressed, the search box by
+/// Active/Hovered/Focused, the pick list by Active/Opened, and the slider by Active/Hovered/Dragged
+/// — so the ladder lives here once and they stay in lockstep. `pressed` wins when both are true,
+/// though no current status is both. Pure, so it needs no widget to test.
 fn chrome_face(hovered: bool, pressed: bool) -> Color {
     if pressed {
         theme::BUTTON_FACE_PRESSED
@@ -78,10 +75,9 @@ fn chrome_face(hovered: bool, pressed: bool) -> Color {
 /// The flat base-skin title-bar fill: a solid [`theme::TITLE_BLUE`] band with
 /// the light [`theme::TEXT`] color for the app name.
 ///
-/// [`super::bevel::raised_panel`] composes with the window face and
-/// [`super::bevel::lcd_well`] paints its own background, but neither sets a text
-/// color; the title bar paints both its own opaque background and its own
-/// light text. Pure, so both fields are testable without a widget.
+/// [`super::bevel::raised_panel`] composes with the window face and [`super::bevel::lcd_well`]
+/// paints its own background, but neither sets a text color; the title bar paints both its own
+/// opaque background and its own light text. Pure, so both fields are testable without a widget.
 pub fn title_bar_style() -> container::Style {
     container::Style {
         background: Some(Background::Color(theme::TITLE_BLUE)),
@@ -92,12 +88,10 @@ pub fn title_bar_style() -> container::Style {
 
 /// The raised (Active/Hovered) and sunken (Pressed) chrome style for a button.
 ///
-/// iced's [`Border`] carries a single color, so the two-tone edge reuses
-/// [`bevel_edges`]: raised, it is a 1px light border on the top/left and a dark
-/// no-blur [`Shadow`] offset down-right on the bottom/right; pressing sinks the
-/// pair. The face comes from [`chrome_face`], which darkens it on hover and
-/// sinks it while pressed. Pure, so the color rule is testable without
-/// building a widget.
+/// iced's [`Border`] carries a single color, so the two-tone edge reuses [`bevel_edges`]: raised,
+/// it is a 1px light border on the top/left and a dark no-blur [`Shadow`] offset down-right on the
+/// bottom/right; pressing sinks the pair. The face comes from [`chrome_face`], which darkens it on
+/// hover and sinks it while pressed. Pure, so the color rule is testable without building a widget.
 pub fn chrome_button_style(status: button::Status) -> button::Style {
     let (top_left, bottom_right) = bevel_edges(!matches!(status, button::Status::Pressed));
     let face = chrome_face(
@@ -119,10 +113,9 @@ pub fn chrome_button_style(status: button::Status) -> button::Style {
     }
 }
 
-/// The chrome style for a toggle button that reads as on: the sunken
-/// ([`button::Status::Pressed`]) chrome while `on`, and the ordinary chrome for
-/// `status` while off. The LCD strip's `A`, the title bar's `M`, and the
-/// transport row's EQ and PL panel toggles all follow this one rule, so it
+/// The chrome style for a toggle button that reads as on: the sunken ([`button::Status::Pressed`])
+/// chrome while `on`, and the ordinary chrome for `status` while off. The LCD strip's `A`, the
+/// title bar's `M`, and the transport row's EQ and PL panel toggles all follow this one rule, so it
 /// lives here once. Pure, so the rule is testable without building a widget.
 pub fn toggle_button_style(on: bool, status: button::Status) -> button::Style {
     if on {
@@ -134,15 +127,13 @@ pub fn toggle_button_style(on: bool, status: button::Status) -> button::Style {
 
 /// The chrome style for the library search box.
 ///
-/// The raised face, light [`theme::TEXT`] value, and light top-left bevel edge
-/// mirror [`chrome_button_style`]: resting and hovered stay raised, while focus
-/// sinks the face to [`theme::BUTTON_FACE_PRESSED`] and reverses the edge to
-/// [`theme::PANEL_EDGE_DARK`], the same press the buttons use. iced's
-/// [`text_input::Style`] carries a single border color and no shadow, so the
-/// bevel's bottom-right dark half is not drawn. The placeholder uses the
-/// lighter [`theme::PANEL_EDGE_LIGHT`] so an empty box reads as empty, and the
-/// selection uses the title-bar [`theme::TITLE_BLUE`]. Pure, so the color rule
-/// is testable without building a widget.
+/// The raised face, light [`theme::TEXT`] value, and light top-left bevel edge mirror
+/// [`chrome_button_style`]: resting and hovered stay raised, while focus sinks the face to
+/// [`theme::BUTTON_FACE_PRESSED`] and reverses the edge to [`theme::PANEL_EDGE_DARK`], the same
+/// press the buttons use. iced's [`text_input::Style`] carries a single border color and no shadow,
+/// so the bevel's bottom-right dark half is not drawn. The placeholder uses the lighter
+/// [`theme::PANEL_EDGE_LIGHT`] so an empty box reads as empty, and the selection uses the title-bar
+/// [`theme::TITLE_BLUE`]. Pure, so the color rule is testable without building a widget.
 pub fn chrome_text_input_style(status: text_input::Status) -> text_input::Style {
     let focused = matches!(status, text_input::Status::Focused { .. });
     let (top_left, _) = bevel_edges(!focused);
@@ -160,15 +151,13 @@ pub fn chrome_text_input_style(status: text_input::Status) -> text_input::Style 
 
 /// The chrome style for the equalizer's preset pick list.
 ///
-/// The closed control is flat chrome, like the transport buttons: a
-/// [`theme::BUTTON_FACE`] face with the dark 1px outline and [`theme::TEXT`]
-/// label. Unlike the buttons and sliders, hovering the closed control does
-/// not lift the face — the base skin's combo boxes give no hover feedback —
-/// but opening the menu sinks the face to [`theme::BUTTON_FACE_PRESSED`]
-/// through [`chrome_face`], the same press shade the other chrome uses. The
-/// placeholder (the `Custom` custom-curve label) is drawn in [`theme::TEXT`]
-/// like a selected preset, because it names a real curve rather than an empty
-/// control. Pure, so the color rule is testable without building a widget.
+/// The closed control is flat chrome, like the transport buttons: a [`theme::BUTTON_FACE`] face
+/// with the dark 1px outline and [`theme::TEXT`] label. Unlike the buttons and sliders, hovering
+/// the closed control does not lift the face — the base skin's combo boxes give no hover feedback —
+/// but opening the menu sinks the face to [`theme::BUTTON_FACE_PRESSED`] through [`chrome_face`],
+/// the same press shade the other chrome uses. The placeholder (the `Custom` custom-curve label) is
+/// drawn in [`theme::TEXT`] like a selected preset, because it names a real curve rather than an
+/// empty control. Pure, so the color rule is testable without building a widget.
 pub fn chrome_pick_list_style(status: pick_list::Status) -> pick_list::Style {
     let opened = matches!(status, pick_list::Status::Opened { .. });
 
@@ -183,11 +172,10 @@ pub fn chrome_pick_list_style(status: pick_list::Status) -> pick_list::Style {
 
 /// The base-skin style for the preset pick list's open menu.
 ///
-/// The dropdown is a [`theme::BUTTON_FACE`] panel with the dark 1px chrome
-/// outline; its options are [`theme::TEXT`] on that face, and the highlighted
-/// option uses the title-bar [`theme::TITLE_BLUE`] with the same light text,
-/// matching Winamp's selection blue. No drop shadow, so the menu stays flat
-/// like the rest of the base-skin chrome. Pure, so the color rule is
+/// The dropdown is a [`theme::BUTTON_FACE`] panel with the dark 1px chrome outline; its options are
+/// [`theme::TEXT`] on that face, and the highlighted option uses the title-bar
+/// [`theme::TITLE_BLUE`] with the same light text, matching Winamp's selection blue. No drop
+/// shadow, so the menu stays flat like the rest of the base-skin chrome. Pure, so the color rule is
 /// testable without building a widget.
 pub fn preset_menu_style() -> menu::Style {
     menu::Style {
@@ -224,16 +212,14 @@ pub fn playlist_row_style(status: button::Status) -> button::Style {
 
 /// The sunken-playlist-well style for the browse list's [`scrollable::Style`].
 ///
-/// The base skin's playlist editor is a near-black recess with a dark track
-/// scrollbar carrying a raised chrome scroller. iced's [`scrollable::Style`]
-/// has no `Default`, so this builds every field: the `container` paints the
-/// [`theme::LCD_BACKGROUND`] well with the same dark-border + light-offset
-/// sunken edge [`chrome_button_style`] uses for its pressed state, both rails
-/// sit in [`theme::WINDOW_BACKGROUND`] with a [`theme::BUTTON_FACE`] scroller
-/// bordered light, and the touch `auto_scroll` overlay matches the well.
-/// Classic Winamp scrollbars give no hover/drag feedback, so the style ignores
-/// the [`scrollable::Status`] iced passes. Pure, so the color rule is
-/// testable without building a widget.
+/// The base skin's playlist editor is a near-black recess with a dark track scrollbar carrying a
+/// raised chrome scroller. iced's [`scrollable::Style`] has no `Default`, so this builds every
+/// field: the `container` paints the [`theme::LCD_BACKGROUND`] well with the same dark-border +
+/// light-offset sunken edge [`chrome_button_style`] uses for its pressed state, both rails sit in
+/// [`theme::WINDOW_BACKGROUND`] with a [`theme::BUTTON_FACE`] scroller bordered light, and the
+/// touch `auto_scroll` overlay matches the well. Classic Winamp scrollbars give no hover/drag
+/// feedback, so the style ignores the [`scrollable::Status`] iced passes. Pure, so the color rule
+/// is testable without building a widget.
 pub fn playlist_scrollable_style() -> scrollable::Style {
     let rail = scrollable::Rail {
         background: Some(Background::Color(theme::WINDOW_BACKGROUND)),
@@ -270,9 +256,9 @@ mod tests {
 
     /// Asserts `status`'s chrome bevel keeps `active`'s 1px square geometry.
     ///
-    /// Interaction statuses change the face and edge colors; they must not
-    /// change the bevel's shape. The three non-resting button-status tests
-    /// each pin that, so the geometry contract lives here once.
+    /// Interaction statuses change the face and edge colors; they must not change the bevel's
+    /// shape. The three non-resting button-status tests each pin that, so the geometry contract
+    /// lives here once.
     fn assert_same_edge_geometry(active: &button::Style, status: &button::Style) {
         assert_eq!(status.border.width, active.border.width);
         assert_eq!(status.border.radius, active.border.radius);
