@@ -529,30 +529,29 @@ mod tests {
         assert_eq!(state.transport_mode(), TransportMode::Stopped);
     }
 
-    #[test]
-    fn toggle_repeat_flips_only_the_repeat_flag() {
+    /// Flips a playback flag twice with `toggle`, reading it through `flag`:
+    /// off to on to off, with the track, volume, and playback state untouched.
+    /// The Repeat and Shuffle tests share it.
+    fn assert_toggle_flips_only_its_flag(toggle: fn(&mut AppState), flag: fn(&AppState) -> bool) {
         let mut state = AppState::default();
-        assert!(!state.repeat);
+        assert!(!flag(&state));
 
-        assert_keeps_track_and_volume(&mut state, AppState::toggle_repeat);
-        assert!(state.repeat);
+        assert_keeps_track_and_volume(&mut state, toggle);
+        assert!(flag(&state));
         assert!(!state.is_playing);
 
-        assert_keeps_track_and_volume(&mut state, AppState::toggle_repeat);
-        assert!(!state.repeat);
+        assert_keeps_track_and_volume(&mut state, toggle);
+        assert!(!flag(&state));
+    }
+
+    #[test]
+    fn toggle_repeat_flips_only_the_repeat_flag() {
+        assert_toggle_flips_only_its_flag(AppState::toggle_repeat, |state| state.repeat);
     }
 
     #[test]
     fn toggle_shuffle_flips_only_the_shuffle_flag() {
-        let mut state = AppState::default();
-        assert!(!state.shuffle);
-
-        assert_keeps_track_and_volume(&mut state, AppState::toggle_shuffle);
-        assert!(state.shuffle);
-        assert!(!state.is_playing);
-
-        assert_keeps_track_and_volume(&mut state, AppState::toggle_shuffle);
-        assert!(!state.shuffle);
+        assert_toggle_flips_only_its_flag(AppState::toggle_shuffle, |state| state.shuffle);
     }
 
     #[test]
