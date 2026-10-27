@@ -827,8 +827,9 @@ queued snapshot written once the worker is free: a burst of changes, such as a s
 repeat, may collapse to its newest value instead of writing every intermediate one. An update that leaves the snapshot
 unchanged writes nothing. Reads and writes go through the state's clamped
 setters, so out-of-range values from a file cannot push shared state outside its documented ranges.
-A missing file, or a malformed line (including bytes that are not UTF-8, which are decoded lossily
-so they spoil only their own line), falls back per key without failing startup; an unreadable file
+A missing file, or a malformed line (including a `NaN` number and bytes that are not UTF-8,
+which are decoded lossily so they spoil only their own line), falls back per key without failing
+startup; an unreadable file
 falls back the same way and prints one stderr line naming the path (`read_failure_message` in
 `src/settings/file_store.rs`, which stays silent for a missing file); an unwritable file is logged
 rather than crashing the player. Each save stages the whole snapshot in
@@ -897,6 +898,7 @@ arm those controls press.
 `always_on_top_round_trips_and_ignores_malformed_values`,
 `shade_round_trips_and_ignores_malformed_values`,
 `from_text_ignores_malformed_and_unknown_lines`,
+`from_text_ignores_nan_numbers`,
 `apply_to_clamps_out_of_range_values_through_the_state_setters`,
 `apply_to_restores_a_saved_preset`,
 `settings_path_resolves_override_then_xdg_then_home_then_none`,

@@ -263,7 +263,9 @@ impl Settings {
     /// out-of-range band indexes, and unrecognized preset names are ignored,
     /// so one bad line falls back to its default without failing the load. A
     /// leading UTF-8 BOM is an encoding marker, not part of the first key, so
-    /// it is dropped before the lines are read.
+    /// it is dropped before the lines are read. A `NaN` is malformed rather
+    /// than a number: `f32::from_str` accepts it, but it is not a value the
+    /// player can hold, so the field keeps its default.
     fn from_text(text: &str) -> Self {
         let text = text.strip_prefix('\u{feff}').unwrap_or(text);
         let mut settings = Self::default();
@@ -274,12 +276,12 @@ impl Settings {
             let key = key.trim();
             let value = value.trim();
             match key {
-                "volume" => parse_into(&mut settings.volume, value),
-                "balance" => parse_into(&mut settings.balance, value),
+                "volume" => parse_number_into(&mut settings.volume, value),
+                "balance" => parse_number_into(&mut settings.balance, value),
                 "repeat" => parse_into(&mut settings.repeat, value),
                 "shuffle" => parse_into(&mut settings.shuffle, value),
                 "eq_enabled" => parse_into(&mut settings.eq_enabled, value),
-                "eq_preamp" => parse_into(&mut settings.eq_preamp, value),
+                "eq_preamp" => parse_number_into(&mut settings.eq_preamp, value),
                 "eq_preset" => {
                     if value.is_empty() {
                         settings.eq_preset = None;
@@ -315,9 +317,8 @@ impl Settings {
                         .strip_prefix("eq_band_")
                         .and_then(|index| index.parse::<usize>().ok())
                         && let Some(slot) = settings.eq_bands.get_mut(index)
-                        && let Ok(gain) = value.parse()
                     {
-                        *slot = gain;
+                        parse_number_into(slot, value);
                     }
                 }
             }
@@ -327,12 +328,29 @@ impl Settings {
 }
 
 /// Assign `value`'s parsed form to `slot`, or leave `slot` unchanged when the
-/// value is malformed. [`Settings::from_text`]'s scalar fields all follow this
+/// value is malformed. [`Settings::from_text`]'s boolean fields follow this
 /// rule, so a bad line falls back to that field's default without failing the
-/// load; `eq_band_*` and `eq_preset` need their own handling for the index and
-/// preset lookup.
+/// load; the float fields, `eq_band_*`, and `eq_preset` need their own
+/// handling for the NaN, index, and preset lookup.
 fn parse_into<T: std::str::FromStr>(slot: &mut T, value: &str) {
     if let Ok(parsed) = value.parse() {
+        *slot = parsed;
+    }
+}
+
+/// Assign `value`'s parsed number to `slot` unless it is malformed or `NaN`,
+/// leaving `slot` unchanged.
+///
+/// `f32::from_str` accepts `NaN` and the infinities. An infinity is a value
+/// outside every documented range, so [`Settings::apply_to`]'s state setters
+/// clamp it like any other out-of-range number. `NaN` is not a number at all,
+/// and passing it on would make each field's fallback depend on its state
+/// setter's neutral value — volume's is silence, not its default — so it is
+/// treated as malformed and the field keeps its default.
+fn parse_number_into(slot: &mut f32, value: &str) {
+    if let Ok(parsed) = value.parse::<f32>()
+        && !parsed.is_nan()
+    {
         *slot = parsed;
     }
 }
@@ -523,6 +541,21 @@ mod tests {
     }
 
     #[test]
+    fn from_text_ignores_nan_numbers() {
+        // `f32::from_str` accepts `NaN`, but it is not a value the player can
+        // use: an ignored line must fall back to its default, not to whichever
+        // neutral value a later clamp happens to choose (volume's is silence).
+        let text = "volume=NaN\n\
+                    balance=NaN\n\
+                    eq_preamp=NaN\n\
+                    eq_band_0=NaN\n";
+        assert_eq!(Settings::from_text(text), Settings::default());
+
+        let recovered = Settings::from_text("volume=NaN\nvolume=0.25\n");
+        assert_eq!(recovered.volume, 0.25, "a later valid line still applies");
+    }
+
+    #[test]
     fn from_text_ignores_malformed_and_unknown_lines() {
         let text = "volume=not-a-number\n\
                     balance=abc\n\
@@ -532,6 +565,7 @@ mod tests {
                     eq_preamp=high\n\
                     eq_band_10=3\n\
                     eq_band_x=2\n\
+                    eq_band_0=NaN\n\
                     eq_preset=Unknown\n\
                     time_display=sideways\n\
                     visualizer_visible=maybe\n\

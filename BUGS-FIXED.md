@@ -5,6 +5,27 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### A NaN settings value starts the player muted instead of at its default (found by the bugfix role 2026-10-26) — fixed 2026-10-26 by the bugfix role
+
+A settings file line such as `volume=NaN` was accepted: `f32::from_str` reads
+`NaN`, so `Settings::from_text` stored it, and `apply_to`'s NaN-safe
+`clamp_volume` then mapped it to silence (`0.0`) instead of the documented
+per-key default (`0.5`). A hand-edited or corrupted line therefore muted
+playback silently. The same line for balance, preamp, or a band gain happened
+to match its field's neutral default, hiding the gap there.
+
+**Reproduce:** `Settings::from_text("volume=NaN\n")` held a NaN volume, and
+`settings.apply_to(&mut AppState::default())` left `state.volume()` at `0.0`
+rather than `0.5`.
+
+**Fix:** the float fields and `eq_band_*` now parse through
+`parse_number_into`, which ignores a NaN and keeps the field's default;
+infinities are still out-of-range values that the state setters clamp.
+
+**Validation gap:** none — the existing suite reproduced and confirmed it;
+the regression test `from_text_ignores_nan_numbers` failed before the fix and
+passes after.
+
 ### A UTF-8 BOM in the settings file drops the first setting (found by the bugfix role 2026-10-26) — fixed 2026-10-26 by the bugfix role
 
 `FileStore::load` decodes the settings file with `String::from_utf8_lossy`, which
