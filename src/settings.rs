@@ -633,6 +633,28 @@ mod tests {
     }
 
     #[test]
+    fn a_later_eq_preset_line_clears_or_keeps_an_earlier_one() {
+        let rock = *equalizer::PRESETS
+            .iter()
+            .find(|preset| preset.name == "Rock")
+            .unwrap();
+
+        let cleared = Settings::from_text("eq_preset=Rock\neq_preset=\n");
+        assert_eq!(cleared.eq_preset, None);
+
+        let kept = Settings::from_text("eq_preset=Rock\neq_preset=Unknown\n");
+        assert_eq!(kept.eq_preset, Some(rock));
+    }
+
+    #[test]
+    fn from_text_reads_the_last_band_and_trims_around_the_equals_sign() {
+        let last = equalizer::BAND_COUNT - 1;
+        let settings = Settings::from_text(&format!("  eq_band_{last} = 4.5 \n"));
+        assert_eq!(settings.eq_bands[last], 4.5);
+        assert_eq!(settings.eq_bands[0], 0.0);
+    }
+
+    #[test]
     fn apply_to_clamps_out_of_range_values_through_the_state_setters() {
         let settings = Settings {
             volume: 2.0,
