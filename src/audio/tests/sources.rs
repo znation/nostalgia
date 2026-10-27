@@ -415,6 +415,35 @@ fn balance_source_reads_the_shared_balance_on_every_sample() {
     assert_eq!(source.next(), Some(0.0));
 }
 
+/// An enabled equalizer snapshot with the given preamp and band gains.
+fn enabled_eq_snapshot(
+    preamp_db: f32,
+    bands_db: [f32; crate::equalizer::BAND_COUNT],
+) -> EqSnapshot {
+    EqSnapshot {
+        enabled: true,
+        preamp_db,
+        bands_db,
+    }
+}
+
+/// Shared equalizer settings holding an enabled snapshot.
+fn enabled_eq_settings(
+    preamp_db: f32,
+    bands_db: [f32; crate::equalizer::BAND_COUNT],
+) -> Arc<EqSettings> {
+    let settings = Arc::new(EqSettings::default());
+    settings.store(enabled_eq_snapshot(preamp_db, bands_db));
+    settings
+}
+
+/// Band gains with only band 4 boosted by 12 dB.
+fn boosted_band_4() -> [f32; crate::equalizer::BAND_COUNT] {
+    let mut bands = [0.0; crate::equalizer::BAND_COUNT];
+    bands[4] = 12.0;
+    bands
+}
+
 #[test]
 fn eq_source_disabled_passes_samples_through() {
     let raw = stereo_source(vec![0.5, -0.25, 0.75, -0.5]);
@@ -449,14 +478,7 @@ fn eq_source_reports_inner_seek_result() {
 // the filters. `eq_source_seek_clears_filter_state` covers the success path.
 #[test]
 fn eq_source_failed_seek_keeps_the_filter_state() {
-    let mut bands = [0.0; crate::equalizer::BAND_COUNT];
-    bands[4] = 12.0;
-    let settings = Arc::new(EqSettings::default());
-    settings.store(EqSnapshot {
-        enabled: true,
-        preamp_db: 0.0,
-        bands_db: bands,
-    });
+    let settings = enabled_eq_settings(0.0, boosted_band_4());
     let samples = vec![1.0, 0.0, 0.0, 0.0, 0.0, 0.0];
     let mut source = EqSource::new(SeekableSource::failing(samples), settings);
 
@@ -478,14 +500,7 @@ fn eq_source_failed_seek_keeps_the_filter_state() {
 
 #[test]
 fn eq_source_seek_clears_filter_state() {
-    let mut bands = [0.0; crate::equalizer::BAND_COUNT];
-    bands[4] = 12.0;
-    let settings = Arc::new(EqSettings::default());
-    settings.store(EqSnapshot {
-        enabled: true,
-        preamp_db: 0.0,
-        bands_db: bands,
-    });
+    let settings = enabled_eq_settings(0.0, boosted_band_4());
     // An impulse followed by silence leaves the left channel's filter
     // ringing, so a seek that kept the filter state would replay the
     // impulse differently from a freshly built source. Seeking from a
@@ -555,12 +570,7 @@ fn balance_source_seek_keeps_the_channel_cursor() {
 
 #[test]
 fn eq_source_enabled_flat_curve_passes_samples_through() {
-    let settings = Arc::new(EqSettings::default());
-    settings.store(EqSnapshot {
-        enabled: true,
-        preamp_db: 0.0,
-        bands_db: [0.0; crate::equalizer::BAND_COUNT],
-    });
+    let settings = enabled_eq_settings(0.0, [0.0; crate::equalizer::BAND_COUNT]);
     let raw = stereo_source(vec![0.5, -0.25, 0.75, -0.5]);
     let mut source = EqSource::new(raw, settings);
 
@@ -574,12 +584,7 @@ fn eq_source_enabled_flat_curve_passes_samples_through() {
 
 #[test]
 fn eq_source_preamp_scales_by_the_decibel_gain() {
-    let settings = Arc::new(EqSettings::default());
-    settings.store(EqSnapshot {
-        enabled: true,
-        preamp_db: 6.020_6,
-        bands_db: [0.0; crate::equalizer::BAND_COUNT],
-    });
+    let settings = enabled_eq_settings(6.020_6, [0.0; crate::equalizer::BAND_COUNT]);
     let raw = stereo_source(vec![0.25, -0.25]);
     let mut source = EqSource::new(raw, settings);
 
@@ -589,14 +594,7 @@ fn eq_source_preamp_scales_by_the_decibel_gain() {
 
 #[test]
 fn eq_source_filters_each_channel_with_its_own_state() {
-    let mut bands = [0.0; crate::equalizer::BAND_COUNT];
-    bands[4] = 12.0;
-    let settings = Arc::new(EqSettings::default());
-    settings.store(EqSnapshot {
-        enabled: true,
-        preamp_db: 0.0,
-        bands_db: bands,
-    });
+    let settings = enabled_eq_settings(0.0, boosted_band_4());
     // An impulse in the left channel followed by silence. A filter shared
     // between channels would ring into the right channel's samples; one
     // filter per channel keeps the right channel exactly silent.
@@ -625,11 +623,10 @@ fn eq_source_follows_the_curve_changed_while_playing() {
 
     assert_eq!(source.next(), Some(1.0));
     assert_eq!(source.next(), Some(1.0));
-    settings.store(EqSnapshot {
-        enabled: true,
-        preamp_db: 6.020_6,
-        bands_db: [0.0; crate::equalizer::BAND_COUNT],
-    });
+    settings.store(enabled_eq_snapshot(
+        6.020_6,
+        [0.0; crate::equalizer::BAND_COUNT],
+    ));
     assert!((source.next().unwrap() - 2.0).abs() < 1e-4);
     assert!((source.next().unwrap() - 2.0).abs() < 1e-4);
 }
