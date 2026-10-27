@@ -523,4 +523,36 @@ mod tests {
         assert_eq!(whole.len(), 8 * 4);
         assert_eq!(&whole[..4], &[255, 10, 255, 255]);
     }
+
+    fn button() -> Element<'static, &'static str, iced::Theme, iced::Renderer> {
+        iced::widget::button(iced::widget::Text::new("go"))
+            .on_press("pressed")
+            .width(iced::Length::Fixed(100.0))
+            .height(iced::Length::Fixed(40.0))
+            .into()
+    }
+
+    // The click helper's own contract: a press and release over a button
+    // publish its message once, and the same batch outside the button's
+    // bounds publishes nothing, so the mouse tests that rely on it fail for
+    // the control and not for the harness.
+    #[test]
+    fn click_at_publishes_inside_the_control_and_not_outside() {
+        let mut renderer = headless_renderer();
+        let inside = click_at(button(), &mut renderer, Point::new(50.0, 20.0));
+        assert_eq!(inside, vec!["pressed"]);
+
+        let outside = click_at(button(), &mut renderer, Point::new(150.0, 20.0));
+        assert!(outside.is_empty(), "outside click published {outside:?}");
+    }
+
+    // `publish_at` dispatches exactly the events it is given: a button acts
+    // on release, so a press alone publishes nothing.
+    #[test]
+    fn publish_at_dispatches_only_the_given_events() {
+        let mut renderer = headless_renderer();
+        let press = Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left));
+        let messages = publish_at(button(), &mut renderer, &[press], Point::new(50.0, 20.0));
+        assert!(messages.is_empty(), "a press alone published {messages:?}");
+    }
 }
