@@ -1,5 +1,26 @@
 use super::*;
 
+/// Records the compact strip's seek and volume container bounds.
+#[derive(Default)]
+struct CapturedControls {
+    seek: Option<Rectangle>,
+    volume: Option<Rectangle>,
+}
+
+impl Operation for CapturedControls {
+    fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
+        operate(self);
+    }
+
+    fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
+        if id == Some(&Id::new(MINI_SEEK_ID)) {
+            self.seek = Some(bounds);
+        } else if id == Some(&Id::new(MINI_VOLUME_ID)) {
+            self.volume = Some(bounds);
+        }
+    }
+}
+
 // The main row and both compact strips must share one spec: same glyphs in the
 // same order, same fixed widths, same messages. Pin the compact projection
 // against `transport_glyphs`.
@@ -147,24 +168,6 @@ fn shade_strip_double_click_restores_the_window() {
 // control's message and none publishes `ToggleWindowShade`.
 #[test]
 fn shade_strip_double_clicks_on_controls_do_not_restore_the_window() {
-    #[derive(Default)]
-    struct CapturedControls {
-        seek: Option<Rectangle>,
-        volume: Option<Rectangle>,
-    }
-    impl Operation for CapturedControls {
-        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
-            operate(self);
-        }
-        fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
-            if id == Some(&Id::new(MINI_SEEK_ID)) {
-                self.seek = Some(bounds);
-            } else if id == Some(&Id::new(MINI_VOLUME_ID)) {
-                self.volume = Some(bounds);
-            }
-        }
-    }
-
     let double_click = [
         iced::Event::Mouse(iced::mouse::Event::ButtonPressed(iced::mouse::Button::Left)),
         iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
@@ -249,24 +252,6 @@ fn shade_strip_double_clicks_on_controls_do_not_restore_the_window() {
 // and blanks without disturbing the row's fill layout otherwise.
 #[test]
 fn shade_strip_shows_a_seek_slider_only_when_position_and_length_are_known() {
-    #[derive(Default)]
-    struct CapturedControls {
-        seek: Option<Rectangle>,
-        volume: Option<Rectangle>,
-    }
-    impl Operation for CapturedControls {
-        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
-            operate(self);
-        }
-        fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
-            if id == Some(&Id::new(MINI_SEEK_ID)) {
-                self.seek = Some(bounds);
-            } else if id == Some(&Id::new(MINI_VOLUME_ID)) {
-                self.volume = Some(bounds);
-            }
-        }
-    }
-
     for (position, duration, expected) in [
         (
             Some(Duration::from_secs(10)),
@@ -327,28 +312,13 @@ fn shade_strip_shows_a_seek_slider_only_when_position_and_length_are_known() {
 fn captured_mini_strip(
     mut element: Element<'_, Message>,
 ) -> (Vec<String>, Option<Rectangle>, Size) {
-    #[derive(Default)]
-    struct CapturedContainer {
-        slider: Option<Rectangle>,
-    }
-    impl Operation for CapturedContainer {
-        fn traverse(&mut self, operate: &mut dyn FnMut(&mut dyn Operation)) {
-            operate(self);
-        }
-        fn container(&mut self, id: Option<&Id>, bounds: Rectangle) {
-            if id == Some(&Id::new(MINI_VOLUME_ID)) {
-                self.slider = Some(bounds);
-            }
-        }
-    }
-
     let renderer = layout_capture::headless_renderer();
     let capture = layout_capture::capture_text(&mut element, &renderer);
     let texts = capture.texts().map(str::to_string).collect();
 
-    let mut captured = CapturedContainer::default();
+    let mut captured = CapturedControls::default();
     layout_capture::operate(&mut element, &renderer, &mut captured);
-    (texts, captured.slider, capture.size())
+    (texts, captured.volume, capture.size())
 }
 
 fn captured_shade_strip(elapsed: &str, total: &str) -> (Vec<String>, Option<Rectangle>, Size) {
