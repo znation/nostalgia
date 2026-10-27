@@ -56,7 +56,8 @@ pub(crate) const SHADED_HEIGHT: f32 = TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT;
 /// `mode` decides whether the time readout publishes
 /// [`Message::ToggleTimeDisplay`], so the shade strip is the only time toggle
 /// available while the LCD is hidden: while playing or paused it is a click
-/// target, and a stopped readout stays inert. `volume` is the slider's value,
+/// target, and a stopped readout stays inert. While paused the readout blinks: `elapsed_visible`
+/// is the LCD's blink phase and hides it in the off phase. `volume` is the slider's value,
 /// and dragging it emits
 /// [`Message::VolumeChange`]. `elapsed` and `total` are the same strings
 /// [`WinampPlayer::now_playing_elapsed`] and [`WinampPlayer::now_playing_time`]
@@ -73,6 +74,7 @@ pub(crate) const SHADED_HEIGHT: f32 = TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT;
 /// [`WinampPlayer::readout_position`]: crate::ui::WinampPlayer::readout_position
 pub fn view_shade_strip<'a>(
     mode: TransportMode,
+    elapsed_visible: bool,
     volume: f32,
     elapsed: Cow<'a, str>,
     total: Cow<'a, str>,
@@ -82,6 +84,7 @@ pub fn view_shade_strip<'a>(
     MouseArea::new(bevel::raised_panel(
         mini_transport_strip_with_seek(
             mode,
+            elapsed_visible,
             volume,
             elapsed,
             total,

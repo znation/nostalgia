@@ -23,7 +23,8 @@ pausing the automatic scroll until you release, which then resumes from there, l
 transport glyph before the readout is a green `▶` while playing, a green `II` while paused, and
 a red `■` while stopped.
 While paused, the large elapsed readout blinks once per second at its frozen position; it stays
-steady while playing and clears while stopped. A loaded preview's average bitrate and sample rate
+steady while playing and clears while stopped. The compact `elapsed/total` readouts in the library
+footer and the shade strip blink with it while paused. A loaded preview's average bitrate and sample rate
 appear at the left of a small status row beneath the title, with `MONO` and `STEREO` side by side
 at its right; the reported mode is lit green and the other dim. The prefix (`256 KBPS  44 KHZ`)
 appears only when the backend reports a format, falling back to the sample rate alone (`44 KHZ`)

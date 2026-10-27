@@ -88,6 +88,7 @@ fn view_shade_strip_keeps_its_fixed_height_for_both_playback_states() {
     ] {
         let mut element = view_shade_strip(
             mode,
+            true,
             0.5,
             Cow::Borrowed("00:53"),
             Cow::Borrowed("3:30"),
@@ -113,6 +114,7 @@ fn shade_strip_double_click_restores_the_window() {
     let mut renderer = layout_capture::headless_renderer();
     let mut element = view_shade_strip(
         TransportMode::Stopped,
+        true,
         0.5,
         Cow::Borrowed("00:53"),
         Cow::Borrowed("3:30"),
@@ -142,6 +144,7 @@ fn shade_strip_double_click_restores_the_window() {
     let messages = layout_capture::publish_at(
         view_shade_strip(
             TransportMode::Stopped,
+            true,
             0.5,
             Cow::Borrowed("00:53"),
             Cow::Borrowed("3:30"),
@@ -182,6 +185,7 @@ fn shade_strip_double_clicks_on_controls_do_not_restore_the_window() {
     let strip = || {
         view_shade_strip(
             TransportMode::Stopped,
+            true,
             0.5,
             Cow::Borrowed("00:53"),
             Cow::Borrowed("3:30"),
@@ -265,6 +269,7 @@ fn shade_strip_shows_a_seek_slider_only_when_position_and_length_are_known() {
         let renderer = layout_capture::headless_renderer();
         let mut element = view_shade_strip(
             TransportMode::Stopped,
+            true,
             0.5,
             Cow::Borrowed("00:53"),
             Cow::Borrowed("3:30"),
@@ -324,6 +329,7 @@ fn captured_mini_strip(
 fn captured_shade_strip(elapsed: &str, total: &str) -> (Vec<String>, Option<Rectangle>, Size) {
     captured_mini_strip(view_shade_strip(
         TransportMode::Stopped,
+        true,
         0.5,
         Cow::Borrowed(elapsed),
         Cow::Borrowed(total),
@@ -335,6 +341,7 @@ fn captured_shade_strip(elapsed: &str, total: &str) -> (Vec<String>, Option<Rect
 fn captured_library_strip(elapsed: &str, total: &str) -> (Vec<String>, Option<Rectangle>, Size) {
     captured_mini_strip(view_library_strip(
         TransportMode::Stopped,
+        true,
         0.5,
         Cow::Borrowed(elapsed),
         Cow::Borrowed(total),
@@ -394,13 +401,20 @@ fn compact_readout_toggles_time_display_only_while_not_stopped() {
             let mut element: iced::Element<'_, Message, iced::Theme, iced::Renderer> = match strip {
                 "shade" => view_shade_strip(
                     mode,
+                    true,
                     0.5,
                     Cow::Borrowed("00:53"),
                     Cow::Borrowed("3:30"),
                     None,
                     None,
                 ),
-                _ => view_library_strip(mode, 0.5, Cow::Borrowed("00:53"), Cow::Borrowed("3:30")),
+                _ => view_library_strip(
+                    mode,
+                    true,
+                    0.5,
+                    Cow::Borrowed("00:53"),
+                    Cow::Borrowed("3:30"),
+                ),
             };
             let capture = layout_capture::capture_text(&mut element, &renderer);
             let readout = capture.find("00:53/3:30");
@@ -471,8 +485,13 @@ fn view_library_strip_keeps_its_fixed_height() {
         TransportMode::Paused,
         TransportMode::Playing,
     ] {
-        let mut element =
-            view_library_strip(mode, 0.5, Cow::Borrowed("00:53"), Cow::Borrowed("3:30"));
+        let mut element = view_library_strip(
+            mode,
+            true,
+            0.5,
+            Cow::Borrowed("00:53"),
+            Cow::Borrowed("3:30"),
+        );
         let (_, node) = layout_capture::layout_tree(&mut element, &renderer);
         assert_eq!(
             node.size().height,
@@ -511,6 +530,7 @@ fn transport_controls_draw_play_and_pause_in_every_playback_state() {
     ] {
         let (texts, _, _) = captured_mini_strip(view_shade_strip(
             mode,
+            true,
             0.5,
             Cow::Borrowed("00:53"),
             Cow::Borrowed("3:30"),
@@ -524,4 +544,46 @@ fn transport_controls_draw_play_and_pause_in_every_playback_state() {
             );
         }
     }
+}
+
+#[test]
+fn compact_readout_color_blinks_only_while_paused() {
+    assert_eq!(
+        compact_readout_color(TransportMode::Paused, false).a,
+        0.0,
+        "the paused hidden phase is transparent"
+    );
+    for mode in [
+        TransportMode::Paused,
+        TransportMode::Playing,
+        TransportMode::Stopped,
+    ] {
+        for visible in [true, false] {
+            if mode == TransportMode::Paused && !visible {
+                continue;
+            }
+            assert_eq!(compact_readout_color(mode, visible), theme::LCD_GREEN);
+        }
+    }
+}
+
+#[test]
+fn compact_readout_keeps_its_bounds_when_the_blink_hides_it() {
+    let capture = |visible: bool| {
+        captured_mini_strip(view_shade_strip(
+            TransportMode::Paused,
+            visible,
+            0.5,
+            Cow::Borrowed("00:53"),
+            Cow::Borrowed("3:30"),
+            None,
+            None,
+        ))
+    };
+    let (hidden_texts, hidden_volume, _) = capture(false);
+    let (shown_texts, shown_volume, _) = capture(true);
+    assert!(hidden_texts.iter().any(|t| t == "00:53/3:30"));
+    assert!(shown_texts.iter().any(|t| t == "00:53/3:30"));
+    assert!(hidden_volume.is_some());
+    assert_eq!(hidden_volume, shown_volume);
 }

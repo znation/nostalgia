@@ -6,13 +6,14 @@
 //! control emits the same [`Message`] as the full-size transport row, and the slider writes
 //! [`Message::VolumeChange`]. While playing or paused the time readout publishes
 //! [`Message::ToggleTimeDisplay`] under the LCD's own
-//! [`super::now_playing::elapsed_readout_clickable`] guard; while stopped it stays inert.
+//! [`super::now_playing::elapsed_readout_clickable`] guard; while stopped it stays inert. While
+//! paused the readout blinks in step with the LCD's large readout (see [`compact_readout_color`]).
 
 use std::borrow::Cow;
 use std::time::Duration;
 
 use iced::{
-    Element, Length,
+    Color, Element, Length,
     alignment::Vertical,
     mouse::Interaction,
     widget::{Container, MouseArea, Row, Space, Text},
@@ -88,11 +89,27 @@ pub(super) fn mini_transport_readout<'a>(
     }
 }
 
+/// The compact readout's color: fully transparent in the hidden phase of the paused blink, else
+/// [`theme::LCD_GREEN`].
+///
+/// The hidden phase keeps the text in the layout and only hides it, so the strip's controls do not
+/// move. `visible` is [`WinampPlayer::blink_visible`], the same phase the LCD's large readout uses.
+///
+/// [`WinampPlayer::blink_visible`]: crate::ui::WinampPlayer::blink_visible
+pub(super) fn compact_readout_color(mode: TransportMode, visible: bool) -> Color {
+    if mode == TransportMode::Paused && !visible {
+        Color::from_rgba(0.0, 0.0, 0.0, 0.0)
+    } else {
+        theme::LCD_GREEN
+    }
+}
+
 /// One full-width compact row: the five fixed-width buttons separated by a 6px gap, the
 /// elapsed-over-total time readout, a fill spacer, and the volume slider pinned to the row's right
 /// edge.
 ///
-/// `mode` decides whether the readout is a click target; while playing or paused it publishes
+/// `mode` decides whether the readout is a click target, and while paused `elapsed_visible` is the
+/// blink phase that hides it (see [`compact_readout_color`]); while playing or paused it publishes
 /// [`Message::ToggleTimeDisplay`], and a stopped readout stays inert but still captures the press,
 /// so an ancestor double-click target (the shade strip's restore) never sees one. `volume` is the
 /// slider's value; `elapsed` and `total` are the same strings [`WinampPlayer::now_playing_elapsed`]
@@ -104,11 +121,12 @@ pub(super) fn mini_transport_readout<'a>(
 /// [`WinampPlayer::now_playing_time`]: crate::ui::WinampPlayer::now_playing_time
 pub(super) fn mini_transport_row<'a>(
     mode: TransportMode,
+    elapsed_visible: bool,
     volume: f32,
     elapsed: Cow<'a, str>,
     total: Cow<'a, str>,
 ) -> Row<'a, Message> {
-    mini_transport_row_with_optional_seek(mode, volume, elapsed, total, None)
+    mini_transport_row_with_optional_seek(mode, elapsed_visible, volume, elapsed, total, None)
 }
 
 /// The shade strip's compact row: the same buttons, time readout, and volume slider as
@@ -124,6 +142,7 @@ pub(super) fn mini_transport_row<'a>(
 /// [`WinampPlayer::readout_position`]: crate::ui::WinampPlayer::readout_position
 pub(super) fn mini_transport_row_with_seek<'a>(
     mode: TransportMode,
+    elapsed_visible: bool,
     volume: f32,
     elapsed: Cow<'a, str>,
     total: Cow<'a, str>,
@@ -137,7 +156,7 @@ pub(super) fn mini_transport_row_with_seek<'a>(
                 .width(Length::Fill)
                 .into()
         });
-    mini_transport_row_with_optional_seek(mode, volume, elapsed, total, seek)
+    mini_transport_row_with_optional_seek(mode, elapsed_visible, volume, elapsed, total, seek)
 }
 
 /// Builds the compact row's shared leading controls — the five buttons and the elapsed-over-total
@@ -145,6 +164,7 @@ pub(super) fn mini_transport_row_with_seek<'a>(
 /// slider.
 fn mini_transport_row_with_optional_seek<'a>(
     mode: TransportMode,
+    elapsed_visible: bool,
     volume: f32,
     elapsed: Cow<'a, str>,
     total: Cow<'a, str>,
@@ -160,7 +180,7 @@ fn mini_transport_row_with_optional_seek<'a>(
     }
     let readout = Text::new(mini_transport_readout(elapsed, total))
         .size(14)
-        .color(theme::LCD_GREEN);
+        .color(compact_readout_color(mode, elapsed_visible));
     let readout: Element<'a, Message> = if super::now_playing::elapsed_readout_clickable(mode) {
         MouseArea::new(readout)
             .on_press(Message::ToggleTimeDisplay)
@@ -209,20 +229,27 @@ fn mini_volume_slider(volume: f32) -> Element<'static, Message> {
 /// shade strip's own) and wraps the result in its chrome, so the two strips cannot drift apart.
 pub(super) fn mini_transport_strip<'a>(
     mode: TransportMode,
+    elapsed_visible: bool,
     volume: f32,
     elapsed: Cow<'a, str>,
     total: Cow<'a, str>,
     height: f32,
 ) -> Container<'a, Message> {
-    mini_transport_strip_container(mini_transport_row(mode, volume, elapsed, total), height)
+    mini_transport_strip_container(
+        mini_transport_row(mode, elapsed_visible, volume, elapsed, total),
+        height,
+    )
 }
 
 /// The shade strip's compact row in the same shared strip geometry as [`mini_transport_strip`],
 /// with the seek slider the rolled-up window needs. The library footer calls
 /// [`mini_transport_strip`] instead, so it stays seekless, while both views keep their geometry
 /// from drifting apart.
+// One argument past clippy's limit: the blink phase rides along with the row's other inputs.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn mini_transport_strip_with_seek<'a>(
     mode: TransportMode,
+    elapsed_visible: bool,
     volume: f32,
     elapsed: Cow<'a, str>,
     total: Cow<'a, str>,
@@ -231,7 +258,15 @@ pub(super) fn mini_transport_strip_with_seek<'a>(
     height: f32,
 ) -> Container<'a, Message> {
     mini_transport_strip_container(
-        mini_transport_row_with_seek(mode, volume, elapsed, total, position, duration),
+        mini_transport_row_with_seek(
+            mode,
+            elapsed_visible,
+            volume,
+            elapsed,
+            total,
+            position,
+            duration,
+        ),
         height,
     )
 }
@@ -256,15 +291,18 @@ fn mini_transport_strip_container<'a>(
 /// elapsed (or remaining) time over the track's total; `mode` makes that readout toggle the mode
 /// while playing or paused and stay inert while stopped. It keeps the row's fixed
 /// [`MINI_TRANSPORT_HEIGHT`] and its 6px horizontal padding, so the slider lands at the same right
-/// edge as the shade strip's.
+/// edge as the shade strip's. While paused the readout blinks with `elapsed_visible`, the LCD's
+/// blink phase.
 pub fn view_library_strip<'a>(
     mode: TransportMode,
+    elapsed_visible: bool,
     volume: f32,
     elapsed: Cow<'a, str>,
     total: Cow<'a, str>,
 ) -> Element<'a, Message> {
     bevel::raised_panel(mini_transport_strip(
         mode,
+        elapsed_visible,
         volume,
         elapsed,
         total,

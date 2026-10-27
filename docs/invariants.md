@@ -1308,7 +1308,10 @@ its internal id, whenever the id is in the known-track index:
   `views::now_playing::elapsed_readout_clickable` turns off its click while stopped, so the text
   keeps its bounds and the title, total, and status row do not move. A poll after Play or Stop holds
   the phase visible, so playing always shows the readout and the stopped view clears it unless it is
-  the `--:--` placeholder, which still shows while stopped. The blink adds no timer or subscription.
+  the `--:--` placeholder, which still shows while stopped. The compact readout in the shade strip
+  and library footer blinks in the same phase: `views::mini_transport::compact_readout_color` draws
+  it transparent in the hidden phase without removing it, so the strip's controls do not move. The
+  blink adds no timer or subscription.
   Pinned by `transport_glyph_names_and_colors_each_mode`,
   `now_playing_row_keeps_the_elapsed_readout_in_place_across_transport_modes`,
   `now_playing_content_draws_the_indicator_strip_beside_the_title`,
@@ -1318,7 +1321,9 @@ its internal id, whenever the id is in the known-track index:
   `elapsed_readout_toggles_only_while_not_stopped`,
   and `now_playing_row_keeps_the_elapsed_bounds_when_the_blink_hides_it` in
   `src/ui/views/tests/now_playing.rs`, and
-  `compact_readout_toggles_time_display_only_while_not_stopped` in `src/ui/views/tests/shade.rs`;
+  `compact_readout_toggles_time_display_only_while_not_stopped`,
+  `compact_readout_color_blinks_only_while_paused`, and
+  `compact_readout_keeps_its_bounds_when_the_blink_hides_it` in `src/ui/views/tests/shade.rs`;
   `lcd_indicator_message_arms_o_a_i_and_v_and_leaves_d_inert` and
   `lcd_indicator_strip_publishes_options_on_o_always_on_top_on_a_visualizer_on_v_and_file_info_on_i` in
   `src/ui/views/tests/now_playing.rs`;

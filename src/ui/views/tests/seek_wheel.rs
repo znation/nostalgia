@@ -79,6 +79,7 @@ fn wheel_over_the_shade_seek_slider_seeks() {
     let strip = || {
         view_shade_strip(
             TransportMode::Playing,
+            true,
             0.5,
             Cow::Borrowed("00:10"),
             Cow::Borrowed("0:30"),

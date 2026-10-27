@@ -113,8 +113,14 @@ pub(super) fn view_player_panels(
             ));
     }
 
-    let footer = player
-        .library_panel_visible
-        .then(|| views::view_library_strip(transport_mode, volume, library_elapsed, library_total));
+    let footer = player.library_panel_visible.then(|| {
+        views::view_library_strip(
+            transport_mode,
+            player.blink_visible,
+            volume,
+            library_elapsed,
+            library_total,
+        )
+    });
     (player_panels.into(), footer)
 }

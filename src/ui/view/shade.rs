@@ -29,6 +29,7 @@ pub(super) fn view_shade(player: &WinampPlayer) -> Element<'_, Message> {
                     .push(views::view_title_bar(player.about_visible))
                     .push(views::view_shade_strip(
                         transport_mode,
+                        player.blink_visible,
                         volume,
                         elapsed,
                         total,

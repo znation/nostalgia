@@ -15,7 +15,7 @@ use super::equalizer::{
     response_curve_offsets, response_curve_row,
 };
 use super::mini_transport::{
-    MINI_SEEK_ID, MINI_TRANSPORT_HEIGHT, MINI_VOLUME_ID, MINI_VOLUME_WIDTH,
+    MINI_SEEK_ID, MINI_TRANSPORT_HEIGHT, MINI_VOLUME_ID, MINI_VOLUME_WIDTH, compact_readout_color,
     mini_transport_controls, mini_transport_readout, mini_volume_spec, view_library_strip,
 };
 use super::now_playing::indicator::{
