@@ -215,3 +215,51 @@ fn a_no_op_move_schedules_no_task() {
     let _ = update(&mut player, Message::ArtistsLoaded(vec![artist("a")]));
     assert_no_task(update(&mut player, Message::MoveSelectedRowDown));
 }
+
+// A move records its swap in the saved library permutation, so a later
+// reorder composes with it. Back must still undo both.
+#[test]
+fn back_restores_library_order_after_a_move_then_a_reverse() {
+    let mut player = player_in_albums();
+    let _ = update(
+        &mut player,
+        Message::ArtistsLoaded(vec![artist("a"), artist("b"), artist("c")]),
+    );
+    player.current_view = CurrentView::Artists;
+    let epoch = player.artists.epoch;
+    select(&mut player, epoch, 0);
+    let _ = update(&mut player, Message::MoveSelectedRowDown);
+    assert_eq!(artist_names(&player), ["b", "a", "c"]);
+    let _ = update(&mut player, Message::ReverseBrowse);
+    assert_eq!(artist_names(&player), ["c", "a", "b"]);
+    player.current_view = CurrentView::Albums;
+
+    let _ = update(&mut player, Message::Back);
+
+    assert_eq!(artist_names(&player), ["a", "b", "c"]);
+}
+
+// A row already at the list's edge cannot move past it: the order, the
+// selection, and the epoch stay as they were, so rendered presses stay valid.
+#[test]
+fn a_move_past_either_edge_changes_nothing() {
+    let mut player = player_in_albums();
+    let _ = update(
+        &mut player,
+        Message::ArtistsLoaded(vec![artist("a"), artist("b"), artist("c")]),
+    );
+    player.current_view = CurrentView::Artists;
+    let epoch = player.artists.epoch;
+
+    select(&mut player, epoch, 0);
+    let _ = update(&mut player, Message::MoveSelectedRowUp);
+    assert_eq!(artist_names(&player), ["a", "b", "c"]);
+    assert_eq!(player.artists.selected(), Some(0));
+    assert_eq!(player.artists.epoch, epoch);
+
+    select(&mut player, epoch, 2);
+    let _ = update(&mut player, Message::MoveSelectedRowDown);
+    assert_eq!(artist_names(&player), ["a", "b", "c"]);
+    assert_eq!(player.artists.selected(), Some(2));
+    assert_eq!(player.artists.epoch, epoch);
+}
