@@ -20,54 +20,6 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Stop after current, part 2/2: show it in the options menu (planned 2026-10-27 by the plan role; "requires part 1/2 landed")
-
-**Goal.** Part 1/2 ("Stop after current, part 1/2: Ctrl+V stops after the current song") arms
-`WinampPlayer::stop_after_current` with no on-screen state. Winamp shows that choice as a checked
-menu item, so add a `Stop after current: On/Off` row to the options menu, after `Library` and
-before `About Nostalgia`, which toggles the flag and closes the menu like the other rows.
-
-**Approach.**
-
-- `src/ui/message.rs`: add `OptionsChoice::StopAfterCurrent` (doc: reuses
-  `Message::ToggleStopAfterCurrent`) and `OptionsRow::StopAfterCurrent`, placed in
-  `OptionsRow::ALL` after `LibraryPanel` (the array grows to 8), mapped in `OptionsRow::message`;
-  update `options_rows_map_to_mouse_messages_in_draw_order`.
-- `src/ui/handlers/window.rs`, `options_choice`: route the new choice to
-  `super::playback::toggle_stop_after_current`. Keyboard selection already clamps against
-  `OptionsRow::ALL.len()`, so Up/Down/Enter reach the row unchanged.
-- `src/ui/views/options.rs`: adding a seventh bool would push `view_options_overlay` to eight
-  parameters and trip clippy's `too_many_arguments` under `make check`. So replace its five bools
-  with one `#[derive(Debug, Clone, Copy)] pub struct OptionsState { always_on_top, time_remaining,
-  visualizer_visible, eq_panel_visible, library_panel_visible, stop_after_current }` (all `bool`,
-  documented). `options_row_label(row, state: OptionsState)` and
-  `view_options_overlay(base, state: OptionsState, selected)` take it. Add
-  `stop_after_current_label(bool)` → `"Stop after current: On"` / `"Stop after current: Off"`.
-  Re-export it beside the existing `pub use options::view_options_overlay;` in
-  `src/ui/views/mod.rs` so `src/ui/view/overlay.rs` can name it.
-- `src/ui/view/overlay.rs`, `apply_overlays`: build the `OptionsState` from the player fields it
-  passes today plus `player.stop_after_current`.
-
-**Tests.**
-
-- `src/ui/views/options.rs`: `stop_after_current_label_mirrors_the_flag`.
-- `src/ui/views/tests/chrome.rs`: `options_overlay_element` builds an `OptionsState` with every
-  field `all_on`, and `options_overlay_draws_each_row_with_its_state` expects the new row in both
-  cases, in draw order.
-- `src/ui/tests/panels_tests.rs`: choosing `OptionsChoice::StopAfterCurrent` arms the flag and
-  closes the menu (`options_visible` false), and choosing it again disarms it.
-
-**Docs.** `docs/usage.md`'s options-menu sentence lists `Stop after current: On/Off` between
-`Library: Shown/Hidden` and `About Nostalgia`; `docs/invariants.md` `## Options panel` names the
-row and pins the new tests.
-
-**Acceptance criteria.**
-
-- The options menu shows `Stop after current: On` while the flag is armed and `Off` otherwise,
-  between the Library and About rows; clicking it or Enter on it toggles the flag and closes the
-  menu.
-- Every other row's label, order, and message are unchanged, and `make check` passes.
-
 ### Hold and drop peak markers above the LCD spectrum bars, like Winamp's analyzer (planned 2026-10-27 by the plan role)
 
 **Goal.** Winamp's spectrum analyzer draws a thin gray peak marker above each bar. The marker

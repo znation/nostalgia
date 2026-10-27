@@ -376,6 +376,29 @@ fn escape_closes_each_transient_panel_without_touching_anything_else() {
     );
 }
 
+// The Stop after current row arms the one-shot and closes the menu; choosing
+// it again (here by keyboard) disarms it.
+#[test]
+fn options_stop_after_current_toggles_the_flag_and_closes_the_panel() {
+    let (mut player, _state) = test_player();
+    player.options_visible = true;
+    let _ = update(
+        &mut player,
+        Message::OptionsChoice(OptionsChoice::StopAfterCurrent),
+    );
+    assert!(player.stop_after_current);
+    assert!(!player.options_visible);
+
+    player.options_visible = true;
+    player.options_selected = OptionsRow::ALL
+        .iter()
+        .position(|row| matches!(row, OptionsRow::StopAfterCurrent))
+        .unwrap();
+    let _ = update(&mut player, Message::OptionsActivate);
+    assert!(!player.stop_after_current);
+    assert!(!player.options_visible);
+}
+
 // Each options-menu row flips exactly the flag its existing toggle owns, then
 // closes the menu. Everything else, including playback, stays put.
 #[test]
@@ -440,6 +463,11 @@ fn options_choice_applies_each_toggle_and_closes_the_panel() {
                     (before.0, before.1, before.2, !before.3, before.4)
                 }
                 OptionsChoice::LibraryPanel => (before.0, before.1, before.2, before.3, !before.4),
+                OptionsChoice::StopAfterCurrent => {
+                    unreachable!(
+                        "covered by options_stop_after_current_toggles_the_flag_and_closes_the_panel"
+                    )
+                }
             };
             assert_eq!(
                 (
@@ -483,18 +511,18 @@ fn options_keyboard_selection_clamps_and_activates_each_row() {
     assert_eq!(player.options_selected, 0);
     let _ = update(&mut player, Message::OptionsSelectionUp);
     assert_eq!(player.options_selected, 0);
-    for index in 1..7 {
+    for index in 1..8 {
         let _ = update(&mut player, Message::OptionsSelectionDown);
         assert_eq!(player.options_selected, index);
     }
     let _ = update(&mut player, Message::OptionsSelectionDown);
-    assert_eq!(player.options_selected, 6);
+    assert_eq!(player.options_selected, 7);
     let _ = update(&mut player, Message::OptionsActivate);
     assert!(!player.options_visible);
     assert!(!player.about_visible);
     let _ = update(&mut player, Message::ToggleOptions);
     assert_eq!(player.options_selected, 0);
-    player.options_selected = 5;
+    player.options_selected = 6;
     let _ = update(&mut player, Message::OptionsActivate);
     assert!(player.about_visible);
     assert!(!player.options_visible);

@@ -211,6 +211,7 @@ pub(in crate::ui) fn options_choice(
         OptionsChoice::Visualizer => super::playback::toggle_visualizer(player),
         OptionsChoice::EqualizerPanel => toggle_equalizer_panel(player),
         OptionsChoice::LibraryPanel => toggle_library_panel(player),
+        OptionsChoice::StopAfterCurrent => super::playback::toggle_stop_after_current(player),
     }
 }
 

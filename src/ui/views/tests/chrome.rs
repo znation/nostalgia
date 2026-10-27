@@ -487,7 +487,15 @@ fn options_overlay_element(all_on: bool) -> Element<'static, Message> {
         .width(Length::Fill)
         .height(Length::Fill)
         .into();
-    super::super::view_options_overlay(base, all_on, all_on, all_on, all_on, all_on, 0)
+    let state = super::super::OptionsState {
+        always_on_top: all_on,
+        time_remaining: all_on,
+        visualizer_visible: all_on,
+        eq_panel_visible: all_on,
+        library_panel_visible: all_on,
+        stop_after_current: all_on,
+    };
+    super::super::view_options_overlay(base, state, 0)
 }
 
 #[test]
@@ -501,6 +509,7 @@ fn options_overlay_draws_each_row_with_its_state() {
                 "Visualizer: Hidden",
                 "Equalizer: Hidden",
                 "Library: Hidden",
+                "Stop after current: Off",
             ],
         ),
         (
@@ -511,6 +520,7 @@ fn options_overlay_draws_each_row_with_its_state() {
                 "Visualizer: Shown",
                 "Equalizer: Shown",
                 "Library: Shown",
+                "Stop after current: On",
             ],
         ),
     ];
@@ -544,6 +554,7 @@ fn options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop() {
         "Visualizer: Hidden",
         "Equalizer: Hidden",
         "Library: Hidden",
+        "Stop after current: Off",
         "About Nostalgia",
         "Close",
         "OPTIONS",
@@ -597,6 +608,13 @@ fn options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop() {
                     Message::OptionsChoice(OptionsChoice::LibraryPanel)
                 )),
                 "the library row must publish its choice: {messages:?}"
+            ),
+            "Stop after current: Off" => assert!(
+                messages.iter().any(|message| matches!(
+                    message,
+                    Message::OptionsChoice(OptionsChoice::StopAfterCurrent)
+                )),
+                "the stop-after-current row must publish its choice: {messages:?}"
             ),
             "About Nostalgia" => assert!(
                 messages

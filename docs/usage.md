@@ -135,7 +135,7 @@ button, or a click on the backdrop outside the panel closes it, and opening it w
 rolled up restores the window first. The LCD's `O` letter, Alt+O, or the lightning button at the
 end of the transport row opens an `OPTIONS` menu over the player listing `Always on Top: On/Off`,
 `Time: Remaining/Elapsed`, `Visualizer: Shown/Hidden`, `Equalizer: Shown/Hidden`,
-`Library: Shown/Hidden`, `About Nostalgia`, and `Close`, with each label reflecting the current
+`Library: Shown/Hidden`, `Stop after current: On/Off`, `About Nostalgia`, and `Close`, with each label reflecting the current
 state. Choosing a row applies that one toggle and closes the menu; `About Nostalgia` opens the
 About panel, and `Close`, a click on the backdrop, or Escape closes the menu. Opening it while the
 window is rolled up restores the window first, and the menu is not saved. Alt+O also closes it
@@ -155,8 +155,8 @@ interrupted track's name across Stop and reading just `nostalgia` when no known 
 With the window focused, the classic Winamp keys drive playback: Z and B step back and forward
 (a Z press restarts the loaded preview from its start once it has played at least three seconds),
 X plays, C pauses, V stops, Ctrl+V arms (or disarms) Stop after current — the playing song then
-plays to its natural end and playback stops instead of advancing, once, with no on-screen
-indicator, R toggles Repeat and S toggles Shuffle, A (or Ctrl+A) toggles
+plays to its natural end and playback stops instead of advancing, once, shown only by the
+options-menu row (`Stop after current: On/Off`), R toggles Repeat and S toggles Shuffle, A (or Ctrl+A) toggles
 always-on-top and T (or Ctrl+T) switches the large readout between elapsed and remaining time (the
 same actions as the on-screen A
 controls and a readout click), E shows or hides the equalizer panel exactly like the `EQ` button

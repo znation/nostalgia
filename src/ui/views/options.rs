@@ -62,21 +62,42 @@ pub(super) fn library_label(library_panel_visible: bool) -> &'static str {
     }
 }
 
+/// The stop-after-current row's label: `On` while the one-shot is armed,
+/// `Off` otherwise.
+pub(super) fn stop_after_current_label(stop_after_current: bool) -> &'static str {
+    if stop_after_current {
+        "Stop after current: On"
+    } else {
+        "Stop after current: Off"
+    }
+}
+
+/// The current toggle state the options menu's labels are resolved from.
+#[derive(Debug, Clone, Copy)]
+pub struct OptionsState {
+    /// The window is pinned above other windows.
+    pub always_on_top: bool,
+    /// The large readout counts down instead of up.
+    pub time_remaining: bool,
+    /// The LCD draws the spectrum bars.
+    pub visualizer_visible: bool,
+    /// The equalizer section is drawn.
+    pub eq_panel_visible: bool,
+    /// The library section is drawn.
+    pub library_panel_visible: bool,
+    /// Playback stops at the end of the current song.
+    pub stop_after_current: bool,
+}
+
 /// Resolve a row's label from the current toggle state.
-pub(super) fn options_row_label(
-    row: OptionsRow,
-    always_on_top: bool,
-    time_remaining: bool,
-    visualizer_visible: bool,
-    eq_panel_visible: bool,
-    library_panel_visible: bool,
-) -> &'static str {
+pub(super) fn options_row_label(row: OptionsRow, state: OptionsState) -> &'static str {
     match row {
-        OptionsRow::AlwaysOnTop => always_on_top_label(always_on_top),
-        OptionsRow::TimeDisplay => time_label(time_remaining),
-        OptionsRow::Visualizer => visualizer_label(visualizer_visible),
-        OptionsRow::EqualizerPanel => equalizer_label(eq_panel_visible),
-        OptionsRow::LibraryPanel => library_label(library_panel_visible),
+        OptionsRow::AlwaysOnTop => always_on_top_label(state.always_on_top),
+        OptionsRow::TimeDisplay => time_label(state.time_remaining),
+        OptionsRow::Visualizer => visualizer_label(state.visualizer_visible),
+        OptionsRow::EqualizerPanel => equalizer_label(state.eq_panel_visible),
+        OptionsRow::LibraryPanel => library_label(state.library_panel_visible),
+        OptionsRow::StopAfterCurrent => stop_after_current_label(state.stop_after_current),
         OptionsRow::About => "About Nostalgia",
         OptionsRow::Close => "Close",
     }
@@ -101,11 +122,7 @@ pub(super) fn options_row_style(
 /// the keyboard row without changing the labels or mouse messages.
 pub fn view_options_overlay<'a>(
     base: Element<'a, Message>,
-    always_on_top: bool,
-    time_remaining: bool,
-    visualizer_visible: bool,
-    eq_panel_visible: bool,
-    library_panel_visible: bool,
+    state: OptionsState,
     selected: usize,
 ) -> Element<'a, Message> {
     let mut content = Column::new()
@@ -114,18 +131,8 @@ pub fn view_options_overlay<'a>(
         .push(Text::new("OPTIONS").size(18).color(theme::TITLE_TAPE));
     for (index, row) in OptionsRow::ALL.into_iter().enumerate() {
         content = content.push(
-            labeled_button(
-                options_row_label(
-                    row,
-                    always_on_top,
-                    time_remaining,
-                    visualizer_visible,
-                    eq_panel_visible,
-                    library_panel_visible,
-                ),
-                row.message(),
-            )
-            .style(move |_, status| options_row_style(index == selected, status)),
+            labeled_button(options_row_label(row, state), row.message())
+                .style(move |_, status| options_row_style(index == selected, status)),
         );
     }
 
@@ -183,6 +190,12 @@ mod tests {
     fn equalizer_label_mirrors_the_flag() {
         assert_eq!(equalizer_label(true), "Equalizer: Shown");
         assert_eq!(equalizer_label(false), "Equalizer: Hidden");
+    }
+
+    #[test]
+    fn stop_after_current_label_mirrors_the_flag() {
+        assert_eq!(stop_after_current_label(true), "Stop after current: On");
+        assert_eq!(stop_after_current_label(false), "Stop after current: Off");
     }
 
     #[test]

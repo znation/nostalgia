@@ -69,7 +69,7 @@ pub use now_playing::{
     now_playing_artist, now_playing_elapsed, now_playing_label, now_playing_number,
     now_playing_time, seek_readout_text, view_now_playing, visible_spectrum,
 };
-pub use options::view_options_overlay;
+pub use options::{OptionsState, view_options_overlay};
 pub use seek_bar::view_seek_bar;
 pub use shade::view_shade_strip;
 pub use title_bar::{view_title_band, view_title_bar};

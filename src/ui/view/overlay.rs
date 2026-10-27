@@ -11,11 +11,14 @@ pub(super) fn apply_overlays<'a>(
     } else if player.options_visible && !player.shaded {
         views::view_options_overlay(
             base,
-            player.always_on_top,
-            player.time_display == views::TimeDisplay::Remaining,
-            player.visualizer_visible,
-            player.eq_panel_visible,
-            player.library_panel_visible,
+            views::OptionsState {
+                always_on_top: player.always_on_top,
+                time_remaining: player.time_display == views::TimeDisplay::Remaining,
+                visualizer_visible: player.visualizer_visible,
+                eq_panel_visible: player.eq_panel_visible,
+                library_panel_visible: player.library_panel_visible,
+                stop_after_current: player.stop_after_current,
+            },
             player.options_selected,
         )
     } else if player.file_info_visible && !player.shaded {

@@ -1739,20 +1739,20 @@ unpersisted options menu listing the app's existing on/off choices plus About an
 - `views::view_options_overlay` stacks an `OPTIONS` panel over the otherwise unchanged normal-mode
   base through `views::modal::modal_overlay`. Its rows are `Always on Top: On/Off`, `Time:
   Remaining/Elapsed`, `Visualizer: Shown/Hidden`, `Equalizer: Shown/Hidden`, `Library:
-  Shown/Hidden`, `About Nostalgia`, and `Close`, with the labels resolved from the passed current
+  Shown/Hidden`, `Stop after current: On/Off`, `About Nostalgia`, and `Close`, with the labels resolved from the passed current
   state on every rebuild. Each choice row publishes `Message::OptionsChoice(..)`; the About row
   publishes `Message::ToggleAbout`; `Close`, the full-window backdrop, and Escape close the menu.
 - `handlers::window::options_choice` clears `options_visible` first, then dispatches to the
   existing `toggle_always_on_top`, `handlers::playback::toggle_time_display`,
   `handlers::playback::toggle_visualizer`, `handlers::window::toggle_equalizer_panel`, or
-  `handlers::window::toggle_library_panel` and returns its task, so each row's non-menu behavior is
+  `handlers::window::toggle_library_panel`, or `handlers::playback::toggle_stop_after_current` and returns its task, so each row's non-menu behavior is
   exactly that toggle's.
 - The overlay assembly in `src/ui/view/overlay.rs` wraps the base tree only while `options_visible &&
   !shaded` holds and passes the current always-on-top, elapsed/remaining, visualizer, equalizer
-  panel, and library panel state; the shade branch never draws it.
+  panel, library panel, and stop-after-current state through `views::OptionsState`; the shade branch never draws it.
 - A plain or Shift-held Escape press also closes it (see `## Transient panel dismissal`).
 
-**Enforced by.** `views::options::view_options_overlay`, its five label helpers, and `Message::ToggleOptions`
+**Enforced by.** `views::options::view_options_overlay`, its six label helpers, and `Message::ToggleOptions`
 and `Message::OptionsChoice`; `handlers::window::toggle_options` and
 `handlers::window::options_choice`; `WinampPlayer::options_visible`; the LCD strip's `O`
 mapping and the transport row's `options_button`; and the normal-mode branch of
@@ -1773,8 +1773,9 @@ mapping and the transport row's `options_button`; and the normal-mode branch of
 expectations in `options_choice_applies_each_toggle_and_closes_the_panel`
 (`src/ui/tests/panels_tests.rs`); `options_overlay_draws_each_row_with_its_state`,
 `options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop`, and
-`transport_options_button_publishes_toggle_options` (`src/ui/views/tests/chrome.rs`); the five
-label tests in `src/ui/views/options.rs`; `lcd_indicator_message_arms_o_a_i_and_v_and_leaves_d_inert`,
+`transport_options_button_publishes_toggle_options` (`src/ui/views/tests/chrome.rs`); the six
+label tests in `src/ui/views/options.rs` (including `stop_after_current_label_mirrors_the_flag`); `options_stop_after_current_toggles_the_flag_and_closes_the_panel`
+(`src/ui/tests/panels_tests.rs`); `lcd_indicator_message_arms_o_a_i_and_v_and_leaves_d_inert`,
 `indicator_label_color_lights_only_the_active_mode`, and
 `lcd_indicator_strip_publishes_options_on_o_always_on_top_on_a_visualizer_on_v_and_file_info_on_i`
 (`src/ui/views/tests/now_playing.rs`); `options_choice_applies_each_toggle_and_closes_the_panel`,
