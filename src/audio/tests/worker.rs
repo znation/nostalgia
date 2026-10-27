@@ -21,6 +21,25 @@ fn assert_unloaded_query_reports_none<T: std::fmt::Debug + PartialEq>(
     assert_eq!(replies.recv().unwrap(), None);
 }
 
+// Plays one track on a worker whose recording player answers every query,
+// then sends one query and returns the players the worker created with the
+// query's reply. `command` wraps the reply sender in the query's variant.
+fn query_after_play<T>(
+    command: fn(mpsc::Sender<Option<T>>) -> Command,
+) -> (Arc<Mutex<Vec<RecordingPlayer>>>, Option<T>) {
+    let (sender, receiver) = mpsc::channel();
+    let (players, create_player) = recording_players_without_queue();
+    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
+    let (reply, replies) = mpsc::channel();
+
+    sender.send(Command::Play("first".to_string())).unwrap();
+    sender.send(command(reply)).unwrap();
+    drop(sender);
+    serve_commands(receiver, create_player, fetch);
+
+    (players, replies.recv().unwrap())
+}
+
 // `play_track` commits the new track and returns `Ok` as soon as the
 // command is queued, so the worker's later download failure is invisible
 // to the caller. If that failure left the previous player running, the old
@@ -173,15 +192,7 @@ fn a_seek_while_stopped_reaches_no_player() {
 // handles it after the Play's download installs the player.
 #[test]
 fn position_query_returns_the_loaded_players_position() {
-    let (sender, receiver) = mpsc::channel();
-    let (players, create_player) = recording_players_without_queue();
-    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
-    let (reply, replies) = mpsc::channel();
-
-    sender.send(Command::Play("first".to_string())).unwrap();
-    sender.send(Command::Position(reply)).unwrap();
-    drop(sender);
-    serve_commands(receiver, create_player, fetch);
+    let (players, reply) = query_after_play(Command::Position);
 
     assert_eq!(
         players.lock().unwrap().len(),
@@ -189,7 +200,7 @@ fn position_query_returns_the_loaded_players_position() {
         "the Play installs a player"
     );
     assert_eq!(
-        replies.recv().unwrap(),
+        reply,
         Some(Duration::from_secs(42)),
         "the query must answer with the installed player's position"
     );
@@ -252,18 +263,8 @@ fn seek_to_command_reaches_the_loaded_player() {
 // preview length.
 #[test]
 fn duration_query_returns_the_loaded_players_duration() {
-    let (sender, receiver) = mpsc::channel();
-    let (_, create_player) = recording_players_without_queue();
-    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
-    let (reply, replies) = mpsc::channel();
-
-    sender.send(Command::Play("first".to_string())).unwrap();
-    sender.send(Command::Duration(reply)).unwrap();
-    drop(sender);
-    serve_commands(receiver, create_player, fetch);
-
     assert_eq!(
-        replies.recv().unwrap(),
+        query_after_play(Command::Duration).1,
         Some(Duration::from_secs(30)),
         "the query must answer with the installed player's duration"
     );
@@ -316,18 +317,8 @@ fn position_query_reports_none_when_nothing_is_loaded() {
 // same way a position query does.
 #[test]
 fn playback_format_query_returns_the_loaded_players_format() {
-    let (sender, receiver) = mpsc::channel();
-    let (_, create_player) = recording_players_without_queue();
-    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
-    let (reply, replies) = mpsc::channel();
-
-    sender.send(Command::Play("first".to_string())).unwrap();
-    sender.send(Command::PlaybackFormat(reply)).unwrap();
-    drop(sender);
-    serve_commands(receiver, create_player, fetch);
-
     assert_eq!(
-        replies.recv().unwrap(),
+        query_after_play(Command::PlaybackFormat).1,
         Some(PlaybackFormat {
             sample_rate_hz: 44_100,
             channels: 2,
@@ -473,18 +464,8 @@ fn a_paused_preview_reports_unfinished() {
 // same way a format query does.
 #[test]
 fn spectrum_query_returns_the_loaded_players_spectrum() {
-    let (sender, receiver) = mpsc::channel();
-    let (_, create_player) = recording_players_without_queue();
-    let fetch = |_url: &str| -> Result<(), AppleMusicError> { Ok(()) };
-    let (reply, replies) = mpsc::channel();
-
-    sender.send(Command::Play("first".to_string())).unwrap();
-    sender.send(Command::Spectrum(reply)).unwrap();
-    drop(sender);
-    serve_commands(receiver, create_player, fetch);
-
     assert_eq!(
-        replies.recv().unwrap(),
+        query_after_play(Command::Spectrum).1,
         Some(test_spectrum()),
         "the query must answer with the installed player's spectrum"
     );
