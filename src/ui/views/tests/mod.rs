@@ -11,8 +11,8 @@ use super::browse::{
 use super::equalizer::{
     AUTO_BUTTON_WIDTH, CUSTOM_PRESET_LABEL, EQ_SLIDER_HEIGHT, RESPONSE_CURVE_COLUMNS,
     RESPONSE_CURVE_GUIDE_THICKNESS, RESPONSE_CURVE_HEIGHT, RESPONSE_CURVE_LINE_HEIGHT, auto_label,
-    eq_enabled_label, preamp_slider_style, preset_pick_list_label, response_curve_offsets,
-    response_curve_row,
+    auto_toggle, eq_enabled_label, eq_toggle, preamp_slider_style, preset_pick_list_label,
+    response_curve_offsets, response_curve_row,
 };
 use super::mini_transport::{
     MINI_SEEK_ID, MINI_TRANSPORT_HEIGHT, MINI_VOLUME_ID, MINI_VOLUME_WIDTH,

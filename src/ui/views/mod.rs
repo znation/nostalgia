@@ -133,8 +133,8 @@ fn spacer(width: f32) -> Space {
 /// A button showing a single text label that emits `message` on press.
 ///
 /// The browse Back, Open, Top, Sort, Reload, Clear, All Songs, All Albums,
-/// Playlists, and Retry buttons and the equalizer panel's on/off button call
-/// this directly;
+/// Playlists, and Retry buttons call this directly; the equalizer panel's on/off
+/// button reaches it through [`toggle_button`];
 /// the transport row's seven buttons (Previous, Play, Pause, Stop, Next,
 /// Repeat, Shuffle), the five in each compact strip (the shade strip and the
 /// library footer), and the title bar's shade, minimize, and close buttons
@@ -161,9 +161,17 @@ fn fixed_width_button(
     labeled_button(label, message).width(Length::Fixed(width))
 }
 
+/// A [`labeled_button`] that sinks while `on` (see [`style::toggle_button_style`]), for a toggle
+/// whose width follows its label: the equalizer's `EQ: On/Off`.
+fn toggle_button(label: &'static str, message: Message, on: bool) -> Button<'static, Message> {
+    labeled_button(label, message)
+        .style(move |_theme, status| style::toggle_button_style(on, status))
+}
+
 /// A [`fixed_width_button`] that sinks while `on` (see [`style::toggle_button_style`]). This is the
 /// one place the sunken-on rule is applied to a fixed-width toggle: the transport row's `EQ` and
-/// `PL`, Repeat, and Shuffle build through it (the title bar's `M` applies the same style itself).
+/// `PL`, Repeat, Shuffle, and the equalizer's `AUTO` build through it (the title bar's `M` applies
+/// the same style itself).
 fn fixed_width_toggle_button(
     label: &'static str,
     width: f32,

@@ -15,7 +15,9 @@ use crate::equalizer::{
 };
 use crate::ui::{Message, bevel, style, theme};
 
-use super::{EQ_STEP, fixed_width_button, labeled_button, spacer};
+use iced::widget::Button;
+
+use super::{EQ_STEP, fixed_width_toggle_button, spacer, toggle_button};
 
 /// The horizontal gap between adjacent equalizer band columns. Without it the labels sit edge to
 /// edge, so `170`, `310`, `600`, and `1K` read as one number in the rendered panel.
@@ -70,6 +72,21 @@ pub(super) fn auto_label(auto: bool) -> &'static str {
 /// The AUTO button's fixed width, pinned wide enough for `AUTO: Off` so swapping the label cannot
 /// reflow the preset pick list beside it.
 pub(super) const AUTO_BUTTON_WIDTH: f32 = 96.0;
+
+/// The equalizer on/off button: sunken while `enabled`, ordinary while off.
+pub(super) fn eq_toggle(enabled: bool) -> Button<'static, Message> {
+    toggle_button(eq_enabled_label(enabled), Message::ToggleEqualizer, enabled)
+}
+
+/// The AUTO button: sunken while `auto`, ordinary while off, pinned to [`AUTO_BUTTON_WIDTH`].
+pub(super) fn auto_toggle(auto: bool) -> Button<'static, Message> {
+    fixed_width_toggle_button(
+        auto_label(auto),
+        AUTO_BUTTON_WIDTH,
+        Message::ToggleEqAuto,
+        auto,
+    )
+}
 
 /// The preset pick list's label when no named preset is applied. Classic Winamp names a hand-tuned
 /// curve `Custom`, so the closed control names the curve instead of showing an empty placeholder
@@ -356,16 +373,9 @@ pub fn view_equalizer(
         Column::new()
             .push(
                 Row::new()
-                    .push(labeled_button(
-                        eq_enabled_label(enabled),
-                        Message::ToggleEqualizer,
-                    ))
+                    .push(eq_toggle(enabled))
                     .push(spacer(8.0))
-                    .push(fixed_width_button(
-                        auto_label(auto),
-                        AUTO_BUTTON_WIDTH,
-                        Message::ToggleEqAuto,
-                    ))
+                    .push(auto_toggle(auto))
                     .push(spacer(8.0))
                     .push(
                         // `PickList` stores its options by value, so passing the

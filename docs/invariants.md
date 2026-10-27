@@ -741,6 +741,9 @@ refresh does not re-join and reformat every row.
   edge to its right edge. The trace passes exactly through each band's gain and is eased between
   adjacent bands with a cubic smoothstep, so it meets every band at a zero slope rather than
   leaving the corners straight segments would.
+- The equalizer header's `EQ` and `AUTO` toggles draw the sunken `theme::BUTTON_FACE_PRESSED`
+  chrome while on and the raised `theme::BUTTON_FACE` while off, built by
+  `views::equalizer::eq_toggle` (via `toggle_button`) and `views::equalizer::auto_toggle`.
 - The equalizer's preset pick list shows the applied preset's name, or `Custom` when
   `AppState::eq_preset` is `None`, drawn in `theme::TEXT` so a hand-tuned curve reads as a value
   rather than an empty control.
@@ -769,6 +772,8 @@ layout flags; `shortcuts::shortcut` in
 `src/ui/shortcuts.rs` maps plain and Shift-held E to that same message; `view` pushes the
 equalizer section only while that flag holds; `views::mini_transport::mini_transport_controls`
 projects the same glyph spec for the shade strip and the library footer.
+`views::equalizer::eq_toggle` (through `toggle_button`) and `views::equalizer::auto_toggle`
+(through `fixed_width_toggle_button`) sink the header's EQ and AUTO toggles while on;
 `views::equalizer::preamp_column`, `views::equalizer::db_scale_column`,
 `views::equalizer::response_curve_offsets`, `views::equalizer::response_curve_row`, and
 `views::view_equalizer`
@@ -789,6 +794,7 @@ tiny-skia renderer.
 
 **Pinned by.** `browse_nav_buttons_place_sort_beside_top`,
 `repeat_and_shuffle_toggles_sink_while_on`,
+`eq_and_auto_toggles_sink_while_on`,
 `browse_nav_buttons_place_reload_beside_sort`,
 `transport_row_keeps_play_and_pause_glyphs_fixed_across_playback_states`,
 `root_view_draws_the_transport_glyph_row`,
@@ -833,6 +839,7 @@ keys use, leaving the row playback-independent (2026-10-26).
 Split root assembly into branch modules, retaining the shared LCD/footer snapshot and the
 outer OptionsShortcut wrapper (2026-10-26 by the feature role).
 Repeat and Shuffle sink while on, through `fixed_width_toggle_button` (2026-10-27).
+The equalizer's EQ and AUTO buttons sink while on, through `eq_toggle` and `auto_toggle` (2026-10-27).
 
 ## Settings persistence
 

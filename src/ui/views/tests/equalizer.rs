@@ -609,3 +609,38 @@ fn equalizer_slider_spec_matches_the_gain_clamp_and_steps_whole_decibels() {
 
     assert_eq!(EQ_STEP, 1.0);
 }
+
+// The EQ and AUTO buttons sink while on, like Repeat and Shuffle: the on button draws the pressed
+// face at rest and the off button the raised face.
+#[test]
+fn eq_and_auto_toggles_sink_while_on() {
+    let mut renderer = layout_capture::headless_renderer();
+    let mut faces = |mut element: Element<'_, Message, iced::Theme, iced::Renderer>| {
+        let (text, pixels) = layout_capture::capture_text_and_pixels(
+            &mut element,
+            &mut renderer,
+            &iced::Theme::Dark,
+        );
+        // Sample the left padding strip, clear of the border and the glyphs.
+        let size = text.size();
+        let region = pixels.region(Rectangle::new(
+            iced::Point::new(2.0, 2.0),
+            Size::new(4.0, size.height - 4.0),
+        ));
+        (
+            region_has_color(&region, theme::BUTTON_FACE_PRESSED),
+            region_has_color(&region, theme::BUTTON_FACE),
+        )
+    };
+    for (name, on, off) in [
+        ("EQ", eq_toggle(true), eq_toggle(false)),
+        ("AUTO", auto_toggle(true), auto_toggle(false)),
+    ] {
+        assert_eq!(faces(on.into()), (true, false), "{name} on must sink");
+        assert_eq!(
+            faces(off.into()),
+            (false, true),
+            "{name} off must stay raised"
+        );
+    }
+}
