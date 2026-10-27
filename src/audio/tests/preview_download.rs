@@ -384,6 +384,52 @@ fn the_preview_resolver_allows_a_public_address_literal() {
     );
 }
 
+// Exercise the connect-time guard with literals, without DNS or a connection.
+// Public counterparts prevent a blanket rejection of IPv6 from passing.
+#[test]
+fn the_preview_resolver_checks_ipv6_transition_literals() {
+    use ureq::unversioned::resolver::DefaultResolver;
+
+    let config = config_with_timeout(Duration::from_secs(1));
+    for (host, internal) in [
+        ("::ffff:0:10.0.0.1", true),
+        ("::ffff:0:8.8.8.8", false),
+        ("2001:4860::5efe:127.0.0.1", true),
+        ("2001:4860::5efe:8.8.8.8", false),
+        ("2002:0a00:0001::1", true),
+        ("2002:0808:0808::1", false),
+    ] {
+        let uri: ureq::http::Uri = format!("https://[{host}]:8443/preview.m4a")
+            .parse()
+            .unwrap();
+        let timeout = NextTimeout {
+            after: ureq::unversioned::transport::time::Duration::from_secs(1),
+            reason: ureq::Timeout::Resolve,
+        };
+        let expected = format!("[{host}]:8443")
+            .parse::<std::net::SocketAddr>()
+            .unwrap();
+        let unguarded = DefaultResolver::default()
+            .resolve(&uri, &config, timeout)
+            .expect("the literal must resolve before the guard is applied");
+        assert!(unguarded.contains(&expected));
+
+        let guarded = PublicAddressResolver::default().resolve(&uri, &config, timeout);
+        if internal {
+            assert!(
+                matches!(guarded, Err(ureq::Error::HostNotFound)),
+                "the resolver must reject {host}, got {guarded:?}"
+            );
+        } else {
+            let addresses = guarded.expect("a public transition literal must resolve");
+            assert!(
+                addresses.contains(&expected),
+                "the resolver must preserve the public address and port for {host}"
+            );
+        }
+    }
+}
+
 // The worker fetches through `preview_agent`, but the redirect test above
 // and the non-success-status test below build their agents with
 // `agent_with_timeout` directly. A regression that built `preview_agent`

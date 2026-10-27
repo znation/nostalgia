@@ -2235,7 +2235,8 @@ redirects and disables the proxy.
   (all in `src/apple_music/tests/validation.rs`)
 - `the_preview_agent_refuses_a_hostname_that_resolves_to_loopback`
 - `the_preview_resolver_allows_a_public_address_literal`
-  (both in `src/audio/tests/preview_download.rs`)
+- `the_preview_resolver_checks_ipv6_transition_literals`
+  (in `src/audio/tests/preview_download.rs`)
 
 **History.** Reconstructed from "Preview URL guard accepts IPv4 multicast and reserved ranges" in
 `BUGS-FIXED.md` (2026-10-23); the v6 branch already refused multicast while the v4 branch did not.
