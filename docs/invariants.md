@@ -928,6 +928,7 @@ arm those controls press.
 `the_directory_sync_follows_a_symlink_to_the_target`, and
 `the_sweep_follows_a_symlink_to_the_targets_directory` (`src/settings/file_store.rs`),
 `a_settings_file_that_could_not_be_read_is_not_overwritten`,
+`a_writer_clone_shares_the_failed_read_and_refuses_to_overwrite`,
 `a_missing_settings_file_still_allows_the_first_save`, and
 `unreadable_settings_save_report_names_the_file_and_the_recovery` (`src/settings/file_store.rs`),
 `a_burst_of_saves_collapses_to_the_latest_snapshot`,

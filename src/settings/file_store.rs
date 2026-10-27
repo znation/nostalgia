@@ -424,6 +424,41 @@ mod tests {
         std::fs::remove_dir_all(&root).unwrap();
     }
 
+    // Production loads through `main`'s store and hands the writer a clone. The
+    // failed read is recorded in storage shared by every clone, so the clone
+    // the background writer owns must refuse too; a per-value flag would let
+    // the writer replace the still-intact file with the defaults snapshot.
+    #[test]
+    fn a_writer_clone_shares_the_failed_read_and_refuses_to_overwrite() {
+        use crate::settings::writer::BackgroundWriter;
+
+        let root = temporary_root("unreadable-clone");
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("settings.ini");
+        std::fs::write(&path, "volume=0.25\n").unwrap();
+        let store = FileStore::at(path.clone());
+
+        let denied = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+        assert_eq!(store.load_with(|_| Err(denied)), None);
+
+        let writer = BackgroundWriter::new(store.clone());
+        writer.save(&varied_settings());
+        drop(writer);
+
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "volume=0.25\n",
+            "a writer clone must leave the file its original could not read intact"
+        );
+        assert_eq!(
+            std::fs::read_dir(&root).unwrap().count(),
+            1,
+            "the refused save must not stage a temp file beside the file"
+        );
+
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
     // A missing file is the normal first run, not a failure: the first save must
     // still create the file rather than being refused for the whole run.
     #[test]
