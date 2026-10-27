@@ -25,6 +25,38 @@ fn shade_mode_builds_no_browse_scroll_target() {
 }
 
 #[test]
+fn about_panel_names_the_active_library_source() {
+    let (mut player, _state) = test_player();
+    player.about_visible = true;
+
+    let unsigned = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = unsigned.texts().collect();
+    assert!(
+        texts.contains(&"Library: Sample library"),
+        "the unsigned About panel must name the sample library: {texts:?}"
+    );
+    assert!(
+        !texts.contains(&"Library: Apple Music"),
+        "the unsigned About panel must not claim Apple Music: {texts:?}"
+    );
+
+    player
+        .apple_music_service
+        .authenticate_with("dev", &|_| Ok(sign_in_session()))
+        .expect("the stub sign-in must store its session");
+    let signed = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = signed.texts().collect();
+    assert!(
+        texts.contains(&"Library: Apple Music"),
+        "the signed-in About panel must name Apple Music: {texts:?}"
+    );
+    assert!(
+        !texts.contains(&"Library: Sample library"),
+        "the signed-in About panel must not claim the sample library: {texts:?}"
+    );
+}
+
+#[test]
 fn new_player_starts_at_artists_with_nothing_selected() {
     let (player, _state) = test_player();
 

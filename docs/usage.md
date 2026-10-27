@@ -125,8 +125,10 @@ that row — closing the panel; `Close` or a click on the backdrop closes it, an
 those song lists. A `Reload` button beside `Sort`
 refetches the library's artists list and returns to the Artists list, clearing any active search
 while leaving the typed query in the search box. The title bar's `M` button (or `Ctrl+F1`) opens
-a transient About panel naming the app, showing its `v`-prefixed package version and the line
-`The classic Winamp look, rebuilt in Rust — with Apple Music as the library.`; `M` (through the
+a transient About panel naming the app, showing its `v`-prefixed package version, the line
+`The classic Winamp look, rebuilt in Rust — with Apple Music as the library.`, and the active
+library source (`Library: Apple Music` once a MusicKit session is stored, `Library: Sample
+library` otherwise); `M` (through the
 backdrop over its slot), `Ctrl+F1`, the panel's `Close` button, or a click on the backdrop outside
 the panel closes it, and opening it while the window is rolled up restores the window first. A
 plain or Shift-held Escape press closes whichever transient panel is open, like its `Close`

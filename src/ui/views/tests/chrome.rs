@@ -78,29 +78,37 @@ fn title_bar_m_button_publishes_toggle_about() {
 
 /// The About overlay over a blank full-space base, so its layout is measured
 /// against the same window limits as the root view.
-fn about_overlay_element() -> Element<'static, Message> {
+fn about_overlay_element(signed_in: bool) -> Element<'static, Message> {
     let base: Element<'static, Message> = iced::widget::Space::new()
         .width(Length::Fill)
         .height(Length::Fill)
         .into();
-    super::super::view_about_overlay(base)
+    super::super::view_about_overlay(base, signed_in)
 }
 
 #[test]
-fn about_overlay_draws_the_name_version_and_tagline() {
-    let mut element = about_overlay_element();
-    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
-    let texts: Vec<&str> = capture.texts().collect();
-    for expected in [
-        "ABOUT NOSTALGIA",
-        concat!("v", env!("CARGO_PKG_VERSION")),
-        "The classic Winamp look, rebuilt in Rust — with Apple Music as the library.",
-        "Close",
-    ] {
-        assert!(
-            texts.contains(&expected),
-            "the About overlay must draw {expected:?}: {texts:?}"
-        );
+fn about_overlay_draws_the_name_version_tagline_and_library_source() {
+    let sources = [
+        (false, "Library: Sample library"),
+        (true, "Library: Apple Music"),
+    ];
+    for (signed_in, library_source) in sources {
+        let mut element = about_overlay_element(signed_in);
+        let capture =
+            layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+        let texts: Vec<&str> = capture.texts().collect();
+        for expected in [
+            "ABOUT NOSTALGIA",
+            concat!("v", env!("CARGO_PKG_VERSION")),
+            "The classic Winamp look, rebuilt in Rust — with Apple Music as the library.",
+            library_source,
+            "Close",
+        ] {
+            assert!(
+                texts.contains(&expected),
+                "the About overlay must draw {expected:?} (signed in: {signed_in}): {texts:?}"
+            );
+        }
     }
 }
 
@@ -111,7 +119,7 @@ fn about_overlay_draws_the_name_version_and_tagline() {
 fn about_overlay_closes_from_close_and_backdrop_but_ignores_its_chrome() {
     let mut renderer = layout_capture::headless_renderer();
     for target in ["Close", "ABOUT NOSTALGIA", "BACKDROP"] {
-        let mut element = about_overlay_element();
+        let mut element = about_overlay_element(false);
         let capture = layout_capture::capture_text(&mut element, &renderer);
         let point = if target == "BACKDROP" {
             iced::Point::new(2.0, capture.size().height - 2.0)
@@ -160,7 +168,7 @@ fn about_overlay_captures_the_wheel_from_the_base_beneath() {
         )
         .on_scroll(|_| Message::ToggleEqualizerPanel)
         .into();
-        let mut element = super::super::view_about_overlay(base);
+        let mut element = super::super::view_about_overlay(base, false);
         let capture = layout_capture::capture_text(&mut element, &renderer);
         let point = if over_panel {
             let bounds = capture.find("ABOUT NOSTALGIA");

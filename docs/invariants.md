@@ -1593,29 +1593,41 @@ measured once the window id resolves, and the first unshade restores it (2026-10
   window restores before the panel draws; the flag is layout-only and not persisted.
 - While the flag holds outside shade mode, `views::view_about_overlay` stacks the panel over the
   otherwise unchanged normal-mode base: `views::about::ABOUT_VERSION` (a `v`-prefixed
-  `CARGO_PKG_VERSION`), `ABOUT NOSTALGIA`, the mockup tagline, and a `Close` button. `Close` and
+  `CARGO_PKG_VERSION`), `ABOUT NOSTALGIA`, the mockup tagline, the active library source from
+  `views::about::library_source_label`, and a `Close` button. The label reads `Library: Apple
+  Music` when the service has a stored session and `Library: Sample library` otherwise, and the
+  normal-mode branch of `ui::view::view` passes the current `AppleMusicService::session()` result
+  on every rebuild, so a sign-in that lands while the panel is open updates it without a new
+  message or stored UI state. `Close` and
   the full-window backdrop each publish one `Message::ToggleAbout`; a press on the panel's own
   chrome publishes `Message::Ignored` and leaves it open. The shade branch never draws the panel.
 - A plain or Shift-held Escape press also closes it (see `## Transient panel dismissal`).
 
-**Enforced by.** `views::title_bar::view_title_bar`, `views::about::view_about_overlay` (over
-`views::modal::modal_overlay`), `Message::ToggleAbout`, `handlers::window::toggle_about`,
-`WinampPlayer::about_visible`, and the normal-mode branch of `ui::view::view` in `src/ui/view.rs`,
+**Enforced by.** `views::title_bar::view_title_bar`, `views::about::view_about_overlay` and
+`views::about::library_source_label` (over
+`views::modal::modal_overlay`), the `AppleMusicService::session()` read in the normal-mode branch
+of `ui::view::view`, `Message::ToggleAbout`, `handlers::window::toggle_about`,
+`WinampPlayer::about_visible`, and that same normal-mode branch in `src/ui/view.rs`,
 which wraps the base tree only while `about_visible && !shaded` holds.
 
 **Pinned by.** `title_bar_m_button_publishes_toggle_about`,
-`about_overlay_draws_the_name_version_and_tagline`,
-`about_overlay_closes_from_close_and_backdrop_but_ignores_its_chrome`
-(`src/ui/views/tests/chrome.rs`); `message_for_maps_ctrl_f1_to_about` (`src/ui/shortcuts.rs`);
+`about_overlay_draws_the_name_version_tagline_and_library_source`,
+`about_overlay_closes_from_close_and_backdrop_but_ignores_its_chrome`,
+and `library_source_label_names_the_signed_in_and_sample_libraries`
+(`src/ui/views/tests/chrome.rs` and `src/ui/views/about.rs`); `message_for_maps_ctrl_f1_to_about` (`src/ui/shortcuts.rs`);
 `toggle_about_shows_and_hides_the_panel_without_touching_playback`
 and `toggle_about_while_shaded_restores_the_window_first` (`src/ui/tests/window_tests.rs`);
-`view_constructs_over_the_apps_full_input_space`, `view_constructs_when_the_window_is_shaded`, and
+`view_constructs_over_the_apps_full_input_space`, `view_constructs_when_the_window_is_shaded`,
+`about_panel_names_the_active_library_source`, and
 `title_bar_constructs_for_both_about_states` (`src/ui/tests/view_tests.rs`);
 `the_escape_listener_runs_only_while_a_transient_panel_is_open`,
 `escape_key_message_maps_escape_but_not_its_chords_or_other_keys`
 (`src/ui/tests/timers_tests.rs`), and
 `escape_closes_each_transient_panel_without_touching_anything_else`
 (`src/ui/tests/panels_tests.rs`) pin the Escape route.
+
+**History.** Added the library-source line (2026-10-26): it reads the service's current session
+on each rebuild rather than caching the source in UI state.
 
 ## File info panel
 

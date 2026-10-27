@@ -26,7 +26,8 @@ use super::views;
 /// [`Message::ToggleTimeDisplay`] as the hidden LCD's, so the elapsed/remaining
 /// choice stays switchable in shade mode. While [`WinampPlayer::about_visible`]
 /// holds outside shade mode, the normal-mode tree is the base of
-/// [`views::view_about_overlay`].
+/// [`views::view_about_overlay`], whose panel also names the active library
+/// source from the Apple Music service's current session.
 pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // Shade mode builds only the title bar and its compact transport strip —
     // the Now Playing bar, seek strip, transport row, equalizer, and browse
@@ -308,7 +309,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
     };
 
     if player.about_visible && !player.shaded {
-        views::view_about_overlay(base)
+        views::view_about_overlay(base, player.apple_music_service.session().is_some())
     } else if player.file_info_visible && !player.shaded {
         match player.current_known_track() {
             Some(track) => views::view_file_info_overlay(base, track, player.playback_format),
