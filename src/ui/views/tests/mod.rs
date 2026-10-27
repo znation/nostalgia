@@ -38,7 +38,8 @@ use super::shade::{SHADE_STRIP_HEIGHT, SHADED_HEIGHT, view_shade_strip};
 use super::title_bar::{TITLE_BAR_BUTTON_WIDTH, TITLE_BAR_LEFT_BUTTON_WIDTH};
 use super::transport::{
     EQ_PANEL_BUTTON_WIDTH, LIBRARY_PANEL_BUTTON_WIDTH, eq_panel_toggle, library_panel_toggle,
-    repeat_label, shuffle_label, transport_buttons, transport_glyphs,
+    repeat_label, repeat_toggle, shuffle_label, shuffle_toggle, transport_buttons,
+    transport_glyphs,
 };
 use super::{
     BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, EQ_STEP, TITLE_BAR_HEIGHT, VOLUME_MAX, VOLUME_MIN,
@@ -167,6 +168,12 @@ fn assert_slider_range_matches_clamp(clamp: fn(f32) -> f32, min: f32, max: f32, 
     assert_eq!(clamp(max), max);
     assert_eq!(clamp(min - step), min);
     assert_eq!(clamp(max + step), max);
+}
+
+/// Whether any pixel in `region` (RGBA bytes) is `color` at 8-bit channels.
+fn region_has_color(region: &[u8], color: Color) -> bool {
+    let [r, g, b, a] = color.into_rgba8();
+    region.chunks_exact(4).any(|pixel| pixel == [r, g, b, a])
 }
 
 mod browse;

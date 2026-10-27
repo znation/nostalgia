@@ -703,7 +703,8 @@ refresh does not re-join and reformat every row.
   buttons are pinned to fixed widths 34, 30, 30, 30, and 34 px, and the row is playback-independent,
   so it cannot reflow when playback starts. Repeat and Shuffle remain the `Repeat:
   Off/On` and `Shuffle: Off/On` text toggles, pinned to 104 and 112 px, so their label swaps
-  cannot reflow it either. The shade strip and the library footer build their five buttons
+  cannot reflow it either; each draws the sunken `theme::BUTTON_FACE_PRESSED` chrome while on and
+  the raised `theme::BUTTON_FACE` while off. The shade strip and the library footer build their five buttons
   from the same glyph spec.
 - The main transport row's fixed-width `EQ` toggle follows the balance slider in every playback
   state and is sunken while the equalizer panel is shown, ordinary chrome while it is hidden.
@@ -757,7 +758,8 @@ refresh does not re-join and reformat every row.
 **Enforced by.** `views::view_browse_nav_buttons` in `src/ui/views/browse.rs` pushes the Top, Sort,
 and Reload buttons into one `Row`. `views::view_transport_controls`,
 `views::transport::transport_buttons`, and `views::transport::transport_glyphs` in
-`src/ui/views/transport.rs` build the glyph row from `fixed_width_button`s and
+`src/ui/views/transport.rs` build the glyph row from `fixed_width_button`s, with Repeat and Shuffle
+built by `repeat_toggle`/`shuffle_toggle` through `fixed_width_toggle_button` (`src/ui/views/mod.rs`), and
 `iced::widget::Tooltip`s; `views::transport::eq_panel_toggle` and
 `views::transport::library_panel_toggle` spec the EQ and PL toggles, which
 `views::transport::panel_toggle_button` builds and `style::toggle_button_style`
@@ -786,6 +788,7 @@ section bands and the app bar's tape/label row from `theme::TITLE_TAPE` and
 tiny-skia renderer.
 
 **Pinned by.** `browse_nav_buttons_place_sort_beside_top`,
+`repeat_and_shuffle_toggles_sink_while_on`,
 `browse_nav_buttons_place_reload_beside_sort`,
 `transport_row_keeps_play_and_pause_glyphs_fixed_across_playback_states`,
 `root_view_draws_the_transport_glyph_row`,
@@ -815,7 +818,7 @@ title bands and app bar, `transport_glyphs_match_the_mockup_order_and_widths`,
 `response_curve_guide_draws_the_zero_db_line_and_band_markers_behind_the_trace`
 (`src/ui/views/tests/equalizer.rs`),
 and `chrome_pick_list_style_sinks_the_face_when_opened` and `toggle_button_style_sinks_while_on`
-(`src/ui/style.rs`) for the pick-list label and the A, EQ, and PL toggles.
+(`src/ui/style.rs`) for the pick-list label and the EQ and PL toggles.
 
 **History.** Reconstructed from "Sort renders below Top instead of beside it, contradicting the
 documented layout" and "Transport buttons resize to their label text, so pressing Play/Pause
@@ -829,6 +832,7 @@ glyph split into separate Play and Pause buttons that dispatch the explicit mess
 keys use, leaving the row playback-independent (2026-10-26).
 Split root assembly into branch modules, retaining the shared LCD/footer snapshot and the
 outer OptionsShortcut wrapper (2026-10-26 by the feature role).
+Repeat and Shuffle sink while on, through `fixed_width_toggle_button` (2026-10-27).
 
 ## Settings persistence
 

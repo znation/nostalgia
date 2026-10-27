@@ -46,7 +46,7 @@ a stopped readout ignores the click. The bar sits above Previous,
 Play, Pause, Stop, and Next glyph controls with word tooltips: Play starts or resumes
 the loaded preview and Pause pauses it (stopping a track whose source supplied no preview),
 then the Repeat and Shuffle
-toggles, a volume slider whose groove runs from green when silent through orange at half volume to
+toggles (each sinks while on), a volume slider whose groove runs from green when silent through orange at half volume to
 red at full volume, a balance slider whose groove is green at center and reddens toward either side,
 an equalizer panel (an EQ on/off button, an AUTO on/off button, a preset pick list, a response curve that eases smoothly
 between the stored band gains above ten band

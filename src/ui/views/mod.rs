@@ -161,6 +161,19 @@ fn fixed_width_button(
     labeled_button(label, message).width(Length::Fixed(width))
 }
 
+/// A [`fixed_width_button`] that sinks while `on` (see [`style::toggle_button_style`]). This is the
+/// one place the sunken-on rule is applied to a fixed-width toggle: the transport row's `EQ` and
+/// `PL`, Repeat, and Shuffle build through it (the title bar's `M` applies the same style itself).
+fn fixed_width_toggle_button(
+    label: &'static str,
+    width: f32,
+    message: Message,
+    on: bool,
+) -> Button<'static, Message> {
+    fixed_width_button(label, width, message)
+        .style(move |_theme, status| style::toggle_button_style(on, status))
+}
+
 /// The volume slider's silence floor, the same lower bound
 /// `state::clamp_volume` clamps to. Named here so the slider spec is a
 /// testable seam; the spec test in the `tests` submodule ties it to the clamp

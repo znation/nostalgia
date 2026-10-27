@@ -5,6 +5,71 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
+### Sink toggles while on, part 1/2: Repeat and Shuffle through a shared toggle helper (planned 2026-10-26 by the plan role; split 2026-10-27 by the plan role) — done 2026-10-27 by the feature role
+
+**Previously held 1**
+
+Part 1 of 2; part 2/2 ("Sink toggles while on, part 2/2") reuses the
+helpers this part adds.
+
+**Goal.** The title bar's `M` and the transport row's `EQ` and `PL` already draw sunken chrome
+(`style::toggle_button_style`) while on. The LCD strip's `A` is not a button: it lights through
+`views::now_playing::indicator::indicator_label_color` and keeps that behavior. The transport's
+Repeat and Shuffle buttons still draw ordinary raised chrome while on, so their state reads only
+from the `On`/`Off` label. Make them sink while on and stay ordinary while off, through one
+shared toggle constructor. Labels, widths, messages, and click behavior stay as they are; no
+playback or settings state changes.
+
+**Approach.**
+
+- `src/ui/style.rs`: correct the comment above the test `toggle_button_style_sinks_while_on`,
+  which names "The A, EQ, and PL toggles": use `M`, `EQ`, and `PL` (and, after this change,
+  Repeat and Shuffle) as the sunken-button examples, and do not mention `A`.
+- `src/ui/views/mod.rs`: beside `fixed_width_button`, add
+  `pub(super) fn fixed_width_toggle_button(label: &'static str, width: f32, message: Message, on: bool) -> Button<'static, Message>`,
+  building on `fixed_width_button` and applying
+  `.style(move |_theme, status| style::toggle_button_style(on, status))`. Document it as the place
+  the sunken-on rule is applied. (The unfixed-width `toggle_button` is added by part 2/2, its
+  first caller, so no helper lands without a caller.)
+- `src/ui/views/transport.rs`: move `REPEAT_WIDTH` and `SHUFFLE_WIDTH` from inside
+  `transport_buttons` to module scope (same values, 104.0 and 112.0). Add
+  `pub(super) fn repeat_toggle(repeat: bool) -> Button<'static, Message>` and
+  `pub(super) fn shuffle_toggle(shuffle: bool) -> Button<'static, Message>`, built with
+  `fixed_width_toggle_button` from `repeat_label`/`shuffle_label`, the widths, and
+  `Message::ToggleRepeat`/`Message::ToggleShuffle`; use them in `transport_buttons` at the same
+  positions. Change `panel_toggle_button` to call `fixed_width_toggle_button`, and rewrite its doc
+  comment: it shares the title bar's `M` rule, and the LCD strip's `A` is a lit letter, not
+  sunken chrome.
+- Tests: in `src/ui/views/tests/mod.rs` add
+  `fn region_has_color(region: &[u8], color: Color) -> bool`, scanning RGBA bytes from
+  `PixelCapture::region` for the color converted to 8-bit channels. In
+  `src/ui/views/tests/transport.rs` add `repeat_and_shuffle_toggles_sink_while_on`: for each of
+  `repeat_toggle` and `shuffle_toggle`, render on and off through
+  `layout_capture::capture_text_and_pixels` (with `layout_capture::headless_renderer()`), take the
+  region `Rectangle::with_size(text.size())`, and assert the on region has
+  `theme::BUTTON_FACE_PRESSED` and not `theme::BUTTON_FACE`, and the off region the reverse.
+- Docs: `docs/usage.md` — say Repeat and Shuffle sink while on, beside the sentence naming their
+  labels. `docs/invariants.md` `## UI layout` — add the sunken-on rule to the transport
+  guarantee, name `fixed_width_toggle_button` under **Enforced by**, add
+  `repeat_and_shuffle_toggles_sink_while_on` under **Pinned by**, and a dated History line.
+
+**Files touched.** `src/ui/style.rs`, `src/ui/views/mod.rs`, `src/ui/views/transport.rs`,
+`src/ui/views/tests/mod.rs`, `src/ui/views/tests/transport.rs`, `docs/usage.md`,
+`docs/invariants.md`.
+
+**Acceptance criteria.**
+
+- Repeat and Shuffle draw `theme::BUTTON_FACE_PRESSED` sunken chrome while on and
+  `theme::BUTTON_FACE` while off, at rest, pinned by `repeat_and_shuffle_toggles_sink_while_on`.
+- Labels, fixed widths, and messages are unchanged: `repeat_label_mirrors_repeat_state`,
+  `shuffle_label_mirrors_shuffle_state`, and `transport_buttons_keep_their_measured_face_widths`
+  pass unmodified.
+- `EQ`, `PL`, and the title bar's `M` keep their sunken-on behavior and geometry;
+  `panel_toggle_button` builds through `fixed_width_toggle_button`.
+- The LCD `A` keeps its lit/dim behavior; `indicator_label_color_lights_only_the_active_mode`
+  passes unmodified, and neither corrected comment describes `A` as sinking.
+- The usage reference and `## UI layout` describe the change, and `make check` passes.
+
 ### Split the root screen assembly into one module per branch (planned 2026-10-26 by the organize role) — done 2026-10-26 by the feature role
 
 **Goal.** `src/ui/view.rs` is the root assembly: a 366-line module with `view()` and `screen()` holding three

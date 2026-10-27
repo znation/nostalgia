@@ -278,3 +278,39 @@ fn transport_buttons_keep_a_fixed_width_across_label_changes() {
         assert_eq!(a.as_widget().size().width, b.as_widget().size().width);
     }
 }
+
+// Repeat and Shuffle sink while on, like the EQ and PL toggles: the on button draws the pressed
+// face at rest and the off button the raised face.
+#[test]
+fn repeat_and_shuffle_toggles_sink_while_on() {
+    let mut renderer = layout_capture::headless_renderer();
+    let mut faces = |mut element: Element<'_, Message, iced::Theme, iced::Renderer>| {
+        let (text, pixels) = layout_capture::capture_text_and_pixels(
+            &mut element,
+            &mut renderer,
+            &iced::Theme::Dark,
+        );
+        // Sample the left padding strip, clear of the 1px border and the glyphs: antialiased
+        // text blends the label color into the face and can land on the other face's color.
+        let size = text.size();
+        let region = pixels.region(Rectangle::new(
+            iced::Point::new(2.0, 2.0),
+            Size::new(4.0, size.height - 4.0),
+        ));
+        (
+            region_has_color(&region, theme::BUTTON_FACE_PRESSED),
+            region_has_color(&region, theme::BUTTON_FACE),
+        )
+    };
+    for (name, on, off) in [
+        ("Repeat", repeat_toggle(true), repeat_toggle(false)),
+        ("Shuffle", shuffle_toggle(true), shuffle_toggle(false)),
+    ] {
+        assert_eq!(faces(on.into()), (true, false), "{name} on must sink");
+        assert_eq!(
+            faces(off.into()),
+            (false, true),
+            "{name} off must stay raised"
+        );
+    }
+}

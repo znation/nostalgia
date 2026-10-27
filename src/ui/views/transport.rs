@@ -13,7 +13,7 @@ use crate::ui::{Message, style};
 
 use super::{
     BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, VOLUME_MAX, VOLUME_MIN, VOLUME_STEP, chrome_slider,
-    fixed_width_button, spacer,
+    fixed_width_button, fixed_width_toggle_button, spacer,
 };
 
 /// The Repeat button's label: "Repeat: On" while Repeat is on, "Repeat: Off" when it is off. Pure
@@ -62,9 +62,6 @@ pub(super) fn transport_buttons(repeat: bool, shuffle: bool) -> [Element<'static
     // the face widths measured from the running window (see the qa
     // reproduction), so at rest each button keeps the width its label
     // already had. The glyph widths live in `transport_glyphs`.
-    const REPEAT_WIDTH: f32 = 104.0;
-    const SHUFFLE_WIDTH: f32 = 112.0;
-
     let [previous, play, pause, stop, next] =
         transport_glyphs().map(|(glyph, word, width, message)| {
             let button = fixed_width_button(glyph, width, message);
@@ -81,14 +78,36 @@ pub(super) fn transport_buttons(repeat: bool, shuffle: bool) -> [Element<'static
         pause,
         stop,
         next,
-        fixed_width_button(repeat_label(repeat), REPEAT_WIDTH, Message::ToggleRepeat).into(),
-        fixed_width_button(
-            shuffle_label(shuffle),
-            SHUFFLE_WIDTH,
-            Message::ToggleShuffle,
-        )
-        .into(),
+        repeat_toggle(repeat).into(),
+        shuffle_toggle(shuffle).into(),
     ]
+}
+
+/// The Repeat button's fixed width, in pixels: the face widths measured from the running window
+/// (see the qa reproduction), so at rest the button keeps the width its label already had.
+const REPEAT_WIDTH: f32 = 104.0;
+
+/// The Shuffle button's fixed width, in pixels, measured like [`REPEAT_WIDTH`].
+const SHUFFLE_WIDTH: f32 = 112.0;
+
+/// The Repeat button: sunken while `repeat` is on, ordinary while off.
+pub(super) fn repeat_toggle(repeat: bool) -> Button<'static, Message> {
+    fixed_width_toggle_button(
+        repeat_label(repeat),
+        REPEAT_WIDTH,
+        Message::ToggleRepeat,
+        repeat,
+    )
+}
+
+/// The Shuffle button: sunken while `shuffle` is on, ordinary while off.
+pub(super) fn shuffle_toggle(shuffle: bool) -> Button<'static, Message> {
+    fixed_width_toggle_button(
+        shuffle_label(shuffle),
+        SHUFFLE_WIDTH,
+        Message::ToggleShuffle,
+        shuffle,
+    )
 }
 
 /// The equalizer-panel toggle's fixed width, in pixels: enough for its `EQ` label, pinned so the
@@ -128,14 +147,14 @@ pub(super) fn options_button() -> Element<'static, Message> {
 
 /// One of the transport row's panel toggles, built from its spec and pinned to the spec's width.
 /// `open` sinks the chrome while the panel it controls is shown (see
-/// [`style::toggle_button_style`]), the same on/off rule as the LCD strip's `A` and the title bar's
-/// `M` toggles. The EQ and PL toggles both build through here, so neither can drift from that rule.
+/// [`style::toggle_button_style`]), the same on/off rule as the title bar's `M` toggle (the LCD
+/// strip's `A` is a lit letter, not sunken chrome). The EQ and PL toggles both build through here,
+/// so neither can drift from that rule.
 fn panel_toggle_button(
     (label, width, message): (&'static str, f32, Message),
     open: bool,
 ) -> Button<'static, Message> {
-    fixed_width_button(label, width, message)
-        .style(move |_theme, status| style::toggle_button_style(open, status))
+    fixed_width_toggle_button(label, width, message, open)
 }
 
 /// The balance slider's container id, used only by the layout tests to find the laid-out slider and

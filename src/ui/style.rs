@@ -436,7 +436,7 @@ mod tests {
         assert_same_edge_geometry(&active, &disabled);
     }
 
-    // The A, EQ, and PL toggles all read as on by sinking the chrome; this
+    // The M, EQ, PL, Repeat, and Shuffle toggles all read as on by sinking the chrome; this
     // pins that rule for every status an off button can report, against the
     // shared chrome faces, so a changed face, edge, or shadow cannot leave a
     // toggle reading wrong.
