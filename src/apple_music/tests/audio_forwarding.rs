@@ -42,18 +42,26 @@ async fn seek_output_forwards_to_the_audio_backend() {
     assert_eq!(*state.lock().await, AppState::default());
 }
 
-// A backend that cannot seek reports it through the seam, so the UI's seek
-// path can log the failure instead of silently claiming the preview moved.
-#[tokio::test]
-async fn seek_output_propagates_an_audio_backend_failure() {
+/// Runs `seek` against a backend whose seek fails and asserts the failure
+/// reaches the caller after exactly one attempt, leaving the shared state alone.
+async fn assert_seek_failure_propagates(
+    seek: impl FnOnce(&AppleMusicService) -> Result<(), AppleMusicError>,
+) {
     let audio = Arc::new(FailingAudio::failing_seek());
     let (service, state) = service_with_audio(Arc::clone(&audio) as Arc<dyn AudioOutput>);
 
-    let error = service.seek_output(-5).unwrap_err();
+    let error = seek(&service).unwrap_err();
 
     assert_eq!(error.to_string(), "the audio device is gone");
     assert_eq!(audio.attempts(FailingCommand::Seek), 1);
     assert_eq!(*state.lock().await, AppState::default());
+}
+
+// A backend that cannot seek reports it through the seam, so the UI's seek
+// path can log the failure instead of silently claiming the preview moved.
+#[tokio::test]
+async fn seek_output_propagates_an_audio_backend_failure() {
+    assert_seek_failure_propagates(|service| service.seek_output(-5)).await;
 }
 
 // `playback_position` reports exactly what the injected backend answers, so
@@ -133,14 +141,7 @@ async fn seek_output_to_forwards_an_absolute_position() {
 // moved.
 #[tokio::test]
 async fn seek_output_to_propagates_an_audio_backend_failure() {
-    let audio = Arc::new(FailingAudio::failing_seek());
-    let (service, state) = service_with_audio(Arc::clone(&audio) as Arc<dyn AudioOutput>);
-
-    let error = service.seek_output_to(Duration::from_secs(12)).unwrap_err();
-
-    assert_eq!(error.to_string(), "the audio device is gone");
-    assert_eq!(audio.attempts(FailingCommand::Seek), 1);
-    assert_eq!(*state.lock().await, AppState::default());
+    assert_seek_failure_propagates(|service| service.seek_output_to(Duration::from_secs(12))).await;
 }
 
 // `playback_duration` reports exactly what the injected backend answers, so
