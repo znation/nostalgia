@@ -757,9 +757,8 @@ fn assert_entering_a_level_clears_the_child_list<T>(
 /// can tell whether the stable `BROWSE_LIST_ID` scroll target is present.
 fn root_scrollable_ids(player: &WinampPlayer) -> Vec<Option<iced::advanced::widget::Id>> {
     use iced::Rectangle;
-    use iced::advanced::Layout;
     use iced::advanced::widget::{
-        Id, Tree,
+        Id,
         operation::{Operation, Scrollable},
     };
 
@@ -783,15 +782,8 @@ fn root_scrollable_ids(player: &WinampPlayer) -> Vec<Option<iced::advanced::widg
 
     let renderer = layout_capture::headless_renderer();
     let mut element = view(player);
-    let mut tree = Tree::new(element.as_widget());
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, &renderer, &layout_capture::limits());
-
     let mut capture = ScrollCapture::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &renderer, &mut capture);
+    layout_capture::operate(&mut element, &renderer, &mut capture);
     capture.0
 }
 
@@ -1241,10 +1233,7 @@ fn captured_root_view_text_bounds(player: &WinampPlayer) -> layout_capture::Text
 /// `id`, so a test can find a compact strip's slider in the real laid-out
 /// tree.
 fn captured_root_view_container(player: &WinampPlayer, target_id: &str) -> Option<iced::Rectangle> {
-    use iced::advanced::{
-        Layout,
-        widget::{Id, Tree, operation::Operation},
-    };
+    use iced::advanced::widget::{Id, operation::Operation};
 
     struct CapturedContainer {
         target_id: Id,
@@ -1263,17 +1252,11 @@ fn captured_root_view_container(player: &WinampPlayer, target_id: &str) -> Optio
 
     let renderer = layout_capture::headless_renderer();
     let mut element = view(player);
-    let mut tree = Tree::new(element.as_widget());
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, &renderer, &layout_capture::limits());
     let mut captured = CapturedContainer {
         target_id: Id::from(target_id.to_string()),
         bounds: None,
     };
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &renderer, &mut captured);
+    layout_capture::operate(&mut element, &renderer, &mut captured);
     captured.bounds
 }
 

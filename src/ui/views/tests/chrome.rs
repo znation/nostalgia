@@ -10,14 +10,8 @@ fn title_bar_centers_its_name_between_its_edge_controls() {
     let mut element = view_title_bar(false);
     let capture = layout_capture::capture_text(&mut element, &renderer);
 
-    let mut tree = Tree::new(element.as_widget());
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, &renderer, &layout_capture::limits());
     let mut containers = CapturedContainers::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &renderer, &mut containers);
+    layout_capture::operate(&mut element, &renderer, &mut containers);
 
     // The M button and the shade button each draw a container at their pinned
     // width. Read the M slot's right edge and the leftmost 22px button's left

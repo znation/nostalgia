@@ -116,15 +116,9 @@ fn equalizer_preamp_and_db_scale_sit_left_of_the_band_sliders() {
 
     // The curve now shares the band row's left edge instead of starting over
     // the preamp and scale, so its first column must sit on the first band.
-    let mut tree = Tree::new(element.as_widget());
     let renderer = layout_capture::headless_renderer();
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, &renderer, &layout_capture::limits());
     let mut containers = CapturedContainers::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &renderer, &mut containers);
+    layout_capture::operate(&mut element, &renderer, &mut containers);
     let first_segment = containers
         .0
         .iter()
@@ -253,16 +247,11 @@ fn response_curve_row_keeps_its_height_and_draws_one_segment_per_column() {
     bands[0] = GAIN_MIN_DB;
     bands[BAND_COUNT - 1] = GAIN_MAX_DB;
     let mut element: iced::Element<'_, Message, iced::Theme, ()> = response_curve_row(&bands);
-    let mut tree = Tree::new(element.as_widget());
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, &(), &layout_capture::limits());
+    let (mut tree, node) = layout_capture::layout_tree(&mut element, &());
     assert_eq!(node.bounds().height, RESPONSE_CURVE_HEIGHT);
 
     let mut captured = CapturedContainers::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &(), &mut captured);
+    layout_capture::apply_operation(&mut element, &(), &mut tree, &node, &mut captured);
     let segments: Vec<Rectangle> = captured
         .0
         .iter()
@@ -289,18 +278,8 @@ fn response_curve_row_keeps_its_height_and_draws_one_segment_per_column() {
     // The mockup's flat preset: every segment stays on the plot's midline.
     let mut flat_element: iced::Element<'_, Message, iced::Theme, ()> =
         response_curve_row(&[0.0; BAND_COUNT]);
-    let mut flat_tree = Tree::new(flat_element.as_widget());
-    let flat_node =
-        flat_element
-            .as_widget_mut()
-            .layout(&mut flat_tree, &(), &layout_capture::limits());
     let mut flat_captured = CapturedContainers::default();
-    flat_element.as_widget_mut().operate(
-        &mut flat_tree,
-        Layout::new(&flat_node),
-        &(),
-        &mut flat_captured,
-    );
+    layout_capture::operate(&mut flat_element, &(), &mut flat_captured);
     let flat_segments: Vec<Rectangle> = flat_captured
         .0
         .iter()
@@ -332,16 +311,11 @@ fn response_curve_guide_draws_the_zero_db_line_and_band_markers_behind_the_trace
     let mut renderer = layout_capture::headless_renderer();
     let mut element: iced::Element<'_, Message, iced::Theme, iced::Renderer> =
         response_curve_row(&bands);
-    let mut tree = Tree::new(element.as_widget());
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, &renderer, &layout_capture::limits());
+    let (mut tree, node) = layout_capture::layout_tree(&mut element, &renderer);
     assert_eq!(node.bounds().height, RESPONSE_CURVE_HEIGHT);
 
     let mut captured = CapturedContainers::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &renderer, &mut captured);
+    layout_capture::apply_operation(&mut element, &renderer, &mut tree, &node, &mut captured);
     let dots: Vec<Rectangle> = captured
         .0
         .iter()

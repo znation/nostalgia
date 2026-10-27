@@ -504,12 +504,8 @@ fn visualizer_row_press_publishes_toggle_visualizer() {
     ] {
         let mut probe: iced::Element<'_, Message, iced::Theme, ()> =
             now_playing_visualizer_row(spectrum).into();
-        let mut tree = Tree::new(probe.as_widget());
-        let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
-        let bounds = probe
-            .as_widget_mut()
-            .layout(&mut tree, &(), &limits)
-            .bounds();
+        let (_, node) = layout_capture::layout_tree(&mut probe, &());
+        let bounds = node.bounds();
 
         let element: iced::Element<'_, Message, iced::Theme, iced::Renderer> =
             now_playing_visualizer_row(spectrum).into();

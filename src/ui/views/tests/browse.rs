@@ -732,14 +732,8 @@ fn view_search_row_draws_clear_after_the_search_box() {
 
     let renderer = layout_capture::headless_renderer();
     let mut element = view_search_row("Opening");
-    let mut tree = Tree::new(element.as_widget());
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, &renderer, &layout_capture::limits());
     let mut captured = CapturedInput::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &renderer, &mut captured);
+    layout_capture::operate(&mut element, &renderer, &mut captured);
     let input = captured
         .0
         .expect("the search row must contain the search box");
@@ -778,14 +772,8 @@ fn view_search_box_registers_its_focus_id() {
 
     let renderer = layout_capture::headless_renderer();
     let mut element = view_search_box("Opening");
-    let mut tree = Tree::new(element.as_widget());
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, &renderer, &layout_capture::limits());
     let mut captured = CapturedIds::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &renderer, &mut captured);
+    layout_capture::operate(&mut element, &renderer, &mut captured);
 
     assert!(
         captured

@@ -268,13 +268,8 @@ fn captured_content_with_spectrum(
         .iter()
         .map(|(_, bounds)| *bounds)
         .collect();
-    let mut tree = Tree::new(element.as_widget());
-    let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
-    let node = element.as_widget_mut().layout(&mut tree, &(), &limits);
     let mut containers = CapturedContainers::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &(), &mut containers);
+    layout_capture::operate(&mut element, &(), &mut containers);
     (texts, bounds, height, containers.0)
 }
 
@@ -376,9 +371,7 @@ fn now_playing_visualizer_row_keeps_its_height_without_a_spectrum() {
     ] {
         let mut element: iced::Element<'_, Message, iced::Theme, ()> =
             now_playing_visualizer_row(spectrum).into();
-        let mut tree = Tree::new(element.as_widget());
-        let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
-        let node = element.as_widget_mut().layout(&mut tree, &(), &limits);
+        let (_, node) = layout_capture::layout_tree(&mut element, &());
         assert_eq!(node.bounds().height, 24.0);
     }
 }
@@ -474,14 +467,10 @@ fn now_playing_visualizer_row_draws_one_fixed_width_bar_per_band() {
 fn captured_visualizer_row(spectrum: Option<Spectrum>) -> (Rectangle, Vec<Rectangle>) {
     let mut element: iced::Element<'_, Message, iced::Theme, ()> =
         now_playing_visualizer_row(spectrum).into();
-    let mut tree = Tree::new(element.as_widget());
-    let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
-    let node = element.as_widget_mut().layout(&mut tree, &(), &limits);
+    let (mut tree, node) = layout_capture::layout_tree(&mut element, &());
     let bounds = node.bounds();
     let mut captured = CapturedContainers::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &(), &mut captured);
+    layout_capture::apply_operation(&mut element, &(), &mut tree, &node, &mut captured);
     (bounds, captured.0)
 }
 

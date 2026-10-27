@@ -88,15 +88,8 @@ fn wheel_over_the_shade_seek_slider_seeks() {
     };
     let mut renderer = layout_capture::headless_renderer();
     let mut element = strip();
-    let mut tree = Tree::new(element.as_widget());
-    let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, &renderer, &limits);
     let mut captured = CapturedSeek::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &renderer, &mut captured);
+    layout_capture::operate(&mut element, &renderer, &mut captured);
     let seek = captured.0.expect("the seek slider is drawn");
     let point = iced::Point::new(seek.center_x(), seek.center_y());
 

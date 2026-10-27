@@ -160,6 +160,50 @@ impl Operation for CapturedText {
     }
 }
 
+/// Lays `element` out under [`limits`], returning its state tree and resolved
+/// layout node so a test can run one or more widget operations over the same
+/// layout.
+pub(crate) fn layout_tree<'a, Message, Theme, Renderer>(
+    element: &mut Element<'a, Message, Theme, Renderer>,
+    renderer: &Renderer,
+) -> (Tree, Node)
+where
+    Renderer: iced::advanced::Renderer,
+{
+    let mut tree = Tree::new(element.as_widget());
+    let node = element
+        .as_widget_mut()
+        .layout(&mut tree, renderer, &limits());
+    (tree, node)
+}
+
+/// Applies `operation` to `element`'s already laid-out `tree` and `node`.
+pub(crate) fn apply_operation<'a, Message, Theme, Renderer>(
+    element: &mut Element<'a, Message, Theme, Renderer>,
+    renderer: &Renderer,
+    tree: &mut Tree,
+    node: &Node,
+    operation: &mut dyn Operation,
+) where
+    Renderer: iced::advanced::Renderer,
+{
+    element
+        .as_widget_mut()
+        .operate(tree, Layout::new(node), renderer, operation);
+}
+
+/// Lays `element` out under [`limits`] and applies `operation` to its tree.
+pub(crate) fn operate<'a, Message, Theme, Renderer>(
+    element: &mut Element<'a, Message, Theme, Renderer>,
+    renderer: &Renderer,
+    operation: &mut dyn Operation,
+) where
+    Renderer: iced::advanced::Renderer,
+{
+    let (mut tree, node) = layout_tree(element, renderer);
+    apply_operation(element, renderer, &mut tree, &node, operation);
+}
+
 /// Lays `element` out under [`limits`] and records its draw operations,
 /// returning the state tree, the resolved layout node, and the text fragments
 /// plus root size. Both capture entry points start from this same tree, node,
@@ -171,15 +215,10 @@ fn layout_and_capture<'a, Message, Theme, Renderer>(
 where
     Renderer: iced::advanced::Renderer,
 {
-    let mut tree = Tree::new(element.as_widget());
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, renderer, &limits());
+    let (mut tree, node) = layout_tree(element, renderer);
     let size = node.size();
     let mut captured = CapturedText::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), renderer, &mut captured);
+    apply_operation(element, renderer, &mut tree, &node, &mut captured);
     (
         tree,
         node,

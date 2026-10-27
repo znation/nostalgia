@@ -20,8 +20,7 @@ fn search_changed_stores_the_box_text() {
 #[test]
 fn ctrl_f_focuses_the_search_box_and_changes_no_browse_state() {
     use iced::Rectangle;
-    use iced::advanced::Layout;
-    use iced::advanced::widget::{Id, Tree, operation::Focusable, operation::Operation};
+    use iced::advanced::widget::{Id, operation::Focusable, operation::Operation};
 
     #[derive(Default)]
     struct FocusCapture(Vec<(Option<Id>, bool)>);
@@ -64,18 +63,17 @@ fn ctrl_f_focuses_the_search_box_and_changes_no_browse_state() {
 
     let renderer = layout_capture::headless_renderer();
     let mut element = view(&player);
-    let mut tree = Tree::new(element.as_widget());
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, &renderer, &layout_capture::limits());
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &renderer, operation.as_mut());
+    let (mut tree, node) = layout_capture::layout_tree(&mut element, &renderer);
+    layout_capture::apply_operation(
+        &mut element,
+        &renderer,
+        &mut tree,
+        &node,
+        operation.as_mut(),
+    );
 
     let mut capture = FocusCapture::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &renderer, &mut capture);
+    layout_capture::apply_operation(&mut element, &renderer, &mut tree, &node, &mut capture);
     let focused: Vec<Option<Id>> = capture
         .0
         .iter()
@@ -97,8 +95,7 @@ fn ctrl_f_focuses_the_search_box_and_changes_no_browse_state() {
 #[test]
 fn ctrl_f_is_a_noop_in_shade_mode() {
     use iced::Rectangle;
-    use iced::advanced::Layout;
-    use iced::advanced::widget::{Id, Tree, operation::Focusable, operation::Operation};
+    use iced::advanced::widget::{Id, operation::Focusable, operation::Operation};
 
     #[derive(Default)]
     struct FocusCapture {
@@ -127,18 +124,17 @@ fn ctrl_f_is_a_noop_in_shade_mode() {
 
     let renderer = layout_capture::headless_renderer();
     let mut element = view(&player);
-    let mut tree = Tree::new(element.as_widget());
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, &renderer, &layout_capture::limits());
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &renderer, operation.as_mut());
+    let (mut tree, node) = layout_capture::layout_tree(&mut element, &renderer);
+    layout_capture::apply_operation(
+        &mut element,
+        &renderer,
+        &mut tree,
+        &node,
+        operation.as_mut(),
+    );
 
     let mut capture = FocusCapture::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &renderer, &mut capture);
+    layout_capture::apply_operation(&mut element, &renderer, &mut tree, &node, &mut capture);
     assert!(
         !capture.ids.contains(&Some(Id::new(BROWSE_SEARCH_ID))),
         "the shade view must build no search box: {:?}",

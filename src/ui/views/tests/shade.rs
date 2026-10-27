@@ -73,11 +73,7 @@ fn view_shade_strip_keeps_its_fixed_height_for_both_playback_states() {
             None,
             None,
         );
-        let mut tree = Tree::new(element.as_widget());
-        let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
-        let node = element
-            .as_widget_mut()
-            .layout(&mut tree, &renderer, &limits);
+        let (_, node) = layout_capture::layout_tree(&mut element, &renderer);
         assert_eq!(
             node.size().height,
             SHADE_STRIP_HEIGHT,
@@ -195,15 +191,8 @@ fn shade_strip_double_clicks_on_controls_do_not_restore_the_window() {
     let capture = layout_capture::capture_text(&mut element, &renderer);
     let readout = capture.find("00:53/3:30");
     let play = capture.find("▶");
-    let mut tree = Tree::new(element.as_widget());
-    let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, &renderer, &limits);
     let mut controls = CapturedControls::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &renderer, &mut controls);
+    layout_capture::operate(&mut element, &renderer, &mut controls);
     let seek = controls.seek.expect("the seek slider is drawn");
     let volume = controls.volume.expect("the volume slider is drawn");
 
@@ -298,15 +287,9 @@ fn shade_strip_shows_a_seek_slider_only_when_position_and_length_are_known() {
             duration,
         );
         let capture = layout_capture::capture_text(&mut element, &renderer);
-        let mut tree = Tree::new(element.as_widget());
-        let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
-        let node = element
-            .as_widget_mut()
-            .layout(&mut tree, &renderer, &limits);
+        let (mut tree, node) = layout_capture::layout_tree(&mut element, &renderer);
         let mut controls = CapturedControls::default();
-        element
-            .as_widget_mut()
-            .operate(&mut tree, Layout::new(&node), &renderer, &mut controls);
+        layout_capture::apply_operation(&mut element, &renderer, &mut tree, &node, &mut controls);
 
         let volume = controls
             .volume
@@ -363,15 +346,8 @@ fn captured_mini_strip(
     let capture = layout_capture::capture_text(&mut element, &renderer);
     let texts = capture.texts().map(str::to_string).collect();
 
-    let mut tree = Tree::new(element.as_widget());
-    let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
-    let node = element
-        .as_widget_mut()
-        .layout(&mut tree, &renderer, &limits);
     let mut captured = CapturedContainer::default();
-    element
-        .as_widget_mut()
-        .operate(&mut tree, Layout::new(&node), &renderer, &mut captured);
+    layout_capture::operate(&mut element, &renderer, &mut captured);
     (texts, captured.slider, capture.size())
 }
 
@@ -527,11 +503,7 @@ fn view_library_strip_keeps_its_fixed_height() {
     ] {
         let mut element =
             view_library_strip(mode, 0.5, Cow::Borrowed("00:53"), Cow::Borrowed("3:30"));
-        let mut tree = Tree::new(element.as_widget());
-        let limits = Limits::new(Size::ZERO, Size::new(1000.0, 1000.0));
-        let node = element
-            .as_widget_mut()
-            .layout(&mut tree, &renderer, &limits);
+        let (_, node) = layout_capture::layout_tree(&mut element, &renderer);
         assert_eq!(
             node.size().height,
             MINI_TRANSPORT_HEIGHT,
