@@ -161,3 +161,151 @@ pub(super) fn write_atomically_with(
     }
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temporary_root(label: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "nostalgia-atomic-{label}-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ))
+    }
+
+    // A save killed mid-write must not truncate the previous file: the
+    // replacement is staged aside, and a failure removes the staging file.
+    #[test]
+    fn a_failed_half_write_leaves_the_previous_settings_file_intact() {
+        let root = temporary_root("half-write");
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("settings.ini");
+        std::fs::write(&path, "volume=0.25\n").unwrap();
+
+        let error = write_atomically_with(&path, |temporary| {
+            // Model a disk filling up after the first few bytes.
+            std::fs::write(temporary, "volume=0.9\nre")?;
+            Err(io::Error::other("disk full"))
+        })
+        .unwrap_err();
+
+        assert_eq!(error.to_string(), "disk full");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "volume=0.25\n");
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    // A symlinked settings file must stay a symlink: the save replaces the
+    // file it points at, and the previous file's mode carries over.
+    #[cfg(unix)]
+    #[test]
+    fn saving_through_a_symlink_updates_its_target_and_keeps_mode() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = temporary_root("symlink");
+        std::fs::create_dir_all(&root).unwrap();
+        let target = root.join("real.ini");
+        std::fs::write(&target, "volume=0.25\n").unwrap();
+        std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o640)).unwrap();
+        let link = root.join("settings.ini");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        write_atomically(&link, "volume=0.9\n").unwrap();
+
+        assert!(std::fs::symlink_metadata(&link).unwrap().is_symlink());
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "volume=0.9\n");
+        let mode = std::fs::metadata(&target).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o640);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    // The staged bytes are synced before the rename replaces the old file, and
+    // a failing sync (a delayed-allocation ENOSPC) keeps the old file intact.
+    #[test]
+    fn staged_settings_are_synced_before_the_rename_and_a_failed_sync_keeps_the_old_file() {
+        let root = temporary_root("sync-first");
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("settings.ini");
+        std::fs::write(&path, "volume=0.25\n").unwrap();
+
+        let mut synced_with_old_target = false;
+        write_atomically_syncing(
+            &path,
+            "volume=0.9\n",
+            |file| {
+                synced_with_old_target = std::fs::read_to_string(&path).unwrap() == "volume=0.25\n";
+                file.sync_all()
+            },
+            |_| Ok(()),
+        )
+        .unwrap();
+        assert!(synced_with_old_target);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "volume=0.9\n");
+
+        let mut directory_synced = false;
+        let error = write_atomically_syncing(
+            &path,
+            "volume=0.1\n",
+            |_| Err(io::Error::other("no space left")),
+            |_| {
+                directory_synced = true;
+                Ok(())
+            },
+        )
+        .unwrap_err();
+        assert!(!directory_synced);
+        assert_eq!(error.to_string(), "no space left");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "volume=0.9\n");
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    // The directory is synced after the rename, so the new file is already in
+    // place when it runs, and its failure is reported rather than swallowed.
+    #[test]
+    fn the_directory_is_synced_after_the_rename_and_its_failure_is_reported() {
+        let root = temporary_root("dir-sync");
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("settings.ini");
+        std::fs::write(&path, "volume=0.25\n").unwrap();
+
+        let mut contents_at_sync = String::new();
+        let error = write_atomically_syncing(&path, "volume=0.9\n", File::sync_all, |target| {
+            contents_at_sync = std::fs::read_to_string(target).unwrap();
+            Err(io::Error::other("directory sync failed"))
+        })
+        .unwrap_err();
+
+        assert_eq!(contents_at_sync, "volume=0.9\n");
+        assert_eq!(error.to_string(), "directory sync failed");
+        sync_parent_directory(&path).unwrap();
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    // The directory sync after a save through a symlink targets the file the
+    // rename replaced, not the link.
+    #[cfg(unix)]
+    #[test]
+    fn the_directory_sync_follows_a_symlink_to_the_target() {
+        let root = temporary_root("symlink-dir-sync");
+        std::fs::create_dir_all(&root).unwrap();
+        let target = root.join("real.ini");
+        std::fs::write(&target, "volume=0.25\n").unwrap();
+        let link = root.join("settings.ini");
+        std::os::unix::fs::symlink(&target, &link).unwrap();
+
+        let mut synced = None;
+        write_atomically_syncing(&link, "volume=0.9\n", File::sync_all, |dir_target| {
+            synced = Some(dir_target.to_path_buf());
+            Ok(())
+        })
+        .unwrap();
+
+        assert_eq!(synced, Some(std::fs::canonicalize(&target).unwrap()));
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+}
