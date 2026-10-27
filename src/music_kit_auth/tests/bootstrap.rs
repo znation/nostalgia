@@ -198,6 +198,34 @@ fn the_bootstrap_sweep_escapes_a_hostile_directory_name_in_its_report() {
     std::fs::remove_dir_all(&root).expect("remove the sweep scratch root");
 }
 
+// A root that cannot be read (a temp directory the user cannot access, say)
+// must report through the same injected reporter as a failed removal rather
+// than writing to stderr behind the caller's back. The reporter seam exists so
+// a test can observe every failure the sweep reports; a direct `eprintln!` in
+// this branch would leave the failure unobservable and make the seam's
+// contract only half true.
+#[test]
+fn the_bootstrap_sweep_reports_an_unreadable_root_through_its_reporter() {
+    let missing = std::env::temp_dir().join(format!("nostalgia-sweep-missing-{}", random_nonce()));
+    let reports = Mutex::new(Vec::new());
+
+    sweep_stale_bootstrap_dirs_with(
+        &missing,
+        std::time::SystemTime::now(),
+        BOOTSTRAP_STALE_AFTER,
+        |_path| panic!("an unreadable root must not remove anything"),
+        |report| reports.lock().expect("report lock").push(report),
+    );
+
+    let reports = reports.into_inner().expect("report lock");
+    assert_eq!(reports.len(), 1, "the read failure must be reported once");
+    assert!(
+        reports[0].contains("could not read the temp directory"),
+        "the report must name what failed, got: {}",
+        reports[0]
+    );
+}
+
 // A symlink carrying the bootstrap prefix must be skipped by its own type, not
 // followed to its target's metadata: an aged target would otherwise make the
 // sweep treat the link as a stale bootstrap directory and remove it.

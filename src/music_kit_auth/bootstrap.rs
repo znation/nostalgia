@@ -78,7 +78,9 @@ pub(super) fn sweep_stale_bootstrap_dirs_with(
     let entries = match fs::read_dir(root) {
         Ok(entries) => entries,
         Err(error) => {
-            eprintln!("could not read the temp directory to clean up stale sign-in pages: {error}");
+            report(format!(
+                "could not read the temp directory to clean up stale sign-in pages: {error}"
+            ));
             return;
         }
     };
