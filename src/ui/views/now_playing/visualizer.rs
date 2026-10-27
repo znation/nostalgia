@@ -87,17 +87,15 @@ pub fn visualizer_bar_segments(height: f32) -> Vec<(f32, Color)> {
         .collect()
 }
 
-/// Builds the LCD's visualizer row: [`BAND_COUNT`] bottom-aligned bars, left to
-/// right in band order, inside a row of fixed [`LCD_VISUALIZER_HEIGHT`]. Each
-/// bar is shaded from dark green at the rail up its earned ramp steps to orange
-/// at its top. Every band keeps a fixed-width slot even when its height is
-/// zero, so a real spectrum with silent bands still draws all ten bars. A
-/// missing spectrum draws the same row with zero-height bars, so the title and
-/// status text keep their places in every playback state. Generic
-/// over the theme and renderer so the tests can lay it out with iced's null
-/// renderer. The row is a mouse area: a left press publishes
-/// [`Message::ToggleVisualizer`] in every playback state, whether the bars are
-/// shown or hidden, exactly like the indicator strip's `V`.
+/// Builds the LCD's visualizer row: [`BAND_COUNT`] bottom-aligned bars, left to right in band
+/// order, inside a row of fixed [`LCD_VISUALIZER_HEIGHT`]. Each bar is shaded from dark green at
+/// the rail up its earned ramp steps to orange at its top. Every band keeps a fixed-width slot even
+/// when its height is zero, so a real spectrum with silent bands still draws all ten bars. A
+/// missing spectrum draws the same row with zero-height bars, so the title and status text keep
+/// their places in every playback state. Generic over the theme and renderer so the tests can lay
+/// it out with iced's null renderer. The row is a mouse area: a left press publishes
+/// [`Message::ToggleVisualizer`] in every playback state, whether the bars are shown or hidden,
+/// exactly like the indicator strip's `V`.
 pub fn now_playing_visualizer_row<'a, Theme, Renderer>(
     spectrum: Option<Spectrum>,
 ) -> MouseArea<'a, Message, Theme, Renderer>

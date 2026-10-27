@@ -16,11 +16,10 @@ use crate::ui::{Message, ticks};
 /// bounds only how often the UI asks; it does not affect the audio itself.
 pub(in crate::ui) const POSITION_POLL_INTERVAL: Duration = Duration::from_secs(1);
 
-/// A subscription that emits [`Message::PositionTick`] once per
-/// [`POSITION_POLL_INTERVAL`], using the same std-thread tick source as
-/// [`super::marquee::marquee_ticks`] because iced's timed subscription is not enabled. Each
-/// tick's `update` arm schedules the actual backend queries — position, format,
-/// length, and finished state — as tasks, so the UI thread never blocks on the
+/// A subscription that emits [`Message::PositionTick`] once per [`POSITION_POLL_INTERVAL`], using
+/// the same std-thread tick source as [`super::marquee::marquee_ticks`] because iced's timed
+/// subscription is not enabled. Each tick's `update` arm schedules the actual backend queries —
+/// position, format, length, and finished state — as tasks, so the UI thread never blocks on the
 /// audio backend.
 pub(in crate::ui) fn position_ticks() -> iced::Subscription<Message> {
     iced::Subscription::run(position_tick_stream)
@@ -59,12 +58,10 @@ pub(in crate::ui) fn position_tick_stream_with(
     .map(|()| Message::PositionTick)
 }
 
-/// The production spawner for the position poll thread: the named
-/// [`POSITION_THREAD_NAME`] thread, started through
-/// [`crate::threads::spawn_named`]. That shared spawner uses the fallible
-/// `std::thread::Builder::spawn` form, as do the audio worker, the REST
-/// worker, the sign-in thread, the timeout timer, the marquee timer, and the
-/// spectrum poll timer.
+/// The production spawner for the position poll thread: the named [`POSITION_THREAD_NAME`] thread,
+/// started through [`crate::threads::spawn_named`]. That shared spawner uses the fallible
+/// `std::thread::Builder::spawn` form, as do the audio worker, the REST worker, the sign-in thread,
+/// the timeout timer, the marquee timer, and the spectrum poll timer.
 pub(in crate::ui) fn spawn_position_thread(work: Box<dyn FnOnce() + Send>) -> io::Result<()> {
     crate::threads::spawn_named(POSITION_THREAD_NAME, work)
 }

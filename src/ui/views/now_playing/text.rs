@@ -50,13 +50,11 @@ pub fn needs_marquee(label: &str, artist: &str, number: &str) -> bool {
     display_len(label, artist, number) > MARQUEE_WIDTH
 }
 
-/// Returns the `width`-character window of `text` starting at
-/// `offset % cycle`, where `cycle` is the line plus [`MARQUEE_GAP`] trailing
-/// spaces. A line that fits `width` is returned unchanged, so the caller's
-/// common case stays still; an overlong line wraps through the gap back to
-/// its start, with a space for each position past the text's end. Counts
-/// characters, not bytes, so a non-ASCII title windows on character
-/// boundaries.
+/// Returns the `width`-character window of `text` starting at `offset % cycle`, where `cycle` is
+/// the line plus [`MARQUEE_GAP`] trailing spaces. A line that fits `width` is returned unchanged,
+/// so the caller's common case stays still; an overlong line wraps through the gap back to its
+/// start, with a space for each position past the text's end. Counts characters, not bytes, so a
+/// non-ASCII title windows on character boundaries.
 pub(in crate::ui::views) fn marquee_text(text: &str, offset: usize, width: usize) -> String {
     let chars: Vec<char> = text.chars().collect();
     if chars.len() <= width {
@@ -101,8 +99,7 @@ impl TimeDisplay {
 /// playing track after the user browses to a different album.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnownTrack {
-    /// The track's title, without the artist (the bar renders
-    /// [`Self::artist`] separately).
+    /// The track's title, without the artist (the bar renders [`Self::artist`] separately).
     pub title: String,
     /// The performing artist's display name; `""` means the source supplied
     /// no artist, and the Now Playing bar falls back to the title alone.
@@ -118,9 +115,8 @@ pub struct KnownTrack {
     /// `""` means the source supplied none, and the File info panel leaves the
     /// genre line out.
     pub genre: String,
-    /// The track's album position, copied from
-    /// [`crate::library::Song::track_number`]; `None` means the source supplied
-    /// none, and the File info panel leaves the track-number line out.
+    /// The track's album position, copied from [`crate::library::Song::track_number`]; `None` means
+    /// the source supplied none, and the File info panel leaves the track-number line out.
     pub track_number: Option<u32>,
     /// The cached `"<n>. "` prefix naming the track's 1-based position in the
     /// list row that selected it; `""` when no number is known.
@@ -135,15 +131,13 @@ pub struct KnownTrack {
     pub duration_ms: u64,
 }
 
-/// The Now Playing bar label: the title of `current_track` when `tracks`
-/// knows it; the raw id when it doesn't; "Nothing" when no track is current
-/// (Stop keeps the interrupted track's title). `tracks` is
-/// the player's known id→track index, so this per-frame resolution is a single
-/// map get rather than a scan of every song the player has ever loaded. The
-/// result borrows the title from `tracks` (or the `"Nothing"` literal) in the
-/// common cases, so a per-frame refresh allocates only for the rare unknown-id
-/// fallback instead of cloning the title on every view. Pure data → `Cow` so
-/// the title resolution is testable without an iced renderer.
+/// The Now Playing bar label: the title of `current_track` when `tracks` knows it; the raw id when
+/// it doesn't; "Nothing" when no track is current (Stop keeps the interrupted track's title).
+/// `tracks` is the player's known id→track index, so this per-frame resolution is a single map get
+/// rather than a scan of every song the player has ever loaded. The result borrows the title from
+/// `tracks` (or the `"Nothing"` literal) in the common cases, so a per-frame refresh allocates only
+/// for the rare unknown-id fallback instead of cloning the title on every view. Pure data → `Cow`
+/// so the title resolution is testable without an iced renderer.
 pub fn now_playing_label<'a>(
     tracks: &'a HashMap<String, KnownTrack>,
     current_track: Option<&str>,
@@ -156,11 +150,10 @@ pub fn now_playing_label<'a>(
     }
 }
 
-/// Looks up the [`KnownTrack`] for `current_track` in `tracks`, returning
-/// `None` when no track is current or the id is unknown. Shared by
-/// [`now_playing_label`], [`now_playing_artist`], [`now_playing_number`],
-/// [`now_playing_elapsed`], and [`now_playing_time`] so the five stay in sync
-/// on the lookup.
+/// Looks up the [`KnownTrack`] for `current_track` in `tracks`, returning `None` when no track is
+/// current or the id is unknown. Shared by [`now_playing_label`], [`now_playing_artist`],
+/// [`now_playing_number`], [`now_playing_elapsed`], and [`now_playing_time`] so the five stay in
+/// sync on the lookup.
 fn known_track_for<'a>(
     tracks: &'a HashMap<String, KnownTrack>,
     current_track: Option<&str>,
@@ -216,23 +209,19 @@ pub fn now_playing_time<'a>(
         .unwrap_or(Cow::Borrowed("--:--"))
 }
 
-/// The Now Playing bar's large left-hand time readout for `current_track`,
-/// as chosen by `display`: elapsed `MM:SS` (the default) or the remaining
-/// time with a leading `-`. In [`TimeDisplay::Elapsed`] the backend-reported
-/// position formats as zero-padded `MM:SS` when there is one (`"00:53"`),
-/// `"00:00"` when the track is known but no position is reported (no preview
-/// loaded, a failed start, or a backend that cannot answer), or `"--:--"`
-/// when the track is unknown or none is current. In [`TimeDisplay::Remaining`]
-/// a known track with a length reads `-MM:SS` counting down from that length,
-/// treating a missing position as zero so a stopped track computes its full
-/// length remaining (which the stopped view then paints transparent); a
-/// missing position past the length saturates at `"-00:00"`, and a
-/// known track whose source supplied no length (`duration_ms == 0`) or an
-/// unknown/absent track reads the `"--:--"` placeholder. Mirrors
-/// [`now_playing_label`], [`now_playing_artist`], and [`now_playing_time`].
-/// The placeholder cases borrow static strings, while a reported position
-/// allocates its formatted `String`. Pure data → `Cow` so the resolution is
-/// testable without an iced renderer.
+/// The Now Playing bar's large left-hand time readout for `current_track`, as chosen by `display`:
+/// elapsed `MM:SS` (the default) or the remaining time with a leading `-`. In
+/// [`TimeDisplay::Elapsed`] the backend-reported position formats as zero-padded `MM:SS` when there
+/// is one (`"00:53"`), `"00:00"` when the track is known but no position is reported (no preview
+/// loaded, a failed start, or a backend that cannot answer), or `"--:--"` when the track is unknown
+/// or none is current. In [`TimeDisplay::Remaining`] a known track with a length reads `-MM:SS`
+/// counting down from that length, treating a missing position as zero so a stopped track computes
+/// its full length remaining (which the stopped view then paints transparent); a missing position
+/// past the length saturates at `"-00:00"`, and a known track whose source supplied no length
+/// (`duration_ms == 0`) or an unknown/absent track reads the `"--:--"` placeholder. Mirrors
+/// [`now_playing_label`], [`now_playing_artist`], and [`now_playing_time`]. The placeholder cases
+/// borrow static strings, while a reported position allocates its formatted `String`. Pure data →
+/// `Cow` so the resolution is testable without an iced renderer.
 pub fn now_playing_elapsed<'a>(
     tracks: &'a HashMap<String, KnownTrack>,
     current_track: Option<&str>,
@@ -265,10 +254,9 @@ fn duration_millis(duration: Duration) -> u64 {
     u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
 }
 
-/// Formats an elapsed playback position in milliseconds as the LCD's
-/// zero-padded `MM:SS` form, so `0` reads `"00:00"`, `53_000` reads `"00:53"`,
-/// and `192_000` reads `"03:12"`. Minutes are unbounded, so an hour or more
-/// reads `"60:00"`/`"61:05"` rather than rolling over.
+/// Formats an elapsed playback position in milliseconds as the LCD's zero-padded `MM:SS` form, so
+/// `0` reads `"00:00"`, `53_000` reads `"00:53"`, and `192_000` reads `"03:12"`. Minutes are
+/// unbounded, so an hour or more reads `"60:00"`/`"61:05"` rather than rolling over.
 pub fn format_lcd_elapsed(position_ms: u64) -> String {
     let total_seconds = position_ms / 1000;
     format!("{:02}:{:02}", total_seconds / 60, total_seconds % 60)

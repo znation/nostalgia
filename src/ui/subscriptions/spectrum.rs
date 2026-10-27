@@ -15,11 +15,10 @@ use crate::ui::{Message, ticks};
 /// signal, so this bounds only how often the UI asks.
 pub(in crate::ui) const SPECTRUM_TICK: Duration = Duration::from_millis(250);
 
-/// A subscription that emits [`Message::SpectrumTick`] once per
-/// [`SPECTRUM_TICK`], using the same std-thread tick source as the other
-/// timers because iced's timed subscription is not enabled. Each tick's
-/// `update` arm schedules the actual backend query as a task, so the UI thread
-/// never blocks on the audio backend.
+/// A subscription that emits [`Message::SpectrumTick`] once per [`SPECTRUM_TICK`], using the same
+/// std-thread tick source as the other timers because iced's timed subscription is not enabled.
+/// Each tick's `update` arm schedules the actual backend query as a task, so the UI thread never
+/// blocks on the audio backend.
 pub(in crate::ui) fn spectrum_ticks() -> iced::Subscription<Message> {
     iced::Subscription::run(spectrum_tick_stream)
 }
@@ -46,9 +45,8 @@ pub(in crate::ui) fn spectrum_tick_stream_with(
         .map(|()| Message::SpectrumTick)
 }
 
-/// The production spawner for the spectrum poll thread: the named
-/// [`SPECTRUM_THREAD_NAME`] thread, started through
-/// [`crate::threads::spawn_named`].
+/// The production spawner for the spectrum poll thread: the named [`SPECTRUM_THREAD_NAME`] thread,
+/// started through [`crate::threads::spawn_named`].
 pub(in crate::ui) fn spawn_spectrum_thread(work: Box<dyn FnOnce() + Send>) -> io::Result<()> {
     crate::threads::spawn_named(SPECTRUM_THREAD_NAME, work)
 }

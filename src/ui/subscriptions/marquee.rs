@@ -14,12 +14,11 @@ use crate::ui::{Message, ticks};
 /// fit the LCD's character budget (see [`super::subscriptions`]).
 pub(in crate::ui) const MARQUEE_TICK: Duration = Duration::from_millis(250);
 
-/// A subscription that emits [`Message::MarqueeTick`] once per
-/// [`MARQUEE_TICK`]. iced's timed subscription is gated behind `smol`/`tokio`
-/// backend features the app does not enable (its default thread-pool backend
-/// has no `time::every`), so this feeds the ticks from one std thread through
-/// the futures channel iced re-exports. Dropping the subscription drops the
-/// receiver, and the thread exits on its next send.
+/// A subscription that emits [`Message::MarqueeTick`] once per [`MARQUEE_TICK`]. iced's timed
+/// subscription is gated behind `smol`/`tokio` backend features the app does not enable (its
+/// default thread-pool backend has no `time::every`), so this feeds the ticks from one std thread
+/// through the futures channel iced re-exports. Dropping the subscription drops the receiver, and
+/// the thread exits on its next send.
 pub(super) fn marquee_ticks() -> iced::Subscription<Message> {
     iced::Subscription::run(marquee_tick_stream)
 }
@@ -51,11 +50,10 @@ pub(in crate::ui) fn marquee_tick_stream_with(
         .map(|()| Message::MarqueeTick)
 }
 
-/// The production spawner for the marquee timer thread: the named
-/// [`MARQUEE_THREAD_NAME`] thread, started through
-/// [`crate::threads::spawn_named`]. That shared spawner uses the fallible
-/// `std::thread::Builder::spawn` form, as do the audio worker, the REST
-/// worker, the sign-in thread, and the timeout timer.
+/// The production spawner for the marquee timer thread: the named [`MARQUEE_THREAD_NAME`] thread,
+/// started through [`crate::threads::spawn_named`]. That shared spawner uses the fallible
+/// `std::thread::Builder::spawn` form, as do the audio worker, the REST worker, the sign-in thread,
+/// and the timeout timer.
 pub(in crate::ui) fn spawn_marquee_thread(work: Box<dyn FnOnce() + Send>) -> io::Result<()> {
     crate::threads::spawn_named(MARQUEE_THREAD_NAME, work)
 }

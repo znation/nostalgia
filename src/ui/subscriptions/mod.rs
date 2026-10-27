@@ -1,15 +1,13 @@
 //! The iced subscriptions the UI runs, and the event filters behind them.
 //!
-//! [`subscriptions`] builds the active set from the player's state: the
-//! always-on keyboard and mixer listeners, the Escape listener while a
-//! transient panel is open, and the marquee, playback-position, and spectrum
-//! timers while each has something to refresh. Each timer lives in its own
-//! module — [`marquee`], [`position`], and [`spectrum`] — fed from the shared
-//! std-thread tick source in [`super::ticks`], because iced's timed
-//! subscription is gated behind backend features the app does not enable; each
-//! only schedules the actual backend query from its `update` arm, so the UI
-//! thread never waits on the audio backend. The event filters that turn iced
-//! events into messages live in [`listeners`].
+//! [`subscriptions`] builds the active set from the player's state: the always-on keyboard and
+//! mixer listeners, the Escape listener while a transient panel is open, and the marquee,
+//! playback-position, and spectrum timers while each has something to refresh. Each timer lives in
+//! its own module — [`marquee`], [`position`], and [`spectrum`] — fed from the shared std-thread
+//! tick source in [`super::ticks`], because iced's timed subscription is gated behind backend
+//! features the app does not enable; each only schedules the actual backend query from its `update`
+//! arm, so the UI thread never waits on the audio backend. The event filters that turn iced events
+//! into messages live in [`listeners`].
 
 mod listeners;
 mod marquee;
@@ -61,13 +59,11 @@ pub(super) use spectrum::{
 /// The timer is therefore subscribed only while the line needs to scroll, and
 /// dropped again once it fits.
 ///
-/// The position poll has the same shape: each tick and its replies rebuild the
-/// same whole screen, and a stopped player's view clears its current track's
-/// time readout (except the `--:--` placeholder), so there is nothing to
-/// refresh. It is subscribed while playback is
-/// running or the backend still holds a preview (a paused player's position a
-/// seek can still move, even before the first position reply); a stopped
-/// player leaves it out.
+/// The position poll has the same shape: each tick and its replies rebuild the same whole screen,
+/// and a stopped player's view clears its current track's time readout (except the `--:--`
+/// placeholder), so there is nothing to refresh. It is subscribed while playback is running or the
+/// backend still holds a preview (a paused player's position a seek can still move, even before the
+/// first position reply); a stopped player leaves it out.
 ///
 /// The spectrum poll runs only while playback is running: a paused or stopped
 /// player keeps the last bars the view stored, so ticking would rebuild the

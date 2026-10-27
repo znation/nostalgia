@@ -1,7 +1,6 @@
-//! The text the LCD shows in place of the title while a mixer slider is
-//! being dragged, as in classic Winamp: `Volume: 72%`, `Balance: Center`,
-//! `Balance: 31% Left`. An equalizer slider reads `EQ: 60HZ +3 DB` for a band
-//! and `Preamp: -12 DB` for the preamp. A seek-slider drag reads
+//! The text the LCD shows in place of the title while a mixer slider is being dragged, as in
+//! classic Winamp: `Volume: 72%`, `Balance: Center`, `Balance: 31% Left`. An equalizer slider reads
+//! `EQ: 60HZ +3 DB` for a band and `Preamp: -12 DB` for the preamp. A seek-slider drag reads
 //! `Seek to: 01:23/03:30 (39%)`.
 
 use std::time::Duration;

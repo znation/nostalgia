@@ -48,31 +48,25 @@ const LCD_TRANSPORT_SIZE: f32 = 22.0;
 /// changes between `▶`, `II`, and `■`.
 const LCD_TRANSPORT_WIDTH: f32 = 16.0;
 
-/// The Now Playing bar: a small `O A I D V` strip down the LCD's left edge
-/// (with `O` opening the options menu, `A` toggling always-on-top, `I` opening
-/// File info, and `V` the visualizer while `D` stays decorative), then the large
-/// elapsed readout, the "Now Playing:" caption
-/// followed by the current track's playlist number prefix, resolved artist,
-/// and title (or "Nothing" when nothing is current), with the track's plain
-/// total length ([`super::format_track_time`]) laid at the right edge of the
-/// LCD well. The number (from [`now_playing_number`]) is pushed after the
-/// caption only when it is non-empty, then the artist (from
-/// [`now_playing_artist`]) before the title with a `" - "` separator only when
-/// it is non-empty, so an artist-less track still reads
-/// `Now Playing: <title>`. A line within [`MARQUEE_WIDTH`] characters keeps
-/// that borrowed, still layout; a longer one is combined into one string and
-/// windowed by [`marquee_text`] at `marquee_offset`, scrolling one character
-/// per tick through the gap and back to its start, prefix included. The
-/// character budget is an approximation of the LCD's pixel width beside the
-/// elapsed readout, the caption, and the total. Takes the already resolved
-/// elapsed, label, artist, number, and time strings so this per-frame widget
-/// build does no song lookup or formatting itself. The five text values are
-/// [`Cow`]s: the borrowed cases keep the strings owned by the caller's index
-/// (no allocation), while the owned fallbacks are moved into the widget, so
-/// the built element never borrows a temporary; the scrolling branch allocates
-/// only its window, as the fitting branch allocates nothing. `modes` carries
-/// the four flags the indicator strip lights (the options menu, always-on-top,
-/// File info, and the visualizer).
+/// The Now Playing bar: a small `O A I D V` strip down the LCD's left edge (with `O` opening the
+/// options menu, `A` toggling always-on-top, `I` opening File info, and `V` the visualizer while
+/// `D` stays decorative), then the large elapsed readout, the "Now Playing:" caption followed by
+/// the current track's playlist number prefix, resolved artist, and title (or "Nothing" when
+/// nothing is current), with the track's plain total length ([`super::format_track_time`]) laid at
+/// the right edge of the LCD well. The number (from [`now_playing_number`]) is pushed after the
+/// caption only when it is non-empty, then the artist (from [`now_playing_artist`]) before the
+/// title with a `" - "` separator only when it is non-empty, so an artist-less track still reads
+/// `Now Playing: <title>`. A line within [`MARQUEE_WIDTH`] characters keeps that borrowed, still
+/// layout; a longer one is combined into one string and windowed by [`marquee_text`] at
+/// `marquee_offset`, scrolling one character per tick through the gap and back to its start, prefix
+/// included. The character budget is an approximation of the LCD's pixel width beside the elapsed
+/// readout, the caption, and the total. Takes the already resolved elapsed, label, artist, number,
+/// and time strings so this per-frame widget build does no song lookup or formatting itself. The
+/// five text values are [`Cow`]s: the borrowed cases keep the strings owned by the caller's index
+/// (no allocation), while the owned fallbacks are moved into the widget, so the built element never
+/// borrows a temporary; the scrolling branch allocates only its window, as the fitting branch
+/// allocates nothing. `modes` carries the four flags the indicator strip lights (the options menu,
+/// always-on-top, File info, and the visualizer).
 // The resolved LCD readouts and playback state; grouping them into a wrapper
 // would add a concept without making the call site clearer, as in `view_songs`.
 #[allow(clippy::too_many_arguments)]

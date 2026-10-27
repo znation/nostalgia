@@ -28,11 +28,10 @@ pub struct IndicatorModes {
     pub visualizer_visible: bool,
 }
 
-/// The color a strip letter draws in `modes`: [`theme::LCD_GREEN`] for the
-/// live `O`, `A`, `I`, or `V` exactly while its mode holds, and
-/// [`theme::LCD_GREEN_DIM`] for every other case, including the decorative
-/// `D` and an inactive live letter. Pure so the exact colors are testable
-/// without a renderer.
+/// The color a strip letter draws in `modes`: [`theme::LCD_GREEN`] for the live `O`, `A`, `I`, or
+/// `V` exactly while its mode holds, and [`theme::LCD_GREEN_DIM`] for every other case, including
+/// the decorative `D` and an inactive live letter. Pure so the exact colors are testable without a
+/// renderer.
 pub fn indicator_label_color(label: &str, modes: IndicatorModes) -> Color {
     match label {
         "O" if modes.options_visible => theme::LCD_GREEN,
@@ -69,15 +68,13 @@ pub fn lcd_indicator_message(label: &str) -> Option<Message> {
     }
 }
 
-/// Builds the indicator strip at the LCD's left edge: one small letter per
-/// line, in [`LCD_INDICATOR_LABELS`] order, in a column of fixed
-/// [`LCD_INDICATOR_WIDTH`]. `O`, `A`, `I`, and `V` are mouse areas that publish
-/// [`Message::ToggleOptions`], [`Message::ToggleAlwaysOnTop`],
-/// [`Message::ToggleFileInfo`], and [`Message::ToggleVisualizer`]; `D` stays
-/// plain, decorative text. Each letter draws in [`indicator_label_color`], so
-/// the live letters light only while their mode holds while `D` stays dim. The
-/// strip is drawn in every playback state, and its fixed width pushes the
-/// content beside it one strip-width right.
+/// Builds the indicator strip at the LCD's left edge: one small letter per line, in
+/// [`LCD_INDICATOR_LABELS`] order, in a column of fixed [`LCD_INDICATOR_WIDTH`]. `O`, `A`, `I`, and
+/// `V` are mouse areas that publish [`Message::ToggleOptions`], [`Message::ToggleAlwaysOnTop`],
+/// [`Message::ToggleFileInfo`], and [`Message::ToggleVisualizer`]; `D` stays plain, decorative
+/// text. Each letter draws in [`indicator_label_color`], so the live letters light only while their
+/// mode holds while `D` stays dim. The strip is drawn in every playback state, and its fixed width
+/// pushes the content beside it one strip-width right.
 pub fn lcd_indicator_strip<'a, Theme, Renderer>(
     modes: IndicatorModes,
 ) -> Column<'a, Message, Theme, Renderer>
