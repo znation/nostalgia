@@ -409,7 +409,7 @@ impl WinampPlayer {
     /// combined artist and title exceed `views::MARQUEE_WIDTH` characters.
     ///
     /// The marquee timer is subscribed only while this holds (see
-    /// [`super::timers::subscriptions`]), so the bar is not rebuilt four times a second for a
+    /// [`super::subscriptions::subscriptions`]), so the bar is not rebuilt four times a second for a
     /// line that fits whole. The label, artist, and number are resolved exactly
     /// as `view` resolves them, so the timer scrolls precisely the lines the
     /// bar windows.
@@ -431,7 +431,7 @@ impl WinampPlayer {
     /// track's time readout (except the `--:--` placeholder), so the poll stays
     /// unsubscribed and the UI does not rebuild the whole visible screen, the
     /// library panel included while it shows, twice a second to re-render an
-    /// unchanged readout (see [`super::timers::subscriptions`]).
+    /// unchanged readout (see [`super::subscriptions::subscriptions`]).
     pub(in crate::ui) fn needs_position_poll(&self) -> bool {
         if self.playback_position.is_some() || self.apple_music_service.has_loaded_preview() {
             return true;
@@ -442,7 +442,7 @@ impl WinampPlayer {
     /// Whether the spectrum poll is needed: only while playback is running.
     /// Pause and Stop drop the timer, so the bars freeze at their last levels
     /// instead of repainting the whole screen four times a second for an
-    /// unchanged strip (see [`super::timers::subscriptions`]).
+    /// unchanged strip (see [`super::subscriptions::subscriptions`]).
     pub(in crate::ui) fn needs_spectrum_poll(&self) -> bool {
         self.state.blocking_lock().is_playing
     }

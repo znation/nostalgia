@@ -1,6 +1,6 @@
 use super::browse::BrowseList;
 use super::loading::{RequestGeneration, fetch_into, play_into};
-use super::timers::*;
+use super::subscriptions::*;
 use super::views::{BROWSE_LIST_ID, BROWSE_PAGE_HEIGHT, BROWSE_SEARCH_ID, BROWSE_VIEWS};
 use super::*;
 use crate::audio::{PlaybackFormat, Spectrum};
@@ -1289,7 +1289,7 @@ mod settings_tests;
 mod shortcuts_tests;
 mod sort_tests;
 mod stepping_tests;
-mod timers_tests;
+mod subscriptions_tests;
 mod transport_tests;
 mod view_tests;
 mod window_tests;

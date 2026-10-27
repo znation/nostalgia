@@ -1279,7 +1279,7 @@ draws its `BAND_COUNT` bars at fixed width inside the row `views::view_now_playi
 the title and status rows. The `Spectrum` handler in `src/ui/handlers/playback/preview.rs` stores
 the reply under the same epoch and pending-transition guards as the position, format, and duration,
 `spectrum_tick` schedules the backend query, and `reset_position_readout` clears the bars on Stop
-and a new selection. `ui::timers::subscriptions` subscribes `spectrum_ticks` only while
+and a new selection. `ui::subscriptions::subscriptions` subscribes `spectrum_ticks` only while
 `WinampPlayer::needs_spectrum_poll` reports that playback is running.
 `views::now_playing::now_playing_number` resolves `KnownTrack::number`,
 `handlers::playback::track_selected` records the selecting row's 1-based number, and
@@ -1291,7 +1291,7 @@ when it scrolls). `views::now_playing::marquee_text` windows an overlong line, a
 `MouseArea` wrapping the readout in `now_playing_row` and mapped from the classic `T` key (and
 Ctrl+T) by `shortcuts::message_for`) flips it without touching playback state.
 `views::now_playing::display_len` and `views::now_playing::needs_marquee` measure the line, and
-`ui::timers::subscriptions` subscribes `marquee_ticks` only while that measure exceeds
+`ui::subscriptions::subscriptions` subscribes `marquee_ticks` only while that measure exceeds
 `MARQUEE_WIDTH`, and `position_ticks` only while `WinampPlayer::needs_position_poll` reports a
 preview whose position can still change. `audio::PlaybackFormat` carries the preview's sample rate,
 channel count, and average bitrate; `audio::preview::DecodedPreview` hands the download's encoded
@@ -1317,7 +1317,7 @@ drag on Stop and a new selection, and `RodioOutput::seek_to`/`duration` query th
 `RodioPlayer` records the decoded source's length and clamps each absolute seek to it.
 
 The scrolling timer's stream is built by `ui::ticks::tick_stream` in `src/ui/ticks.rs`, and its
-thread starts through `spawn_marquee_thread` in `src/ui/timers.rs`, which delegates
+thread starts through `spawn_marquee_thread` in `src/ui/subscriptions/marquee.rs`, which delegates
 to `crate::threads::spawn_named`, the fallible `std::thread::Builder::spawn` every worker in the app
 uses. `std::thread::spawn` panics when
 the OS refuses a thread, and iced builds the subscription's stream on its main thread while it
@@ -1622,7 +1622,7 @@ and `toggle_about_while_shaded_restores_the_window_first` (`src/ui/tests/window_
 `title_bar_constructs_for_both_about_states` (`src/ui/tests/view_tests.rs`);
 `the_escape_listener_runs_only_while_a_transient_panel_is_open`,
 `escape_key_message_maps_escape_but_not_its_chords_or_other_keys`
-(`src/ui/tests/timers_tests.rs`), and
+(`src/ui/tests/subscriptions_tests.rs`), and
 `escape_closes_each_transient_panel_without_touching_anything_else`
 (`src/ui/tests/panels_tests.rs`) pin the Escape route.
 
@@ -1711,7 +1711,7 @@ and `song_track_number_defaults_to_none_when_the_payload_omits_it` (`src/library
 `view_constructs_when_the_window_is_shaded` (`src/ui/tests/view_tests.rs`);
 `the_escape_listener_runs_only_while_a_transient_panel_is_open`,
 `escape_key_message_maps_escape_but_not_its_chords_or_other_keys`
-(`src/ui/tests/timers_tests.rs`), and
+(`src/ui/tests/subscriptions_tests.rs`), and
 `escape_closes_each_transient_panel_without_touching_anything_else`
 (`src/ui/tests/panels_tests.rs`) pin the Escape route.
 
@@ -1746,7 +1746,7 @@ and `jump_time_overlay_buttons_and_backdrop_publish_their_messages`
 (`src/ui/views/tests/chrome.rs`); `view_constructs_when_the_window_is_shaded`
 (`src/ui/tests/view_tests.rs`); `the_escape_listener_runs_only_while_a_transient_panel_is_open`,
 `escape_key_message_maps_escape_but_not_its_chords_or_other_keys`
-(`src/ui/tests/timers_tests.rs`), and
+(`src/ui/tests/subscriptions_tests.rs`), and
 `escape_closes_each_transient_panel_without_touching_anything_else`
 (`src/ui/tests/panels_tests.rs`) pin the Escape route.
 
@@ -1756,7 +1756,7 @@ and `jump_time_overlay_buttons_and_backdrop_publish_their_messages`
 
 - `shortcuts::shortcut` maps plain `j` or `J`, with Shift allowed and Control, Alt, and Logo
   released, to `Message::ToggleJumpFile`; Ctrl+J still maps to `ToggleJumpTime`, and Ctrl+Shift+J
-  stays unbound. While the panel is open, `ui::timers` installs
+  stays unbound. While the panel is open, `ui::subscriptions` installs
   `shortcuts::message_for_jump_file`, which maps Up, Down, Page Up, and Page Down (Shift allowed,
   Control, Alt, and Logo released) to `JumpFileSelectionUp`/`JumpFileSelectionDown` and
   `JumpFileSelectionPageUp`/`JumpFileSelectionPageDown`, and falls through to `message_for` for
@@ -1807,7 +1807,7 @@ and `jump_time_overlay_buttons_and_backdrop_publish_their_messages`
   `JumpFileRowSelected`. The shade branch never draws it.
 
 **Enforced by.** `handlers::jump`, `handlers::browse`,
-`handlers::browse::scroll::reveal_offset`, `ui::timers`,
+`handlers::browse::scroll::reveal_offset`, `ui::subscriptions`,
 `shortcuts::message_for_jump_file`, `views::jump_file::view_jump_file_overlay`, and the
 jump-file branch of `ui::view::view`.
 
@@ -1827,7 +1827,7 @@ jump-file branch of `ui::view::view`.
 `jump_file_row_top_starts_at_the_padding_and_steps_by_one_row_and_gap`, and the other tests in
 `src/ui/tests/jump_file_tests.rs`; `the_escape_listener_runs_only_while_a_transient_panel_is_open`,
 `escape_key_message_maps_escape_but_not_its_chords_or_other_keys`
-(`src/ui/tests/timers_tests.rs`), and
+(`src/ui/tests/subscriptions_tests.rs`), and
 `escape_closes_each_transient_panel_without_touching_anything_else`
 (`src/ui/tests/panels_tests.rs`) pin the Escape route.
 
@@ -1844,21 +1844,21 @@ its own focus; `Message::EscapePressed` is still a no-op.
 - `WinampPlayer::transient_panel_open` is the read side of the four flags
   `WinampPlayer::close_transient_panels` clears, so the subscription gate and the closer share one
   set.
-- `ui::timers::escape_key_message` maps the press through `iced::event::listen_with`, ignoring the
+- `ui::subscriptions::escape_key_message` maps the press through `iced::event::listen_with`, ignoring the
   event status so a focused `TextInput` that captures Escape cannot swallow it;
-  `ui::timers::subscriptions` adds that listener only while `transient_panel_open` holds.
+  `ui::subscriptions::subscriptions` adds that listener only while `transient_panel_open` holds.
 - `Message::EscapePressed` routes to `handlers::window::escape_pressed`, which calls
   `close_transient_panels` and schedules nothing. It is not a toggle, so it never opens a panel.
 - `shortcuts::message_for` still returns `None` for a plain Escape press, leaving every existing
   keyboard and media-key binding unchanged.
 
 **Enforced by.** `WinampPlayer::transient_panel_open`, `WinampPlayer::close_transient_panels`,
-`ui::timers::escape_key_message`, `ui::timers::subscriptions`, `Message::EscapePressed`, and
+`ui::subscriptions::escape_key_message`, `ui::subscriptions::subscriptions`, `Message::EscapePressed`, and
 `handlers::window::escape_pressed`.
 
 **Pinned by.** `the_escape_listener_runs_only_while_a_transient_panel_is_open` and
 `escape_key_message_maps_escape_but_not_its_chords_or_other_keys`
-(`src/ui/tests/timers_tests.rs`);
+(`src/ui/tests/subscriptions_tests.rs`);
 `escape_closes_each_transient_panel_without_touching_anything_else`
 (`src/ui/tests/panels_tests.rs`); `message_for`'s plain-Escape case
 (`src/ui/shortcuts.rs`).
@@ -2166,7 +2166,7 @@ backend queries. On the UI side, `views::now_playing::visualizer::visualizer_bar
 ramp steps, and `views::now_playing::visualizer::now_playing_visualizer_row` draws them at fixed
 width, while `views::visible_spectrum` applies `WinampPlayer::visualizer_visible`,
 `Message::ToggleVisualizer` and `handlers::playback::toggle_visualizer` flip that flag,
-`WinampPlayer::needs_spectrum_poll` gates the poll, `ui::timers::spectrum_ticks` feeds it, and
+`WinampPlayer::needs_spectrum_poll` gates the poll, `ui::subscriptions::spectrum_ticks` feeds it, and
 `handlers::playback::preview::spectrum_tick`/`spectrum` issue and guard the query while
 `reset_position_readout` clears the stored value.
 
@@ -2332,9 +2332,9 @@ held, and a mixer drag wins if both were set; without a `playback_duration` the 
 glyph, elapsed readout, and total stay. The release shows the
 title again. The EQ on/off button and preset picks never set the readout. The global arrow-key
 handlers and wheel never set the readout; a slider's own arrow-key or Ctrl+wheel change message
-does. `timers::mixer_key_message` turns a navigation key press
+does. `subscriptions::mixer_key_message` turns a navigation key press
 (arrows, Home/End, Page) into `MixerReleased` and is always subscribed, because the slider sets the
-readout during the event it must then see; other keys send nothing. `timers::mixer_wheel_message`
+readout during the event it must then see; other keys send nothing. `subscriptions::mixer_wheel_message`
 does the same for a wheel roll but is subscribed only while a readout shows (the
 `mixer_readout_showing` argument of `subscriptions`), so plain list scrolling rebuilds no screen.
 Known limit: the Ctrl+wheel change that sets a readout leaves it until the next wheel roll or

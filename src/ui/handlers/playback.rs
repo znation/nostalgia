@@ -218,7 +218,7 @@ pub(in crate::ui) fn track_played(
 
 /// The marquee timer only advances the title window, and it runs only while
 /// the line is too long to fit the LCD's character budget (see
-/// `crate::ui::timers::subscriptions`), so every tick scrolls the bar.
+/// `crate::ui::subscriptions::subscriptions`), so every tick scrolls the bar.
 pub(in crate::ui) fn marquee_tick(player: &mut WinampPlayer) -> Task<Message> {
     player.marquee_offset = player.marquee_offset.wrapping_add(1);
     Task::none()

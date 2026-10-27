@@ -63,7 +63,7 @@ pub(in crate::ui) enum Message {
     SeekForward,
     // The marquee timer's tick: advance the Now Playing title window by one
     // character. The timer runs only while the line is too long to fit the
-    // LCD's character budget (see [`super::timers::subscriptions`]), so a tick always
+    // LCD's character budget (see [`super::subscriptions::subscriptions`]), so a tick always
     // scrolls the bar.
     MarqueeTick,
     // The position poll's tick: schedule queries of the loaded preview's
@@ -87,7 +87,7 @@ pub(in crate::ui) enum Message {
     },
     // The spectrum poll's tick: schedule a query of the loaded preview's live
     // ten-band spectrum. It runs only while playback is running (see
-    // [`super::timers::subscriptions`]), so a paused or stopped player keeps its last bars.
+    // [`super::subscriptions::subscriptions`]), so a paused or stopped player keeps its last bars.
     SpectrumTick,
     // The spectrum query's reply, stamped with the `position_epoch` that
     // issued it. A reply from before a Stop or a new selection is dropped so

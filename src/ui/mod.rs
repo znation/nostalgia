@@ -6,8 +6,9 @@
 //! controls, and equalizer panel), the Previous/Next stepping arithmetic in
 //! `transport`, the library-fetch and error-reporting adapter in `loading`,
 //! the per-level browse state machine in `browse`, the classic key bindings in
-//! `shortcuts`, and the marquee, position-poll and spectrum-poll timer
-//! subscriptions in `timers`; `update` is a dispatch table over the
+//! `shortcuts`, and the iced subscription set — keyboard and mixer listeners
+//! plus the marquee, position-poll, and spectrum-poll timers — in
+//! `subscriptions`; `update` is a dispatch table over the
 //! per-concern message handlers in `handlers`, and this module wires those to
 //! the shared `AppState` and the `AppleMusicService` seam. Its unit tests live
 //! in the `tests` submodule.
@@ -26,9 +27,9 @@ mod message;
 mod player;
 mod shortcuts;
 mod style;
+mod subscriptions;
 mod theme;
 mod ticks;
-mod timers;
 mod transport;
 mod view;
 mod views;
@@ -37,7 +38,7 @@ pub(in crate::ui) use message::Message;
 pub(in crate::ui) use player::{CurrentView, SongsOrigin, WinampPlayer};
 pub(in crate::ui) use view::view;
 
-use timers::subscriptions;
+use subscriptions::subscriptions;
 
 use crate::settings::Settings;
 use crate::settings::file_store::FileStore;
