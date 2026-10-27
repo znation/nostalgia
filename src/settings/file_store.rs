@@ -673,14 +673,7 @@ mod tests {
 
     #[test]
     fn file_store_save_then_load_returns_the_same_settings() {
-        let root = std::env::temp_dir().join(format!(
-            "nostalgia-settings-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
+        let root = temporary_root("round-trip");
         let path = root.join("nested").join("settings.ini");
         let store = FileStore::at(path);
 
@@ -699,14 +692,7 @@ mod tests {
     // bare-name path is pinned separately; this covers the save side.
     #[test]
     fn file_store_saves_and_loads_a_bare_file_name_in_the_current_directory() {
-        let name = format!(
-            "nostalgia-bare-save-{}-{}.ini",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        );
+        let name = format!("{}.ini", temporary_name("bare-save"));
         let store = FileStore::at(PathBuf::from(&name));
 
         let settings = varied_settings();
@@ -730,14 +716,19 @@ mod tests {
     }
 
     fn temporary_root(label: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
+        std::env::temp_dir().join(temporary_name(label))
+    }
+
+    /// Build a scratch name from the test label, process ID, and current timestamp.
+    fn temporary_name(label: &str) -> String {
+        format!(
             "nostalgia-settings-{label}-{}-{}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_nanos()
-        ))
+        )
     }
 
     // A byte that is not UTF-8 spoils only its own line; the other settings
