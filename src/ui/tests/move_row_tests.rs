@@ -263,3 +263,30 @@ fn a_move_past_either_edge_changes_nothing() {
     assert_eq!(player.artists.selected(), Some(2));
     assert_eq!(player.artists.epoch, epoch);
 }
+
+// A list that is loading or failed keeps its order even with a row selected.
+#[test]
+fn a_move_on_a_loading_or_failed_list_changes_nothing() {
+    for failed in [false, true] {
+        let mut player = player_in_albums();
+        let _ = update(
+            &mut player,
+            Message::ArtistsLoaded(vec![artist("a"), artist("b"), artist("c")]),
+        );
+        player.current_view = CurrentView::Artists;
+        let epoch = player.artists.epoch;
+        select(&mut player, epoch, 1);
+        if failed {
+            player.artists.error = Some("offline".to_string());
+        } else {
+            player.artists.loading = true;
+        }
+
+        let _ = update(&mut player, Message::MoveSelectedRowDown);
+        let _ = update(&mut player, Message::MoveSelectedRowUp);
+
+        assert_eq!(artist_names(&player), ["a", "b", "c"], "failed={failed}");
+        assert_eq!(player.artists.selected(), Some(1), "failed={failed}");
+        assert_eq!(player.artists.epoch, epoch, "failed={failed}");
+    }
+}
