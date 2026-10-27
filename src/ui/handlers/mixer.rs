@@ -1,12 +1,10 @@
 //! The mixer message handlers: the volume, the balance, the seek nudges, the
-//! equalizer, and both panel-visibility toggles (the equalizer panel's and the
-//! library section's).
+//! equalizer.
 //!
 //! The volume, balance, and equalizer handlers write a clamped value into the
 //! shared state and forward the result to the audio backend, so a slider drag
 //! reaches the playing preview without restarting it. The seek nudge forwards
-//! a relative seek without touching shared state, and each panel toggle flips
-//! only its player layout flag; neither schedules work.
+//! a relative seek without touching shared state.
 
 use iced::Task;
 
@@ -98,32 +96,6 @@ pub(in crate::ui) fn seek_backward(player: &mut WinampPlayer) -> Task<Message> {
 /// five-second step.
 pub(in crate::ui) fn seek_forward(player: &mut WinampPlayer) -> Task<Message> {
     seek_preview(player, views::SEEK_STEP_SECS)
-}
-
-/// The player row's EQ button and the E key: shows or hides the normal-mode
-/// equalizer section. This is a layout-only toggle, distinct from
-/// [`toggle_equalizer`], which flips the audio equalizer's on/off state; it
-/// changes no shared EQ value and schedules no work. Shade mode builds no
-/// equalizer panel, so there the toggle leaves the flag alone instead of
-/// flipping a hidden setting.
-pub(in crate::ui) fn toggle_equalizer_panel(player: &mut WinampPlayer) -> Task<Message> {
-    if player.shaded {
-        return Task::none();
-    }
-    player.eq_panel_visible = !player.eq_panel_visible;
-    Task::none()
-}
-
-/// The player row's PL button: shows or hides the normal-mode library section.
-/// This is a layout-only toggle that changes no playback, equalizer, browse,
-/// search, or selection state and schedules no work. Shade mode draws no PL
-/// button, so the Alt+E key does nothing there, like `toggle_equalizer_panel`.
-pub(in crate::ui) fn toggle_library_panel(player: &mut WinampPlayer) -> Task<Message> {
-    if player.shaded {
-        return Task::none();
-    }
-    player.library_panel_visible = !player.library_panel_visible;
-    Task::none()
 }
 
 /// The equalizer's on/off button.

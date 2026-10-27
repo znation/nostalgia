@@ -762,7 +762,7 @@ and Reload buttons into one `Row`. `views::view_transport_controls`,
 `views::transport::library_panel_toggle` spec the EQ and PL toggles, which
 `views::transport::panel_toggle_button` builds and `style::toggle_button_style`
 in `src/ui/style.rs` sinks while its panel is shown,
-`handlers::mixer::toggle_equalizer_panel` and `handlers::mixer::toggle_library_panel` flip the
+`handlers::window::toggle_equalizer_panel` and `handlers::window::toggle_library_panel` flip the
 layout flags; `shortcuts::shortcut` in
 `src/ui/shortcuts.rs` maps plain and Shift-held E to that same message; `view` pushes the
 equalizer section only while that flag holds; `views::mini_transport::mini_transport_controls`
@@ -1703,8 +1703,8 @@ unpersisted options menu listing the app's existing on/off choices plus About an
   publishes `Message::ToggleAbout`; `Close`, the full-window backdrop, and Escape close the menu.
 - `handlers::window::options_choice` clears `options_visible` first, then dispatches to the
   existing `toggle_always_on_top`, `handlers::playback::toggle_time_display`,
-  `handlers::playback::toggle_visualizer`, `handlers::mixer::toggle_equalizer_panel`, or
-  `handlers::mixer::toggle_library_panel` and returns its task, so each row's non-menu behavior is
+  `handlers::playback::toggle_visualizer`, `handlers::window::toggle_equalizer_panel`, or
+  `handlers::window::toggle_library_panel` and returns its task, so each row's non-menu behavior is
   exactly that toggle's.
 - The normal-mode branch of `ui::view::view` wraps the base tree only while `options_visible &&
   !shaded` holds and passes the current always-on-top, elapsed/remaining, visualizer, equalizer

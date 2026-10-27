@@ -1,10 +1,10 @@
 //! The window message handlers: the app window's resolved id and the custom
 //! title bar's actions — drag, minimize, close, shade, always-on-top, and the
-//! About and Options panels.
+//! About and Options panels — plus the equalizer and library panels' visibility.
 //!
-//! Every action acts on the resolved window id and is a no-op until it
-//! exists; `with_window_id` holds that guard once, so each handler names only
-//! the `iced::window` call it schedules.
+//! Native window actions use the resolved window id and are no-ops until it
+//! exists; `with_window_id` holds that guard. Panel visibility toggles update
+//! player layout flags without scheduling native window work.
 
 use iced::Task;
 
@@ -137,6 +137,32 @@ pub(in crate::ui) fn toggle_options(player: &mut WinampPlayer) -> Task<Message> 
     }
 }
 
+/// The player row's EQ button and the E key: shows or hides the normal-mode
+/// equalizer section. This is a layout-only toggle, distinct from
+/// [`super::mixer::toggle_equalizer`], which flips the audio equalizer's on/off state; it
+/// changes no shared EQ value and schedules no work. Shade mode builds no
+/// equalizer panel, so there the toggle leaves the flag alone instead of
+/// flipping a hidden setting.
+pub(in crate::ui) fn toggle_equalizer_panel(player: &mut WinampPlayer) -> Task<Message> {
+    if player.shaded {
+        return Task::none();
+    }
+    player.eq_panel_visible = !player.eq_panel_visible;
+    Task::none()
+}
+
+/// The player row's PL button: shows or hides the normal-mode library section.
+/// This is a layout-only toggle that changes no playback, equalizer, browse,
+/// search, or selection state and schedules no work. Shade mode draws no PL
+/// button, so the Alt+E key does nothing there, like `toggle_equalizer_panel`.
+pub(in crate::ui) fn toggle_library_panel(player: &mut WinampPlayer) -> Task<Message> {
+    if player.shaded {
+        return Task::none();
+    }
+    player.library_panel_visible = !player.library_panel_visible;
+    Task::none()
+}
+
 /// An options-menu row: close the menu first, then apply the one existing
 /// toggle the row names and return that handler's task. The menu itself
 /// changes no state, so a row's non-menu behavior is exactly its toggle's.
@@ -149,8 +175,8 @@ pub(in crate::ui) fn options_choice(
         OptionsChoice::AlwaysOnTop => toggle_always_on_top(player),
         OptionsChoice::TimeDisplay => super::playback::toggle_time_display(player),
         OptionsChoice::Visualizer => super::playback::toggle_visualizer(player),
-        OptionsChoice::EqualizerPanel => super::mixer::toggle_equalizer_panel(player),
-        OptionsChoice::LibraryPanel => super::mixer::toggle_library_panel(player),
+        OptionsChoice::EqualizerPanel => toggle_equalizer_panel(player),
+        OptionsChoice::LibraryPanel => toggle_library_panel(player),
     }
 }
 
