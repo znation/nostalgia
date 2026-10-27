@@ -2154,6 +2154,7 @@ reports a removal failure without failing the new sign-in.
   (all in `src/music_kit_auth/tests/server.rs`)
 - `the_reader_reports_a_partial_request_as_incomplete`
 - `the_reader_preserves_a_partial_body_between_polls`
+- `the_reader_finds_a_header_terminator_split_across_polls`
   (in `src/music_kit_auth/tests/http_request.rs`)
 - `the_bootstrap_sweep_removes_only_old_bootstrap_directories`
 - `the_bootstrap_sweep_skips_a_symlink_instead_of_following_it`

@@ -237,6 +237,42 @@ fn the_reader_preserves_a_partial_body_between_polls() {
     assert_eq!(request.body, b"hello world");
 }
 
+// The blank line ending the headers can arrive split across reads. The reader
+// keeps its buffer between polls, so the terminator is found once its last
+// byte lands, and a request with no body is then served.
+#[test]
+fn the_reader_finds_a_header_terminator_split_across_polls() {
+    let (server, mut client) = connected_pair();
+    client
+        .write_all(b"GET /callback?a=1 HTTP/1.1\r\nHost: 127.0.0.1\r\n\r")
+        .expect("write the headers up to half the terminator");
+    server
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .expect("bound the readiness check");
+    assert!(server.peek(&mut [0u8; 1]).expect("first part arrived") > 0);
+    let mut reader = http::RequestReader::new(server).expect("wrap the server side");
+    assert!(
+        reader
+            .poll()
+            .expect("read the unfinished headers")
+            .is_none()
+    );
+
+    client.write_all(b"\n").expect("finish the terminator");
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let request = loop {
+        if let Some(request) = reader.poll().expect("resume the partial headers") {
+            break request;
+        }
+        assert!(Instant::now() < deadline, "the completed request was lost");
+        thread::sleep(Duration::from_millis(1));
+    };
+    assert_eq!(request.method, "GET");
+    assert_eq!(request.path, "/callback");
+    assert_eq!(request.query.as_deref(), Some("a=1"));
+    assert!(request.body.is_empty());
+}
+
 // A request whose headers declare a `Content-Length` but whose body closes
 // before that many bytes arrive must be ignored, not returned with the bytes
 // that did arrive. `authorize_survives_a_connection_that_closes_early` pins
