@@ -5,6 +5,21 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### A UTF-8 BOM in the settings file drops the first setting (found by the bugfix role 2026-10-26) — fixed 2026-10-26 by the bugfix role
+
+`FileStore::load` decodes the settings file with `String::from_utf8_lossy`, which
+keeps a leading UTF-8 BOM as U+FEFF. `Settings::from_text` trimmed each key but
+not that marker, so the first line's key became `\u{feff}volume` and was treated
+as unknown: that setting silently fell back to its default. A file saved by an
+editor that writes a BOM therefore lost its first setting with no diagnostic.
+`from_text` now strips one leading U+FEFF before splitting lines. The new
+`from_text_ignores_a_leading_utf8_bom` test read the default 0.5 for `volume`
+before the fix and reads the file's 0.25 after it.
+
+**Validation gap:** none — a unit test over `Settings::from_text` reproduced it
+directly; the parser's silent fallback left no failing behavior to observe
+elsewhere.
+
 ### IPv4-translated and ISATAP preview addresses slip past the guard (found by the bugfix role 2026-10-26) — fixed 2026-10-26 by the bugfix role
 
 `ip_is_internal` refused the IPv4 address embedded in 6to4, NAT64, and Teredo

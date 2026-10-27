@@ -240,8 +240,11 @@ impl Settings {
     ///
     /// Unknown keys, malformed numbers, booleans other than `true`/`false`,
     /// out-of-range band indexes, and unrecognized preset names are ignored,
-    /// so one bad line falls back to its default without failing the load.
+    /// so one bad line falls back to its default without failing the load. A
+    /// leading UTF-8 BOM is an encoding marker, not part of the first key, so
+    /// it is dropped before the lines are read.
     fn from_text(text: &str) -> Self {
+        let text = text.strip_prefix('\u{feff}').unwrap_or(text);
         let mut settings = Self::default();
         for line in text.lines() {
             let Some((key, value)) = line.split_once('=') else {
@@ -449,6 +452,17 @@ mod tests {
             !Settings::from_text("always_on_top=yes\n").always_on_top(),
             "an unknown word must fall back to unpinned"
         );
+    }
+
+    #[test]
+    fn from_text_ignores_a_leading_utf8_bom() {
+        let settings = Settings::from_text("\u{feff}volume=0.25\nbalance=0.25\n");
+
+        assert_eq!(
+            settings.volume, 0.25,
+            "a leading BOM is an encoding marker, not part of the first key"
+        );
+        assert_eq!(settings.balance, 0.25);
     }
 
     #[test]

@@ -200,7 +200,8 @@ choice, the equalizer and library panels' shown/hidden choices, and the always-o
 saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or `$HOME/.config/nostalgia/settings.ini`)
 and restored at the next launch; `NOSTALGIA_SETTINGS_PATH`
 overrides the path. A missing or malformed entry falls back to its default (a byte that
-is not UTF-8 spoils only its own line), and a settings file that exists but cannot be
+is not UTF-8 spoils only its own line, and a leading UTF-8 BOM is ignored), and a settings file
+that exists but cannot be
 read falls back to defaults with one line on stderr naming the file. Each save replaces
 the file atomically; a symlinked settings file stays a link, with the write going to
 the file it points at and that file's mode kept. The always-on-top choice
