@@ -12,6 +12,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use super::Settings;
 use super::atomic_write::{sweep_stale_temporaries, write_atomically};
 
+/// Whether `path` is not absolute, so it depends on a current directory.
+///
+/// On Windows this also rejects rooted paths without a drive such as `/xdg`
+/// (they resolve on the current drive) and drive-relative paths such as
+/// `C:config`; only drive-rooted and UNC paths pass.
+fn starts_relative(path: &Path) -> bool {
+    !path.is_absolute()
+}
+
 /// Writes a [`Settings`] snapshot somewhere. The UI's `WinampPlayer` holds one
 /// behind a `Box<dyn SettingsWriter>`; production uses [`FileStore`] and the
 /// tests use an in-memory recorder.
@@ -42,7 +51,9 @@ impl FileStore {
     /// `NOSTALGIA_SETTINGS_PATH` is the cross-platform override (read once at
     /// startup), then `$XDG_CONFIG_HOME/nostalgia/settings.ini`, then
     /// `$HOME/.config/nostalgia/settings.ini`. An empty variable is treated as
-    /// unset; when none resolves, persistence is disabled.
+    /// unset, and a relative `XDG_CONFIG_HOME` is ignored because the XDG Base
+    /// Directory spec requires it to be absolute; when none resolves,
+    /// persistence is disabled.
     #[must_use]
     pub fn from_environment() -> Self {
         Self {
@@ -57,7 +68,10 @@ impl FileStore {
 
     /// The settings file's path: the override, else the XDG config directory,
     /// else the home directory's `.config`, else `None`. Empty values count as
-    /// unset.
+    /// unset. A relative `XDG_CONFIG_HOME` counts as unset: the XDG Base
+    /// Directory spec requires an absolute path, and resolving a relative one
+    /// would put the settings file under whatever directory the player happened
+    /// to start in.
     #[must_use]
     fn resolve_path(
         override_path: Option<OsString>,
@@ -68,7 +82,9 @@ impl FileStore {
         if let Some(path) = non_empty(override_path) {
             return Some(PathBuf::from(path));
         }
-        if let Some(config_home) = non_empty(xdg_config_home) {
+        if let Some(config_home) =
+            non_empty(xdg_config_home).filter(|value| !starts_relative(Path::new(value)))
+        {
             return Some(
                 PathBuf::from(config_home)
                     .join("nostalgia")
@@ -260,7 +276,9 @@ mod tests {
     #[test]
     fn settings_path_resolves_override_then_xdg_then_home_then_none() {
         let override_path = Some(OsString::from("/custom/settings.ini"));
-        let xdg = Some(OsString::from("/xdg"));
+        // `/xdg` is rooted but not absolute on Windows, so use a drive path there.
+        let xdg_dir = if cfg!(windows) { r"C:\xdg" } else { "/xdg" };
+        let xdg = Some(OsString::from(xdg_dir));
         let home = Some(OsString::from("/home/user"));
 
         assert_eq!(
@@ -269,7 +287,11 @@ mod tests {
         );
         assert_eq!(
             FileStore::resolve_path(Some(OsString::new()), xdg, home.clone()),
-            Some(PathBuf::from("/xdg/nostalgia/settings.ini"))
+            Some(
+                PathBuf::from(xdg_dir)
+                    .join("nostalgia")
+                    .join("settings.ini")
+            )
         );
         assert_eq!(
             FileStore::resolve_path(
@@ -282,6 +304,58 @@ mod tests {
         assert_eq!(
             FileStore::resolve_path(None, None, Some(OsString::new())),
             None
+        );
+    }
+
+    // The XDG Base Directory spec requires XDG_CONFIG_HOME to be absolute. A
+    // relative value must be ignored rather than resolving under the current
+    // directory, so resolution continues to `$HOME` (or to no path at all)
+    // instead of moving the settings file with the launch directory.
+    #[test]
+    fn settings_path_ignores_a_relative_xdg_config_home() {
+        assert!(starts_relative(Path::new("relative/config")));
+        assert!(starts_relative(Path::new(".")));
+        assert!(starts_relative(Path::new("..")));
+        #[cfg(unix)]
+        assert!(!starts_relative(Path::new("/xdg")));
+        #[cfg(windows)]
+        {
+            for relative in ["C:config", "C:", "/xdg"] {
+                assert!(starts_relative(Path::new(relative)));
+                assert_eq!(
+                    FileStore::resolve_path(
+                        None,
+                        Some(OsString::from(relative)),
+                        Some(OsString::from("/home/user")),
+                    ),
+                    Some(PathBuf::from("/home/user/.config/nostalgia/settings.ini"))
+                );
+                assert_eq!(
+                    FileStore::resolve_path(None, Some(OsString::from(relative)), None),
+                    None
+                );
+            }
+            assert!(!starts_relative(Path::new(r"C:\config")));
+            assert!(!starts_relative(Path::new(r"\\server\share\config")));
+        }
+        let home = Some(OsString::from("/home/user"));
+        assert_eq!(
+            FileStore::resolve_path(None, Some(OsString::from("relative/config")), home.clone()),
+            Some(PathBuf::from("/home/user/.config/nostalgia/settings.ini"))
+        );
+        assert_eq!(
+            FileStore::resolve_path(None, Some(OsString::from("relative/config")), None),
+            None
+        );
+        assert_eq!(
+            FileStore::resolve_path(
+                None,
+                Some(OsString::from("relative/config")),
+                Some(OsString::from("relative/home")),
+            ),
+            Some(PathBuf::from(
+                "relative/home/.config/nostalgia/settings.ini"
+            ))
         );
     }
 

@@ -852,6 +852,9 @@ queued snapshot written once the worker is free: a burst of changes, such as a s
 repeat, may collapse to its newest value instead of writing every intermediate one. An update that leaves the snapshot
 unchanged writes nothing. Reads and writes go through the state's clamped
 setters, so out-of-range values from a file cannot push shared state outside its documented ranges.
+The path is `NOSTALGIA_SETTINGS_PATH` when set and non-empty, else an absolute `$XDG_CONFIG_HOME`'s
+`nostalgia/settings.ini`, else `$HOME/.config/nostalgia/settings.ini`, else persistence is
+disabled; a relative `XDG_CONFIG_HOME` is ignored per the XDG spec.
 A missing file, or a malformed line (including a `NaN` number and bytes that are not UTF-8,
 which are decoded lossily so they spoil only their own line), falls back per key without failing
 startup; an unreadable file
@@ -943,6 +946,7 @@ arm those controls press.
 `apply_to_restores_a_saved_preset`,
 `eq_auto_round_trips_and_ignores_malformed_values`,
 `settings_path_resolves_override_then_xdg_then_home_then_none`,
+`settings_path_ignores_a_relative_xdg_config_home`,
 `file_store_save_then_load_returns_the_same_settings`,
 `file_store_saves_and_loads_a_bare_file_name_in_the_current_directory`,
 `file_store_keeps_the_previous_file_when_the_replacement_cannot_be_staged`,
