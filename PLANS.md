@@ -20,102 +20,114 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Sink the Repeat, Shuffle, EQ, and AUTO toggles while on, like Winamp (planned 2026-10-26 by the plan role)
+### Sink toggles while on, part 1/2: Repeat and Shuffle through a shared toggle helper (planned 2026-10-26 by the plan role; split 2026-10-27 by the plan role)
 
 **Previously held 1**
 
-**Replanned 2026-10-26 by the plan role:** distinguish lit LCD letters from sunken
-chrome buttons, including the existing comments identified by review.
+Part 1 of 2; part 2/2 ("Sink toggles while on, part 2/2") reuses the
+helpers this part adds.
 
-**Routing 2026-10-26 by the director role: user requests breakdown and refinement by the plan role.**
-Keep this implementation hold until the plan role replaces the revised draft below with focused,
-independently mergeable sub-plans sized for one implementation run each. Evaluate a shared
-helper/transport part and an equalizer part; put any prerequisite in the dependent heading as
-"requires part 1/2 landed" if using two parts. Each part must name its files and symbols,
-behavior tests, usage/invariant documentation updates, and acceptance criteria. Carry forward
-the revised draft's distinction between lit LCD indicators and sunken chrome, its requirement
-to correct misleading comments, and preservation of the LCD `A` indicator's existing behavior.
-The revised draft below is input for replanning, not authorization to resume implementation as written.
-
-**Goal.** The title bar's `M` and the transport row's `EQ` and `PL` already use shared sunken
-chrome (`style::toggle_button_style`) while on. The LCD strip's `A` instead lights through
-`views::now_playing::indicator::indicator_label_color` and keeps that behavior.
-The four state toggles whose labels carry an `On`/`Off` value — the transport's
-Repeat and Shuffle buttons and the equalizer's EQ on/off and AUTO buttons — still draw ordinary
-raised chrome while on, so their state reads only from the label. Make those four buttons follow
-the same on/off rule: sunken chrome while on, ordinary chrome while off. Their labels, widths,
-messages, and click behavior stay exactly as they are, and no playback, equalizer, or settings
-state changes.
+**Goal.** The title bar's `M` and the transport row's `EQ` and `PL` already draw sunken chrome
+(`style::toggle_button_style`) while on. The LCD strip's `A` is not a button: it lights through
+`views::now_playing::indicator::indicator_label_color` and keeps that behavior. The transport's
+Repeat and Shuffle buttons still draw ordinary raised chrome while on, so their state reads only
+from the `On`/`Off` label. Make them sink while on and stay ordinary while off, through one
+shared toggle constructor. Labels, widths, messages, and click behavior stay as they are; no
+playback or settings state changes.
 
 **Approach.**
 
-- Correct the comment above `toggle_button_style_sinks_while_on` in `src/ui/style.rs`:
-  use `M`, `EQ`, and `PL` as the existing sunken-button examples, not `A`. Correct the
-  `panel_toggle_button` doc comment in `src/ui/views/transport.rs` as well: compare it
-  with the title bar's `M`, and explicitly distinguish the LCD's lit `A` letter.
-  These comment corrections are part of this change's acceptance, not optional cleanup.
-- `src/ui/views/mod.rs`: add `pub(super) fn toggle_button(label, message, on) -> Button` and
-  `pub(super) fn fixed_width_toggle_button(label, width, message, on) -> Button`. They build on the
-  existing `labeled_button` and `fixed_width_button` and apply
-  `style::toggle_button_style(on, status)`, so the sunken-on rule lives in one place. Document them
-  beside those helpers.
-- `src/ui/views/transport.rs`: extract the Repeat and Shuffle buttons into
-  `pub(super) fn repeat_toggle(repeat: bool) -> Button` and
-  `pub(super) fn shuffle_toggle(shuffle: bool) -> Button`, built with
-  `fixed_width_toggle_button` and the existing `REPEAT_WIDTH`, `SHUFFLE_WIDTH`,
-  `repeat_label`, and `shuffle_label`. Use them in `transport_buttons` in the same positions.
-  Move `REPEAT_WIDTH` and `SHUFFLE_WIDTH` from inside `transport_buttons` to module scope
-  so the extracted constructors can reuse their existing values.
-  Change `panel_toggle_button` to call `fixed_width_toggle_button` so the EQ and PL toggles, the
-  Repeat and Shuffle toggles, and the new helpers all share one construction.
-- `src/ui/views/equalizer.rs`: extract `pub(super) fn eq_toggle(enabled: bool) -> Button` (the
-  existing `eq_enabled_label` plus `Message::ToggleEqualizer`, keeping its unfixed width) and
-  `pub(super) fn auto_toggle(auto: bool) -> Button` (the existing `auto_label`,
-  `AUTO_BUTTON_WIDTH`, and `Message::ToggleEqAuto`). Build both with the new shared helpers and use
-  them in `view_equalizer`'s header row.
-- Tests: add a shared test helper in `src/ui/views/tests/mod.rs`,
-  `region_has_color(region: &[u8], color: Color) -> bool`, that scans a captured RGBA region for a
-  color. In `src/ui/views/tests/transport.rs` add
-  `repeat_and_shuffle_toggles_sink_while_on`: for each of `repeat_toggle` and `shuffle_toggle`,
-  render the on and off buttons through `layout_capture::capture_text_and_pixels`, take each
-  button's whole root region from `TextCapture::size`, and assert the on region contains
-  `theme::BUTTON_FACE_PRESSED` (and not `theme::BUTTON_FACE`) while the off region contains
-  `theme::BUTTON_FACE` (and not the pressed face). Repeat the same test for `eq_toggle` and
-  `auto_toggle` as `eq_and_auto_toggles_sink_while_on` in `src/ui/views/tests/equalizer.rs`.
-  Leave `repeat_label_mirrors_repeat_state`, `shuffle_label_mirrors_shuffle_state`,
-  `eq_enabled_label_mirrors_enabled_state`, `auto_button_draws_its_state_and_publishes_toggle_eq_auto`,
-  and `transport_buttons_keep_their_measured_face_widths` in place; they already pin the labels,
-  messages, and widths.
-- Docs: in `docs/usage.md`, say the Repeat and Shuffle toggles and the equalizer's EQ and AUTO
-  buttons sink while on, alongside the existing sentence naming their labels. In
-  `docs/invariants.md` `## UI layout`, extend the transport and equalizer guarantees with the
-  sunken-on rule, name the new helpers under **Enforced by**, add the two new test names under
-  **Pinned by**, and add a History line dated 2026-10-26. No settings section changes because no
-  persisted value changes.
+- `src/ui/style.rs`: correct the comment above the test `toggle_button_style_sinks_while_on`,
+  which names "The A, EQ, and PL toggles": use `M`, `EQ`, and `PL` (and, after this change,
+  Repeat and Shuffle) as the sunken-button examples, and do not mention `A`.
+- `src/ui/views/mod.rs`: beside `fixed_width_button`, add
+  `pub(super) fn fixed_width_toggle_button(label: &'static str, width: f32, message: Message, on: bool) -> Button<'static, Message>`,
+  building on `fixed_width_button` and applying
+  `.style(move |_theme, status| style::toggle_button_style(on, status))`. Document it as the place
+  the sunken-on rule is applied. (The unfixed-width `toggle_button` is added by part 2/2, its
+  first caller, so no helper lands without a caller.)
+- `src/ui/views/transport.rs`: move `REPEAT_WIDTH` and `SHUFFLE_WIDTH` from inside
+  `transport_buttons` to module scope (same values, 104.0 and 112.0). Add
+  `pub(super) fn repeat_toggle(repeat: bool) -> Button<'static, Message>` and
+  `pub(super) fn shuffle_toggle(shuffle: bool) -> Button<'static, Message>`, built with
+  `fixed_width_toggle_button` from `repeat_label`/`shuffle_label`, the widths, and
+  `Message::ToggleRepeat`/`Message::ToggleShuffle`; use them in `transport_buttons` at the same
+  positions. Change `panel_toggle_button` to call `fixed_width_toggle_button`, and rewrite its doc
+  comment: it shares the title bar's `M` rule, and the LCD strip's `A` is a lit letter, not
+  sunken chrome.
+- Tests: in `src/ui/views/tests/mod.rs` add
+  `fn region_has_color(region: &[u8], color: Color) -> bool`, scanning RGBA bytes from
+  `PixelCapture::region` for the color converted to 8-bit channels. In
+  `src/ui/views/tests/transport.rs` add `repeat_and_shuffle_toggles_sink_while_on`: for each of
+  `repeat_toggle` and `shuffle_toggle`, render on and off through
+  `layout_capture::capture_text_and_pixels` (with `layout_capture::headless_renderer()`), take the
+  region `Rectangle::with_size(text.size())`, and assert the on region has
+  `theme::BUTTON_FACE_PRESSED` and not `theme::BUTTON_FACE`, and the off region the reverse.
+- Docs: `docs/usage.md` — say Repeat and Shuffle sink while on, beside the sentence naming their
+  labels. `docs/invariants.md` `## UI layout` — add the sunken-on rule to the transport
+  guarantee, name `fixed_width_toggle_button` under **Enforced by**, add
+  `repeat_and_shuffle_toggles_sink_while_on` under **Pinned by**, and a dated History line.
 
 **Files touched.** `src/ui/style.rs`, `src/ui/views/mod.rs`, `src/ui/views/transport.rs`,
-`src/ui/views/equalizer.rs`, `src/ui/views/tests/mod.rs`,
-`src/ui/views/tests/transport.rs`, `src/ui/views/tests/equalizer.rs`, `docs/usage.md`,
+`src/ui/views/tests/mod.rs`, `src/ui/views/tests/transport.rs`, `docs/usage.md`,
 `docs/invariants.md`.
 
 **Acceptance criteria.**
 
-- The Repeat, Shuffle, EQ on/off, and AUTO buttons draw `theme::BUTTON_FACE_PRESSED` chrome in the
-  sunken bevel while on, and ordinary `theme::BUTTON_FACE` chrome while off, at rest.
-- Their labels (`Repeat: On/Off`, `Shuffle: On/Off`, `EQ: On/Off`, `AUTO: On/Off`), fixed widths,
-  and published messages are unchanged, and pressing each still dispatches exactly its existing
-  toggle message.
-- The title bar's `M` and the transport row's `EQ` and `PL` toggles keep their
-  existing sunken-on behavior and their geometry, and the transport row's fixed widths still match
-  `transport_buttons_keep_their_measured_face_widths`.
-- The LCD strip's `A` keeps its lit/dim text behavior from `indicator_label_color`;
-  no sunken chrome is added to the strip. The comments above `toggle_button_style_sinks_while_on`
-  and `panel_toggle_button` no longer describe `A` as sinking. Retain
-  `indicator_label_color_lights_only_the_active_mode` as coverage for the distinct LCD rule.
-- No playback, equalizer, browse, search, selection, window, or settings state changes, and no
-  setting is added.
-- The usage reference and `## UI layout` describe the four sunken toggles, and the project's check
-  passes.
+- Repeat and Shuffle draw `theme::BUTTON_FACE_PRESSED` sunken chrome while on and
+  `theme::BUTTON_FACE` while off, at rest, pinned by `repeat_and_shuffle_toggles_sink_while_on`.
+- Labels, fixed widths, and messages are unchanged: `repeat_label_mirrors_repeat_state`,
+  `shuffle_label_mirrors_shuffle_state`, and `transport_buttons_keep_their_measured_face_widths`
+  pass unmodified.
+- `EQ`, `PL`, and the title bar's `M` keep their sunken-on behavior and geometry;
+  `panel_toggle_button` builds through `fixed_width_toggle_button`.
+- The LCD `A` keeps its lit/dim behavior; `indicator_label_color_lights_only_the_active_mode`
+  passes unmodified, and neither corrected comment describes `A` as sinking.
+- The usage reference and `## UI layout` describe the change, and `make check` passes.
 
+### Sink toggles while on, part 2/2: the equalizer's EQ and AUTO toggles (planned 2026-10-26 by the plan role; split 2026-10-27 by the plan role; "requires part 1/2 landed")
+
+**Previously held 1**
+
+Part 2 of 2; builds on `fixed_width_toggle_button` and the test helper
+`region_has_color` from part 1/2 ("Sink toggles while on, part 1/2").
+
+**Goal.** The equalizer header's EQ on/off and AUTO buttons draw raised chrome while on, so their
+state reads only from the `EQ: On/Off` and `AUTO: On/Off` labels. Make them sink while on, like
+Repeat, Shuffle, `EQ`/`PL`, and `M`. Labels, widths, messages, and click behavior stay as they
+are; no equalizer or settings state changes.
+
+**Approach.**
+
+- `src/ui/views/equalizer.rs`: add `pub(super) fn eq_toggle(enabled: bool) -> Button<'static, Message>`
+  (`toggle_button` with `eq_enabled_label(enabled)` and `Message::ToggleEqualizer`, keeping its
+  current unfixed width) and `pub(super) fn auto_toggle(auto: bool) -> Button<'static, Message>`
+  (`fixed_width_toggle_button` with `auto_label(auto)`, `AUTO_BUTTON_WIDTH`, and
+  `Message::ToggleEqAuto`). Replace the two inline button constructions in `view_equalizer`'s
+  header row with them.
+- `src/ui/views/mod.rs`: beside `labeled_button` and part 1/2's `fixed_width_toggle_button`, add
+  `pub(super) fn toggle_button(label: &'static str, message: Message, on: bool) -> Button<'static, Message>`,
+  building on `labeled_button` and applying `style::toggle_button_style(on, status)` the same way.
+- Tests: in `src/ui/views/tests/equalizer.rs` add `eq_and_auto_toggles_sink_while_on`, the same
+  shape as part 1/2's `repeat_and_shuffle_toggles_sink_while_on`: on regions have
+  `theme::BUTTON_FACE_PRESSED` and not `theme::BUTTON_FACE`, off regions the reverse, using
+  `region_has_color`.
+- Docs: `docs/usage.md` — say the equalizer's EQ and AUTO buttons sink while on.
+  `docs/invariants.md` `## UI layout` — extend the equalizer guarantee with the sunken-on rule,
+  name `toggle_button`, `eq_toggle`, and `auto_toggle` under **Enforced by**, add
+  `eq_and_auto_toggles_sink_while_on` under **Pinned by**, and a dated History line.
+
+**Files touched.** `src/ui/views/equalizer.rs`, `src/ui/views/mod.rs`,
+`src/ui/views/tests/equalizer.rs`, `docs/usage.md`, `docs/invariants.md`.
+
+**Acceptance criteria.**
+
+- EQ on/off and AUTO draw `theme::BUTTON_FACE_PRESSED` sunken chrome while on and
+  `theme::BUTTON_FACE` while off, at rest, pinned by `eq_and_auto_toggles_sink_while_on`.
+- `eq_enabled_label_mirrors_enabled_state` and
+  `auto_button_draws_its_state_and_publishes_toggle_eq_auto` pass unmodified; AUTO keeps
+  `AUTO_BUTTON_WIDTH`, and each button still dispatches exactly its existing message.
+- No equalizer, playback, or settings state changes, and no setting is added.
+- The usage reference and `## UI layout` describe the change, and `make check` passes.
 
 ## Done
