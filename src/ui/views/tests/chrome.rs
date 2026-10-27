@@ -487,7 +487,7 @@ fn options_overlay_element(all_on: bool) -> Element<'static, Message> {
         .width(Length::Fill)
         .height(Length::Fill)
         .into();
-    super::super::view_options_overlay(base, all_on, all_on, all_on, all_on, all_on)
+    super::super::view_options_overlay(base, all_on, all_on, all_on, all_on, all_on, 0)
 }
 
 #[test]

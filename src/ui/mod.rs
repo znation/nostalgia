@@ -34,7 +34,7 @@ mod transport;
 mod view;
 mod views;
 
-pub(in crate::ui) use message::{Message, OptionsChoice};
+pub(in crate::ui) use message::{Message, OptionsChoice, OptionsRow};
 pub(in crate::ui) use player::{CurrentView, SongsOrigin, WinampPlayer};
 pub(in crate::ui) use view::view;
 
@@ -92,6 +92,7 @@ pub fn init_ui(
             player.needs_spectrum_poll(),
             player.mixer_drag.is_some(),
             player.jump_file_visible,
+            player.options_visible,
             player.transient_panel_open(),
         ))
     })
@@ -276,6 +277,9 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::WindowShadeMeasured(size) => handlers::window::window_shade_measured(player, size),
         Message::ToggleAbout => handlers::window::toggle_about(player),
         Message::ToggleOptions => handlers::window::toggle_options(player),
+        Message::OptionsSelectionUp => handlers::window::options_selection_up(player),
+        Message::OptionsSelectionDown => handlers::window::options_selection_down(player),
+        Message::OptionsActivate => handlers::window::options_activate(player),
         Message::OptionsChoice(choice) => handlers::window::options_choice(player, choice),
         Message::EscapePressed => handlers::window::escape_pressed(player),
         Message::ToggleFileInfo => handlers::window::toggle_file_info(player),

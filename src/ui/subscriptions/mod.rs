@@ -14,11 +14,9 @@ mod marquee;
 mod position;
 mod spectrum;
 
-use iced::keyboard;
-
 use super::{
     Message,
-    shortcuts::{message_for, message_for_jump_file},
+    shortcuts::{message_for, message_for_jump_file, message_for_options},
 };
 
 use marquee::marquee_ticks;
@@ -71,7 +69,8 @@ pub(super) use spectrum::{
 ///
 /// Up and Down choose a Jump to File match only while that panel is open;
 /// otherwise they keep their normal volume bindings, so the keyboard mapper
-/// switches with `jump_file_open`.
+/// switches with `jump_file_open`. Otherwise `options_open` selects the options
+/// Up/Down/Enter mapper, before falling back to normal player shortcuts.
 ///
 /// The Escape listener joins only while a transient panel is open, so Escape
 /// outside a panel rebuilds no screen. It uses the event-with-status form
@@ -83,12 +82,42 @@ pub(super) fn subscriptions(
     spectrum_needed: bool,
     mixer_readout_showing: bool,
     jump_file_open: bool,
+    options_open: bool,
     transient_panel_open: bool,
 ) -> Vec<iced::Subscription<Message>> {
+    fn route_key(
+        event: iced::Event,
+        status: iced::event::Status,
+        mapper: fn(iced::keyboard::Event) -> Option<Message>,
+        options_open: bool,
+    ) -> Option<Message> {
+        let iced::Event::Keyboard(event) = event else {
+            return None;
+        };
+        let message = mapper(event)?;
+        // Focus can remain in the covered search box or a slider. Menu
+        // navigation must still work, but captured editing keys stay local.
+        (status == iced::event::Status::Ignored
+            || matches!(message, Message::ToggleOptions)
+            || (options_open
+                && matches!(
+                    message,
+                    Message::OptionsSelectionUp
+                        | Message::OptionsSelectionDown
+                        | Message::OptionsActivate
+                )))
+        .then_some(message)
+    }
     let keyboard_listener = if jump_file_open {
-        keyboard::listen().filter_map(message_for_jump_file)
+        iced::event::listen_with(|event, status, _| {
+            route_key(event, status, message_for_jump_file, false)
+        })
+    } else if options_open {
+        iced::event::listen_with(|event, status, _| {
+            route_key(event, status, message_for_options, true)
+        })
     } else {
-        keyboard::listen().filter_map(message_for)
+        iced::event::listen_with(|event, status, _| route_key(event, status, message_for, false))
     };
     let mut subscriptions = vec![
         keyboard_listener,

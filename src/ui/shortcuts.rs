@@ -50,11 +50,44 @@ pub(super) fn message_for(event: Event) -> Option<Message> {
         } => playlist_sort_shortcut(&physical_key, location, modifiers)
             .or_else(|| file_info_shortcut(&physical_key, location, modifiers))
             .or_else(|| panel_shortcut(&physical_key, modifiers))
+            .or_else(|| options_shortcut(&physical_key, modifiers))
             .or_else(|| move_row_shortcut(&key, modifiers))
             .or_else(|| numpad_shortcut(&key, location, modifiers))
             .or_else(|| shortcut(&key, modifiers)),
         Event::KeyReleased { .. } | Event::ModifiersChanged(_) => None,
     }
+}
+
+/// Options captures Up, Down, and Enter without Control, Alt, or Logo;
+/// other events retain their normal bindings.
+pub(super) fn message_for_options(event: Event) -> Option<Message> {
+    if let Event::KeyPressed {
+        key: Key::Named(named),
+        modifiers,
+        ..
+    } = &event
+        && !modifiers.control()
+        && !modifiers.alt()
+        && !modifiers.logo()
+    {
+        match named {
+            key::Named::ArrowUp => return Some(Message::OptionsSelectionUp),
+            key::Named::ArrowDown => return Some(Message::OptionsSelectionDown),
+            key::Named::Enter => return Some(Message::OptionsActivate),
+            _ => {}
+        }
+    }
+    message_for(event)
+}
+
+/// Alt+O uses the physical letter position, without additional modifiers.
+fn options_shortcut(physical_key: &key::Physical, modifiers: Modifiers) -> Option<Message> {
+    (matches!(physical_key, key::Physical::Code(key::Code::KeyO))
+        && modifiers.alt()
+        && !modifiers.control()
+        && !modifiers.shift()
+        && !modifiers.logo())
+    .then_some(Message::ToggleOptions)
 }
 
 /// The keyboard mapper used while the Jump to File panel is open: Up and Down
@@ -378,6 +411,86 @@ mod tests {
             text: None,
             repeat: false,
         }
+    }
+
+    #[test]
+    fn options_shortcut_maps_alt_o_and_rejects_other_chords() {
+        let physical = key::Physical::Code(key::Code::KeyO);
+        assert!(matches!(
+            options_shortcut(&physical, Modifiers::ALT),
+            Some(Message::ToggleOptions)
+        ));
+        assert!(matches!(
+            message_for(digit_pressed(
+                Key::Character("o".into()),
+                key::Code::KeyO,
+                Location::Standard,
+                Modifiers::ALT
+            )),
+            Some(Message::ToggleOptions)
+        ));
+        for modifiers in [
+            Modifiers::NONE,
+            Modifiers::SHIFT,
+            Modifiers::CTRL,
+            Modifiers::ALT | Modifiers::CTRL,
+            Modifiers::ALT | Modifiers::SHIFT,
+            Modifiers::ALT | Modifiers::LOGO,
+        ] {
+            assert!(options_shortcut(&physical, modifiers).is_none());
+        }
+        assert!(options_shortcut(&key::Physical::Code(key::Code::KeyP), Modifiers::ALT).is_none());
+    }
+
+    #[test]
+    fn message_for_options_maps_up_down_enter_and_falls_back() {
+        for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
+            assert!(matches!(
+                message_for_options(key_pressed(Key::Named(key::Named::ArrowUp), modifiers)),
+                Some(Message::OptionsSelectionUp)
+            ));
+            assert!(matches!(
+                message_for_options(key_pressed(Key::Named(key::Named::ArrowDown), modifiers)),
+                Some(Message::OptionsSelectionDown)
+            ));
+            assert!(matches!(
+                message_for_options(key_pressed(Key::Named(key::Named::Enter), modifiers)),
+                Some(Message::OptionsActivate)
+            ));
+        }
+        for modifiers in [Modifiers::CTRL, Modifiers::LOGO] {
+            for named in [
+                key::Named::ArrowUp,
+                key::Named::ArrowDown,
+                key::Named::Enter,
+            ] {
+                assert!(message_for_options(key_pressed(Key::Named(named), modifiers)).is_none());
+            }
+        }
+        assert!(matches!(
+            message_for_options(key_pressed(Key::Character("x".into()), Modifiers::NONE)),
+            Some(Message::Play)
+        ));
+        assert!(matches!(
+            message_for_options(digit_pressed(
+                Key::Character("o".into()),
+                key::Code::KeyO,
+                Location::Standard,
+                Modifiers::ALT
+            )),
+            Some(Message::ToggleOptions)
+        ));
+        assert!(matches!(
+            message_for(key_pressed(
+                Key::Named(key::Named::ArrowUp),
+                Modifiers::NONE
+            )),
+            Some(Message::VolumeUp)
+        ));
+        assert!(matches!(
+            message_for(key_pressed(Key::Named(key::Named::Enter), Modifiers::NONE)),
+            Some(Message::OpenSelected)
+        ));
     }
 
     /// Asserts that pressing `key` with `modifiers` maps to the message `pattern`.

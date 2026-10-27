@@ -178,6 +178,8 @@ pub(in crate::ui) struct WinampPlayer {
     /// [`Self::about_visible`], [`Self::file_info_visible`],
     /// [`Self::jump_time_visible`], and [`Self::jump_file_visible`] holds.
     pub(in crate::ui) options_visible: bool,
+    /// Layout-only index into `OptionsRow::ALL`, reset when the menu opens.
+    pub(in crate::ui) options_selected: usize,
     /// Whether the transient File info panel is drawn over the normal-mode
     /// tree. `Message::ToggleFileInfo` flips it; it is closed at launch and
     /// deliberately not persisted. At most one of this,
@@ -322,6 +324,7 @@ impl WinampPlayer {
             library_panel_visible: true,
             about_visible: false,
             options_visible: false,
+            options_selected: 0,
             file_info_visible: false,
             jump_time_visible: false,
             jump_time_query: String::new(),

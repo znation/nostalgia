@@ -5,6 +5,95 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
+### Open and navigate the options menu from the keyboard (planned 2026-10-26 by the plan role) — done 2026-10-26 by the feature role
+
+**Goal.** The transient options menu is the only panel with no keyboard route: it opens only from
+the LCD's `O` cell or the transport row's lightning button, and its rows only accept mouse clicks.
+Give it the treatment the other panels already have: `Alt+O` opens and closes the menu like `Alt+3`
+opens File info and `Ctrl+F1` opens About, and while the menu is open Up and Down move a highlighted
+row and Enter invokes it, mirroring the Jump to File panel's arrow-and-Enter navigation. Mouse
+clicks, labels, widths, and every existing toggle's behavior stay as they are; the menu and its
+highlight remain layout-only and unpersisted.
+
+**Approach.**
+
+- `src/ui/message.rs`: add `Message::OptionsSelectionUp`, `Message::OptionsSelectionDown`, and
+  `Message::OptionsActivate`, documented beside `ToggleOptions`/`OptionsChoice`. Add
+  `pub(in crate::ui) enum OptionsRow { AlwaysOnTop, TimeDisplay, Visualizer, EqualizerPanel,
+  LibraryPanel, About, Close }` with `ALL: [Self; 7]` in draw order and `message(self) -> Message`
+  returning exactly the message each row's button publishes (`OptionsChoice(..)` for the five
+  toggles, `ToggleAbout`, `ToggleOptions`). This keeps the row order in one place shared by the
+  view and the keyboard handler. Unit-test that `ALL` maps to those messages in order.
+- `src/ui/player.rs`: add `pub(in crate::ui) options_selected: usize` (default `0`), documented as
+  an index into `OptionsRow::ALL`, reset whenever the menu opens, layout-only and not persisted.
+- `src/ui/handlers/window.rs`: in `toggle_options`, reset `options_selected = 0` on the opening
+  branch. Add `options_selection_up`/`options_selection_down`, which are no-ops unless
+  `options_visible` holds and otherwise clamp at the first and last rows. Add `options_activate`,
+  which is a no-op unless `options_visible` holds, takes `OptionsRow::ALL.get(options_selected)`,
+  and dispatches the message from `OptionsRow::message` by calling the existing `options_choice`,
+  `toggle_about`, or `toggle_options` for that message, so a keyboard activation follows exactly
+  the mouse row's path.
+- `src/ui/shortcuts.rs`: add `options_shortcut(physical_key, modifiers)` matching the physical
+  `KeyO` with Alt held and Control, Shift, and Logo released to `Message::ToggleOptions`, and wire
+  it into `message_for` before the plain-letter bindings. Add `message_for_options`, used while the
+  menu is open: it maps Up and Down (Control, Alt, and Logo released; Shift allowed) to the
+  selection messages and Enter to `Message::OptionsActivate`, and falls through to `message_for`
+  for every other event so `Alt+O` still closes the menu and the rest of the key table keeps its
+  existing behavior, exactly like `message_for_jump_file`.
+- `src/ui/subscriptions/mod.rs`: add an `options_open: bool` parameter to `subscriptions` and choose
+  the keyboard mapper as Jump to File, then Options, then the normal `message_for`. Update the
+  function doc and `src/ui/mod.rs`'s subscription call to pass `player.options_visible`.
+- `src/ui/mod.rs`: dispatch the three new messages to the new handlers and re-export `OptionsRow`
+  beside `Message` and `OptionsChoice`.
+- `src/ui/views/options.rs`: change `view_options_overlay` to take a final `selected: usize`, draw
+  its rows by iterating `OptionsRow::ALL` through a new `options_row_label(row, always_on_top,
+  time_remaining, visualizer_visible, eq_panel_visible, library_panel_visible)` that delegates to
+  the existing five label helpers and returns `"About Nostalgia"`/`"Close"`, and build each row
+  with `labeled_button` overridden by `options_row_style(index == selected, status)`. That new pure
+  helper keeps `style::chrome_button_style(status)` for an unselected row and, for the selected
+  row, paints the blue `theme::ROW_HIGHLIGHT` bar with white `theme::PLAYING_ROW_TEXT` in every
+  button status; unit-test both branches. `src/ui/view.rs` passes `player.options_selected`.
+- Tests: in `src/ui/shortcuts.rs`, add `options_shortcut_maps_alt_o_and_rejects_other_chords` and
+  `message_for_options_maps_up_down_enter_and_falls_back`. In `src/ui/tests/panels_tests.rs`, add
+  `options_keyboard_selection_clamps_and_activates_each_row`: opening highlights row 0, Up at the
+  first row and Down at the last row stay put, Down walks the rows, and `OptionsActivate` on each
+  of the seven rows applies exactly that row's effect and closes the menu (About opens About; Close
+  only closes; each toggle flips only its flag, reusing the expectations in
+  `options_choice_applies_each_toggle_and_closes_the_panel`). Add a no-op case with the menu
+  closed. Update every `subscriptions(...)` call in `src/ui/tests/subscriptions_tests.rs` for the
+  new parameter, and update `options_overlay_element` and its tests in
+  `src/ui/views/tests/chrome.rs` for the new `selected` argument (row 0 selected).
+- Docs: in `docs/usage.md`, add `Alt+O` to the keyboard list as the options menu's open/close
+  chord and extend the options-menu paragraph with the highlighted row, Up/Down, and Enter (mouse
+  behavior unchanged). In `docs/invariants.md` `## Options panel`, record the `Alt+O` chord, the
+  highlighted-row state and its reset, the Up/Down/Enter mapper, the new handlers, the
+  `OptionsRow` vocabulary, and the `options_open` subscription choice under **Enforced by** and
+  **Pinned by**, with a History line dated 2026-10-26. No settings section changes.
+
+**Files touched.** `src/ui/message.rs`, `src/ui/player.rs`, `src/ui/handlers/window.rs`,
+`src/ui/shortcuts.rs`, `src/ui/subscriptions/mod.rs`, `src/ui/mod.rs`, `src/ui/views/options.rs`,
+`src/ui/view.rs`, `src/ui/tests/panels_tests.rs`, `src/ui/tests/subscriptions_tests.rs`,
+`src/ui/views/tests/chrome.rs`, `docs/usage.md`, `docs/invariants.md`.
+
+**Acceptance criteria.**
+
+- `Alt+O` toggles the options menu open and closed, opening it with the same unshade-first and
+  close-other-panels behavior as the `O` cell and lightning button; it does not fire with Control,
+  Shift, or Logo held. Opening highlights the first row, Up and Down move the highlight and clamp at
+  the first and last rows, and Enter applies the highlighted row and closes the menu exactly like a
+  click on it.
+- The seven rows keep their current labels, order, and published messages; the selected row
+  draws the blue highlight bar with white text in every button status, and unselected rows keep
+  ordinary chrome. Mouse row presses, `Close`, the backdrop, and Escape behave as before.
+- With the menu closed, Up and Down still nudge the volume, Enter still opens the selected browse
+  row, and every other existing binding is unchanged; the options mapper is used only while
+  `options_visible` holds.
+- No playback, equalizer, browse, search, selection, window, or settings state changes beyond the
+  row's existing toggle, the highlight index is layout-only and resets whenever the menu opens, and
+  no setting is added or persisted.
+- The usage reference and `## Options panel` describe the keyboard access, and the project's check
+  passes.
+
 ### Add Winamp's options menu from the LCD's `O` cell and the transport row (planned 2026-10-26 by the plan role) — done 2026-10-26 by the feature role
 
 **Goal.** The mockups draw the LCD's classic `O` indicator cell and a lightning menu button at the

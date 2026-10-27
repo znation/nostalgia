@@ -380,74 +380,124 @@ fn escape_closes_each_transient_panel_without_touching_anything_else() {
 // closes the menu. Everything else, including playback, stays put.
 #[test]
 fn options_choice_applies_each_toggle_and_closes_the_panel() {
-    for choice in [
+    for (index, choice) in [
         OptionsChoice::AlwaysOnTop,
         OptionsChoice::TimeDisplay,
         OptionsChoice::Visualizer,
         OptionsChoice::EqualizerPanel,
         OptionsChoice::LibraryPanel,
-    ] {
-        let (mut player, state) = test_player();
-        player.options_visible = true;
-        let before = {
-            let state = state.blocking_lock();
-            (
-                player.always_on_top,
-                player.time_display,
-                player.visualizer_visible,
-                player.eq_panel_visible,
-                player.library_panel_visible,
-                state.transport_mode(),
-                state.current_track.clone(),
-            )
-        };
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        for keyboard in [false, true] {
+            let (mut player, state) = test_player();
+            player.options_visible = true;
+            let before = {
+                let state = state.blocking_lock();
+                (
+                    player.always_on_top,
+                    player.time_display,
+                    player.visualizer_visible,
+                    player.eq_panel_visible,
+                    player.library_panel_visible,
+                    state.transport_mode(),
+                    state.current_track.clone(),
+                )
+            };
 
-        let _ = update(&mut player, Message::OptionsChoice(choice));
+            player.options_selected = index;
+            let _ = update(
+                &mut player,
+                if keyboard {
+                    Message::OptionsActivate
+                } else {
+                    Message::OptionsChoice(choice)
+                },
+            );
 
-        let (
-            always_on_top,
-            time_display,
-            visualizer_visible,
-            eq_panel_visible,
-            library_panel_visible,
-        ) = (
-            player.always_on_top,
-            player.time_display,
-            player.visualizer_visible,
-            player.eq_panel_visible,
-            player.library_panel_visible,
-        );
-        assert!(!player.options_visible, "{choice:?} must close the menu");
-        let expected = match choice {
-            OptionsChoice::AlwaysOnTop => (!before.0, before.1, before.2, before.3, before.4),
-            OptionsChoice::TimeDisplay => {
-                (before.0, before.1.toggled(), before.2, before.3, before.4)
-            }
-            OptionsChoice::Visualizer => (before.0, before.1, !before.2, before.3, before.4),
-            OptionsChoice::EqualizerPanel => (before.0, before.1, before.2, !before.3, before.4),
-            OptionsChoice::LibraryPanel => (before.0, before.1, before.2, before.3, !before.4),
-        };
-        assert_eq!(
-            (
+            let (
                 always_on_top,
                 time_display,
                 visualizer_visible,
                 eq_panel_visible,
                 library_panel_visible,
-            ),
-            expected,
-            "{choice:?} must flip only its own flag and leave the others alone"
-        );
-        let after = {
-            let state = state.blocking_lock();
-            (state.transport_mode(), state.current_track.clone())
-        };
-        assert_eq!(
-            after,
-            (before.5, before.6),
-            "{choice:?} must leave playback alone"
-        );
+            ) = (
+                player.always_on_top,
+                player.time_display,
+                player.visualizer_visible,
+                player.eq_panel_visible,
+                player.library_panel_visible,
+            );
+            assert!(!player.options_visible, "{choice:?} must close the menu");
+            let expected = match choice {
+                OptionsChoice::AlwaysOnTop => (!before.0, before.1, before.2, before.3, before.4),
+                OptionsChoice::TimeDisplay => {
+                    (before.0, before.1.toggled(), before.2, before.3, before.4)
+                }
+                OptionsChoice::Visualizer => (before.0, before.1, !before.2, before.3, before.4),
+                OptionsChoice::EqualizerPanel => {
+                    (before.0, before.1, before.2, !before.3, before.4)
+                }
+                OptionsChoice::LibraryPanel => (before.0, before.1, before.2, before.3, !before.4),
+            };
+            assert_eq!(
+                (
+                    always_on_top,
+                    time_display,
+                    visualizer_visible,
+                    eq_panel_visible,
+                    library_panel_visible,
+                ),
+                expected,
+                "{choice:?} must flip only its own flag and leave the others alone"
+            );
+            let after = {
+                let state = state.blocking_lock();
+                (state.transport_mode(), state.current_track.clone())
+            };
+            assert_eq!(
+                after,
+                (before.5, before.6),
+                "{choice:?} must leave playback alone"
+            );
+        }
     }
+}
+
+#[test]
+fn options_keyboard_selection_clamps_and_activates_each_row() {
+    let (mut player, _state) = test_player();
+    player.options_selected = 3;
+    for message in [
+        Message::OptionsSelectionUp,
+        Message::OptionsSelectionDown,
+        Message::OptionsActivate,
+    ] {
+        let _ = update(&mut player, message);
+        assert_eq!(player.options_selected, 3);
+        assert!(!player.options_visible);
+        assert!(!player.about_visible);
+    }
+    let _ = update(&mut player, Message::ToggleOptions);
+    assert_eq!(player.options_selected, 0);
+    let _ = update(&mut player, Message::OptionsSelectionUp);
+    assert_eq!(player.options_selected, 0);
+    for index in 1..7 {
+        let _ = update(&mut player, Message::OptionsSelectionDown);
+        assert_eq!(player.options_selected, index);
+    }
+    let _ = update(&mut player, Message::OptionsSelectionDown);
+    assert_eq!(player.options_selected, 6);
+    let _ = update(&mut player, Message::OptionsActivate);
+    assert!(!player.options_visible);
+    assert!(!player.about_visible);
+    let _ = update(&mut player, Message::ToggleOptions);
+    assert_eq!(player.options_selected, 0);
+    player.options_selected = 5;
+    let _ = update(&mut player, Message::OptionsActivate);
+    assert!(player.about_visible);
+    assert!(!player.options_visible);
 }
 
 // The options menu is transient like the other panels: opening it closes each

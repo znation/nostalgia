@@ -1691,6 +1691,16 @@ on each rebuild rather than caching the source in UI state.
 **Guarantee.** The LCD strip's `O` and the transport row's lightning button open a transient,
 unpersisted options menu listing the app's existing on/off choices plus About and Close:
 
+- Alt+O (without Control, Shift, or Logo) toggles the menu. Opening resets the layout-only
+  `options_selected` index to zero. Up/Down clamp the highlight to the first/last row; Enter
+  invokes the highlighted row through its existing mouse handler. Closed-menu navigation
+  messages do nothing. The selected row uses blue `ROW_HIGHLIGHT` and white `PLAYING_ROW_TEXT`
+  in each button status; unselected rows retain chrome styling.
+  The root `OptionsShortcut` wrapper keeps Alt+O from reaching focused inputs,
+  preserving the search query before the subscription toggles the menu.
+  Alt+O receives captured key events with the menu open or closed, as does menu
+  navigation while open; messages from the covered base
+  are discarded, so a focused search box cannot submit behind the menu.
 - `handlers::window::toggle_options` flips `WinampPlayer::options_visible`. Opening it first calls
   `close_transient_panels`, and while `WinampPlayer::shaded` holds it first calls
   `toggle_window_shade`, so the window restores before the menu draws. The flag is layout-only and
@@ -1715,9 +1725,22 @@ unpersisted options menu listing the app's existing on/off choices plus About an
 and `Message::OptionsChoice`; `handlers::window::toggle_options` and
 `handlers::window::options_choice`; `WinampPlayer::options_visible`; the LCD strip's `O`
 mapping and the transport row's `options_button`; and the normal-mode branch of
-`src/ui/view.rs`.
+`src/ui/view.rs`. `OptionsRow::ALL` and `OptionsRow::message` share row order and messages;
+`options_row_label` and `options_row_style` draw them. `options_shortcut` and
+`message_for_options` map the keys; `options_selection_up`, `options_selection_down`, and
+`options_activate` handle navigation. The subscription chooses Jump to File first, then the
+`options_open` mapper, then normal shortcuts.
 
-**Pinned by.** `options_overlay_draws_each_row_with_its_state`,
+**Pinned by.** `options_shortcut_maps_alt_o_and_rejects_other_chords` and
+`alt_o_routes_captured_text_with_options_open_or_closed` and
+`options_navigation_routes_captured_search_keys_without_submitting`
+(`src/ui/tests/subscriptions_tests.rs`);
+`message_for_options_maps_up_down_enter_and_falls_back` (`src/ui/shortcuts.rs`);
+`options_rows_map_to_mouse_messages_in_draw_order` (`src/ui/message.rs`);
+`options_row_style_highlights_selection_in_each_status` (`src/ui/views/options.rs`);
+`options_keyboard_selection_clamps_and_activates_each_row` and the mouse/keyboard toggle
+expectations in `options_choice_applies_each_toggle_and_closes_the_panel`
+(`src/ui/tests/panels_tests.rs`); `options_overlay_draws_each_row_with_its_state`,
 `options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop`, and
 `transport_options_button_publishes_toggle_options` (`src/ui/views/tests/chrome.rs`); the five
 label tests in `src/ui/views/options.rs`; `lcd_indicator_message_arms_o_a_i_and_v_and_leaves_d_inert`,
@@ -1734,6 +1757,7 @@ label tests in `src/ui/views/options.rs`; `lcd_indicator_message_arms_o_a_i_and_
 
 **History.** Added 2026-10-26 with the Winamp-style options menu; the menu is transient and
 unpersisted because every row reuses an existing toggle.
+Keyboard access and the transient row highlight added 2026-10-26 by the feature role.
 
 ## File info panel
 

@@ -12,6 +12,9 @@ use super::message::Message;
 use super::player::{CurrentView, WinampPlayer};
 use super::views;
 
+mod options_shortcut;
+use options_shortcut::OptionsShortcut;
+
 /// Assembles the app screen: the title bar, Now Playing bar, seek strip,
 /// transport row, and — while [`WinampPlayer::eq_panel_visible`] holds — the
 /// equalizer band and panel, all built in `views` from the resolved title and
@@ -31,6 +34,10 @@ use super::views;
 /// library source from the Apple Music service's current session and whose
 /// options menu lists the existing on/off choices plus About.
 pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
+    Element::new(OptionsShortcut(screen(player)))
+}
+
+fn screen(player: &WinampPlayer) -> Element<'_, Message> {
     // Shade mode builds only the title bar and its compact transport strip —
     // the Now Playing bar, seek strip, transport row, equalizer, and browse
     // list are all dropped, and the window itself is resized down to that
@@ -323,6 +330,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
             player.visualizer_visible,
             player.eq_panel_visible,
             player.library_panel_visible,
+            player.options_selected,
         )
     } else if player.file_info_visible && !player.shaded {
         match player.current_known_track() {

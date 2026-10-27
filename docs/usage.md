@@ -133,13 +133,18 @@ library source (`Library: Apple Music` once a MusicKit session is stored, `Libra
 library` otherwise); `M` (through the
 backdrop over its slot), `Ctrl+F1`, the panel's `Close` button, or a click on the backdrop outside
 the panel closes it, and opening it while the window is rolled up restores the window first. The
-LCD's `O` letter or the lightning button at the end of the transport row opens an `OPTIONS` menu
+LCD's `O` letter, Alt+O, or the lightning button at the end of the transport row opens an `OPTIONS` menu
 over the player listing `Always on Top: On/Off`, `Time: Remaining/Elapsed`, `Visualizer:
 Shown/Hidden`, `Equalizer: Shown/Hidden`, `Library: Shown/Hidden`, `About Nostalgia`, and `Close`,
 with each label reflecting the current state. Choosing a row applies that one toggle and closes
 the menu; `About Nostalgia` opens the About panel, and `Close`, a click on the backdrop, or Escape
 closes the menu. Opening it while the window is rolled up restores the window first, and the menu
-is not saved. A
+is not saved. Alt+O also closes it and works while the search box has focus,
+without changing the query.
+Opening highlights the first row; Up and Down move the
+highlight, stopping at either end, and Enter invokes the highlighted row even if the covered
+search box has focus, without submitting a search. Mouse clicks keep
+the same behavior. A
 plain or Shift-held Escape press closes whichever transient panel is open, like its `Close`
 button or the backdrop; with no panel open Escape keeps its existing behavior. Its
 shade button, a double-click on the bar, or a double-click on the rolled-up strip rolls the window

@@ -9,7 +9,7 @@
 use iced::Task;
 
 use crate::ui::views;
-use crate::ui::{Message, OptionsChoice, WinampPlayer};
+use crate::ui::{Message, OptionsChoice, OptionsRow, WinampPlayer};
 
 /// The app window's id, resolved once at boot by `iced::window::latest()`:
 /// store it, so the title bar's window actions can act on the window. Until
@@ -130,6 +130,7 @@ pub(in crate::ui) fn toggle_options(player: &mut WinampPlayer) -> Task<Message> 
     }
     player.close_transient_panels();
     player.options_visible = true;
+    player.options_selected = 0;
     if player.shaded {
         toggle_window_shade(player)
     } else {
@@ -163,9 +164,42 @@ pub(in crate::ui) fn toggle_library_panel(player: &mut WinampPlayer) -> Task<Mes
     Task::none()
 }
 
-/// An options-menu row: close the menu first, then apply the one existing
-/// toggle the row names and return that handler's task. The menu itself
-/// changes no state, so a row's non-menu behavior is exactly its toggle's.
+/// Move the menu highlight up, clamping at the first row; closed menus ignore it.
+pub(in crate::ui) fn options_selection_up(player: &mut WinampPlayer) -> Task<Message> {
+    if player.options_visible {
+        player.options_selected = player.options_selected.saturating_sub(1);
+    }
+    Task::none()
+}
+
+/// Move the menu highlight down, clamping at the last row; closed menus ignore it.
+pub(in crate::ui) fn options_selection_down(player: &mut WinampPlayer) -> Task<Message> {
+    if player.options_visible {
+        player.options_selected = player
+            .options_selected
+            .saturating_add(1)
+            .min(OptionsRow::ALL.len() - 1);
+    }
+    Task::none()
+}
+
+/// Invoke the highlighted row through its mouse handler while the menu is open.
+pub(in crate::ui) fn options_activate(player: &mut WinampPlayer) -> Task<Message> {
+    if !player.options_visible {
+        return Task::none();
+    }
+    match OptionsRow::ALL
+        .get(player.options_selected)
+        .map(|row| row.message())
+    {
+        Some(Message::OptionsChoice(choice)) => options_choice(player, choice),
+        Some(Message::ToggleAbout) => toggle_about(player),
+        Some(Message::ToggleOptions) => toggle_options(player),
+        _ => Task::none(),
+    }
+}
+
+/// Close the menu and apply the row's existing toggle.
 pub(in crate::ui) fn options_choice(
     player: &mut WinampPlayer,
     choice: OptionsChoice,

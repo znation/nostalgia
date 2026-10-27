@@ -325,6 +325,12 @@ pub(in crate::ui) enum Message {
     // and opening while shaded first restores the window. The flag is not
     // persisted.
     ToggleOptions,
+    /// Move the options highlight toward the first row.
+    OptionsSelectionUp,
+    /// Move the options highlight toward the last row.
+    OptionsSelectionDown,
+    /// Invoke the highlighted options row.
+    OptionsActivate,
     // A row of the options menu: close the menu first, then apply the one
     // choice it names through that choice's existing toggle handler. The
     // choice itself is not a persisted setting.
@@ -389,8 +395,8 @@ pub(in crate::ui) enum Message {
 }
 
 /// A row of the transient options menu, each naming the existing on/off
-/// toggle its press reuses after closing the menu. The menu adds no state of
-/// its own and persists nothing.
+/// toggle its press reuses after closing the menu. These choices introduce
+/// no additional settings.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::ui) enum OptionsChoice {
     /// Reuses [`Message::ToggleAlwaysOnTop`].
@@ -403,4 +409,62 @@ pub(in crate::ui) enum OptionsChoice {
     EqualizerPanel,
     /// Reuses [`Message::ToggleLibraryPanel`].
     LibraryPanel,
+}
+
+/// Options rows in their shared drawing and keyboard order.
+#[derive(Debug, Clone, Copy)]
+pub(in crate::ui) enum OptionsRow {
+    AlwaysOnTop,
+    TimeDisplay,
+    Visualizer,
+    EqualizerPanel,
+    LibraryPanel,
+    About,
+    Close,
+}
+
+impl OptionsRow {
+    pub(in crate::ui) const ALL: [Self; 7] = [
+        Self::AlwaysOnTop,
+        Self::TimeDisplay,
+        Self::Visualizer,
+        Self::EqualizerPanel,
+        Self::LibraryPanel,
+        Self::About,
+        Self::Close,
+    ];
+
+    pub(in crate::ui) fn message(self) -> Message {
+        match self {
+            Self::AlwaysOnTop => Message::OptionsChoice(OptionsChoice::AlwaysOnTop),
+            Self::TimeDisplay => Message::OptionsChoice(OptionsChoice::TimeDisplay),
+            Self::Visualizer => Message::OptionsChoice(OptionsChoice::Visualizer),
+            Self::EqualizerPanel => Message::OptionsChoice(OptionsChoice::EqualizerPanel),
+            Self::LibraryPanel => Message::OptionsChoice(OptionsChoice::LibraryPanel),
+            Self::About => Message::ToggleAbout,
+            Self::Close => Message::ToggleOptions,
+        }
+    }
+}
+
+#[cfg(test)]
+mod options_tests {
+    use super::*;
+
+    #[test]
+    fn options_rows_map_to_mouse_messages_in_draw_order() {
+        let messages = OptionsRow::ALL.map(OptionsRow::message);
+        assert!(matches!(
+            messages,
+            [
+                Message::OptionsChoice(OptionsChoice::AlwaysOnTop),
+                Message::OptionsChoice(OptionsChoice::TimeDisplay),
+                Message::OptionsChoice(OptionsChoice::Visualizer),
+                Message::OptionsChoice(OptionsChoice::EqualizerPanel),
+                Message::OptionsChoice(OptionsChoice::LibraryPanel),
+                Message::ToggleAbout,
+                Message::ToggleOptions,
+            ]
+        ));
+    }
 }

@@ -1,5 +1,186 @@
 use super::*;
 
+#[test]
+fn alt_o_routes_captured_text_with_options_open_or_closed() {
+    use iced::advanced::subscription;
+    use iced::futures::{StreamExt, executor::block_on, stream};
+    use iced::{Event, event::Status, keyboard};
+
+    for (jump_file_open, options_open) in [(false, false), (false, true), (true, false)] {
+        let listener = subscriptions(
+            false,
+            false,
+            false,
+            false,
+            jump_file_open,
+            options_open,
+            true,
+        )
+        .remove(0);
+        let recipe = subscription::into_recipes(listener).remove(0);
+        let (mut player, _) = test_player();
+        player.search_query = "test".into();
+        player.options_visible = options_open;
+        player.jump_file_visible = jump_file_open;
+        let mut renderer = layout_capture::headless_renderer();
+        let mut interface = iced_runtime::user_interface::UserInterface::build(
+            view::view(&player),
+            layout_capture::limits().max(),
+            iced_runtime::user_interface::Cache::new(),
+            &mut renderer,
+        );
+        interface.operate(
+            &renderer,
+            &mut iced::advanced::widget::operation::focusable::focus::<()>(BROWSE_SEARCH_ID.into()),
+        );
+        // Exercise printable Alt+O through the real focused widget tree.
+        let events = [Event::Keyboard(keyboard::Event::KeyPressed {
+            key: keyboard::Key::Character("o".into()),
+            modified_key: keyboard::Key::Character("o".into()),
+            physical_key: keyboard::key::Physical::Code(keyboard::key::Code::KeyO),
+            location: keyboard::Location::Standard,
+            modifiers: keyboard::Modifiers::ALT,
+            text: Some("o".into()),
+            repeat: false,
+        })];
+        let mut messages = Vec::new();
+        let (_, statuses) = interface.update(
+            &events,
+            iced::mouse::Cursor::Unavailable,
+            &mut renderer,
+            &mut iced::advanced::clipboard::Null,
+            &mut messages,
+        );
+        assert!(
+            !messages
+                .iter()
+                .any(|message| matches!(message, Message::SearchChanged(_)))
+        );
+        drop(interface);
+        let mut interactions: Vec<_> = events
+            .into_iter()
+            .zip(statuses)
+            .map(|(event, status)| subscription::Event::Interaction {
+                window: iced::window::Id::unique(),
+                event,
+                status,
+            })
+            .collect();
+        interactions.extend(["p"].map(|text| subscription::Event::Interaction {
+            window: iced::window::Id::unique(),
+            event: Event::Keyboard(keyboard::Event::KeyPressed {
+                key: keyboard::Key::Character(text.into()),
+                modified_key: keyboard::Key::Character(text.into()),
+                physical_key: keyboard::key::Physical::Code(if text == "o" {
+                    keyboard::key::Code::KeyO
+                } else {
+                    keyboard::key::Code::KeyP
+                }),
+                location: keyboard::Location::Standard,
+                modifiers: keyboard::Modifiers::ALT,
+                text: Some(text.into()),
+                repeat: false,
+            }),
+            status: Status::Captured,
+        }));
+        let routed = block_on(
+            recipe
+                .stream(Box::pin(stream::iter(interactions)))
+                .collect::<Vec<_>>(),
+        );
+        assert!(matches!(routed.as_slice(), [Message::ToggleOptions]));
+        for message in messages.into_iter().chain(routed) {
+            let _ = update(&mut player, message);
+        }
+        assert_eq!(player.search_query, "test");
+        assert_eq!(player.options_visible, !options_open);
+    }
+}
+
+#[test]
+fn options_navigation_routes_captured_search_keys_without_submitting() {
+    use iced::advanced::{subscription, widget::operation::focusable};
+    use iced::futures::{StreamExt, executor::block_on, stream};
+    use iced::{Event, event::Status, keyboard, mouse};
+
+    let (mut player, _) = test_player();
+    player.search_query = "test".into();
+    let _ = update(&mut player, Message::ToggleOptions);
+    let mut renderer = layout_capture::headless_renderer();
+    let mut interface = iced_runtime::user_interface::UserInterface::build(
+        view::view(&player),
+        layout_capture::limits().max(),
+        iced_runtime::user_interface::Cache::new(),
+        &mut renderer,
+    );
+    // Ctrl+F can focus the search box even while the menu is open.
+    interface.operate(
+        &renderer,
+        &mut focusable::focus::<()>(BROWSE_SEARCH_ID.into()),
+    );
+    let events: Vec<_> = [
+        keyboard::key::Named::ArrowDown,
+        keyboard::key::Named::ArrowUp,
+        keyboard::key::Named::Enter,
+    ]
+    .into_iter()
+    .map(|named| {
+        Event::Keyboard(keyboard::Event::KeyPressed {
+            key: keyboard::Key::Named(named),
+            modified_key: keyboard::Key::Named(named),
+            physical_key: keyboard::key::Physical::Unidentified(
+                keyboard::key::NativeCode::Unidentified,
+            ),
+            location: keyboard::Location::Standard,
+            modifiers: keyboard::Modifiers::NONE,
+            text: None,
+            repeat: false,
+        })
+    })
+    .collect();
+    let mut messages = Vec::new();
+    let (_, statuses) = interface.update(
+        &events,
+        mouse::Cursor::Unavailable,
+        &mut renderer,
+        &mut iced::advanced::clipboard::Null,
+        &mut messages,
+    );
+    assert_eq!(statuses[2], Status::Captured);
+    assert!(
+        !messages
+            .iter()
+            .any(|m| matches!(m, Message::SearchSubmitted))
+    );
+    drop(interface);
+
+    // Exercise the installed subscription, including its event-status filter.
+    let listener = subscriptions(false, false, false, false, false, true, true).remove(0);
+    let recipe = subscription::into_recipes(listener).remove(0);
+    let input = stream::iter(events.into_iter().zip(statuses).map(|(event, status)| {
+        subscription::Event::Interaction {
+            window: iced::window::Id::unique(),
+            event,
+            status,
+        }
+    }));
+    let routed = block_on(recipe.stream(Box::pin(input)).collect::<Vec<_>>());
+    assert!(matches!(
+        routed.as_slice(),
+        [
+            Message::OptionsSelectionDown,
+            Message::OptionsSelectionUp,
+            Message::OptionsActivate
+        ]
+    ));
+    for message in messages.into_iter().chain(routed) {
+        let _ = update(&mut player, message);
+    }
+    assert!(player.always_on_top);
+    assert!(!player.options_visible);
+    assert!(!player.search_active);
+}
+
 // The marquee timer advances the title window by one character without
 // scheduling any work. The timer itself runs only while the line is too long
 // to fit the LCD (see `the_marquee_timer_runs_only_while_the_line_needs_to_scroll`),
@@ -22,15 +203,15 @@ fn marquee_tick_advances_the_offset() {
 #[test]
 fn the_marquee_timer_runs_only_while_the_line_needs_to_scroll() {
     assert_eq!(
-        subscriptions(false, false, false, false, false, false).len(),
+        subscriptions(false, false, false, false, false, false, false).len(),
         2
     );
     assert_eq!(
-        subscriptions(true, false, false, false, false, false).len(),
+        subscriptions(true, false, false, false, false, false, false).len(),
         3
     );
     assert_eq!(
-        subscriptions(false, false, false, true, false, false).len(),
+        subscriptions(false, false, false, true, false, false, false).len(),
         3
     );
 }
@@ -44,11 +225,11 @@ fn the_marquee_timer_runs_only_while_the_line_needs_to_scroll() {
 #[test]
 fn the_escape_listener_runs_only_while_a_transient_panel_is_open() {
     assert_eq!(
-        subscriptions(false, false, false, false, false, false).len(),
+        subscriptions(false, false, false, false, false, false, false).len(),
         2
     );
     assert_eq!(
-        subscriptions(false, false, false, false, false, true).len(),
+        subscriptions(false, false, false, false, false, false, true).len(),
         3
     );
 }
@@ -132,15 +313,15 @@ fn escape_key_message_maps_escape_but_not_its_chords_or_other_keys() {
 #[test]
 fn the_mixer_nudge_listener_is_always_subscribed() {
     assert_eq!(
-        subscriptions(false, false, false, false, false, false).len(),
+        subscriptions(false, false, false, false, false, false, false).len(),
         2
     );
     assert_eq!(
-        subscriptions(true, true, true, false, false, false).len(),
+        subscriptions(true, true, true, false, false, false, false).len(),
         5
     );
     assert_eq!(
-        subscriptions(false, false, false, true, false, false).len(),
+        subscriptions(false, false, false, true, false, false, false).len(),
         3
     );
 }
@@ -154,11 +335,11 @@ fn the_mixer_nudge_listener_is_always_subscribed() {
 #[test]
 fn the_position_timer_runs_only_while_there_is_a_position_to_refresh() {
     assert_eq!(
-        subscriptions(false, true, false, false, false, false).len(),
+        subscriptions(false, true, false, false, false, false, false).len(),
         3
     );
     assert_eq!(
-        subscriptions(true, true, false, false, false, false).len(),
+        subscriptions(true, true, false, false, false, false, false).len(),
         4
     );
 
@@ -183,15 +364,15 @@ fn the_position_timer_runs_only_while_there_is_a_position_to_refresh() {
 #[test]
 fn the_spectrum_timer_runs_only_while_playback_runs() {
     assert_eq!(
-        subscriptions(false, false, false, false, false, false).len(),
+        subscriptions(false, false, false, false, false, false, false).len(),
         2
     );
     assert_eq!(
-        subscriptions(false, false, true, false, false, false).len(),
+        subscriptions(false, false, true, false, false, false, false).len(),
         3
     );
     assert_eq!(
-        subscriptions(true, true, true, false, false, false).len(),
+        subscriptions(true, true, true, false, false, false, false).len(),
         5
     );
 
