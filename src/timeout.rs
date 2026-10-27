@@ -130,6 +130,62 @@ mod tests {
         assert_eq!(output, None);
     }
 
+    // The timer thread must be told the future finished, so it exits at once
+    // instead of sleeping the full bound. The injected spawner keeps the
+    // receiver so the test can read the completion signal.
+    #[test]
+    fn with_timeout_signals_the_timer_when_the_future_completes() {
+        let mut kept = None;
+        let output = futures::executor::block_on(with_timeout_with(
+            Duration::from_secs(60),
+            async { 7 },
+            |_timeout, finished, fired| {
+                kept = Some((finished, fired));
+                Ok(())
+            },
+        ));
+        assert_eq!(output, Some(7));
+        let (finished, _fired) = kept.expect("the spawner ran");
+        assert_eq!(finished.try_recv(), Ok(()));
+    }
+
+    // A timeout must not signal completion: the timer's `finished` channel
+    // is closed, not fed, when the bound wins.
+    #[test]
+    fn with_timeout_does_not_signal_completion_when_the_bound_wins() {
+        let mut kept = None;
+        let output = futures::executor::block_on(with_timeout_with(
+            Duration::from_millis(1),
+            std::future::pending::<()>(),
+            |_timeout, finished, fired| {
+                kept = Some(finished);
+                let _ = fired.send(());
+                Ok(())
+            },
+        ));
+        assert_eq!(output, None);
+        let finished = kept.expect("the spawner ran");
+        assert_eq!(
+            finished.try_recv(),
+            Err(std::sync::mpsc::TryRecvError::Disconnected)
+        );
+    }
+
+    // When the future is ready and the timer has already fired, the future's
+    // output wins (the select is biased toward it).
+    #[test]
+    fn with_timeout_prefers_a_ready_future_over_a_fired_timer() {
+        let output = futures::executor::block_on(with_timeout_with(
+            Duration::from_millis(1),
+            async { 7 },
+            |_timeout, _finished, fired| {
+                let _ = fired.send(());
+                Ok(())
+            },
+        ));
+        assert_eq!(output, Some(7));
+    }
+
     // A refused timer thread's report must name the cause as well as the
     // fallback: without the cause a log reader cannot tell thread exhaustion
     // from an internal fault, and the wait's `None` would look like a slow
