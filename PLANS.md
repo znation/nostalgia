@@ -219,8 +219,9 @@ describe. Resolve each state lock inside the module that reads it, so `view()` n
 17-field snapshot and each module locks only for its own fields. Keep the two deliberate second
 locks for the Songs and All Songs playing-row markers in `library`. Replace `src/ui/view.rs` with
 the directory rather than keeping a compatibility shim. Update `docs/invariants.md`'s current-path
-mentions of `src/ui/view.rs` in the layout, browse-hierarchy, media-key, About, and options sections
-to the owning file; leave historical `PLANS-DONE.md` and `BUGS-FIXED.md` paths alone. No behavior
+mentions of `src/ui/view.rs` in the Library search clearing, UI layout, Volume wheel, About panel,
+and Options panel sections to the owning file; leave historical `PLANS-DONE.md` and `BUGS-FIXED.md`
+paths alone. No behavior
 test is added: the existing root-view, layout, panel, browse, and shortcut tests already exercise
 `ui::view::view`.
 
