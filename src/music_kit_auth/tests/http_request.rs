@@ -129,6 +129,28 @@ fn parse_http_request_rejects_a_request_line_without_a_target() {
     assert_request_parse_error(b"GET\r\n\r\n", "missing target");
 }
 
+// A request line is `method SP target SP HTTP-version`; a line missing the
+// version, naming one this HTTP/1.1 server does not speak, or carrying a
+// fourth token is malformed rather than an older or newer dialect. Refusing it
+// keeps the parser from accepting a line whose fields it only guessed at.
+#[test]
+fn parse_http_request_rejects_a_request_line_without_an_http_version() {
+    assert_request_parse_error(b"GET /\r\n\r\n", "missing HTTP version");
+}
+
+#[test]
+fn parse_http_request_rejects_an_unsupported_http_version() {
+    assert_request_parse_error(b"GET / HTTP/2.0\r\n\r\n", "unsupported HTTP version");
+}
+
+#[test]
+fn parse_http_request_rejects_text_after_the_http_version() {
+    assert_request_parse_error(
+        b"GET / HTTP/1.1 extra\r\n\r\n",
+        "unexpected text after the HTTP version",
+    );
+}
+
 // A `Content-Length` that does not parse as a number is treated as no body
 // (the `parse().unwrap_or(0)` branch), so the request is still returned with
 // an empty body rather than aborting the flow or reading an unbounded body.

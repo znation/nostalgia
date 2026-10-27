@@ -153,6 +153,20 @@ pub(super) fn parse_http_request(buffer: &[u8]) -> io::Result<Option<HttpRequest
     let Some(target) = parts.next() else {
         return Err(refused("missing target"));
     };
+    // HTTP/1.x is the protocol this server speaks (see `write_response`). A
+    // request line without a version, or with an unsupported one, is not a
+    // request this server can answer, so refuse it rather than guess at the
+    // missing field. Only the two 1.x versions are accepted: HTTP/2 and HTTP/3
+    // use a different wire format and never send a request line.
+    let Some(version) = parts.next() else {
+        return Err(refused("missing HTTP version"));
+    };
+    if version != "HTTP/1.0" && version != "HTTP/1.1" {
+        return Err(refused("unsupported HTTP version"));
+    }
+    if parts.next().is_some() {
+        return Err(refused("unexpected text after the HTTP version"));
+    }
     let (path, query) = match target.split_once('?') {
         Some((path, query)) => (path.to_string(), Some(query.to_string())),
         None => (target.to_string(), None),
