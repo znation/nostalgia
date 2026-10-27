@@ -34,7 +34,7 @@ mod transport;
 mod view;
 mod views;
 
-pub(in crate::ui) use message::Message;
+pub(in crate::ui) use message::{Message, OptionsChoice};
 pub(in crate::ui) use player::{CurrentView, SongsOrigin, WinampPlayer};
 pub(in crate::ui) use view::view;
 
@@ -275,6 +275,8 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::ToggleWindowShade => handlers::window::toggle_window_shade(player),
         Message::WindowShadeMeasured(size) => handlers::window::window_shade_measured(player, size),
         Message::ToggleAbout => handlers::window::toggle_about(player),
+        Message::ToggleOptions => handlers::window::toggle_options(player),
+        Message::OptionsChoice(choice) => handlers::window::options_choice(player, choice),
         Message::EscapePressed => handlers::window::escape_pressed(player),
         Message::ToggleFileInfo => handlers::window::toggle_file_info(player),
         Message::ToggleJumpTime => handlers::jump::toggle_jump_time(player),

@@ -1,4 +1,4 @@
-use super::super::{CurrentView, Message, style, theme};
+use super::super::{CurrentView, Message, OptionsChoice, style, theme};
 use super::browse::rows::text::{
     album_count_label, album_row, artist_row, browse_placeholder, empty_list_label,
     list_count_summary, playlist_row, row_prefix, song_list_summary, song_row,

@@ -6,10 +6,11 @@ project's summary, status, screenshots, and build instructions stay in
 [README.md](../README.md).
 
 Build and run with `cargo run`; the player opens an iced window showing the Now Playing bar (a
-small `O A I D V` strip down the LCD's left edge, whose `A` toggles always-on-top, whose `I`
-opens the File info panel, and whose `V` hides and restores the visualizer while `O` and `D` stay
-decorative; each live letter is lit while its mode is on (`A` for always-on-top, `I` while File
-info is open, `V` while the visualizer is shown) and dim otherwise, and `O` and `D` stay dim;
+small `O A I D V` strip down the LCD's left edge, whose `O` opens the options menu, whose `A`
+toggles always-on-top, whose `I` opens the File info panel, and whose `V` hides and restores the
+visualizer while `D` stays decorative; each live letter is lit while its mode is on (`O` while
+the options menu is open, `A` for always-on-top, `I` while File info is open, `V` while the
+visualizer is shown) and dim otherwise, and `D` stays dim;
 then a large elapsed-time readout at the left for a loaded preview, shown while
 playing or paused and blank
 (though it keeps its space)
@@ -53,6 +54,7 @@ sliders, with a vertical preamp slider and a `+12 dB` / `0 dB` / `-12 dB` scale 
 plot marks the 0 dB midline and the ten bands with dim guides behind the green trace, and its
 preset pick list names the applied preset and reads `Custom` when no preset is applied, whether
 on a fresh launch or after a slider move makes the curve your own),
+a lightning button at the end of the row,
 and a browse list whose song rows read `artist - title` (or the title alone when the source
 supplies no artist) and show each track's length at the right, whose album rows read
 `artist - title` (or the title alone when the source supplies no artist) and show the album's
@@ -130,7 +132,14 @@ a transient About panel naming the app, showing its `v`-prefixed package version
 library source (`Library: Apple Music` once a MusicKit session is stored, `Library: Sample
 library` otherwise); `M` (through the
 backdrop over its slot), `Ctrl+F1`, the panel's `Close` button, or a click on the backdrop outside
-the panel closes it, and opening it while the window is rolled up restores the window first. A
+the panel closes it, and opening it while the window is rolled up restores the window first. The
+LCD's `O` letter or the lightning button at the end of the transport row opens an `OPTIONS` menu
+over the player listing `Always on Top: On/Off`, `Time: Remaining/Elapsed`, `Visualizer:
+Shown/Hidden`, `Equalizer: Shown/Hidden`, `Library: Shown/Hidden`, `About Nostalgia`, and `Close`,
+with each label reflecting the current state. Choosing a row applies that one toggle and closes
+the menu; `About Nostalgia` opens the About panel, and `Close`, a click on the backdrop, or Escape
+closes the menu. Opening it while the window is rolled up restores the window first, and the menu
+is not saved. A
 plain or Shift-held Escape press closes whichever transient panel is open, like its `Close`
 button or the backdrop; with no panel open Escape keeps its existing behavior. Its
 shade button, a double-click on the bar, or a double-click on the rolled-up strip rolls the window

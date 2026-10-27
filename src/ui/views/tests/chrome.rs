@@ -484,3 +484,179 @@ fn jump_time_overlay_buttons_and_backdrop_publish_their_messages() {
         }
     }
 }
+
+/// The options overlay over a blank full-space base, so its layout is measured
+/// against the same window limits as the root view. `all_on` selects the
+/// on/remaining/shown labels; `false` selects off/elapsed/hidden.
+fn options_overlay_element(all_on: bool) -> Element<'static, Message> {
+    let base: Element<'static, Message> = iced::widget::Space::new()
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into();
+    super::super::view_options_overlay(base, all_on, all_on, all_on, all_on, all_on)
+}
+
+#[test]
+fn options_overlay_draws_each_row_with_its_state() {
+    let cases = [
+        (
+            false,
+            [
+                "Always on Top: Off",
+                "Time: Elapsed",
+                "Visualizer: Hidden",
+                "Equalizer: Hidden",
+                "Library: Hidden",
+            ],
+        ),
+        (
+            true,
+            [
+                "Always on Top: On",
+                "Time: Remaining",
+                "Visualizer: Shown",
+                "Equalizer: Shown",
+                "Library: Shown",
+            ],
+        ),
+    ];
+    for (all_on, rows) in cases {
+        let mut element = options_overlay_element(all_on);
+        let capture =
+            layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+        let texts: Vec<&str> = capture.texts().collect();
+        for expected in ["OPTIONS"]
+            .into_iter()
+            .chain(rows)
+            .chain(["About Nostalgia", "Close"])
+        {
+            assert!(
+                texts.contains(&expected),
+                "the options overlay must draw {expected:?} (all_on: {all_on}): {texts:?}"
+            );
+        }
+    }
+}
+
+// A press on each row publishes that choice's message; Close and the backdrop
+// each dismiss the menu with one ToggleOptions; a press on the panel's own
+// text chrome is swallowed with Ignored, so the menu stays open.
+#[test]
+fn options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop() {
+    let mut renderer = layout_capture::headless_renderer();
+    for label in [
+        "Always on Top: Off",
+        "Time: Elapsed",
+        "Visualizer: Hidden",
+        "Equalizer: Hidden",
+        "Library: Hidden",
+        "About Nostalgia",
+        "Close",
+        "OPTIONS",
+        "BACKDROP",
+    ] {
+        let mut element = options_overlay_element(false);
+        let capture = layout_capture::capture_text(&mut element, &renderer);
+        let point = if label == "BACKDROP" {
+            iced::Point::new(2.0, capture.size().height - 2.0)
+        } else {
+            let bounds = capture.find(label);
+            iced::Point::new(bounds.center_x(), bounds.center_y())
+        };
+        let messages = layout_capture::click_at(element, &mut renderer, point);
+        let toggles = messages
+            .iter()
+            .filter(|message| matches!(message, Message::ToggleOptions))
+            .count();
+        match label {
+            "Always on Top: Off" => assert!(
+                messages.iter().any(|message| matches!(
+                    message,
+                    Message::OptionsChoice(OptionsChoice::AlwaysOnTop)
+                )),
+                "the always-on-top row must publish its choice: {messages:?}"
+            ),
+            "Time: Elapsed" => assert!(
+                messages.iter().any(|message| matches!(
+                    message,
+                    Message::OptionsChoice(OptionsChoice::TimeDisplay)
+                )),
+                "the time row must publish its choice: {messages:?}"
+            ),
+            "Visualizer: Hidden" => assert!(
+                messages.iter().any(|message| matches!(
+                    message,
+                    Message::OptionsChoice(OptionsChoice::Visualizer)
+                )),
+                "the visualizer row must publish its choice: {messages:?}"
+            ),
+            "Equalizer: Hidden" => assert!(
+                messages.iter().any(|message| matches!(
+                    message,
+                    Message::OptionsChoice(OptionsChoice::EqualizerPanel)
+                )),
+                "the equalizer row must publish its choice: {messages:?}"
+            ),
+            "Library: Hidden" => assert!(
+                messages.iter().any(|message| matches!(
+                    message,
+                    Message::OptionsChoice(OptionsChoice::LibraryPanel)
+                )),
+                "the library row must publish its choice: {messages:?}"
+            ),
+            "About Nostalgia" => assert!(
+                messages
+                    .iter()
+                    .any(|message| matches!(message, Message::ToggleAbout)),
+                "the About row must publish ToggleAbout: {messages:?}"
+            ),
+            "OPTIONS" => {
+                assert_eq!(
+                    toggles, 0,
+                    "the panel's chrome must not dismiss it: {messages:?}"
+                );
+                assert_eq!(
+                    messages.len(),
+                    1,
+                    "the panel must publish exactly one message: {messages:?}"
+                );
+                assert!(
+                    matches!(messages.first(), Some(Message::Ignored)),
+                    "the panel must swallow the press with Ignored: {messages:?}"
+                );
+            }
+            _ => assert_eq!(
+                toggles, 1,
+                "{label} must publish exactly one ToggleOptions: {messages:?}"
+            ),
+        }
+    }
+}
+
+#[test]
+fn transport_options_button_publishes_toggle_options() {
+    let mut renderer = layout_capture::headless_renderer();
+    let mut element = view_transport_controls(0.5, 0.0, false, false, true, true);
+    let capture = layout_capture::capture_text(&mut element, &renderer);
+    let library = capture.find("PL");
+    let options = capture.find("⚡");
+    assert!(
+        options.x > library.x,
+        "the lightning button must sit after PL: PL {:?}, options {:?}",
+        library,
+        options
+    );
+    let messages = layout_capture::click_at(
+        element,
+        &mut renderer,
+        iced::Point::new(options.center_x(), options.center_y()),
+    );
+    assert_eq!(
+        messages
+            .iter()
+            .filter(|message| matches!(message, Message::ToggleOptions))
+            .count(),
+        1,
+        "a press on the lightning button must publish exactly one ToggleOptions: {messages:?}"
+    );
+}

@@ -1,6 +1,6 @@
 //! The window message handlers: the app window's resolved id and the custom
 //! title bar's actions — drag, minimize, close, shade, always-on-top, and the
-//! About panel.
+//! About and Options panels.
 //!
 //! Every action acts on the resolved window id and is a no-op until it
 //! exists; `with_window_id` holds that guard once, so each handler names only
@@ -9,7 +9,7 @@
 use iced::Task;
 
 use crate::ui::views;
-use crate::ui::{Message, WinampPlayer};
+use crate::ui::{Message, OptionsChoice, WinampPlayer};
 
 /// The app window's id, resolved once at boot by `iced::window::latest()`:
 /// store it, so the title bar's window actions can act on the window. Until
@@ -118,8 +118,44 @@ pub(in crate::ui) fn toggle_about(player: &mut WinampPlayer) -> Task<Message> {
     }
 }
 
+/// The LCD strip's `O` or the transport row's lightning button: flip the
+/// transient options menu. Opening it while the window is shaded first calls
+/// [`toggle_window_shade`] and returns that task, so the window restores before
+/// the menu draws; opening it also closes every other transient panel. Closing
+/// it never touches the window, and the flag is layout-only and not persisted.
+pub(in crate::ui) fn toggle_options(player: &mut WinampPlayer) -> Task<Message> {
+    if player.options_visible {
+        player.options_visible = false;
+        return Task::none();
+    }
+    player.close_transient_panels();
+    player.options_visible = true;
+    if player.shaded {
+        toggle_window_shade(player)
+    } else {
+        Task::none()
+    }
+}
+
+/// An options-menu row: close the menu first, then apply the one existing
+/// toggle the row names and return that handler's task. The menu itself
+/// changes no state, so a row's non-menu behavior is exactly its toggle's.
+pub(in crate::ui) fn options_choice(
+    player: &mut WinampPlayer,
+    choice: OptionsChoice,
+) -> Task<Message> {
+    player.options_visible = false;
+    match choice {
+        OptionsChoice::AlwaysOnTop => toggle_always_on_top(player),
+        OptionsChoice::TimeDisplay => super::playback::toggle_time_display(player),
+        OptionsChoice::Visualizer => super::playback::toggle_visualizer(player),
+        OptionsChoice::EqualizerPanel => super::mixer::toggle_equalizer_panel(player),
+        OptionsChoice::LibraryPanel => super::mixer::toggle_library_panel(player),
+    }
+}
+
 /// A plain or Shift-held Escape press: close every transient panel, leaving
-/// only the four visibility flags changed. `ui::subscriptions` delivers this message
+/// only the five visibility flags changed. `ui::subscriptions` delivers this message
 /// only while [`WinampPlayer::transient_panel_open`] holds, but with no panel
 /// open it is still a no-op. It is not a toggle, so it never opens a panel.
 pub(in crate::ui) fn escape_pressed(player: &mut WinampPlayer) -> Task<Message> {
@@ -130,7 +166,7 @@ pub(in crate::ui) fn escape_pressed(player: &mut WinampPlayer) -> Task<Message> 
 /// Alt+3 or the LCD strip's `I`: flip the transient File info panel. Opening
 /// needs a current track
 /// resolved in `known_tracks` (as `window_title` resolves it); without one the
-/// flag stays as it was. Opening closes the About panel, and opening while
+/// flag stays as it was. Opening closes the About and Options panels, and opening while
 /// shaded first restores the window exactly as [`toggle_about`] does. The flag
 /// is layout-only and not persisted.
 pub(in crate::ui) fn toggle_file_info(player: &mut WinampPlayer) -> Task<Message> {

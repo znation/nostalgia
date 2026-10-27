@@ -25,9 +25,11 @@ use super::views;
 /// the screen is dropped. The strip's time readout publishes the same
 /// [`Message::ToggleTimeDisplay`] as the hidden LCD's, so the elapsed/remaining
 /// choice stays switchable in shade mode. While [`WinampPlayer::about_visible`]
-/// holds outside shade mode, the normal-mode tree is the base of
-/// [`views::view_about_overlay`], whose panel also names the active library
-/// source from the Apple Music service's current session.
+/// or [`WinampPlayer::options_visible`] holds outside shade mode, the
+/// normal-mode tree is the base of [`views::view_about_overlay`] or
+/// [`views::view_options_overlay`], whose About panel also names the active
+/// library source from the Apple Music service's current session and whose
+/// options menu lists the existing on/off choices plus About.
 pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
     // Shade mode builds only the title bar and its compact transport strip —
     // the Now Playing bar, seek strip, transport row, equalizer, and browse
@@ -155,6 +157,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
                             .map(|(target, length)| views::seek_readout_text(target, length))
                     }),
                 views::IndicatorModes {
+                    options_visible: player.options_visible,
                     always_on_top: player.always_on_top,
                     file_info_visible: player.file_info_visible,
                     visualizer_visible: player.visualizer_visible,
@@ -312,6 +315,15 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
 
     if player.about_visible && !player.shaded {
         views::view_about_overlay(base, player.apple_music_service.session().is_some())
+    } else if player.options_visible && !player.shaded {
+        views::view_options_overlay(
+            base,
+            player.always_on_top,
+            player.time_display == views::TimeDisplay::Remaining,
+            player.visualizer_visible,
+            player.eq_panel_visible,
+            player.library_panel_visible,
+        )
     } else if player.file_info_visible && !player.shaded {
         match player.current_known_track() {
             Some(track) => views::view_file_info_overlay(base, track, player.playback_format),

@@ -1196,3 +1196,28 @@ fn root_view_draws_each_browse_levels_own_placeholder() {
         capture.texts().collect::<Vec<_>>()
     );
 }
+
+// The options menu draws over the normal-mode player with its row labels, and
+// shade mode never draws it even if the flag is left set.
+#[test]
+fn options_panel_draws_over_the_player_and_drops_out_in_shade_mode() {
+    let (mut player, _state) = test_player();
+    player.options_visible = true;
+
+    let normal = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = normal.texts().collect();
+    for expected in ["OPTIONS", "Always on Top: Off", "Time: Elapsed", "Close"] {
+        assert!(
+            texts.contains(&expected),
+            "the options menu must draw {expected:?}: {texts:?}"
+        );
+    }
+
+    player.shaded = true;
+    let shaded = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = shaded.texts().collect();
+    assert!(
+        !texts.contains(&"OPTIONS"),
+        "shade mode must never draw the options menu: {texts:?}"
+    );
+}

@@ -1,7 +1,7 @@
 //! The transport row's widgets: the Previous, Play, Pause, Stop, Next, Repeat,
-//! and Shuffle buttons, the volume slider, the balance slider, and the EQ and
-//! PL panel toggles, plus the pure glyph, word, and button-label helpers they
-//! use.
+//! and Shuffle buttons, the volume slider, the balance slider, the EQ and PL
+//! panel toggles, and the options-menu button, plus the pure glyph, word, and
+//! button-label helpers they use.
 
 #[cfg(test)]
 use iced::widget::Container;
@@ -124,6 +124,16 @@ pub(super) fn library_panel_toggle() -> (&'static str, f32, Message) {
     )
 }
 
+/// The options-menu button's fixed width, in pixels, pinned like the other
+/// panel toggles so a glyph change cannot reflow the row.
+pub(super) const OPTIONS_BUTTON_WIDTH: f32 = 30.0;
+
+/// The lightning button at the end of the player row: opens the same transient
+/// options menu as the LCD strip's `O` through [`Message::ToggleOptions`].
+pub(super) fn options_button() -> Element<'static, Message> {
+    fixed_width_button("⚡", OPTIONS_BUTTON_WIDTH, Message::ToggleOptions).into()
+}
+
 /// One of the transport row's panel toggles, built from its spec and pinned to
 /// the spec's width. `open` sinks the chrome while the panel it controls is
 /// shown (see [`style::toggle_button_style`]), the same on/off rule as the
@@ -143,16 +153,18 @@ fn panel_toggle_button(
 pub(crate) const BALANCE_SLIDER_ID: &str = "transport-balance";
 
 /// The transport row: the Previous, Play, Pause, Stop, Next, Repeat, and
-/// Shuffle buttons, the volume slider, the balance slider, and the fixed-width
-/// `EQ` and `PL` panel toggles. `volume` and `balance` are the sliders' current
-/// values; dragging them emits `Message::VolumeChange` and
+/// Shuffle buttons, the volume slider, the balance slider, the fixed-width
+/// `EQ` and `PL` panel toggles, and the lightning options-menu button. `volume`
+/// and `balance` are the sliders' current values; dragging them emits
+/// `Message::VolumeChange` and
 /// `Message::BalanceChange` respectively. `repeat` is the shared Repeat flag
 /// and `shuffle` the shared Shuffle flag, each shown on its button and toggled
 /// by pressing it. The five glyph buttons carry word tooltips; Repeat and
 /// Shuffle stay text toggles. `eq_panel_visible` sinks the EQ button while the
 /// equalizer section is drawn and leaves its chrome raised while the section
 /// is hidden; `library_panel_visible` does the same for the PL button and the
-/// library section.
+/// library section. The lightning button publishes [`Message::ToggleOptions`]
+/// and is separated from PL by the row's usual gap.
 pub fn view_transport_controls(
     volume: f32,
     balance: f32,
@@ -196,6 +208,8 @@ pub fn view_transport_controls(
         .push(panel_toggle_button(
             library_panel_toggle(),
             library_panel_visible,
-        ));
+        ))
+        .push(spacer(20.0))
+        .push(options_button());
     row.into()
 }

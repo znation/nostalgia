@@ -8,7 +8,7 @@
 //! can be reworked (or tested) independently of how the app is booted.
 //!
 //! Each panel lives in its own submodule — `about` (the transient About
-//! overlay), `browse` (the artist → album →
+//! overlay), `options` (the transient options menu), `browse` (the artist → album →
 //! song drill-down, the flat lists, and Playlists, with their list scaffolding
 //! in `browse::rows` and pure row wording and labels in `browse::rows::text`),
 //! `title_bar`, `shade` (the rolled-up
@@ -19,7 +19,7 @@
 //! — while the chrome helpers, slider specs, and track-length formatting the
 //! panels share ([`spacer`], [`labeled_button`], [`fixed_width_button`],
 //! [`chrome_slider`], and [`format_track_time`]) live here. The transient
-//! overlays are `about`, `file_info`, `jump_time`, and `jump_file`.
+//! overlays are `about`, `options`, `file_info`, `jump_time`, and `jump_file`.
 
 use iced::{
     Color, Element, Length,
@@ -38,6 +38,7 @@ mod jump_time;
 mod mini_transport;
 mod modal;
 mod now_playing;
+mod options;
 mod seek_bar;
 mod shade;
 mod title_bar;
@@ -68,6 +69,7 @@ pub use now_playing::{
     now_playing_artist, now_playing_elapsed, now_playing_label, now_playing_number,
     now_playing_time, seek_readout_text, view_now_playing, visible_spectrum,
 };
+pub use options::view_options_overlay;
 pub use seek_bar::view_seek_bar;
 pub use shade::view_shade_strip;
 pub use title_bar::{view_title_band, view_title_bar};

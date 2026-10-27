@@ -54,7 +54,7 @@ fn song_list(player: &WinampPlayer) -> Option<(&[String], u64)> {
 
 /// Ctrl+J: flip the transient Jump to time panel. Opening needs a loaded
 /// preview with a known length; without one the flag stays as it was. Opening
-/// clears the query, closes About, File info, and Jump to File, focuses the
+/// clears the query, closes About, Options, File info, and Jump to File, focuses the
 /// time box, and while shaded first restores the window as `toggle_about`
 /// does. Closing only clears the flag. The flag is layout-only and not
 /// persisted.
@@ -103,7 +103,7 @@ pub(in crate::ui) fn jump_time_submitted(player: &mut WinampPlayer) -> Task<Mess
 
 /// Plain J: flip the transient Jump to File panel. Opening needs a showing song
 /// list ([`song_list`]); elsewhere the flag stays as it was. Opening clears the
-/// filter, closes About, File info, and Jump to time, focuses the filter box,
+/// filter, closes About, Options, File info, and Jump to time, focuses the filter box,
 /// and while shaded first restores the window as `toggle_about` does. Closing
 /// only clears the flag. The flag is layout-only and not persisted.
 pub(in crate::ui) fn toggle_jump_file(player: &mut WinampPlayer) -> Task<Message> {

@@ -721,6 +721,11 @@ refresh does not re-join and reformat every row.
   dispatches `Message::ToggleLibraryPanel` by physical key, its other modifier chords stay unbound,
   and shade mode changes nothing because the toggle leaves `library_panel_visible` alone while
   `WinampPlayer::shaded` holds.
+- The main transport row's fixed-width lightning button follows `PL`, separated by the row's
+  usual gap, and publishes `Message::ToggleOptions`, the same message as the LCD strip's `O`.
+  The root `view` draws the options menu only while `WinampPlayer::options_visible` holds outside
+  shade mode, so the button never changes playback, browse, search, equalizer audio, volume, or
+  balance.
 - The equalizer band row puts the vertical preamp slider leftmost, then the `+12 DB` / `0 DB` /
   `-12 DB` scale, then the ten band sliders. The scale reads top to bottom beside the rail's top,
   middle, and bottom, and the preamp label shares the band labels' text row. The response curve
@@ -1202,15 +1207,17 @@ its internal id, whenever the id is in the known-track index:
   reply issued before a Stop or a new selection, or landing while a transport transition is in
   flight, is dropped. The spectrum poll is subscribed only while playback is running.
 - The LCD's left edge always draws the five classic indicator letters `O`, `A`, `I`, `D`, `V`,
-  in that order, at a fixed width, in every playback state including the empty `--:--` bar. `A`,
-  `I`, and `V` are mouse areas: pressing `A` publishes `Message::ToggleAlwaysOnTop` (the LCD
-  strip's own always-on-top control), pressing `I` publishes `Message::ToggleFileInfo` (the same
-  panel as Alt+3), and pressing `V` publishes `Message::ToggleVisualizer`, which flips only
-  the LCD's display flag. `O` and `D` stay decorative and publish nothing. Each live letter
-  draws `theme::LCD_GREEN` exactly while its mode holds (`A` for `WinampPlayer::always_on_top`,
-  `I` for `file_info_visible`, `V` for `visualizer_visible`), and every other letter, including
-  the decorative `O` and `D` and an inactive live letter, draws `theme::LCD_GREEN_DIM`. The strip
-  keeps its fixed width and letter order, so the content beside it does not move.
+  in that order, at a fixed width, in every playback state including the empty `--:--` bar. `O`,
+  `A`, `I`, and `V` are mouse areas: pressing `O` publishes `Message::ToggleOptions` (the same
+  options menu as the transport row's lightning button), pressing `A` publishes
+  `Message::ToggleAlwaysOnTop` (the LCD strip's own always-on-top control), pressing `I`
+  publishes `Message::ToggleFileInfo` (the same panel as Alt+3), and pressing `V` publishes
+  `Message::ToggleVisualizer`, which flips only the LCD's display flag. `D` stays decorative and
+  publishes nothing. Each live letter draws `theme::LCD_GREEN` exactly while its mode holds (`O`
+  for `WinampPlayer::options_visible`, `A` for `WinampPlayer::always_on_top`, `I` for
+  `file_info_visible`, `V` for `visualizer_visible`), and every other letter, including the
+  decorative `D` and an inactive live letter, draws `theme::LCD_GREEN_DIM`. The strip keeps its
+  fixed width and letter order, so the content beside it does not move.
 - A transport glyph leads the row in a fixed `LCD_TRANSPORT_WIDTH` slot before the large elapsed
   readout, so the readout keeps its x position as the glyph changes: green `▶` while playing, green
   `II` while paused, and red `■` while stopped. Pause of a loaded preview sets the shared paused
@@ -1237,8 +1244,8 @@ its internal id, whenever the id is in the known-track index:
   and `now_playing_row_keeps_the_elapsed_bounds_when_the_blink_hides_it` in
   `src/ui/views/tests/now_playing.rs`, and
   `compact_readout_toggles_time_display_only_while_not_stopped` in `src/ui/views/tests/shade.rs`;
-  `lcd_indicator_message_arms_a_i_and_v_and_leaves_o_d_inert` and
-  `lcd_indicator_strip_publishes_always_on_top_on_a_visualizer_on_v_and_file_info_on_i` in
+  `lcd_indicator_message_arms_o_a_i_and_v_and_leaves_d_inert` and
+  `lcd_indicator_strip_publishes_options_on_o_always_on_top_on_a_visualizer_on_v_and_file_info_on_i` in
   `src/ui/views/tests/now_playing.rs`;
   `toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum` in
   `src/ui/tests/panels_tests.rs`; `position_tick_blinks_the_elapsed_readout_only_while_paused` in
@@ -1300,10 +1307,11 @@ preview URL. `views::now_playing::indicator::lcd_indicator_strip` draws
 `views::now_playing::indicator::LCD_INDICATOR_LABELS` down the LCD's left edge in a fixed-width
 column, coloring each letter through `views::now_playing::indicator::indicator_label_color` from
 the `views::now_playing::indicator::IndicatorModes` flags `views::view_now_playing` passes
-(`always_on_top`, `file_info_visible`, and `visualizer_visible`); its `A`, `I`, and `V` cells
-publish `Message::ToggleAlwaysOnTop`, `Message::ToggleFileInfo`, and
+(`options_visible`, `always_on_top`, `file_info_visible`, and `visualizer_visible`); its `O`,
+`A`, `I`, and `V` cells publish `Message::ToggleOptions`, `Message::ToggleAlwaysOnTop`,
+`Message::ToggleFileInfo`, and
 `Message::ToggleVisualizer` through `views::now_playing::indicator::lcd_indicator_message`,
-while `O` and `D` publish nothing. `views::now_playing::visualizer::visualizer_bar_heights` scales
+while `D` publishes nothing. `views::now_playing::visualizer::visualizer_bar_heights` scales
 and clamps the stored spectrum, and `views::now_playing::visualizer::now_playing_visualizer_row`
 draws its `BAND_COUNT` bars at fixed width inside the row `views::view_now_playing` places between
 the title and status rows. The `Spectrum` handler in `src/ui/handlers/playback/preview.rs` stores
@@ -1659,6 +1667,55 @@ and `toggle_about_while_shaded_restores_the_window_first` (`src/ui/tests/window_
 **History.** Added the library-source line (2026-10-26): it reads the service's current session
 on each rebuild rather than caching the source in UI state.
 
+## Options panel
+
+**Guarantee.** The LCD strip's `O` and the transport row's lightning button open a transient,
+unpersisted options menu listing the app's existing on/off choices plus About and Close:
+
+- `handlers::window::toggle_options` flips `WinampPlayer::options_visible`. Opening it first calls
+  `close_transient_panels`, and while `WinampPlayer::shaded` holds it first calls
+  `toggle_window_shade`, so the window restores before the menu draws. The flag is layout-only and
+  not persisted; the menu adds no setting.
+- `views::view_options_overlay` stacks an `OPTIONS` panel over the otherwise unchanged normal-mode
+  base through `views::modal::modal_overlay`. Its rows are `Always on Top: On/Off`, `Time:
+  Remaining/Elapsed`, `Visualizer: Shown/Hidden`, `Equalizer: Shown/Hidden`, `Library:
+  Shown/Hidden`, `About Nostalgia`, and `Close`, with the labels resolved from the passed current
+  state on every rebuild. Each choice row publishes `Message::OptionsChoice(..)`; the About row
+  publishes `Message::ToggleAbout`; `Close`, the full-window backdrop, and Escape close the menu.
+- `handlers::window::options_choice` clears `options_visible` first, then dispatches to the
+  existing `toggle_always_on_top`, `handlers::playback::toggle_time_display`,
+  `handlers::playback::toggle_visualizer`, `handlers::mixer::toggle_equalizer_panel`, or
+  `handlers::mixer::toggle_library_panel` and returns its task, so each row's non-menu behavior is
+  exactly that toggle's.
+- The normal-mode branch of `ui::view::view` wraps the base tree only while `options_visible &&
+  !shaded` holds and passes the current always-on-top, elapsed/remaining, visualizer, equalizer
+  panel, and library panel state; the shade branch never draws it.
+- A plain or Shift-held Escape press also closes it (see `## Transient panel dismissal`).
+
+**Enforced by.** `views::options::view_options_overlay`, its five label helpers, and `Message::ToggleOptions`
+and `Message::OptionsChoice`; `handlers::window::toggle_options` and
+`handlers::window::options_choice`; `WinampPlayer::options_visible`; the LCD strip's `O`
+mapping and the transport row's `options_button`; and the normal-mode branch of
+`src/ui/view.rs`.
+
+**Pinned by.** `options_overlay_draws_each_row_with_its_state`,
+`options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop`, and
+`transport_options_button_publishes_toggle_options` (`src/ui/views/tests/chrome.rs`); the five
+label tests in `src/ui/views/options.rs`; `lcd_indicator_message_arms_o_a_i_and_v_and_leaves_d_inert`,
+`indicator_label_color_lights_only_the_active_mode`, and
+`lcd_indicator_strip_publishes_options_on_o_always_on_top_on_a_visualizer_on_v_and_file_info_on_i`
+(`src/ui/views/tests/now_playing.rs`); `options_choice_applies_each_toggle_and_closes_the_panel`,
+`toggle_options_opens_and_closes_and_excludes_each_other_panel`, and
+`escape_closes_each_transient_panel_without_touching_anything_else`
+(`src/ui/tests/panels_tests.rs`);
+`toggle_options_while_shaded_restores_the_window_first`
+(`src/ui/tests/window_tests.rs`); and
+`options_panel_draws_over_the_player_and_drops_out_in_shade_mode`
+(`src/ui/tests/view_tests.rs`).
+
+**History.** Added 2026-10-26 with the Winamp-style options menu; the menu is transient and
+unpersisted because every row reuses an existing toggle.
+
 ## File info panel
 
 **Guarantee.** Alt+3 flips a transient, unpersisted File info panel for the current track:
@@ -1671,7 +1728,8 @@ on each rebuild rather than caching the source in UI state.
   known current track.
 - `handlers::window::toggle_file_info` flips `WinampPlayer::file_info_visible`. Opening needs a
   current track found in `known_tracks` (`WinampPlayer::current_known_track`); without one the flag
-  stays false. Opening clears `about_visible`, and opening About clears `file_info_visible`.
+  stays false. Opening clears `about_visible` and `options_visible`, and opening About or Options
+  clears `file_info_visible`.
   Opening while `shaded` holds first calls `toggle_window_shade` and returns that task.
 - A plain or Shift-held Escape press also closes it (see `## Transient panel dismissal`).
 - While the flag holds outside shade mode and the track resolves, `views::view_file_info_overlay`
@@ -1703,8 +1761,8 @@ on each rebuild rather than caching the source in UI state.
 overlay branch of `ui::view::view`.
 
 **Pinned by.** `message_for_maps_alt_3_to_file_info` (`src/ui/shortcuts.rs`);
-`lcd_indicator_message_arms_a_i_and_v_and_leaves_o_d_inert` and
-`lcd_indicator_strip_publishes_always_on_top_on_a_visualizer_on_v_and_file_info_on_i`
+`lcd_indicator_message_arms_o_a_i_and_v_and_leaves_d_inert` and
+`lcd_indicator_strip_publishes_options_on_o_always_on_top_on_a_visualizer_on_v_and_file_info_on_i`
 (`src/ui/views/tests/now_playing.rs`);
 `toggle_file_info_shows_and_hides_the_panel_without_touching_playback`,
 `toggle_file_info_needs_a_known_current_track`, `file_info_and_about_close_each_other`, and
@@ -1755,9 +1813,9 @@ preview:
   `j`/`J` opens Jump to File instead, see `## Jump to File panel`).
 - `handlers::jump::toggle_jump_time` flips `WinampPlayer::jump_time_visible`. Opening needs
   `playback_duration` to be `Some`; without it the flag stays false. Opening clears the query,
-  `about_visible`, `file_info_visible`, and `jump_file_visible`, and opening About, File info, or
-  Jump to File clears `jump_time_visible`. Opening while `shaded` holds first calls
-  `toggle_window_shade`.
+  `about_visible`, `options_visible`, `file_info_visible`, and `jump_file_visible`, and opening
+  About, Options, File info, or Jump to File clears `jump_time_visible`. Opening while `shaded`
+  holds first calls `toggle_window_shade`.
 - A plain or Shift-held Escape press also closes it (see `## Transient panel dismissal`).
 - `handlers::jump::parse_jump_time` accepts ASCII-digit seconds or `M:SS`; `jump_time_submitted`
   seeks through `playback::preview::seek_preview_to` (clamped to the length), bumping
@@ -1797,11 +1855,11 @@ and `jump_time_overlay_buttons_and_backdrop_publish_their_messages`
   filters, and `Close` or the backdrop closes the panel.
 - `handlers::jump::song_list` names the cached titles and epoch of the showing list: the browsed
   Songs buffer or the flat All Songs buffer, and no list on every other view. `toggle_jump_file`
-  opens only when that list exists; opening clears the query, closes About, File info, and Jump to
-  time, and while `shaded` first calls `toggle_window_shade`. Opening any of those panels closes
-  Jump to File, and the flag is never persisted. Navigation that changes the showing view (Reload,
-  Back, search, and the All Songs/All Albums/Playlists buttons) clears it, so a panel left open
-  cannot reappear over a later song list. A plain or Shift-held Escape press also closes it (see
+  opens only when that list exists; opening clears the query, closes About, Options, File info, and
+  Jump to time, and while `shaded` first calls `toggle_window_shade`. Opening any of those panels
+  closes Jump to File, and the flag is never persisted. Navigation that changes the showing view
+  (Reload, Back, search, and the All Songs/All Albums/Playlists buttons) clears it, so a panel left
+  open cannot reappear over a later song list. A plain or Shift-held Escape press also closes it (see
   `## Transient panel dismissal`).
 - `views::jump_file::jump_file_matches` trims the query and compares it case-insensitively as a
   substring, matching every index for a blank query, in list order. The view and the submit handler
@@ -1864,14 +1922,14 @@ jump-file branch of `ui::view::view`.
 ## Transient panel dismissal
 
 **Guarantee.** A plain or Shift-held Escape press closes whichever transient panel is showing —
-About, File info, Jump to time, or Jump to File — including while its filter or time box has focus.
-It changes only the four visibility flags; no query, selection, playback, transport, mixer, browse,
-or settings state changes, no work is scheduled, and nothing is persisted. Escape with Control,
-Alt, or Logo held, and Escape releases, map to nothing. With no panel open the listener is not
-subscribed, so Escape stays unbound there and a focused `Search library` box keeps it for clearing
-its own focus; `Message::EscapePressed` is still a no-op.
+About, Options, File info, Jump to time, or Jump to File — including while its filter or time box
+has focus. It changes only the five visibility flags; no query, selection, playback, transport,
+mixer, browse, or settings state changes, no work is scheduled, and nothing is persisted. Escape
+with Control, Alt, or Logo held, and Escape releases, map to nothing. With no panel open the
+listener is not subscribed, so Escape stays unbound there and a focused `Search library` box keeps
+it for clearing its own focus; `Message::EscapePressed` is still a no-op.
 
-- `WinampPlayer::transient_panel_open` is the read side of the four flags
+- `WinampPlayer::transient_panel_open` is the read side of the five flags
   `WinampPlayer::close_transient_panels` clears, so the subscription gate and the closer share one
   set.
 - `ui::subscriptions::escape_key_message` maps the press through `iced::event::listen_with`, ignoring the
@@ -2225,7 +2283,7 @@ width, while `views::visible_spectrum` applies `WinampPlayer::visualizer_visible
 - `now_playing_visualizer_row_draws_one_fixed_width_bar_per_band` (`src/ui/views/tests/lcd_display.rs`)
 - `now_playing_visualizer_row_paints_its_ramp_from_green_to_orange` (`src/ui/views/tests/lcd_display.rs`)
 - `visible_spectrum_hides_the_stored_bars_while_the_visualizer_is_off` (`src/ui/views/tests/now_playing.rs`)
-- `lcd_indicator_strip_publishes_always_on_top_on_a_visualizer_on_v_and_file_info_on_i`
+- `lcd_indicator_strip_publishes_options_on_o_always_on_top_on_a_visualizer_on_v_and_file_info_on_i`
   (`src/ui/views/tests/now_playing.rs`)
 - `toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum` (`src/ui/tests/panels_tests.rs`)
 - `hidden_visualizer_draws_no_bars_in_the_root_view` (`src/ui/tests/panels_tests.rs`)

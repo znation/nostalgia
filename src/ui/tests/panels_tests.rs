@@ -342,6 +342,7 @@ fn escape_closes_each_transient_panel_without_touching_anything_else() {
 
     for toggle in [
         Message::ToggleAbout,
+        Message::ToggleOptions,
         Message::ToggleFileInfo,
         Message::ToggleJumpTime,
         Message::ToggleJumpFile,
@@ -373,4 +374,124 @@ fn escape_closes_each_transient_panel_without_touching_anything_else() {
         CurrentView::Songs,
         "Escape must not change the browse level"
     );
+}
+
+// Each options-menu row flips exactly the flag its existing toggle owns, then
+// closes the menu. Everything else, including playback, stays put.
+#[test]
+fn options_choice_applies_each_toggle_and_closes_the_panel() {
+    for choice in [
+        OptionsChoice::AlwaysOnTop,
+        OptionsChoice::TimeDisplay,
+        OptionsChoice::Visualizer,
+        OptionsChoice::EqualizerPanel,
+        OptionsChoice::LibraryPanel,
+    ] {
+        let (mut player, state) = test_player();
+        player.options_visible = true;
+        let before = {
+            let state = state.blocking_lock();
+            (
+                player.always_on_top,
+                player.time_display,
+                player.visualizer_visible,
+                player.eq_panel_visible,
+                player.library_panel_visible,
+                state.transport_mode(),
+                state.current_track.clone(),
+            )
+        };
+
+        let _ = update(&mut player, Message::OptionsChoice(choice));
+
+        let (
+            always_on_top,
+            time_display,
+            visualizer_visible,
+            eq_panel_visible,
+            library_panel_visible,
+        ) = (
+            player.always_on_top,
+            player.time_display,
+            player.visualizer_visible,
+            player.eq_panel_visible,
+            player.library_panel_visible,
+        );
+        assert!(!player.options_visible, "{choice:?} must close the menu");
+        let expected = match choice {
+            OptionsChoice::AlwaysOnTop => (!before.0, before.1, before.2, before.3, before.4),
+            OptionsChoice::TimeDisplay => {
+                (before.0, before.1.toggled(), before.2, before.3, before.4)
+            }
+            OptionsChoice::Visualizer => (before.0, before.1, !before.2, before.3, before.4),
+            OptionsChoice::EqualizerPanel => (before.0, before.1, before.2, !before.3, before.4),
+            OptionsChoice::LibraryPanel => (before.0, before.1, before.2, before.3, !before.4),
+        };
+        assert_eq!(
+            (
+                always_on_top,
+                time_display,
+                visualizer_visible,
+                eq_panel_visible,
+                library_panel_visible,
+            ),
+            expected,
+            "{choice:?} must flip only its own flag and leave the others alone"
+        );
+        let after = {
+            let state = state.blocking_lock();
+            (state.transport_mode(), state.current_track.clone())
+        };
+        assert_eq!(
+            after,
+            (before.5, before.6),
+            "{choice:?} must leave playback alone"
+        );
+    }
+}
+
+// The options menu is transient like the other panels: opening it closes each
+// of them, opening any of them closes it, and with nothing shaded a toggle
+// schedules no work.
+#[test]
+fn toggle_options_opens_and_closes_and_excludes_each_other_panel() {
+    let (mut player, state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    player.current_view = CurrentView::Songs;
+    make_current_track_known(&mut player, &state);
+    player.playback_duration = Some(Duration::from_secs(210));
+
+    assert_message_schedules_no_work(&mut player, Message::ToggleOptions);
+    assert!(player.options_visible);
+    assert_message_schedules_no_work(&mut player, Message::ToggleOptions);
+    assert!(!player.options_visible);
+
+    for (toggle, is_open) in [
+        (
+            Message::ToggleAbout,
+            (|player: &WinampPlayer| player.about_visible) as fn(&WinampPlayer) -> bool,
+        ),
+        (Message::ToggleFileInfo, |player| player.file_info_visible),
+        (Message::ToggleJumpTime, |player| player.jump_time_visible),
+        (Message::ToggleJumpFile, |player| player.jump_file_visible),
+    ] {
+        let _ = update(&mut player, Message::EscapePressed);
+        let _ = update(&mut player, Message::ToggleOptions);
+        assert!(player.options_visible);
+        let _ = update(&mut player, toggle.clone());
+        assert!(
+            !player.options_visible,
+            "opening {toggle:?} must close the options menu"
+        );
+        assert!(is_open(&player), "opening {toggle:?} must open its panel");
+
+        let _ = update(&mut player, Message::EscapePressed);
+        let _ = update(&mut player, toggle);
+        assert!(is_open(&player));
+        assert_message_schedules_no_work(&mut player, Message::ToggleOptions);
+        assert!(
+            player.options_visible && !is_open(&player),
+            "opening the options menu must close the other panel"
+        );
+    }
 }

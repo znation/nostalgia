@@ -320,22 +320,32 @@ pub(in crate::ui) enum Message {
     // while the window is shaded first restores the window, so the panel never
     // draws in shade mode. The flag is not persisted.
     ToggleAbout,
+    // The LCD strip's `O` or the transport row's lightning button: flips the
+    // transient options menu. Opening it closes every other transient panel,
+    // and opening while shaded first restores the window. The flag is not
+    // persisted.
+    ToggleOptions,
+    // A row of the options menu: close the menu first, then apply the one
+    // choice it names through that choice's existing toggle handler. The
+    // choice itself is not a persisted setting.
+    OptionsChoice(OptionsChoice),
     // Alt+3 or the LCD strip's `I`: flips the transient File info panel for the
     // current track.
-    // Opening it needs a current track known to the player and closes About;
-    // opening while shaded first restores the window. The flag is not persisted.
+    // Opening it needs a current track known to the player and closes About and
+    // Options; opening while shaded first restores the window. The flag is not
+    // persisted.
     ToggleFileInfo,
     // Ctrl+J: flips the transient Jump to time panel. Opening it needs a
-    // loaded preview with a known length, closes About and File info, and
-    // while shaded first restores the window. The flag is not persisted.
+    // loaded preview with a known length, closes About, Options, and File info,
+    // and while shaded first restores the window. The flag is not persisted.
     ToggleJumpTime,
     // A keystroke in the Jump to time box: stores the typed text.
     JumpTimeChanged(String),
     // Enter or the `Jump` button: seeks to the typed time and closes the panel.
     JumpTimeSubmitted,
     // Plain J: flips the transient Jump to File panel. Opening needs a showing
-    // song list (Songs or All Songs), closes About, File info, and Jump to
-    // time, and while shaded first restores the window. The flag is not
+    // song list (Songs or All Songs), closes About, Options, File info, and Jump
+    // to time, and while shaded first restores the window. The flag is not
     // persisted.
     ToggleJumpFile,
     // A keystroke in the Jump to File box: stores the typed filter text.
@@ -364,9 +374,9 @@ pub(in crate::ui) enum Message {
         index: usize,
     },
     // A plain or Shift-held Escape press while a transient panel is open:
-    // close the showing About, File info, Jump to time, or Jump to File panel
-    // by clearing only those four visibility flags. No other state changes and
-    // no work is scheduled; with no panel open the arm is a no-op.
+    // close the showing About, Options, File info, Jump to time, or Jump to
+    // File panel by clearing only those five visibility flags. No other state
+    // changes and no work is scheduled; with no panel open the arm is a no-op.
     EscapePressed,
     // The LCD strip's always-on-top toggle. The arm flips the flag and
     // schedules `iced::window::set_level` for the resolved window, which is a
@@ -376,4 +386,21 @@ pub(in crate::ui) enum Message {
     // arm stores it and resizes the window down to the title-bar strip,
     // unless a newer toggle already left shade mode or captured the size.
     WindowShadeMeasured(iced::Size),
+}
+
+/// A row of the transient options menu, each naming the existing on/off
+/// toggle its press reuses after closing the menu. The menu adds no state of
+/// its own and persists nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::ui) enum OptionsChoice {
+    /// Reuses [`Message::ToggleAlwaysOnTop`].
+    AlwaysOnTop,
+    /// Reuses [`Message::ToggleTimeDisplay`].
+    TimeDisplay,
+    /// Reuses [`Message::ToggleVisualizer`].
+    Visualizer,
+    /// Reuses [`Message::ToggleEqualizerPanel`].
+    EqualizerPanel,
+    /// Reuses [`Message::ToggleLibraryPanel`].
+    LibraryPanel,
 }

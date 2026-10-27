@@ -166,27 +166,39 @@ pub(in crate::ui) struct WinampPlayer {
     /// Whether the transient About panel is drawn over the normal-mode tree.
     /// `Message::ToggleAbout` flips it; it is closed at launch and deliberately
     /// not persisted. Opening it while [`Self::shaded`] holds restores the
-    /// window first, and `view` never draws it in shade mode.
+    /// window first, and `view` never draws it in shade mode. At most one of
+    /// this and [`Self::options_visible`], [`Self::file_info_visible`],
+    /// [`Self::jump_time_visible`], and [`Self::jump_file_visible`] holds.
     pub(in crate::ui) about_visible: bool,
+    /// Whether the transient options menu is drawn over the normal-mode tree.
+    /// `Message::ToggleOptions` flips it; it is closed at launch and
+    /// deliberately not persisted, because the menu only lists existing
+    /// choices. Opening it while [`Self::shaded`] holds restores the window
+    /// first, and `view` never draws it in shade mode. At most one of this and
+    /// [`Self::about_visible`], [`Self::file_info_visible`],
+    /// [`Self::jump_time_visible`], and [`Self::jump_file_visible`] holds.
+    pub(in crate::ui) options_visible: bool,
     /// Whether the transient File info panel is drawn over the normal-mode
     /// tree. `Message::ToggleFileInfo` flips it; it is closed at launch and
-    /// deliberately not persisted. At most one of this and
-    /// [`Self::about_visible`] holds.
+    /// deliberately not persisted. At most one of this,
+    /// [`Self::about_visible`], [`Self::options_visible`],
+    /// [`Self::jump_time_visible`], and [`Self::jump_file_visible`] holds.
     pub(in crate::ui) file_info_visible: bool,
     /// Whether the transient Jump to time panel is drawn over the normal-mode
     /// tree. `Message::ToggleJumpTime` flips it; it is closed at launch and
     /// deliberately not persisted. At most one of this,
-    /// [`Self::about_visible`], [`Self::file_info_visible`], and
-    /// [`Self::jump_file_visible`] holds.
+    /// [`Self::about_visible`], [`Self::options_visible`],
+    /// [`Self::file_info_visible`], and [`Self::jump_file_visible`] holds.
     pub(in crate::ui) jump_time_visible: bool,
     /// The Jump to time panel's typed text, cleared each time it opens.
     pub(in crate::ui) jump_time_query: String,
     /// Whether the transient Jump to File panel is drawn over the normal-mode
     /// showing song list. `Message::ToggleJumpFile` flips it; it is closed at
     /// launch and deliberately not persisted. At most one of this,
-    /// [`Self::about_visible`], [`Self::file_info_visible`], and
-    /// [`Self::jump_time_visible`] holds. Navigation that changes the showing
-    /// list clears it, so a panel left open cannot reappear over the next list.
+    /// [`Self::about_visible`], [`Self::options_visible`],
+    /// [`Self::file_info_visible`], and [`Self::jump_time_visible`] holds.
+    /// Navigation that changes the showing list clears it, so a panel left open
+    /// cannot reappear over the next list.
     pub(in crate::ui) jump_file_visible: bool,
     /// The Jump to File panel's typed filter text, cleared each time it opens.
     pub(in crate::ui) jump_file_query: String,
@@ -309,6 +321,7 @@ impl WinampPlayer {
             eq_panel_visible: true,
             library_panel_visible: true,
             about_visible: false,
+            options_visible: false,
             file_info_visible: false,
             jump_time_visible: false,
             jump_time_query: String::new(),
@@ -327,24 +340,26 @@ impl WinampPlayer {
         }
     }
 
-    /// Close every transient panel — About, File info, Jump to time, and Jump
-    /// to File — so that at most one is open (the invariant the `*_visible`
-    /// fields document). A toggle handler that opens its panel calls this
-    /// first, then sets its own flag, so the full set of panels lives here
-    /// instead of being listed again in each opener.
+    /// Close every transient panel — About, Options, File info, Jump to time,
+    /// and Jump to File — so that at most one is open (the invariant the
+    /// `*_visible` fields document). A toggle handler that opens its panel
+    /// calls this first, then sets its own flag, so the full set of panels
+    /// lives here instead of being listed again in each opener.
     pub(in crate::ui) fn close_transient_panels(&mut self) {
         self.about_visible = false;
+        self.options_visible = false;
         self.file_info_visible = false;
         self.jump_time_visible = false;
         self.jump_file_visible = false;
     }
 
-    /// Whether any transient panel — About, File info, Jump to time, or Jump
-    /// to File — is open. The read side of the same four flags
+    /// Whether any transient panel — About, Options, File info, Jump to time,
+    /// or Jump to File — is open. The read side of the same five flags
     /// [`Self::close_transient_panels`] clears, so the subscription gate and
     /// the closer cannot drift.
     pub(in crate::ui) fn transient_panel_open(&self) -> bool {
         self.about_visible
+            || self.options_visible
             || self.file_info_visible
             || self.jump_time_visible
             || self.jump_file_visible

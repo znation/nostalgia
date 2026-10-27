@@ -49,8 +49,8 @@ const LCD_TRANSPORT_SIZE: f32 = 22.0;
 const LCD_TRANSPORT_WIDTH: f32 = 16.0;
 
 /// The Now Playing bar: a small `O A I D V` strip down the LCD's left edge
-/// (with `A` toggling always-on-top, `I` opening File info, and `V` the
-/// visualizer), then the large
+/// (with `O` opening the options menu, `A` toggling always-on-top, `I` opening
+/// File info, and `V` the visualizer while `D` stays decorative), then the large
 /// elapsed readout, the "Now Playing:" caption
 /// followed by the current track's playlist number prefix, resolved artist,
 /// and title (or "Nothing" when nothing is current), with the track's plain
@@ -71,8 +71,8 @@ const LCD_TRANSPORT_WIDTH: f32 = 16.0;
 /// (no allocation), while the owned fallbacks are moved into the widget, so
 /// the built element never borrows a temporary; the scrolling branch allocates
 /// only its window, as the fitting branch allocates nothing. `modes` carries
-/// the three flags the indicator strip lights (always-on-top, File info, and
-/// the visualizer).
+/// the four flags the indicator strip lights (the options menu, always-on-top,
+/// File info, and the visualizer).
 // The resolved LCD readouts and playback state; grouping them into a wrapper
 // would add a concept without making the call site clearer, as in `view_songs`.
 #[allow(clippy::too_many_arguments)]

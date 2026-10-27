@@ -264,8 +264,9 @@ fn marquee_text_counts_characters_not_bytes() {
     assert_eq!(marquee_text("Café — Ok", 0, 5), "Café ");
 }
 
-/// Lays out the indicator strip (with its live `A`, `I`, and `V` controls) and
-/// returns the text fragments it would draw and the width the column occupies.
+/// Lays out the indicator strip (with its live `O`, `A`, `I`, and `V` controls)
+/// and returns the text fragments it would draw and the width the column
+/// occupies.
 fn captured_indicator_texts() -> (Vec<String>, f32) {
     let mut element: iced::Element<'_, Message, iced::Theme, ()> =
         lcd_indicator_strip(IndicatorModes::default()).into();
@@ -287,9 +288,9 @@ fn captured_indicator(
     layout_capture::capture_text_and_pixels(&mut element, &mut renderer, &iced::Theme::Dark)
 }
 
-// Each live letter lights only for its own mode: A for always-on-top, I for
-// File info, and V for the visualizer. Every other case stays dim, including
-// the decorative O and D under every combination.
+// Each live letter lights only for its own mode: O for the options menu, A for
+// always-on-top, I for File info, and V for the visualizer. Every other case
+// stays dim, including the decorative D under every combination.
 #[test]
 fn indicator_label_color_lights_only_the_active_mode() {
     for label in LCD_INDICATOR_LABELS {
@@ -301,12 +302,13 @@ fn indicator_label_color_lights_only_the_active_mode() {
     }
 
     let all_on = IndicatorModes {
+        options_visible: true,
         always_on_top: true,
         file_info_visible: true,
         visualizer_visible: true,
     };
     for label in LCD_INDICATOR_LABELS {
-        let expected = if matches!(label, "A" | "I" | "V") {
+        let expected = if matches!(label, "O" | "A" | "I" | "V") {
             theme::LCD_GREEN
         } else {
             theme::LCD_GREEN_DIM
@@ -319,6 +321,13 @@ fn indicator_label_color_lights_only_the_active_mode() {
     }
 
     for (modes, lit) in [
+        (
+            IndicatorModes {
+                options_visible: true,
+                ..Default::default()
+            },
+            "O",
+        ),
         (
             IndicatorModes {
                 always_on_top: true,
@@ -371,6 +380,7 @@ fn lcd_indicator_strip_lights_the_active_letters_and_dims_the_rest() {
     }
 
     let (lit_capture, lit_pixels) = captured_indicator(IndicatorModes {
+        options_visible: true,
         always_on_top: true,
         file_info_visible: true,
         visualizer_visible: true,
@@ -380,16 +390,13 @@ fn lcd_indicator_strip_lights_the_active_letters_and_dims_the_rest() {
         vec!["O", "A", "I", "D", "V"],
         "lighting the letters must not change their order"
     );
-    for lit in ["A", "I", "V"] {
+    for lit in ["O", "A", "I", "V"] {
         let lit_green = lit_pixels.max_green_in(lit_capture.find(lit));
-        for dim in ["O", "D"] {
-            let dim_green = lit_pixels.max_green_in(lit_capture.find(dim));
-            assert!(
-                lit_green > dim_green + 100,
-                "{lit} must be lit and {dim} dim: {lit} green {lit_green}, \
-                 {dim} green {dim_green}"
-            );
-        }
+        let dim_green = lit_pixels.max_green_in(lit_capture.find("D"));
+        assert!(
+            lit_green > dim_green + 100,
+            "{lit} must be lit and D dim: {lit} green {lit_green}, D green {dim_green}"
+        );
     }
 }
 
@@ -403,10 +410,15 @@ fn lcd_indicator_strip_draws_each_label_in_order_at_a_fixed_width() {
     assert_eq!(width, 12.0, "the strip's fixed width");
 }
 
-// Only A, I, and V are live: A reuses the always-on-top toggle, I opens
-// File info, V toggles the LCD visualizer, and O and D publish nothing.
+// All four non-D letters are live: O opens the options menu, A reuses the
+// always-on-top toggle, I opens File info, V toggles the LCD visualizer, and D
+// publishes nothing.
 #[test]
-fn lcd_indicator_message_arms_a_i_and_v_and_leaves_o_d_inert() {
+fn lcd_indicator_message_arms_o_a_i_and_v_and_leaves_d_inert() {
+    assert!(matches!(
+        lcd_indicator_message("O"),
+        Some(Message::ToggleOptions)
+    ));
     assert!(matches!(
         lcd_indicator_message("A"),
         Some(Message::ToggleAlwaysOnTop)
@@ -419,22 +431,21 @@ fn lcd_indicator_message_arms_a_i_and_v_and_leaves_o_d_inert() {
         lcd_indicator_message("V"),
         Some(Message::ToggleVisualizer)
     ));
-    for label in ["O", "D"] {
-        assert!(
-            lcd_indicator_message(label).is_none(),
-            "{label} must stay decorative"
-        );
-    }
+    assert!(
+        lcd_indicator_message("D").is_none(),
+        "D must stay decorative"
+    );
 }
 
 // The strip must wire the mapping up, not just expose it: drive a real left
-// press at each letter's bounds. A publishes the always-on-top toggle, I
-// publishes the File info toggle, V publishes the visualizer toggle, and O
-// publishes nothing.
+// press at each letter's bounds. O publishes the options toggle, A publishes
+// the always-on-top toggle, I publishes the File info toggle, V publishes the
+// visualizer toggle, and D publishes nothing.
 #[test]
-fn lcd_indicator_strip_publishes_always_on_top_on_a_visualizer_on_v_and_file_info_on_i() {
+fn lcd_indicator_strip_publishes_options_on_o_always_on_top_on_a_visualizer_on_v_and_file_info_on_i()
+ {
     let mut renderer = layout_capture::headless_renderer();
-    for label in ["A", "I", "V", "O"] {
+    for label in ["O", "A", "I", "V", "D"] {
         let mut element: iced::Element<'_, Message, iced::Theme, iced::Renderer> =
             lcd_indicator_strip(IndicatorModes::default()).into();
         let capture = layout_capture::capture_text(&mut element, &renderer);
@@ -448,6 +459,12 @@ fn lcd_indicator_strip_publishes_always_on_top_on_a_visualizer_on_v_and_file_inf
             iced::Point::new(letter.center_x(), letter.center_y()),
         );
         match label {
+            "O" => assert!(
+                messages
+                    .iter()
+                    .any(|message| matches!(message, Message::ToggleOptions)),
+                "a press on O must publish ToggleOptions: {messages:?}"
+            ),
             "A" => assert!(
                 messages
                     .iter()

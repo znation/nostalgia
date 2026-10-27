@@ -81,6 +81,21 @@ fn toggle_about_shows_and_hides_the_panel_without_touching_playback() {
 }
 
 #[test]
+fn toggle_options_while_shaded_restores_the_window_first() {
+    let (mut player, _state) = player_with_window_id();
+    player.shaded = true;
+    player.unshaded_size = Some(iced::Size::new(800.0, 600.0));
+
+    assert_message_schedules_work(&mut player, Message::ToggleOptions);
+
+    assert!(
+        !player.shaded,
+        "opening Options must restore the window first"
+    );
+    assert!(player.options_visible);
+}
+
+#[test]
 fn toggle_about_while_shaded_restores_the_window_first() {
     let (mut player, _state) = player_with_window_id();
     player.shaded = true;
