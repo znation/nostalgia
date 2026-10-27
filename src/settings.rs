@@ -678,6 +678,21 @@ mod tests {
     }
 
     #[test]
+    fn infinite_numbers_load_and_clamp_to_the_range_ends() {
+        // Unlike `NaN`, an infinity is kept by the parser and clamped by the
+        // state setters, so it lands on the nearest range end.
+        let settings =
+            Settings::from_text("volume=inf\nbalance=-inf\neq_preamp=infinity\neq_band_0=-inf\n");
+        let mut state = AppState::default();
+        settings.apply_to(&mut state);
+
+        assert_eq!(state.volume(), 1.0);
+        assert_eq!(state.balance(), -1.0);
+        assert_eq!(state.eq_preamp(), equalizer::GAIN_MAX_DB);
+        assert_eq!(state.eq_bands()[0], equalizer::GAIN_MIN_DB);
+    }
+
+    #[test]
     fn apply_to_restores_a_saved_preset() {
         let rock = *equalizer::PRESETS
             .iter()
