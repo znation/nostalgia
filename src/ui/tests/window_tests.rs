@@ -321,6 +321,28 @@ fn a_late_measurement_cannot_overwrite_the_captured_size() {
 }
 
 #[test]
+fn window_id_resolved_measures_a_restored_shade() {
+    let (mut player, _state) = test_player();
+    player.shaded = true;
+    assert_eq!(player.unshaded_size, None);
+    let id = iced::window::Id::unique();
+
+    assert_message_schedules_work(&mut player, Message::WindowIdResolved(Some(id)));
+    assert_eq!(player.window_id, Some(id));
+
+    assert_message_schedules_work(
+        &mut player,
+        Message::WindowShadeMeasured(iced::Size::new(800.0, 600.0)),
+    );
+    assert!(player.shaded);
+    assert_eq!(player.unshaded_size, Some(iced::Size::new(800.0, 600.0)));
+
+    let (mut player, _state) = test_player();
+    let id = iced::window::Id::unique();
+    assert_message_schedules_no_work(&mut player, Message::WindowIdResolved(Some(id)));
+}
+
+#[test]
 fn toggle_window_shade_without_a_window_id_still_flips_the_flag() {
     let (mut player, _state) = test_player();
     assert_eq!(player.window_id, None);

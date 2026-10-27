@@ -4,19 +4,18 @@
 //! runs: the volume, balance, Repeat and Shuffle flags, the equalizer's on/off
 //! state, preamp, band gains, and selected preset, the Now Playing readout's
 //! elapsed/remaining mode, the visualizer's shown/hidden choice, the equalizer
-//! and library panels' shown/hidden choices, and the always-on-top flag. All
-//! but the last five live in [`AppState`]; the readout mode, visualizer choice,
-//! panel choices, and always-on-top flag live on the UI's
-//! `WinampPlayer`, so the player sets them on its snapshot before saving and
-//! restores them after loading. The file-backed store and the writer seam
-//! live in [`file_store`], and [`writer::BackgroundWriter`] runs the blocking
-//! write on a worker thread in production.
+//! and library panels' shown/hidden choices, the always-on-top flag, and the
+//! window-shade mode. All but the last six live in [`AppState`]; the readout
+//! mode, visualizer choice, panel choices, always-on-top flag, and shade mode
+//! live on the UI's `WinampPlayer`, so the player sets them on its snapshot
+//! before saving and restores them after loading. The file-backed store and the
+//! writer seam live in [`file_store`], and [`writer::BackgroundWriter`] runs the
+//! blocking write on a worker thread in production.
 //!
 //! [`file_store::FileStore`] loads the snapshot from a line-based text file
 //! at startup and rewrites it whenever the UI changes one of those values.
 //! Playback position, the browse level, the search box, the current track,
-//! and window placement (other than the saved always-on-top level) are
-//! deliberately not persisted.
+//! and the window's size and position are deliberately not persisted.
 
 pub mod file_store;
 pub mod writer;
@@ -26,16 +25,17 @@ use crate::state::AppState;
 
 /// The persisted values the next launch restores: the mixer and equalizer
 /// subset of [`AppState`] plus the UI-owned readout mode, visualizer choice,
-/// equalizer and library panel choices, and always-on-top flag.
+/// equalizer and library panel choices, always-on-top flag, and shade mode.
 ///
 /// The fields are private; build a state-backed snapshot with
 /// [`Settings::from_state`] and restore it with [`Settings::apply_to`].
 /// `time_display_remaining`, `visualizer_visible`, `eq_panel_visible`,
-/// `library_panel_visible`, and `always_on_top` are not held in
-/// [`AppState`]: `from_state` leaves them elapsed, shown (all three), and
-/// unpinned, and the player overwrites them from its own values before
-/// saving. `Default` mirrors [`AppState::default`] plus elapsed, shown, and unpinned, so if one
-/// starting value changes the other must change with it.
+/// `library_panel_visible`, `always_on_top`, and `shade` are not held in
+/// [`AppState`]: `from_state` leaves them elapsed, shown (all three), unpinned,
+/// and unshaded, and the player overwrites them from its own values before
+/// saving. `Default` mirrors [`AppState::default`] plus elapsed, shown,
+/// unpinned, and unshaded, so if one starting value changes the other must
+/// change with it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
     volume: f32,
@@ -51,14 +51,15 @@ pub struct Settings {
     eq_panel_visible: bool,
     library_panel_visible: bool,
     always_on_top: bool,
+    shade: bool,
 }
 
 impl Default for Settings {
     /// The same starting values as [`AppState::default`]: half volume, a
     /// centered balance, both toggles off, and the equalizer off with a flat
     /// curve and no preset, plus the elapsed readout mode, the shown
-    /// visualizer and both panels, and an unpinned window. A missing or unreadable settings
-    /// file starts here.
+    /// visualizer and both panels, and an unpinned, unshaded window. A missing
+    /// or unreadable settings file starts here.
     fn default() -> Self {
         Self {
             volume: 0.5,
@@ -74,6 +75,7 @@ impl Default for Settings {
             eq_panel_visible: true,
             library_panel_visible: true,
             always_on_top: false,
+            shade: false,
         }
     }
 }
@@ -97,6 +99,7 @@ impl Settings {
             eq_panel_visible: true,
             library_panel_visible: true,
             always_on_top: false,
+            shade: false,
         }
     }
 
@@ -177,6 +180,22 @@ impl Settings {
         self.always_on_top = always_on_top;
     }
 
+    /// Whether the window is rolled up into shade mode. The player owns this
+    /// value, so it reads it back when saving and restores it from the loaded
+    /// snapshot at boot. The window's size and position are separate and are
+    /// not persisted.
+    #[must_use]
+    pub fn shaded(&self) -> bool {
+        self.shade
+    }
+
+    /// Set whether the window is rolled up into shade mode. The player calls
+    /// this on its fresh snapshot before saving; [`Self::apply_to`]
+    /// deliberately leaves the UI-owned flag alone.
+    pub fn set_shaded(&mut self, shaded: bool) {
+        self.shade = shaded;
+    }
+
     /// Restore this snapshot into `state`.
     ///
     /// The private values go through the state's clamped setters
@@ -184,7 +203,8 @@ impl Settings {
     /// hand-edited file cannot push the state out of range. An applied preset
     /// is restored last through `apply_eq_preset`, after the per-band writes
     /// have cleared the selection. The UI-owned readout mode, visualizer
-    /// choice, panel choices, and always-on-top flag are deliberately left alone.
+    /// choice, panel choices, always-on-top flag, and shade mode are
+    /// deliberately left alone.
     pub fn apply_to(&self, state: &mut AppState) {
         state.set_volume(self.volume);
         state.set_balance(self.balance);
@@ -233,6 +253,7 @@ impl Settings {
             self.library_panel_visible
         ));
         text.push_str(&format!("always_on_top={}\n", self.always_on_top));
+        text.push_str(&format!("shade={}\n", self.shade));
         text
     }
 
@@ -287,6 +308,8 @@ impl Settings {
                 }
                 // A malformed value leaves the default unpinned window.
                 "always_on_top" => parse_into(&mut settings.always_on_top, value),
+                // A malformed value leaves the default unshaded window.
+                "shade" => parse_into(&mut settings.shade, value),
                 _ => {
                     if let Some(index) = key
                         .strip_prefix("eq_band_")
@@ -346,12 +369,14 @@ mod tests {
         settings.set_eq_panel_visible(false);
         settings.set_library_panel_visible(false);
         settings.set_always_on_top(true);
+        settings.set_shaded(true);
         assert_eq!(Settings::from_text(&settings.to_text()), settings);
         assert!(Settings::from_text(&settings.to_text()).time_display_remaining());
         assert!(!Settings::from_text(&settings.to_text()).visualizer_visible());
         assert!(!Settings::from_text(&settings.to_text()).eq_panel_visible());
         assert!(!Settings::from_text(&settings.to_text()).library_panel_visible());
         assert!(Settings::from_text(&settings.to_text()).always_on_top());
+        assert!(Settings::from_text(&settings.to_text()).shaded());
 
         let custom = Settings {
             eq_preset: None,
@@ -466,6 +491,38 @@ mod tests {
     }
 
     #[test]
+    fn shade_round_trips_and_ignores_malformed_values() {
+        let unshaded = Settings::default();
+        assert!(!unshaded.shaded());
+        assert!(!Settings::from_text(&unshaded.to_text()).shaded());
+        assert!(
+            !Settings::from_text("volume=0.5\n").shaded(),
+            "a missing shade line must fall back to unshaded"
+        );
+
+        let mut shaded = unshaded.clone();
+        shaded.set_shaded(true);
+        assert!(shaded.to_text().contains("shade=true"));
+        assert!(
+            Settings::from_text(&shaded.to_text()).shaded(),
+            "a shaded window must survive the round trip"
+        );
+
+        assert!(
+            !Settings::from_text("shade=false\n").shaded(),
+            "an explicit false must stay unshaded"
+        );
+        assert!(
+            !Settings::from_text("shade=\n").shaded(),
+            "an empty value must fall back to unshaded"
+        );
+        assert!(
+            !Settings::from_text("shade=yes\n").shaded(),
+            "an unknown word must fall back to unshaded"
+        );
+    }
+
+    #[test]
     fn from_text_ignores_malformed_and_unknown_lines() {
         let text = "volume=not-a-number\n\
                     balance=abc\n\
@@ -481,6 +538,7 @@ mod tests {
                     eq_panel_visible=maybe\n\
                     library_panel_visible=maybe\n\
                     always_on_top=yes\n\
+                    shade=yes\n\
                     mystery=1\n";
         assert_eq!(Settings::from_text(text), Settings::default());
     }

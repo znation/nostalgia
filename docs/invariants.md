@@ -789,8 +789,8 @@ keys use, leaving the row playback-independent (2026-10-26).
 **Guarantee.** The values the user sets that outlive a track — volume, balance, Repeat, Shuffle, the
 equalizer's on/off state, preamp, ten band gains, and selected preset, the large readout's
 elapsed/remaining choice, the visualizer's shown/hidden choice, the equalizer and library panels'
-shown/hidden choices, and the LCD strip's always-on-top choice — are loaded once before the
-first view is drawn and rewritten after any update that changes their snapshot, with the newest
+shown/hidden choices, the LCD strip's always-on-top choice, and the window's shade mode — are
+loaded once before the first view is drawn and rewritten after any update that changes their snapshot, with the newest
 queued snapshot written once the worker is free: a burst of changes, such as a slider drag or key
 repeat, may collapse to its newest value instead of writing every intermediate one. An update that leaves the snapshot
 unchanged writes nothing. Reads and writes go through the state's clamped
@@ -808,21 +808,26 @@ they are old enough not to belong to an in-flight save. A symlinked settings fil
 save, the directory sync, and the stale-temp sweep all follow it to the file and directory it points
 at, so the link is never replaced; a dangling link or a missing file is used as the path given, and
 a new file takes the platform's default mode. The readout mode, the visualizer's shown/hidden
-choice, the two panel choices, and the always-on-top choice are the five persisted values not held
-in `AppState`: they live on `WinampPlayer::time_display`, `WinampPlayer::visualizer_visible`,
-`WinampPlayer::eq_panel_visible`, `WinampPlayer::library_panel_visible`, and
-`WinampPlayer::always_on_top`, `main` passes the loaded snapshot through to
-`WinampPlayer::adopt_saved_settings` (which restores all five before the first view), and
+choice, the two panel choices, the always-on-top choice, and the shade mode are the six persisted
+values not held in `AppState`: they live on `WinampPlayer::time_display`,
+`WinampPlayer::visualizer_visible`, `WinampPlayer::eq_panel_visible`,
+`WinampPlayer::library_panel_visible`, `WinampPlayer::always_on_top`, and
+`WinampPlayer::shaded`, `main` passes the loaded snapshot through to
+`WinampPlayer::adopt_saved_settings` (which restores all six before the first view), and
 `persist_settings_if_changed` copies them into the snapshot before comparing and saving. A missing
 or malformed `time_display` line falls back to elapsed, a missing or malformed `always_on_top` line
-falls back to unpinned, and a missing or malformed `visualizer_visible`, `eq_panel_visible`, or
-`library_panel_visible` line falls back to shown. The classic `A` key and Winamp's Ctrl+A reach
+falls back to unpinned, a missing or malformed `shade` line falls back to unshaded, and a missing
+or malformed `visualizer_visible`, `eq_panel_visible`, or `library_panel_visible` line falls back
+to shown. The classic `A` key and Winamp's Ctrl+A reach
 the same `Message::ToggleAlwaysOnTop` arm through `shortcuts::message_for`, so they flip the flag
 and schedule the same window-level call as the on-screen A controls. The saved always-on-top level
 waits for the window id every other window action uses: `window_id_resolved` stores the id, then
-schedules `iced::window::set_level` when the restored flag holds. It is still not window placement:
-the window's size, position, and shade state are not persisted. Playback position, the browse level,
-the search box, the current track, and window placement are deliberately not persisted.
+schedules `iced::window::set_level` when the restored flag holds. A restored shade mode waits for
+the same id: no pre-shade size was captured at boot, so `window_id_resolved` also schedules
+`iced::window::size`, and the resulting measurement stores the launch size before rolling the
+window up (see `## Window shade`). It is still not window placement: the window's size and position
+are not persisted. Playback position, the browse level, the search box, and the current track are
+deliberately not persisted.
 
 **Enforced by.** `src/main.rs` resolves the path with
 `settings::file_store::FileStore::from_environment`, loads it once with `FileStore::load`, applies
@@ -834,10 +839,10 @@ per key, and `apply_to` writes through `AppState::set_volume`, `set_balance`, `s
 `set_eq_band` before restoring a preset through `apply_eq_preset`. `ui::init_ui` attaches the
 store to `WinampPlayer` and restores the snapshot through
 `WinampPlayer::adopt_saved_settings`, which restores `time_display`, `visualizer_visible`,
-`eq_panel_visible`, `library_panel_visible`, and `always_on_top` and
+`eq_panel_visible`, `library_panel_visible`, `always_on_top`, and `shaded` and
 records the snapshot; `update` calls
 `WinampPlayer::persist_settings_if_changed` once after every message, and that method copies
-the five player-owned values into `Settings::from_state`, then compares that snapshot against the
+the six player-owned values into `Settings::from_state`, then compares that snapshot against the
 last one before calling `settings::file_store::SettingsWriter::save`. Production wraps the store
 in `settings::writer::BackgroundWriter`, so that `save` stores the snapshot in a one-slot mailbox
 and wakes its worker instead of writing on the update thread; the worker writes the newest queued
@@ -845,7 +850,8 @@ snapshot with the wrapped store's blocking `save`, and dropping the writer close
 writes any pending snapshot, and joins the worker before returning. Boot's `WindowIdResolved` is
 handled by
 `handlers::window::window_id_resolved`, which applies the restored level through
-`window_level` once the id exists.
+`window_level` once the id exists and, when the restored shade mode is still waiting for its
+launch size, batches in the `iced::window::size` query.
 `settings::file_store::FileStore`'s `SettingsWriter` impl creates the parent directory, stages the
 text with `write_atomically`, and logs a failed create or write.
 With no store attached the method returns before taking the state lock, so tests keep the default
@@ -857,6 +863,7 @@ arm those controls press.
 `visualizer_visibility_round_trips_and_ignores_malformed_values`,
 `panel_visibility_round_trips_and_ignores_malformed_values`,
 `always_on_top_round_trips_and_ignores_malformed_values`,
+`shade_round_trips_and_ignores_malformed_values`,
 `from_text_ignores_malformed_and_unknown_lines`,
 `apply_to_clamps_out_of_range_values_through_the_state_setters`,
 `apply_to_restores_a_saved_preset`,
@@ -884,6 +891,8 @@ arm those controls press.
 `shaded_eq_toggle_saves_nothing`,
 `toggle_always_on_top_reaches_the_saved_snapshot`,
 `saved_always_on_top_is_restored_on_boot`,
+`toggle_window_shade_reaches_the_saved_snapshot`,
+`saved_shade_is_restored_on_boot`,
 `window_level_selects_always_on_top`, and
 `window_id_resolved_applies_a_saved_always_on_top_level` (`src/ui/tests/`). The classic `A` key
 and Ctrl+A reaching the same arm are pinned by `a_toggles_always_on_top_from_the_keyboard`
@@ -901,7 +910,9 @@ became temp-then-rename the same day, after a failed write could truncate the on
 mode, where replacing the link would have silently detached a dotfile setup. On 2026-10-26 the
 production writer moved its blocking write to a background thread, because a slider drag changed
 the snapshot on every movement and each synchronous save fsyncs the file and its directory, so the
-update thread stalled on the disk repeatedly during a drag.
+update thread stalled on the disk repeatedly during a drag. On 2026-10-26 the window's shade
+mode joined the file, so a saved-shaded launch opens rolled up and its first unshade restores the
+launch size; the window's size and position remain unpersisted.
 
 ## Equalizer band tint
 
@@ -1426,6 +1437,14 @@ rather than the panic unwinding the event loop.
   Pinned by `message_for_maps_ctrl_w_to_toggle_window_shade` and
   `ctrl_w_rolls_the_window_up_and_back`.
 
+- A launch whose settings say the window was shaded opens rolled up: `adopt_saved_settings`
+  restores `WinampPlayer::shaded` before the first view, so the root draws the title bar plus
+  strip; once `WindowIdResolved` lands, `window_id_resolved` schedules `iced::window::size`
+  (batched with a saved always-on-top level when both apply), and `WindowShadeMeasured` stores
+  the launch size before resizing to `SHADED_HEIGHT`, so the first unshade restores it. An
+  unshaded launch schedules no measurement, and the size and position themselves stay
+  unpersisted.
+
 - Shade mode builds exactly the title bar over the compact transport strip, and the window is
   resized to that same height (`SHADED_HEIGHT = TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT`). The
   strip keeps a fixed `SHADE_STRIP_HEIGHT`, which aliases the shared
@@ -1493,7 +1512,9 @@ and `Message::VolumeChange`; `views::mini_transport::MINI_TRANSPORT_HEIGHT` owns
 `views::shade::SHADE_STRIP_HEIGHT` aliases it while `views::shade::SHADED_HEIGHT` adds the title
 bar; the shaded branch of `ui::view::view` stacks the bar and strip; and
 `handlers::window::resize_to_shade` resizes to `handlers::window::shade_target_size`, which reads
-`SHADED_HEIGHT`. `views::view_shade_strip` is re-exported by `src/ui/views/mod.rs`.
+`SHADED_HEIGHT`; `handlers::window::window_id_resolved` additionally schedules the launch-size
+query for a restored shade and batches it with the saved always-on-top level when both apply.
+`views::view_shade_strip` is re-exported by `src/ui/views/mod.rs`.
 
 **Pinned by.** `transport_controls_draw_play_and_pause_in_every_playback_state`,
 `shade_controls_map_to_transport_messages_and_keep_fixed_widths`,
@@ -1511,13 +1532,17 @@ bar; the shaded branch of `ui::view::view` stacks the bar and strip; and
 `shade_root_readout_previews_the_seek_drag`,
 `shade_target_size_is_the_title_bar_plus_the_strip`,
 `title_bar_height_pins_the_shade_strip`, and `root_view_footer_shows_elapsed_over_total`
-(`src/ui/tests/view_tests.rs`).
+(`src/ui/tests/view_tests.rs`), `window_id_resolved_measures_a_restored_shade`
+(`src/ui/tests/window_tests.rs`), and `toggle_window_shade_reaches_the_saved_snapshot` and
+`saved_shade_is_restored_on_boot` (`src/ui/tests/settings_tests.rs`).
 
 **History.** Added with the window-shade transport strip; the earlier shade mode built the title
 bar alone. The strip's controls now come from the shared compact row the library footer uses; the
 shade strip additionally draws the Now Playing bar's seek slider from `seek_bar::seek_slider`.
 A double-click on the strip now restores the window, matching the title bar's double-click. Opening
-About now restores the window first, so the panel never draws in shade mode (2026-10-24).
+About now restores the window first, so the panel never draws in shade mode (2026-10-24). A saved
+shade mode now restores at boot: the rolled-up tree draws from the first view, the launch size is
+measured once the window id resolves, and the first unshade restores it (2026-10-26).
 
 ## About panel
 

@@ -185,11 +185,49 @@ fn saved_panel_visibility_is_restored_on_boot() {
 }
 
 #[test]
+fn toggle_window_shade_reaches_the_saved_snapshot() {
+    let (mut player, _state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+
+    let _ = update(&mut player, Message::ToggleWindowShade);
+    let snapshots = store.snapshots();
+    assert_eq!(snapshots.len(), 1);
+    assert!(snapshots[0].shaded());
+    assert!(player.shaded);
+
+    let _ = update(&mut player, Message::Ignored);
+    assert_eq!(store.snapshots().len(), 1);
+
+    let _ = update(&mut player, Message::ToggleWindowShade);
+    let snapshots = store.snapshots();
+    assert_eq!(snapshots.len(), 2);
+    assert!(!snapshots[1].shaded());
+    assert!(!player.shaded);
+}
+
+#[test]
+fn saved_shade_is_restored_on_boot() {
+    let (mut player, _state) = test_player();
+    let mut shaded = Settings::default();
+    shaded.set_shaded(true);
+
+    player.adopt_saved_settings(shaded.clone());
+    assert!(player.shaded);
+    assert_eq!(player.saved_settings, shaded);
+
+    player.adopt_saved_settings(Settings::default());
+    assert!(!player.shaded);
+    assert_eq!(player.saved_settings, Settings::default());
+}
+
+#[test]
 fn shaded_eq_toggle_saves_nothing() {
     let (mut player, _state) = test_player();
     let store = MemorySettingsStore::default();
     player.settings_store = Some(Box::new(store.clone()));
     player.shaded = true;
+    player.saved_settings.set_shaded(true);
 
     let _ = update(&mut player, Message::ToggleEqualizerPanel);
     assert!(player.eq_panel_visible);

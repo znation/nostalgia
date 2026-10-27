@@ -196,8 +196,8 @@ showing list: to the next song, to the first song with Repeat on at the end, or,
 a shuffled song when another exists. With Repeat off on the last song it stops instead and keeps
 that song queued for Play. The volume, balance, Repeat and Shuffle flags, the equalizer's on/off
 state, curve, and preset, the elapsed/remaining readout choice, the visualizer's shown/hidden
-choice, the equalizer and library panels' shown/hidden choices, and the always-on-top choice are
-saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or `$HOME/.config/nostalgia/settings.ini`)
+choice, the equalizer and library panels' shown/hidden choices, the always-on-top choice, and the
+window-shade mode are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or `$HOME/.config/nostalgia/settings.ini`)
 and restored at the next launch; `NOSTALGIA_SETTINGS_PATH`
 overrides the path. A missing or malformed entry falls back to its default (a byte that
 is not UTF-8 spoils only its own line, and a leading UTF-8 BOM is ignored), and a settings file
@@ -206,4 +206,7 @@ read falls back to defaults with one line on stderr naming the file. Each save r
 the file atomically; a symlinked settings file stays a link, with the write going to
 the file it points at and that file's mode kept. The always-on-top choice
 (the LCD strip's `A` or the `A` key) is remembered for the next launch, and a saved-on launch starts
-with the window pinned once boot resolves its window id. There are no CLI flags yet.
+with the window pinned once boot resolves its window id. The shade mode (the title bar's shade
+button, a double-click on the bar or the rolled-up strip, or Ctrl+W) is remembered too: a
+saved-shaded launch opens rolled up and the same controls unroll it to the size the window opened
+at. There are no CLI flags yet.

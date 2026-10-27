@@ -15,17 +15,29 @@ use crate::ui::{Message, WinampPlayer};
 /// store it, so the title bar's window actions can act on the window. Until
 /// it lands (or if the query fails) those actions are no-ops (see
 /// `with_window_id`). A saved always-on-top choice waits for the same id, so
-/// its level is applied once the window exists instead of before boot.
+/// its level is applied once the window exists instead of before boot. A
+/// restored shade mode also waits for the id: because no pre-shade size was
+/// captured at boot, this schedules the launch size query that
+/// [`window_shade_measured`] turns into the size the first unshade restores.
+/// When both the saved level and the shade measurement apply, their tasks run
+/// together as one batch.
 pub(in crate::ui) fn window_id_resolved(
     player: &mut WinampPlayer,
     id: Option<iced::window::Id>,
 ) -> Task<Message> {
     player.window_id = id;
-    match id {
-        Some(id) if player.always_on_top => {
-            iced::window::set_level(id, window_level(player.always_on_top))
-        }
-        _ => Task::none(),
+    let Some(id) = id else {
+        return Task::none();
+    };
+    let level = player
+        .always_on_top
+        .then(|| iced::window::set_level(id, window_level(true)));
+    let measurement = (player.shaded && player.unshaded_size.is_none())
+        .then(|| iced::window::size(id).map(Message::WindowShadeMeasured));
+    match (level, measurement) {
+        (Some(level), Some(measurement)) => Task::batch([level, measurement]),
+        (Some(task), None) | (None, Some(task)) => task,
+        (None, None) => Task::none(),
     }
 }
 
