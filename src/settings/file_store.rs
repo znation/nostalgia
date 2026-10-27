@@ -6,7 +6,8 @@ use std::ffi::OsString;
 use std::fs::File;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, SystemTime};
 
 use super::Settings;
@@ -28,6 +29,11 @@ pub trait SettingsWriter: Send + Sync {
 #[derive(Debug, Clone)]
 pub struct FileStore {
     path: Option<PathBuf>,
+    /// Set when [`Self::load`] found the file but could not read it, so its
+    /// values are unknown. Saves then refuse to replace it rather than write
+    /// defaults over a file the user never saw. Shared with clones: the
+    /// production writer runs on a clone of the store `main` loaded from.
+    read_failed: Arc<AtomicBool>,
 }
 
 impl FileStore {
@@ -45,6 +51,7 @@ impl FileStore {
                 std::env::var_os("XDG_CONFIG_HOME"),
                 std::env::var_os("HOME"),
             ),
+            read_failed: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -80,23 +87,43 @@ impl FileStore {
     /// where the file belongs.
     #[must_use]
     pub fn at(path: PathBuf) -> Self {
-        Self { path: Some(path) }
+        Self {
+            path: Some(path),
+            read_failed: Arc::new(AtomicBool::new(false)),
+        }
     }
 
     /// Read and parse the settings file, or `None` when persistence is
     /// disabled, the file is missing, or it cannot be read. Malformed lines
     /// fall back per key through [`Settings::from_text`].
+    ///
+    /// A file that exists but cannot be read is not the defaults: its values
+    /// are unknown, so the store records the failure and later [`save`] calls
+    /// refuse to replace it (see [`Self::save`]). A missing file is the normal
+    /// first run and records nothing.
+    ///
+    /// [`save`]: SettingsWriter::save
     #[must_use]
     pub fn load(&self) -> Option<Settings> {
+        self.load_with(|path| std::fs::read(path))
+    }
+
+    /// [`Self::load`] with the byte reader injected, so a test can make the
+    /// read fail without relying on file permissions (which differ for a
+    /// privileged test runner).
+    fn load_with(&self, read: impl FnOnce(&Path) -> io::Result<Vec<u8>>) -> Option<Settings> {
         let path = self.path.as_ref()?;
         sweep_stale_temporaries(path);
         // Read bytes and decode lossily: one corrupt byte must spoil only its
         // own line, not make `read_to_string` reject the whole file and reset
         // every other setting.
-        match std::fs::read(path) {
+        match read(path) {
             Ok(bytes) => Some(Settings::from_text(&String::from_utf8_lossy(&bytes))),
             Err(error) => {
                 if let Some(message) = read_failure_message(path, &error) {
+                    // The file's values are unknown, so replacing it with a
+                    // snapshot built from defaults would lose them.
+                    self.read_failed.store(true, Ordering::Relaxed);
                     eprintln!("{message}");
                 }
                 None
@@ -116,11 +143,30 @@ fn read_failure_message(path: &Path, error: &std::io::Error) -> Option<String> {
     })
 }
 
+/// The diagnostic for a save refused because the file could not be read at
+/// startup: names the file, why the save stopped, and the way to recover, so a
+/// settings file that is never updated for the rest of the run is explained
+/// instead of silent.
+fn unreadable_settings_save_report(path: &Path) -> String {
+    format!(
+        "refusing to overwrite the settings file {}: it could not be read at startup, so its values are unknown; repair or remove it and restart to save settings again",
+        path.display()
+    )
+}
+
 impl SettingsWriter for FileStore {
     fn save(&self, settings: &Settings) {
         let Some(path) = self.path.as_ref() else {
             return;
         };
+        // A save writes the whole snapshot the app has, which on a failed load
+        // is built from defaults. Replacing a file whose contents could not be
+        // read would destroy values the user still has, so refuse it and name
+        // both the reason and how to recover.
+        if self.read_failed.load(Ordering::Relaxed) {
+            eprintln!("{}", unreadable_settings_save_report(path));
+            return;
+        }
         if let Some(parent) = path
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty())
@@ -338,6 +384,64 @@ mod tests {
         assert!(message.contains("using defaults"), "{message}");
     }
 
+    #[test]
+    fn unreadable_settings_save_report_names_the_file_and_the_recovery() {
+        let report = unreadable_settings_save_report(Path::new("/cfg/settings.ini"));
+        assert!(report.contains("/cfg/settings.ini"), "{report}");
+        assert!(report.contains("refusing to overwrite"), "{report}");
+        assert!(report.contains("could not be read at startup"), "{report}");
+        assert!(report.contains("restart"), "{report}");
+    }
+
+    // A settings file that exists but cannot be read holds values the app never
+    // saw; the snapshot it would save is built from defaults, so writing it
+    // would destroy the user's settings. The store records the failed load and
+    // the later save leaves the file (and stages nothing) alone.
+    #[test]
+    fn a_settings_file_that_could_not_be_read_is_not_overwritten() {
+        let root = temporary_root("unreadable");
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("settings.ini");
+        std::fs::write(&path, "volume=0.25\n").unwrap();
+        let store = FileStore::at(path.clone());
+
+        let denied = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
+        assert_eq!(store.load_with(|_| Err(denied)), None);
+
+        store.save(&varied_settings());
+
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "volume=0.25\n",
+            "the refused save must leave the unreadable file's bytes intact"
+        );
+        assert_eq!(
+            std::fs::read_dir(&root).unwrap().count(),
+            1,
+            "the refused save must not stage a temp file beside it"
+        );
+
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    // A missing file is the normal first run, not a failure: the first save must
+    // still create the file rather than being refused for the whole run.
+    #[test]
+    fn a_missing_settings_file_still_allows_the_first_save() {
+        let root = temporary_root("missing-first-save");
+        let path = root.join("settings.ini");
+        let store = FileStore::at(path.clone());
+
+        assert_eq!(store.load(), None);
+
+        let settings = varied_settings();
+        store.save(&settings);
+
+        assert_eq!(store.load(), Some(settings));
+
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
     fn varied_settings() -> Settings {
         let mut settings = Settings {
             volume: 0.8,
@@ -449,7 +553,10 @@ mod tests {
     // nothing and saving is a no-op rather than an error or a panic.
     #[test]
     fn file_store_without_a_path_disables_load_and_save() {
-        let store = FileStore { path: None };
+        let store = FileStore {
+            path: None,
+            read_failed: Arc::new(AtomicBool::new(false)),
+        };
 
         assert_eq!(store.load(), None);
         store.save(&varied_settings());

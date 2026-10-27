@@ -838,7 +838,11 @@ A missing file, or a malformed line (including a `NaN` number and bytes that are
 which are decoded lossily so they spoil only their own line), falls back per key without failing
 startup; an unreadable file
 falls back the same way and prints one stderr line naming the path (`read_failure_message` in
-`src/settings/file_store.rs`, which stays silent for a missing file); an unwritable file is logged
+`src/settings/file_store.rs`, which stays silent for a missing file), and because its values are
+unknown the store then refuses every later save for the rest of the run, printing one line per
+refusal that names the file and says to repair or remove it and restart, so a file the app could
+not read is never replaced by a snapshot built from defaults; a missing file records no failure,
+so a first run still creates the file. An unwritable file is logged
 rather than crashing the player. Each save stages the whole snapshot in
 a sibling temp file of the file it writes, flushes it to disk, gives the staged file the existing
 target's mode, and renames it over that target and then syncs its directory, so a failed,
@@ -893,7 +897,10 @@ handled by
 `window_level` once the id exists and, when the restored shade mode is still waiting for its
 launch size, batches in the `iced::window::size` query.
 `settings::file_store::FileStore`'s `SettingsWriter` impl creates the parent directory, stages the
-text with `write_atomically`, and logs a failed create or write.
+text with `write_atomically`, and logs a failed create or write. `FileStore::load` records a failed
+read in a flag shared across the store's clones (an `Arc<AtomicBool>`, so the `BackgroundWriter`'s
+clone sees it), and `save` checks it before creating a directory or a temp file and refuses with
+`unreadable_settings_save_report`.
 With no store attached the method returns before taking the state lock, so tests keep the default
 no-op behavior. `shortcuts::message_for` maps `A` and Ctrl+A to `Message::ToggleAlwaysOnTop`, the
 arm those controls press.
@@ -920,6 +927,9 @@ arm those controls press.
 `saving_through_a_symlink_updates_its_target_and_keeps_mode`,
 `the_directory_sync_follows_a_symlink_to_the_target`, and
 `the_sweep_follows_a_symlink_to_the_targets_directory` (`src/settings/file_store.rs`),
+`a_settings_file_that_could_not_be_read_is_not_overwritten`,
+`a_missing_settings_file_still_allows_the_first_save`, and
+`unreadable_settings_save_report_names_the_file_and_the_recovery` (`src/settings/file_store.rs`),
 `a_burst_of_saves_collapses_to_the_latest_snapshot`,
 `dropping_the_writer_flushes_the_pending_snapshot`, and
 `a_refused_writer_thread_falls_back_to_saving_on_the_caller` (`src/settings/writer.rs`), plus
@@ -958,6 +968,9 @@ update thread stalled on the disk repeatedly during a drag. On 2026-10-26 the wi
 mode joined the file, so a saved-shaded launch opens rolled up and its first unshade restores the
 launch size; the window's size and position remain unpersisted. On 2026-10-26 the equalizer's
 AUTO choice joined the file as `eq_auto`, restoring the genre-matched preset behavior at launch.
+On 2026-10-26 a settings file that exists but cannot be read began refusing later saves for that
+run, because the app starts from defaults in that case and the first settings change would
+otherwise overwrite the still-intact file with those defaults.
 
 ## Equalizer band tint
 

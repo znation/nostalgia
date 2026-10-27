@@ -218,7 +218,10 @@ overrides the path. A missing or malformed entry falls back to its default (a `N
 counts as malformed; a byte that is not UTF-8 spoils only its own line, and a leading UTF-8 BOM
 is ignored), and a settings file
 that exists but cannot be
-read falls back to defaults with one line on stderr naming the file. Each save replaces
+read falls back to defaults with one line on stderr naming the file; the player then refuses to
+save for the rest of that run, printing a line that names the file each time, so the unread values
+are not overwritten with defaults. Repair or remove that file and restart to save settings again.
+Each save replaces
 the file atomically; a symlinked settings file stays a link, with the write going to
 the file it points at and that file's mode kept. The always-on-top choice
 (the LCD strip's `A` or the `A` key) is remembered for the next launch, and a saved-on launch starts
