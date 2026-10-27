@@ -17,7 +17,7 @@ fn pressing_a_db_scale_label_sets_every_band_to_its_gain() {
         ("-12 DB", GAIN_MIN_DB),
     ] {
         let mut renderer = layout_capture::headless_renderer();
-        let mut element = view_equalizer(true, 0.0, &[0.0; BAND_COUNT], None);
+        let mut element = view_equalizer(true, false, 0.0, &[0.0; BAND_COUNT], None);
         let capture = layout_capture::capture_text(&mut element, &renderer);
         let text = capture.find(label);
         let messages = layout_capture::publish_at(
@@ -80,7 +80,7 @@ fn equalizer_wheel_messages_map_the_roll_direction_and_band() {
 #[test]
 fn equalizer_preamp_and_db_scale_sit_left_of_the_band_sliders() {
     let bands = [0.0; BAND_COUNT];
-    let mut element = view_equalizer(false, 0.0, &bands, None);
+    let mut element = view_equalizer(false, false, 0.0, &bands, None);
     let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
 
     let plus_twelve = capture.find("+12 DB");
@@ -146,7 +146,7 @@ fn equalizer_preamp_and_db_scale_sit_left_of_the_band_sliders() {
 #[test]
 fn equalizer_band_labels_leave_a_gap_between_frequencies() {
     let bands = [0.0; BAND_COUNT];
-    let mut element = view_equalizer(false, 0.0, &bands, None);
+    let mut element = view_equalizer(false, false, 0.0, &bands, None);
     let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
 
     let bounds: Vec<(&str, Rectangle)> = BAND_FREQUENCIES
@@ -484,6 +484,40 @@ fn eq_enabled_label_mirrors_enabled_state() {
     assert_eq!(eq_enabled_label(false), "EQ: Off");
 }
 
+// The AUTO button shows the auto-loading flag and publishes its own toggle.
+// Lay out the panel with AUTO off and on, pin both labels, then press the on
+// state's button and observe the message it emits.
+#[test]
+fn auto_button_draws_its_state_and_publishes_toggle_eq_auto() {
+    assert_eq!(auto_label(true), "AUTO: On");
+    assert_eq!(auto_label(false), "AUTO: Off");
+
+    for (auto, expected) in [(false, "AUTO: Off"), (true, "AUTO: On")] {
+        let mut element = view_equalizer(false, auto, 0.0, &[0.0; BAND_COUNT], None);
+        let capture =
+            layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+        let button = capture.find(expected);
+        assert!(button.width > 0.0, "the {expected} button must be laid out");
+
+        if auto {
+            let mut renderer = layout_capture::headless_renderer();
+            let messages = layout_capture::click_at(
+                element,
+                &mut renderer,
+                iced::Point::new(button.center_x(), button.center_y()),
+            );
+            assert_eq!(
+                messages
+                    .iter()
+                    .filter(|message| matches!(message, Message::ToggleEqAuto))
+                    .count(),
+                1,
+                "a press on AUTO: On must publish one toggle: {messages:?}"
+            );
+        }
+    }
+}
+
 // Classic Winamp names a hand-tuned curve `Custom` rather than showing an
 // empty pick list. Lay out the real panel for both states and compare its
 // closed pick list pixel for pixel with the same header row rendered for the
@@ -502,7 +536,7 @@ fn equalizer_pick_list_shows_custom_for_a_hand_tuned_curve() {
 
     for preset in [None, Some(PRESETS[0])] {
         let mut renderer = layout_capture::headless_renderer();
-        let mut element = view_equalizer(false, 0.0, &[0.0; BAND_COUNT], preset);
+        let mut element = view_equalizer(false, false, 0.0, &[0.0; BAND_COUNT], preset);
         let (capture, pixels) = layout_capture::capture_text_and_pixels(
             &mut element,
             &mut renderer,
@@ -556,6 +590,12 @@ fn reference_header_row(
             Message::ToggleEqualizer,
         ))
         .push(spacer(8.0))
+        .push(fixed_width_button(
+            auto_label(false),
+            AUTO_BUTTON_WIDTH,
+            Message::ToggleEqAuto,
+        ))
+        .push(spacer(8.0))
         .push(
             iced::widget::PickList::new(PRESETS.as_slice(), selected, Message::EqPresetSelected)
                 .placeholder(placeholder)
@@ -580,7 +620,7 @@ fn equalizer_panel_constructs_for_both_states_and_gain_endpoints() {
         for gain in [GAIN_MIN_DB, 0.0, GAIN_MAX_DB] {
             for preset in [None, Some(PRESETS[0])] {
                 let bands = [gain; BAND_COUNT];
-                let _panel = view_equalizer(enabled, gain, &bands, preset);
+                let _panel = view_equalizer(enabled, false, gain, &bands, preset);
             }
         }
     }

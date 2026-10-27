@@ -159,6 +159,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::ToggleEqualizerPanel => handlers::mixer::toggle_equalizer_panel(player),
         Message::ToggleLibraryPanel => handlers::mixer::toggle_library_panel(player),
         Message::ToggleEqualizer => handlers::mixer::toggle_equalizer(player),
+        Message::ToggleEqAuto => handlers::mixer::toggle_eq_auto(player),
         Message::EqPreampChange(gain) => handlers::mixer::eq_preamp_change(player, gain),
         Message::EqBandChange(band, gain) => handlers::mixer::eq_band_change(player, band, gain),
         Message::EqBandsSetAll(gain) => handlers::mixer::eq_bands_set_all(player, gain),

@@ -40,6 +40,47 @@ fn repeat_and_equalizer_changes_reach_the_saved_snapshot() {
 }
 
 #[test]
+fn toggle_eq_auto_reaches_the_saved_snapshot() {
+    let (mut player, state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+
+    let _ = update(&mut player, Message::ToggleEqAuto);
+    let on = {
+        let state = state.blocking_lock();
+        assert!(state.eq_auto);
+        Settings::from_state(&state)
+    };
+    assert_eq!(store.snapshots(), vec![on.clone()]);
+
+    let _ = update(&mut player, Message::Ignored);
+    assert_eq!(store.snapshots().len(), 1);
+
+    let _ = update(&mut player, Message::ToggleEqAuto);
+    let off = {
+        let state = state.blocking_lock();
+        assert!(!state.eq_auto);
+        Settings::from_state(&state)
+    };
+    assert_eq!(store.snapshots().len(), 2);
+    assert_eq!(store.snapshots()[1], off);
+    assert_ne!(store.snapshots()[0], store.snapshots()[1]);
+}
+
+#[test]
+fn saved_eq_auto_is_restored_through_apply_to() {
+    let mut auto = AppState::default();
+    auto.eq_auto = true;
+    let saved = Settings::from_state(&auto);
+    let mut restored = AppState::default();
+    saved.apply_to(&mut restored);
+    assert!(restored.eq_auto);
+
+    Settings::from_state(&AppState::default()).apply_to(&mut restored);
+    assert!(!restored.eq_auto);
+}
+
+#[test]
 fn toggle_time_display_reaches_the_saved_snapshot() {
     let (mut player, _state) = test_player();
     let store = MemorySettingsStore::default();

@@ -11,7 +11,7 @@
 use iced::Task;
 
 use crate::apple_music::{AppleMusicError, AppleMusicService};
-use crate::equalizer::{BAND_COUNT, Preset};
+use crate::equalizer::{BAND_COUNT, Preset, preset_for_genre};
 use crate::state::AppState;
 use crate::ui::views;
 use crate::ui::{Message, WinampPlayer};
@@ -129,6 +129,28 @@ pub(in crate::ui) fn toggle_library_panel(player: &mut WinampPlayer) -> Task<Mes
 /// The equalizer's on/off button.
 pub(in crate::ui) fn toggle_equalizer(player: &mut WinampPlayer) -> Task<Message> {
     mutate_equalizer(player, AppState::toggle_equalizer)
+}
+
+/// The equalizer panel's AUTO button: flips the genre-matched preset flag.
+/// The toggle changes no gain, so it writes shared state directly and
+/// schedules nothing instead of forwarding a curve to the audio backend.
+pub(in crate::ui) fn toggle_eq_auto(player: &mut WinampPlayer) -> Task<Message> {
+    player.state.blocking_lock().toggle_eq_auto();
+    Task::none()
+}
+
+/// Applies the preset named after `genre` when AUTO is on, through the same
+/// mutate-and-forward path as a pick-list selection so the stored curve, the
+/// pick list, and a running preview's filters update together. A blank or
+/// unmatched genre, or AUTO off, changes nothing.
+pub(in crate::ui) fn apply_auto_preset(player: &WinampPlayer, genre: &str) -> Task<Message> {
+    let Some(preset) = preset_for_genre(genre) else {
+        return Task::none();
+    };
+    if !player.state.blocking_lock().eq_auto {
+        return Task::none();
+    }
+    mutate_equalizer(player, |state| state.apply_eq_preset(preset))
 }
 
 /// The preamp slider's drag.

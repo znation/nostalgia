@@ -91,6 +91,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
             repeat,
             shuffle,
             eq_enabled,
+            eq_auto,
             eq_preamp,
             eq_bands,
             eq_preset,
@@ -110,6 +111,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
                 state.repeat,
                 state.shuffle,
                 state.eq_enabled,
+                state.eq_auto,
                 state.eq_preamp(),
                 state.eq_bands(),
                 state.eq_preset(),
@@ -178,7 +180,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
             player_panels = player_panels
                 .push(views::view_title_band("NOSTALGIA EQUALIZER"))
                 .push(views::view_equalizer(
-                    eq_enabled, eq_preamp, &eq_bands, eq_preset,
+                    eq_enabled, eq_auto, eq_preamp, &eq_bands, eq_preset,
                 ));
         }
 

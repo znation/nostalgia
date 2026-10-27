@@ -9,9 +9,10 @@ use super::browse::{
     view_search_row,
 };
 use super::equalizer::{
-    CUSTOM_PRESET_LABEL, EQ_SLIDER_HEIGHT, RESPONSE_CURVE_COLUMNS, RESPONSE_CURVE_GUIDE_THICKNESS,
-    RESPONSE_CURVE_HEIGHT, RESPONSE_CURVE_LINE_HEIGHT, eq_enabled_label, preamp_slider_style,
-    preset_pick_list_label, response_curve_offsets, response_curve_row,
+    AUTO_BUTTON_WIDTH, CUSTOM_PRESET_LABEL, EQ_SLIDER_HEIGHT, RESPONSE_CURVE_COLUMNS,
+    RESPONSE_CURVE_GUIDE_THICKNESS, RESPONSE_CURVE_HEIGHT, RESPONSE_CURVE_LINE_HEIGHT, auto_label,
+    eq_enabled_label, preamp_slider_style, preset_pick_list_label, response_curve_offsets,
+    response_curve_row,
 };
 use super::mini_transport::{
     MINI_SEEK_ID, MINI_TRANSPORT_HEIGHT, MINI_VOLUME_ID, MINI_VOLUME_WIDTH,
@@ -42,11 +43,12 @@ use super::transport::{
 use super::{
     BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, EQ_STEP, TITLE_BAR_HEIGHT, VOLUME_MAX, VOLUME_MIN,
     VOLUME_STEP, balance_wheel_message, can_go_back, can_retry_artists, eq_band_wheel_message,
-    eq_preamp_wheel_message, format_track_time, labeled_button, seek_bar_value, spacer,
-    view_albums, view_all_albums, view_all_albums_button, view_all_songs, view_all_songs_button,
-    view_artists, view_back_button, view_browse_nav_buttons, view_equalizer, view_now_playing,
-    view_open_button, view_playlists, view_playlists_button, view_retry_button, view_seek_bar,
-    view_songs, view_title_band, view_title_bar, view_transport_controls, volume_wheel_message,
+    eq_preamp_wheel_message, fixed_width_button, format_track_time, labeled_button, seek_bar_value,
+    spacer, view_albums, view_all_albums, view_all_albums_button, view_all_songs,
+    view_all_songs_button, view_artists, view_back_button, view_browse_nav_buttons, view_equalizer,
+    view_now_playing, view_open_button, view_playlists, view_playlists_button, view_retry_button,
+    view_seek_bar, view_songs, view_title_band, view_title_bar, view_transport_controls,
+    volume_wheel_message,
 };
 use crate::audio::{PlaybackFormat, Spectrum};
 use crate::equalizer::{

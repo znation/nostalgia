@@ -135,6 +135,10 @@ pub(in crate::ui) enum Message {
     // browse, search, or selection state, and schedules no work.
     ToggleLibraryPanel,
     ToggleEqualizer,
+    // The equalizer panel's AUTO button: flips whether a track selection
+    // applies a preset matched to its genre. It changes no curve, preset, or
+    // on/off value and schedules no work.
+    ToggleEqAuto,
     EqPreampChange(f32),
     EqBandChange(usize, f32),
     // From a press on an equalizer dB scale label; carries that label's gain.

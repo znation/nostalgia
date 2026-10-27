@@ -44,6 +44,11 @@ pub struct AppState {
     /// Whether the equalizer is engaged. Starts off, as in Winamp; the band
     /// gains below are stored regardless so turning it back on restores them.
     pub eq_enabled: bool,
+    /// Whether selecting a track applies a preset matched to its primary
+    /// genre (Winamp's AUTO button). Starts off, as in Winamp.
+    /// [`AppState::toggle_eq_auto`] flips it; selecting a track reads it
+    /// through `handlers::mixer::apply_auto_preset`.
+    pub eq_auto: bool,
     /// The preamp gain in decibels applied ahead of the bands, in
     /// `[equalizer::GAIN_MIN_DB, equalizer::GAIN_MAX_DB]`. Kept private like
     /// `volume`: [`AppState::set_eq_preamp`] and
@@ -89,7 +94,8 @@ pub enum TransportMode {
 ///
 /// Initial state: nothing loaded, not playing and not paused (stopped),
 /// Repeat off, Shuffle off, at 50% volume with a centered balance, and the
-/// equalizer off with a flat (all-zero) curve and no preset selected.
+/// equalizer off with a flat (all-zero) curve and no preset selected, and
+/// AUTO off.
 impl Default for AppState {
     fn default() -> Self {
         Self {
@@ -101,6 +107,7 @@ impl Default for AppState {
             volume: 0.5,
             balance: 0.0,
             eq_enabled: false,
+            eq_auto: false,
             eq_preamp: 0.0,
             eq_bands: [0.0; equalizer::BAND_COUNT],
             eq_preset: None,
@@ -194,6 +201,16 @@ impl AppState {
     /// in.
     pub fn toggle_equalizer(&mut self) {
         self.eq_enabled = !self.eq_enabled;
+    }
+
+    /// Flip the equalizer's AUTO flag in place. The equalizer panel's
+    /// `AUTO: On`/`AUTO: Off` button is the only UI caller, through
+    /// `Message::ToggleEqAuto`; keeping the flip here (rather than inlined at
+    /// the call site) puts the toggling semantics next to the field they
+    /// mutate, like `toggle_equalizer`. The stored curve, preset, and on/off
+    /// flag are left alone.
+    pub fn toggle_eq_auto(&mut self) {
+        self.eq_auto = !self.eq_auto;
     }
 
     /// Store a preamp gain, clamped to the valid range via
@@ -536,6 +553,24 @@ mod tests {
 
         assert_keeps_track_and_volume(&mut state, AppState::toggle_shuffle);
         assert!(!state.shuffle);
+    }
+
+    #[test]
+    fn toggle_eq_auto_flips_only_the_auto_flag_and_keeps_the_curve() {
+        let mut state = AppState::default();
+        assert!(!state.eq_auto);
+        let preset = rock_preset();
+        state.apply_eq_preset(preset);
+
+        state.toggle_eq_auto();
+        assert!(state.eq_auto);
+        assert!(!state.eq_enabled);
+        assert_eq!(state.eq_preset(), Some(preset));
+        assert_eq!(state.eq_bands(), preset.bands);
+
+        state.toggle_eq_auto();
+        assert!(!state.eq_auto);
+        assert_eq!(state.eq_preset(), Some(preset));
     }
 
     #[test]

@@ -169,6 +169,25 @@ pub const PRESETS: [Preset; 19] = [
     },
 ];
 
+/// The preset named after `genre`, or `None` when the trimmed genre is blank
+/// or matches no preset name.
+///
+/// Winamp's AUTO button loads the preset whose name matches the playing
+/// track's primary genre. The comparison ignores surrounding whitespace and
+/// ASCII case, so a source's `" rock "` selects the `Rock` curve while an
+/// unmatched genre such as `Alternative` leaves the current curve alone.
+#[must_use]
+pub fn preset_for_genre(genre: &str) -> Option<Preset> {
+    let genre = genre.trim();
+    if genre.is_empty() {
+        return None;
+    }
+    PRESETS
+        .iter()
+        .find(|preset| preset.name.eq_ignore_ascii_case(genre))
+        .copied()
+}
+
 /// Clamps an equalizer gain to the valid `[GAIN_MIN_DB, GAIN_MAX_DB]` range,
 /// mapping a NaN to `0.0` (flat).
 ///
@@ -190,6 +209,7 @@ pub fn clamp_gain(gain: f32) -> f32 {
 mod tests {
     use super::{
         BAND_COUNT, BAND_FREQUENCIES, BAND_HZ, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, clamp_gain,
+        preset_for_genre,
     };
     use crate::test_support::rock_preset;
 
@@ -317,6 +337,20 @@ mod tests {
                 assert_eq!(gain, clamp_gain(gain), "{}", preset.name);
             }
         }
+    }
+
+    #[test]
+    fn preset_for_genre_matches_trimmed_case_insensitive_names() {
+        let rock = rock_preset();
+        assert_eq!(preset_for_genre("Rock"), Some(rock));
+        assert_eq!(preset_for_genre("  rOcK  "), Some(rock));
+        assert_eq!(
+            preset_for_genre("Full Bass & Treble").map(|p| p.name),
+            Some("Full Bass & Treble")
+        );
+        assert_eq!(preset_for_genre(""), None);
+        assert_eq!(preset_for_genre("   "), None);
+        assert_eq!(preset_for_genre("Alternative"), None);
     }
 
     #[test]

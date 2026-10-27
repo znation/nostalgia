@@ -819,7 +819,7 @@ keys use, leaving the row playback-independent (2026-10-26).
 ## Settings persistence
 
 **Guarantee.** The values the user sets that outlive a track — volume, balance, Repeat, Shuffle, the
-equalizer's on/off state, preamp, ten band gains, and selected preset, the large readout's
+equalizer's on/off state, AUTO choice, preamp, ten band gains, and selected preset, the large readout's
 elapsed/remaining choice, the visualizer's shown/hidden choice, the equalizer and library panels'
 shown/hidden choices, the LCD strip's always-on-top choice, and the window's shade mode — are
 loaded once before the first view is drawn and rewritten after any update that changes their snapshot, with the newest
@@ -901,6 +901,7 @@ arm those controls press.
 `from_text_ignores_nan_numbers`,
 `apply_to_clamps_out_of_range_values_through_the_state_setters`,
 `apply_to_restores_a_saved_preset`,
+`eq_auto_round_trips_and_ignores_malformed_values`,
 `settings_path_resolves_override_then_xdg_then_home_then_none`,
 `file_store_save_then_load_returns_the_same_settings`,
 `file_store_saves_and_loads_a_bare_file_name_in_the_current_directory`,
@@ -927,6 +928,8 @@ arm those controls press.
 `saved_always_on_top_is_restored_on_boot`,
 `toggle_window_shade_reaches_the_saved_snapshot`,
 `saved_shade_is_restored_on_boot`,
+`toggle_eq_auto_reaches_the_saved_snapshot`,
+`saved_eq_auto_is_restored_through_apply_to`,
 `window_level_selects_always_on_top`, and
 `window_id_resolved_applies_a_saved_always_on_top_level` (`src/ui/tests/`). The classic `A` key
 and Ctrl+A reaching the same arm are pinned by `a_toggles_always_on_top_from_the_keyboard`
@@ -946,7 +949,8 @@ production writer moved its blocking write to a background thread, because a sli
 the snapshot on every movement and each synchronous save fsyncs the file and its directory, so the
 update thread stalled on the disk repeatedly during a drag. On 2026-10-26 the window's shade
 mode joined the file, so a saved-shaded launch opens rolled up and its first unshade restores the
-launch size; the window's size and position remain unpersisted.
+launch size; the window's size and position remain unpersisted. On 2026-10-26 the equalizer's
+AUTO choice joined the file as `eq_auto`, restoring the genre-matched preset behavior at launch.
 
 ## Equalizer band tint
 
@@ -982,6 +986,30 @@ flag and the LCD readout untouched, and forwards the curve to the audio backend.
 **Pinned by.** `set_all_eq_bands_clamps_every_band_and_clears_the_preset` in `src/state.rs`,
 `eq_scale_click_sets_every_band_and_keeps_the_preamp` in `src/ui/tests/mixer_tests.rs`, and
 `pressing_a_db_scale_label_sets_every_band_to_its_gain` in `src/ui/views/tests/equalizer.rs`.
+
+## Auto-load presets
+
+**Guarantee.** While AUTO is on, selecting a track whose trimmed primary genre matches a preset
+name case-insensitively applies that preset's whole curve — preamp and all ten bands — names it in
+the pick list, and forwards the curve to the running preview through the equalizer's existing
+forwarding path. A blank or unmatched genre changes nothing, and AUTO off never changes the curve
+on selection. The AUTO button flips only `AppState::eq_auto`, schedules no work, and leaves the
+gains, preset, and equalizer on/off state alone.
+
+**Enforced by.** `equalizer::preset_for_genre` in `src/equalizer.rs`, `AppState::eq_auto` and
+`AppState::toggle_eq_auto` in `src/state.rs`, `handlers::mixer::toggle_eq_auto` and
+`handlers::mixer::apply_auto_preset` in `src/ui/handlers/mixer.rs`, the
+`apply_auto_preset` call in `handlers::playback::track_selected`, and `views::equalizer::auto_label`
+with `AUTO_BUTTON_WIDTH` in `src/ui/views/equalizer.rs`.
+
+**Pinned by.** `preset_for_genre_matches_trimmed_case_insensitive_names` in `src/equalizer.rs`,
+`toggle_eq_auto_flips_only_the_auto_flag_and_keeps_the_curve` in `src/state.rs`,
+`toggle_eq_auto_flips_only_the_auto_flag`,
+`auto_on_applies_a_genre_matched_preset_on_track_selection` in `src/ui/tests/mixer_tests.rs`, and
+`auto_button_draws_its_state_and_publishes_toggle_eq_auto` in `src/ui/views/tests/equalizer.rs`.
+
+**History.** Added with the AUTO-toggle plan on 2026-10-26; the panel previously applied a preset
+only when the user picked one, so a song's genre never reached the equalizer.
 
 ## Level slider fill
 

@@ -2,7 +2,7 @@
 //!
 //! [`Settings`] is a small snapshot of the values the player keeps while it
 //! runs: the volume, balance, Repeat and Shuffle flags, the equalizer's on/off
-//! state, preamp, band gains, and selected preset, the Now Playing readout's
+//! and AUTO states, preamp, band gains, and selected preset, the Now Playing readout's
 //! elapsed/remaining mode, the visualizer's shown/hidden choice, the equalizer
 //! and library panels' shown/hidden choices, the always-on-top flag, and the
 //! window-shade mode. All but the last six live in [`AppState`]; the readout
@@ -43,6 +43,7 @@ pub struct Settings {
     repeat: bool,
     shuffle: bool,
     eq_enabled: bool,
+    eq_auto: bool,
     eq_preamp: f32,
     eq_bands: [f32; equalizer::BAND_COUNT],
     eq_preset: Option<Preset>,
@@ -56,8 +57,8 @@ pub struct Settings {
 
 impl Default for Settings {
     /// The same starting values as [`AppState::default`]: half volume, a
-    /// centered balance, both toggles off, and the equalizer off with a flat
-    /// curve and no preset, plus the elapsed readout mode, the shown
+    /// centered balance, both toggles off, and the equalizer off with AUTO off,
+    /// a flat curve, and no preset, plus the elapsed readout mode, the shown
     /// visualizer and both panels, and an unpinned, unshaded window. A missing
     /// or unreadable settings file starts here.
     fn default() -> Self {
@@ -67,6 +68,7 @@ impl Default for Settings {
             repeat: false,
             shuffle: false,
             eq_enabled: false,
+            eq_auto: false,
             eq_preamp: 0.0,
             eq_bands: [0.0; equalizer::BAND_COUNT],
             eq_preset: None,
@@ -91,6 +93,7 @@ impl Settings {
             repeat: state.repeat,
             shuffle: state.shuffle,
             eq_enabled: state.eq_enabled,
+            eq_auto: state.eq_auto,
             eq_preamp: state.eq_preamp(),
             eq_bands: state.eq_bands(),
             eq_preset: state.eq_preset(),
@@ -202,7 +205,8 @@ impl Settings {
     /// (`set_volume`, `set_balance`, `set_eq_preamp`, and `set_eq_band`), so a
     /// hand-edited file cannot push the state out of range. An applied preset
     /// is restored last through `apply_eq_preset`, after the per-band writes
-    /// have cleared the selection. The UI-owned readout mode, visualizer
+    /// have cleared the selection. The AUTO flag is a plain restored boolean.
+    /// The UI-owned readout mode, visualizer
     /// choice, panel choices, always-on-top flag, and shade mode are
     /// deliberately left alone.
     pub fn apply_to(&self, state: &mut AppState) {
@@ -211,6 +215,7 @@ impl Settings {
         state.repeat = self.repeat;
         state.shuffle = self.shuffle;
         state.eq_enabled = self.eq_enabled;
+        state.eq_auto = self.eq_auto;
         state.set_eq_preamp(self.eq_preamp);
         for (band, gain) in self.eq_bands.iter().enumerate() {
             state.set_eq_band(band, *gain);
@@ -230,6 +235,7 @@ impl Settings {
         text.push_str(&format!("repeat={}\n", self.repeat));
         text.push_str(&format!("shuffle={}\n", self.shuffle));
         text.push_str(&format!("eq_enabled={}\n", self.eq_enabled));
+        text.push_str(&format!("eq_auto={}\n", self.eq_auto));
         text.push_str(&format!("eq_preamp={}\n", self.eq_preamp));
         for (band, gain) in self.eq_bands.iter().enumerate() {
             text.push_str(&format!("eq_band_{band}={gain}\n"));
@@ -281,6 +287,8 @@ impl Settings {
                 "repeat" => parse_into(&mut settings.repeat, value),
                 "shuffle" => parse_into(&mut settings.shuffle, value),
                 "eq_enabled" => parse_into(&mut settings.eq_enabled, value),
+                // A malformed value leaves the default AUTO off.
+                "eq_auto" => parse_into(&mut settings.eq_auto, value),
                 "eq_preamp" => parse_number_into(&mut settings.eq_preamp, value),
                 "eq_preset" => {
                     if value.is_empty() {
@@ -366,6 +374,7 @@ mod tests {
         state.repeat = true;
         state.shuffle = true;
         state.eq_enabled = true;
+        state.eq_auto = true;
         state.set_eq_preamp(3.5);
         state.set_eq_band(0, -4.0);
         state.set_eq_band(9, 7.5);
@@ -541,6 +550,38 @@ mod tests {
     }
 
     #[test]
+    fn eq_auto_round_trips_and_ignores_malformed_values() {
+        let off = Settings::default();
+        assert!(!off.eq_auto);
+        assert!(!Settings::from_text(&off.to_text()).eq_auto);
+        assert!(
+            !Settings::from_text("volume=0.5\n").eq_auto,
+            "a missing eq_auto line must fall back to off"
+        );
+
+        let mut on = off.clone();
+        on.eq_auto = true;
+        assert!(on.to_text().contains("eq_auto=true"));
+        assert!(
+            Settings::from_text(&on.to_text()).eq_auto,
+            "an enabled AUTO must survive the round trip"
+        );
+
+        assert!(
+            !Settings::from_text("eq_auto=false\n").eq_auto,
+            "an explicit false must stay off"
+        );
+        assert!(
+            !Settings::from_text("eq_auto=\n").eq_auto,
+            "an empty value must fall back to off"
+        );
+        assert!(
+            !Settings::from_text("eq_auto=yes\n").eq_auto,
+            "an unknown word must fall back to off"
+        );
+    }
+
+    #[test]
     fn from_text_ignores_nan_numbers() {
         // `f32::from_str` accepts `NaN`, but it is not a value the player can
         // use: an ignored line must fall back to its default, not to whichever
@@ -562,6 +603,7 @@ mod tests {
                     repeat=yes\n\
                     shuffle=1\n\
                     eq_enabled=maybe\n\
+                    eq_auto=maybe\n\
                     eq_preamp=high\n\
                     eq_band_10=3\n\
                     eq_band_x=2\n\

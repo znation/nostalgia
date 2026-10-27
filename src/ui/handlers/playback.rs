@@ -101,7 +101,8 @@ pub(in crate::ui) fn toggle_visualizer(player: &mut WinampPlayer) -> Task<Messag
 /// list was replaced after the row was rendered, so the index names a
 /// different song now — ignore the stale press. An out-of-range index
 /// likewise names no track and is a no-op rather than a bogus play. `select`
-/// applies both checks.
+/// applies both checks. Once the song resolves, an enabled AUTO applies the
+/// preset named after its genre before the play request is issued.
 pub(in crate::ui) fn track_selected(
     player: &mut WinampPlayer,
     epoch: u64,
@@ -117,6 +118,9 @@ pub(in crate::ui) fn track_selected(
     };
     let track_id = song.id.clone();
     let preview_url = song.preview_url.clone();
+    // Cloned before the AUTO call, which borrows the whole player while
+    // `song` still borrows its list.
+    let genre = song.genre.clone();
     // A newly selected song starts its title at character zero; the
     // previous song's scroll position must not carry over.
     player.marquee_offset = 0;
@@ -158,6 +162,10 @@ pub(in crate::ui) fn track_selected(
     // older play cannot overwrite the newer track. The browse path
     // uses the same `RequestGeneration` for the same reason.
     let generation = RequestGeneration::issue(&player.plays_generation);
+    // The genre-matched AUTO preset reaches the same mutate-and-forward path
+    // as a pick-list selection, so a running preview's filters update with
+    // the stored curve before the new track replaces it.
+    let _ = super::mixer::apply_auto_preset(player, &genre);
     let id_for_report = track_id.clone();
     play_into(
         &player.apple_music_service,

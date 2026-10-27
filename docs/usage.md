@@ -47,7 +47,7 @@ the loaded preview and Pause pauses it (stopping a track whose source supplied n
 then the Repeat and Shuffle
 toggles, a volume slider whose groove runs from green when silent through orange at half volume to
 red at full volume, a balance slider whose groove is green at center and reddens toward either side,
-an equalizer panel (an EQ on/off button, a preset pick list, a response curve that eases smoothly
+an equalizer panel (an EQ on/off button, an AUTO on/off button, a preset pick list, a response curve that eases smoothly
 between the stored band gains above ten band
 sliders, with a vertical preamp slider and a `+12 dB` / `0 dB` / `-12 dB` scale to their left; the
 plot marks the 0 dB midline and the ten bands with dim guides behind the green trace, and its
@@ -184,7 +184,11 @@ or balance slider is dragged, the LCD shows its level (`Volume: 72%`,
 `Balance: 31% Left`) in place of the title until release; an equalizer band or preamp drag does
 the same (`EQ: 60HZ +3 DB`, `Preamp: -12 DB`), and dragging the seek slider shows the target
 (`Seek to: 01:23/03:30 (39%)`) the same way. The equalizer panel's on/off button,
-sliders, and presets change the playing preview's curve live; clicking `+12 DB`, `0 DB`, or
+sliders, and presets change the playing preview's curve live. The `AUTO` button loads a preset
+automatically when a song is selected: while it reads `AUTO: On`, a song whose trimmed primary
+genre matches a preset name case-insensitively (say `rock` or `Rock`) applies that preset's whole
+curve and names it in the pick list, while a blank or unmatched genre leaves the current curve
+alone; `AUTO: Off` never changes the curve. Clicking `+12 DB`, `0 DB`, or
 `-12 DB` sets all ten bands to that gain and leaves the preamp alone; the volume and balance are
 remembered for the next track. Setting
 `APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a browser-based MusicKit sign-in: browse and search
@@ -197,7 +201,7 @@ beginning. When a loaded preview reaches its end while playing, the player steps
 showing list: to the next song, to the first song with Repeat on at the end, or, with Shuffle on, to
 a shuffled song when another exists. With Repeat off on the last song it stops instead and keeps
 that song queued for Play. The volume, balance, Repeat and Shuffle flags, the equalizer's on/off
-state, curve, and preset, the elapsed/remaining readout choice, the visualizer's shown/hidden
+state, AUTO choice, curve, and preset, the elapsed/remaining readout choice, the visualizer's shown/hidden
 choice, the equalizer and library panels' shown/hidden choices, the always-on-top choice, and the
 window-shade mode are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or `$HOME/.config/nostalgia/settings.ini`)
 and restored at the next launch; `NOSTALGIA_SETTINGS_PATH`

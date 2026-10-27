@@ -15,7 +15,7 @@ use crate::equalizer::{
 };
 use crate::ui::{Message, bevel, style, theme};
 
-use super::{EQ_STEP, labeled_button, spacer};
+use super::{EQ_STEP, fixed_width_button, labeled_button, spacer};
 
 /// The horizontal gap between adjacent equalizer band columns. Without it the
 /// labels sit edge to edge, so `170`, `310`, `600`, and `1K` read as one
@@ -64,6 +64,17 @@ pub(super) const RESPONSE_CURVE_GUIDE_THICKNESS: f32 = 1.0;
 pub(super) fn eq_enabled_label(enabled: bool) -> &'static str {
     if enabled { "EQ: On" } else { "EQ: Off" }
 }
+
+/// The equalizer AUTO button's label: "AUTO: On" while genre-matched presets
+/// are enabled, "AUTO: Off" when they are not. Pure so the label logic is
+/// testable without an iced `Element`.
+pub(super) fn auto_label(auto: bool) -> &'static str {
+    if auto { "AUTO: On" } else { "AUTO: Off" }
+}
+
+/// The AUTO button's fixed width, pinned wide enough for `AUTO: Off` so
+/// swapping the label cannot reflow the preset pick list beside it.
+pub(super) const AUTO_BUTTON_WIDTH: f32 = 96.0;
 
 /// The preset pick list's label when no named preset is applied. Classic
 /// Winamp names a hand-tuned curve `Custom`, so the closed control names the
@@ -296,14 +307,15 @@ where
         .into()
 }
 
-/// The equalizer panel: an on/off button, a preset pick list, a response
-/// curve above the [`BAND_COUNT`] band sliders, and to their left the vertical
+/// The equalizer panel: an on/off button, an AUTO toggle, a preset pick list,
+/// a response curve above the [`BAND_COUNT`] band sliders, and to their left the vertical
 /// preamp slider and the `+12 DB` / `0 DB` / `-12 DB` scale. The curve starts at
 /// the first band, so its column 0 sits on that band rather than over the
 /// preamp.
 ///
 /// `enabled` is the shared EQ on/off flag shown on the button and toggled by
-/// pressing it; `preset` is the applied curve the pick list shows (or `None`,
+/// pressing it; `auto` is the genre-matched preset flag shown on the AUTO
+/// button and toggled by pressing it; `preset` is the applied curve the pick list shows (or `None`,
 /// drawn as [`CUSTOM_PRESET_LABEL`]), and picking one emits
 /// [`Message::EqPresetSelected`]; `preamp` and `bands` are the stored gains the
 /// sliders start from. Every slider spans `GAIN_MIN_DB..=GAIN_MAX_DB` in 1 dB steps and
@@ -316,6 +328,7 @@ where
 /// [`view_transport_controls`](super::transport::view_transport_controls).
 pub fn view_equalizer(
     enabled: bool,
+    auto: bool,
     preamp: f32,
     bands: &[f32; BAND_COUNT],
     preset: Option<Preset>,
@@ -367,6 +380,12 @@ pub fn view_equalizer(
                     .push(labeled_button(
                         eq_enabled_label(enabled),
                         Message::ToggleEqualizer,
+                    ))
+                    .push(spacer(8.0))
+                    .push(fixed_width_button(
+                        auto_label(auto),
+                        AUTO_BUTTON_WIDTH,
+                        Message::ToggleEqAuto,
                     ))
                     .push(spacer(8.0))
                     .push(
