@@ -35,6 +35,12 @@ pub(in crate::ui) enum Message {
     // The Shuffle toggle: with it on, a forward step picks a random
     // non-current song from the loaded song list instead of the next in order.
     ToggleShuffle,
+    /// A left press on the overlong scrolling LCD title: starts a hand-scroll drag.
+    TitleDragPressed,
+    /// The cursor's window-space x during a title drag; scrolls the title by the distance moved.
+    TitleDragMoved(f32),
+    /// The left button released, or the cursor left the window: ends the title drag.
+    TitleDragReleased,
     VolumeChange(f32),
     /// The release of any `chrome_slider` or equalizer slider drag: the LCD shows the title again.
     MixerReleased,

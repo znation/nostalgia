@@ -1186,3 +1186,65 @@ fn now_playing_row_with_a_readout_replaces_the_title() {
         ]
     );
 }
+
+#[test]
+fn dragged_marquee_offset_follows_the_pointer_and_wraps() {
+    use crate::ui::views::dragged_marquee_offset;
+    assert_eq!(dragged_marquee_offset(0, -25.0, 30), 2);
+    assert_eq!(dragged_marquee_offset(0, 10.0, 30), 29);
+    assert_eq!(dragged_marquee_offset(5, 9.0, 30), 5);
+    assert_eq!(dragged_marquee_offset(5, -9.0, 30), 5);
+    assert_eq!(dragged_marquee_offset(35, 0.0, 30), 5);
+}
+
+#[test]
+fn marquee_cycle_len_is_the_line_plus_its_gap() {
+    use crate::ui::views::marquee_cycle_len;
+    // "3. " + "Title" + " - " + "Band" = 3 + 5 + 3 + 4 = 15, plus the 3-space gap.
+    assert_eq!(marquee_cycle_len("Title", "Band", "3. "), 18);
+    assert_eq!(marquee_cycle_len("Title", "", ""), 8);
+}
+
+#[test]
+fn the_overlong_title_publishes_a_drag_press_and_a_fitting_one_does_not() {
+    let mut renderer = layout_capture::headless_renderer();
+    for (label, expected) in [
+        ("A Title Much Longer Than The Display", true),
+        ("Short", false),
+    ] {
+        let mut element: iced::Element<'_, Message, iced::Theme, iced::Renderer> = now_playing_row(
+            Cow::Borrowed("00:53"),
+            Cow::Borrowed(label),
+            Cow::Borrowed(""),
+            Cow::Borrowed(""),
+            Cow::Borrowed("3:30"),
+            0,
+            TransportMode::Playing,
+            true,
+            None,
+        )
+        .into();
+        let capture = layout_capture::capture_text(&mut element, &renderer);
+        let title = capture.find(if expected {
+            "A Title Much Longer Th"
+        } else {
+            "Short"
+        });
+        let messages = layout_capture::publish_at(
+            element,
+            &mut renderer,
+            &[iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
+                iced::mouse::Button::Left,
+            ))],
+            iced::Point::new(title.center_x(), title.center_y()),
+        );
+        let presses = messages
+            .iter()
+            .filter(|message| matches!(message, Message::TitleDragPressed))
+            .count();
+        assert_eq!(presses, usize::from(expected), "{label}: {messages:?}");
+        if !expected {
+            assert!(messages.is_empty(), "{label}: {messages:?}");
+        }
+    }
+}

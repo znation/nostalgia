@@ -94,6 +94,7 @@ pub fn init_ui(
             player.jump_file_visible,
             player.options_visible,
             player.transient_panel_open(),
+            player.title_drag.is_some(),
         ))
     })
     .run()
@@ -200,6 +201,9 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             handlers::playback::preview::seek_preview_changed(player, value)
         }
         Message::SeekPreviewReleased => handlers::playback::preview::seek_preview_released(player),
+        Message::TitleDragPressed => handlers::playback::title_drag::title_drag_pressed(player),
+        Message::TitleDragMoved(x) => handlers::playback::title_drag::title_drag_moved(player, x),
+        Message::TitleDragReleased => handlers::playback::title_drag::title_drag_released(player),
         Message::ToggleTimeDisplay => handlers::playback::toggle_time_display(player),
         Message::ToggleVisualizer => handlers::playback::toggle_visualizer(player),
         Message::TrackSelected { epoch, index } => {

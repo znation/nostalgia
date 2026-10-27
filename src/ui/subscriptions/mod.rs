@@ -23,7 +23,9 @@ use marquee::marquee_ticks;
 use position::position_ticks;
 use spectrum::spectrum_ticks;
 
-pub(super) use listeners::{escape_key_message, mixer_key_message, mixer_wheel_message};
+pub(super) use listeners::{
+    escape_key_message, mixer_key_message, mixer_wheel_message, title_drag_message,
+};
 
 // The timer internals are exercised by `ui::tests`, so only a test build needs
 // them reachable through this module; `subscriptions` calls the tick
@@ -76,6 +78,10 @@ pub(super) use spectrum::{
 /// outside a panel rebuilds no screen. It uses the event-with-status form
 /// because the panel boxes hold focus and the focused `TextInput` captures
 /// Escape, which `keyboard::listen`'s ignored-only feed would drop.
+///
+/// The title-drag listener joins only while a hand-scroll drag of the LCD title is active, so
+/// cursor moves rebuild the screen only then.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn subscriptions(
     marquee_needed: bool,
     position_needed: bool,
@@ -84,6 +90,7 @@ pub(super) fn subscriptions(
     jump_file_open: bool,
     options_open: bool,
     transient_panel_open: bool,
+    title_drag_active: bool,
 ) -> Vec<iced::Subscription<Message>> {
     fn route_key(
         event: iced::Event,
@@ -137,6 +144,9 @@ pub(super) fn subscriptions(
     }
     if transient_panel_open {
         subscriptions.push(iced::event::listen_with(escape_key_message));
+    }
+    if title_drag_active {
+        subscriptions.push(iced::event::listen_with(title_drag_message));
     }
     subscriptions
 }

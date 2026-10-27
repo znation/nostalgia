@@ -109,6 +109,9 @@ pub(in crate::ui) struct WinampPlayer {
     /// a new song starts at the beginning of its title. The view ignores it
     /// whenever the line fits the LCD's character budget.
     pub(in crate::ui) marquee_offset: usize,
+    /// The hand-scroll drag of an overlong Now Playing title while the left button is held, or
+    /// `None`. The marquee timer pauses for its duration, and a new selection clears it.
+    pub(in crate::ui) title_drag: Option<crate::ui::handlers::playback::title_drag::TitleDrag>,
     /// The loaded preview's last reported playback position, or `None` when no
     /// preview is loaded or the backend cannot answer. `Message::PlaybackPosition`
     /// stores it; the Now Playing bar reads it for the large elapsed readout.
@@ -324,6 +327,7 @@ impl WinampPlayer {
             known_tracks: HashMap::new(),
             play_history: transport::PlayHistory::default(),
             marquee_offset: 0,
+            title_drag: None,
             playback_position: None,
             playback_format: None,
             playback_duration: None,
@@ -444,7 +448,7 @@ impl WinampPlayer {
     /// as `view` resolves them, so the timer scrolls precisely the lines the
     /// bar windows.
     pub(in crate::ui) fn needs_marquee(&self) -> bool {
-        if self.mixer_drag.is_some() || self.seek_preview.is_some() {
+        if self.mixer_drag.is_some() || self.seek_preview.is_some() || self.title_drag.is_some() {
             return false;
         }
         let state = self.state.blocking_lock();

@@ -17,7 +17,9 @@ playing or paused and blank
 while stopped, except that the `--:--` placeholder stays visible when stopped with no current
 track or no known time, the playing track's 1-based position in the list it was played from
 (`1. The Sample Band - Opening`) followed by its artist and title, scrolled across the
-display when the line is longer than it, and the track's plain length at the right); the
+display when the line is longer than it, and the track's plain length at the right; pressing on a
+scrolling title and dragging left or right scrolls it by hand, one character per 10 pixels,
+pausing the automatic scroll until you release, which then resumes from there, like Winamp); the
 transport glyph before the readout is a green `▶` while playing, a green `II` while paused, and
 a red `■` while stopped.
 While paused, the large elapsed readout blinks once per second at its frozen position; it stays

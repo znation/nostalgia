@@ -77,3 +77,24 @@ pub(in crate::ui) fn mixer_wheel_message(
         _ => None,
     }
 }
+
+/// Subscribed only while the LCD title is being dragged. A cursor move maps to
+/// [`Message::TitleDragMoved`]; a left-button release or the cursor leaving the window maps to
+/// [`Message::TitleDragReleased`]; every other event maps to nothing. The status is ignored so the
+/// drag follows the pointer off the title.
+pub(in crate::ui) fn title_drag_message(
+    event: iced::Event,
+    _status: iced::event::Status,
+    _window: iced::window::Id,
+) -> Option<Message> {
+    use iced::mouse;
+    match event {
+        iced::Event::Mouse(mouse::Event::CursorMoved { position }) => {
+            Some(Message::TitleDragMoved(position.x))
+        }
+        iced::Event::Mouse(
+            mouse::Event::ButtonReleased(mouse::Button::Left) | mouse::Event::CursorLeft,
+        ) => Some(Message::TitleDragReleased),
+        _ => None,
+    }
+}

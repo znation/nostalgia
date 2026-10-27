@@ -21,6 +21,7 @@ use crate::ui::{CurrentView, Message, WinampPlayer};
 
 pub(in crate::ui) mod preview;
 pub(in crate::ui) mod stepping;
+pub(in crate::ui) mod title_drag;
 
 /// The system media Play/Pause key: toggles the preview between playing and
 /// paused. A track with no loaded preview stops instead, since there is
@@ -132,6 +133,7 @@ pub(in crate::ui) fn track_selected(
     // A newly selected song starts its title at character zero; the
     // previous song's scroll position must not carry over.
     player.marquee_offset = 0;
+    player.title_drag = None;
     // Record the played track's playlist number, title, artist, album, and
     // formatted length before handing the id to the async play: the Now
     // Playing bar resolves its number, label, artist, and time from

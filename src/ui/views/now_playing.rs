@@ -27,9 +27,9 @@ pub use indicator::{IndicatorModes, lcd_indicator_strip};
 pub use mixer_readout::{MixerDrag, mixer_readout_text, seek_readout_text};
 use status::now_playing_status_row;
 pub use text::{
-    KnownTrack, TimeDisplay, channel_mode_label, format_playback_prefix, needs_marquee,
-    now_playing_artist, now_playing_elapsed, now_playing_label, now_playing_number,
-    now_playing_time,
+    KnownTrack, TimeDisplay, channel_mode_label, dragged_marquee_offset, format_playback_prefix,
+    marquee_cycle_len, needs_marquee, now_playing_artist, now_playing_elapsed, now_playing_label,
+    now_playing_number, now_playing_time,
 };
 pub(in crate::ui::views) use text::{MARQUEE_WIDTH, display_len, marquee_text};
 use visualizer::now_playing_visualizer_row;
@@ -308,11 +308,15 @@ where
         row = row.push(lcd_text(label));
     } else {
         let display = format!("{number}{}", display_title_for(&artist, &label));
-        row = row.push(lcd_text(marquee_text(
-            &display,
-            marquee_offset,
-            MARQUEE_WIDTH,
-        )));
+        row = row.push(
+            MouseArea::new(lcd_text(marquee_text(
+                &display,
+                marquee_offset,
+                MARQUEE_WIDTH,
+            )))
+            .on_press(Message::TitleDragPressed)
+            .interaction(Interaction::Grab),
+        );
     }
     row
 }

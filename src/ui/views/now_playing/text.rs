@@ -50,6 +50,24 @@ pub fn needs_marquee(label: &str, artist: &str, number: &str) -> bool {
     display_len(label, artist, number) > MARQUEE_WIDTH
 }
 
+/// Window-space pixels of horizontal drag that scroll the marquee by one character: roughly one
+/// glyph of the size-20 LCD text.
+pub const TITLE_DRAG_PX_PER_CHAR: f32 = 10.0;
+
+/// The period [`marquee_text`] wraps on: the Now Playing line's [`display_len`] plus the
+/// [`MARQUEE_GAP`] spaces before it repeats.
+pub fn marquee_cycle_len(label: &str, artist: &str, number: &str) -> usize {
+    display_len(label, artist, number) + MARQUEE_GAP
+}
+
+/// The marquee offset after dragging the title `dx` pixels from `start`: one character per
+/// [`TITLE_DRAG_PX_PER_CHAR`], truncated toward zero, wrapping on `cycle`. Dragging left (negative
+/// `dx`) reveals later characters, so the text follows the pointer. `cycle` must be nonzero.
+pub fn dragged_marquee_offset(start: usize, dx: f32, cycle: usize) -> usize {
+    let steps = (-dx / TITLE_DRAG_PX_PER_CHAR).trunc() as i64;
+    ((start % cycle) as i64 + steps).rem_euclid(cycle as i64) as usize
+}
+
 /// Returns the `width`-character window of `text` starting at `offset % cycle`, where `cycle` is
 /// the line plus [`MARQUEE_GAP`] trailing spaces. A line that fits `width` is returned unchanged,
 /// so the caller's common case stays still; an overlong line wraps through the gap back to its

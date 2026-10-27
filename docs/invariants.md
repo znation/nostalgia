@@ -1198,6 +1198,17 @@ its internal id, whenever the id is in the known-track index:
 - The number prefix counts toward the marquee character budget alongside the artist and title,
   and an overlong line's scrolling window includes it, so it neither overflows the LCD nor stays
   fixed while the rest of the line scrolls.
+- An overlong title can be scrolled by hand: a left press on it (`Message::TitleDragPressed`) starts
+  a drag, `needs_marquee` is false while `title_drag` is set, and `title_drag_message` is
+  subscribed only while one is active. The first cursor move anchors, later moves set the offset one
+  character per 10 px (wrapping on the line plus its gap), a left release or `CursorLeft` ends the
+  drag, and a new selection clears it. A title that fits is not a drag target. Pinned by
+  `dragged_marquee_offset_follows_the_pointer_and_wraps`,
+  `marquee_cycle_len_is_the_line_plus_its_gap`,
+  `the_overlong_title_publishes_a_drag_press_and_a_fitting_one_does_not`,
+  `the_marquee_pauses_while_the_title_is_dragged_and_resumes_from_there`,
+  `a_new_selection_clears_a_title_drag`, and
+  `title_drag_listener_is_subscribed_only_while_dragging_and_maps_pointer_events`.
 - The LCD splits its time readouts: by default the large left-hand readout shows the backend's
   reported position as zero-padded `MM:SS` (for example `00:53`), and the right edge always shows
   the plain cached total (for example `3:30`). Clicking the large readout switches it to the track's

@@ -15,6 +15,7 @@ fn alt_o_routes_captured_text_with_options_open_or_closed() {
             jump_file_open,
             options_open,
             true,
+            false,
         )
         .remove(0);
         let recipe = subscription::into_recipes(listener).remove(0);
@@ -155,7 +156,7 @@ fn options_navigation_routes_captured_search_keys_without_submitting() {
     drop(interface);
 
     // Exercise the installed subscription, including its event-status filter.
-    let listener = subscriptions(false, false, false, false, false, true, true).remove(0);
+    let listener = subscriptions(false, false, false, false, false, true, true, false).remove(0);
     let recipe = subscription::into_recipes(listener).remove(0);
     let input = stream::iter(events.into_iter().zip(statuses).map(|(event, status)| {
         subscription::Event::Interaction {
@@ -203,15 +204,15 @@ fn marquee_tick_advances_the_offset() {
 #[test]
 fn the_marquee_timer_runs_only_while_the_line_needs_to_scroll() {
     assert_eq!(
-        subscriptions(false, false, false, false, false, false, false).len(),
+        subscriptions(false, false, false, false, false, false, false, false).len(),
         2
     );
     assert_eq!(
-        subscriptions(true, false, false, false, false, false, false).len(),
+        subscriptions(true, false, false, false, false, false, false, false).len(),
         3
     );
     assert_eq!(
-        subscriptions(false, false, false, true, false, false, false).len(),
+        subscriptions(false, false, false, true, false, false, false, false).len(),
         3
     );
 }
@@ -225,11 +226,11 @@ fn the_marquee_timer_runs_only_while_the_line_needs_to_scroll() {
 #[test]
 fn the_escape_listener_runs_only_while_a_transient_panel_is_open() {
     assert_eq!(
-        subscriptions(false, false, false, false, false, false, false).len(),
+        subscriptions(false, false, false, false, false, false, false, false).len(),
         2
     );
     assert_eq!(
-        subscriptions(false, false, false, false, false, false, true).len(),
+        subscriptions(false, false, false, false, false, false, true, false).len(),
         3
     );
 }
@@ -313,15 +314,15 @@ fn escape_key_message_maps_escape_but_not_its_chords_or_other_keys() {
 #[test]
 fn the_mixer_nudge_listener_is_always_subscribed() {
     assert_eq!(
-        subscriptions(false, false, false, false, false, false, false).len(),
+        subscriptions(false, false, false, false, false, false, false, false).len(),
         2
     );
     assert_eq!(
-        subscriptions(true, true, true, false, false, false, false).len(),
+        subscriptions(true, true, true, false, false, false, false, false).len(),
         5
     );
     assert_eq!(
-        subscriptions(false, false, false, true, false, false, false).len(),
+        subscriptions(false, false, false, true, false, false, false, false).len(),
         3
     );
 }
@@ -335,11 +336,11 @@ fn the_mixer_nudge_listener_is_always_subscribed() {
 #[test]
 fn the_position_timer_runs_only_while_there_is_a_position_to_refresh() {
     assert_eq!(
-        subscriptions(false, true, false, false, false, false, false).len(),
+        subscriptions(false, true, false, false, false, false, false, false).len(),
         3
     );
     assert_eq!(
-        subscriptions(true, true, false, false, false, false, false).len(),
+        subscriptions(true, true, false, false, false, false, false, false).len(),
         4
     );
 
@@ -364,15 +365,15 @@ fn the_position_timer_runs_only_while_there_is_a_position_to_refresh() {
 #[test]
 fn the_spectrum_timer_runs_only_while_playback_runs() {
     assert_eq!(
-        subscriptions(false, false, false, false, false, false, false).len(),
+        subscriptions(false, false, false, false, false, false, false, false).len(),
         2
     );
     assert_eq!(
-        subscriptions(false, false, true, false, false, false, false).len(),
+        subscriptions(false, false, true, false, false, false, false, false).len(),
         3
     );
     assert_eq!(
-        subscriptions(true, true, true, false, false, false, false).len(),
+        subscriptions(true, true, true, false, false, false, false, false).len(),
         5
     );
 
@@ -710,4 +711,49 @@ fn reported_thread_name(
     receiver
         .recv_timeout(TASK_TIMEOUT)
         .expect("the timer thread reports its name")
+}
+
+// The title-drag listener joins only while a title drag is active, so cursor moves rebuild the
+// screen only then. It maps a cursor move, a left release and the cursor leaving the window, and
+// ignores everything else.
+#[test]
+fn title_drag_listener_is_subscribed_only_while_dragging_and_maps_pointer_events() {
+    use iced::{Event, event::Status, keyboard, mouse, window};
+    assert_eq!(
+        subscriptions(false, false, false, false, false, false, false, false).len(),
+        2
+    );
+    assert_eq!(
+        subscriptions(false, false, false, false, false, false, false, true).len(),
+        3
+    );
+    let map = |event| title_drag_message(event, Status::Captured, window::Id::unique());
+    assert!(matches!(
+        map(Event::Mouse(mouse::Event::CursorMoved {
+            position: iced::Point::new(42.0, 7.0)
+        })),
+        Some(Message::TitleDragMoved(x)) if x == 42.0
+    ));
+    assert!(matches!(
+        map(Event::Mouse(mouse::Event::ButtonReleased(
+            mouse::Button::Left
+        ))),
+        Some(Message::TitleDragReleased)
+    ));
+    assert!(matches!(
+        map(Event::Mouse(mouse::Event::CursorLeft)),
+        Some(Message::TitleDragReleased)
+    ));
+    assert!(
+        map(Event::Mouse(mouse::Event::ButtonReleased(
+            mouse::Button::Right
+        )))
+        .is_none()
+    );
+    assert!(
+        map(Event::Keyboard(keyboard::Event::ModifiersChanged(
+            keyboard::Modifiers::NONE
+        )))
+        .is_none()
+    );
 }
