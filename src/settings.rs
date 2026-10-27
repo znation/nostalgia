@@ -17,6 +17,7 @@
 //! Playback position, the browse level, the search box, the current track,
 //! and the window's size and position are deliberately not persisted.
 
+pub mod atomic_write;
 pub mod file_store;
 pub mod writer;
 
