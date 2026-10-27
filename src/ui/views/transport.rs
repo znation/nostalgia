@@ -1,7 +1,6 @@
-//! The transport row's widgets: the Previous, Play, Pause, Stop, Next, Repeat,
-//! and Shuffle buttons, the volume slider, the balance slider, the EQ and PL
-//! panel toggles, and the options-menu button, plus the pure glyph, word, and
-//! button-label helpers they use.
+//! The transport row's widgets: the Previous, Play, Pause, Stop, Next, Repeat, and Shuffle buttons,
+//! the volume slider, the balance slider, the EQ and PL panel toggles, and the options-menu button,
+//! plus the pure glyph, word, and button-label helpers they use.
 
 #[cfg(test)]
 use iced::widget::Container;
@@ -17,16 +16,14 @@ use super::{
     fixed_width_button, spacer,
 };
 
-/// The Repeat button's label: "Repeat: On" while Repeat is on, "Repeat:
-/// Off" when it is off. Pure so the label logic is testable without an
-/// iced `Element`, like [`transport_glyphs`].
+/// The Repeat button's label: "Repeat: On" while Repeat is on, "Repeat: Off" when it is off. Pure
+/// so the label logic is testable without an iced `Element`, like [`transport_glyphs`].
 pub(super) fn repeat_label(repeat: bool) -> &'static str {
     if repeat { "Repeat: On" } else { "Repeat: Off" }
 }
 
-/// The Shuffle button's label: "Shuffle: On" while Shuffle is on, "Shuffle:
-/// Off" when it is off. Pure so the label logic is testable without an iced
-/// `Element`, like [`repeat_label`].
+/// The Shuffle button's label: "Shuffle: On" while Shuffle is on, "Shuffle: Off" when it is off.
+/// Pure so the label logic is testable without an iced `Element`, like [`repeat_label`].
 pub(super) fn shuffle_label(shuffle: bool) -> &'static str {
     if shuffle {
         "Shuffle: On"
@@ -35,14 +32,12 @@ pub(super) fn shuffle_label(shuffle: bool) -> &'static str {
     }
 }
 
-/// The five transport glyph buttons' shared spec, in row order: Previous,
-/// Play, Pause, Stop, and Next. Each tuple is `(glyph, tooltip word, fixed
-/// width, message)`.
+/// The five transport glyph buttons' shared spec, in row order: Previous, Play, Pause, Stop, and
+/// Next. Each tuple is `(glyph, tooltip word, fixed width, message)`.
 ///
-/// The main row and both compact strips (the shade strip and the library
-/// footer) build from this one list, so their glyphs, order, widths, and
-/// messages cannot drift apart. The spec is playback-independent: Play always
-/// resumes and Pause always pauses, like the X and C keys.
+/// The main row and both compact strips (the shade strip and the library footer) build from this
+/// one list, so their glyphs, order, widths, and messages cannot drift apart. The spec is
+/// playback-independent: Play always resumes and Pause always pauses, like the X and C keys.
 pub(super) fn transport_glyphs() -> [(&'static str, &'static str, f32, Message); 5] {
     [
         ("◀◀", "Previous", 34.0, Message::PreviousTrack),
@@ -53,16 +48,14 @@ pub(super) fn transport_glyphs() -> [(&'static str, &'static str, f32, Message);
     ]
 }
 
-/// The transport row's seven chrome buttons, in row order: Previous, Play,
-/// Pause, Stop, Next, Repeat, and Shuffle. `repeat` and `shuffle` resolve the
-/// labels that change with state; the other labels and tooltips are static
-/// literals.
+/// The transport row's seven chrome buttons, in row order: Previous, Play, Pause, Stop, Next,
+/// Repeat, and Shuffle. `repeat` and `shuffle` resolve the labels that change with state; the other
+/// labels and tooltips are static literals.
 ///
-/// The five glyph buttons come from [`transport_glyphs`], each wrapped in a
-/// hover tooltip carrying its word. Every button is pinned to a fixed width,
-/// so neither toggle's label swap can resize it and reflow every widget after
-/// it in the row. Returned as `Element`s so the width each button requests is
-/// observable in a test.
+/// The five glyph buttons come from [`transport_glyphs`], each wrapped in a hover tooltip carrying
+/// its word. Every button is pinned to a fixed width, so neither toggle's label swap can resize it
+/// and reflow every widget after it in the row. Returned as `Element`s so the width each button
+/// requests is observable in a test.
 pub(super) fn transport_buttons(repeat: bool, shuffle: bool) -> [Element<'static, Message>; 7] {
     // The widths, in pixels, of the two text toggles' widest labels: Repeat
     // must fit "Repeat: Off" and Shuffle must fit "Shuffle: Off". They are
@@ -98,24 +91,23 @@ pub(super) fn transport_buttons(repeat: bool, shuffle: bool) -> [Element<'static
     ]
 }
 
-/// The equalizer-panel toggle's fixed width, in pixels: enough for its `EQ`
-/// label, pinned so the panel's visibility cannot reflow the row.
+/// The equalizer-panel toggle's fixed width, in pixels: enough for its `EQ` label, pinned so the
+/// panel's visibility cannot reflow the row.
 pub(super) const EQ_PANEL_BUTTON_WIDTH: f32 = 30.0;
 
-/// The player row's EQ toggle spec: `(label, fixed width, message)`. Pressing
-/// it shows or hides the equalizer panel without changing the equalizer's
-/// on/off state, curve, or preset.
+/// The player row's EQ toggle spec: `(label, fixed width, message)`. Pressing it shows or hides the
+/// equalizer panel without changing the equalizer's on/off state, curve, or preset.
 pub(super) fn eq_panel_toggle() -> (&'static str, f32, Message) {
     ("EQ", EQ_PANEL_BUTTON_WIDTH, Message::ToggleEqualizerPanel)
 }
 
-/// The library-section toggle's fixed width, in pixels: enough for its `PL`
-/// label, pinned so the section's visibility cannot reflow the row.
+/// The library-section toggle's fixed width, in pixels: enough for its `PL` label, pinned so the
+/// section's visibility cannot reflow the row.
 pub(super) const LIBRARY_PANEL_BUTTON_WIDTH: f32 = 30.0;
 
-/// The player row's PL toggle spec: `(label, fixed width, message)`. Pressing
-/// it shows or hides the normal-mode library section without changing any
-/// playback, equalizer, browse, search, or selection state.
+/// The player row's PL toggle spec: `(label, fixed width, message)`. Pressing it shows or hides the
+/// normal-mode library section without changing any playback, equalizer, browse, search, or
+/// selection state.
 pub(super) fn library_panel_toggle() -> (&'static str, f32, Message) {
     (
         "PL",
@@ -124,21 +116,20 @@ pub(super) fn library_panel_toggle() -> (&'static str, f32, Message) {
     )
 }
 
-/// The options-menu button's fixed width, in pixels, pinned like the other
-/// panel toggles so a glyph change cannot reflow the row.
+/// The options-menu button's fixed width, in pixels, pinned like the other panel toggles so a glyph
+/// change cannot reflow the row.
 pub(super) const OPTIONS_BUTTON_WIDTH: f32 = 30.0;
 
-/// The lightning button at the end of the player row: opens the same transient
-/// options menu as the LCD strip's `O` through [`Message::ToggleOptions`].
+/// The lightning button at the end of the player row: opens the same transient options menu as the
+/// LCD strip's `O` through [`Message::ToggleOptions`].
 pub(super) fn options_button() -> Element<'static, Message> {
     fixed_width_button("⚡", OPTIONS_BUTTON_WIDTH, Message::ToggleOptions).into()
 }
 
-/// One of the transport row's panel toggles, built from its spec and pinned to
-/// the spec's width. `open` sinks the chrome while the panel it controls is
-/// shown (see [`style::toggle_button_style`]), the same on/off rule as the
-/// LCD strip's `A` and the title bar's `M` toggles. The EQ and PL toggles both
-/// build through here, so neither can drift from that rule.
+/// One of the transport row's panel toggles, built from its spec and pinned to the spec's width.
+/// `open` sinks the chrome while the panel it controls is shown (see
+/// [`style::toggle_button_style`]), the same on/off rule as the LCD strip's `A` and the title bar's
+/// `M` toggles. The EQ and PL toggles both build through here, so neither can drift from that rule.
 fn panel_toggle_button(
     (label, width, message): (&'static str, f32, Message),
     open: bool,
@@ -147,24 +138,21 @@ fn panel_toggle_button(
         .style(move |_theme, status| style::toggle_button_style(open, status))
 }
 
-/// The balance slider's container id, used only by the layout tests to find
-/// the laid-out slider and publish a wheel roll over it, like `SEEK_BAR_ID`.
+/// The balance slider's container id, used only by the layout tests to find the laid-out slider and
+/// publish a wheel roll over it, like `SEEK_BAR_ID`.
 #[cfg(test)]
 pub(crate) const BALANCE_SLIDER_ID: &str = "transport-balance";
 
-/// The transport row: the Previous, Play, Pause, Stop, Next, Repeat, and
-/// Shuffle buttons, the volume slider, the balance slider, the fixed-width
-/// `EQ` and `PL` panel toggles, and the lightning options-menu button. `volume`
-/// and `balance` are the sliders' current values; dragging them emits
-/// `Message::VolumeChange` and
-/// `Message::BalanceChange` respectively. `repeat` is the shared Repeat flag
-/// and `shuffle` the shared Shuffle flag, each shown on its button and toggled
-/// by pressing it. The five glyph buttons carry word tooltips; Repeat and
-/// Shuffle stay text toggles. `eq_panel_visible` sinks the EQ button while the
-/// equalizer section is drawn and leaves its chrome raised while the section
-/// is hidden; `library_panel_visible` does the same for the PL button and the
-/// library section. The lightning button publishes [`Message::ToggleOptions`]
-/// and is separated from PL by the row's usual gap.
+/// The transport row: the Previous, Play, Pause, Stop, Next, Repeat, and Shuffle buttons, the
+/// volume slider, the balance slider, the fixed-width `EQ` and `PL` panel toggles, and the
+/// lightning options-menu button. `volume` and `balance` are the sliders' current values; dragging
+/// them emits `Message::VolumeChange` and `Message::BalanceChange` respectively. `repeat` is the
+/// shared Repeat flag and `shuffle` the shared Shuffle flag, each shown on its button and toggled
+/// by pressing it. The five glyph buttons carry word tooltips; Repeat and Shuffle stay text
+/// toggles. `eq_panel_visible` sinks the EQ button while the equalizer section is drawn and leaves
+/// its chrome raised while the section is hidden; `library_panel_visible` does the same for the PL
+/// button and the library section. The lightning button publishes [`Message::ToggleOptions`] and is
+/// separated from PL by the row's usual gap.
 pub fn view_transport_controls(
     volume: f32,
     balance: f32,
