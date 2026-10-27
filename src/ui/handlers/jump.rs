@@ -287,6 +287,11 @@ mod tests {
         assert_eq!(parse_jump_time("01:05"), Some(secs(65)));
         assert_eq!(parse_jump_time("1:5"), Some(secs(65)));
         assert_eq!(parse_jump_time("0:00"), Some(secs(0)));
+        // The largest minutes count whose seconds still fit u64.
+        assert_eq!(
+            parse_jump_time("307445734561825860:15"),
+            Some(secs(307_445_734_561_825_860 * 60 + 15))
+        );
     }
 
     #[test]
@@ -302,6 +307,11 @@ mod tests {
             "1m",
             "1:005",
             "99999999999999999999999",
+            // Minutes that fit u64 but overflow once multiplied by 60.
+            "18446744073709551615:00",
+            // Non-ASCII digits are not accepted.
+            "٣٠",
+            "1:٣٠",
         ] {
             assert_eq!(parse_jump_time(text), None, "{text:?}");
         }
