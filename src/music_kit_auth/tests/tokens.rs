@@ -63,6 +63,31 @@ fn percent_decode_decodes_form_escapes_and_leaves_bad_ones_literal() {
     assert_eq!(percent_decode("%2"), "%2");
 }
 
+// The decoder runs on the token callback's body and the page query, both
+// chosen by a local client, so its edges must neither drop bytes nor decode
+// twice: an escape that ends the input still decodes, an encoded `+` stays a
+// plus rather than becoming a space, one pass never re-decodes its own output,
+// and bytes that are not UTF-8 become U+FFFD instead of panicking.
+#[test]
+fn percent_decode_handles_a_final_escape_a_literal_plus_and_invalid_utf8() {
+    assert_eq!(percent_decode("a%41"), "aA");
+    assert_eq!(percent_decode("%41"), "A");
+    assert_eq!(percent_decode("a%2Bb"), "a+b");
+    assert_eq!(percent_decode("%252B"), "%2B");
+    assert_eq!(percent_decode("%%41"), "%A");
+    assert_eq!(percent_decode("%FF"), "\u{fffd}");
+}
+
+// A host that merely starts with the loopback address, or carries an empty
+// port, must not pass: only the exact name (after stripping one port) does.
+#[test]
+fn is_loopback_host_rejects_lookalike_names() {
+    assert!(!is_loopback_host(Some("127.0.0.1.evil.example")));
+    assert!(!is_loopback_host(Some("127.0.0.10")));
+    assert!(!is_loopback_host(Some("")));
+    assert!(!is_loopback_host(Some("localhost:51234")));
+}
+
 // The `Host` header is the DNS-rebinding guard: the server is bound to
 // `127.0.0.1`, so only that address — with or without the port the browser
 // appends — may read the sign-in page, which embeds the developer token.
