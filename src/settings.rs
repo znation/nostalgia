@@ -291,16 +291,7 @@ impl Settings {
                 // A malformed value leaves the default AUTO off.
                 "eq_auto" => parse_into(&mut settings.eq_auto, value),
                 "eq_preamp" => parse_number_into(&mut settings.eq_preamp, value),
-                "eq_preset" => {
-                    if value.is_empty() {
-                        settings.eq_preset = None;
-                    } else if let Some(preset) = equalizer::PRESETS
-                        .iter()
-                        .find(|preset| preset.name == value)
-                    {
-                        settings.eq_preset = Some(*preset);
-                    }
-                }
+                "eq_preset" => settings.parse_eq_preset(value),
                 // Only the two written words are recognized; any other value
                 // leaves the default elapsed mode.
                 "time_display" => match value {
@@ -321,18 +312,39 @@ impl Settings {
                 "always_on_top" => parse_into(&mut settings.always_on_top, value),
                 // A malformed value leaves the default unshaded window.
                 "shade" => parse_into(&mut settings.shade, value),
-                _ => {
-                    if let Some(index) = key
-                        .strip_prefix("eq_band_")
-                        .and_then(|index| index.parse::<usize>().ok())
-                        && let Some(slot) = settings.eq_bands.get_mut(index)
-                    {
-                        parse_number_into(slot, value);
-                    }
-                }
+                _ => settings.parse_eq_band(key, value),
             }
         }
         settings
+    }
+
+    /// Apply an `eq_preset` line: empty clears the preset, a known name selects
+    /// it, and an unrecognized name leaves the current preset.
+    fn parse_eq_preset(&mut self, value: &str) {
+        if value.is_empty() {
+            self.eq_preset = None;
+            return;
+        }
+        if let Some(preset) = equalizer::PRESETS
+            .iter()
+            .find(|preset| preset.name == value)
+        {
+            self.eq_preset = Some(*preset);
+        }
+    }
+
+    /// Apply an `eq_band_<index>` line; any other key, or an index past the
+    /// last band, is ignored.
+    fn parse_eq_band(&mut self, key: &str, value: &str) {
+        let Some(index) = key
+            .strip_prefix("eq_band_")
+            .and_then(|index| index.parse::<usize>().ok())
+        else {
+            return;
+        };
+        if let Some(slot) = self.eq_bands.get_mut(index) {
+            parse_number_into(slot, value);
+        }
     }
 }
 
