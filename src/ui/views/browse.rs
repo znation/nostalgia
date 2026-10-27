@@ -62,6 +62,7 @@ pub fn view_artists<'a>(
                 .iter()
                 .enumerate()
                 .map(|(index, artist)| artist_row(artist, labels.get(index).map(String::as_str))),
+            &CurrentView::Artists,
             epoch,
             selected,
             browse_placeholder(&CurrentView::Artists, loading, error, false),
@@ -94,6 +95,7 @@ pub fn view_albums<'a>(
         albums,
         titles,
         labels,
+        &CurrentView::Albums,
         epoch,
         selected,
         browse_placeholder(&CurrentView::Albums, loading, error, false),
@@ -127,6 +129,7 @@ pub fn view_songs<'a>(
         songs,
         titles,
         labels,
+        &CurrentView::Songs,
         epoch,
         selected,
         current_track,
@@ -157,6 +160,7 @@ pub fn view_all_songs<'a>(
         songs,
         titles,
         labels,
+        &CurrentView::AllSongs,
         epoch,
         selected,
         current_track,
@@ -186,6 +190,7 @@ pub fn view_all_albums<'a>(
         albums,
         titles,
         labels,
+        &CurrentView::AllAlbums,
         epoch,
         selected,
         browse_placeholder(&CurrentView::AllAlbums, loading, error, false),
@@ -208,6 +213,7 @@ pub fn view_playlists<'a>(
     list_with_count(
         scrollable_list(
             playlists.iter().map(playlist_row),
+            &CurrentView::Playlists,
             epoch,
             selected,
             browse_placeholder(&CurrentView::Playlists, loading, error, false),

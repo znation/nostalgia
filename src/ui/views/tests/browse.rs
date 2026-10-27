@@ -44,6 +44,7 @@ fn scrollable_list_clips_an_overlong_title_to_its_column() {
             Cow::Borrowed("3:30"),
             false,
         )],
+        &CurrentView::Songs,
         0,
         None,
         "No songs",
@@ -69,8 +70,11 @@ fn scrollable_list_clips_an_overlong_title_to_its_column() {
 // A playback poll rebuilds the whole view, so an unchanged browse list must
 // reuse each row's cached button instead of constructing it again. Build the
 // real list twice, diff the second element into the first tree, and count
-// `row_button` calls: no new calls on an identical list, and exactly the rows
-// whose key changed on a title, label, selection, or epoch change.
+// `row_button` calls: no new calls on an identical list, exactly the row a
+// selection change marks, and every row when the list epoch changes. A text
+// change rides an epoch bump, because `BrowseList` bumps the epoch whenever it
+// stores or reorders the cached titles and labels; the key therefore need not
+// rescan the text on every refresh.
 #[test]
 fn scrollable_list_reuses_unchanged_rows_and_rebuilds_only_changed_keys() {
     fn items(
@@ -88,7 +92,13 @@ fn scrollable_list_reuses_unchanged_rows_and_rebuilds_only_changed_keys() {
     }
 
     let before = row_build_count();
-    let first = scrollable_list(items("First", "3:30"), 7, None, "No songs");
+    let first = scrollable_list(
+        items("First", "3:30"),
+        &CurrentView::Songs,
+        7,
+        None,
+        "No songs",
+    );
     let mut tree = Tree::new(first.as_widget());
     assert_eq!(
         row_build_count() - before,
@@ -96,7 +106,13 @@ fn scrollable_list_reuses_unchanged_rows_and_rebuilds_only_changed_keys() {
         "the first view builds each browse row once"
     );
 
-    let same = scrollable_list(items("First", "3:30"), 7, None, "No songs");
+    let same = scrollable_list(
+        items("First", "3:30"),
+        &CurrentView::Songs,
+        7,
+        None,
+        "No songs",
+    );
     tree.diff(same.as_widget());
     assert_eq!(
         row_build_count() - before,
@@ -104,31 +120,41 @@ fn scrollable_list_reuses_unchanged_rows_and_rebuilds_only_changed_keys() {
         "an unchanged list and selection reuses every row"
     );
 
-    let renamed = scrollable_list(items("Renamed", "3:30"), 7, None, "No songs");
-    tree.diff(renamed.as_widget());
-    assert_eq!(
-        row_build_count() - before,
-        3,
-        "a changed title rebuilds exactly that row"
+    let selected = scrollable_list(
+        items("First", "3:30"),
+        &CurrentView::Songs,
+        7,
+        Some(1),
+        "No songs",
     );
-
-    let relabeled = scrollable_list(items("Renamed", "3:31"), 7, None, "No songs");
-    tree.diff(relabeled.as_widget());
-    assert_eq!(
-        row_build_count() - before,
-        4,
-        "a changed label rebuilds exactly that row"
-    );
-
-    let selected = scrollable_list(items("Renamed", "3:31"), 7, Some(1), "No songs");
     tree.diff(selected.as_widget());
     assert_eq!(
         row_build_count() - before,
-        5,
+        3,
         "changing the selection rebuilds exactly the row it marks"
     );
 
-    let reloaded = scrollable_list(items("Renamed", "3:31"), 8, Some(1), "No songs");
+    let renamed = scrollable_list(
+        items("Renamed", "3:31"),
+        &CurrentView::Songs,
+        8,
+        Some(1),
+        "No songs",
+    );
+    tree.diff(renamed.as_widget());
+    assert_eq!(
+        row_build_count() - before,
+        5,
+        "a new list epoch rebuilds every row, including new cached text"
+    );
+
+    let reloaded = scrollable_list(
+        items("Renamed", "3:31"),
+        &CurrentView::Songs,
+        9,
+        Some(1),
+        "No songs",
+    );
     tree.diff(reloaded.as_widget());
     assert_eq!(
         row_build_count() - before,
@@ -144,6 +170,36 @@ fn album_count_label_singular_plural_and_none() {
     assert_eq!(album_count_label(2), "2 albums");
 }
 
+#[test]
+fn switching_lists_at_the_same_epoch_rebuilds_cached_rows() {
+    let before = row_build_count();
+    let album = sample_album();
+    let titles = vec!["Shared title".to_string()];
+    let labels = vec!["3:30".to_string()];
+    let albums = [album];
+    let first = view_albums(&albums, &titles, &labels, 1, None, false, None);
+    let mut tree = Tree::new(first.as_widget());
+    assert_eq!(row_build_count() - before, 1);
+
+    // Identical text must still invalidate the old list's cache. This also
+    // fails with the original text-hashing key, which lacked list identity.
+    let flat = view_all_albums(&albums, &titles, &labels, 1, None, false, None);
+    tree.diff(flat.as_widget());
+    assert_eq!(row_build_count() - before, 2);
+
+    let renamed = vec!["Different title".to_string()];
+    let relabeled = vec!["4:00".to_string()];
+    let back = view_albums(&albums, &renamed, &relabeled, 1, None, false, None);
+    tree.diff(back.as_widget());
+    assert_eq!(row_build_count() - before, 3);
+    tree.diff(back.as_widget());
+    assert_eq!(
+        row_build_count() - before,
+        3,
+        "the same list reuses its row"
+    );
+}
+
 // The mockup puts the album count at the artist row's right edge, not
 // directly after the name. Lay the real list out and require the count to
 // reach the right of the row while the name stays on the left.
@@ -151,7 +207,13 @@ fn album_count_label_singular_plural_and_none() {
 fn artist_row_puts_its_album_count_at_the_right_edge() {
     let mut artist = sample_artist();
     artist.album_count = 2;
-    let mut element = scrollable_list([artist_row(&artist, None)], 0, None, "No artists");
+    let mut element = scrollable_list(
+        [artist_row(&artist, None)],
+        &CurrentView::Artists,
+        0,
+        None,
+        "No artists",
+    );
     let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
 
     let title = capture.find("The Sample Band");

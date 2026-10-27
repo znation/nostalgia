@@ -4,10 +4,11 @@
 //! The browse list is the heaviest part of the view tree, and iced rebuilds
 //! the whole screen on every message — including the position and spectrum
 //! polls while a preview plays. A row's widgets depend only on the list's
-//! epoch, its position, whether it is playing, whether it is selected, and its
-//! text; a poll reply changes none of those, so rebuilding every row for it
-//! throws away identical widgets. [`LazyRow`] keeps the built element in the
-//! widget tree and reuses it while its dependency hashes the same.
+//! identity and epoch — which also revises its cached titles and labels — its position,
+//! whether it is playing, and whether it is selected; a poll reply changes
+//! none of those, so rebuilding every row for it throws away identical
+//! widgets. [`LazyRow`] keeps the built element in the widget tree and reuses
+//! it while its dependency hashes the same.
 //!
 //! This is a small non-overlay copy of iced's `lazy` widget, which the crate
 //! does not enable. A browse row's element is a button with text, so it never

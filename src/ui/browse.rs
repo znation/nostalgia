@@ -317,6 +317,41 @@ mod tests {
     }
 
     #[test]
+    fn storing_row_text_bumps_the_epoch_that_revises_cached_rows() {
+        // The browse row cache keys on the epoch instead of rescanning each
+        // row's title and label every view, so a text change must revise the
+        // epoch. `store_with_row_text` and `store_with_labels` are the two
+        // paths that install cached text for a freshly loaded list.
+        let mut songs = BrowseList::new(false);
+        let before = songs.epoch;
+        songs.store_with_row_text(
+            vec!["a".to_string()],
+            |item| format!("title-{item}"),
+            |item| format!("label-{item}"),
+        );
+        let stored = songs.epoch;
+        assert_ne!(stored, before, "storing a loaded list revises its epoch");
+
+        songs.store_with_row_text(
+            vec!["a".to_string()],
+            |_| "another title".to_string(),
+            |_| "another label".to_string(),
+        );
+        assert_ne!(
+            songs.epoch, stored,
+            "changed cached row text revises the epoch"
+        );
+
+        let mut artists = BrowseList::new(false);
+        let before = artists.epoch;
+        artists.store_with_labels(vec!["a".to_string()], |_| "1 album".to_string());
+        assert_ne!(
+            artists.epoch, before,
+            "storing cached labels revises the epoch"
+        );
+    }
+
+    #[test]
     fn reordering_moves_rows_without_cloning_them() {
         // Reorder paths used to rebuild every buffer by cloning each row, so
         // they required `T: Clone`. A row that deliberately does not implement

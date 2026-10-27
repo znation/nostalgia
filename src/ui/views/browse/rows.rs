@@ -15,7 +15,7 @@ use iced::{
 };
 
 use crate::library::{Album, Song};
-use crate::ui::{Message, style, theme};
+use crate::ui::{CurrentView, Message, style, theme};
 
 use super::super::spacer;
 
@@ -135,8 +135,14 @@ fn one_line_title<'a>(title: Cow<'a, str>) -> Cow<'a, str> {
 /// Each row's built button — including its prefix and the owned copies of its
 /// title and label — is cached by [`RowKey`] and rebuilt only when that key
 /// changes, so a playback poll reuses the row instead of reconstructing it.
+/// The key does not rescan the row's text: the list's epoch is the text's
+/// revision, because [`crate::ui::browse::BrowseList`] bumps it whenever it
+/// stores or reorders rows with their cached titles and labels. Hashing every
+/// title and label again each refresh would read the whole list's text for a
+/// key that has not changed.
 pub(in crate::ui::views) fn scrollable_list<'a>(
     items: impl IntoIterator<Item = (Cow<'a, str>, Cow<'a, str>, bool)>,
+    list: &CurrentView,
     epoch: u64,
     selected: Option<usize>,
     empty_label: &'a str,
@@ -148,17 +154,16 @@ pub(in crate::ui::views) fn scrollable_list<'a>(
         is_empty = false;
         let is_selected = selected == Some(position);
         // The built row is cached across views by its dependency: the list
-        // epoch, the row's position and flags, and a hash of the two text
-        // values. A position or text change bumps the epoch through
-        // `BrowseList`, but hashing the text too keeps this builder correct
-        // for any caller. A playback poll changes none of these, so the row's
-        // button, text, and containers are reused instead of rebuilt.
+        // browse level, epoch, the row's position and flags. The epoch is the row text's
+        // revision too — `BrowseList` bumps it on every store and reorder,
+        // together with the cached titles and labels — so this key does not
+        // rescan the text each refresh.
         let key = RowKey {
+            list: std::mem::discriminant(list),
             epoch,
             position,
             is_current,
             is_selected,
-            text: text_hash(&title, &label),
         };
         let row = LazyRow::new(key, move |key| {
             row_button(
@@ -189,25 +194,16 @@ pub(in crate::ui::views) fn scrollable_list<'a>(
 }
 
 /// The cache key for one browse row: what changes the widget it builds. The
-/// text hash makes a changed title or label rebuild even when a caller did not
-/// bump the list epoch.
+/// browse level identifies the list, and its epoch revises its cached titles and labels;
+/// `BrowseList` bumps it on every store and reorder, so a text change always
+/// rebuilds the affected rows without rescanning their text here.
 #[derive(Clone, Copy, Hash)]
 struct RowKey {
+    list: std::mem::Discriminant<CurrentView>,
     epoch: u64,
     position: usize,
     is_current: bool,
     is_selected: bool,
-    text: u64,
-}
-
-/// A stable hash of a row's title and label, used in [`RowKey`].
-fn text_hash(title: &str, label: &str) -> u64 {
-    use std::hash::{Hash, Hasher};
-
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    title.hash(&mut hasher);
-    label.hash(&mut hasher);
-    hasher.finish()
 }
 
 // Counts browse row builds on the current test thread, so a test can prove
@@ -278,6 +274,7 @@ pub(in crate::ui::views) fn album_list<'a>(
     albums: &'a [Album],
     titles: &'a [String],
     labels: &'a [String],
+    list: &CurrentView,
     epoch: u64,
     selected: Option<usize>,
     placeholder: &'a str,
@@ -291,6 +288,7 @@ pub(in crate::ui::views) fn album_list<'a>(
                     labels.get(index).map(String::as_str),
                 )
             }),
+            list,
             epoch,
             selected,
             placeholder,
@@ -343,10 +341,12 @@ pub(in crate::ui::views) fn list_with_count<'a>(
 /// footer ([`song_list_summary`], which includes the selected row's length)
 /// beneath its rows; an empty list returns only the scrollable so its loading,
 /// error, or empty placeholder stays alone.
+#[allow(clippy::too_many_arguments)]
 pub(in crate::ui::views) fn song_list<'a>(
     songs: &'a [Song],
     titles: &'a [String],
     labels: &'a [String],
+    list: &CurrentView,
     epoch: u64,
     selected: Option<usize>,
     current_track: Option<&str>,
@@ -361,6 +361,7 @@ pub(in crate::ui::views) fn song_list<'a>(
                 current_track,
             )
         }),
+        list,
         epoch,
         selected,
         placeholder,

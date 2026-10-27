@@ -599,28 +599,33 @@ those labels through `BrowseList::store_with_labels`, so `artist_row` can borrow
 
 ## Browse row caching
 
-**Guarantee.** Each browse row's built widget is reused across view rebuilds while its list epoch,
-position, playing flag, selected flag, and title/label text stay the same, so a playback poll
-reply that changes none of them does not rebuild the row's button, text, or containers. A
-changed dependency rebuilds exactly that row, so the rendered text, layout, press message, and
-style remain the ones the current list and selection describe. The cache lives in the iced widget
-slots of the library column, so each refresh of the same browse level diffs new keys against those
-slots instead of allocating fresh rows. Switching to or from Artists changes the buttons pushed
-above the list (Back, Retry, and the flat-list buttons depend on the view), which shifts the list's
-position in the column and builds its rows anew; every level below Artists pushes the same buttons,
-so a direct switch between them keeps the list's slot and rebuilds only rows whose keys changed.
-Hiding the library panel or shading the window stops building the column and drops the cached rows
-with it.
+**Guarantee.** Each browse row's built widget is reused across view rebuilds while its browse level, list epoch,
+position, playing flag, and selected flag stay the same, so a playback poll reply that changes none
+of them does not rebuild the row's button, text, or containers. The epoch is the list's row-text
+revision as well: `BrowseList` bumps it on every store and reorder, together with the cached titles
+and labels, so stored text changes revise the key within that list. A changed key rebuilds that row, so
+the rendered text, layout, press message, and style remain the ones the current list and selection
+describe. The cache lives in the iced widget slots of the library column, so each refresh of the
+same browse level diffs new keys against those slots instead of allocating fresh rows. Switching to
+or from Artists changes the buttons pushed above the list (Back, Retry, and the flat-list buttons
+depend on the view), which shifts the list's position in the column and builds its rows anew; every
+level below Artists pushes the same buttons, so a direct switch between them keeps the list's slot
+and rebuilds its rows because the browse level in each key changes. Hiding the library panel or shading the window stops
+building the column and drops the cached rows with it.
 
 **Enforced by.** `views::browse::rows::scrollable_list` wraps every row in
-`views::browse::rows::lazy::LazyRow`, keyed by `RowKey` (epoch, position, playing and selected
-flags, and a hash of the title and label); `LazyRow` builds its element from that key and keeps it
-while the key hashes the same. A row reports the browse button's full-width, content-height size
-before its element is built, so `Column::push` sees the same hint the uncached button gave it.
+`views::browse::rows::lazy::LazyRow`, keyed by `RowKey` (browse-level discriminant, epoch, position, playing and selected
+flags); `LazyRow` builds its element from that key and keeps it while the key hashes the same. The
+key deliberately does not hash the row's title and label: doing so rescanned the whole list's text
+on every refresh even though `BrowseList::replace_rows` and the reorder methods already bump the
+epoch whenever cached text changes. A row reports the browse button's full-width, content-height
+size before its element is built, so `Column::push` sees the same hint the uncached button gave it.
 
 **Pinned by.** `scrollable_list_reuses_unchanged_rows_and_rebuilds_only_changed_keys`
 (`src/ui/views/tests/browse.rs`), which builds the real list twice and varies the title, label,
-selection, and epoch, and `reuses_the_element_until_the_dependency_changes` and
+selection, and epoch; `switching_lists_at_the_same_epoch_rebuilds_cached_rows`
+(`src/ui/views/tests/browse.rs`), which switches Albums and All Albums at equal epochs
+with identical and different text; and `reuses_the_element_until_the_dependency_changes` and
 `an_unbuilt_row_reports_a_full_width_content_height_hint`
 (`src/ui/views/browse/rows/lazy.rs`), which pin the widget itself and its pre-build size hint.
 The existing browse-row text, clipping, and right-edge tests in `src/ui/views/tests/browse.rs` and
