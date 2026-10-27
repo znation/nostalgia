@@ -402,6 +402,44 @@ fn options_stop_after_current_toggles_the_flag_and_closes_the_panel() {
     assert!(!player.options_visible);
 }
 
+// The Repeat and Shuffle rows flip only their shared AppState flag and close
+// the menu; activating each by keyboard flips it back.
+#[test]
+fn options_repeat_and_shuffle_toggle_shared_state_and_close_the_panel() {
+    for choice in [OptionsChoice::Repeat, OptionsChoice::Shuffle] {
+        let is_repeat = matches!(choice, OptionsChoice::Repeat);
+        let (mut player, state) = test_player();
+        let flags = || {
+            let state = state.blocking_lock();
+            (state.repeat, state.shuffle)
+        };
+        let before = flags();
+        player.options_visible = true;
+        let _ = update(&mut player, Message::OptionsChoice(choice));
+        let expected = if is_repeat {
+            (!before.0, before.1)
+        } else {
+            (before.0, !before.1)
+        };
+        assert_eq!(flags(), expected, "{choice:?} must flip only its own flag");
+        assert!(!player.options_visible);
+
+        player.options_visible = true;
+        player.options_selected = OptionsRow::ALL
+            .iter()
+            .position(|row| {
+                matches!(
+                    (row, is_repeat),
+                    (OptionsRow::Repeat, true) | (OptionsRow::Shuffle, false)
+                )
+            })
+            .unwrap();
+        let _ = update(&mut player, Message::OptionsActivate);
+        assert_eq!(flags(), before, "{choice:?} by keyboard must flip it back");
+        assert!(!player.options_visible);
+    }
+}
+
 // Each options-menu row flips exactly the flag its existing toggle owns, then
 // closes the menu. Everything else, including playback, stays put.
 #[test]
@@ -471,6 +509,11 @@ fn options_choice_applies_each_toggle_and_closes_the_panel() {
                         "covered by options_stop_after_current_toggles_the_flag_and_closes_the_panel"
                     )
                 }
+                OptionsChoice::Repeat | OptionsChoice::Shuffle => {
+                    unreachable!(
+                        "covered by options_repeat_and_shuffle_toggle_shared_state_and_close_the_panel"
+                    )
+                }
             };
             assert_eq!(
                 (
@@ -514,18 +557,21 @@ fn options_keyboard_selection_clamps_and_activates_each_row() {
     assert_eq!(player.options_selected, 0);
     let _ = update(&mut player, Message::OptionsSelectionUp);
     assert_eq!(player.options_selected, 0);
-    for index in 1..8 {
+    for index in 1..10 {
         let _ = update(&mut player, Message::OptionsSelectionDown);
         assert_eq!(player.options_selected, index);
     }
     let _ = update(&mut player, Message::OptionsSelectionDown);
-    assert_eq!(player.options_selected, 7);
+    assert_eq!(player.options_selected, 9);
     let _ = update(&mut player, Message::OptionsActivate);
     assert!(!player.options_visible);
     assert!(!player.about_visible);
     let _ = update(&mut player, Message::ToggleOptions);
     assert_eq!(player.options_selected, 0);
-    player.options_selected = 6;
+    player.options_selected = OptionsRow::ALL
+        .iter()
+        .position(|row| matches!(row, OptionsRow::About))
+        .unwrap();
     let _ = update(&mut player, Message::OptionsActivate);
     assert!(player.about_visible);
     assert!(!player.options_visible);

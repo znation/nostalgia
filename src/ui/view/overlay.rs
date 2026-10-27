@@ -9,6 +9,10 @@ pub(super) fn apply_overlays<'a>(
     if player.about_visible && !player.shaded {
         views::view_about_overlay(base, player.apple_music_service.session().is_some())
     } else if player.options_visible && !player.shaded {
+        let (repeat, shuffle) = {
+            let state = player.state.blocking_lock();
+            (state.repeat, state.shuffle)
+        };
         views::view_options_overlay(
             base,
             views::OptionsState {
@@ -18,6 +22,8 @@ pub(super) fn apply_overlays<'a>(
                 eq_panel_visible: player.eq_panel_visible,
                 library_panel_visible: player.library_panel_visible,
                 stop_after_current: player.stop_after_current,
+                repeat,
+                shuffle,
             },
             player.options_selected,
         )

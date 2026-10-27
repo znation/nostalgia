@@ -136,7 +136,7 @@ button, or a click on the backdrop outside the panel closes it, and opening it w
 rolled up restores the window first. The LCD's `O` letter, Alt+O, or the lightning button at the
 end of the transport row opens an `OPTIONS` menu over the player listing `Always on Top: On/Off`,
 `Time: Remaining/Elapsed`, `Visualizer: Shown/Hidden`, `Equalizer: Shown/Hidden`,
-`Library: Shown/Hidden`, `Stop after current: On/Off`, `About Nostalgia`, and `Close`, with each label reflecting the current
+`Library: Shown/Hidden`, `Stop after current: On/Off`, `Repeat: On/Off`, `Shuffle: On/Off`, `About Nostalgia`, and `Close`, with each label reflecting the current
 state. Choosing a row applies that one toggle and closes the menu; `About Nostalgia` opens the
 About panel, and `Close`, a click on the backdrop, or Escape closes the menu. Opening it while the
 window is rolled up restores the window first, and the menu is not saved. Alt+O also closes it

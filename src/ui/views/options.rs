@@ -72,6 +72,20 @@ pub(super) fn stop_after_current_label(stop_after_current: bool) -> &'static str
     }
 }
 
+/// The repeat row's label: `On` while Repeat is enabled, `Off` otherwise.
+pub(super) fn repeat_label(repeat: bool) -> &'static str {
+    if repeat { "Repeat: On" } else { "Repeat: Off" }
+}
+
+/// The shuffle row's label: `On` while Shuffle is enabled, `Off` otherwise.
+pub(super) fn shuffle_label(shuffle: bool) -> &'static str {
+    if shuffle {
+        "Shuffle: On"
+    } else {
+        "Shuffle: Off"
+    }
+}
+
 /// The current toggle state the options menu's labels are resolved from.
 #[derive(Debug, Clone, Copy)]
 pub struct OptionsState {
@@ -87,6 +101,10 @@ pub struct OptionsState {
     pub library_panel_visible: bool,
     /// Playback stops at the end of the current song.
     pub stop_after_current: bool,
+    /// Repeat is enabled.
+    pub repeat: bool,
+    /// Shuffle is enabled.
+    pub shuffle: bool,
 }
 
 /// Resolve a row's label from the current toggle state.
@@ -98,6 +116,8 @@ pub(super) fn options_row_label(row: OptionsRow, state: OptionsState) -> &'stati
         OptionsRow::EqualizerPanel => equalizer_label(state.eq_panel_visible),
         OptionsRow::LibraryPanel => library_label(state.library_panel_visible),
         OptionsRow::StopAfterCurrent => stop_after_current_label(state.stop_after_current),
+        OptionsRow::Repeat => repeat_label(state.repeat),
+        OptionsRow::Shuffle => shuffle_label(state.shuffle),
         OptionsRow::About => "About Nostalgia",
         OptionsRow::Close => "Close",
     }
@@ -190,6 +210,14 @@ mod tests {
     fn equalizer_label_mirrors_the_flag() {
         assert_eq!(equalizer_label(true), "Equalizer: Shown");
         assert_eq!(equalizer_label(false), "Equalizer: Hidden");
+    }
+
+    #[test]
+    fn repeat_and_shuffle_labels_mirror_their_flags() {
+        assert_eq!(repeat_label(true), "Repeat: On");
+        assert_eq!(repeat_label(false), "Repeat: Off");
+        assert_eq!(shuffle_label(true), "Shuffle: On");
+        assert_eq!(shuffle_label(false), "Shuffle: Off");
     }
 
     #[test]

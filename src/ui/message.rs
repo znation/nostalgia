@@ -415,6 +415,10 @@ pub(in crate::ui) enum OptionsChoice {
     LibraryPanel,
     /// Reuses [`Message::ToggleStopAfterCurrent`].
     StopAfterCurrent,
+    /// Reuses [`Message::ToggleRepeat`].
+    Repeat,
+    /// Reuses [`Message::ToggleShuffle`].
+    Shuffle,
 }
 
 /// Options rows in their shared drawing and keyboard order.
@@ -426,18 +430,22 @@ pub(in crate::ui) enum OptionsRow {
     EqualizerPanel,
     LibraryPanel,
     StopAfterCurrent,
+    Repeat,
+    Shuffle,
     About,
     Close,
 }
 
 impl OptionsRow {
-    pub(in crate::ui) const ALL: [Self; 8] = [
+    pub(in crate::ui) const ALL: [Self; 10] = [
         Self::AlwaysOnTop,
         Self::TimeDisplay,
         Self::Visualizer,
         Self::EqualizerPanel,
         Self::LibraryPanel,
         Self::StopAfterCurrent,
+        Self::Repeat,
+        Self::Shuffle,
         Self::About,
         Self::Close,
     ];
@@ -450,6 +458,8 @@ impl OptionsRow {
             Self::EqualizerPanel => Message::OptionsChoice(OptionsChoice::EqualizerPanel),
             Self::LibraryPanel => Message::OptionsChoice(OptionsChoice::LibraryPanel),
             Self::StopAfterCurrent => Message::OptionsChoice(OptionsChoice::StopAfterCurrent),
+            Self::Repeat => Message::OptionsChoice(OptionsChoice::Repeat),
+            Self::Shuffle => Message::OptionsChoice(OptionsChoice::Shuffle),
             Self::About => Message::ToggleAbout,
             Self::Close => Message::ToggleOptions,
         }
@@ -472,6 +482,8 @@ mod options_tests {
                 Message::OptionsChoice(OptionsChoice::EqualizerPanel),
                 Message::OptionsChoice(OptionsChoice::LibraryPanel),
                 Message::OptionsChoice(OptionsChoice::StopAfterCurrent),
+                Message::OptionsChoice(OptionsChoice::Repeat),
+                Message::OptionsChoice(OptionsChoice::Shuffle),
                 Message::ToggleAbout,
                 Message::ToggleOptions,
             ]

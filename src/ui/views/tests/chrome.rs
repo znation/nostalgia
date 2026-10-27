@@ -494,6 +494,8 @@ fn options_overlay_element(all_on: bool) -> Element<'static, Message> {
         eq_panel_visible: all_on,
         library_panel_visible: all_on,
         stop_after_current: all_on,
+        repeat: all_on,
+        shuffle: all_on,
     };
     super::super::view_options_overlay(base, state, 0)
 }
@@ -510,6 +512,8 @@ fn options_overlay_draws_each_row_with_its_state() {
                 "Equalizer: Hidden",
                 "Library: Hidden",
                 "Stop after current: Off",
+                "Repeat: Off",
+                "Shuffle: Off",
             ],
         ),
         (
@@ -521,6 +525,8 @@ fn options_overlay_draws_each_row_with_its_state() {
                 "Equalizer: Shown",
                 "Library: Shown",
                 "Stop after current: On",
+                "Repeat: On",
+                "Shuffle: On",
             ],
         ),
     ];
@@ -555,6 +561,8 @@ fn options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop() {
         "Equalizer: Hidden",
         "Library: Hidden",
         "Stop after current: Off",
+        "Repeat: Off",
+        "Shuffle: Off",
         "About Nostalgia",
         "Close",
         "OPTIONS",
@@ -615,6 +623,20 @@ fn options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop() {
                     Message::OptionsChoice(OptionsChoice::StopAfterCurrent)
                 )),
                 "the stop-after-current row must publish its choice: {messages:?}"
+            ),
+            "Repeat: Off" => assert!(
+                messages.iter().any(|message| matches!(
+                    message,
+                    Message::OptionsChoice(OptionsChoice::Repeat)
+                )),
+                "the repeat row must publish its choice: {messages:?}"
+            ),
+            "Shuffle: Off" => assert!(
+                messages.iter().any(|message| matches!(
+                    message,
+                    Message::OptionsChoice(OptionsChoice::Shuffle)
+                )),
+                "the shuffle row must publish its choice: {messages:?}"
             ),
             "About Nostalgia" => assert!(
                 messages
