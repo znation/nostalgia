@@ -269,6 +269,7 @@ fn reset_position_readout(player: &mut WinampPlayer) {
     // one), so it closes with the length instead of lingering invisibly.
     player.jump_time_visible = false;
     player.spectrum = None;
+    player.spectrum_peaks = None;
     player.seek_preview = None;
 }
 

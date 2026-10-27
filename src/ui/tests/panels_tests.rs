@@ -51,6 +51,7 @@ fn toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum() {
     let (mut player, state) = test_player();
     let spectrum = recording_spectrum();
     player.spectrum = Some(spectrum);
+    player.spectrum_peaks = Some(spectrum);
     state.blocking_lock().play();
     let before = {
         let state = state.blocking_lock();
@@ -69,6 +70,7 @@ fn toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum() {
     assert_message_schedules_no_work(&mut player, Message::ToggleVisualizer);
     assert!(!player.visualizer_visible);
     assert_eq!(player.spectrum, Some(spectrum));
+    assert_eq!(player.spectrum_peaks, Some(spectrum));
     assert!(
         player.needs_spectrum_poll(),
         "hiding the bars must leave the spectrum poll running"
@@ -77,6 +79,7 @@ fn toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum() {
     assert_message_schedules_no_work(&mut player, Message::ToggleVisualizer);
     assert!(player.visualizer_visible);
     assert_eq!(player.spectrum, Some(spectrum));
+    assert_eq!(player.spectrum_peaks, Some(spectrum));
     assert!(player.needs_spectrum_poll());
 
     let after = {

@@ -33,7 +33,7 @@ pub use text::{
 };
 pub(in crate::ui::views) use text::{MARQUEE_WIDTH, display_len, marquee_text};
 use visualizer::now_playing_visualizer_row;
-pub use visualizer::visible_spectrum;
+pub use visualizer::{next_spectrum_peaks, visible_spectrum};
 
 /// The LCD's large elapsed-readout size in pixels, matching the mockup's big
 /// left-hand time readout.
@@ -79,6 +79,7 @@ pub fn view_now_playing<'a>(
     marquee_offset: usize,
     format: Option<PlaybackFormat>,
     spectrum: Option<Spectrum>,
+    peaks: Option<Spectrum>,
     mode: TransportMode,
     elapsed_visible: bool,
     mixer_readout: Option<String>,
@@ -93,6 +94,7 @@ pub fn view_now_playing<'a>(
         marquee_offset,
         format,
         spectrum,
+        peaks,
         mode,
         elapsed_visible,
         mixer_readout,
@@ -117,6 +119,7 @@ pub(super) fn now_playing_content<'a, Theme, Renderer>(
     marquee_offset: usize,
     format: Option<PlaybackFormat>,
     spectrum: Option<Spectrum>,
+    peaks: Option<Spectrum>,
     mode: TransportMode,
     elapsed_visible: bool,
     mixer_readout: Option<String>,
@@ -143,7 +146,7 @@ where
                 elapsed_visible,
                 mixer_readout,
             ))
-            .push(now_playing_visualizer_row(spectrum))
+            .push(now_playing_visualizer_row(spectrum, peaks))
             .push(now_playing_status_row(format)),
     )
 }

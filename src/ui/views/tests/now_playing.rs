@@ -503,12 +503,12 @@ fn visualizer_row_press_publishes_toggle_visualizer() {
         }),
     ] {
         let mut probe: iced::Element<'_, Message, iced::Theme, ()> =
-            now_playing_visualizer_row(spectrum).into();
+            now_playing_visualizer_row(spectrum, None).into();
         let (_, node) = layout_capture::layout_tree(&mut probe, &());
         let bounds = node.bounds();
 
         let element: iced::Element<'_, Message, iced::Theme, iced::Renderer> =
-            now_playing_visualizer_row(spectrum).into();
+            now_playing_visualizer_row(spectrum, None).into();
         let messages = layout_capture::publish_at(
             element,
             &mut renderer,
@@ -535,6 +535,43 @@ fn visible_spectrum_hides_the_stored_bars_while_the_visualizer_is_off() {
     assert_eq!(visible_spectrum(None, false), None);
 }
 
+// A peak holds its level while the bars fall, drops one step per reply, and
+// never sinks below the reported band or zero; odd bands are clamped.
+#[test]
+fn next_spectrum_peaks_follows_a_rising_band_and_falls_slowly_after_it() {
+    let bands = |first: f32, second: f32| {
+        let mut bands = [0.0; BAND_COUNT];
+        bands[0] = first;
+        bands[1] = second;
+        Spectrum { bands }
+    };
+    let first = next_spectrum_peaks(None, Some(bands(0.5, 2.0))).unwrap();
+    assert_eq!(first.bands[0], 0.5);
+    assert_eq!(first.bands[1], 1.0);
+    let lower = next_spectrum_peaks(Some(first), Some(bands(0.0, f32::NAN))).unwrap();
+    assert_eq!(lower.bands[0], 0.375);
+    assert_eq!(lower.bands[1], 0.875);
+    let floor = next_spectrum_peaks(Some(lower), Some(bands(0.4, -1.0))).unwrap();
+    assert_eq!(floor.bands[0], 0.4);
+    assert_eq!(floor.bands[1], 0.75);
+    let low = next_spectrum_peaks(Some(bands(0.1, 0.0)), Some(bands(0.0, 0.0))).unwrap();
+    assert_eq!(low.bands[0], 0.0);
+    let raised = next_spectrum_peaks(Some(bands(0.2, 0.0)), Some(bands(0.9, 0.0))).unwrap();
+    assert_eq!(raised.bands[0], 0.9);
+    assert_eq!(next_spectrum_peaks(Some(first), None), None);
+}
+
+// The marker sits on or above its bar and inside the 24 px strip, and only a
+// positive peak draws one.
+#[test]
+fn visualizer_peak_marker_bottom_sits_on_or_above_its_bar_inside_the_strip() {
+    assert_eq!(visualizer_peak_marker_bottom(10.0, 0.0), None);
+    assert_eq!(visualizer_peak_marker_bottom(10.0, f32::NAN), None);
+    assert_eq!(visualizer_peak_marker_bottom(10.0, 6.0), Some(10.0));
+    assert_eq!(visualizer_peak_marker_bottom(10.0, 15.0), Some(15.0));
+    assert_eq!(visualizer_peak_marker_bottom(24.0, 24.0), Some(23.0));
+}
+
 // The whole bar's content carries the strip as well as the elapsed, title,
 // and total readouts, so a refactor cannot drop the strip while its builder
 // alone stays tested. The content is laid out directly because the concrete
@@ -552,6 +589,7 @@ fn now_playing_content_draws_the_indicator_strip_beside_the_title() {
         Cow::Borrowed(""),
         Cow::Borrowed("3:30"),
         0,
+        None,
         None,
         None,
         TransportMode::Playing,

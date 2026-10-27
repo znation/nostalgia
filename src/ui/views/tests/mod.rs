@@ -25,7 +25,8 @@ use super::now_playing::indicator::{
 use super::now_playing::status::{CHANNEL_LABELS, channel_label_color, now_playing_status_row};
 use super::now_playing::text::{format_lcd_elapsed, format_lcd_remaining};
 use super::now_playing::visualizer::{
-    now_playing_visualizer_row, visible_spectrum, visualizer_bar_heights, visualizer_bar_segments,
+    next_spectrum_peaks, now_playing_visualizer_row, visible_spectrum, visualizer_bar_heights,
+    visualizer_bar_segments, visualizer_peak_marker_bottom,
 };
 use super::now_playing::{
     KnownTrack, MARQUEE_WIDTH, TimeDisplay, channel_mode_label, display_len,

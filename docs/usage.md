@@ -28,9 +28,10 @@ appears only when the backend reports a format, falling back to the sample rate 
 when it cannot compute the bitrate; with no reported format both labels stay dim and the prefix is
 absent. A loaded preview also drives a small ten-bar spectrum visualizer beneath the
 title, shaded from dark green at the rail through yellow to orange at its peaks and updating
-about four times a second while playback runs; Pause freezes the bars at their
+about four times a second while playback runs. A thin gray peak marker above each bar jumps up
+with the bar and then drops back slowly. Pause freezes the bars and markers at their
 last levels, Stop and a new selection clear them, and the strip stays blank (with its height)
-when no preview reports a spectrum. The strip's `V` hides the bars and shows them again from the
+when no preview reports a spectrum. The strip's `V` hides the bars and their markers and shows them again from the
 still-stored spectrum, so the poll keeps running while they are hidden; a click on the bars'
 strip does the same, hidden or shown. Beneath the LCD, a chrome
 slider spans the loaded preview's own length and tracks its playback position; dragging moves

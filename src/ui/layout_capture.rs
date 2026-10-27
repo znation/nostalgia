@@ -98,6 +98,13 @@ impl PixelCapture {
         self.max_channel_in(bounds, 1)
     }
 
+    /// The strongest blue channel value drawn inside `bounds`, for telling the
+    /// visualizer's gray peak markers from its blue-poor ramp colors. Like
+    /// [`Self::max_red_in`], it returns the maximum over the covered pixels.
+    pub(crate) fn max_blue_in(&self, bounds: Rectangle) -> u8 {
+        self.max_channel_in(bounds, 2)
+    }
+
     /// The strongest red channel value drawn inside `bounds`.
     ///
     /// Used where a fill's hue rather than its brightness carries the claim,
@@ -415,6 +422,36 @@ mod tests {
             pixels,
             size: Size::new(4, 2),
         }
+    }
+
+    /// A 4x2 image whose blue channel is `10 * (y * 4 + x + 1)`.
+    fn blue_gradient_pixels() -> PixelCapture {
+        let mut pixels = Vec::new();
+        for n in 0..8u8 {
+            pixels.extend_from_slice(&[255, 255, 10 * (n + 1), 255]);
+        }
+        PixelCapture {
+            pixels,
+            size: Size::new(4, 2),
+        }
+    }
+
+    // Only the blue channel inside the bounds counts, clipped to the image.
+    #[test]
+    fn max_blue_in_reads_only_the_blue_of_pixels_inside_the_bounds() {
+        let capture = blue_gradient_pixels();
+
+        assert_eq!(
+            capture.max_blue_in(Rectangle::new(Point::new(0.0, 0.0), Size::new(2.0, 1.0))),
+            20
+        );
+        assert_eq!(
+            capture.max_blue_in(Rectangle::new(
+                Point::new(-5.0, -5.0),
+                Size::new(50.0, 50.0)
+            )),
+            80
+        );
     }
 
     // Only the green channel inside the bounds counts: the maximum of the

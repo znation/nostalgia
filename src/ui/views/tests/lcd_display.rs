@@ -254,6 +254,7 @@ fn captured_content_with_spectrum(
             bitrate_kbps: Some(256),
         }),
         spectrum,
+        None,
         TransportMode::Playing,
         true,
         None,
@@ -370,10 +371,63 @@ fn now_playing_visualizer_row_keeps_its_height_without_a_spectrum() {
         }),
     ] {
         let mut element: iced::Element<'_, Message, iced::Theme, ()> =
-            now_playing_visualizer_row(spectrum).into();
+            now_playing_visualizer_row(spectrum, None).into();
         let (_, node) = layout_capture::layout_tree(&mut element, &());
         assert_eq!(node.bounds().height, 24.0);
     }
+}
+
+// A row drawn with peaks keeps the same fixed height, whatever the bars do.
+#[test]
+fn now_playing_visualizer_row_keeps_its_height_with_peaks() {
+    for (spectrum, peaks) in [
+        (
+            None,
+            Some(Spectrum {
+                bands: [1.0; BAND_COUNT],
+            }),
+        ),
+        (
+            Some(Spectrum {
+                bands: [1.0; BAND_COUNT],
+            }),
+            Some(Spectrum {
+                bands: [1.0; BAND_COUNT],
+            }),
+        ),
+        (
+            Some(Spectrum {
+                bands: [0.5; BAND_COUNT],
+            }),
+            Some(Spectrum {
+                bands: [0.75; BAND_COUNT],
+            }),
+        ),
+    ] {
+        let mut element: iced::Element<'_, Message, iced::Theme, ()> =
+            now_playing_visualizer_row(spectrum, peaks).into();
+        let (_, node) = layout_capture::layout_tree(&mut element, &());
+        assert_eq!(node.bounds().height, 24.0);
+    }
+}
+
+// A fallen bar shows a gray marker at its held peak: the top pixel row of
+// slot 0 carries blue (the ramp colors have almost none), and the rest of the
+// slot below it does not.
+#[test]
+fn now_playing_visualizer_row_draws_a_gray_peak_marker_above_a_fallen_bar() {
+    let mut peaks = [0.0; BAND_COUNT];
+    peaks[0] = 1.0;
+    let mut renderer = layout_capture::headless_renderer();
+    let mut element: iced::Element<'_, Message, iced::Theme, iced::Renderer> =
+        now_playing_visualizer_row(None, Some(Spectrum { bands: peaks })).into();
+    let (_text, pixels) =
+        layout_capture::capture_text_and_pixels(&mut element, &mut renderer, &iced::Theme::Dark);
+
+    let marker = Rectangle::new(iced::Point::new(0.0, 0.0), Size::new(8.0, 1.0));
+    let below = Rectangle::new(iced::Point::new(0.0, 1.0), Size::new(8.0, 23.0));
+    assert!(pixels.max_blue_in(marker) > 100);
+    assert!(pixels.max_blue_in(below) < 100);
 }
 
 // The row draws one fixed-width slot per band, each bar shaded by the ramp
@@ -415,7 +469,7 @@ fn now_playing_visualizer_row_draws_one_fixed_width_bar_per_band() {
 
     let mut renderer = layout_capture::headless_renderer();
     let mut element: iced::Element<'_, Message, iced::Theme, iced::Renderer> =
-        now_playing_visualizer_row(Some(Spectrum { bands })).into();
+        now_playing_visualizer_row(Some(Spectrum { bands }), None).into();
     let (_text, pixels) =
         layout_capture::capture_text_and_pixels(&mut element, &mut renderer, &iced::Theme::Dark);
     for (index, x) in bar_xs.iter().enumerate() {
@@ -466,7 +520,7 @@ fn now_playing_visualizer_row_draws_one_fixed_width_bar_per_band() {
 /// container it draws.
 fn captured_visualizer_row(spectrum: Option<Spectrum>) -> (Rectangle, Vec<Rectangle>) {
     let mut element: iced::Element<'_, Message, iced::Theme, ()> =
-        now_playing_visualizer_row(spectrum).into();
+        now_playing_visualizer_row(spectrum, None).into();
     let (mut tree, node) = layout_capture::layout_tree(&mut element, &());
     let bounds = node.bounds();
     let mut captured = CapturedContainers::default();
@@ -482,7 +536,7 @@ fn now_playing_visualizer_row_paints_its_ramp_from_green_to_orange() {
     bands[0] = 1.0;
     let mut renderer = layout_capture::headless_renderer();
     let mut element: iced::Element<'_, Message, iced::Theme, iced::Renderer> =
-        now_playing_visualizer_row(Some(Spectrum { bands })).into();
+        now_playing_visualizer_row(Some(Spectrum { bands }), None).into();
     let (_text, pixels) =
         layout_capture::capture_text_and_pixels(&mut element, &mut renderer, &iced::Theme::Dark);
 

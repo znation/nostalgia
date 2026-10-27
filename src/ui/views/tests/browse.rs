@@ -700,6 +700,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         0,
         None,
         None,
+        None,
         TransportMode::Stopped,
         true,
         None,
@@ -720,6 +721,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         Some(Spectrum {
             bands: [0.5; BAND_COUNT],
         }),
+        None,
         TransportMode::Paused,
         true,
         None,
@@ -732,6 +734,7 @@ fn now_playing_bar_and_browse_action_buttons_construct() {
         "".into(),
         "3:30".into(),
         7,
+        None,
         None,
         None,
         TransportMode::Playing,

@@ -1,6 +1,6 @@
 //! The LCD's visualizer row: the stored spectrum's clamped bar heights, the
-//! fixed-width bars that draw them, and the flag that hides the bars while the
-//! spectrum poll keeps running.
+//! fixed-width bars that draw them, the held peak markers above the bars, and
+//! the flag that hides both while the spectrum poll keeps running.
 
 use iced::{
     Color, Length,
@@ -32,6 +32,17 @@ const LCD_VISUALIZER_BAR_GAP: f32 = 3.0;
 /// full-height bar reaches the orange peak.
 const LCD_VISUALIZER_RAMP_STEP: f32 = 2.0;
 
+/// How far a held peak drops on each spectrum reply, as a fraction of full
+/// height: 3 px of the 24 px strip, so a peak falls the whole strip in about
+/// two seconds at the poll's four replies a second.
+const LCD_VISUALIZER_PEAK_FALL: f32 = 0.125;
+
+/// The height of one peak marker, in pixels.
+const LCD_VISUALIZER_PEAK_HEIGHT: f32 = 1.0;
+
+/// The peak marker's color: the base skin's `viscolor.txt` peak-dot gray.
+const LCD_VISUALIZER_PEAK_COLOR: Color = Color::from_rgb8(150, 150, 150);
+
 /// The analyzer's color ramp, bottom to top: dark green at the rail through
 /// yellow to orange at the peaks, sampled from the mockup's 24 px analyzer.
 const LCD_VISUALIZER_RAMP: [Color; 12] = [
@@ -56,6 +67,37 @@ const LCD_VISUALIZER_RAMP: [Color; 12] = [
 /// reply.
 pub fn visible_spectrum(spectrum: Option<Spectrum>, visualizer_visible: bool) -> Option<Spectrum> {
     if visualizer_visible { spectrum } else { None }
+}
+
+/// The peak levels after a spectrum reply: each band holds the higher of its
+/// reported level and the previous peak less [`LCD_VISUALIZER_PEAK_FALL`],
+/// floored at zero. Reported bands are clamped to `0.0..=1.0` with NaN as
+/// zero, and a missing `previous` counts as all zeros. A missing `spectrum`
+/// clears the peaks. Pure so the hold-and-fall rule is testable.
+pub fn next_spectrum_peaks(
+    previous: Option<Spectrum>,
+    spectrum: Option<Spectrum>,
+) -> Option<Spectrum> {
+    let spectrum = spectrum?;
+    let held = previous.map_or([0.0; BAND_COUNT], |previous| previous.bands);
+    let mut bands = [0.0; BAND_COUNT];
+    for (band, (level, held)) in bands.iter_mut().zip(spectrum.bands.into_iter().zip(held)) {
+        let level = clamp_with_nan_fallback(level, 0.0, 1.0, 0.0);
+        *band = level.max(held - LCD_VISUALIZER_PEAK_FALL).max(0.0);
+    }
+    Some(Spectrum { bands })
+}
+
+/// The bottom edge of a band's peak marker, in pixels above the rail, or
+/// `None` when `peak_height` is not above zero (NaN included). It is the
+/// higher of the peak and the bar `height`, clamped so the marker never sits
+/// inside its bar and always stays inside the strip.
+pub fn visualizer_peak_marker_bottom(height: f32, peak_height: f32) -> Option<f32> {
+    if peak_height.is_nan() || peak_height <= 0.0 {
+        return None;
+    }
+    let top = LCD_VISUALIZER_HEIGHT - LCD_VISUALIZER_PEAK_HEIGHT;
+    Some(peak_height.max(height).clamp(0.0, top))
 }
 
 /// Resolves the visualizer's bar heights from the loaded preview's spectrum.
@@ -95,9 +137,12 @@ pub fn visualizer_bar_segments(height: f32) -> Vec<(f32, Color)> {
 /// their places in every playback state. Generic over the theme and renderer so the tests can lay
 /// it out with iced's null renderer. The row is a mouse area: a left press publishes
 /// [`Message::ToggleVisualizer`] in every playback state, whether the bars are shown or hidden,
-/// exactly like the indicator strip's `V`.
+/// exactly like the indicator strip's `V`. A band with a positive entry in `peaks` also draws a
+/// 1 px gray marker above its bar (see [`visualizer_peak_marker_bottom`]); a bar at full height
+/// gives its top pixel to the marker, and a band without one draws only its bar.
 pub fn now_playing_visualizer_row<'a, Theme, Renderer>(
     spectrum: Option<Spectrum>,
+    peaks: Option<Spectrum>,
 ) -> MouseArea<'a, Message, Theme, Renderer>
 where
     Theme: iced::widget::text::Catalog + iced::widget::container::Catalog + 'a,
@@ -106,39 +151,65 @@ where
         From<iced::widget::container::StyleFn<'a, Theme>>,
     Renderer: iced::advanced::text::Renderer + 'a,
 {
-    let row = visualizer_bar_heights(spectrum).into_iter().fold(
-        Row::new()
-            .height(Length::Fixed(LCD_VISUALIZER_HEIGHT))
-            .spacing(LCD_VISUALIZER_BAR_GAP)
-            .align_y(Vertical::Bottom),
-        |row, height| {
-            // The bar's ramp segments stack from the top down, above a spacer
-            // that fills the part of the strip its height does not reach. A
-            // silent bar keeps its fixed-width slot through the column alone:
-            // it draws no segment, but the column still has a nonzero fixed
-            // size, so `Row::push` does not drop it.
-            let mut column = Column::new()
-                .width(Length::Fixed(LCD_VISUALIZER_BAR_WIDTH))
-                .height(Length::Fixed(LCD_VISUALIZER_HEIGHT));
-            let segments = visualizer_bar_segments(height);
-            let spacer_height = LCD_VISUALIZER_HEIGHT - height;
-            if spacer_height > 0.0 {
-                column = column.push(Space::new().height(Length::Fixed(spacer_height)));
-            }
-            for (segment_height, color) in segments.into_iter().rev() {
-                column = column.push(
-                    Container::new(Space::new())
-                        .width(Length::Fill)
-                        .height(Length::Fixed(segment_height))
-                        .style(move |_theme| container::Style {
-                            background: Some(color.into()),
-                            ..container::Style::default()
-                        }),
-                );
-            }
-            row.push(column)
-        },
-    );
+    let peak_heights = visualizer_bar_heights(peaks);
+    let row = visualizer_bar_heights(spectrum)
+        .into_iter()
+        .zip(peak_heights)
+        .fold(
+            Row::new()
+                .height(Length::Fixed(LCD_VISUALIZER_HEIGHT))
+                .spacing(LCD_VISUALIZER_BAR_GAP)
+                .align_y(Vertical::Bottom),
+            |row, (height, peak_height)| {
+                // The bar's ramp segments stack from the top down, above a spacer
+                // that fills the part of the strip its height does not reach. A
+                // silent bar keeps its fixed-width slot through the column alone:
+                // it draws no segment, but the column still has a nonzero fixed
+                // size, so `Row::push` does not drop it.
+                let mut column = Column::new()
+                    .width(Length::Fixed(LCD_VISUALIZER_BAR_WIDTH))
+                    .height(Length::Fixed(LCD_VISUALIZER_HEIGHT));
+                let marker_bottom = visualizer_peak_marker_bottom(height, peak_height);
+                // The marker's bottom edge caps the drawn bar, so a full-height
+                // bar gives its top pixel to the marker.
+                let drawn = marker_bottom.map_or(height, |bottom| height.min(bottom));
+                let segments = visualizer_bar_segments(drawn);
+                let spacer_height = match marker_bottom {
+                    Some(bottom) => {
+                        let above = LCD_VISUALIZER_HEIGHT - bottom - LCD_VISUALIZER_PEAK_HEIGHT;
+                        if above > 0.0 {
+                            column = column.push(Space::new().height(Length::Fixed(above)));
+                        }
+                        column = column.push(
+                            Container::new(Space::new())
+                                .width(Length::Fill)
+                                .height(Length::Fixed(LCD_VISUALIZER_PEAK_HEIGHT))
+                                .style(|_theme| container::Style {
+                                    background: Some(LCD_VISUALIZER_PEAK_COLOR.into()),
+                                    ..container::Style::default()
+                                }),
+                        );
+                        bottom - drawn
+                    }
+                    None => LCD_VISUALIZER_HEIGHT - drawn,
+                };
+                if spacer_height > 0.0 {
+                    column = column.push(Space::new().height(Length::Fixed(spacer_height)));
+                }
+                for (segment_height, color) in segments.into_iter().rev() {
+                    column = column.push(
+                        Container::new(Space::new())
+                            .width(Length::Fill)
+                            .height(Length::Fixed(segment_height))
+                            .style(move |_theme| container::Style {
+                                background: Some(color.into()),
+                                ..container::Style::default()
+                            }),
+                    );
+                }
+                row.push(column)
+            },
+        );
     MouseArea::new(row)
         .on_press(Message::ToggleVisualizer)
         .interaction(Interaction::Pointer)

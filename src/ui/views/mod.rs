@@ -66,8 +66,8 @@ pub use jump_time::{JUMP_TIME_INPUT_ID, view_jump_time_overlay};
 pub use mini_transport::view_library_strip;
 pub use now_playing::{
     IndicatorModes, KnownTrack, MixerDrag, TimeDisplay, mixer_readout_text, needs_marquee,
-    now_playing_artist, now_playing_elapsed, now_playing_label, now_playing_number,
-    now_playing_time, seek_readout_text, view_now_playing, visible_spectrum,
+    next_spectrum_peaks, now_playing_artist, now_playing_elapsed, now_playing_label,
+    now_playing_number, now_playing_time, seek_readout_text, view_now_playing, visible_spectrum,
 };
 pub use options::{OptionsState, view_options_overlay};
 pub use seek_bar::view_seek_bar;

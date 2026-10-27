@@ -142,6 +142,11 @@ pub(in crate::ui) struct WinampPlayer {
     /// the bars freeze at their last levels, while Stop and a new selection
     /// clear it through `reset_position_readout`.
     pub(in crate::ui) spectrum: Option<Spectrum>,
+    /// The levels of the visualizer's peak markers: each band holds its
+    /// highest recent level and drops back on each spectrum reply. It follows
+    /// [`Self::spectrum`] (same reply guards, Pause freeze, Stop and selection
+    /// clear), is not persisted, and starts as `None`.
+    pub(in crate::ui) spectrum_peaks: Option<Spectrum>,
     /// Whether the LCD's indicator strip's V control lets the visualizer row
     /// draw the stored spectrum. `Message::ToggleVisualizer` flips it; hiding
     /// leaves [`Self::spectrum`] and the spectrum poll untouched, so showing
@@ -324,6 +329,7 @@ impl WinampPlayer {
             playback_duration: None,
             blink_visible: true,
             spectrum: None,
+            spectrum_peaks: None,
             visualizer_visible: true,
             stop_after_current: false,
             eq_panel_visible: true,

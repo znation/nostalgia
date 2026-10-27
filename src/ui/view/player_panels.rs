@@ -70,6 +70,7 @@ pub(super) fn view_player_panels(
             player.marquee_offset,
             playback_format,
             views::visible_spectrum(spectrum, player.visualizer_visible),
+            views::visible_spectrum(player.spectrum_peaks, player.visualizer_visible),
             transport_mode,
             player.blink_visible,
             player

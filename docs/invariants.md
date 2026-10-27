@@ -1256,6 +1256,19 @@ its internal id, whenever the id is in the known-track index:
   bars. Pause keeps the last bars frozen, while Stop and a new selection clear them. A spectrum
   reply issued before a Stop or a new selection, or landing while a transport transition is in
   flight, is dropped. The spectrum poll is subscribed only while playback is running.
+  Each band with a positive peak also draws a 1 px gray marker above its bar: it never sits
+  inside its bar and always stays inside the strip (`visualizer_peak_marker_bottom`, pinned by
+  `visualizer_peak_marker_bottom_sits_on_or_above_its_bar_inside_the_strip` and
+  `now_playing_visualizer_row_draws_a_gray_peak_marker_above_a_fallen_bar`, with
+  `now_playing_visualizer_row_keeps_its_height_with_peaks` for the row height). The peaks are
+  `WinampPlayer::spectrum_peaks`, advanced by `next_spectrum_peaks` (hold the higher of the band
+  and the previous peak less 0.125; pinned by
+  `next_spectrum_peaks_follows_a_rising_band_and_falls_slowly_after_it`) inside the same reply
+  guard as the spectrum (`a_stale_spectrum_reply_leaves_the_peaks_alone`,
+  `spectrum_reply_stores_the_loaded_previews_spectrum`). Pause keeps them and Stop clears them
+  (`stop_clears_the_spectrum_while_pause_keeps_it`), and hiding the visualizer hides them
+  while keeping the stored levels
+  (`toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum`).
 - The LCD's left edge always draws the five classic indicator letters `O`, `A`, `I`, `D`, `V`,
   in that order, at a fixed width, in every playback state including the empty `--:--` bar. `O`,
   `A`, `I`, and `V` are mouse areas: pressing `O` publishes `Message::ToggleOptions` (the same

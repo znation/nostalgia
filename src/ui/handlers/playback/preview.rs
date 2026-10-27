@@ -14,7 +14,7 @@ use std::time::Duration;
 use iced::Task;
 
 use crate::state::TransportMode;
-use crate::ui::{Message, WinampPlayer};
+use crate::ui::{Message, WinampPlayer, views};
 
 use super::stepping::{forward_track_id, showing_songs};
 use super::stop;
@@ -225,8 +225,8 @@ pub(in crate::ui) fn spectrum_tick(player: &mut WinampPlayer) -> Task<Message> {
     )
 }
 
-/// The spectrum query's reply: store the reported bars, or clear the
-/// visualizer when the backend reports no spectrum. A reply that
+/// The spectrum query's reply: store the reported bars and advance the peak
+/// markers' hold-and-fall levels, or clear both when the backend reports no spectrum. A reply that
 /// [`reply_is_current`] rejects is dropped, so a poll in flight across a Stop
 /// or a new selection cannot restore the previous preview's bars, and neither
 /// can one that lands while a transport transition is still in flight.
@@ -236,6 +236,7 @@ pub(in crate::ui) fn spectrum(
     spectrum: Option<crate::audio::Spectrum>,
 ) -> Task<Message> {
     if reply_is_current(player, epoch) {
+        player.spectrum_peaks = views::next_spectrum_peaks(player.spectrum_peaks, spectrum);
         player.spectrum = spectrum;
     }
     Task::none()
