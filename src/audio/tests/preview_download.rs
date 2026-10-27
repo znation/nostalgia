@@ -18,13 +18,7 @@ fn a_compressed_preview_larger_than_the_cap_is_rejected() {
         "the compressed body must stay under the wire cap, got {}",
         body.len()
     );
-    let mut response = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: audio/mp4\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        body.len()
-    )
-    .into_bytes();
-    response.extend_from_slice(&body);
-    let address = serve_one_response_bytes(&response);
+    let address = serve_one_response_bytes(&gzip_preview_response(&body));
     let agent = agent_with_timeout(Duration::from_secs(10));
     let url = format!("http://{address}/bomb.m4a");
 
@@ -52,13 +46,7 @@ fn a_preview_with_more_wire_bytes_than_the_cap_is_rejected() {
         "the compressed body must exceed the wire cap, got {}",
         body.len()
     );
-    let mut response = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: audio/mp4\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        body.len()
-    )
-    .into_bytes();
-    response.extend_from_slice(&body);
-    let address = serve_one_response_bytes(&response);
+    let address = serve_one_response_bytes(&gzip_preview_response(&body));
     let agent = agent_with_timeout(Duration::from_secs(10));
     let url = format!("http://{address}/bomb.m4a");
 
@@ -541,6 +529,17 @@ const DECODABLE_PREVIEW: &[u8] = include_bytes!("fixtures/chew-scratch.m4a");
 fn preview_response(body: &[u8]) -> Vec<u8> {
     let mut response = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: audio/mp4\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        body.len()
+    )
+    .into_bytes();
+    response.extend_from_slice(body);
+    response
+}
+
+/// A `200 OK` response carrying `body` as a gzip-encoded MP4 preview.
+fn gzip_preview_response(body: &[u8]) -> Vec<u8> {
+    let mut response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: audio/mp4\r\nContent-Encoding: gzip\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
         body.len()
     )
     .into_bytes();
