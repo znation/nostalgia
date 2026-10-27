@@ -66,6 +66,62 @@ fn scrollable_list_clips_an_overlong_title_to_its_column() {
     );
 }
 
+// A playback poll rebuilds the whole view, so an unchanged browse list must
+// reuse each row's cached button instead of constructing it again. Build the
+// real list twice, diff the second element into the first tree, and count
+// `row_button` calls: no new calls on an identical list, and exactly the rows
+// whose key changed on a title, selection, or epoch change.
+#[test]
+fn scrollable_list_reuses_unchanged_rows_and_rebuilds_only_changed_keys() {
+    fn items(first_title: &'static str) -> [(Cow<'static, str>, Cow<'static, str>, bool); 2] {
+        [
+            (Cow::Borrowed(first_title), Cow::Borrowed("3:30"), false),
+            (Cow::Borrowed("Second"), Cow::Borrowed("4:00"), true),
+        ]
+    }
+
+    let before = row_build_count();
+    let first = scrollable_list(items("First"), 7, None, "No songs");
+    let mut tree = Tree::new(first.as_widget());
+    assert_eq!(
+        row_build_count() - before,
+        2,
+        "the first view builds each browse row once"
+    );
+
+    let same = scrollable_list(items("First"), 7, None, "No songs");
+    tree.diff(same.as_widget());
+    assert_eq!(
+        row_build_count() - before,
+        2,
+        "an unchanged list and selection reuses every row"
+    );
+
+    let renamed = scrollable_list(items("Renamed"), 7, None, "No songs");
+    tree.diff(renamed.as_widget());
+    assert_eq!(
+        row_build_count() - before,
+        3,
+        "a changed title rebuilds exactly that row"
+    );
+
+    let selected = scrollable_list(items("Renamed"), 7, Some(1), "No songs");
+    tree.diff(selected.as_widget());
+    assert_eq!(
+        row_build_count() - before,
+        4,
+        "changing the selection rebuilds exactly the row it marks"
+    );
+
+    let reloaded = scrollable_list(items("Renamed"), 8, Some(1), "No songs");
+    tree.diff(reloaded.as_widget());
+    assert_eq!(
+        row_build_count() - before,
+        6,
+        "a new list epoch rebuilds every row"
+    );
+}
+
 #[test]
 fn album_count_label_singular_plural_and_none() {
     assert_eq!(album_count_label(0), "");

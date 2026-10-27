@@ -19,7 +19,10 @@ use crate::ui::{Message, style, theme};
 
 use super::super::spacer;
 
+mod lazy;
 pub(in crate::ui::views) mod text;
+
+use self::lazy::LazyRow;
 
 use self::text::{album_row, list_count_summary, row_prefix, song_list_summary, song_row};
 
@@ -126,10 +129,10 @@ fn one_line_title<'a>(title: Cow<'a, str>) -> Cow<'a, str> {
 /// album row's title and label are borrowed from the loaded list's caches in
 /// the common case and only composed on the fallback path, while a playlist
 /// row borrows its name and static hint. This builder runs on every view
-/// refresh, so borrowing avoids a `String` allocation per row per frame. The
-/// row prefix is one owned `String` per row per refresh, since it depends on
-/// the row's position; it is not cached in `BrowseList` because that would
-/// need invalidating on every store for no correctness gain.
+/// refresh, so borrowing avoids a `String` allocation per row per refresh.
+/// Each row's built button — including its prefix and the owned copies of its
+/// title and label — is cached by [`RowKey`] and rebuilt only when that key
+/// changes, so a playback poll reuses the row instead of reconstructing it.
 pub(in crate::ui::views) fn scrollable_list<'a>(
     items: impl IntoIterator<Item = (Cow<'a, str>, Cow<'a, str>, bool)>,
     epoch: u64,
@@ -142,36 +145,33 @@ pub(in crate::ui::views) fn scrollable_list<'a>(
     for (position, (title, label, is_current)) in items.into_iter().enumerate() {
         is_empty = false;
         let is_selected = selected == Some(position);
-        let button = Button::new(
-            Row::new()
-                .width(Length::Fill)
-                .push(Text::new(row_prefix(position, is_current)).size(18))
-                // A wrapped title would make its row taller than
-                // BROWSE_ROW_HEIGHT and break the absolute scroll offset.
-                // The fill container clips a title wider than its column so
-                // it cannot draw under the right-aligned label.
-                .push(
-                    container(
-                        Text::new(one_line_title(title))
-                            .size(18)
-                            .wrapping(Wrapping::None),
-                    )
-                    .width(Length::Fill)
-                    .clip(true),
-                )
-                .push(spacer(10.0))
-                .push(Text::new(label).size(14)),
-        )
-        .width(Length::Fill)
-        .on_press(Message::SelectRow {
+        // The built row is cached across views by its dependency: the list
+        // epoch, the row's position and flags, and a hash of the two text
+        // values. A position or text change bumps the epoch through
+        // `BrowseList`, but hashing the text too keeps this builder correct
+        // for any caller. A playback poll changes none of these, so the row's
+        // button, text, and containers are reused instead of rebuilt.
+        let key = RowKey {
             epoch,
-            index: position,
-        })
-        .style(move |_theme, status| browse_row_style(status, is_current, is_selected));
+            position,
+            is_current,
+            is_selected,
+            text: text_hash(&title, &label),
+        };
+        let row = LazyRow::new(key, move |key| {
+            row_button(
+                title.to_string(),
+                label.to_string(),
+                key.epoch,
+                key.position,
+                key.is_current,
+                key.is_selected,
+            )
+        });
         // Unselected rows are green, the playing row is white without a bar,
         // and the selected row draws the blue bar with white text; the prefix
         // already distinguishes the current track.
-        column = column.push(button);
+        column = column.push(row);
     }
 
     if is_empty {
@@ -184,6 +184,84 @@ pub(in crate::ui::views) fn scrollable_list<'a>(
         .height(Length::FillPortion(3))
         .style(|_theme, _status| style::playlist_scrollable_style())
         .into()
+}
+
+/// The cache key for one browse row: what changes the widget it builds. The
+/// text hash makes a changed title or label rebuild even when a caller did not
+/// bump the list epoch.
+#[derive(Clone, Copy, Hash)]
+struct RowKey {
+    epoch: u64,
+    position: usize,
+    is_current: bool,
+    is_selected: bool,
+    text: u64,
+}
+
+/// A stable hash of a row's title and label, used in [`RowKey`].
+fn text_hash(title: &str, label: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    title.hash(&mut hasher);
+    label.hash(&mut hasher);
+    hasher.finish()
+}
+
+// Counts browse row builds on the current test thread, so a test can prove
+// the real list reuses cached rows instead of rebuilding them.
+#[cfg(test)]
+thread_local! {
+    static ROW_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many browse rows the current test thread has built. Test-only.
+#[cfg(test)]
+pub(in crate::ui::views) fn row_build_count() -> usize {
+    ROW_BUILDS.with(std::cell::Cell::get)
+}
+
+/// Builds one browse row button from its owned text and flags. `LazyRow`
+/// calls this only when the row's [`RowKey`] changes, so the strings are owned
+/// by the cached element and the row can outlive the view that first built it.
+fn row_button(
+    title: String,
+    label: String,
+    epoch: u64,
+    position: usize,
+    is_current: bool,
+    is_selected: bool,
+) -> Element<'static, Message> {
+    #[cfg(test)]
+    ROW_BUILDS.with(|count| count.set(count.get() + 1));
+
+    Button::new(
+        Row::new()
+            .width(Length::Fill)
+            .push(Text::new(row_prefix(position, is_current)).size(18))
+            // A wrapped title would make its row taller than
+            // BROWSE_ROW_HEIGHT and break the absolute scroll offset.
+            // The fill container clips a title wider than its column so
+            // it cannot draw under the right-aligned label.
+            .push(
+                container(
+                    Text::new(one_line_title(Cow::Owned(title)))
+                        .size(18)
+                        .wrapping(Wrapping::None),
+                )
+                .width(Length::Fill)
+                .clip(true),
+            )
+            .push(spacer(10.0))
+            .push(Text::new(label).size(14)),
+    )
+    .width(Length::Fill)
+    .on_press(Message::SelectRow {
+        epoch,
+        index: position,
+    })
+    .style(move |_theme, status| browse_row_style(status, is_current, is_selected))
+    .into()
 }
 
 /// Builds an album list: the shared body of [`super::view_albums`] and
