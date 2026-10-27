@@ -619,10 +619,12 @@ while the key hashes the same. A row reports the browse button's full-width, con
 before its element is built, so `Column::push` sees the same hint the uncached button gave it.
 
 **Pinned by.** `scrollable_list_reuses_unchanged_rows_and_rebuilds_only_changed_keys`
-(`src/ui/views/tests/browse.rs`), which builds the real list twice and varies the title, selection,
-and epoch, and `reuses_the_element_until_the_dependency_changes`
-(`src/ui/views/browse/rows/lazy.rs`), which pins the widget itself. The existing browse-row text,
-clipping, and right-edge tests in `src/ui/views/tests/browse.rs` and the pitch tests
+(`src/ui/views/tests/browse.rs`), which builds the real list twice and varies the title, label,
+selection, and epoch, and `reuses_the_element_until_the_dependency_changes` and
+`an_unbuilt_row_reports_a_full_width_content_height_hint`
+(`src/ui/views/browse/rows/lazy.rs`), which pin the widget itself and its pre-build size hint.
+The existing browse-row text, clipping, and right-edge tests in `src/ui/views/tests/browse.rs` and
+the pitch tests
 (`browse_row_height_matches_the_laid_out_row_pitch`,
 `a_hard_line_break_in_a_title_does_not_change_the_row_pitch`,
 `a_carriage_return_in_a_title_does_not_change_the_row_pitch`) in `src/ui/tests/view_tests.rs` pin

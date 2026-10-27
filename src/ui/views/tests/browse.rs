@@ -70,18 +70,25 @@ fn scrollable_list_clips_an_overlong_title_to_its_column() {
 // reuse each row's cached button instead of constructing it again. Build the
 // real list twice, diff the second element into the first tree, and count
 // `row_button` calls: no new calls on an identical list, and exactly the rows
-// whose key changed on a title, selection, or epoch change.
+// whose key changed on a title, label, selection, or epoch change.
 #[test]
 fn scrollable_list_reuses_unchanged_rows_and_rebuilds_only_changed_keys() {
-    fn items(first_title: &'static str) -> [(Cow<'static, str>, Cow<'static, str>, bool); 2] {
+    fn items(
+        first_title: &'static str,
+        first_label: &'static str,
+    ) -> [(Cow<'static, str>, Cow<'static, str>, bool); 2] {
         [
-            (Cow::Borrowed(first_title), Cow::Borrowed("3:30"), false),
+            (
+                Cow::Borrowed(first_title),
+                Cow::Borrowed(first_label),
+                false,
+            ),
             (Cow::Borrowed("Second"), Cow::Borrowed("4:00"), true),
         ]
     }
 
     let before = row_build_count();
-    let first = scrollable_list(items("First"), 7, None, "No songs");
+    let first = scrollable_list(items("First", "3:30"), 7, None, "No songs");
     let mut tree = Tree::new(first.as_widget());
     assert_eq!(
         row_build_count() - before,
@@ -89,7 +96,7 @@ fn scrollable_list_reuses_unchanged_rows_and_rebuilds_only_changed_keys() {
         "the first view builds each browse row once"
     );
 
-    let same = scrollable_list(items("First"), 7, None, "No songs");
+    let same = scrollable_list(items("First", "3:30"), 7, None, "No songs");
     tree.diff(same.as_widget());
     assert_eq!(
         row_build_count() - before,
@@ -97,7 +104,7 @@ fn scrollable_list_reuses_unchanged_rows_and_rebuilds_only_changed_keys() {
         "an unchanged list and selection reuses every row"
     );
 
-    let renamed = scrollable_list(items("Renamed"), 7, None, "No songs");
+    let renamed = scrollable_list(items("Renamed", "3:30"), 7, None, "No songs");
     tree.diff(renamed.as_widget());
     assert_eq!(
         row_build_count() - before,
@@ -105,19 +112,27 @@ fn scrollable_list_reuses_unchanged_rows_and_rebuilds_only_changed_keys() {
         "a changed title rebuilds exactly that row"
     );
 
-    let selected = scrollable_list(items("Renamed"), 7, Some(1), "No songs");
-    tree.diff(selected.as_widget());
+    let relabeled = scrollable_list(items("Renamed", "3:31"), 7, None, "No songs");
+    tree.diff(relabeled.as_widget());
     assert_eq!(
         row_build_count() - before,
         4,
+        "a changed label rebuilds exactly that row"
+    );
+
+    let selected = scrollable_list(items("Renamed", "3:31"), 7, Some(1), "No songs");
+    tree.diff(selected.as_widget());
+    assert_eq!(
+        row_build_count() - before,
+        5,
         "changing the selection rebuilds exactly the row it marks"
     );
 
-    let reloaded = scrollable_list(items("Renamed"), 8, Some(1), "No songs");
+    let reloaded = scrollable_list(items("Renamed", "3:31"), 8, Some(1), "No songs");
     tree.diff(reloaded.as_widget());
     assert_eq!(
         row_build_count() - before,
-        6,
+        7,
         "a new list epoch rebuilds every row"
     );
 }

@@ -325,4 +325,27 @@ mod tests {
         tree.diff(&changed as &dyn Widget<Message, iced::Theme, iced::Renderer>);
         assert_eq!(builds.get(), 2, "a changed dependency rebuilds the row");
     }
+
+    // `Column::push` asks for a child's hint before any tree exists, so the
+    // unbuilt fallback must report a full-width, content-height size. A
+    // shrink-width fallback would collapse the list's column before its rows
+    // are ever built.
+    #[test]
+    fn an_unbuilt_row_reports_a_full_width_content_height_hint() {
+        let builds = Rc::new(Cell::new(0));
+        let lazy = row(Rc::clone(&builds), 1);
+
+        assert_eq!(
+            lazy.size_hint(),
+            Size {
+                width: Length::Fill,
+                height: Length::Shrink,
+            }
+        );
+        assert_eq!(
+            builds.get(),
+            0,
+            "asking for the hint must not build the row"
+        );
+    }
 }
