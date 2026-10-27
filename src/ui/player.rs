@@ -148,6 +148,11 @@ pub(in crate::ui) struct WinampPlayer {
     /// the bars again draws the current ones. The choice is saved and restored
     /// by `persist_settings_if_changed` and `adopt_saved_settings`.
     pub(in crate::ui) visualizer_visible: bool,
+    /// The transient "Stop after current" one-shot: `Message::ToggleStopAfterCurrent`
+    /// (Ctrl+V) flips it, and a natural preview end that finds it set stops
+    /// playback instead of advancing and clears it. False at launch and never
+    /// persisted; manual transports neither read nor clear it.
+    pub(in crate::ui) stop_after_current: bool,
     /// Whether the normal-mode `NOSTALGIA EQUALIZER` band and equalizer panel
     /// are drawn. `Message::ToggleEqualizerPanel` flips it; it is open on a
     /// first launch and is saved and restored by `persist_settings_if_changed`
@@ -320,6 +325,7 @@ impl WinampPlayer {
             blink_visible: true,
             spectrum: None,
             visualizer_visible: true,
+            stop_after_current: false,
             eq_panel_visible: true,
             library_panel_visible: true,
             about_visible: false,

@@ -2391,7 +2391,10 @@ itself, so it repeats that song rather than stopping; Shuffle with no other song
 Stop path. A finished preview on the last song with Repeat off takes
 the Stop path, so playback becomes stopped, the song stays queued for Play, and the elapsed
 readout, status row's reported format, visualizer, and seek bar clear together. Pause, Stop, a
-stale epoch, a pending transition, and a not-finished reply never advance.
+stale epoch, a pending transition, and a not-finished reply never advance. Ctrl+V arms a one-shot
+"Stop after current" flag (`WinampPlayer::stop_after_current`, not persisted): a finished reply that
+passes those checks then takes the Stop path instead of advancing and disarms the flag, while a
+dropped reply leaves it armed.
 
 **Enforced by.** `audio::AudioOutput::is_finished` in `src/audio.rs` defaults to false, and
 `audio::player::rodio_player::RodioPlayer::is_finished` in `src/audio/player/rodio_player.rs`
@@ -2428,6 +2431,11 @@ same list/Shuffle/Repeat rules as Next, and the no-next-song case reuses `handle
 - `preview_end_with_shuffle_on_a_single_song_stops` (`src/ui/tests/`)
 - `preview_end_while_paused_or_stopped_does_not_advance` (`src/ui/tests/`)
 - `preview_end_with_a_stale_epoch_or_pending_transition_is_dropped` (`src/ui/tests/`)
+- `preview_end_with_stop_after_current_stops_and_clears_it` (`src/ui/tests/stepping_tests.rs`)
+- `preview_end_after_stop_after_current_fired_advances_again` (`src/ui/tests/stepping_tests.rs`)
+- `stop_after_current_survives_a_dropped_finished_reply` (`src/ui/tests/stepping_tests.rs`)
+- `toggle_stop_after_current_flips_only_the_flag` (`src/ui/tests/stepping_tests.rs`)
+- `message_for_maps_ctrl_v_to_stop_after_current` (`src/ui/shortcuts.rs`)
 
 ## Play history
 

@@ -66,6 +66,14 @@ pub(in crate::ui) fn stop(player: &mut WinampPlayer) -> Task<Message> {
     })
 }
 
+/// Ctrl+V: flips the "Stop after current" one-shot flag. It starts no
+/// transport and changes no playback or window state; the next natural preview
+/// end reads the flag.
+pub(in crate::ui) fn toggle_stop_after_current(player: &mut WinampPlayer) -> Task<Message> {
+    player.stop_after_current = !player.stop_after_current;
+    Task::none()
+}
+
 /// The Repeat toggle: flips the shared repeat flag.
 pub(in crate::ui) fn toggle_repeat(player: &mut WinampPlayer) -> Task<Message> {
     mutate_state(player, AppState::toggle_repeat)

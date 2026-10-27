@@ -159,7 +159,9 @@ pub(in crate::ui) fn playback_duration(
 /// A reply that is not finished, is stale, arrives while a transition is in
 /// flight, or lands while paused or stopped is dropped: Pause and Stop never
 /// advance. A natural end is a forward step, not a Previous, so it records
-/// nothing in `PlayHistory`.
+/// nothing in `PlayHistory`. When `stop_after_current` is armed, a reply that
+/// passes those checks takes the [`stop`] path instead of picking a song, and
+/// disarms the flag; a dropped reply leaves it armed.
 pub(in crate::ui) fn playback_finished(
     player: &mut WinampPlayer,
     epoch: u64,
@@ -172,6 +174,11 @@ pub(in crate::ui) fn playback_finished(
         let state = player.state.blocking_lock();
         if !state.is_playing {
             return Task::none();
+        }
+        if player.stop_after_current {
+            drop(state);
+            player.stop_after_current = false;
+            return stop(player);
         }
         let (items, list_epoch) = showing_songs(player);
         let current = state.current_track.as_deref();

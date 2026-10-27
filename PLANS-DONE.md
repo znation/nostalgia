@@ -5,6 +5,64 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
+### Stop after current, part 1/2: Ctrl+V stops after the current song, like Winamp (planned 2026-10-27 by the plan role) — done 2026-10-27 by the feature role
+
+**Goal.** Winamp's Ctrl+V arms "Stop after current": the playing song plays to its end, and then
+playback stops instead of advancing; the choice is used up when it fires. Nostalgia binds plain V
+to Stop (`shortcut` in `src/ui/shortcuts.rs`) but leaves Ctrl+V unbound, and
+`handlers::playback::preview::playback_finished` always advances when a next song exists. Add the
+chord and the one-shot stop. Part 2/2 ("Stop after current, part 2/2: show it in the options menu") adds the
+visible menu row; this part has no on-screen indicator, like Winamp's main window.
+
+**Approach.**
+
+- `src/ui/player.rs`: add `pub(in crate::ui) stop_after_current: bool` to `WinampPlayer`, doc'd as
+  the transient one-shot flag (false at launch, not persisted, cleared when a natural preview end
+  consumes it), and initialise it to `false` in `WinampPlayer::new`.
+- `src/ui/message.rs`: add `Message::ToggleStopAfterCurrent`, documented beside `Message::Stop`.
+- `src/ui/shortcuts.rs`: in `shortcut`'s Control block (the no-Alt, no-Logo match that already holds
+  Ctrl+Z/B/R/W/J/A/T), map `v`/`V` with or without Shift to `Message::ToggleStopAfterCurrent`,
+  and add `v` to that block's leading comment. Plain V stays `Message::Stop`.
+- `src/ui/handlers/playback.rs`: add `pub(in crate::ui) fn toggle_stop_after_current(player)` that
+  flips the flag and returns `Task::none()` — no transport, playback, or window change. Dispatch it
+  from `update` in `src/ui/mod.rs`.
+- `src/ui/handlers/playback/preview.rs`, `playback_finished`: after the existing early returns
+  (not finished, stale epoch / pending transition, not playing) and before picking the next song,
+  when `player.stop_after_current` holds, set it to `false` and return the existing `stop(player)`
+  task. Extend the function's doc comment with this rule. A dropped reply leaves the flag armed,
+  and manual Play, Pause, Stop, Next, and Previous neither read nor clear it.
+
+**Tests.**
+
+- `src/ui/shortcuts.rs` tests: a `message_for_maps_ctrl_v_to_stop_after_current` test covering
+  `v`/`V` under `Modifiers::CTRL` and `CTRL | SHIFT`, and `Modifiers::CTRL | ALT` and
+  `CTRL | LOGO` mapping to none; `assert_letter_bindings`' plain `v` → `Message::Stop` still holds.
+- `src/ui/tests/stepping_tests.rs`, reusing `player_playing_stepping_song` and
+  `drive_playback_finished` (which yields `Message::TransportSettled` on the stop path, as
+  `preview_end_at_the_last_song_stops_when_repeat_is_off` asserts, and `TrackSelected` on an
+  advance):
+  - `preview_end_with_stop_after_current_stops_and_clears_it`: playing `song-1` of the stepping
+    list with a next song available, flag armed → after the finished reply, `is_playing` is false,
+    `current_track` is still `song-1`, and `stop_after_current` is false.
+  - `preview_end_after_stop_after_current_fired_advances_again`: a second song played after the
+    flag fired advances normally on its natural end.
+  - `stop_after_current_survives_a_dropped_finished_reply`: a stale-epoch reply leaves the flag
+    armed.
+  - `toggle_stop_after_current_flips_only_the_flag`: two `Message::ToggleStopAfterCurrent` updates
+    go true then false, and the returned task produces no message; playing state is unchanged.
+
+**Docs.** `docs/usage.md`'s keyboard paragraph (beside "X plays, C pauses, V stops") gains Ctrl+V;
+`docs/invariants.md` `## Preview end` records the one-shot rule and pins the new stepping tests.
+
+**Acceptance criteria.**
+
+- Ctrl+V (and Ctrl+Shift+V) toggles `stop_after_current`; Ctrl+Alt+V and Ctrl+Logo+V do nothing;
+  plain V still stops.
+- With it armed, a natural preview end stops playback through the existing `stop` path, keeps the
+  song current for Play, and disarms; with it off, natural-end behavior is unchanged (the existing
+  `preview_end_*` tests pass untouched).
+- No setting is added or persisted, and `make check` passes.
+
 ### Sink toggles while on, part 2/2: the equalizer's EQ and AUTO toggles (planned 2026-10-26 by the plan role; split 2026-10-27 by the plan role; "requires part 1/2 landed") — done 2026-10-27 by the feature role
 
 Part 2 of 2; builds on `fixed_width_toggle_button` and the test helper

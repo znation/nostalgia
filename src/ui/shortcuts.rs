@@ -275,7 +275,7 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
     // step through, Ctrl+R reverses the showing list, Ctrl+Shift+R shuffles it,
     // and Ctrl+W rolls the window up into shade mode and back, Ctrl+J flips the
     // Jump to time panel, Ctrl+A and Ctrl+T repeat the classic always-on-top and
-    // elapsed/remaining toggles, and Ctrl+F1 opens the About panel, under the
+    // elapsed/remaining toggles, Ctrl+V arms Stop after current, and Ctrl+F1 opens the About panel, under the
     // same no-Alt, no-Logo rule as Ctrl+F.
     if modifiers.control() && !modifiers.alt() && !modifiers.logo() {
         match key {
@@ -306,6 +306,9 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
             }
             Key::Character(character) if character.eq_ignore_ascii_case("t") => {
                 return Some(Message::ToggleTimeDisplay);
+            }
+            Key::Character(character) if character.eq_ignore_ascii_case("v") => {
+                return Some(Message::ToggleStopAfterCurrent);
             }
             Key::Named(key::Named::F1) => {
                 return Some(Message::ToggleAbout);
@@ -592,6 +595,24 @@ mod tests {
         for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
             assert_maps!(Key::Character("a".into()), modifiers => Message::ToggleAlwaysOnTop);
             assert_maps!(Key::Character("t".into()), modifiers => Message::ToggleTimeDisplay);
+        }
+    }
+
+    #[test]
+    fn message_for_maps_ctrl_v_to_stop_after_current() {
+        for modifiers in [Modifiers::CTRL, Modifiers::CTRL | Modifiers::SHIFT] {
+            for character in ["v", "V"] {
+                assert_maps!(Key::Character(character.into()), modifiers => Message::ToggleStopAfterCurrent);
+            }
+        }
+        for modifiers in [
+            Modifiers::CTRL | Modifiers::ALT,
+            Modifiers::CTRL | Modifiers::LOGO,
+        ] {
+            assert!(
+                message_for(key_pressed(Key::Character("v".into()), modifiers)).is_none(),
+                "v with {modifiers:?} must stay unbound"
+            );
         }
     }
 

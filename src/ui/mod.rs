@@ -142,6 +142,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::Play => handlers::playback::play(player),
         Message::Pause => handlers::playback::pause(player),
         Message::Stop => handlers::playback::stop(player),
+        Message::ToggleStopAfterCurrent => handlers::playback::toggle_stop_after_current(player),
         Message::ToggleRepeat => handlers::playback::toggle_repeat(player),
         Message::ToggleShuffle => handlers::playback::toggle_shuffle(player),
         Message::MixerReleased => handlers::mixer::mixer_released(player),

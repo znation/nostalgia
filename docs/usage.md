@@ -154,7 +154,9 @@ environment shows for the app) names the current track as
 interrupted track's name across Stop and reading just `nostalgia` when no known track is current.
 With the window focused, the classic Winamp keys drive playback: Z and B step back and forward
 (a Z press restarts the loaded preview from its start once it has played at least three seconds),
-X plays, C pauses, V stops, R toggles Repeat and S toggles Shuffle, A (or Ctrl+A) toggles
+X plays, C pauses, V stops, Ctrl+V arms (or disarms) Stop after current — the playing song then
+plays to its natural end and playback stops instead of advancing, once, with no on-screen
+indicator, R toggles Repeat and S toggles Shuffle, A (or Ctrl+A) toggles
 always-on-top and T (or Ctrl+T) switches the large readout between elapsed and remaining time (the
 same actions as the on-screen A
 controls and a readout click), E shows or hides the equalizer panel exactly like the `EQ` button

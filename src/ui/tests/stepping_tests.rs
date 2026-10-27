@@ -972,3 +972,70 @@ fn edge_jumps_scroll_the_showing_song_list() {
         PAD + (last as f32 + 1.0) * ROW - ROW,
     ));
 }
+
+#[test]
+fn preview_end_with_stop_after_current_stops_and_clears_it() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) = player_playing_stepping_song(&recording, "song-1");
+    player.stop_after_current = true;
+
+    let settled = drive_playback_finished(&mut player);
+    assert!(matches!(settled, Message::TransportSettled));
+
+    let state = state.blocking_lock();
+    assert!(!state.is_playing);
+    assert_eq!(state.current_track.as_deref(), Some("song-1"));
+    assert!(!player.stop_after_current);
+}
+
+#[test]
+fn preview_end_after_stop_after_current_fired_advances_again() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) = player_playing_stepping_song(&recording, "song-1");
+    player.stop_after_current = true;
+    let settled = drive_playback_finished(&mut player);
+    assert!(matches!(settled, Message::TransportSettled));
+    let _ = update(&mut player, settled);
+
+    {
+        let mut state = state.blocking_lock();
+        state.current_track = Some("song-1".to_string());
+        state.play();
+    }
+    let advanced = drive_playback_finished(&mut player);
+    assert!(matches!(advanced, Message::TrackSelected { .. }));
+}
+
+#[test]
+fn stop_after_current_survives_a_dropped_finished_reply() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) = player_playing_stepping_song(&recording, "song-1");
+    player.stop_after_current = true;
+    let stale = player.position_epoch.wrapping_add(1);
+
+    let task = update(
+        &mut player,
+        Message::PlaybackFinished {
+            epoch: stale,
+            finished: true,
+        },
+    );
+
+    assert!(iced_runtime::task::into_stream(task).is_none());
+    assert!(player.stop_after_current);
+    assert!(state.blocking_lock().is_playing);
+}
+
+#[test]
+fn toggle_stop_after_current_flips_only_the_flag() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) = player_playing_stepping_song(&recording, "song-1");
+
+    let task = update(&mut player, Message::ToggleStopAfterCurrent);
+    assert!(player.stop_after_current);
+    assert!(iced_runtime::task::into_stream(task).is_none());
+    let _ = update(&mut player, Message::ToggleStopAfterCurrent);
+    assert!(!player.stop_after_current);
+    assert!(state.blocking_lock().is_playing);
+    assert!(recording.calls().is_empty());
+}

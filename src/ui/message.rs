@@ -27,6 +27,10 @@ pub(in crate::ui) enum Message {
     Play,
     Pause,
     Stop,
+    // Ctrl+V: arms or disarms "Stop after current", so the playing song's
+    // natural end stops playback instead of advancing. It changes no
+    // transport state itself.
+    ToggleStopAfterCurrent,
     ToggleRepeat,
     // The Shuffle toggle: with it on, a forward step picks a random
     // non-current song from the loaded song list instead of the next in order.
