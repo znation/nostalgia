@@ -1,6 +1,6 @@
-//! The equalizer panel: the on/off button, the preset pick list, the response
-//! curve with its dim 0 dB and band guides, and one row of a vertical preamp
-//! slider, a dB scale, and the [`BAND_COUNT`] vertical band sliders.
+//! The equalizer panel: the on/off button, the preset pick list, the response curve with its dim 0
+//! dB and band guides, and one row of a vertical preamp slider, a dB scale, and the [`BAND_COUNT`]
+//! vertical band sliders.
 
 use iced::{
     Element, Length,
@@ -17,17 +17,16 @@ use crate::ui::{Message, bevel, style, theme};
 
 use super::{EQ_STEP, fixed_width_button, labeled_button, spacer};
 
-/// The horizontal gap between adjacent equalizer band columns. Without it the
-/// labels sit edge to edge, so `170`, `310`, `600`, and `1K` read as one
-/// number in the rendered panel.
+/// The horizontal gap between adjacent equalizer band columns. Without it the labels sit edge to
+/// edge, so `170`, `310`, `600`, and `1K` read as one number in the rendered panel.
 const BAND_ROW_SPACING: f32 = 6.0;
 
-/// The height of every equalizer slider's rail, in pixels. The preamp, the dB
-/// scale, and the band sliders share it so their labels land on one row.
+/// The height of every equalizer slider's rail, in pixels. The preamp, the dB scale, and the band
+/// sliders share it so their labels land on one row.
 pub(super) const EQ_SLIDER_HEIGHT: f32 = 100.0;
 
-/// The preamp slider's container id, used only by the layout tests to find the
-/// laid-out slider and publish a wheel roll over it.
+/// The preamp slider's container id, used only by the layout tests to find the laid-out slider and
+/// publish a wheel roll over it.
 #[cfg(test)]
 pub(crate) const EQ_PREAMP_SLIDER_ID: &str = "equalizer-preamp";
 
@@ -38,74 +37,66 @@ pub(crate) fn eq_band_slider_id(index: usize) -> String {
     format!("equalizer-band-{index}")
 }
 
-/// The response curve's horizontal resolution: one green segment per column,
-/// so the line reads as a smooth trace over the ten band sliders.
+/// The response curve's horizontal resolution: one green segment per column, so the line reads as a
+/// smooth trace over the ten band sliders.
 pub(super) const RESPONSE_CURVE_COLUMNS: usize = 64;
 
-/// The fixed height of the response curve's plot, in pixels. The panel keeps
-/// it whether the curve is flat or shaped, so the band sliders below never
-/// move.
+/// The fixed height of the response curve's plot, in pixels. The panel keeps it whether the curve
+/// is flat or shaped, so the band sliders below never move.
 pub(super) const RESPONSE_CURVE_HEIGHT: f32 = 24.0;
 
-/// The height of one response-curve segment, in pixels. Adjacent segments
-/// touch, so the dots read as one continuous line.
+/// The height of one response-curve segment, in pixels. Adjacent segments touch, so the dots read
+/// as one continuous line.
 pub(super) const RESPONSE_CURVE_LINE_HEIGHT: f32 = 2.0;
 
-/// The thickness of the response curve's reference guide, in pixels: the size
-/// of each dot on the 0 dB line and the width of each band marker. It is kept
-/// distinct from [`RESPONSE_CURVE_LINE_HEIGHT`] so the trace's height filter
-/// still counts only trace segments.
+/// The thickness of the response curve's reference guide, in pixels: the size of each dot on the 0
+/// dB line and the width of each band marker. It is kept distinct from
+/// [`RESPONSE_CURVE_LINE_HEIGHT`] so the trace's height filter still counts only trace segments.
 pub(super) const RESPONSE_CURVE_GUIDE_THICKNESS: f32 = 1.0;
 
-/// The equalizer on/off button's label: "EQ: On" while the equalizer is
-/// engaged, "EQ: Off" when it is off. Pure so the label logic is testable
-/// without an iced `Element`, like
+/// The equalizer on/off button's label: "EQ: On" while the equalizer is engaged, "EQ: Off" when it
+/// is off. Pure so the label logic is testable without an iced `Element`, like
 /// [`repeat_label`](super::transport::repeat_label).
 pub(super) fn eq_enabled_label(enabled: bool) -> &'static str {
     if enabled { "EQ: On" } else { "EQ: Off" }
 }
 
-/// The equalizer AUTO button's label: "AUTO: On" while genre-matched presets
-/// are enabled, "AUTO: Off" when they are not. Pure so the label logic is
-/// testable without an iced `Element`.
+/// The equalizer AUTO button's label: "AUTO: On" while genre-matched presets are enabled, "AUTO:
+/// Off" when they are not. Pure so the label logic is testable without an iced `Element`.
 pub(super) fn auto_label(auto: bool) -> &'static str {
     if auto { "AUTO: On" } else { "AUTO: Off" }
 }
 
-/// The AUTO button's fixed width, pinned wide enough for `AUTO: Off` so
-/// swapping the label cannot reflow the preset pick list beside it.
+/// The AUTO button's fixed width, pinned wide enough for `AUTO: Off` so swapping the label cannot
+/// reflow the preset pick list beside it.
 pub(super) const AUTO_BUTTON_WIDTH: f32 = 96.0;
 
-/// The preset pick list's label when no named preset is applied. Classic
-/// Winamp names a hand-tuned curve `Custom`, so the closed control names the
-/// curve instead of showing an empty placeholder while `AppState::eq_preset`
-/// is `None`, including a fresh launch with a flat curve.
+/// The preset pick list's label when no named preset is applied. Classic Winamp names a hand-tuned
+/// curve `Custom`, so the closed control names the curve instead of showing an empty placeholder
+/// while `AppState::eq_preset` is `None`, including a fresh launch with a flat curve.
 pub(super) const CUSTOM_PRESET_LABEL: &str = "Custom";
 
-/// The equalizer pick list's closed label: an applied preset's name, or
-/// [`CUSTOM_PRESET_LABEL`] for a hand-tuned curve. `view_equalizer` passes it
-/// as the placeholder, which iced draws only while no preset is selected.
+/// The equalizer pick list's closed label: an applied preset's name, or [`CUSTOM_PRESET_LABEL`] for
+/// a hand-tuned curve. `view_equalizer` passes it as the placeholder, which iced draws only while
+/// no preset is selected.
 pub(super) fn preset_pick_list_label(preset: Option<Preset>) -> &'static str {
     preset.map_or(CUSTOM_PRESET_LABEL, |preset| preset.name)
 }
 
 /// Resolves the response curve's segment offsets from the stored band gains.
 ///
-/// The result holds exactly `columns` values, each the segment's height above
-/// the plot's bottom: `0.0` at [`GAIN_MIN_DB`], `0.5` at `0.0`, and `1.0` at
-/// [`GAIN_MAX_DB`]. Column 0 sits on the first band and the last column on the
-/// last band; each span between adjacent bands is eased with the cubic
-/// smoothstep `f * f * (3 - 2f)`, so the line meets every band at a zero slope
-/// instead of leaving a corner. The curve still passes exactly through each
-/// band's gain, so it follows the same gains the sliders and `BandFilter` use.
-/// A flat, all-minimum, or all-maximum curve is unchanged. Each band passes
-/// through [`clamp_gain`] first, so a NaN or out-of-range stored gain cannot
-/// leave the plot; the smoothstep is monotone and the endpoint offsets are
-/// clamped, so no eased value leaves `0.0..=1.0` either.
+/// The result holds exactly `columns` values, each the segment's height above the plot's bottom:
+/// `0.0` at [`GAIN_MIN_DB`], `0.5` at `0.0`, and `1.0` at [`GAIN_MAX_DB`]. Column 0 sits on the
+/// first band and the last column on the last band; each span between adjacent bands is eased with
+/// the cubic smoothstep `f * f * (3 - 2f)`, so the line meets every band at a zero slope instead of
+/// leaving a corner. The curve still passes exactly through each band's gain, so it follows the
+/// same gains the sliders and `BandFilter` use. A flat, all-minimum, or all-maximum curve is
+/// unchanged. Each band passes through [`clamp_gain`] first, so a NaN or out-of-range stored gain
+/// cannot leave the plot; the smoothstep is monotone and the endpoint offsets are clamped, so no
+/// eased value leaves `0.0..=1.0` either.
 ///
-/// `columns == 0` returns an empty vector, and `columns == 1` returns the first
-/// band's offset rather than dividing by zero. Pure so the shape is testable
-/// without an iced `Element`.
+/// `columns == 0` returns an empty vector, and `columns == 1` returns the first band's offset
+/// rather than dividing by zero. Pure so the shape is testable without an iced `Element`.
 pub(super) fn response_curve_offsets(bands: &[f32; BAND_COUNT], columns: usize) -> Vec<f32> {
     if columns == 0 {
         return Vec::new();
@@ -135,10 +126,9 @@ pub(super) fn response_curve_offsets(bands: &[f32; BAND_COUNT], columns: usize) 
         .collect()
 }
 
-/// Builds the equalizer's dB scale: `+12 DB` at the rail's top, `0 DB` in the
-/// middle, and `-12 DB` at its bottom. The column is exactly
-/// [`EQ_SLIDER_HEIGHT`] tall and its two fill `Space`s split the leftover height
-/// evenly, so the middle label centers on the rail beside it. Pressing a label
+/// Builds the equalizer's dB scale: `+12 DB` at the rail's top, `0 DB` in the middle, and `-12 DB`
+/// at its bottom. The column is exactly [`EQ_SLIDER_HEIGHT`] tall and its two fill `Space`s split
+/// the leftover height evenly, so the middle label centers on the rail beside it. Pressing a label
 /// sends [`Message::EqBandsSetAll`] with its gain, as in Winamp.
 pub(super) fn db_scale_column() -> Column<'static, Message> {
     Column::new()
@@ -158,20 +148,16 @@ fn scale_label(label: &'static str, gain: f32) -> MouseArea<'static, Message> {
         .interaction(Interaction::Pointer)
 }
 
-/// Builds one equalizer slider column: a [`VerticalSlider`] over a gain, sized
-/// to [`EQ_SLIDER_HEIGHT`] and stepped by [`EQ_STEP`], with its `label`
-/// beneath it at the band labels' text size. The preamp column and each of the
-/// ten band columns share this shape; only the slider's value, change
-/// message, and paint style differ, so the construction lives here once.
-/// Releasing the slider sends [`Message::MixerReleased`], ending the LCD's
-/// gain readout.
+/// Builds one equalizer slider column: a [`VerticalSlider`] over a gain, sized to
+/// [`EQ_SLIDER_HEIGHT`] and stepped by [`EQ_STEP`], with its `label` beneath it at the band labels'
+/// text size. The preamp column and each of the ten band columns share this shape; only the
+/// slider's value, change message, and paint style differ, so the construction lives here once.
+/// Releasing the slider sends [`Message::MixerReleased`], ending the LCD's gain readout.
 ///
-/// `style` receives the slider's interaction status and returns the chrome
-/// style to paint, so the preamp and each band pass their own gain tint
-/// through [`style::band_slider_style`]. `on_scroll` receives a plain wheel
-/// roll over the slider and returns that slider's wheel message; the slider's
-/// own Ctrl+wheel step still runs first and keeps the wheel when it captures
-/// it.
+/// `style` receives the slider's interaction status and returns the chrome style to paint, so the
+/// preamp and each band pass their own gain tint through [`style::band_slider_style`]. `on_scroll`
+/// receives a plain wheel roll over the slider and returns that slider's wheel message; the
+/// slider's own Ctrl+wheel step still runs first and keeps the wheel when it captures it.
 fn eq_slider_column<'a>(
     value: f32,
     label: &'a str,
@@ -193,10 +179,10 @@ fn eq_slider_column<'a>(
         .push(Text::new(label).size(12))
 }
 
-/// Builds the equalizer's preamp column: a [`VerticalSlider`] over the
-/// `Preamp` label, matching a band column's shape so it sits in the band row.
-/// The slider spans `GAIN_MIN_DB..=GAIN_MAX_DB` in [`EQ_STEP`] increments and
-/// takes the same gain tint as every band slider, from the stored preamp.
+/// Builds the equalizer's preamp column: a [`VerticalSlider`] over the `Preamp` label, matching a
+/// band column's shape so it sits in the band row. The slider spans `GAIN_MIN_DB..=GAIN_MAX_DB` in
+/// [`EQ_STEP`] increments and takes the same gain tint as every band slider, from the stored
+/// preamp.
 pub(super) fn preamp_column(preamp: f32) -> Column<'static, Message> {
     eq_slider_column(
         preamp,
@@ -207,23 +193,20 @@ pub(super) fn preamp_column(preamp: f32) -> Column<'static, Message> {
     )
 }
 
-/// The preamp slider's paint style: exactly the band tint for the preamp's
-/// gain, so the preamp groove matches a band slider at the same gain.
+/// The preamp slider's paint style: exactly the band tint for the preamp's gain, so the preamp
+/// groove matches a band slider at the same gain.
 pub(super) fn preamp_slider_style(preamp: f32, status: slider::Status) -> slider::Style {
     style::band_slider_style(preamp, status)
 }
 
-/// Builds the response curve row: one green line segment per
-/// [`RESPONSE_CURVE_COLUMNS`] column, placed at the height
-/// [`response_curve_offsets`] gives for the stored band gains. Behind the trace
-/// it draws a dim reference grid: a dotted line on the 0 dB midline and one
-/// full-height marker at each band's `i / (BAND_COUNT - 1)` position, from the
-/// plot's left edge to its right edge, both in [`theme::LCD_GREEN_DIM`]. The
-/// trace draws last, over the guide. The row keeps the fixed
-/// [`RESPONSE_CURVE_HEIGHT`] for every curve, flat included, so the band
-/// sliders below keep their places. The preamp is not plotted: it is a uniform
-/// gain offset, not a bend in the curve. Generic over the theme and renderer so
-/// the tests can lay it out with iced's null renderer.
+/// Builds the response curve row: one green line segment per [`RESPONSE_CURVE_COLUMNS`] column,
+/// placed at the height [`response_curve_offsets`] gives for the stored band gains. Behind the
+/// trace it draws a dim reference grid: a dotted line on the 0 dB midline and one full-height
+/// marker at each band's `i / (BAND_COUNT - 1)` position, from the plot's left edge to its right
+/// edge, both in [`theme::LCD_GREEN_DIM`]. The trace draws last, over the guide. The row keeps the
+/// fixed [`RESPONSE_CURVE_HEIGHT`] for every curve, flat included, so the band sliders below keep
+/// their places. The preamp is not plotted: it is a uniform gain offset, not a bend in the curve.
+/// Generic over the theme and renderer so the tests can lay it out with iced's null renderer.
 pub(super) fn response_curve_row<'a, Theme, Renderer>(
     bands: &[f32; BAND_COUNT],
 ) -> Element<'a, Message, Theme, Renderer>
@@ -307,24 +290,20 @@ where
         .into()
 }
 
-/// The equalizer panel: an on/off button, an AUTO toggle, a preset pick list,
-/// a response curve above the [`BAND_COUNT`] band sliders, and to their left the vertical
-/// preamp slider and the `+12 DB` / `0 DB` / `-12 DB` scale. The curve starts at
-/// the first band, so its column 0 sits on that band rather than over the
-/// preamp.
+/// The equalizer panel: an on/off button, an AUTO toggle, a preset pick list, a response curve
+/// above the [`BAND_COUNT`] band sliders, and to their left the vertical preamp slider and the
+/// `+12 DB` / `0 DB` / `-12 DB` scale. The curve starts at the first band, so its column 0 sits on
+/// that band rather than over the preamp.
 ///
-/// `enabled` is the shared EQ on/off flag shown on the button and toggled by
-/// pressing it; `auto` is the genre-matched preset flag shown on the AUTO
-/// button and toggled by pressing it; `preset` is the applied curve the pick list shows (or `None`,
-/// drawn as [`CUSTOM_PRESET_LABEL`]), and picking one emits
-/// [`Message::EqPresetSelected`]; `preamp` and `bands` are the stored gains the
-/// sliders start from. Every slider spans `GAIN_MIN_DB..=GAIN_MAX_DB` in 1 dB steps and
-/// emits its own change message, so dragging one routes a clamped gain back
-/// into shared state. The response curve traces the stored `bands` whether the
-/// EQ is on or off, and each band slider's groove is tinted by that band's own
-/// gain through [`style::band_slider_style`]. The band row is built by index so
-/// each slider's closure captures its own band number — the vertical twin of
-/// the volume slider in
+/// `enabled` is the shared EQ on/off flag shown on the button and toggled by pressing it; `auto` is
+/// the genre-matched preset flag shown on the AUTO button and toggled by pressing it; `preset` is
+/// the applied curve the pick list shows (or `None`, drawn as [`CUSTOM_PRESET_LABEL`]), and picking
+/// one emits [`Message::EqPresetSelected`]; `preamp` and `bands` are the stored gains the sliders
+/// start from. Every slider spans `GAIN_MIN_DB..=GAIN_MAX_DB` in 1 dB steps and emits its own
+/// change message, so dragging one routes a clamped gain back into shared state. The response curve
+/// traces the stored `bands` whether the EQ is on or off, and each band slider's groove is tinted
+/// by that band's own gain through [`style::band_slider_style`]. The band row is built by index so
+/// each slider's closure captures its own band number — the vertical twin of the volume slider in
 /// [`view_transport_controls`](super::transport::view_transport_controls).
 pub fn view_equalizer(
     enabled: bool,
