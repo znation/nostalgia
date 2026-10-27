@@ -6,10 +6,10 @@ use super::wire::api_error_cause;
 use super::*;
 
 use crate::test_support::{
-    PREVIEW_URL, StubTransport, assert_ids, assert_single_call, gzip_empty_stored_blocks,
-    gzip_zeros, loopback_listener, record_first_request, rest_session, sample_album, sample_artist,
-    sample_playlist, sample_song, serve_one_response, serve_one_response_bytes,
-    serve_one_response_capturing_request,
+    EMPTY_DATA_BODY, PREVIEW_URL, StubTransport, assert_ids, assert_single_call,
+    gzip_empty_stored_blocks, gzip_zeros, loopback_listener, record_first_request, rest_session,
+    sample_album, sample_artist, sample_playlist, sample_song, serve_one_response,
+    serve_one_response_bytes, serve_one_response_capturing_request,
 };
 
 /// A [`RestLibrary`] over `stub`, plus the handle to inspect its calls.

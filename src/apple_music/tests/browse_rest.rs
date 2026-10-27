@@ -82,7 +82,7 @@ async fn get_songs_from_playlist_fails_when_the_tracks_request_fails() {
 async fn get_favorite_artists_uses_the_rest_library_when_signed_in() {
     let stub = StubTransport::returning_bodies(&[
         r#"{"data":[{"id":"artist-1","attributes":{"name":"The Sample Band"}}]}"#,
-        r#"{"data":[]}"#,
+        EMPTY_DATA_BODY,
     ]);
     let service = signed_in_service(&stub);
 
@@ -149,7 +149,7 @@ async fn get_favorite_artists_counts_albums_by_artist_name_from_the_rest_library
 // than an error.
 #[tokio::test]
 async fn get_favorite_artists_returns_no_artists_for_an_empty_signed_in_library() {
-    let stub = StubTransport::returning_bodies(&[r#"{"data":[]}"#, r#"{"data":[]}"#]);
+    let stub = StubTransport::returning_bodies(&[EMPTY_DATA_BODY, EMPTY_DATA_BODY]);
     let service = signed_in_service(&stub);
 
     let artists = service.get_favorite_artists().await.unwrap();
@@ -173,7 +173,7 @@ async fn get_favorite_artists_returns_no_artists_for_an_empty_signed_in_library(
 // own. The pinned URL proves the answer came from the signed-in collection.
 #[tokio::test]
 async fn get_playlists_returns_no_playlists_for_an_empty_signed_in_library() {
-    let stub = StubTransport::returning(r#"{"data":[]}"#);
+    let stub = StubTransport::returning(EMPTY_DATA_BODY);
     let service = signed_in_service(&stub);
 
     let playlists = service.get_playlists().await.unwrap();
@@ -190,7 +190,7 @@ async fn get_playlists_returns_no_playlists_for_an_empty_signed_in_library() {
 // not own. The URL pins the signed-in songs collection as the source.
 #[tokio::test]
 async fn get_all_songs_returns_no_songs_for_an_empty_signed_in_library() {
-    let stub = StubTransport::returning(r#"{"data":[]}"#);
+    let stub = StubTransport::returning(EMPTY_DATA_BODY);
     let service = signed_in_service(&stub);
 
     let songs = service.get_all_songs().await.unwrap();
@@ -208,7 +208,7 @@ async fn get_all_songs_returns_no_songs_for_an_empty_signed_in_library() {
 // Both calls are pinned so a regression cannot skip the durations request.
 #[tokio::test]
 async fn get_all_albums_returns_no_albums_for_an_empty_signed_in_library() {
-    let stub = StubTransport::returning_bodies(&[r#"{"data":[]}"#, r#"{"data":[]}"#]);
+    let stub = StubTransport::returning_bodies(&[EMPTY_DATA_BODY, EMPTY_DATA_BODY]);
     let service = signed_in_service(&stub);
 
     let albums = service.get_all_albums().await.unwrap();
@@ -235,7 +235,7 @@ async fn get_all_albums_returns_no_albums_for_an_empty_signed_in_library() {
 #[tokio::test]
 async fn get_albums_by_artist_returns_no_albums_for_an_empty_signed_in_result() {
     let stub = StubTransport::returning_bodies(&[
-        r#"{"data":[]}"#,
+        EMPTY_DATA_BODY,
         r#"{"data":[{"id":"song-1","attributes":{"name":"Opening","artistName":"The Sample Band","albumName":"First Record","durationInMillis":210000}}]}"#,
     ]);
     let service = signed_in_service(&stub);
@@ -262,7 +262,7 @@ async fn get_albums_by_artist_returns_no_albums_for_an_empty_signed_in_result() 
 // answer came from the album's tracks endpoint.
 #[tokio::test]
 async fn get_songs_from_album_returns_no_songs_for_an_empty_signed_in_result() {
-    let stub = StubTransport::returning(r#"{"data":[]}"#);
+    let stub = StubTransport::returning(EMPTY_DATA_BODY);
     let service = signed_in_service(&stub);
 
     let songs = service.get_songs_from_album("album-1").await.unwrap();
@@ -282,7 +282,7 @@ async fn get_songs_from_album_returns_no_songs_for_an_empty_signed_in_result() {
 // them. The URL pins the playlist's tracks endpoint as the source.
 #[tokio::test]
 async fn get_songs_from_playlist_returns_no_songs_for_an_empty_signed_in_result() {
-    let stub = StubTransport::returning(r#"{"data":[]}"#);
+    let stub = StubTransport::returning(EMPTY_DATA_BODY);
     let service = signed_in_service(&stub);
 
     let songs = service.get_songs_from_playlist("playlist-1").await.unwrap();
@@ -659,7 +659,7 @@ async fn get_favorite_artists_fails_when_the_albums_request_fails() {
 async fn get_favorite_artists_fails_when_the_artists_request_fails() {
     let stub = StubTransport::returning_results(&[
         Err(AppleMusicError::new("artists down")),
-        Ok(r#"{"data":[]}"#.to_string()),
+        Ok(EMPTY_DATA_BODY.to_string()),
     ]);
     let service = signed_in_service(&stub);
 

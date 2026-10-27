@@ -352,7 +352,7 @@ fn songs_from_album_keeps_a_padded_preview_url_verbatim() {
 
 #[test]
 fn albums_by_artist_percent_encodes_the_id() {
-    let stub = StubTransport::returning(r#"{"data":[]}"#);
+    let stub = StubTransport::returning(EMPTY_DATA_BODY);
     let library = library_over(&stub);
 
     library
@@ -367,7 +367,7 @@ fn albums_by_artist_percent_encodes_the_id() {
 
 #[test]
 fn songs_from_album_percent_encodes_the_id() {
-    let stub = StubTransport::returning(r#"{"data":[]}"#);
+    let stub = StubTransport::returning(EMPTY_DATA_BODY);
     let library = library_over(&stub);
 
     library
@@ -813,7 +813,7 @@ fn get_songs_from_playlist_maps_the_playlist_tracks_collection() {
 
 #[test]
 fn get_songs_from_playlist_percent_encodes_the_playlist_id() {
-    let stub = StubTransport::returning(r#"{"data":[]}"#);
+    let stub = StubTransport::returning(EMPTY_DATA_BODY);
     let library = library_over(&stub);
 
     library

@@ -9,6 +9,10 @@ use crate::music_kit_auth::MusicKitSession;
 
 use super::rest_session;
 
+/// A REST response body with an empty `data` list, the shape of a library or
+/// catalog request that matched nothing.
+pub(crate) const EMPTY_DATA_BODY: &str = r#"{"data":[]}"#;
+
 /// A transport stub shared by the `apple_music` service tests, the
 /// `apple_music::rest` client tests, and the `ui` player-construction helpers:
 /// it records every `(url, session)` it is handed and answers with its canned
