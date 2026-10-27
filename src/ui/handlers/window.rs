@@ -214,6 +214,8 @@ pub(in crate::ui) fn options_choice(
         OptionsChoice::StopAfterCurrent => super::playback::toggle_stop_after_current(player),
         OptionsChoice::Repeat => super::playback::toggle_repeat(player),
         OptionsChoice::Shuffle => super::playback::toggle_shuffle(player),
+        OptionsChoice::JumpTime => super::jump::toggle_jump_time(player),
+        OptionsChoice::JumpFile => super::jump::toggle_jump_file(player),
     }
 }
 

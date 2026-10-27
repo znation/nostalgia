@@ -535,11 +535,12 @@ fn options_overlay_draws_each_row_with_its_state() {
         let capture =
             layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
         let texts: Vec<&str> = capture.texts().collect();
-        for expected in ["OPTIONS"]
-            .into_iter()
-            .chain(rows)
-            .chain(["About Nostalgia", "Close"])
-        {
+        for expected in ["OPTIONS"].into_iter().chain(rows).chain([
+            "Jump to time",
+            "Jump to file",
+            "About Nostalgia",
+            "Close",
+        ]) {
             assert!(
                 texts.contains(&expected),
                 "the options overlay must draw {expected:?} (all_on: {all_on}): {texts:?}"
@@ -563,6 +564,8 @@ fn options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop() {
         "Stop after current: Off",
         "Repeat: Off",
         "Shuffle: Off",
+        "Jump to time",
+        "Jump to file",
         "About Nostalgia",
         "Close",
         "OPTIONS",
@@ -637,6 +640,20 @@ fn options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop() {
                     Message::OptionsChoice(OptionsChoice::Shuffle)
                 )),
                 "the shuffle row must publish its choice: {messages:?}"
+            ),
+            "Jump to time" => assert!(
+                messages.iter().any(|message| matches!(
+                    message,
+                    Message::OptionsChoice(OptionsChoice::JumpTime)
+                )),
+                "the jump-to-time row must publish its choice: {messages:?}"
+            ),
+            "Jump to file" => assert!(
+                messages.iter().any(|message| matches!(
+                    message,
+                    Message::OptionsChoice(OptionsChoice::JumpFile)
+                )),
+                "the jump-to-file row must publish its choice: {messages:?}"
             ),
             "About Nostalgia" => assert!(
                 messages

@@ -514,6 +514,9 @@ fn options_choice_applies_each_toggle_and_closes_the_panel() {
                         "covered by options_repeat_and_shuffle_toggle_shared_state_and_close_the_panel"
                     )
                 }
+                OptionsChoice::JumpTime | OptionsChoice::JumpFile => {
+                    unreachable!("covered by options_jump_rows_open_their_panels_or_just_close")
+                }
             };
             assert_eq!(
                 (
@@ -557,12 +560,12 @@ fn options_keyboard_selection_clamps_and_activates_each_row() {
     assert_eq!(player.options_selected, 0);
     let _ = update(&mut player, Message::OptionsSelectionUp);
     assert_eq!(player.options_selected, 0);
-    for index in 1..10 {
+    for index in 1..OptionsRow::ALL.len() {
         let _ = update(&mut player, Message::OptionsSelectionDown);
         assert_eq!(player.options_selected, index);
     }
     let _ = update(&mut player, Message::OptionsSelectionDown);
-    assert_eq!(player.options_selected, 9);
+    assert_eq!(player.options_selected, OptionsRow::ALL.len() - 1);
     let _ = update(&mut player, Message::OptionsActivate);
     assert!(!player.options_visible);
     assert!(!player.about_visible);

@@ -425,6 +425,10 @@ pub(in crate::ui) enum OptionsChoice {
     Repeat,
     /// Reuses [`Message::ToggleShuffle`].
     Shuffle,
+    /// Opens the Jump to time panel when a preview of known length is loaded.
+    JumpTime,
+    /// Opens the Jump to File panel while a song list is showing.
+    JumpFile,
 }
 
 /// Options rows in their shared drawing and keyboard order.
@@ -438,12 +442,14 @@ pub(in crate::ui) enum OptionsRow {
     StopAfterCurrent,
     Repeat,
     Shuffle,
+    JumpTime,
+    JumpFile,
     About,
     Close,
 }
 
 impl OptionsRow {
-    pub(in crate::ui) const ALL: [Self; 10] = [
+    pub(in crate::ui) const ALL: [Self; 12] = [
         Self::AlwaysOnTop,
         Self::TimeDisplay,
         Self::Visualizer,
@@ -452,6 +458,8 @@ impl OptionsRow {
         Self::StopAfterCurrent,
         Self::Repeat,
         Self::Shuffle,
+        Self::JumpTime,
+        Self::JumpFile,
         Self::About,
         Self::Close,
     ];
@@ -466,6 +474,8 @@ impl OptionsRow {
             Self::StopAfterCurrent => Message::OptionsChoice(OptionsChoice::StopAfterCurrent),
             Self::Repeat => Message::OptionsChoice(OptionsChoice::Repeat),
             Self::Shuffle => Message::OptionsChoice(OptionsChoice::Shuffle),
+            Self::JumpTime => Message::OptionsChoice(OptionsChoice::JumpTime),
+            Self::JumpFile => Message::OptionsChoice(OptionsChoice::JumpFile),
             Self::About => Message::ToggleAbout,
             Self::Close => Message::ToggleOptions,
         }
@@ -490,6 +500,8 @@ mod options_tests {
                 Message::OptionsChoice(OptionsChoice::StopAfterCurrent),
                 Message::OptionsChoice(OptionsChoice::Repeat),
                 Message::OptionsChoice(OptionsChoice::Shuffle),
+                Message::OptionsChoice(OptionsChoice::JumpTime),
+                Message::OptionsChoice(OptionsChoice::JumpFile),
                 Message::ToggleAbout,
                 Message::ToggleOptions,
             ]

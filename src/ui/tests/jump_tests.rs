@@ -71,3 +71,48 @@ fn jumps_in_all_songs_use_the_flat_list() {
 
     assert_track_selected(update(&mut player, Message::JumpTracksForward), 1, 12);
 }
+
+// The Jump rows close the menu and open their panel when it is available, by
+// mouse and by keyboard; when it is not, they only close the menu.
+#[test]
+fn options_jump_rows_open_their_panels_or_just_close() {
+    for (row, is_time) in [(OptionsRow::JumpTime, true), (OptionsRow::JumpFile, false)] {
+        let position = if is_time { 8 } else { 9 };
+        assert!(
+            matches!(OptionsRow::ALL[position], r if std::mem::discriminant(&r) == std::mem::discriminant(&row))
+        );
+        for by_keyboard in [false, true] {
+            for available in [true, false] {
+                let (mut player, _state) = test_player();
+                if available {
+                    if is_time {
+                        player.playback_duration = Some(Duration::from_secs(90));
+                    } else {
+                        let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+                        player.current_view = CurrentView::Songs;
+                    }
+                }
+                player.options_visible = true;
+                let _ = if by_keyboard {
+                    player.options_selected = position;
+                    update(&mut player, Message::OptionsActivate)
+                } else {
+                    update(&mut player, row.message())
+                };
+                let context =
+                    format!("time: {is_time}, keyboard: {by_keyboard}, available: {available}");
+                assert!(!player.options_visible, "menu must close ({context})");
+                assert_eq!(
+                    player.jump_time_visible,
+                    is_time && available,
+                    "jump time flag ({context})"
+                );
+                assert_eq!(
+                    player.jump_file_visible,
+                    !is_time && available,
+                    "jump file flag ({context})"
+                );
+            }
+        }
+    }
+}

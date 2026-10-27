@@ -1,5 +1,5 @@
 //! The transient options menu: a modal overlay listing the app's existing
-//! on/off choices plus an About row, each applying that choice and closing the
+//! on/off choices plus Jump to time, Jump to file, and About rows, each applying that choice and closing the
 //! menu like a Winamp menu item. Its highlight is layout-only and unpersisted.
 
 use iced::{
@@ -118,6 +118,8 @@ pub(super) fn options_row_label(row: OptionsRow, state: OptionsState) -> &'stati
         OptionsRow::StopAfterCurrent => stop_after_current_label(state.stop_after_current),
         OptionsRow::Repeat => repeat_label(state.repeat),
         OptionsRow::Shuffle => shuffle_label(state.shuffle),
+        OptionsRow::JumpTime => "Jump to time",
+        OptionsRow::JumpFile => "Jump to file",
         OptionsRow::About => "About Nostalgia",
         OptionsRow::Close => "Close",
     }
@@ -137,7 +139,7 @@ pub(super) fn options_row_style(
 
 /// Stacks the transient options menu over `base` through [`modal_overlay`].
 /// The backdrop and Close publish [`Message::ToggleOptions`]; toggle rows
-/// publish [`Message::OptionsChoice`] and About publishes [`Message::ToggleAbout`].
+/// publish [`Message::OptionsChoice`] (so do the Jump rows) and About publishes [`Message::ToggleAbout`].
 /// Each row closes the menu through its existing handler. `selected` highlights
 /// the keyboard row without changing the labels or mouse messages.
 pub fn view_options_overlay<'a>(
