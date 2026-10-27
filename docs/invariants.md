@@ -1192,9 +1192,10 @@ its internal id, whenever the id is in the known-track index:
 - Stop keeps the interrupted track's title and number (the current track is not cleared by Stop).
 - The iced application window's title mirrors a known current track through
   `WinampPlayer::window_title`, using the same index and number prefix as the LCD, so it reads
-  `<number>Artist - Title - nostalgia` and omits an empty number or artist. It keeps the
-  interrupted track across Stop and falls back to the plain `nostalgia` for no current track or
-  an unknown id.
+  `<number>Artist - Title - nostalgia` and omits an empty number or artist. It ends in
+  ` [Paused]` while paused and ` [Stopped]` while stopped, and nothing while playing. It keeps the
+  interrupted track across Stop (then ending in ` [Stopped]`) and falls back to the plain
+  `nostalgia`, never suffixed, for no current track or an unknown id.
 - The number prefix counts toward the marquee character budget alongside the artist and title,
   and an overlong line's scrolling window includes it, so it neither overflows the LCD nor stays
   fixed while the rest of the line scrolls.
@@ -1472,6 +1473,7 @@ rather than the panic unwinding the event loop.
   (all in `src/ui/views/tests/`)
 - `now_playing_label_keeps_the_track_name_after_browsing_to_another_album` (`src/ui/tests/readouts_tests.rs`)
 - `window_title_names_the_current_track` (`src/ui/tests/`)
+- `window_title_marks_a_paused_or_stopped_track` (`src/ui/tests/`)
 - `now_playing_number_survives_browsing_to_another_album` (`src/ui/tests/`)
 - `track_selected_records_the_selected_rows_number`
 - `replaying_a_track_from_another_row_updates_its_number`

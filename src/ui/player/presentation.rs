@@ -7,6 +7,7 @@ use std::borrow::Cow;
 use std::time::Duration;
 
 use super::WinampPlayer;
+use crate::state::TransportMode;
 use crate::ui::views;
 
 /// The title `init_ui` gives iced when no known track is current.
@@ -26,8 +27,11 @@ impl WinampPlayer {
     /// [`Self::known_tracks`], then ` - nostalgia`. With no current track or an
     /// unknown id it is the plain [`APP_TITLE`]. This names the iced window
     /// (what the desktop environment shows), not the custom title bar, whose
-    /// label is the fixed `NOSTALGIA`. Stop leaves `current_track` in place, so
-    /// the interrupted track's name stays in the title as it does on the LCD.
+    /// label is the fixed `NOSTALGIA`. A known track's title ends in
+    /// ` [Paused]` while paused and ` [Stopped]` while stopped, like Winamp's
+    /// taskbar title; the plain fallback never gets a suffix. Stop leaves
+    /// `current_track` in place, so the interrupted track's name stays in the
+    /// title as it does on the LCD, now ending in ` [Stopped]`.
     pub(in crate::ui) fn window_title(&self) -> String {
         let state = self.state.blocking_lock();
         let Some(track) = state
@@ -37,7 +41,7 @@ impl WinampPlayer {
         else {
             return APP_TITLE.to_string();
         };
-        let mut title = String::with_capacity(track.number.len() + track.artist.len() + 32);
+        let mut title = String::with_capacity(track.number.len() + track.artist.len() + 48);
         title.push_str(&track.number);
         if !track.artist.is_empty() {
             title.push_str(&track.artist);
@@ -46,6 +50,11 @@ impl WinampPlayer {
         title.push_str(&track.title);
         title.push_str(" - ");
         title.push_str(APP_TITLE);
+        match state.transport_mode() {
+            TransportMode::Playing => {}
+            TransportMode::Paused => title.push_str(" [Paused]"),
+            TransportMode::Stopped => title.push_str(" [Stopped]"),
+        }
         title
     }
 

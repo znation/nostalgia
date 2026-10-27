@@ -154,8 +154,9 @@ up to the title bar plus a compact transport strip with Previous, Play, Pause, S
 elapsed-over-total time readout, a seek slider over the preview's own length, and a volume slider,
 where Play starts or resumes and Pause pauses, and back. Its `–` and `✕` buttons minimize and close. The window title (the name the desktop
 environment shows for the app) names the current track as
-`<number>Artist - Title - nostalgia` (omitting the number or artist when empty), keeping the
-interrupted track's name across Stop and reading just `nostalgia` when no known track is current.
+`<number>Artist - Title - nostalgia` (omitting the number or artist when empty), ending in ` [Paused]` while paused and ` [Stopped]`
+while stopped, like Winamp's taskbar title. It keeps the interrupted track's name across Stop and
+reads just `nostalgia` when no known track is current.
 With the window focused, the classic Winamp keys drive playback: Z and B step back and forward
 (a Z press restarts the loaded preview from its start once it has played at least three seconds),
 X plays, C pauses, V stops, Ctrl+V arms (or disarms) Stop after current — the playing song then

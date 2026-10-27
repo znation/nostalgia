@@ -302,7 +302,8 @@ fn toggle_window_shade_without_a_window_id_still_flips_the_flag() {
 // The iced window's title follows the Now Playing bar's known track: the same
 // `known_tracks` entry the LCD names, with the row number and artist included
 // only when they exist. Nothing current, or an id the index does not know,
-// falls back to the plain app name, and Stop keeps the interrupted track.
+// falls back to the plain app name, and Stop keeps the interrupted track
+// (marked `[Stopped]`).
 #[test]
 fn window_title_names_the_current_track() {
     let (mut player, state) = test_player();
@@ -321,6 +322,7 @@ fn window_title_names_the_current_track() {
         },
     );
     state.blocking_lock().current_track = Some("song-1".to_string());
+    state.blocking_lock().is_playing = true;
     assert_eq!(
         player.window_title(),
         "1. The Sample Band - Opening - nostalgia"
@@ -363,6 +365,35 @@ fn window_title_names_the_current_track() {
     state.blocking_lock().stop();
     assert_eq!(
         player.window_title(),
+        "1. The Sample Band - Opening - nostalgia [Stopped]"
+    );
+}
+
+// A known track's title gains ` [Paused]` or ` [Stopped]` off the playing
+// state; the plain fallback never does.
+#[test]
+fn window_title_marks_a_paused_or_stopped_track() {
+    let (mut player, state) = test_player();
+    make_current_track_known(&mut player, &state);
+
+    state.blocking_lock().play();
+    assert_eq!(
+        player.window_title(),
         "1. The Sample Band - Opening - nostalgia"
     );
+    state.blocking_lock().pause();
+    assert_eq!(
+        player.window_title(),
+        "1. The Sample Band - Opening - nostalgia [Paused]"
+    );
+    state.blocking_lock().stop();
+    assert_eq!(
+        player.window_title(),
+        "1. The Sample Band - Opening - nostalgia [Stopped]"
+    );
+
+    state.blocking_lock().current_track = None;
+    assert_eq!(player.window_title(), "nostalgia");
+    state.blocking_lock().pause();
+    assert_eq!(player.window_title(), "nostalgia");
 }
