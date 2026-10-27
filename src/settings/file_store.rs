@@ -306,13 +306,10 @@ mod tests {
         assert!(report.contains("restart"), "{report}");
     }
 
-    // A settings file that exists but cannot be read holds values the app never
-    // saw; the snapshot it would save is built from defaults, so writing it
-    // would destroy the user's settings. The store records the failed load and
-    // the later save leaves the file (and stages nothing) alone.
-    #[test]
-    fn a_settings_file_that_could_not_be_read_is_not_overwritten() {
-        let root = temporary_root("unreadable");
+    // A store over a settings file holding `volume=0.25` whose first load failed
+    // with a permission error, so it must refuse every later save.
+    fn store_after_failed_read(label: &str) -> (PathBuf, PathBuf, FileStore) {
+        let root = temporary_root(label);
         std::fs::create_dir_all(&root).unwrap();
         let path = root.join("settings.ini");
         std::fs::write(&path, "volume=0.25\n").unwrap();
@@ -320,6 +317,16 @@ mod tests {
 
         let denied = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
         assert_eq!(store.load_with(|_| Err(denied)), None);
+        (root, path, store)
+    }
+
+    // A settings file that exists but cannot be read holds values the app never
+    // saw; the snapshot it would save is built from defaults, so writing it
+    // would destroy the user's settings. The store records the failed load and
+    // the later save leaves the file (and stages nothing) alone.
+    #[test]
+    fn a_settings_file_that_could_not_be_read_is_not_overwritten() {
+        let (root, path, store) = store_after_failed_read("unreadable");
 
         store.save(&varied_settings());
 
@@ -345,14 +352,7 @@ mod tests {
     fn a_writer_clone_shares_the_failed_read_and_refuses_to_overwrite() {
         use crate::settings::writer::BackgroundWriter;
 
-        let root = temporary_root("unreadable-clone");
-        std::fs::create_dir_all(&root).unwrap();
-        let path = root.join("settings.ini");
-        std::fs::write(&path, "volume=0.25\n").unwrap();
-        let store = FileStore::at(path.clone());
-
-        let denied = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
-        assert_eq!(store.load_with(|_| Err(denied)), None);
+        let (root, path, store) = store_after_failed_read("unreadable-clone");
 
         let writer = BackgroundWriter::new(store.clone());
         writer.save(&varied_settings());
