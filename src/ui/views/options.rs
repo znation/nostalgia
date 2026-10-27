@@ -118,6 +118,8 @@ pub(super) fn options_row_label(row: OptionsRow, state: OptionsState) -> &'stati
         OptionsRow::StopAfterCurrent => stop_after_current_label(state.stop_after_current),
         OptionsRow::Repeat => repeat_label(state.repeat),
         OptionsRow::Shuffle => shuffle_label(state.shuffle),
+        OptionsRow::JumpTracksBack => "10 songs back",
+        OptionsRow::JumpTracksForward => "10 songs forward",
         OptionsRow::JumpTime => "Jump to time",
         OptionsRow::JumpFile => "Jump to file",
         OptionsRow::About => "About Nostalgia",

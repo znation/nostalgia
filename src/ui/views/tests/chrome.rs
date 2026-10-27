@@ -536,6 +536,8 @@ fn options_overlay_draws_each_row_with_its_state() {
             layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
         let texts: Vec<&str> = capture.texts().collect();
         for expected in ["OPTIONS"].into_iter().chain(rows).chain([
+            "10 songs back",
+            "10 songs forward",
             "Jump to time",
             "Jump to file",
             "About Nostalgia",
@@ -564,6 +566,8 @@ fn options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop() {
         "Stop after current: Off",
         "Repeat: Off",
         "Shuffle: Off",
+        "10 songs back",
+        "10 songs forward",
         "Jump to time",
         "Jump to file",
         "About Nostalgia",
@@ -640,6 +644,20 @@ fn options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop() {
                     Message::OptionsChoice(OptionsChoice::Shuffle)
                 )),
                 "the shuffle row must publish its choice: {messages:?}"
+            ),
+            "10 songs back" => assert!(
+                messages.iter().any(|message| matches!(
+                    message,
+                    Message::OptionsChoice(OptionsChoice::JumpTracksBack)
+                )),
+                "the ten-songs-back row must publish its choice: {messages:?}"
+            ),
+            "10 songs forward" => assert!(
+                messages.iter().any(|message| matches!(
+                    message,
+                    Message::OptionsChoice(OptionsChoice::JumpTracksForward)
+                )),
+                "the ten-songs-forward row must publish its choice: {messages:?}"
             ),
             "Jump to time" => assert!(
                 messages.iter().any(|message| matches!(

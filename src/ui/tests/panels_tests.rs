@@ -514,6 +514,9 @@ fn options_choice_applies_each_toggle_and_closes_the_panel() {
                         "covered by options_repeat_and_shuffle_toggle_shared_state_and_close_the_panel"
                     )
                 }
+                OptionsChoice::JumpTracksBack | OptionsChoice::JumpTracksForward => {
+                    unreachable!("covered by options_ten_song_rows_jump_like_the_keypad")
+                }
                 OptionsChoice::JumpTime | OptionsChoice::JumpFile => {
                     unreachable!("covered by options_jump_rows_open_their_panels_or_just_close")
                 }

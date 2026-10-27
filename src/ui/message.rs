@@ -425,6 +425,10 @@ pub(in crate::ui) enum OptionsChoice {
     Repeat,
     /// Reuses [`Message::ToggleShuffle`].
     Shuffle,
+    /// Reuses [`Message::JumpTracksBack`].
+    JumpTracksBack,
+    /// Reuses [`Message::JumpTracksForward`].
+    JumpTracksForward,
     /// Opens the Jump to time panel when a preview of known length is loaded.
     JumpTime,
     /// Opens the Jump to File panel while a song list is showing.
@@ -442,6 +446,8 @@ pub(in crate::ui) enum OptionsRow {
     StopAfterCurrent,
     Repeat,
     Shuffle,
+    JumpTracksBack,
+    JumpTracksForward,
     JumpTime,
     JumpFile,
     About,
@@ -449,7 +455,7 @@ pub(in crate::ui) enum OptionsRow {
 }
 
 impl OptionsRow {
-    pub(in crate::ui) const ALL: [Self; 12] = [
+    pub(in crate::ui) const ALL: [Self; 14] = [
         Self::AlwaysOnTop,
         Self::TimeDisplay,
         Self::Visualizer,
@@ -458,6 +464,8 @@ impl OptionsRow {
         Self::StopAfterCurrent,
         Self::Repeat,
         Self::Shuffle,
+        Self::JumpTracksBack,
+        Self::JumpTracksForward,
         Self::JumpTime,
         Self::JumpFile,
         Self::About,
@@ -474,6 +482,8 @@ impl OptionsRow {
             Self::StopAfterCurrent => Message::OptionsChoice(OptionsChoice::StopAfterCurrent),
             Self::Repeat => Message::OptionsChoice(OptionsChoice::Repeat),
             Self::Shuffle => Message::OptionsChoice(OptionsChoice::Shuffle),
+            Self::JumpTracksBack => Message::OptionsChoice(OptionsChoice::JumpTracksBack),
+            Self::JumpTracksForward => Message::OptionsChoice(OptionsChoice::JumpTracksForward),
             Self::JumpTime => Message::OptionsChoice(OptionsChoice::JumpTime),
             Self::JumpFile => Message::OptionsChoice(OptionsChoice::JumpFile),
             Self::About => Message::ToggleAbout,
@@ -500,6 +510,8 @@ mod options_tests {
                 Message::OptionsChoice(OptionsChoice::StopAfterCurrent),
                 Message::OptionsChoice(OptionsChoice::Repeat),
                 Message::OptionsChoice(OptionsChoice::Shuffle),
+                Message::OptionsChoice(OptionsChoice::JumpTracksBack),
+                Message::OptionsChoice(OptionsChoice::JumpTracksForward),
                 Message::OptionsChoice(OptionsChoice::JumpTime),
                 Message::OptionsChoice(OptionsChoice::JumpFile),
                 Message::ToggleAbout,

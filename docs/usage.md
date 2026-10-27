@@ -138,8 +138,8 @@ button, or a click on the backdrop outside the panel closes it, and opening it w
 rolled up restores the window first. The LCD's `O` letter, Alt+O, or the lightning button at the
 end of the transport row opens an `OPTIONS` menu over the player listing `Always on Top: On/Off`,
 `Time: Remaining/Elapsed`, `Visualizer: Shown/Hidden`, `Equalizer: Shown/Hidden`,
-`Library: Shown/Hidden`, `Stop after current: On/Off`, `Repeat: On/Off`, `Shuffle: On/Off`, `Jump to time`, `Jump to file`, `About Nostalgia`, and `Close`, with each label reflecting the current
-state. Choosing a row applies that one toggle and closes the menu; `Jump to time` and `Jump to file` open the Ctrl+J and J panels (doing nothing beyond closing
+`Library: Shown/Hidden`, `Stop after current: On/Off`, `Repeat: On/Off`, `Shuffle: On/Off`, `10 songs back`, `10 songs forward`, `Jump to time`, `Jump to file`, `About Nostalgia`, and `Close`, with each label reflecting the current
+state. Choosing a row applies that one toggle and closes the menu; `10 songs back` and `10 songs forward` jump ten songs back or forward exactly like keypad 1 and 3 (doing nothing beyond closing the menu with no song list showing); `Jump to time` and `Jump to file` open the Ctrl+J and J panels (doing nothing beyond closing
 the menu while that panel is unavailable); `About Nostalgia` opens the
 About panel, and `Close`, a click on the backdrop, or Escape closes the menu. Opening it while the
 window is rolled up restores the window first, and the menu is not saved. Alt+O also closes it

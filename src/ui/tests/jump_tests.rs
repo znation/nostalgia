@@ -72,15 +72,48 @@ fn jumps_in_all_songs_use_the_flat_list() {
     assert_track_selected(update(&mut player, Message::JumpTracksForward), 1, 12);
 }
 
+fn options_position(row: OptionsRow) -> usize {
+    OptionsRow::ALL
+        .iter()
+        .position(|r| std::mem::discriminant(r) == std::mem::discriminant(&row))
+        .expect("row is listed in OptionsRow::ALL")
+}
+
+// The ten-song rows run the keypad jumps, by mouse and by keyboard, and with
+// no song list they only close the menu.
+#[test]
+fn options_ten_song_rows_jump_like_the_keypad() {
+    for (row, expected) in [
+        (OptionsRow::JumpTracksBack, 5),
+        (OptionsRow::JumpTracksForward, 24),
+    ] {
+        for by_keyboard in [false, true] {
+            let (mut player, _state) = player_jumping_from("song-15");
+            player.options_visible = true;
+            let task = if by_keyboard {
+                player.options_selected = options_position(row);
+                update(&mut player, Message::OptionsActivate)
+            } else {
+                update(&mut player, row.message())
+            };
+            assert!(!player.options_visible, "menu must close ({row:?})");
+            assert_track_selected(task, 0, expected);
+
+            let (mut player, _state) = test_player();
+            player.options_visible = true;
+            let task = update(&mut player, row.message());
+            assert!(!player.options_visible, "menu must close empty ({row:?})");
+            assert_no_task(task);
+        }
+    }
+}
+
 // The Jump rows close the menu and open their panel when it is available, by
 // mouse and by keyboard; when it is not, they only close the menu.
 #[test]
 fn options_jump_rows_open_their_panels_or_just_close() {
     for (row, is_time) in [(OptionsRow::JumpTime, true), (OptionsRow::JumpFile, false)] {
-        let position = if is_time { 8 } else { 9 };
-        assert!(
-            matches!(OptionsRow::ALL[position], r if std::mem::discriminant(&r) == std::mem::discriminant(&row))
-        );
+        let position = options_position(row);
         for by_keyboard in [false, true] {
             for available in [true, false] {
                 let (mut player, _state) = test_player();
