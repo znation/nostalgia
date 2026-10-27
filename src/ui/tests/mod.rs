@@ -151,6 +151,13 @@ fn player_in_albums() -> WinampPlayer {
     player
 }
 
+/// Rolls `player` up into window-shade mode with its pre-shade size known, so
+/// a toggle message sent from the shaded window has a size to restore to.
+fn shade_with_known_size(player: &mut WinampPlayer) {
+    player.shaded = true;
+    player.unshaded_size = Some(iced::Size::new(800.0, 600.0));
+}
+
 /// A fresh player with a resolved window id — the precondition the title-bar
 /// action and window-shade tests need before driving a message, since
 /// [`test_player`] leaves `window_id` as `None`. The id is unique per call,

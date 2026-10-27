@@ -83,8 +83,7 @@ fn toggle_about_shows_and_hides_the_panel_without_touching_playback() {
 #[test]
 fn toggle_options_while_shaded_restores_the_window_first() {
     let (mut player, _state) = player_with_window_id();
-    player.shaded = true;
-    player.unshaded_size = Some(iced::Size::new(800.0, 600.0));
+    shade_with_known_size(&mut player);
 
     assert_message_schedules_work(&mut player, Message::ToggleOptions);
 
@@ -98,8 +97,7 @@ fn toggle_options_while_shaded_restores_the_window_first() {
 #[test]
 fn toggle_about_while_shaded_restores_the_window_first() {
     let (mut player, _state) = player_with_window_id();
-    player.shaded = true;
-    player.unshaded_size = Some(iced::Size::new(800.0, 600.0));
+    shade_with_known_size(&mut player);
 
     assert_message_schedules_work(&mut player, Message::ToggleAbout);
 
@@ -175,8 +173,7 @@ fn file_info_and_about_close_each_other() {
 fn toggle_file_info_while_shaded_restores_the_window_first() {
     let (mut player, state) = player_with_window_id();
     make_current_track_known(&mut player, &state);
-    player.shaded = true;
-    player.unshaded_size = Some(iced::Size::new(800.0, 600.0));
+    shade_with_known_size(&mut player);
 
     assert_message_schedules_work(&mut player, Message::ToggleFileInfo);
 

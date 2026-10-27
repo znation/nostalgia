@@ -104,8 +104,7 @@ fn jump_time_and_the_other_panels_close_each_other() {
 fn toggle_while_shaded_restores_the_window_first() {
     let (mut player, _state) = player_with_window_id();
     player.playback_duration = Some(Duration::from_secs(30));
-    player.shaded = true;
-    player.unshaded_size = Some(iced::Size::new(800.0, 600.0));
+    shade_with_known_size(&mut player);
 
     assert_message_schedules_work(&mut player, Message::ToggleJumpTime);
 

@@ -368,8 +368,7 @@ fn toggle_while_shaded_restores_the_window_first() {
     let (mut player, _state) = player_with_window_id();
     let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
     player.current_view = CurrentView::Songs;
-    player.shaded = true;
-    player.unshaded_size = Some(iced::Size::new(800.0, 600.0));
+    shade_with_known_size(&mut player);
 
     assert_message_schedules_work(&mut player, Message::ToggleJumpFile);
 
