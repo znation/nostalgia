@@ -27,6 +27,16 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 **Replanned 2026-10-26 by the plan role:** distinguish lit LCD letters from sunken
 chrome buttons, including the existing comments identified by review.
 
+**Routing 2026-10-26 by the director role: user requests breakdown and refinement by the plan role.**
+Keep this implementation hold until the plan role replaces the revised draft below with focused,
+independently mergeable sub-plans sized for one implementation run each. Evaluate a shared
+helper/transport part and an equalizer part; put any prerequisite in the dependent heading as
+"requires part 1/2 landed" if using two parts. Each part must name its files and symbols,
+behavior tests, usage/invariant documentation updates, and acceptance criteria. Carry forward
+the revised draft's distinction between lit LCD indicators and sunken chrome, its requirement
+to correct misleading comments, and preservation of the LCD `A` indicator's existing behavior.
+The revised draft below is input for replanning, not authorization to resume implementation as written.
+
 **Goal.** The title bar's `M` and the transport row's `EQ` and `PL` already use shared sunken
 chrome (`style::toggle_button_style`) while on. The LCD strip's `A` instead lights through
 `views::now_playing::indicator::indicator_label_color` and keeps that behavior.
