@@ -14,7 +14,8 @@
 //! (`next_track` and `previous_track`) stay so a real implementation has a
 //! surface to land on. Inside, `browse` holds the queries (over `rest` or the
 //! `sample` fallbacks), `playback` the transport transitions, output controls,
-//! and play path, `validation` the id and preview-URL guards, and `threads` the
+//! and play path, `validation` the id and preview-URL guards, `address` the
+//! host-address classification behind them, and `threads` the
 //! background sign-in and REST seams.
 //!
 //! The service also holds the authenticated `MusicKit` session
@@ -233,13 +234,14 @@ impl AppleMusicService {
 
 pub mod rest;
 
+mod address;
 mod browse;
 mod playback;
 mod sample;
 mod threads;
 mod validation;
 
-pub(crate) use validation::ip_is_internal;
+pub(crate) use address::ip_is_internal;
 
 #[cfg(test)]
 mod tests;

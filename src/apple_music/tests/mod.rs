@@ -1,8 +1,9 @@
+use super::address::{ip_is_internal, is_numeric_host_form};
 use super::playback::play::play_log_line;
 use super::threads::{
     off_thread, off_thread_with, spawn_sign_in_thread, start_sign_in_with, startup_token,
 };
-use super::validation::{IdKind, ensure_id_is_valid, is_numeric_host_form, preview_url_problem};
+use super::validation::{IdKind, ensure_id_is_valid, preview_url_problem};
 use super::*;
 use crate::audio::{AudioOutput, EqSnapshot};
 use crate::library::{Album, Artist, Playlist, Song};

@@ -2265,8 +2265,9 @@ IPv4 in bytes 4..8 and the complemented client IPv4 in bytes 12..16. It refuses 
 (`2001:db8::/32`) or benchmarking (`2001:2::/48`) addresses. Redirects are not followed, and a
 proxy cannot take over resolution.
 
-**Enforced by.** `preview_url_problem`, `is_numeric_host_form`, and `ip_is_internal` in
-`src/apple_music/validation.rs` (the last re-exported by `src/apple_music.rs`), applied at the
+**Enforced by.** `preview_url_problem` in `src/apple_music/validation.rs`, with `is_numeric_host_form` and
+`ip_is_internal` in `src/apple_music/address.rs` (`ip_is_internal` is re-exported by
+`src/apple_music.rs`), applied at the
 seam by `ensure_preview_url_is_valid`; `audio::preview::PublicAddressResolver` applies
 `ip_is_internal` to every resolved address before connecting, and `preview_agent` follows no
 redirects and disables the proxy.
