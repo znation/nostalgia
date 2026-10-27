@@ -235,21 +235,7 @@ fn toggle_library_panel_hides_and_restores_the_library_section() {
     let mut artist = sample_artist();
     artist.name = "Library Toggle Artist".to_string();
     player.artists.items = vec![artist];
-    let before = {
-        let state = state.blocking_lock();
-        (
-            state.transport_mode(),
-            state.current_track.clone(),
-            state.volume(),
-            state.balance(),
-            state.eq_enabled,
-            state.eq_preamp(),
-            state.eq_bands(),
-            state.eq_preset(),
-            state.repeat,
-            state.shuffle,
-        )
-    };
+    let before = playback_snapshot(&state);
     assert_eq!(player.current_view, CurrentView::Artists);
     assert!(player.library_panel_visible);
     let browse_target = Some(iced::advanced::widget::Id::new(BROWSE_LIST_ID));
@@ -313,21 +299,7 @@ fn toggle_library_panel_hides_and_restores_the_library_section() {
     assert_eq!(restored.find("Library Toggle Artist"), open_artist);
     assert_eq!(captured_root_view_volume_slider(&player), Some(open_footer));
 
-    let after = {
-        let state = state.blocking_lock();
-        (
-            state.transport_mode(),
-            state.current_track.clone(),
-            state.volume(),
-            state.balance(),
-            state.eq_enabled,
-            state.eq_preamp(),
-            state.eq_bands(),
-            state.eq_preset(),
-            state.repeat,
-            state.shuffle,
-        )
-    };
+    let after = playback_snapshot(&state);
     assert_eq!(
         after, before,
         "the library panel toggle must leave playback, volume, and equalizer state untouched"

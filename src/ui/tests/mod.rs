@@ -188,6 +188,58 @@ fn assert_browse_lists_empty(player: &WinampPlayer) {
     assert!(player.playlists.items.is_empty());
 }
 
+/// The playback, mixer, and equalizer state a presentation-only control must
+/// leave untouched, captured as one comparable value.
+type PlaybackSnapshot = (
+    TransportMode,
+    Option<String>,
+    f32,
+    f32,
+    bool,
+    f32,
+    [f32; BAND_COUNT],
+    Option<crate::equalizer::Preset>,
+    bool,
+    bool,
+);
+
+/// Captures the shared playback, mixer, and equalizer state so the panel
+/// toggle tests compare one field list instead of rebuilding the same tuple
+/// at every before-and-after site.
+fn playback_snapshot(state: &Arc<Mutex<AppState>>) -> PlaybackSnapshot {
+    let state = state.blocking_lock();
+    (
+        state.transport_mode(),
+        state.current_track.clone(),
+        state.volume(),
+        state.balance(),
+        state.eq_enabled,
+        state.eq_preamp(),
+        state.eq_bands(),
+        state.eq_preset(),
+        state.repeat,
+        state.shuffle,
+    )
+}
+
+/// The browse rows, selection, and search state a presentation-only control
+/// must leave untouched, captured as one comparable value.
+type BrowseSnapshot = (usize, usize, Option<usize>, Option<usize>, String, bool);
+
+/// Captures the browse and search state so the panel toggle tests compare one
+/// field list instead of rebuilding the same tuple at every before-and-after
+/// site.
+fn browse_snapshot(player: &WinampPlayer) -> BrowseSnapshot {
+    (
+        player.artists.items.len(),
+        player.songs.items.len(),
+        player.artists.selected(),
+        player.songs.selected(),
+        player.search_query.clone(),
+        player.search_active,
+    )
+}
+
 /// Asserts the player is showing `expected`. The tests pin the current
 /// view at each navigation step — `ArtistSelected`, `AlbumSelected`,
 /// `PlaylistSelected`, the flat-list `Show*` arms, and `Back` — and at

@@ -57,29 +57,8 @@ fn toggle_always_on_top_without_a_window_id_still_flips_the_flag() {
 fn toggle_about_shows_and_hides_the_panel_without_touching_playback() {
     let (mut player, state) = test_player();
     seed_browse_lists(&mut player);
-    let before = {
-        let state = state.blocking_lock();
-        (
-            state.transport_mode(),
-            state.current_track.clone(),
-            state.volume(),
-            state.balance(),
-            state.eq_enabled,
-            state.eq_preamp(),
-            state.eq_bands(),
-            state.eq_preset(),
-            state.repeat,
-            state.shuffle,
-        )
-    };
-    let browse_before = (
-        player.artists.items.len(),
-        player.songs.items.len(),
-        player.artists.selected(),
-        player.songs.selected(),
-        player.search_query.clone(),
-        player.search_active,
-    );
+    let before = playback_snapshot(&state);
+    let browse_before = browse_snapshot(&player);
     assert!(!player.about_visible);
 
     assert_message_schedules_no_work(&mut player, Message::ToggleAbout);
@@ -88,34 +67,13 @@ fn toggle_about_shows_and_hides_the_panel_without_touching_playback() {
     assert_message_schedules_no_work(&mut player, Message::ToggleAbout);
     assert!(!player.about_visible);
 
-    let after = {
-        let state = state.blocking_lock();
-        (
-            state.transport_mode(),
-            state.current_track.clone(),
-            state.volume(),
-            state.balance(),
-            state.eq_enabled,
-            state.eq_preamp(),
-            state.eq_bands(),
-            state.eq_preset(),
-            state.repeat,
-            state.shuffle,
-        )
-    };
+    let after = playback_snapshot(&state);
     assert_eq!(
         after, before,
         "the About toggle must leave playback, volume, and equalizer state untouched"
     );
     assert_eq!(
-        (
-            player.artists.items.len(),
-            player.songs.items.len(),
-            player.artists.selected(),
-            player.songs.selected(),
-            player.search_query.clone(),
-            player.search_active,
-        ),
+        browse_snapshot(&player),
         browse_before,
         "the About toggle must leave the browse and search state untouched"
     );
@@ -161,32 +119,7 @@ fn toggle_file_info_shows_and_hides_the_panel_without_touching_playback() {
     let (mut player, state) = test_player();
     seed_browse_lists(&mut player);
     make_current_track_known(&mut player, &state);
-    let playback = |state: &Arc<Mutex<AppState>>| {
-        let state = state.blocking_lock();
-        (
-            state.transport_mode(),
-            state.current_track.clone(),
-            state.volume(),
-            state.balance(),
-            state.eq_enabled,
-            state.eq_preamp(),
-            state.eq_bands(),
-            state.eq_preset(),
-            state.repeat,
-            state.shuffle,
-        )
-    };
-    let browse = |player: &WinampPlayer| {
-        (
-            player.artists.items.len(),
-            player.songs.items.len(),
-            player.artists.selected(),
-            player.songs.selected(),
-            player.search_query.clone(),
-            player.search_active,
-        )
-    };
-    let (playback_before, browse_before) = (playback(&state), browse(&player));
+    let (playback_before, browse_before) = (playback_snapshot(&state), browse_snapshot(&player));
     assert!(!player.file_info_visible);
 
     assert_message_schedules_no_work(&mut player, Message::ToggleFileInfo);
@@ -195,8 +128,8 @@ fn toggle_file_info_shows_and_hides_the_panel_without_touching_playback() {
     assert_message_schedules_no_work(&mut player, Message::ToggleFileInfo);
     assert!(!player.file_info_visible);
 
-    assert_eq!(playback(&state), playback_before);
-    assert_eq!(browse(&player), browse_before);
+    assert_eq!(playback_snapshot(&state), playback_before);
+    assert_eq!(browse_snapshot(&player), browse_before);
 }
 
 #[test]
