@@ -22,6 +22,10 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ### Sink the Repeat, Shuffle, EQ, and AUTO toggles while on, like Winamp (planned 2026-10-26 by the plan role)
 
+**Needs replan 2026-10-26 by feature: rejected after 4 review rounds (held 1)**
+
+> 1. (prior 1) The LCD strip's `A` contradiction is still present, now at `src/ui/style.rs:440`: the `toggle_button_style_sinks_while_on` test comment says "The A, EQ, and PL toggles all read as on by sinking the chrome", but `A` is drawn by `indicator_label_color` and lights rather than sinks, as the r…
+
 **Goal.** The app already draws every panel toggle that is on with the shared sunken chrome
 (`style::toggle_button_style`): the LCD strip's `A`, the title bar's `M`, and the transport row's
 `EQ` and `PL`. The four state toggles whose labels carry an `On`/`Off` value — the transport's
