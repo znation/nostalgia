@@ -98,6 +98,14 @@ impl HttpTransport for StubTransport {
     }
 }
 
+/// Asserts the stub saw exactly the requests to `expected_urls`, in order.
+/// The two-request browse loads (artists then albums, albums then songs)
+/// pin both endpoints this way; the session is not checked.
+pub(crate) fn assert_call_urls(stub: &StubTransport, expected_urls: &[&str]) {
+    let urls: Vec<String> = stub.calls().into_iter().map(|call| call.0).collect();
+    assert_eq!(urls, expected_urls);
+}
+
 /// Asserts the stub saw exactly one request, to `expected_url` with the
 /// [`rest_session`] the browse tests store. The `apple_music` service tests
 /// and the `apple_music::rest` client tests both need this same

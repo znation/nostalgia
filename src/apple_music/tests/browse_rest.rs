@@ -89,15 +89,12 @@ async fn get_favorite_artists_uses_the_rest_library_when_signed_in() {
     let artists = service.get_favorite_artists().await.unwrap();
 
     assert_eq!(artists, vec![sample_artist()]);
-    let calls = stub.calls();
-    assert_eq!(calls.len(), 2);
-    assert_eq!(
-        calls[0].0,
-        "https://api.music.apple.com/v1/me/library/artists"
-    );
-    assert_eq!(
-        calls[1].0,
-        "https://api.music.apple.com/v1/me/library/albums"
+    assert_call_urls(
+        &stub,
+        &[
+            "https://api.music.apple.com/v1/me/library/artists",
+            "https://api.music.apple.com/v1/me/library/albums",
+        ],
     );
 }
 
@@ -134,15 +131,12 @@ async fn get_favorite_artists_counts_albums_by_artist_name_from_the_rest_library
             },
         ]
     );
-    let calls = stub.calls();
-    assert_eq!(calls.len(), 2);
-    assert_eq!(
-        calls[0].0,
-        "https://api.music.apple.com/v1/me/library/artists"
-    );
-    assert_eq!(
-        calls[1].0,
-        "https://api.music.apple.com/v1/me/library/albums"
+    assert_call_urls(
+        &stub,
+        &[
+            "https://api.music.apple.com/v1/me/library/artists",
+            "https://api.music.apple.com/v1/me/library/albums",
+        ],
     );
 }
 
@@ -164,15 +158,12 @@ async fn get_favorite_artists_returns_no_artists_for_an_empty_signed_in_library(
         artists.is_empty(),
         "an empty signed-in library must not fall back to the sample artists: {artists:?}"
     );
-    let calls = stub.calls();
-    assert_eq!(calls.len(), 2);
-    assert_eq!(
-        calls[0].0,
-        "https://api.music.apple.com/v1/me/library/artists"
-    );
-    assert_eq!(
-        calls[1].0,
-        "https://api.music.apple.com/v1/me/library/albums"
+    assert_call_urls(
+        &stub,
+        &[
+            "https://api.music.apple.com/v1/me/library/artists",
+            "https://api.music.apple.com/v1/me/library/albums",
+        ],
     );
 }
 
@@ -226,15 +217,12 @@ async fn get_all_albums_returns_no_albums_for_an_empty_signed_in_library() {
         albums.is_empty(),
         "an empty signed-in library must not fall back to the sample albums: {albums:?}"
     );
-    let calls = stub.calls();
-    assert_eq!(calls.len(), 2);
-    assert_eq!(
-        calls[0].0,
-        "https://api.music.apple.com/v1/me/library/albums"
-    );
-    assert_eq!(
-        calls[1].0,
-        "https://api.music.apple.com/v1/me/library/songs"
+    assert_call_urls(
+        &stub,
+        &[
+            "https://api.music.apple.com/v1/me/library/albums",
+            "https://api.music.apple.com/v1/me/library/songs",
+        ],
     );
 }
 
@@ -258,15 +246,12 @@ async fn get_albums_by_artist_returns_no_albums_for_an_empty_signed_in_result() 
         albums.is_empty(),
         "an empty signed-in album result must not fall back to the sample albums: {albums:?}"
     );
-    let calls = stub.calls();
-    assert_eq!(calls.len(), 2);
-    assert_eq!(
-        calls[0].0,
-        "https://api.music.apple.com/v1/me/library/artists/artist-1/albums"
-    );
-    assert_eq!(
-        calls[1].0,
-        "https://api.music.apple.com/v1/me/library/songs"
+    assert_call_urls(
+        &stub,
+        &[
+            "https://api.music.apple.com/v1/me/library/artists/artist-1/albums",
+            "https://api.music.apple.com/v1/me/library/songs",
+        ],
     );
 }
 
@@ -330,15 +315,12 @@ async fn get_albums_by_artist_uses_the_rest_library_when_signed_in() {
             ..sample_album()
         }]
     );
-    let calls = stub.calls();
-    assert_eq!(calls.len(), 2);
-    assert_eq!(
-        calls[0].0,
-        "https://api.music.apple.com/v1/me/library/artists/artist-9/albums"
-    );
-    assert_eq!(
-        calls[1].0,
-        "https://api.music.apple.com/v1/me/library/songs"
+    assert_call_urls(
+        &stub,
+        &[
+            "https://api.music.apple.com/v1/me/library/artists/artist-9/albums",
+            "https://api.music.apple.com/v1/me/library/songs",
+        ],
     );
 }
 
@@ -395,15 +377,12 @@ async fn get_albums_by_artist_fails_when_the_album_durations_request_fails() {
     let error = service.get_albums_by_artist("artist-9").await.unwrap_err();
 
     assert_eq!(error.to_string(), "songs down");
-    let calls = stub.calls();
-    assert_eq!(calls.len(), 2);
-    assert_eq!(
-        calls[0].0,
-        "https://api.music.apple.com/v1/me/library/artists/artist-9/albums"
-    );
-    assert_eq!(
-        calls[1].0,
-        "https://api.music.apple.com/v1/me/library/songs"
+    assert_call_urls(
+        &stub,
+        &[
+            "https://api.music.apple.com/v1/me/library/artists/artist-9/albums",
+            "https://api.music.apple.com/v1/me/library/songs",
+        ],
     );
 }
 
@@ -570,15 +549,12 @@ async fn get_all_albums_uses_the_rest_library_when_signed_in() {
             duration_ms: 211_000,
         }]
     );
-    let calls = stub.calls();
-    assert_eq!(calls.len(), 2);
-    assert_eq!(
-        calls[0].0,
-        "https://api.music.apple.com/v1/me/library/albums"
-    );
-    assert_eq!(
-        calls[1].0,
-        "https://api.music.apple.com/v1/me/library/songs"
+    assert_call_urls(
+        &stub,
+        &[
+            "https://api.music.apple.com/v1/me/library/albums",
+            "https://api.music.apple.com/v1/me/library/songs",
+        ],
     );
 }
 

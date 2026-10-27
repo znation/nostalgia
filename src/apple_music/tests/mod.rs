@@ -11,8 +11,8 @@ use crate::sample_library::sample_library;
 use crate::state::TransportMode;
 use crate::test_support::{
     AudioCall, FailingAudio, FailingCommand, PREVIEW_URL, RecordingAudio, StubTransport,
-    assert_ids, assert_preview_calls, assert_single_call, record_call, rest_session, sample_album,
-    sample_artist, sample_song, sign_in_session,
+    assert_call_urls, assert_ids, assert_preview_calls, assert_single_call, record_call,
+    rest_session, sample_album, sample_artist, sample_song, sign_in_session,
 };
 use std::time::Duration;
 
