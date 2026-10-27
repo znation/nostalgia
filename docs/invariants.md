@@ -126,7 +126,7 @@ only while `search_active` is set, delegates to `handlers::browse::back`, which 
 active case identical to the Back button. `views::browse::view_clear_search_button` renders the
 button and `views::browse::view_search_row` places it after the search box; `view_search_row` is
 re-exported by `src/ui/views/mod.rs`, and the view tests import the button and box builders from
-`views::browse` directly. `src/ui/view.rs` builds that row where the bare search box used to sit.
+`views::browse` directly. `src/ui/view/library.rs` builds that row where the bare search box used to sit.
 
 **Pinned by.**
 
@@ -776,13 +776,13 @@ align the curve with it;
 placeholder, which `style::chrome_pick_list_style` in `src/ui/style.rs` draws in `theme::TEXT`. The browse
 and transport layout tests lay out the whole root `view` through the test-only
 `src/ui/layout_capture.rs` harness; the equalizer layout test lays out `view_equalizer` directly.
-`view` in `src/ui/view.rs` matches on `CurrentView` and passes each arm that level's buffer, caches,
+`view_library` in `src/ui/view/library.rs` matches on `CurrentView` and passes each arm that level's buffer, caches,
 and current-track id, and gates its Back, Retry, and flat-list buttons on `can_go_back`,
 `can_retry_artists`, and a `CurrentView::Artists` match. `views::view_title_band` and
 `views::title_bar::title_tape` in `src/ui/views/title_bar.rs` build the
 section bands and the app bar's tape/label row from `theme::TITLE_TAPE` and
-`theme::TITLE_TAPE_SHADOW`; `view` in `src/ui/view.rs` pushes the two bands into the normal-mode
-column only. The harness records each drawn text fragment's absolute bounds with iced's headless
+`theme::TITLE_TAPE_SHADOW`; `view_player_panels` in `src/ui/view/player_panels.rs` and `view_library` in
+`src/ui/view/library.rs` push their section bands into the normal-mode tree only. The harness records each drawn text fragment's absolute bounds with iced's headless
 tiny-skia renderer.
 
 **Pinned by.** `browse_nav_buttons_place_sort_beside_top`,
@@ -827,6 +827,8 @@ trace (2026-10-26). Its spans are eased between adjacent bands with a cubic smoo
 trace meets every band at a zero slope (2026-10-26). The transport row's combined Play/Pause
 glyph split into separate Play and Pause buttons that dispatch the explicit messages the X and C
 keys use, leaving the row playback-independent (2026-10-26).
+Split root assembly into branch modules, retaining the shared LCD/footer snapshot and the
+outer OptionsShortcut wrapper (2026-10-26 by the feature role).
 
 ## Settings persistence
 
@@ -1097,7 +1099,7 @@ each equalizer band are the others: a roll over one moves that slider instead (s
 **Enforced by.** `views::volume_wheel_message` and its `views::wheel_direction` sign mapping in
 `src/ui/views/mod.rs`, `Message::VolumeWheel` in `src/ui/message.rs`,
 `handlers::mixer::volume_wheel` in `src/ui/handlers/mixer.rs` (the zero/NaN no-op), and the two
-`MouseArea::on_scroll` wrappers in `src/ui/view.rs` (the normal and shaded trees), which the
+`MouseArea::on_scroll` wrappers in `src/ui/view/normal.rs` and `src/ui/view/shade.rs`, which the
 balance, preamp, and band wrappers nest inside.
 
 **Pinned by.** `volume_wheel_message_maps_a_vertical_roll_to_a_direction` and
@@ -1667,7 +1669,7 @@ measured once the window id resolves, and the first unshade restores it (2026-10
   `CARGO_PKG_VERSION`), `ABOUT NOSTALGIA`, the mockup tagline, the active library source from
   `views::about::library_source_label`, and a `Close` button. The label reads `Library: Apple
   Music` when the service has a stored session and `Library: Sample library` otherwise, and the
-  normal-mode branch of `ui::view::view` passes the current `AppleMusicService::session()` result
+  overlay assembly in `src/ui/view/overlay.rs` passes the current `AppleMusicService::session()` result
   on every rebuild, so a sign-in that lands while the panel is open updates it without a new
   message or stored UI state. `Close` and
   the full-window backdrop each publish one `Message::ToggleAbout`; a press on the panel's own
@@ -1676,9 +1678,9 @@ measured once the window id resolves, and the first unshade restores it (2026-10
 
 **Enforced by.** `views::title_bar::view_title_bar`, `views::about::view_about_overlay` and
 `views::about::library_source_label` (over
-`views::modal::modal_overlay`), the `AppleMusicService::session()` read in the normal-mode branch
-of `ui::view::view`, `Message::ToggleAbout`, `handlers::window::toggle_about`,
-`WinampPlayer::about_visible`, and that same normal-mode branch in `src/ui/view.rs`,
+`views::modal::modal_overlay`), the `AppleMusicService::session()` read in the overlay assembly
+in `src/ui/view/overlay.rs`, `Message::ToggleAbout`, `handlers::window::toggle_about`,
+`WinampPlayer::about_visible`, and the overlay selection in `src/ui/view/overlay.rs`,
 which wraps the base tree only while `about_visible && !shaded` holds.
 
 **Pinned by.** `title_bar_m_button_publishes_toggle_about`,
@@ -1730,7 +1732,7 @@ unpersisted options menu listing the app's existing on/off choices plus About an
   `handlers::playback::toggle_visualizer`, `handlers::window::toggle_equalizer_panel`, or
   `handlers::window::toggle_library_panel` and returns its task, so each row's non-menu behavior is
   exactly that toggle's.
-- The normal-mode branch of `ui::view::view` wraps the base tree only while `options_visible &&
+- The overlay assembly in `src/ui/view/overlay.rs` wraps the base tree only while `options_visible &&
   !shaded` holds and passes the current always-on-top, elapsed/remaining, visualizer, equalizer
   panel, and library panel state; the shade branch never draws it.
 - A plain or Shift-held Escape press also closes it (see `## Transient panel dismissal`).
@@ -1739,7 +1741,7 @@ unpersisted options menu listing the app's existing on/off choices plus About an
 and `Message::OptionsChoice`; `handlers::window::toggle_options` and
 `handlers::window::options_choice`; `WinampPlayer::options_visible`; the LCD strip's `O`
 mapping and the transport row's `options_button`; and the normal-mode branch of
-`src/ui/view.rs`. `OptionsRow::ALL` and `OptionsRow::message` share row order and messages;
+`src/ui/view/overlay.rs`. `OptionsRow::ALL` and `OptionsRow::message` share row order and messages;
 `options_row_label` and `options_row_style` draw them. `options_shortcut` and
 `message_for_options` map the keys; `options_selection_up`, `options_selection_down`, and
 `options_activate` handle navigation. The subscription chooses Jump to File first, then the
