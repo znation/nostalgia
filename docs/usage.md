@@ -225,7 +225,10 @@ is ignored), and a settings file
 that exists but cannot be
 read falls back to defaults with one line on stderr naming the file; the player then refuses to
 save for the rest of that run, printing a line that names the file each time, so the unread values
-are not overwritten with defaults. Repair or remove that file and restart to save settings again.
+are not overwritten with defaults. A path that is not a regular file (a FIFO or device, say) and a
+file larger than 1 MiB are treated as unreadable the same way, so a stray FIFO or device is not
+read; on Unix the open is nonblocking so a FIFO cannot wait for a writer. A larger file stops
+at the cap plus one detection byte instead of being loaded whole. Repair or remove that file and restart to save settings again.
 Each save replaces
 the file atomically; a symlinked settings file stays a link, with the write going to
 the file it points at and that file's mode kept. The always-on-top choice

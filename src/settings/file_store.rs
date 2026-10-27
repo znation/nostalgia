@@ -4,7 +4,7 @@
 
 use std::ffi::OsString;
 use std::fs::File;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -105,7 +105,7 @@ impl FileStore {
     /// [`save`]: SettingsWriter::save
     #[must_use]
     pub fn load(&self) -> Option<Settings> {
-        self.load_with(|path| std::fs::read(path))
+        self.load_with(read_settings_file)
     }
 
     /// [`Self::load`] with the byte reader injected, so a test can make the
@@ -130,6 +130,71 @@ impl FileStore {
             }
         }
     }
+}
+
+/// The largest settings file [`FileStore::load`] will read.
+///
+/// The file holds a fixed set of short lines, so a legitimate one is a few
+/// hundred bytes. A much larger file is not this app's settings: an
+/// accidentally overridden path, a corrupted file, or a file whose reported
+/// length is meaningless must not be read into memory on the startup thread.
+/// Oversized input is treated like an unreadable file, so the load falls back
+/// to defaults and later saves leave it alone.
+const MAX_SETTINGS_BYTES: u64 = 1024 * 1024;
+
+/// Reads the settings file without trusting its path or length.
+///
+/// `std::fs::read` opens whatever the path names: a FIFO or device can block
+/// the caller forever, and a huge file can exhaust memory. [`FileStore::load`]
+/// runs on the startup thread before the window opens, so either fault leaves
+/// the player unable to start. On Unix a nonblocking open prevents a FIFO
+/// from waiting for a writer, even if the path or its symlink changes. Metadata
+/// is checked on the opened handle before reading. The read bound also covers
+/// unreliable lengths (`/proc` files report zero).
+fn read_settings_file(path: &Path) -> io::Result<Vec<u8>> {
+    let mut options = File::options();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(rustix::fs::OFlags::NONBLOCK.bits() as i32);
+    }
+    let file = options.open(path)?;
+    let metadata = file.metadata()?;
+    if !metadata.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "the settings path is not a regular file",
+        ));
+    }
+    read_settings_bytes(file, metadata.len())
+}
+
+/// Check the reported length and bound the actual read independently of it.
+fn read_settings_bytes(reader: impl Read, reported_len: u64) -> io::Result<Vec<u8>> {
+    if reported_len > MAX_SETTINGS_BYTES {
+        return Err(oversized_settings_error());
+    }
+    let mut bytes = Vec::new();
+    reader
+        .take(MAX_SETTINGS_BYTES + 1)
+        .read_to_end(&mut bytes)?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_SETTINGS_BYTES {
+        return Err(oversized_settings_error());
+    }
+    Ok(bytes)
+}
+
+/// The error for a settings file larger than [`MAX_SETTINGS_BYTES`], naming
+/// the cap so the stderr line explains why the file was not read.
+fn oversized_settings_error() -> io::Error {
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        format!(
+            "the settings file is larger than {} KiB",
+            MAX_SETTINGS_BYTES / 1024
+        ),
+    )
 }
 
 /// The diagnostic for a settings file that exists but cannot be read, or
@@ -457,6 +522,117 @@ mod tests {
         );
 
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    // A settings path can be overridden to something that is not this app's
+    // settings. Reading it with no bound can block forever (a FIFO or device)
+    // or exhaust memory (a huge file) on the startup thread, so an oversized
+    // file is refused like an unreadable one: the load falls back to defaults
+    // and a later save leaves the file untouched.
+    #[test]
+    fn an_oversized_settings_file_is_refused_without_being_read_or_overwritten() {
+        let root = temporary_root("oversized");
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("settings.ini");
+        std::fs::File::create(&path)
+            .unwrap()
+            .set_len(MAX_SETTINGS_BYTES + 1)
+            .unwrap();
+        let store = FileStore::at(path.clone());
+
+        assert_eq!(store.load(), None);
+
+        store.save(&varied_settings());
+
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().len(),
+            MAX_SETTINGS_BYTES + 1,
+            "the refused save must leave the oversized file unchanged"
+        );
+
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn understated_settings_lengths_still_enforce_the_read_cap() {
+        for length in [MAX_SETTINGS_BYTES - 1, MAX_SETTINGS_BYTES] {
+            let mut reader = io::Cursor::new(vec![b'x'; length as usize]);
+            assert_eq!(
+                read_settings_bytes(&mut reader, 0).unwrap().len(),
+                length as usize
+            );
+            assert_eq!(reader.position(), length);
+        }
+
+        let mut reader = io::Cursor::new(vec![b'x'; (MAX_SETTINGS_BYTES + 100) as usize]);
+        assert_eq!(
+            read_settings_bytes(&mut reader, 0).unwrap_err().kind(),
+            io::ErrorKind::InvalidData
+        );
+        assert_eq!(reader.position(), MAX_SETTINGS_BYTES + 1);
+    }
+
+    // Exercise the open itself with no FIFO writer. A blocking open would
+    // hang, so run this case in a child with a deadline enforced by the parent.
+    #[cfg(unix)]
+    #[test]
+    fn a_fifo_settings_path_does_not_wait_for_a_writer() {
+        const CHILD: &str = "NOSTALGIA_FIFO_TEST_CHILD";
+        if let Some(path) = std::env::var_os(CHILD) {
+            assert_eq!(
+                read_settings_file(Path::new(&path)).unwrap_err().kind(),
+                io::ErrorKind::InvalidInput
+            );
+            return;
+        }
+        let root = temporary_root("fifo-open");
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("settings.ini");
+        rustix::fs::mkfifoat(
+            rustix::fs::CWD,
+            &path,
+            rustix::fs::Mode::RUSR | rustix::fs::Mode::WUSR,
+        )
+        .unwrap();
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "settings::file_store::tests::a_fifo_settings_path_does_not_wait_for_a_writer",
+            ])
+            .env(CHILD, &path)
+            .spawn()
+            .unwrap();
+        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+        let status = loop {
+            if let Some(status) = child.try_wait().unwrap() {
+                break Some(status);
+            }
+            if std::time::Instant::now() >= deadline {
+                child.kill().unwrap();
+                child.wait().unwrap();
+                break None;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        std::fs::remove_dir_all(&root).unwrap();
+        assert!(
+            status.is_some_and(|status| status.success()),
+            "FIFO open blocked or failed"
+        );
+    }
+
+    // Non-regular handles are refused before reading, even when the device
+    // would return an empty file.
+    #[cfg(unix)]
+    #[test]
+    fn a_non_regular_settings_path_is_treated_as_unreadable() {
+        let store = FileStore::at(PathBuf::from("/dev/null"));
+
+        assert_eq!(store.load(), None);
+
+        store.save(&varied_settings());
+
+        assert_eq!(store.load(), None);
     }
 
     // A missing file is the normal first run, not a failure: the first save must

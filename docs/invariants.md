@@ -847,7 +847,12 @@ falls back the same way and prints one stderr line naming the path (`read_failur
 unknown the store then refuses every later save for the rest of the run, printing one line per
 refusal that names the file and says to repair or remove it and restart, so a file the app could
 not read is never replaced by a snapshot built from defaults; a missing file records no failure,
-so a first run still creates the file. An unwritable file is logged
+so a first run still creates the file. A path that is not a regular file (a FIFO or device, say)
+and a regular file larger than 1 MiB are treated as unreadable too: the non-regular path is
+refused using metadata from the opened handle, with a nonblocking open on Unix so a FIFO
+cannot wait for a writer even when the path changes during load. The read is capped at 1 MiB
+plus one detection byte so an oversized file is not loaded whole. An
+unwritable file is logged
 rather than crashing the player. Each save stages the whole snapshot in
 a sibling temp file of the file it writes, flushes it to disk, gives the staged file the existing
 target's mode, and renames it over that target and then syncs its directory, so a failed,
@@ -902,7 +907,10 @@ handled by
 `window_level` once the id exists and, when the restored shade mode is still waiting for its
 launch size, batches in the `iced::window::size` query.
 `settings::file_store::FileStore`'s `SettingsWriter` impl creates the parent directory, stages the
-text with `write_atomically`, and logs a failed create or write. `FileStore::load` records a failed
+text with `write_atomically`, and logs a failed create or write. `FileStore::load` reads through
+`read_settings_file`, which opens nonblocking on Unix and checks the opened handle's metadata
+(refusing one that is not a regular file), then `read_settings_bytes` caps the read at
+`MAX_SETTINGS_BYTES` plus one detection byte. The store records a failed
 read in a flag shared across the store's clones (an `Arc<AtomicBool>`, so the `BackgroundWriter`'s
 clone sees it), and `save` checks it before creating a directory or a temp file and refuses with
 `unreadable_settings_save_report`.
@@ -934,7 +942,11 @@ arm those controls press.
 `the_sweep_follows_a_symlink_to_the_targets_directory` (`src/settings/file_store.rs`),
 `a_settings_file_that_could_not_be_read_is_not_overwritten`,
 `a_writer_clone_shares_the_failed_read_and_refuses_to_overwrite`,
-`a_missing_settings_file_still_allows_the_first_save`, and
+`a_missing_settings_file_still_allows_the_first_save`,
+`an_oversized_settings_file_is_refused_without_being_read_or_overwritten`,
+`a_non_regular_settings_path_is_treated_as_unreadable`, and
+`a_fifo_settings_path_does_not_wait_for_a_writer` (Unix),
+`understated_settings_lengths_still_enforce_the_read_cap`, and
 `unreadable_settings_save_report_names_the_file_and_the_recovery` (`src/settings/file_store.rs`),
 `a_burst_of_saves_collapses_to_the_latest_snapshot`,
 `dropping_the_writer_flushes_the_pending_snapshot`, and
@@ -976,7 +988,9 @@ launch size; the window's size and position remain unpersisted. On 2026-10-26 th
 AUTO choice joined the file as `eq_auto`, restoring the genre-matched preset behavior at launch.
 On 2026-10-26 a settings file that exists but cannot be read began refusing later saves for that
 run, because the app starts from defaults in that case and the first settings change would
-otherwise overwrite the still-intact file with those defaults.
+otherwise overwrite the still-intact file with those defaults. On 2026-10-26 the load also began
+refusing a path that is not a regular file and capping the file at 1 MiB, with a nonblocking
+open on Unix to avoid waiting for a FIFO writer and a read bound independent of reported length.
 
 ## Equalizer band tint
 
