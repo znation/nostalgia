@@ -59,10 +59,9 @@ keyboard and mouse bindings, the settings file, and how sign-in and playback wor
 --all-targets -- -D warnings`, a `cargo doc` build that fails on any rustdoc warning, and the test
 suite — and is the fastest way to see whether a change is merge-ready. The individual stages are
 available separately (`make fmt`, `make lint`, `make docs`, `make test`); `make test-one
-TEST=<name>` runs only the tests whose
-names contain `<name>`, for a fast loop while iterating on one behavior;
-`make fix` applies formatting and clippy's machine-applicable fixes in place,
-and `make run` is the same as `cargo run`.
+TEST=<name>` runs only the tests whose names contain `<name>`, for a fast loop while iterating on
+one behavior; `make fix` applies formatting and clippy's machine-applicable fixes in place, and
+`make run` is the same as `cargo run`.
 
 `docs/invariants.md` records each subsystem's guarantees, the code that enforces them, and the
 tests that pin them; update a section when a change alters its guarantee.

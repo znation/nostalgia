@@ -130,21 +130,19 @@ while leaving the typed query in the search box. The title bar's `M` button (or 
 a transient About panel naming the app, showing its `v`-prefixed package version, the line
 `The classic Winamp look, rebuilt in Rust — with Apple Music as the library.`, and the active
 library source (`Library: Apple Music` once a MusicKit session is stored, `Library: Sample
-library` otherwise); `M` (through the
-backdrop over its slot), `Ctrl+F1`, the panel's `Close` button, or a click on the backdrop outside
-the panel closes it, and opening it while the window is rolled up restores the window first. The
-LCD's `O` letter, Alt+O, or the lightning button at the end of the transport row opens an `OPTIONS` menu
-over the player listing `Always on Top: On/Off`, `Time: Remaining/Elapsed`, `Visualizer:
-Shown/Hidden`, `Equalizer: Shown/Hidden`, `Library: Shown/Hidden`, `About Nostalgia`, and `Close`,
-with each label reflecting the current state. Choosing a row applies that one toggle and closes
-the menu; `About Nostalgia` opens the About panel, and `Close`, a click on the backdrop, or Escape
-closes the menu. Opening it while the window is rolled up restores the window first, and the menu
-is not saved. Alt+O also closes it and works while the search box has focus,
-without changing the query.
-Opening highlights the first row; Up and Down move the
-highlight, stopping at either end, and Enter invokes the highlighted row even if the covered
-search box has focus, without submitting a search. Mouse clicks keep
-the same behavior. A
+library` otherwise); `M` (through the backdrop over its slot), `Ctrl+F1`, the panel's `Close`
+button, or a click on the backdrop outside the panel closes it, and opening it while the window is
+rolled up restores the window first. The LCD's `O` letter, Alt+O, or the lightning button at the
+end of the transport row opens an `OPTIONS` menu over the player listing `Always on Top: On/Off`,
+`Time: Remaining/Elapsed`, `Visualizer: Shown/Hidden`, `Equalizer: Shown/Hidden`,
+`Library: Shown/Hidden`, `About Nostalgia`, and `Close`, with each label reflecting the current
+state. Choosing a row applies that one toggle and closes the menu; `About Nostalgia` opens the
+About panel, and `Close`, a click on the backdrop, or Escape closes the menu. Opening it while the
+window is rolled up restores the window first, and the menu is not saved. Alt+O also closes it
+and works while the search box has focus, without changing the query. Opening highlights the
+first row; Up and Down move the highlight, stopping at either end, and Enter invokes the
+highlighted row even if the covered search box has focus, without submitting a search. Mouse
+clicks keep the same behavior. A
 plain or Shift-held Escape press closes whichever transient panel is open, like its `Close`
 button or the backdrop; with no panel open Escape keeps its existing behavior. Its
 shade button, a double-click on the bar, or a double-click on the rolled-up strip rolls the window
@@ -215,22 +213,20 @@ beginning. When a loaded preview reaches its end while playing, the player steps
 showing list: to the next song, to the first song with Repeat on at the end, or, with Shuffle on, to
 a shuffled song when another exists. With Repeat off on the last song it stops instead and keeps
 that song queued for Play. The volume, balance, Repeat and Shuffle flags, the equalizer's on/off
-state, AUTO choice, curve, and preset, the elapsed/remaining readout choice, the visualizer's shown/hidden
-choice, the equalizer and library panels' shown/hidden choices, the always-on-top choice, and the
-window-shade mode are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or `$HOME/.config/nostalgia/settings.ini`)
-and restored at the next launch; `NOSTALGIA_SETTINGS_PATH`
-overrides the path. A missing or malformed entry falls back to its default (a `NaN` number
-counts as malformed; a byte that is not UTF-8 spoils only its own line, and a leading UTF-8 BOM
-is ignored), and a settings file
-that exists but cannot be
-read falls back to defaults with one line on stderr naming the file; the player then refuses to
-save for the rest of that run, printing a line that names the file each time, so the unread values
-are not overwritten with defaults. A path that is not a regular file (a FIFO or device, say) and a
-file larger than 1 MiB are treated as unreadable the same way, so a stray FIFO or device is not
-read; on Unix the open is nonblocking so a FIFO cannot wait for a writer. A larger file stops
-at the cap plus one detection byte instead of being loaded whole. Repair or remove that file and restart to save settings again.
-Each save replaces
-the file atomically; a symlinked settings file stays a link, with the write going to
+state, AUTO choice, curve, and preset, the elapsed/remaining readout choice, the visualizer's
+shown/hidden choice, the equalizer and library panels' shown/hidden choices, the always-on-top
+choice, and the window-shade mode are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or
+`$HOME/.config/nostalgia/settings.ini`) and restored at the next launch; `NOSTALGIA_SETTINGS_PATH`
+overrides the path. A missing or malformed entry falls back to its default (a `NaN` number counts
+as malformed; a byte that is not UTF-8 spoils only its own line, and a leading UTF-8 BOM is
+ignored), and a settings file that exists but cannot be read falls back to defaults with one line
+on stderr naming the file; the player then refuses to save for the rest of that run, printing a
+line that names the file each time, so the unread values are not overwritten with defaults. A path
+that is not a regular file (a FIFO or device, say) and a file larger than 1 MiB are treated as
+unreadable the same way, so a stray FIFO or device is not read; on Unix the open is nonblocking so
+a FIFO cannot wait for a writer. A larger file stops at the cap plus one detection byte instead of
+being loaded whole. Repair or remove that file and restart to save settings again. Each save
+replaces the file atomically; a symlinked settings file stays a link, with the write going to
 the file it points at and that file's mode kept. The always-on-top choice
 (the LCD strip's `A` or the `A` key) is remembered for the next launch, and a saved-on launch starts
 with the window pinned once boot resolves its window id. The shade mode (the title bar's shade
