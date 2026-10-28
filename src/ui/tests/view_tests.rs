@@ -262,6 +262,7 @@ fn file_info_panel_draws_each_metadata_line_only_when_the_track_has_it() {
         "Track #:",
         "Disc #:",
         "Composer:",
+        "Rating:",
     ] {
         assert!(
             texts.iter().all(|text| !text.starts_with(label)),
@@ -277,6 +278,7 @@ fn file_info_panel_draws_each_metadata_line_only_when_the_track_has_it() {
     track.track_number = Some(4);
     track.disc_number = Some(2);
     track.composer = "Writer".to_string();
+    track.content_rating = Some(crate::library::ContentRating::Explicit);
     let full = captured_root_view_text_bounds(&player);
     let texts: Vec<&str> = full.texts().collect();
     for line in [
@@ -287,9 +289,18 @@ fn file_info_panel_draws_each_metadata_line_only_when_the_track_has_it() {
         "Track #: 4",
         "Disc #: 2",
         "Composer: Writer",
+        "Rating: Explicit",
     ] {
         assert!(texts.contains(&line), "missing {line:?}: {texts:?}");
     }
+
+    let track = player.known_tracks.get_mut("song-1").unwrap();
+    track.content_rating = Some(crate::library::ContentRating::Clean);
+    let clean = captured_root_view_text_bounds(&player);
+    assert!(
+        clean.texts().any(|text| text == "Rating: Clean"),
+        "a Clean track must draw Rating: Clean"
+    );
 }
 
 #[test]
