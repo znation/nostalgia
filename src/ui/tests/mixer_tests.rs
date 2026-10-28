@@ -1,5 +1,11 @@
 use super::*;
 
+/// Asserts the shared state holds `preset`'s preamp and band gains.
+fn assert_curve_applied(state: &AppState, preset: crate::equalizer::Preset) {
+    assert_eq!(state.eq_preamp(), preset.preamp);
+    assert_eq!(state.eq_bands(), preset.bands);
+}
+
 #[test]
 fn toggle_equalizer_flips_shared_state() {
     assert_toggles_shared_state(Message::ToggleEqualizer, |state| state.eq_enabled);
@@ -19,8 +25,7 @@ fn toggle_eq_auto_flips_only_the_auto_flag() {
         assert!(state.eq_auto);
         assert!(!state.eq_enabled);
         assert_eq!(state.eq_preset(), Some(preset));
-        assert_eq!(state.eq_preamp(), preset.preamp);
-        assert_eq!(state.eq_bands(), preset.bands);
+        assert_curve_applied(&state, preset);
     }
 
     assert_message_schedules_no_work(&mut player, Message::ToggleEqAuto);
@@ -57,8 +62,7 @@ fn auto_on_applies_a_genre_matched_preset_on_track_selection() {
     {
         let state = state.blocking_lock();
         assert_eq!(state.eq_preset(), Some(rock));
-        assert_eq!(state.eq_preamp(), rock.preamp);
-        assert_eq!(state.eq_bands(), rock.bands);
+        assert_curve_applied(&state, rock);
     }
     let calls = recording.calls();
     assert_eq!(
@@ -128,8 +132,7 @@ fn eq_preset_selected_applies_the_curve_and_selection() {
     let _ = update(&mut player, Message::EqPresetSelected(preset));
 
     let state = state.blocking_lock();
-    assert_eq!(state.eq_preamp(), preset.preamp);
-    assert_eq!(state.eq_bands(), preset.bands);
+    assert_curve_applied(&state, preset);
     assert_eq!(state.eq_preset(), Some(preset));
 }
 
