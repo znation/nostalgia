@@ -600,6 +600,21 @@ fn next_track_in_all_songs_steps_the_flat_list() {
     assert_track_selected(task, 1, 1);
 }
 
+/// Drives a natural preview end, asserts it schedules a selection of `index`
+/// at `epoch`, and plays that selection to completion.
+fn advance_on_preview_end(player: &mut WinampPlayer, epoch: u64, index: usize) {
+    let selected = drive_playback_finished(player);
+    assert!(
+        matches!(
+            selected,
+            Message::TrackSelected { epoch: e, index: i } if e == epoch && i == index
+        ),
+        "preview end must select index {index} at epoch {epoch}"
+    );
+    let task = update(player, selected);
+    futures::executor::block_on(drive_task(task, "preview end play", |_| {}));
+}
+
 // A preview that ends while playing must step forward exactly as Next would:
 // from song-1, the showing list's next song is song-2. The scheduled selection
 // resolves against the same list, and its play commits the new current track.
@@ -608,13 +623,7 @@ fn preview_end_advances_to_the_next_song() {
     let recording = Arc::new(RecordingAudio::default());
     let (mut player, state) = player_playing_stepping_song(&recording, "song-1");
 
-    let selected = drive_playback_finished(&mut player);
-    assert!(matches!(
-        selected,
-        Message::TrackSelected { epoch: 0, index: 1 }
-    ));
-    let task = update(&mut player, selected);
-    futures::executor::block_on(drive_task(task, "preview end play", |_| {}));
+    advance_on_preview_end(&mut player, 0, 1);
 
     let state = state.blocking_lock();
     assert_eq!(state.current_track.as_deref(), Some("song-2"));
@@ -634,13 +643,7 @@ fn preview_end_in_all_songs_steps_the_flat_list() {
     player.current_view = CurrentView::AllSongs;
     let all_songs_epoch = player.all_songs.epoch;
 
-    let selected = drive_playback_finished(&mut player);
-    assert!(matches!(
-        selected,
-        Message::TrackSelected { epoch, index } if epoch == all_songs_epoch && index == 1
-    ));
-    let task = update(&mut player, selected);
-    futures::executor::block_on(drive_task(task, "preview end play", |_| {}));
+    advance_on_preview_end(&mut player, all_songs_epoch, 1);
 
     let state = state.blocking_lock();
     assert_eq!(state.current_track.as_deref(), Some("song-2"));
@@ -707,13 +710,7 @@ fn preview_end_wraps_to_the_first_song_with_repeat_on() {
     let (mut player, state) = player_playing_stepping_song(&recording, "song-3");
     state.blocking_lock().repeat = true;
 
-    let selected = drive_playback_finished(&mut player);
-    assert!(matches!(
-        selected,
-        Message::TrackSelected { epoch: 0, index: 0 }
-    ));
-    let task = update(&mut player, selected);
-    futures::executor::block_on(drive_task(task, "preview end play", |_| {}));
+    advance_on_preview_end(&mut player, 0, 0);
 
     assert_eq!(
         state.blocking_lock().current_track.as_deref(),
@@ -731,13 +728,7 @@ fn preview_end_repeats_a_single_song_with_repeat_on() {
     player.songs.items.truncate(1);
     state.blocking_lock().repeat = true;
 
-    let selected = drive_playback_finished(&mut player);
-    assert!(matches!(
-        selected,
-        Message::TrackSelected { epoch: 0, index: 0 }
-    ));
-    let task = update(&mut player, selected);
-    futures::executor::block_on(drive_task(task, "preview end play", |_| {}));
+    advance_on_preview_end(&mut player, 0, 0);
 
     let state = state.blocking_lock();
     assert_eq!(state.current_track.as_deref(), Some("song-1"));
@@ -785,13 +776,7 @@ fn preview_end_with_shuffle_on_picks_the_other_song() {
     player.songs.items.truncate(2);
     state.blocking_lock().shuffle = true;
 
-    let selected = drive_playback_finished(&mut player);
-    assert!(matches!(
-        selected,
-        Message::TrackSelected { epoch: 0, index: 1 }
-    ));
-    let task = update(&mut player, selected);
-    futures::executor::block_on(drive_task(task, "preview end play", |_| {}));
+    advance_on_preview_end(&mut player, 0, 1);
 
     assert_eq!(
         state.blocking_lock().current_track.as_deref(),
