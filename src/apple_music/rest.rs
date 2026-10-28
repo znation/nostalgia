@@ -178,6 +178,33 @@ impl RestLibrary {
         self.fetch(&url, session, |resource| resource.into_album(""))
     }
 
+    /// The signed-in user's recently added library albums, newest first as Apple orders them.
+    ///
+    /// The `recently-added` endpoint mixes resource types, so only resources typed
+    /// `library-albums` are mapped (with [`Resource::into_album`], leaving the artist id empty as
+    /// [`RestLibrary::get_all_albums`] does); library playlists, catalog albums, stations and
+    /// untyped resources are dropped. No `limit` is sent, because the endpoint's page size
+    /// differs from the other collections'; later pages are followed through `next`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the request fails, the response is
+    /// not valid JSON, or a library album carries a blank id or no name.
+    pub fn get_recently_added_albums(
+        &self,
+        session: &MusicKitSession,
+    ) -> Result<Vec<Album>, AppleMusicError> {
+        let url = format!("{API_BASE}/me/library/recently-added");
+        let albums = self.fetch(&url, session, |resource| {
+            if resource.is_library_album() {
+                resource.into_album("").map(Some)
+            } else {
+                Ok(None)
+            }
+        })?;
+        Ok(albums.into_iter().flatten().collect())
+    }
+
     /// Every playlist in the signed-in user's library, in library order.
     ///
     /// The whole library is read through the same paginated collection

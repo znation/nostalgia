@@ -38,6 +38,14 @@ pub(super) fn sample_all_albums() -> Vec<Album> {
     sample_albums_in_library_order().cloned().collect()
 }
 
+/// Every sample-library album, last first. The sample library carries no added dates, so the
+/// reversed library order stands in for newest first.
+pub(super) fn sample_recently_added_albums() -> Vec<Album> {
+    let mut albums = sample_all_albums();
+    albums.reverse();
+    albums
+}
+
 /// Every sample-library playlist, in library order.
 pub(super) fn sample_all_playlists() -> Vec<Playlist> {
     sample_library().playlists.clone()

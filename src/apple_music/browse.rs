@@ -4,7 +4,8 @@ use std::sync::Arc;
 
 use super::rest;
 use super::sample::{
-    lookup, sample_all_albums, sample_all_playlists, sample_all_songs, sample_songs_matching,
+    lookup, sample_all_albums, sample_all_playlists, sample_all_songs,
+    sample_recently_added_albums, sample_songs_matching,
 };
 use super::threads::off_thread;
 use super::validation::{IdKind, ensure_id_is_valid};
@@ -208,6 +209,30 @@ impl AppleMusicService {
                 with_album_durations(rest, session, albums)
             },
             sample_all_albums,
+        )
+        .await
+    }
+
+    /// The library's recently added albums, newest first: the signed-in user's
+    /// `recently-added` library albums when a session is stored, and the
+    /// sample library's albums in reverse order otherwise.
+    ///
+    /// Like [`AppleMusicService::get_all_albums`], a signed-in load also reads the
+    /// whole-library songs collection (one extra paginated request) to fill each
+    /// album's [`Album::duration_ms`]; a failed songs request fails the whole load
+    /// through the existing Retry path.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when either signed-in request fails; with
+    /// no session the sample-library lookup never fails.
+    pub async fn get_recently_added_albums(&self) -> Result<Vec<Album>, AppleMusicError> {
+        self.browse(
+            |rest, session| {
+                let albums = rest.get_recently_added_albums(session)?;
+                with_album_durations(rest, session, albums)
+            },
+            sample_recently_added_albums,
         )
         .await
     }

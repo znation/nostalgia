@@ -158,6 +158,10 @@ pub(super) fn api_error_cause(body: &str) -> Option<String> {
 pub(super) struct Resource {
     /// The resource's stable identifier.
     id: String,
+    /// Apple's resource type (`library-albums`, `library-playlists`, …); absent when the API
+    /// omits it.
+    #[serde(rename = "type")]
+    kind: Option<String>,
     /// The resource's attributes; absent when the API omits them.
     attributes: Option<Attributes>,
 }

@@ -778,3 +778,53 @@ async fn a_signed_in_service_rejects_bad_input_without_sending_a_request() {
 
     assert!(stub.calls().is_empty(), "calls: {:?}", stub.calls());
 }
+
+// Recently Added reads the `recently-added` endpoint, then the songs collection for running
+// times, like All Albums.
+#[tokio::test]
+async fn get_recently_added_albums_uses_the_rest_library_when_signed_in() {
+    let stub = StubTransport::returning_bodies(&[
+        r#"{"data":[{"id":"rest-album","type":"library-albums","attributes":{"name":"Remote Record","artistName":"The Sample Band"}}]}"#,
+        r#"{"data":[
+            {"id":"song-1","attributes":{"name":"Opening","artistName":"The Sample Band","albumName":"Remote Record","durationInMillis":210000}},
+            {"id":"song-2","attributes":{"name":"Middle","artistName":"The Sample Band","albumName":"Remote Record","durationInMillis":1000}}
+        ]}"#,
+    ]);
+    let service = signed_in_service(&stub);
+
+    let albums = service.get_recently_added_albums().await.unwrap();
+
+    assert_eq!(
+        albums,
+        vec![Album {
+            id: "rest-album".to_string(),
+            title: "Remote Record".to_string(),
+            artist_id: String::new(),
+            artist: "The Sample Band".to_string(),
+            duration_ms: 211_000,
+        }]
+    );
+    assert_call_urls(
+        &stub,
+        &[
+            "https://api.music.apple.com/v1/me/library/recently-added",
+            "https://api.music.apple.com/v1/me/library/songs",
+        ],
+    );
+}
+
+#[tokio::test]
+async fn get_recently_added_albums_fails_when_the_album_durations_request_fails() {
+    let stub = StubTransport::returning_results(&[
+        Ok(
+            r#"{"data":[{"id":"rest-album","type":"library-albums","attributes":{"name":"Remote Record"}}]}"#
+                .to_string(),
+        ),
+        Err(AppleMusicError::new("songs down")),
+    ]);
+    let service = signed_in_service(&stub);
+
+    let error = service.get_recently_added_albums().await.unwrap_err();
+
+    assert_eq!(error.to_string(), "songs down");
+}

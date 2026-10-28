@@ -20,61 +20,6 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-### Read the library's recently added albums through the service seam (Recently Added, part 1/2: planned 2026-10-27 by the plan role)
-
-**Goal.** Apple Music's own app opens on a Recently Added shelf, but Nostalgia has no way to
-read it: `AppleMusicService` offers artists, all albums, all songs, playlists, and search only.
-This part adds the data path, `AppleMusicService::get_recently_added_albums`, over Apple's
-`GET /v1/me/library/recently-added` with a sample-library fallback, so part 2/2 ("Show a Recently
-Added list on the Artists view") can show it. No UI changes here.
-
-**Approach.**
-- `src/apple_music/rest/wire.rs`: give `Resource` an optional resource type,
-  `#[serde(rename = "type")] kind: Option<String>`, documented as Apple's resource type
-  (`library-albums`, `library-playlists`, …). Update every `let Resource { id, attributes } = self;`
-  destructure in `src/apple_music/rest/wire/mapping.rs` to ignore it (`..`).
-- `src/apple_music/rest.rs`: add `RestLibrary::get_recently_added_albums(&self, session)`
-  requesting `{API_BASE}/me/library/recently-added` with no query string (the endpoint's page size
-  is smaller than the 100-item collections, so pass no `limit`, which could be out of contract;
-  `fetch` follows `next` up to `MAX_PAGES` and returns the rows read when it stops). The endpoint
-  mixes resource types, so map with a closure returning `Result<Option<Album>, _>`: a resource whose
-  `kind` is exactly `Some("library-albums")` maps through `Resource::into_album("")` (like
-  `get_all_albums`, the collection carries no artist id); any other or missing kind (library
-  playlists, catalog `albums` whose ids `get_songs_from_album`'s library-albums tracks request
-  cannot open, stations) yields `None`. Flatten the `None`s out. A nameless library album still
-  fails the whole query through `into_album`, as in `get_all_albums`. Keep Apple's order (newest
-  first). Add an accessor on `Resource` in `wire/mapping.rs` (`is_library_album(&self) -> bool`)
-  rather than making the field public.
-- `src/apple_music/sample.rs`: add `sample_recently_added_albums()` returning
-  `sample_all_albums()` reversed. The sample library carries no added dates, so its doc comment
-  states that the reversed library order stands in for newest first.
-- `src/apple_music/browse.rs`: add `AppleMusicService::get_recently_added_albums` beside
-  `get_all_albums`, through `self.browse`: signed in, it reads `rest.get_recently_added_albums`
-  and fills running times with `with_album_durations` (same as `get_all_albums`); signed out, it
-  returns `sample_recently_added_albums`. Its doc comment follows `get_all_albums`'s, errors
-  section included.
-
-**Files touched.** `src/apple_music/rest/wire.rs`, `src/apple_music/rest/wire/mapping.rs`,
-`src/apple_music/rest.rs`, `src/apple_music/sample.rs`, `src/apple_music/browse.rs`, a new test
-file `src/apple_music/rest/tests/recently_added.rs` (registered in
-`src/apple_music/rest/tests/mod.rs`; `library.rs` there already runs past 1000 lines), and
-`src/apple_music/tests/browse_rest.rs` / `browse_sample.rs`.
-
-**Acceptance criteria.**
-- REST tests (new file, using `StubTransport`, `library_over`, `rest_session`,
-  `assert_single_call`, `assert_follows_next_page`, `transport_error_over` as `library.rs` does):
-  a response mixing a `library-albums`, a `library-playlists`, and a catalog `albums` resource
-  maps to only the library album, with `artist_id` empty and the artist name read, and the single
-  call goes to `https://api.music.apple.com/v1/me/library/recently-added`; a resource with no
-  `type` is dropped; the order of two library albums is kept; a `next` page is followed; a
-  transport error is reported bare; a nameless `library-albums` resource fails the query.
-- Service tests: signed out, `get_recently_added_albums` returns `sample_all_albums()` reversed;
-  signed in, it returns the REST albums with durations filled from the whole-library songs (mirror
-  `get_all_albums_uses_the_rest_library_when_signed_in`), and a failed durations request fails it
-  (mirror `get_all_albums_fails_when_the_album_durations_request_fails`).
-- Every existing REST and browse test passes unchanged. No `docs/usage.md` change (nothing the
-  player shows changes). `make check` passes.
-
 ### Show a Recently Added list on the Artists view (Recently Added, part 2/2: planned 2026-10-27 by the plan role, requires part 1/2 landed)
 
 **Goal.** Add a `Recently Added` button beside `All Songs`, `All Albums`, and `Playlists` on the

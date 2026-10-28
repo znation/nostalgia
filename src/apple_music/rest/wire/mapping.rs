@@ -11,13 +11,19 @@ use super::Resource;
 use crate::library::{Album, Artist, Playlist, Song};
 
 impl Resource {
+    /// Whether Apple typed this resource `library-albums`, the only type
+    /// [`Resource::into_album`] maps in a mixed-type collection.
+    pub(in crate::apple_music::rest) fn is_library_album(&self) -> bool {
+        self.kind.as_deref() == Some("library-albums")
+    }
+
     /// Maps this resource to an [`Artist`], moving its id and name into the
     /// model instead of cloning them out of the parsed response.
     ///
     /// The id and name are required (see [`required_id`] and [`required_name`]): a blank id can
     /// name nothing, and a nameless resource would render as an empty row.
     pub(in crate::apple_music::rest) fn into_artist(self) -> Result<Artist, AppleMusicError> {
-        let Resource { id, attributes } = self;
+        let Resource { id, attributes, .. } = self;
         let id = required_id(id, "artist")?;
         let name = required_name(
             attributes.and_then(|attributes| attributes.name),
@@ -44,7 +50,7 @@ impl Resource {
         self,
         artist_id: &str,
     ) -> Result<Album, AppleMusicError> {
-        let Resource { id, attributes } = self;
+        let Resource { id, attributes, .. } = self;
         let id = required_id(id, "album")?;
         let (title, artist_name) = match attributes {
             Some(attributes) => (attributes.name, attributes.artist_name),
@@ -88,7 +94,7 @@ impl Resource {
     /// A playlist's id and name are required, like an artist's: a blank id
     /// can name nothing and a nameless playlist would render as an empty row.
     pub(in crate::apple_music::rest) fn into_playlist(self) -> Result<Playlist, AppleMusicError> {
-        let Resource { id, attributes } = self;
+        let Resource { id, attributes, .. } = self;
         let id = required_id(id, "playlist")?;
         let name = required_name(
             attributes.and_then(|attributes| attributes.name),
@@ -116,7 +122,7 @@ impl Resource {
         self,
         album_id: &str,
     ) -> Result<Song, AppleMusicError> {
-        let Resource { id, attributes } = self;
+        let Resource { id, attributes, .. } = self;
         let id = required_id(id, "song")?;
         let (title, artist, album, genre_names, release_date, track_number, duration_ms, previews) =
             match attributes {

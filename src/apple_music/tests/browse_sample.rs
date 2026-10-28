@@ -330,3 +330,15 @@ async fn search_songs_rejects_a_blank_query() {
         );
     }
 }
+
+// With no added dates in the sample library, Recently Added is the library order reversed.
+#[tokio::test]
+async fn get_recently_added_albums_returns_the_sample_albums_reversed() {
+    let service = test_service();
+    let mut expected = service.get_all_albums().await.unwrap();
+    expected.reverse();
+
+    let albums = service.get_recently_added_albums().await.unwrap();
+
+    assert_eq!(albums, expected);
+}
