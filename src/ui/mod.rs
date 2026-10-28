@@ -29,7 +29,6 @@ mod shortcuts;
 mod style;
 mod subscriptions;
 mod theme;
-mod ticks;
 mod transport;
 mod view;
 mod views;

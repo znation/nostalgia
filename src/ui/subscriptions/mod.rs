@@ -4,7 +4,7 @@
 //! mixer listeners, the Escape listener while a transient panel is open, and the marquee,
 //! playback-position, and spectrum timers while each has something to refresh. Each timer lives in
 //! its own module — [`marquee`], [`position`], and [`spectrum`] — fed from the shared std-thread
-//! tick source in [`super::ticks`], because iced's timed subscription is gated behind backend
+//! tick source in [`ticks`], because iced's timed subscription is gated behind backend
 //! features the app does not enable; each only schedules the actual backend query from its `update`
 //! arm, so the UI thread never waits on the audio backend. The event filters that turn iced events
 //! into messages live in [`listeners`].
@@ -13,6 +13,7 @@ mod listeners;
 mod marquee;
 mod position;
 mod spectrum;
+mod ticks;
 
 use super::{
     Message,

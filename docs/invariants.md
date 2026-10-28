@@ -1441,7 +1441,7 @@ reaches it through `AudioOutput::duration`. `reset_position_readout` clears the 
 drag on Stop and a new selection, and `RodioOutput::seek_to`/`duration` query the worker, whose
 `RodioPlayer` records the decoded source's length and clamps each absolute seek to it.
 
-The scrolling timer's stream is built by `ui::ticks::tick_stream` in `src/ui/ticks.rs`, and its
+The scrolling timer's stream is built by `ui::subscriptions::ticks::tick_stream` in `src/ui/subscriptions/ticks.rs`, and its
 thread starts through `spawn_marquee_thread` in `src/ui/subscriptions/marquee.rs`, which delegates
 to `crate::threads::spawn_named`, the fallible `std::thread::Builder::spawn` every worker in the app
 uses. `std::thread::spawn` panics when
@@ -1583,7 +1583,7 @@ rather than the panic unwinding the event loop.
 - `a_refused_marquee_thread_ends_the_tick_stream_instead_of_panicking`
 - `a_refused_marquee_thread_reports_the_cause_and_the_loss`
 - `the_marquee_thread_is_named_nostalgia_marquee` (all in `src/ui/tests/`)
-- `dropping_the_receiver_ends_the_tick_thread` (`src/ui/ticks.rs`)
+- `dropping_the_receiver_ends_the_tick_thread` (`src/ui/subscriptions/ticks.rs`)
 
 **History.** Reconstructed from "Now Playing bar shows the track id instead of the song title" in
 `BUGS-FIXED.md`.

@@ -2,12 +2,13 @@
 //! the loaded preview's position, format, length, and finished state.
 //!
 //! Like the other timers, it feeds iced from the shared std-thread tick source
-//! in [`crate::ui::ticks`], because iced's timed subscription is gated behind
+//! in [`super::ticks`], because iced's timed subscription is gated behind
 //! backend features the app does not enable.
 
 use std::{io, time::Duration};
 
-use crate::ui::{Message, ticks};
+use super::ticks;
+use crate::ui::Message;
 
 /// How often the Now Playing bar polls the audio backend for the loaded
 /// preview's position, format, length, and finished state, refreshing the
