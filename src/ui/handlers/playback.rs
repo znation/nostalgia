@@ -37,7 +37,8 @@ pub(in crate::ui) fn play_pause(player: &mut WinampPlayer) -> Task<Message> {
 }
 
 /// The transport row's Play button and the keyboard's X key: an explicit play
-/// rather than the media key's toggle. Play resumes (or restarts) the preview.
+/// rather than the media key's toggle. Play resumes (or restarts) the preview, and restarts a playing
+/// preview from its start.
 pub(in crate::ui) fn play(player: &mut WinampPlayer) -> Task<Message> {
     begin_position_transition(player);
     transport_into(&player.apple_music_service, "play", |service| async move {

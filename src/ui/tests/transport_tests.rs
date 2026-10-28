@@ -47,7 +47,7 @@ async fn stop_clears_is_playing() {
 async fn play_and_pause_set_the_playback_flag_explicitly() {
     let (mut player, state) = player_playing_preview(Arc::new(RecordingAudio::default())).await;
 
-    // X plays even when already playing, unlike the Play/Pause toggle.
+    // X restarts a song that is already playing, unlike the Play/Pause toggle.
     let task = update(&mut player, Message::Play);
     assert_transport_settled(task, "play").await;
     assert!(state.lock().await.is_playing);
@@ -80,6 +80,13 @@ async fn transport_messages_drive_the_audio_backend() {
     player.apple_music_service.pause().await.unwrap();
     assert_transport_settled(update(&mut player, Message::Play), "play").await;
     assert_preview_calls(&recording.calls(), &[AudioCall::Pause, AudioCall::Resume]);
+    assert!(state.lock().await.is_playing);
+
+    // Play while playing: restarts the preview from zero.
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) = player_playing_preview(Arc::clone(&recording)).await;
+    assert_transport_settled(update(&mut player, Message::Play), "restart").await;
+    assert_preview_calls(&recording.calls(), &[AudioCall::SeekTo(Duration::ZERO)]);
     assert!(state.lock().await.is_playing);
 
     // Pause (the C key).
@@ -124,7 +131,7 @@ async fn rejected_transport_commands_still_settle_and_keep_playing_state() {
     for (message, what) in [
         (Message::Pause, "rejected pause"),
         (Message::Stop, "rejected stop"),
-        (Message::Play, "rejected resume"),
+        (Message::Play, "play restarts instead of resuming"),
         (Message::PlayPause, "rejected toggle"),
     ] {
         assert_transport_settled(update(&mut player, message), what).await;
@@ -134,7 +141,8 @@ async fn rejected_transport_commands_still_settle_and_keep_playing_state() {
         );
     }
 
-    assert_eq!(audio.attempts(FailingCommand::Transport), 4);
+    // Play on a playing preview restarts it with a seek, not a transport command.
+    assert_eq!(audio.attempts(FailingCommand::Transport), 3);
 }
 
 // The UI must hand the selected song's preview URL to the service, so the

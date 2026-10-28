@@ -2551,6 +2551,20 @@ unchanged step paths.
 **History.** Added 2026-10-24 with the Previous restart plan, matching classic Winamp's rule that a
 late Previous restarts the track already playing instead of stepping back.
 
+## Play restart
+
+**Guarantee.** Play on a loaded, playing preview sends exactly one absolute seek to zero and leaves
+the current track and `Playing` mode unchanged. Paused and stopped Play keep their resume and
+replay paths, and a rejected seek is reported without changing state.
+
+**Enforced by.** `AppleMusicService::resume` in `src/apple_music/playback.rs`.
+
+**Pinned by.**
+
+- `resume_while_playing_restarts_the_preview_from_zero` (`src/apple_music/tests/transport.rs`)
+- `resume_while_playing_reports_a_seek_failure` (`src/apple_music/tests/transport.rs`)
+- `transport_messages_drive_the_audio_backend` (`src/ui/tests/transport_tests.rs`)
+
 ## Mixer drag readout
 
 **Guarantee.** While a volume or balance `chrome_slider`, or an equalizer band or preamp slider, is

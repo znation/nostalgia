@@ -7,6 +7,8 @@
 mod output;
 pub(super) mod play;
 
+use std::time::Duration;
+
 use super::{AppleMusicError, AppleMusicService};
 
 /// The service's view of the audio backend: whether a preview is loaded and
@@ -59,10 +61,12 @@ impl AppleMusicService {
         Ok(())
     }
 
-    /// Resumes a paused preview, or restarts a stopped one from the last
+    /// Restarts a playing preview from its start (Winamp's Play while
+    /// playing), resumes a paused one, or restarts a stopped one from the last
     /// preview URL, sets the shared playing flag, and clears the shared paused
-    /// flag. Does nothing when no preview has ever played, so Play cannot
-    /// claim playback with nothing to sound.
+    /// flag. The playing restart is one absolute seek to zero and leaves the
+    /// shared state alone. Does nothing when no preview has ever played, so
+    /// Play cannot claim playback with nothing to sound.
     ///
     /// # Errors
     ///
@@ -70,6 +74,12 @@ impl AppleMusicService {
     /// request.
     pub(crate) async fn resume(&self) -> Result<(), AppleMusicError> {
         let mut transport = self.transport.lock().await;
+        let is_playing = self.state.lock().await.is_playing;
+        if transport.loaded && is_playing {
+            self.seek_output_to(Duration::ZERO)?;
+            println!("Restarted playback");
+            return Ok(());
+        }
         self.resume_locked(&mut transport).await
     }
 

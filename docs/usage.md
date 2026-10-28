@@ -49,7 +49,7 @@ time (`-02:37`) and back; the choice stays until clicked again. The compact read
 footer and the shade strip are click targets too while playing or paused, switching the same mode;
 a stopped readout ignores the click. The bar sits above Previous,
 Play, Pause, Stop, and Next glyph controls with word tooltips: Play starts or resumes
-the loaded preview and Pause pauses it, or resumes it while paused, like Winamp (stopping a track whose source supplied no preview),
+the loaded preview (restarting it from its start while it is already playing, like Winamp) and Pause pauses it, or resumes it while paused, like Winamp (stopping a track whose source supplied no preview),
 then the Repeat and Shuffle
 toggles (each sinks while on), a volume slider whose groove runs from green when silent through orange at half volume to
 red at full volume, a balance slider whose groove is green at center and reddens toward either side,
@@ -221,8 +221,8 @@ queries then read your Apple Music library through the REST API, and fall back t
 sample library when it is unset. Playback plays the selected song's Apple Music preview through
 `rodio` when the library supplies one, and updates the UI state either way. Pause and Stop silence
 the preview through the audio backend; a pause with no loaded preview stops the transport instead,
-since there is nothing to pause. Play resumes a paused preview or restarts a stopped one from the
-beginning. When a loaded preview reaches its end while playing, the player steps forward through the
+since there is nothing to pause. Play resumes a paused preview, restarts a stopped one from the
+beginning, and restarts a playing one from its start. When a loaded preview reaches its end while playing, the player steps forward through the
 showing list: to the next song, to the first song with Repeat on at the end, or, with Shuffle on, to
 a shuffled song when another exists. With Repeat off on the last song it stops instead and keeps
 that song queued for Play. The volume, balance, Repeat and Shuffle flags, the equalizer's on/off

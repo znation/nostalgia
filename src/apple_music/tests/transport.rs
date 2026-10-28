@@ -94,6 +94,34 @@ async fn resume_resumes_the_audio_backend() {
     assert_transport_mode(&state, TransportMode::Playing).await;
 }
 
+// Play while a preview is playing restarts it with one absolute seek to zero
+// and leaves the shared state playing the same track.
+#[tokio::test]
+async fn resume_while_playing_restarts_the_preview_from_zero() {
+    let (service, state, recording) = recording_service_with_preview().await;
+
+    service.resume().await.unwrap();
+
+    assert_preview_calls(&recording.calls(), &[AudioCall::SeekTo(Duration::ZERO)]);
+    assert_playback_state(&state, Some("song-1"), true).await;
+    assert_transport_mode(&state, TransportMode::Playing).await;
+}
+
+// A backend that rejects the restart seek is reported after one attempt, with
+// the state untouched.
+#[tokio::test]
+async fn resume_while_playing_reports_a_seek_failure() {
+    let audio = Arc::new(FailingAudio::failing_seek());
+    let (service, state) =
+        service_with_preview_playing(Arc::clone(&audio) as Arc<dyn AudioOutput>).await;
+
+    let error = service.resume().await.unwrap_err();
+
+    assert_eq!(error.to_string(), "the audio device is gone");
+    assert_eq!(audio.attempts(FailingCommand::Seek), 1);
+    assert_playback_state(&state, Some("song-1"), true).await;
+}
+
 // `stop` drives the injected backend and clears the shared playing and paused
 // flags while keeping `current_track`, exactly as `AppState::stop` does.
 #[tokio::test]
