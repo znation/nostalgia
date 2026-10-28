@@ -190,4 +190,96 @@ extended them.
   - `## UI layout`'s flat-list button line names Recently Played.
 - `make check` passes.
 
+### Show the current track's composer in the File info panel, like Winamp's ID3 panel (planned 2026-10-28 by the plan role)
+
+**Goal.** Winamp's File info dialog lists a track's composer beside its year, genre, and track
+number. Nostalgia's File info panel shows the title, artist, album, year, genre, track number,
+length, and loaded preview format. `Song` carries no composer even though Apple Music reports one
+as `attributes.composerName`. This change carries that attribute through `Song` and the
+`KnownTrack` cache. The panel then draws a `Composer: <name>` line between `Track #:` and
+`Length:` while the source supplies one. It adds no new state, handlers, settings, or playback
+behavior, and it leaves search matching alone. It mirrors the finished "Show the current track's
+track number in the File info panel" plan in PLANS-DONE.md. It does not depend on the Recently
+Played series. The two share a few files (`src/apple_music/rest/wire/mapping.rs`,
+`src/ui/handlers/playback.rs`, and test files), but this plan edits only `Resource::into_song`
+and the recorded `KnownTrack` literal in them.
+
+**Approach.**
+
+- `src/library.rs`: add `#[serde(default)] pub composer: String` to `Song`, after
+  `track_number`. Its doc comment says `""` means the source supplied none (the sentinel
+  `Self::album` uses) and that the File info panel draws a `Composer:` line only when it is
+  non-empty. In the test module:
+  - add the `"composer": ""` key to `song_payload`;
+  - add `song_round_trips_its_composer` and
+    `song_composer_defaults_to_empty_when_the_payload_omits_it` (built from
+    `song_required_fields_payload`) beside `song_round_trips_its_track_number`.
+- `src/apple_music/rest/wire.rs`: add `#[serde(rename = "composerName")] composer_name:
+  Option<String>` to the private `Attributes`. Its doc comment says absence means the API omitted
+  it.
+- `src/apple_music/rest/wire/mapping.rs`: in `Resource::into_song`, carry `composer_name`
+  through the attributes destructure (add one more `None` to the fallback tuple). Map it the way
+  `album` is mapped: `composer_name.filter(|name| !name.trim().is_empty()).unwrap_or_default()`.
+  An absent or whitespace-only name becomes `""`, and any other name is kept exactly as carried.
+  Name the composer in `into_song`'s doc comment among the fields it moves into the model.
+- `src/sample_library.rs`: give Opening, Middle, and Ending (First Record) the composer
+  `"Sam Ample"`, and give B-side and Headliner `""`. Signed out, the panel then shows both the
+  line and its omission. Add `songs_carry_the_documented_composers` beside
+  `songs_carry_the_documented_track_numbers`, pinning every song's id and composer in library
+  order.
+- `src/ui/views/now_playing/text.rs`: add `pub composer: String` to `KnownTrack`. Its doc comment
+  says it is copied from `Song::composer`, and that `""` means the source supplied none and the
+  panel leaves the line out. In `src/ui/handlers/playback.rs`, the `KnownTrack` literal that
+  records `track_number: song.track_number` also records `composer: song.composer.clone()`.
+- `src/ui/views/file_info.rs`: add `const COMPOSER_LABEL: &str = "Composer: ";` beside
+  `TRACK_NUMBER_LABEL`. In `view_file_info_overlay`, push a `Composer: <name>` line after the
+  conditional track-number line and before the `Length:` line, only while `track.composer` is
+  non-empty. Name the composer in the module and `view_file_info_overlay` doc comments.
+- Tests:
+  - In `src/apple_music/rest/tests/library.rs`, use the existing `song_from_attributes` helper
+    to add two tests. `songs_from_album_maps_the_composer` checks that
+    `"composerName":"Jane Doe"` maps to `"Jane Doe"`.
+    `songs_from_album_maps_a_missing_or_blank_composer_to_empty` checks that an absent, `null`,
+    `""`, and `"   "` composer each map to `""`.
+  - In `src/ui/tests/readouts_tests.rs`, add `known_tracks_record_the_played_songs_composer`,
+    modelled on `known_tracks_record_the_played_songs_track_number`.
+  - In `src/ui/views/tests/chrome.rs`, add `file_info_overlay_draws_the_tracks_composer` (the
+    line sits between the `Track #:` and `Length:` lines) and
+    `file_info_overlay_omits_the_composer_line_when_the_source_supplied_none`, modelled on the
+    two track-number tests there.
+  - Add `composer: String::new()` to `sample_known_track` in `src/ui/views/tests/mod.rs`. Also
+    add `composer` to every other `Song` and `KnownTrack` literal the compiler reports, such as
+    in `src/test_support/fixtures.rs`, `src/apple_music/tests/mod.rs`, and `src/ui/tests/*.rs`.
+- `docs/usage.md`: in the Alt+3 File info sentence, add the composer after the track number in
+  the list of lines. Add it to the parenthetical of lines left out when the source supplies none.
+- `docs/invariants.md` `## File info panel`: add `Composer: …` after `Track #: …` and before
+  `Length: …`. It is left out when `KnownTrack::composer` is empty. It is copied from
+  `Song::composer`, which `Resource::into_song` takes from `attributes.composerName`, with an
+  absent or whitespace-only name mapped to `""`. Name the new tests in its `Pinned by`, and leave
+  every other guarantee unchanged.
+
+**Files touched.** `src/library.rs`, `src/apple_music/rest/wire.rs`,
+`src/apple_music/rest/wire/mapping.rs`, `src/apple_music/rest/tests/library.rs`,
+`src/sample_library.rs`, `src/ui/views/now_playing/text.rs`, `src/ui/handlers/playback.rs`,
+`src/ui/views/file_info.rs`, `src/ui/views/tests/chrome.rs`, `src/ui/views/tests/mod.rs`,
+`src/ui/tests/readouts_tests.rs`, plus the one-line `composer` field in the other test-built
+`Song`/`KnownTrack` literals, `docs/usage.md`, and `docs/invariants.md`.
+
+**Acceptance criteria.**
+
+- A REST song resource whose `attributes.composerName` is `"Jane Doe"` maps to
+  `Song::composer == "Jane Doe"`. An absent, `null`, empty, or whitespace-only composer maps to
+  `""`, and a resource without the attribute still parses.
+- A serialized `Song` round-trips its composer, and a payload without the `composer` key parses
+  with `""`.
+- The sample library's First Record songs carry `"Sam Ample"`, and B-side and Headliner carry
+  `""`.
+- Playing a song records its composer in the `KnownTrack` the File info panel reads.
+- With a non-empty composer, the File info panel draws `Composer: <name>` after the `Track #:`
+  line (or after whichever earlier line is present) and before `Length:`. With an empty composer
+  it draws no `Composer:` line, and every other line is unchanged.
+- Library search still matches only title, artist, and album.
+- `docs/usage.md` and `docs/invariants.md` name the new line as above.
+- `make check` passes.
+
 ## Done
