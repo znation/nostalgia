@@ -350,4 +350,63 @@ mod tests {
         );
         assert_eq!(history.cursor, Some(2));
     }
+
+    // Walking back past the oldest entry finds nothing; the jump to that
+    // oldest entry stays in effect, so repeated presses keep missing and its
+    // play still lands on the entry when it commits.
+    #[test]
+    fn previous_at_the_oldest_entry_misses_and_keeps_the_jump() {
+        let songs = stepping_songs();
+        let mut history = recorded(&["song-1", "song-2"]);
+
+        assert_eq!(
+            history.previous(&songs, Some("song-2")),
+            Some("song-1".to_string())
+        );
+        assert_eq!(history.previous(&songs, Some("song-2")), None);
+        assert_eq!(history.previous(&songs, Some("song-1")), None);
+
+        history.record("song-1");
+        assert_eq!(history.cursor, Some(0));
+        assert_eq!(history.entries.len(), 2);
+    }
+
+    // A failed play with no jump pending has nothing to retry: Previous walks
+    // back from the cursor as usual.
+    #[test]
+    fn retry_pending_without_a_jump_changes_nothing() {
+        let songs = stepping_songs();
+        let mut history = recorded(&["song-1", "song-2", "song-3"]);
+
+        history.retry_pending();
+
+        assert_eq!(
+            history.previous(&songs, Some("song-3")),
+            Some("song-2".to_string())
+        );
+    }
+
+    // A retry only re-offers a target the visible list still shows; one that
+    // has since left the list is walked past to the next usable entry.
+    #[test]
+    fn retrying_a_jump_whose_target_left_the_list_walks_past_it() {
+        let songs = stepping_songs();
+        let visible: Vec<Song> = songs
+            .iter()
+            .filter(|song| song.id != "song-2")
+            .cloned()
+            .collect();
+        let mut history = recorded(&["song-1", "song-2", "song-3"]);
+
+        assert_eq!(
+            history.previous(&songs, Some("song-3")),
+            Some("song-2".to_string())
+        );
+        history.retry_pending();
+
+        assert_eq!(
+            history.previous(&visible, Some("song-2")),
+            Some("song-1".to_string())
+        );
+    }
 }
