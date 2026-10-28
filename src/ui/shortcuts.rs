@@ -330,6 +330,9 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
         }
         Key::Character(character) if character.eq_ignore_ascii_case("x") => Some(Message::Play),
         Key::Character(character) if character.eq_ignore_ascii_case("c") => Some(Message::Pause),
+        Key::Character(character) if character.eq_ignore_ascii_case("v") && modifiers.shift() => {
+            Some(Message::FadeOutAndStop)
+        }
         Key::Character(character) if character.eq_ignore_ascii_case("v") => Some(Message::Stop),
         Key::Character(character) if character.eq_ignore_ascii_case("b") => {
             Some(Message::NextTrack)
@@ -525,7 +528,6 @@ mod tests {
         assert!(matches!(map("z"), Some(Message::PreviousTrack)));
         assert!(matches!(map("x"), Some(Message::Play)));
         assert!(matches!(map("c"), Some(Message::Pause)));
-        assert!(matches!(map("v"), Some(Message::Stop)));
         assert!(matches!(map("b"), Some(Message::NextTrack)));
         assert!(matches!(map("r"), Some(Message::ToggleRepeat)));
         assert!(matches!(map("s"), Some(Message::ToggleShuffle)));
@@ -539,6 +541,14 @@ mod tests {
         assert_letter_bindings(|letter| {
             message_for(key_pressed(Key::Character(letter.into()), Modifiers::NONE))
         });
+        assert_maps!(Key::Character("v".into()), Modifiers::NONE => Message::Stop);
+    }
+
+    #[test]
+    fn message_for_maps_shift_v_to_fade_out_and_stop() {
+        for character in ["v", "V"] {
+            assert_maps!(Key::Character(character.into()), Modifiers::SHIFT => Message::FadeOutAndStop);
+        }
     }
 
     #[test]

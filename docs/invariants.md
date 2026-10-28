@@ -2714,3 +2714,27 @@ never snapped.
   `a_balance_step_after_release_leaves_center` (`src/ui/tests/mixer_tests.rs`)
 
 **History.** Added 2026-10-24 with the balance center detent plan.
+
+## Fade-out stop
+
+**Guarantee.** Shift+V (`Message::FadeOutAndStop`) while a preview plays starts a fade of
+`FADE_OUT_TICKS` (8) LCD ticks, about two seconds, and makes no backend call on the press. Each of
+the next seven `MarqueeTick`s forwards a lower fraction (7/8 … 1/8) of the saved volume to the
+backend; the eighth stops like Stop and then restores the saved volume. The shared state's volume
+is never written, so the slider and the settings file keep the pre-fade level. While paused or
+stopped it acts as Stop, and a second press mid-fade does not restart the countdown. Play, Pause,
+the Play/Pause toggle, and a track selection mid-fade end the fade and re-send the saved volume;
+Stop mid-fade stops and then re-sends it.
+
+**Enforced by.** `handlers::playback::fade` and the hooks in `handlers::playback`.
+
+**Pinned by.**
+
+- `message_for_maps_shift_v_to_fade_out_and_stop` (`src/ui/shortcuts.rs`)
+- `a_full_fade_steps_the_volume_down_then_stops_and_restores_it`,
+  `fade_out_while_not_playing_acts_as_stop`, `a_second_fade_press_does_not_restart_the_countdown`,
+  `play_mid_fade_restores_the_volume_and_cancels_the_rest`,
+  `a_track_selection_mid_fade_restores_the_volume`, `stop_mid_fade_stops_and_then_restores_the_volume`,
+  `a_full_fade_leaves_the_saved_settings_volume_alone` (`src/ui/tests/fade_tests.rs`)
+
+**History.** Added 2026-10-28 with the Shift+V fade-out plan.

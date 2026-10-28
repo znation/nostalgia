@@ -19,6 +19,7 @@ use crate::ui::loading::{
 use crate::ui::views;
 use crate::ui::{CurrentView, Message, WinampPlayer};
 
+pub(in crate::ui) mod fade;
 pub(in crate::ui) mod preview;
 pub(in crate::ui) mod stepping;
 pub(in crate::ui) mod title_drag;
@@ -28,6 +29,7 @@ pub(in crate::ui) mod title_drag;
 /// nothing to pause. The transport row's Play and Pause buttons use the
 /// explicit [`play`] and [`pause`] instead.
 pub(in crate::ui) fn play_pause(player: &mut WinampPlayer) -> Task<Message> {
+    fade::cancel_fade_out(player);
     begin_position_transition(player);
     transport_into(
         &player.apple_music_service,
@@ -40,6 +42,7 @@ pub(in crate::ui) fn play_pause(player: &mut WinampPlayer) -> Task<Message> {
 /// rather than the media key's toggle. Play resumes (or restarts) the preview, and restarts a playing
 /// preview from its start.
 pub(in crate::ui) fn play(player: &mut WinampPlayer) -> Task<Message> {
+    fade::cancel_fade_out(player);
     begin_position_transition(player);
     transport_into(&player.apple_music_service, "play", |service| async move {
         service.resume().await
@@ -51,6 +54,7 @@ pub(in crate::ui) fn play(player: &mut WinampPlayer) -> Task<Message> {
 /// stops the transport, since there is nothing to pause. It differs from the
 /// media key's toggle only while stopped, where it does not start playback.
 pub(in crate::ui) fn pause(player: &mut WinampPlayer) -> Task<Message> {
+    fade::cancel_fade_out(player);
     begin_position_transition(player);
     transport_into(&player.apple_music_service, "pause", |service| async move {
         service.pause().await
@@ -62,6 +66,10 @@ pub(in crate::ui) fn pause(player: &mut WinampPlayer) -> Task<Message> {
 /// readout clears immediately, and any poll in flight is invalidated so it
 /// cannot bring the old position back.
 pub(in crate::ui) fn stop(player: &mut WinampPlayer) -> Task<Message> {
+    if player.fade_out_ticks > 0 {
+        player.fade_out_ticks = 0;
+        return fade::stop_restoring_volume(player);
+    }
     reset_position_readout(player);
     begin_position_transition(player);
     transport_into(&player.apple_music_service, "stop", |service| async move {
@@ -166,6 +174,8 @@ pub(in crate::ui) fn track_selected(
             duration_ms: song.duration_ms,
         },
     );
+    // A selection mid-fade plays at the saved volume, not the faded one.
+    fade::cancel_fade_out(player);
     // A new selection starts with no elapsed position. Bumping the epoch
     // drops a poll reply issued for the previous track.
     reset_position_readout(player);
@@ -250,12 +260,13 @@ pub(in crate::ui) fn track_played(
 /// the line is too long to fit the LCD's character budget (see
 /// `crate::ui::subscriptions::subscriptions`), so every tick scrolls the bar.
 pub(in crate::ui) fn marquee_tick(player: &mut WinampPlayer) -> Task<Message> {
+    let fade = fade::fade_out_tick(player);
     if player.mixer_flash_ticks > 0 {
         player.mixer_flash_ticks -= 1;
     } else {
         player.marquee_offset = player.marquee_offset.wrapping_add(1);
     }
-    Task::none()
+    fade
 }
 
 /// A Play/Pause/Stop transition finished (or failed; the failure was

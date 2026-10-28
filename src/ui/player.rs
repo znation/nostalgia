@@ -26,6 +26,10 @@ mod presentation;
 /// one second at `MARQUEE_TICK`.
 pub(in crate::ui) const MIXER_FLASH_TICKS: u8 = 4;
 
+/// How many LCD ticks Shift+V's fade-out takes before it stops: two seconds at
+/// `MARQUEE_TICK`.
+pub(in crate::ui) const FADE_OUT_TICKS: u8 = 8;
+
 /// The app model the iced loop owns: the shared playback state, the Apple
 /// Music service, the browse lists and their view state, the Now Playing
 /// readouts and drag state, and the window flags and settings writer.
@@ -262,6 +266,10 @@ pub(in crate::ui) struct WinampPlayer {
     /// shows. Counted down by `marquee_tick`; transient, never saved to
     /// settings.
     pub(in crate::ui) mixer_flash_ticks: u8,
+    /// The LCD ticks Shift+V's fade-out has left before it stops; 0 when no
+    /// fade runs. Counted down by `marquee_tick`; transient, never saved to
+    /// settings.
+    pub(in crate::ui) fade_out_ticks: u8,
     /// The slider whose readout the flash shows; means nothing while
     /// `mixer_flash_ticks` is 0, and is never saved to settings.
     pub(in crate::ui) mixer_flash: views::MixerDrag,
@@ -388,6 +396,7 @@ impl WinampPlayer {
             time_display: views::TimeDisplay::Elapsed,
             mixer_drag: None,
             mixer_flash_ticks: 0,
+            fade_out_ticks: 0,
             mixer_flash: views::MixerDrag::Volume,
             balance_drag_raw: None,
             position_epoch: 0,
@@ -480,10 +489,10 @@ impl WinampPlayer {
         self.saved_settings = saved;
     }
 
-    /// Whether the LCD timer must run: a mixer flash is counting down, or the
-    /// title has to scroll ([`Self::needs_marquee`]).
+    /// Whether the LCD timer must run: a mixer flash or a fade-out is counting
+    /// down, or the title has to scroll ([`Self::needs_marquee`]).
     pub(in crate::ui) fn needs_lcd_tick(&self) -> bool {
-        self.mixer_flash_ticks > 0 || self.needs_marquee()
+        self.mixer_flash_ticks > 0 || self.fade_out_ticks > 0 || self.needs_marquee()
     }
 
     /// Whether the Now Playing line is too long for the LCD's character

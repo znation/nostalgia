@@ -27,6 +27,9 @@ pub(in crate::ui) enum Message {
     Play,
     Pause,
     Stop,
+    // Shift+V: fades the playing song out over about two seconds and then
+    // stops, like Stop; paused or stopped it is Stop. The saved volume stays.
+    FadeOutAndStop,
     // Ctrl+V: arms or disarms "Stop after current", so the playing song's
     // natural end stops playback instead of advancing. It changes no
     // transport state itself.

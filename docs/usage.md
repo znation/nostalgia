@@ -169,7 +169,7 @@ while stopped, like Winamp's taskbar title. It keeps the interrupted track's nam
 reads just `nostalgia` when no known track is current.
 With the window focused, the classic Winamp keys drive playback: Z and B step back and forward
 (a Z press restarts the loaded preview from its start once it has played at least three seconds),
-X plays, C pauses (or resumes while paused), V stops, Ctrl+V arms (or disarms) Stop after current — the playing song then
+X plays, C pauses (or resumes while paused), V stops, Shift+V fades the playing song out over about two seconds and then stops (the volume setting is left unchanged; while paused or stopped it acts as Stop), Ctrl+V arms (or disarms) Stop after current — the playing song then
 plays to its natural end and playback stops instead of advancing, once, shown only by the
 options-menu row (`Stop after current: On/Off`), R toggles Repeat and S toggles Shuffle, A (or Ctrl+A) toggles
 always-on-top and T (or Ctrl+T) switches the large readout between elapsed and remaining time (the
