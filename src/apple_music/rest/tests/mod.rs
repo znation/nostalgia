@@ -48,4 +48,5 @@ fn transport_error_over<T>(
 mod library;
 mod paging;
 mod recently_added;
+mod recently_played;
 mod transport;

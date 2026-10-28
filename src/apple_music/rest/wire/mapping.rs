@@ -17,6 +17,12 @@ impl Resource {
         self.kind.as_deref() == Some("library-albums")
     }
 
+    /// Whether Apple typed this resource `songs` or `library-songs`, the two types
+    /// `RestLibrary::get_recently_played_songs` maps.
+    pub(in crate::apple_music::rest) fn is_song(&self) -> bool {
+        matches!(self.kind.as_deref(), Some("songs" | "library-songs"))
+    }
+
     /// Maps this resource to an [`Artist`], moving its id and name into the
     /// model instead of cloning them out of the parsed response.
     ///

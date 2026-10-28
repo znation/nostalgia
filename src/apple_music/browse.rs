@@ -5,7 +5,7 @@ use std::sync::Arc;
 use super::rest;
 use super::sample::{
     lookup, sample_all_albums, sample_all_playlists, sample_all_songs,
-    sample_recently_added_albums, sample_songs_matching,
+    sample_recently_added_albums, sample_recently_played_songs, sample_songs_matching,
 };
 use super::threads::off_thread;
 use super::validation::{IdKind, ensure_id_is_valid};
@@ -233,6 +233,21 @@ impl AppleMusicService {
                 with_album_durations(rest, session, albums)
             },
             sample_recently_added_albums,
+        )
+        .await
+    }
+
+    /// The songs the user played most recently: the signed-in user's Apple Music play history
+    /// when a session is stored, and the sample library's songs in reverse order otherwise.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the signed-in request fails; with
+    /// no session the sample-library lookup never fails.
+    pub async fn get_recently_played_songs(&self) -> Result<Vec<Song>, AppleMusicError> {
+        self.browse(
+            |rest, session| rest.get_recently_played_songs(session),
+            sample_recently_played_songs,
         )
         .await
     }

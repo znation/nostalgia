@@ -828,3 +828,20 @@ async fn get_recently_added_albums_fails_when_the_album_durations_request_fails(
 
     assert_eq!(error.to_string(), "songs down");
 }
+
+#[tokio::test]
+async fn get_recently_played_songs_uses_the_rest_library_when_signed_in() {
+    let stub = StubTransport::returning(
+        r#"{"data":[{"id":"song-1","type":"library-songs","attributes":{"name":"Opening","artistName":"The Sample Band","albumName":"Remote Record","durationInMillis":210000}}]}"#,
+    );
+    let service = signed_in_service(&stub);
+
+    let songs = service.get_recently_played_songs().await.unwrap();
+
+    assert_eq!(songs.len(), 1);
+    assert_eq!(songs[0].title, "Opening");
+    assert_call_urls(
+        &stub,
+        &["https://api.music.apple.com/v1/me/recent/played/tracks"],
+    );
+}

@@ -342,3 +342,15 @@ async fn get_recently_added_albums_returns_the_sample_albums_reversed() {
 
     assert_eq!(albums, expected);
 }
+
+// With no play history in the sample library, Recently Played is the library order reversed.
+#[tokio::test]
+async fn get_recently_played_songs_returns_the_sample_songs_reversed() {
+    let service = test_service();
+    let mut expected = service.get_all_songs().await.unwrap();
+    expected.reverse();
+
+    let songs = service.get_recently_played_songs().await.unwrap();
+
+    assert_eq!(songs, expected);
+}

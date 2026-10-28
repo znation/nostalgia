@@ -205,6 +205,32 @@ impl RestLibrary {
         Ok(albums.into_iter().flatten().collect())
     }
 
+    /// The signed-in user's recently played songs, most recent first as Apple orders them.
+    ///
+    /// The `recent/played/tracks` endpoint mixes resource types, so only resources typed `songs`
+    /// or `library-songs` are mapped (with [`Resource::into_song`], leaving the album id empty as
+    /// [`RestLibrary::get_all_songs`] does); music videos and untyped resources are dropped. No
+    /// `limit` is sent; later pages are followed through `next`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the request fails, the response is
+    /// not valid JSON, or a song carries a blank id or no name.
+    pub fn get_recently_played_songs(
+        &self,
+        session: &MusicKitSession,
+    ) -> Result<Vec<Song>, AppleMusicError> {
+        let url = format!("{API_BASE}/me/recent/played/tracks");
+        let songs = self.fetch(&url, session, |resource| {
+            if resource.is_song() {
+                resource.into_song("").map(Some)
+            } else {
+                Ok(None)
+            }
+        })?;
+        Ok(songs.into_iter().flatten().collect())
+    }
+
     /// Every playlist in the signed-in user's library, in library order.
     ///
     /// The whole library is read through the same paginated collection
