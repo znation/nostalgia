@@ -245,6 +245,54 @@ fn file_info_panel_draws_the_loaded_previews_format() {
 }
 
 #[test]
+fn file_info_panel_draws_each_metadata_line_only_when_the_track_has_it() {
+    let (mut player, state) = test_player();
+    seed_current_title(&mut player, &state, "Opening");
+    player.file_info_visible = true;
+
+    let bare = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = bare.texts().collect();
+    assert!(texts.contains(&"Title: Opening"), "{texts:?}");
+    assert!(texts.contains(&"Length: 3:30"), "{texts:?}");
+    for label in [
+        "Artist:",
+        "Album:",
+        "Year:",
+        "Genre:",
+        "Track #:",
+        "Disc #:",
+        "Composer:",
+    ] {
+        assert!(
+            texts.iter().all(|text| !text.starts_with(label)),
+            "a track with no {label} data must not draw that line: {texts:?}"
+        );
+    }
+
+    let track = player.known_tracks.get_mut("song-1").unwrap();
+    track.artist = "Band".to_string();
+    track.album = "Record".to_string();
+    track.year = Some(1999);
+    track.genre = "Rock".to_string();
+    track.track_number = Some(4);
+    track.disc_number = Some(2);
+    track.composer = "Writer".to_string();
+    let full = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = full.texts().collect();
+    for line in [
+        "Artist: Band",
+        "Album: Record",
+        "Year: 1999",
+        "Genre: Rock",
+        "Track #: 4",
+        "Disc #: 2",
+        "Composer: Writer",
+    ] {
+        assert!(texts.contains(&line), "missing {line:?}: {texts:?}");
+    }
+}
+
+#[test]
 fn title_bar_constructs_for_both_about_states() {
     // iced `Element`s expose no tree introspection, so the observable
     // contract is that the title bar builds for both About states — the
