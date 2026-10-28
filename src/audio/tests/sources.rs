@@ -22,6 +22,29 @@ fn spectrum_bands_peak_at_the_matching_band_for_a_sine() {
     );
 }
 
+// An empty window or an unreported (zero) sample rate has nothing to analyze,
+// so the bands read zero rather than dividing by zero into NaN.
+#[test]
+fn spectrum_bands_read_zero_without_samples_or_a_sample_rate() {
+    assert_eq!(spectrum_bands(&[], 44_100), [0.0; BAND_COUNT]);
+    let tone = sine_samples(1_000.0, 44_100, SPECTRUM_WINDOW);
+    assert_eq!(spectrum_bands(&tone, 0), [0.0; BAND_COUNT]);
+}
+
+// A zero channel count cannot form a frame: the push is dropped, leaving the
+// ring empty and the spectrum silent, and a later valid push still records.
+#[test]
+fn meter_push_ignores_a_zero_channel_count() {
+    let meter = SpectrumMeter::default();
+    meter.set_sample_rate(44_100);
+    meter.push(0.8, 0);
+    assert!(meter.recorded().is_empty());
+    assert_eq!(meter.take().bands, [0.0; BAND_COUNT]);
+
+    meter.push(0.5, 1);
+    assert_eq!(meter.recorded(), vec![0.5]);
+}
+
 // A band at or above Nyquist has no representable tone, so it reads zero even
 // while a lower tone the source does carry is still detected.
 #[test]
