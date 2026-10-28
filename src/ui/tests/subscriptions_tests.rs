@@ -1,5 +1,31 @@
 use super::*;
 
+/// Which of `subscriptions`' eight inputs a test turns on; the rest stay off.
+#[derive(Default)]
+struct Active {
+    marquee: bool,
+    position: bool,
+    spectrum: bool,
+    mixer_readout: bool,
+    panel: bool,
+    drag: bool,
+}
+
+/// How many subscriptions `subscriptions` returns with only `active` turned on.
+fn subscription_count(active: Active) -> usize {
+    subscriptions(
+        active.marquee,
+        active.position,
+        active.spectrum,
+        active.mixer_readout,
+        false,
+        false,
+        active.panel,
+        active.drag,
+    )
+    .len()
+}
+
 #[test]
 fn alt_o_routes_captured_text_with_options_open_or_closed() {
     use iced::advanced::subscription;
@@ -203,16 +229,19 @@ fn marquee_tick_advances_the_offset() {
 // subscription set is the four listeners until the line needs to scroll.
 #[test]
 fn the_marquee_timer_runs_only_while_the_line_needs_to_scroll() {
+    assert_eq!(subscription_count(Active::default()), 4);
     assert_eq!(
-        subscriptions(false, false, false, false, false, false, false, false).len(),
-        4
-    );
-    assert_eq!(
-        subscriptions(true, false, false, false, false, false, false, false).len(),
+        subscription_count(Active {
+            marquee: true,
+            ..Active::default()
+        }),
         5
     );
     assert_eq!(
-        subscriptions(false, false, false, true, false, false, false, false).len(),
+        subscription_count(Active {
+            mixer_readout: true,
+            ..Active::default()
+        }),
         5
     );
 }
@@ -225,12 +254,12 @@ fn the_marquee_timer_runs_only_while_the_line_needs_to_scroll() {
 // outside a panel rebuilds no screen.
 #[test]
 fn the_escape_listener_runs_only_while_a_transient_panel_is_open() {
+    assert_eq!(subscription_count(Active::default()), 4);
     assert_eq!(
-        subscriptions(false, false, false, false, false, false, false, false).len(),
-        4
-    );
-    assert_eq!(
-        subscriptions(false, false, false, false, false, false, true, false).len(),
+        subscription_count(Active {
+            panel: true,
+            ..Active::default()
+        }),
         5
     );
 }
@@ -313,16 +342,21 @@ fn escape_key_message_maps_escape_but_not_its_chords_or_other_keys() {
 
 #[test]
 fn the_mixer_nudge_listener_is_always_subscribed() {
+    assert_eq!(subscription_count(Active::default()), 4);
     assert_eq!(
-        subscriptions(false, false, false, false, false, false, false, false).len(),
-        4
-    );
-    assert_eq!(
-        subscriptions(true, true, true, false, false, false, false, false).len(),
+        subscription_count(Active {
+            marquee: true,
+            position: true,
+            spectrum: true,
+            ..Active::default()
+        }),
         7
     );
     assert_eq!(
-        subscriptions(false, false, false, true, false, false, false, false).len(),
+        subscription_count(Active {
+            mixer_readout: true,
+            ..Active::default()
+        }),
         5
     );
 }
@@ -336,11 +370,18 @@ fn the_mixer_nudge_listener_is_always_subscribed() {
 #[test]
 fn the_position_timer_runs_only_while_there_is_a_position_to_refresh() {
     assert_eq!(
-        subscriptions(false, true, false, false, false, false, false, false).len(),
+        subscription_count(Active {
+            position: true,
+            ..Active::default()
+        }),
         5
     );
     assert_eq!(
-        subscriptions(true, true, false, false, false, false, false, false).len(),
+        subscription_count(Active {
+            marquee: true,
+            position: true,
+            ..Active::default()
+        }),
         6
     );
 
@@ -364,16 +405,21 @@ fn the_position_timer_runs_only_while_there_is_a_position_to_refresh() {
 // already stored.
 #[test]
 fn the_spectrum_timer_runs_only_while_playback_runs() {
+    assert_eq!(subscription_count(Active::default()), 4);
     assert_eq!(
-        subscriptions(false, false, false, false, false, false, false, false).len(),
-        4
-    );
-    assert_eq!(
-        subscriptions(false, false, true, false, false, false, false, false).len(),
+        subscription_count(Active {
+            spectrum: true,
+            ..Active::default()
+        }),
         5
     );
     assert_eq!(
-        subscriptions(true, true, true, false, false, false, false, false).len(),
+        subscription_count(Active {
+            marquee: true,
+            position: true,
+            spectrum: true,
+            ..Active::default()
+        }),
         7
     );
 
@@ -697,12 +743,12 @@ fn reported_thread_name(
 #[test]
 fn title_drag_listener_is_subscribed_only_while_dragging_and_maps_pointer_events() {
     use iced::{Event, event::Status, keyboard, mouse, window};
+    assert_eq!(subscription_count(Active::default()), 4);
     assert_eq!(
-        subscriptions(false, false, false, false, false, false, false, false).len(),
-        4
-    );
-    assert_eq!(
-        subscriptions(false, false, false, false, false, false, false, true).len(),
+        subscription_count(Active {
+            drag: true,
+            ..Active::default()
+        }),
         5
     );
     let map = |event| title_drag_message(event, Status::Captured, window::Id::unique());
