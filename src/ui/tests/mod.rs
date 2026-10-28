@@ -80,6 +80,13 @@ async fn player_playing_preview(
     (player, state)
 }
 
+/// [`player_playing_preview`] over a [`RecordingAudio`] the test never reads —
+/// for the tests that assert only on the UI or shared state, not on the
+/// calls forwarded to the audio.
+async fn player_playing_unrecorded_preview() -> (WinampPlayer, Arc<Mutex<AppState>>) {
+    player_playing_preview(Arc::new(RecordingAudio::default())).await
+}
+
 /// A fresh request generation over its own counter — the starting
 /// generation the `fetch_into` and `play_into` tests issue before driving
 /// their task, so no two tests share a counter.

@@ -9,7 +9,7 @@ use super::*;
 #[tokio::test]
 async fn play_pause_toggles_is_playing() {
     // Load a preview so the toggle has audio to pause and resume.
-    let (mut player, state) = player_playing_preview(Arc::new(RecordingAudio::default())).await;
+    let (mut player, state) = player_playing_unrecorded_preview().await;
     assert!(state.lock().await.is_playing);
 
     let task = update(&mut player, Message::PlayPause);
@@ -35,7 +35,7 @@ fn shuffle_toggle_flips_the_shuffle_flag() {
 // async runtime and `drive_task`.
 #[tokio::test]
 async fn stop_clears_is_playing() {
-    let (mut player, state) = player_playing_preview(Arc::new(RecordingAudio::default())).await;
+    let (mut player, state) = player_playing_unrecorded_preview().await;
     assert!(state.lock().await.is_playing);
 
     let task = update(&mut player, Message::Stop);
@@ -45,7 +45,7 @@ async fn stop_clears_is_playing() {
 
 #[tokio::test]
 async fn play_and_pause_set_the_playback_flag_explicitly() {
-    let (mut player, state) = player_playing_preview(Arc::new(RecordingAudio::default())).await;
+    let (mut player, state) = player_playing_unrecorded_preview().await;
 
     // X restarts a song that is already playing, unlike the Play/Pause toggle.
     let task = update(&mut player, Message::Play);

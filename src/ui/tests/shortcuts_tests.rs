@@ -7,7 +7,7 @@ use super::*;
 async fn media_play_pause_key_toggles_playback() {
     use iced::keyboard::{Event, Key, Modifiers, key};
 
-    let (mut player, state) = player_playing_preview(Arc::new(RecordingAudio::default())).await;
+    let (mut player, state) = player_playing_unrecorded_preview().await;
     assert!(state.lock().await.is_playing);
 
     for (index, modifiers) in [Modifiers::NONE, Modifiers::SHIFT].into_iter().enumerate() {

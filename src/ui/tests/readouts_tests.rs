@@ -137,7 +137,7 @@ fn replaying_a_track_from_another_row_updates_its_number() {
 // though `playback_position` is still `None`.
 #[tokio::test]
 async fn a_paused_preview_needs_the_position_poll_before_its_first_reply() {
-    let (player, state) = player_playing_preview(Arc::new(RecordingAudio::default())).await;
+    let (player, state) = player_playing_unrecorded_preview().await;
     assert!(player.playback_position.is_none());
 
     state.lock().await.pause();
