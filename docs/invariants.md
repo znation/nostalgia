@@ -2086,8 +2086,9 @@ it for clearing its own focus; `Message::EscapePressed` is still a no-op.
 
 **Guarantee.** A non-empty song list draws a footer beneath its rows. With no selection it reads
 `<count> song(s) - <total>`. While the list's own `selected` index names a song, it reads
-`<count> song(s) - <selected length>/<total>`, for example `2 songs - 3:30/4:15`; a zero-length
-selected song reads `0:00`. An index past the list falls back to the plain form.
+`<count> song(s) - <selected length>/<total>`, for example `2 songs - 3:30/4:15`; a total that
+covers a song with no known length (`duration_ms` 0) and an unknown-length selection get a trailing
+`+` (`2 songs - 3:30+`, `0:00+/3:30+`), like Winamp. An index past the list falls back to the plain form.
 
 **Enforced by.** `views::browse::rows::text::song_list_summary` formats both forms;
 `views::browse::rows::song_list` passes its `selected` argument to it.
@@ -2095,7 +2096,8 @@ selected song reads `0:00`. An index past the list falls back to the plain form.
 **Pinned by.** `song_list_summary_counts_songs_and_sums_durations` and the other existing
 `song_list_summary_*` tests (plain form, `None`),
 `song_list_summary_puts_the_selected_length_before_the_total`,
-`song_list_summary_reads_a_zero_length_selection_as_zero`, and
+`song_list_summary_marks_an_unknown_selected_length`,
+`song_list_summary_marks_a_total_that_skips_unknown_durations`, and
 `song_list_summary_ignores_a_selection_past_the_list` (`src/ui/views/tests/browse.rs`).
 
 **History.** Added with the selected-length footer, like Winamp's playlist status line.

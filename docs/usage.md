@@ -67,7 +67,8 @@ total running time at the right (`10:30`, or `--:--` when the source supplied no
 artist rows show their album count at the right (`2 albums`, `1 album`, and no count for an
 artist with none), with each song list showing its song count and total playing time beneath
 the rows (while a song row is selected, the footer shows that song's length before the total,
-`2 songs - 3:30/4:15`, like Winamp's playlist editor) and artist, album, and playlist lists
+`2 songs - 3:30/4:15`, like Winamp's playlist editor; a total covering a song with no known
+length, or such a selected song's length, gets a trailing `+`, as in `2 songs - 3:30+`) and artist, album, and playlist lists
 showing their item count beneath theirs. An `EQ` button beside the balance slider shows and
 hides the equalizer panel, which is open on a first launch and then reopens as last left;
 hiding it gives its height to the browse list without changing EQ processing. A `PL` button

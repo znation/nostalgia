@@ -479,9 +479,10 @@ fn song_list_summary_puts_the_selected_length_before_the_total() {
 }
 
 #[test]
-fn song_list_summary_reads_a_zero_length_selection_as_zero() {
+fn song_list_summary_marks_an_unknown_selected_length() {
     let songs = [summary_song(210_000), summary_song(0)];
-    assert_eq!(song_list_summary(&songs, Some(1)), "2 songs - 0:00/3:30");
+    assert_eq!(song_list_summary(&songs, Some(1)), "2 songs - 0:00+/3:30+");
+    assert_eq!(song_list_summary(&songs, Some(0)), "2 songs - 3:30/3:30+");
 }
 
 #[test]
@@ -507,9 +508,13 @@ fn song_list_summary_uses_the_singular_for_one_song() {
 }
 
 #[test]
-fn song_list_summary_counts_unknown_durations_without_adding_time() {
+fn song_list_summary_marks_a_total_that_skips_unknown_durations() {
     let songs = [summary_song(210_000), summary_song(0)];
-    assert_eq!(song_list_summary(&songs, None), "2 songs - 3:30");
+    assert_eq!(song_list_summary(&songs, None), "2 songs - 3:30+");
+    assert_eq!(
+        song_list_summary(&[summary_song(0)], None),
+        "1 song - 0:00+"
+    );
 }
 
 #[test]
