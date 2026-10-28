@@ -151,4 +151,56 @@ mod tests {
         round.record("song-3", &songs);
         assert!(!round.ends_round(Some("song-3")));
     }
+
+    // `roll` indexes the unplayed songs in list order, modulo their count, so
+    // each unplayed song is reachable and a large roll still stays in range.
+    #[test]
+    fn pick_indexes_the_unplayed_songs_in_list_order() {
+        let songs = stepping_songs();
+        let mut round = ShuffleRound::default();
+        round.record("song-2", &songs);
+        let picks: Vec<Option<String>> =
+            (0..4).map(|roll| round.pick(&songs, None, roll)).collect();
+        let expected = ["song-1", "song-3", "song-1", "song-3"].map(|id| Some(id.to_string()));
+        assert_eq!(picks, expected);
+        assert_eq!(
+            round.pick(&songs, None, u64::MAX).as_deref(),
+            Some("song-3")
+        );
+    }
+
+    #[test]
+    fn recording_the_same_song_twice_does_not_complete_the_round() {
+        let songs = stepping_songs();
+        let mut round = ShuffleRound::default();
+        round.record("song-1", &songs);
+        round.record("song-1", &songs);
+        assert_eq!(round.played.len(), 1);
+        assert_eq!(
+            round.pick(&songs, Some("song-1"), 0).as_deref(),
+            Some("song-2")
+        );
+    }
+
+    // An empty list never counts as a completed round, and nothing played
+    // survives it because no song is shown.
+    #[test]
+    fn recording_against_an_empty_list_keeps_nothing_and_picks_nothing() {
+        let mut round = ShuffleRound::default();
+        round.record("song-1", &[]);
+        assert!(round.played.is_empty());
+        assert_eq!(round.pick(&[], Some("song-1"), 0), None);
+    }
+
+    // A play outside the showing list is dropped at once, so it cannot count
+    // toward finishing the round.
+    #[test]
+    fn recording_a_song_outside_the_list_leaves_the_round_untouched() {
+        let songs = stepping_songs();
+        let mut round = ShuffleRound::default();
+        round.record("song-1", &songs);
+        round.record("elsewhere", &songs);
+        assert_eq!(round.played.len(), 1);
+        assert!(round.played.contains("song-1"));
+    }
 }
