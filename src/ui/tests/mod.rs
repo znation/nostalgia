@@ -1371,6 +1371,7 @@ mod move_row_tests;
 mod panels_tests;
 mod randomize_tests;
 mod readouts_tests;
+mod recently_added_tests;
 mod reverse_tests;
 mod scroll_tests;
 mod search_tests;

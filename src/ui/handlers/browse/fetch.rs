@@ -107,6 +107,16 @@ pub(in crate::ui) fn all_albums_loaded(
     Task::none()
 }
 
+/// The recently added albums fetch landed: store the rows in the Recently
+/// Added list, with the same cached row text as the browsed list.
+pub(in crate::ui) fn recently_added_loaded(
+    player: &mut WinampPlayer,
+    albums: Vec<Album>,
+) -> Task<Message> {
+    store_albums(&mut player.recently_added, albums);
+    Task::none()
+}
+
 /// The playlists fetch landed: store the rows in the playlists list.
 pub(in crate::ui) fn playlists_loaded(
     player: &mut WinampPlayer,
@@ -165,6 +175,15 @@ pub(in crate::ui) fn all_albums_load_failed(
     fail_list(&mut player.all_albums, report)
 }
 
+/// The recently added albums fetch failed: record the report on the Recently
+/// Added list.
+pub(in crate::ui) fn recently_added_load_failed(
+    player: &mut WinampPlayer,
+    report: String,
+) -> Task<Message> {
+    fail_list(&mut player.recently_added, report)
+}
+
 /// The playlists fetch failed: record the report on the playlists list.
 pub(in crate::ui) fn playlists_load_failed(
     player: &mut WinampPlayer,
@@ -196,6 +215,9 @@ pub(in crate::ui) fn browse_reply(
         }
         Message::AllAlbumsLoaded(_) | Message::AllAlbumsLoadFailed(_) => {
             player.all_albums.is_current(issued)
+        }
+        Message::RecentlyAddedLoaded(_) | Message::RecentlyAddedLoadFailed(_) => {
+            player.recently_added.is_current(issued)
         }
         Message::PlaylistsLoaded(_) | Message::PlaylistsLoadFailed(_) => {
             player.playlists.is_current(issued)

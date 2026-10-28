@@ -68,11 +68,14 @@ pub(in crate::ui) struct WinampPlayer {
     /// The flat whole-library album list behind the Artists view's All Albums
     /// button.
     pub(in crate::ui) all_albums: BrowseList<Album>,
+    /// The library's recently added albums behind the Artists view's Recently
+    /// Added button, newest first.
+    pub(in crate::ui) recently_added: BrowseList<Album>,
     /// The library's playlists behind the Artists view's Playlists button.
     pub(in crate::ui) playlists: BrowseList<Playlist>,
     /// Which list the Songs view was opened from. `Album` returns to the
     /// per-artist Albums view on Back; `AllAlbums` returns to the flat All
-    /// Albums view; `Playlist` returns to the Playlists view. Set by the
+    /// Albums view; `RecentlyAdded` returns to the Recently Added view; `Playlist` returns to the Playlists view. Set by the
     /// selection arm from the view that rendered the pressed row, so Back
     /// always steps to the level the row came from.
     pub(in crate::ui) songs_origin: SongsOrigin,
@@ -302,6 +305,7 @@ pub(in crate::ui) enum CurrentView {
     Songs,
     AllSongs,
     AllAlbums,
+    RecentlyAdded,
     Playlists,
 }
 
@@ -313,6 +317,8 @@ pub(in crate::ui) enum SongsOrigin {
     /// The flat whole-library All Albums view: Back returns to
     /// `CurrentView::AllAlbums`.
     AllAlbums,
+    /// The Recently Added view: Back returns to `CurrentView::RecentlyAdded`.
+    RecentlyAdded,
     /// The Playlists view: Back returns to `CurrentView::Playlists`.
     Playlist,
 }
@@ -339,6 +345,7 @@ impl WinampPlayer {
             songs: BrowseList::new(false),
             all_songs: BrowseList::new(false),
             all_albums: BrowseList::new(false),
+            recently_added: BrowseList::new(false),
             playlists: BrowseList::new(false),
             songs_origin: SongsOrigin::Album,
             search_query: String::new(),

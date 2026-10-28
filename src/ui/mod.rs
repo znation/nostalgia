@@ -238,6 +238,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::ReloadLibrary => handlers::browse::reload_library(player),
         Message::ShowAllSongs => handlers::browse::show_all_songs(player),
         Message::ShowAllAlbums => handlers::browse::show_all_albums(player),
+        Message::ShowRecentlyAdded => handlers::browse::show_recently_added(player),
         Message::ShowPlaylists => handlers::browse::show_playlists(player),
         Message::SearchChanged(text) => handlers::browse::search::search_changed(player, text),
         Message::SearchSubmitted => handlers::browse::search::search_submitted(player),
@@ -250,6 +251,9 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::AllSongsLoaded(songs) => handlers::browse::fetch::all_songs_loaded(player, songs),
         Message::AllAlbumsLoaded(albums) => {
             handlers::browse::fetch::all_albums_loaded(player, albums)
+        }
+        Message::RecentlyAddedLoaded(albums) => {
+            handlers::browse::fetch::recently_added_loaded(player, albums)
         }
         Message::PlaylistsLoaded(playlists) => {
             handlers::browse::fetch::playlists_loaded(player, playlists)
@@ -268,6 +272,9 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         }
         Message::AllAlbumsLoadFailed(report) => {
             handlers::browse::fetch::all_albums_load_failed(player, report)
+        }
+        Message::RecentlyAddedLoadFailed(report) => {
+            handlers::browse::fetch::recently_added_load_failed(player, report)
         }
         Message::PlaylistsLoadFailed(report) => {
             handlers::browse::fetch::playlists_load_failed(player, report)

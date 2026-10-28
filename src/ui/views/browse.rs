@@ -197,6 +197,29 @@ pub fn view_all_albums<'a>(
     )
 }
 
+/// The Recently Added browse view: one row per recently added album, newest
+/// first as given. It mirrors [`view_all_albums`] over its own
+/// `recently_added` list, so Back from the songs it opens returns here.
+pub fn view_recently_added<'a>(
+    albums: &'a [Album],
+    titles: &'a [String],
+    labels: &'a [String],
+    epoch: u64,
+    selected: Option<usize>,
+    loading: bool,
+    error: Option<&'a str>,
+) -> Element<'a, Message> {
+    album_list(
+        albums,
+        titles,
+        labels,
+        &CurrentView::RecentlyAdded,
+        epoch,
+        selected,
+        browse_placeholder(&CurrentView::RecentlyAdded, loading, error, false),
+    )
+}
+
 /// The Playlists browse view: one row per playlist, in the order given, each
 /// selecting its row with [`Message::SelectRow`] (a second press opens it);
 /// `selected` paints that row's blue bar. `loading` and `error` select the
@@ -317,6 +340,14 @@ pub fn view_all_albums_button() -> Element<'static, Message> {
     labeled_button("All Albums", Message::ShowAllAlbums).into()
 }
 
+/// The Artists view's Recently Added button, opening the library's recently
+/// added albums. Rendered only on the Artists view; the update loop's
+/// `ShowRecentlyAdded` arm switches to `CurrentView::RecentlyAdded` and
+/// issues the fetch.
+pub fn view_recently_added_button() -> Element<'static, Message> {
+    labeled_button("Recently Added", Message::ShowRecentlyAdded).into()
+}
+
 /// The Artists view's Playlists button, opening the library's playlist list.
 /// Rendered only on the Artists view, beside the All Songs and All Albums
 /// buttons; the update loop's `ShowPlaylists` arm switches to
@@ -385,11 +416,12 @@ pub fn view_search_row(query: &str) -> Element<'_, Message> {
 /// naming the list once means a new view is added here rather than to each
 /// loop's literal.
 #[cfg(test)]
-pub const BROWSE_VIEWS: [CurrentView; 6] = [
+pub const BROWSE_VIEWS: [CurrentView; 7] = [
     CurrentView::Artists,
     CurrentView::Albums,
     CurrentView::Songs,
     CurrentView::AllSongs,
     CurrentView::AllAlbums,
+    CurrentView::RecentlyAdded,
     CurrentView::Playlists,
 ];

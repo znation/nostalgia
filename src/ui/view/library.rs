@@ -71,6 +71,15 @@ pub(super) fn view_library<'a>(
             player.all_albums.loading,
             player.all_albums.error.as_deref(),
         ),
+        CurrentView::RecentlyAdded => views::view_recently_added(
+            &player.recently_added.items,
+            &player.recently_added.titles,
+            &player.recently_added.labels,
+            player.recently_added.epoch,
+            player.recently_added.selected(),
+            player.recently_added.loading,
+            player.recently_added.error.as_deref(),
+        ),
         CurrentView::Playlists => views::view_playlists(
             &player.playlists.items,
             player.playlists.epoch,
@@ -100,14 +109,15 @@ pub(super) fn view_library<'a>(
     // with nothing selected it does nothing.
     library = library.push(views::view_open_button());
     library = library.push(views::view_browse_nav_buttons());
-    // The All Songs, All Albums, and Playlists buttons open the flat lists;
+    // The All Songs, All Albums, Playlists, and Recently Added buttons open the flat lists;
     // they live on the Artists view, beside Back/Retry, so each list is one
     // press from the top of the hierarchy.
     if matches!(player.current_view, CurrentView::Artists) {
         library = library
             .push(views::view_all_songs_button())
             .push(views::view_all_albums_button())
-            .push(views::view_playlists_button());
+            .push(views::view_playlists_button())
+            .push(views::view_recently_added_button());
     }
     // The search box and its Clear button sit on every browse screen, so a
     // query can be typed from (and cleared at) any level of the hierarchy.

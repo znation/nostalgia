@@ -859,7 +859,7 @@ fn root_view_offers_back_retry_and_flat_list_buttons_only_where_they_belong() {
             .texts()
             .any(|text| text == label)
     };
-    let flat_list_buttons = ["All Songs", "All Albums", "Playlists"];
+    let flat_list_buttons = ["All Songs", "All Albums", "Playlists", "Recently Added"];
 
     // Artists with a healthy fetch: the three flat-list entry points, but no
     // Back (nothing above it) and no Retry (nothing failed).

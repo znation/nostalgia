@@ -22,9 +22,11 @@ exactly one level up, and Back never falls through to the wrong level:
 - Albums → Artists.
 - Songs → Albums when the songs were opened from an artist's album list.
 - Songs → All Albums when the songs were opened from the All Albums list.
+- Songs → Recently Added when the songs were opened from the Recently Added list.
 - Songs → Playlists when the songs were opened from a playlist.
 - All Songs → Artists.
 - All Albums → Artists.
+- Recently Added → Artists.
 - Playlists → Artists.
 - An active search's result list → Artists, not the album the search was issued from.
 
@@ -759,7 +761,7 @@ refresh does not re-join and reformat every row.
   cached row text, with its loading, failure, or empty-search placeholder chosen from that same
   level's flags, and marks the playing row only in the Songs and All Songs lists.
 - The root `view` draws Back on every level below Artists, Retry only on Artists while its fetch
-  has failed, and the All Songs, All Albums, and Playlists buttons only on Artists.
+  has failed, and the All Songs, All Albums, Playlists, and Recently Added buttons only on Artists.
 - The app bar and the two section bands are `TITLE_BAR_HEIGHT` tall. The app bar centers
   `NOSTALGIA` between gold tapes with its M and shade/minimize/close controls pinned at the
   edges. Normal mode draws `NOSTALGIA EQUALIZER` immediately above the equalizer and

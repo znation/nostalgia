@@ -423,12 +423,14 @@ fn sort_leaves_other_lists_view_search_and_playback_untouched() {
             CurrentView::AllSongs => 3,
             CurrentView::AllAlbums => 4,
             CurrentView::Playlists => 5,
+            CurrentView::RecentlyAdded => unreachable!("not in the views iterated above"),
         };
         let expected_sorted = match &view {
             CurrentView::Artists => vec!["alpha", "bravo", "Zulu"],
             CurrentView::Albums | CurrentView::AllAlbums => vec!["alpha", "zulu"],
             CurrentView::Songs | CurrentView::AllSongs => vec!["song-1", "song-3", "song-2"],
             CurrentView::Playlists => vec!["alpha", "zulu"],
+            CurrentView::RecentlyAdded => unreachable!("not in the views iterated above"),
         };
         let view_name = format!("{view:?}");
 
