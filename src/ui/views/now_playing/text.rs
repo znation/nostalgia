@@ -17,8 +17,8 @@ use crate::audio::PlaybackFormat;
 /// scrolls through [`marquee_text`].
 pub(in crate::ui::views) const MARQUEE_WIDTH: usize = 22;
 
-/// The spaces between the end of a scrolling line and its next repeat.
-const MARQUEE_GAP: usize = 3;
+/// What separates the end of a scrolling line from its next repeat, like Winamp's.
+const MARQUEE_SEPARATOR: &str = "  ***  ";
 
 /// The number of characters the Now Playing line occupies: the playlist
 /// number prefix's characters, the label's characters, plus the artist's and
@@ -55,9 +55,9 @@ pub fn needs_marquee(label: &str, artist: &str, number: &str) -> bool {
 pub const TITLE_DRAG_PX_PER_CHAR: f32 = 10.0;
 
 /// The period [`marquee_text`] wraps on: the Now Playing line's [`display_len`] plus the
-/// [`MARQUEE_GAP`] spaces before it repeats.
+/// [`MARQUEE_SEPARATOR`] before it repeats.
 pub fn marquee_cycle_len(label: &str, artist: &str, number: &str) -> usize {
-    display_len(label, artist, number) + MARQUEE_GAP
+    display_len(label, artist, number) + MARQUEE_SEPARATOR.chars().count()
 }
 
 /// The marquee offset after dragging the title `dx` pixels from `start`: one character per
@@ -69,22 +69,18 @@ pub fn dragged_marquee_offset(start: usize, dx: f32, cycle: usize) -> usize {
 }
 
 /// Returns the `width`-character window of `text` starting at `offset % cycle`, where `cycle` is
-/// the line plus [`MARQUEE_GAP`] trailing spaces. A line that fits `width` is returned unchanged,
-/// so the caller's common case stays still; an overlong line wraps through the gap back to its
-/// start, with a space for each position past the text's end. Counts characters, not bytes, so a
+/// the line plus the trailing [`MARQUEE_SEPARATOR`]. A line that fits `width` is returned
+/// unchanged, so the caller's common case stays still and never shows the separator; an overlong
+/// line wraps through the separator back to its start. Counts characters, not bytes, so a
 /// non-ASCII title windows on character boundaries.
 pub(in crate::ui::views) fn marquee_text(text: &str, offset: usize, width: usize) -> String {
-    let chars: Vec<char> = text.chars().collect();
-    if chars.len() <= width {
+    if text.chars().count() <= width {
         return text.to_string();
     }
-    let cycle = chars.len() + MARQUEE_GAP;
-    let start = offset % cycle;
+    let cycle: Vec<char> = text.chars().chain(MARQUEE_SEPARATOR.chars()).collect();
+    let start = offset % cycle.len();
     (0..width)
-        .map(|position| {
-            let index = (start + position) % cycle;
-            chars.get(index).copied().unwrap_or(' ')
-        })
+        .map(|position| cycle[(start + position) % cycle.len()])
         .collect()
 }
 

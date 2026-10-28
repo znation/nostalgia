@@ -1365,7 +1365,8 @@ its internal id, whenever the id is in the known-track index:
   length.
 - A number-prefixed artist/title line longer than `MARQUEE_WIDTH` characters is windowed by
   `views::now_playing::marquee_text`, advanced one character per `Message::MarqueeTick`, and
-  reset to the start by `TrackSelected`; a line that fits is shown whole and borrowed.
+  reset to the start by `TrackSelected`; the window wraps through `MARQUEE_SEPARATOR`
+  (`  ***  `), and a line that fits is shown whole and borrowed, never with the separator.
 - The marquee timer is subscribed only while the line needs to scroll: `WinampPlayer::needs_marquee`
   measures the same number, label, and artist the bar renders, so a line that fits leaves the timer
   out (every message makes iced rebuild the whole visible screen, the library panel included while
@@ -1479,7 +1480,7 @@ rather than the panic unwinding the event loop.
   (all in `src/ui/tests/`)
 - `marquee_text_keeps_a_line_that_fits`
 - `marquee_text_windows_from_the_offset`
-- `marquee_text_wraps_through_the_gap_to_the_start`
+- `marquee_text_wraps_through_the_separator_to_the_start`
 - `marquee_text_counts_characters_not_bytes`
 - `display_len_counts_the_number_the_label_the_artist_and_the_separator`
 - `needs_marquee_only_for_a_line_too_long_for_the_lcd`

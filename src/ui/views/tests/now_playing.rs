@@ -237,7 +237,7 @@ fn format_track_time_shows_placeholders_when_the_source_supplied_no_duration() {
 
 // The marquee window is a pure character window: a line that fits is left
 // alone so the common case renders borrowed and still, and an overlong line
-// starts at the requested offset, wraps through the gap, and counts
+// starts at the requested offset, wraps through the separator, and counts
 // characters rather than bytes.
 #[test]
 fn marquee_text_keeps_a_line_that_fits() {
@@ -252,11 +252,12 @@ fn marquee_text_windows_from_the_offset() {
 }
 
 #[test]
-fn marquee_text_wraps_through_the_gap_to_the_start() {
-    assert_eq!(
-        marquee_text("The Sample Band - Opening", 25, 10),
-        "   The Sam"
-    );
+fn marquee_text_wraps_through_the_separator_to_the_start() {
+    let text = "The Sample Band - Opening";
+    assert_eq!(marquee_text(text, 25, 10), "  ***  The");
+    assert_eq!(marquee_text(text, 27, 10), "***  The S");
+    assert_eq!(marquee_text(text, 57, 10), "  ***  The");
+    assert_eq!(marquee_text("Opening", 9, 28), "Opening");
 }
 
 #[test]
@@ -1225,9 +1226,9 @@ fn dragged_marquee_offset_follows_the_pointer_and_wraps() {
 #[test]
 fn marquee_cycle_len_is_the_line_plus_its_gap() {
     use crate::ui::views::marquee_cycle_len;
-    // "3. " + "Title" + " - " + "Band" = 3 + 5 + 3 + 4 = 15, plus the 3-space gap.
-    assert_eq!(marquee_cycle_len("Title", "Band", "3. "), 18);
-    assert_eq!(marquee_cycle_len("Title", "", ""), 8);
+    // "3. " + "Title" + " - " + "Band" = 3 + 5 + 3 + 4 = 15, plus the 7-character separator.
+    assert_eq!(marquee_cycle_len("Title", "Band", "3. "), 22);
+    assert_eq!(marquee_cycle_len("Title", "", ""), 12);
 }
 
 #[test]
