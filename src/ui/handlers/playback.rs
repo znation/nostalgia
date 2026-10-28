@@ -160,6 +160,7 @@ pub(in crate::ui) fn track_selected(
             track_number: song.track_number,
             disc_number: song.disc_number,
             composer: song.composer.clone(),
+            content_rating: song.content_rating,
             number: format!("{}. ", index + 1),
             time: views::format_track_time(song.duration_ms),
             duration_ms: song.duration_ms,

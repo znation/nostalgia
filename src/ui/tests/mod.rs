@@ -1348,6 +1348,7 @@ fn known_track(title: &str, artist: &str, number: &str) -> views::KnownTrack {
         track_number: None,
         disc_number: None,
         composer: String::new(),
+        content_rating: None,
         number: number.to_string(),
         time: "3:30".to_string(),
         duration_ms: 210_000,

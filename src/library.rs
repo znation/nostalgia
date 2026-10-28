@@ -69,6 +69,26 @@ pub struct Playlist {
     pub name: String,
 }
 
+/// A song's content rating as Apple Music reports it (`attributes.contentRating`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ContentRating {
+    /// The song carries explicit content.
+    Explicit,
+    /// The song is the edited, clean version.
+    Clean,
+}
+
+impl ContentRating {
+    /// The word the File info panel shows after `Rating: `.
+    pub fn label(self) -> &'static str {
+        match self {
+            ContentRating::Explicit => "Explicit",
+            ContentRating::Clean => "Clean",
+        }
+    }
+}
+
 /// A song on an [`Album`], linked to it by [`Song::album_id`].
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Song {
@@ -124,6 +144,12 @@ pub struct Song {
     /// omit it.
     #[serde(default)]
     pub composer: String,
+    /// The track's content rating; `None` when the source supplied none. The
+    /// File info panel draws a `Rating:` line only while it is `Some`.
+    /// `#[serde(default)]` keeps a payload without the field deserializable,
+    /// as an older or partial response may omit it.
+    #[serde(default)]
+    pub content_rating: Option<ContentRating>,
     /// The [`Album::id`] of the album this song belongs to.
     pub album_id: String,
     /// The track's length in milliseconds; `0` means the source supplied no
@@ -223,6 +249,7 @@ mod tests {
             "track_number": null,
             "disc_number": null,
             "composer": "",
+            "content_rating": null,
             "album_id": "album-1",
             "duration_ms": 210_000,
             "preview_url": null
@@ -582,6 +609,22 @@ mod tests {
         assert_eq!(payload["composer"], json!("Jane Doe"));
         let parsed: Song = serde_json::from_value(payload).unwrap();
         assert_eq!(parsed.composer, "Jane Doe");
+    }
+
+    #[test]
+    fn song_content_rating_defaults_to_none_when_the_payload_omits_it() {
+        let parsed: Song = serde_json::from_value(song_required_fields_payload()).unwrap();
+        assert_eq!(parsed.content_rating, None);
+    }
+
+    #[test]
+    fn song_round_trips_its_content_rating() {
+        let mut song = sample_song();
+        song.content_rating = Some(super::ContentRating::Explicit);
+        let payload = serde_json::to_value(&song).unwrap();
+        assert_eq!(payload["content_rating"], json!("explicit"));
+        let parsed: Song = serde_json::from_value(payload).unwrap();
+        assert_eq!(parsed.content_rating, Some(super::ContentRating::Explicit));
     }
 
     #[test]

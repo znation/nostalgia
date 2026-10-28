@@ -228,6 +228,7 @@ fn sample_known_track(artist: &str) -> KnownTrack {
         track_number: None,
         disc_number: None,
         composer: String::new(),
+        content_rating: None,
         number: "1. ".to_string(),
         time: "3:30".to_string(),
         duration_ms: 210_000,
@@ -784,4 +785,35 @@ fn transport_options_button_publishes_toggle_options() {
         1,
         "a press on the lightning button must publish exactly one ToggleOptions: {messages:?}"
     );
+}
+
+#[test]
+fn file_info_overlay_draws_the_tracks_content_rating() {
+    let mut track = sample_known_track("The Sample Band");
+    track.composer = "Jane Doe".to_string();
+    track.content_rating = Some(crate::library::ContentRating::Explicit);
+    let texts = file_info_texts(&track, None);
+    let composer_at = texts
+        .iter()
+        .position(|text| text == "Composer: Jane Doe")
+        .unwrap();
+    let rating_at = texts
+        .iter()
+        .position(|text| text == "Rating: Explicit")
+        .unwrap();
+    let length_at = texts
+        .iter()
+        .position(|text| text == "Length: 3:30")
+        .unwrap();
+    assert!(
+        composer_at < rating_at && rating_at < length_at,
+        "the rating line must sit between Composer and Length: {texts:?}"
+    );
+}
+
+#[test]
+fn file_info_overlay_omits_the_content_rating_line_when_the_source_supplied_none() {
+    let track = sample_known_track("The Sample Band");
+    let texts = file_info_texts(&track, None);
+    assert_no_file_info_line(&texts, "Rating:");
 }

@@ -154,6 +154,7 @@ fn known_tracks(entries: &[(&str, &str, &str)]) -> HashMap<String, KnownTrack> {
                     track_number: None,
                     disc_number: None,
                     composer: String::new(),
+                    content_rating: None,
                     number: String::new(),
                     time: "--:--".to_string(),
                     duration_ms: 0,

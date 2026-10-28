@@ -8,7 +8,7 @@
 
 use super::super::AppleMusicError;
 use super::Resource;
-use crate::library::{Album, Artist, Playlist, Song};
+use crate::library::{Album, Artist, ContentRating, Playlist, Song};
 
 impl Resource {
     /// Whether Apple typed this resource `library-albums`, the only type
@@ -120,7 +120,7 @@ impl Resource {
     /// [`get_songs_from_playlist`](super::super::RestLibrary::get_songs_from_playlist), and
     /// [`RestLibrary::search_library`](super::super::RestLibrary::search_library)). The id and
     /// title are required (see [`required_id`] and [`required_name`]); the artist, album name,
-    /// genre, track number, disc number, composer, duration, and preview URL fall back to their "source supplied none"
+    /// genre, track number, disc number, composer, content rating, duration, and preview URL fall back to their "source supplied none"
     /// sentinels. The whole-library path maps up to [`MAX_PAGES`](super::super::paging::MAX_PAGES)
     /// pages of songs, so consuming the parsed resource avoids re-allocating every string it
     /// already owns.
@@ -139,6 +139,7 @@ impl Resource {
             track_number,
             disc_number,
             composer_name,
+            content_rating,
             duration_ms,
             previews,
         ) = match attributes {
@@ -151,10 +152,13 @@ impl Resource {
                 attributes.track_number,
                 attributes.disc_number,
                 attributes.composer_name,
+                attributes.content_rating,
                 attributes.duration_in_millis,
                 attributes.previews,
             ),
-            None => (None, None, None, None, None, None, None, None, None, None),
+            None => (
+                None, None, None, None, None, None, None, None, None, None, None,
+            ),
         };
         let title = required_name(title, &id, "song")?;
         let artist = artist_or_empty(artist);
@@ -188,10 +192,25 @@ impl Resource {
             track_number: positive_position(track_number),
             disc_number: positive_position(disc_number),
             composer,
+            content_rating: content_rating_from(content_rating),
             album_id: album_id.to_string(),
             duration_ms: duration_millis(duration_ms),
             preview_url,
         })
+    }
+}
+
+/// Maps the raw `contentRating` to a [`ContentRating`], ignoring ASCII case and surrounding
+/// whitespace; an absent, blank, or unknown value is `None`.
+fn content_rating_from(raw: Option<String>) -> Option<ContentRating> {
+    let raw = raw?;
+    let raw = raw.trim();
+    if raw.eq_ignore_ascii_case("explicit") {
+        Some(ContentRating::Explicit)
+    } else if raw.eq_ignore_ascii_case("clean") {
+        Some(ContentRating::Clean)
+    } else {
+        None
     }
 }
 

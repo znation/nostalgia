@@ -1,6 +1,6 @@
 //! The transient File info panel: a modal overlay over the normal-mode screen
 //! naming the current track's title, artist, album, year, genre, track number,
-//! disc number, composer, length, and — while the loaded preview reports one — its format.
+//! disc number, composer, content rating, length, and — while the loaded preview reports one — its format.
 
 use iced::{
     Element,
@@ -39,6 +39,8 @@ const DISC_NUMBER_LABEL: &str = "Disc #: ";
 
 /// The label before the track's composer.
 const COMPOSER_LABEL: &str = "Composer: ";
+/// The label before the track's content rating.
+const CONTENT_RATING_LABEL: &str = "Rating: ";
 
 /// The label before the track's formatted length.
 const LENGTH_LABEL: &str = "Length: ";
@@ -50,7 +52,7 @@ const FORMAT_LABEL: &str = "Format: ";
 ///
 /// The panel is modal (see [`modal_overlay`]): `Close` and the backdrop each
 /// publish [`Message::ToggleFileInfo`]. It lists the title, the artist, the
-/// album, the release year, the genre, the track number, the disc number, and the composer (each left out
+/// album, the release year, the genre, the track number, the disc number, the composer, and the content rating (each left out
 /// when the source supplied none), the length, which is `--:--` for an unknown
 /// duration, and — after the length
 /// and only while the loaded preview reports one (`format` is `Some`) — the
@@ -93,6 +95,11 @@ pub fn view_file_info_overlay<'a>(
     if !track.composer.is_empty() {
         content = content
             .push(Text::new(format!("{COMPOSER_LABEL}{}", track.composer)).color(theme::TEXT));
+    }
+    if let Some(rating) = track.content_rating {
+        content = content.push(
+            Text::new(format!("{CONTENT_RATING_LABEL}{}", rating.label())).color(theme::TEXT),
+        );
     }
     content = content.push(Text::new(format!("{LENGTH_LABEL}{}", track.time)).color(theme::TEXT));
     if let Some(format) = format {

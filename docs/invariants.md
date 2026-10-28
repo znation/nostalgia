@@ -1868,7 +1868,8 @@ Keyboard access and the transient row highlight added 2026-10-26 by the feature 
   (left out when `KnownTrack::genre` is empty), `Track #: …` (left out when
   `KnownTrack::track_number` is `None`), `Disc #: …` (left out when `KnownTrack::disc_number` is
   `None`), `Composer: …` (left out when `KnownTrack::composer` is
-  empty), `Length: …`,
+  empty), `Rating: Explicit` / `Rating: Clean` (left out when `KnownTrack::content_rating` is
+  `None`), `Length: …`,
   and a `Close` button over the base through `views::modal::modal_overlay`, the chrome About
   shares. `KnownTrack::year` is copied from `Song::year`, which `Resource::into_song` parses from
   the resource's `releaseDate` (only its leading four ASCII-digit year is kept).
@@ -1883,6 +1884,9 @@ Keyboard access and the transient row highlight added 2026-10-26 by the feature 
   above-`u32::MAX` → `None` rule as the track number.
   `KnownTrack::composer` is copied from `Song::composer`, which `Resource::into_song` takes from
   the resource's `attributes.composerName` with an absent or whitespace-only name mapped to `""`.
+  `KnownTrack::content_rating` is copied from `Song::content_rating`, which `Resource::into_song`
+  takes from the resource's `attributes.contentRating` through `content_rating_from` — trimmed,
+  ASCII-case-insensitive `explicit` or `clean`; an absent, blank, or unknown value is `None`.
   Between `Length:` and `Close`, it also draws one `Format: …` line (`256 KBPS  44 KHZ STEREO`,
   or `44 KHZ MONO` when the backend reports no bitrate) only while
   `WinampPlayer::playback_format` is `Some`, formatted from
@@ -1915,6 +1919,8 @@ overlay branch of `ui::view::view`.
 `file_info_overlay_omits_the_disc_number_line_when_the_source_supplied_none`,
 `file_info_overlay_draws_the_tracks_composer`,
 `file_info_overlay_omits_the_composer_line_when_the_source_supplied_none`,
+`file_info_overlay_draws_the_tracks_content_rating`,
+`file_info_overlay_omits_the_content_rating_line_when_the_source_supplied_none`,
 `file_info_overlay_draws_the_loaded_previews_format`,
 `file_info_overlay_omits_the_format_line_without_a_loaded_preview`, and
 `file_info_overlay_closes_from_close_and_backdrop_but_ignores_its_chrome`
@@ -1922,7 +1928,12 @@ overlay branch of `ui::view::view`.
 `known_tracks_record_the_played_songs_genre`, and
 `known_tracks_record_the_played_songs_track_number`, and
 `known_tracks_record_the_played_songs_disc_number`, and
-`known_tracks_record_the_played_songs_composer` (`src/ui/tests/readouts_tests.rs`);
+`known_tracks_record_the_played_songs_composer`, and
+`known_tracks_record_the_played_songs_content_rating` (`src/ui/tests/readouts_tests.rs`);
+`songs_from_album_maps_the_content_rating` and
+`songs_from_album_maps_a_missing_blank_or_unknown_content_rating_to_none`
+(`src/apple_music/rest/tests/library.rs`); `song_round_trips_its_content_rating`,
+`song_content_rating_defaults_to_none_when_the_payload_omits_it` (`src/library.rs`);
 `songs_from_album_maps_the_disc_number` and
 `songs_from_album_maps_a_missing_zero_negative_or_oversized_disc_number_to_none`
 (`src/apple_music/rest/tests/library.rs`); `song_round_trips_its_disc_number`,

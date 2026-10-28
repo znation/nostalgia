@@ -1117,3 +1117,23 @@ fn now_playing_number_survives_browsing_to_another_album() {
     assert_eq!(player.now_playing_number(current_track.as_deref()), "1. ");
     assert_eq!(player.now_playing_number(Some("no-such-song")), "");
 }
+
+// `TrackSelected` must also copy the played song's `content_rating` into the
+// `known_tracks` entry the File info panel reads.
+#[test]
+fn known_tracks_record_the_played_songs_content_rating() {
+    let (mut player, _state) = test_player();
+    let mut songs = stepping_songs();
+    songs[0].content_rating = Some(crate::library::ContentRating::Clean);
+    let _ = update(&mut player, Message::SongsLoaded(songs));
+
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+
+    assert_eq!(
+        player
+            .known_tracks
+            .get("song-1")
+            .map(|track| track.content_rating),
+        Some(Some(crate::library::ContentRating::Clean))
+    );
+}

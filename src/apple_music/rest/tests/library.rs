@@ -95,6 +95,7 @@ fn songs_from_album_maps_a_missing_duration_to_zero() {
             track_number: None,
             disc_number: None,
             composer: String::new(),
+            content_rating: None,
             album_id: "album-9".to_string(),
             duration_ms: 0,
             preview_url: None,
@@ -150,6 +151,35 @@ fn songs_from_album_maps_the_composer() {
         song_from_attributes(r#"{"name":"Opening","composerName":"Jane Doe"}"#).composer,
         "Jane Doe"
     );
+}
+
+#[test]
+fn songs_from_album_maps_the_content_rating() {
+    use crate::library::ContentRating::{Clean, Explicit};
+    for (raw, expected) in [
+        ("explicit", Explicit),
+        ("clean", Clean),
+        (" Explicit ", Explicit),
+    ] {
+        let attributes = format!(r#"{{"name":"Opening","contentRating":"{raw}"}}"#);
+        assert_eq!(
+            song_from_attributes(&attributes).content_rating,
+            Some(expected)
+        );
+    }
+}
+
+#[test]
+fn songs_from_album_maps_a_missing_blank_or_unknown_content_rating_to_none() {
+    for attributes in [
+        r#"{"name":"Opening"}"#,
+        r#"{"name":"Opening","contentRating":null}"#,
+        r#"{"name":"Opening","contentRating":""}"#,
+        r#"{"name":"Opening","contentRating":"   "}"#,
+        r#"{"name":"Opening","contentRating":"notExplicit"}"#,
+    ] {
+        assert_eq!(song_from_attributes(attributes).content_rating, None);
+    }
 }
 
 #[test]
@@ -455,6 +485,7 @@ fn search_library_maps_the_search_envelope_and_percent_encodes_the_term() {
             track_number: None,
             disc_number: None,
             composer: String::new(),
+            content_rating: None,
             album_id: String::new(),
             duration_ms: 210_000,
             preview_url: Some(PREVIEW_URL.to_string()),
@@ -585,6 +616,7 @@ fn get_all_songs_maps_the_library_songs_collection() {
             track_number: None,
             disc_number: None,
             composer: String::new(),
+            content_rating: None,
             album_id: String::new(),
             duration_ms: 210_000,
             preview_url: Some(PREVIEW_URL.to_string()),
@@ -853,6 +885,7 @@ fn get_songs_from_playlist_maps_the_playlist_tracks_collection() {
             track_number: None,
             disc_number: None,
             composer: String::new(),
+            content_rating: None,
             album_id: String::new(),
             duration_ms: 210_000,
             preview_url: Some(PREVIEW_URL.to_string()),

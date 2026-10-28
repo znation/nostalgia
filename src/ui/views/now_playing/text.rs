@@ -138,6 +138,9 @@ pub struct KnownTrack {
     /// The track's composer, copied from [`crate::library::Song::composer`]; `""` means the
     /// source supplied none, and the File info panel leaves the composer line out.
     pub composer: String,
+    /// The track's content rating, copied from [`crate::library::Song::content_rating`]; `None`
+    /// means the source supplied none, and the File info panel leaves the rating line out.
+    pub content_rating: Option<crate::library::ContentRating>,
     /// The cached `"<n>. "` prefix naming the track's 1-based position in the
     /// list row that selected it; `""` when no number is known.
     pub number: String,

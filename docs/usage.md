@@ -119,8 +119,8 @@ one-shot way, like Winamp's playlist editor, and Ctrl+Shift+R shuffles it into a
 same one-shot way. Alt+Up and Alt+Down move the selected row of the showing list one place up or
 down, the same one-shot way, keeping the row selected and scrolling the list only as far as needed
 to keep it in view. Alt+3 opens a transient File info panel naming the current track's title,
-artist, album, year, genre, track number, disc number, composer, and length, like Winamp (the album, year, genre,
-track-number, disc-number, and composer lines are left out
+artist, album, year, genre, track number, disc number, composer, content rating (`Rating: Explicit` or `Rating: Clean`), and length, like Winamp (the album, year, genre,
+track-number, disc-number, composer, and rating lines are left out
 when the source supplies none), plus a `Format:` line
 (`256 KBPS  44 KHZ STEREO`) while a loaded preview reports its format and `44 KHZ MONO` when it
 reports no bitrate; its `Close` button, a click on the backdrop, or Alt+3 again closes it, and it
