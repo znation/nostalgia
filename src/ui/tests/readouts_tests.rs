@@ -1,5 +1,22 @@
 use super::*;
 
+/// Plays `song-1` after `edit` changes it, and returns the `known_tracks`
+/// entry `TrackSelected` recorded for it.
+fn track_recorded_after_editing(edit: impl FnOnce(&mut Song)) -> views::KnownTrack {
+    let (mut player, _state) = test_player();
+    let mut songs = stepping_songs();
+    edit(&mut songs[0]);
+    let _ = update(&mut player, Message::SongsLoaded(songs));
+
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+
+    player
+        .known_tracks
+        .get("song-1")
+        .expect("song-1 recorded")
+        .clone()
+}
+
 #[test]
 fn track_selected_records_the_played_tracks_title_and_time() {
     let (mut player, _state) = test_player();
@@ -25,17 +42,9 @@ fn track_selected_records_the_played_tracks_title_and_time() {
 // played song's `year`, not drop it.
 #[test]
 fn known_tracks_record_the_played_songs_year() {
-    let (mut player, _state) = test_player();
-    let mut songs = stepping_songs();
-    songs[0].year = Some(2001);
-    let _ = update(&mut player, Message::SongsLoaded(songs));
+    let track = track_recorded_after_editing(|song| song.year = Some(2001));
 
-    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
-
-    assert_eq!(
-        player.known_tracks.get("song-1").map(|track| track.year),
-        Some(Some(2001))
-    );
+    assert_eq!(track.year, Some(2001));
 }
 
 // The File info panel reads the genre from the same `known_tracks` entry as
@@ -43,20 +52,9 @@ fn known_tracks_record_the_played_songs_year() {
 // drop it.
 #[test]
 fn known_tracks_record_the_played_songs_genre() {
-    let (mut player, _state) = test_player();
-    let mut songs = stepping_songs();
-    songs[0].genre = "Rock".to_string();
-    let _ = update(&mut player, Message::SongsLoaded(songs));
+    let track = track_recorded_after_editing(|song| song.genre = "Rock".to_string());
 
-    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
-
-    assert_eq!(
-        player
-            .known_tracks
-            .get("song-1")
-            .map(|track| track.genre.as_str()),
-        Some("Rock")
-    );
+    assert_eq!(track.genre.as_str(), "Rock");
 }
 
 // The File info panel reads the track number from the same `known_tracks`
@@ -64,60 +62,27 @@ fn known_tracks_record_the_played_songs_genre() {
 // song's `track_number`, not drop it.
 #[test]
 fn known_tracks_record_the_played_songs_track_number() {
-    let (mut player, _state) = test_player();
-    let mut songs = stepping_songs();
-    songs[0].track_number = Some(3);
-    let _ = update(&mut player, Message::SongsLoaded(songs));
+    let track = track_recorded_after_editing(|song| song.track_number = Some(3));
 
-    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
-
-    assert_eq!(
-        player
-            .known_tracks
-            .get("song-1")
-            .map(|track| track.track_number),
-        Some(Some(3))
-    );
+    assert_eq!(track.track_number, Some(3));
 }
 
 // `TrackSelected` must also copy the played song's `disc_number` into the
 // `known_tracks` entry the File info panel reads.
 #[test]
 fn known_tracks_record_the_played_songs_disc_number() {
-    let (mut player, _state) = test_player();
-    let mut songs = stepping_songs();
-    songs[0].disc_number = Some(2);
-    let _ = update(&mut player, Message::SongsLoaded(songs));
+    let track = track_recorded_after_editing(|song| song.disc_number = Some(2));
 
-    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
-
-    assert_eq!(
-        player
-            .known_tracks
-            .get("song-1")
-            .map(|track| track.disc_number),
-        Some(Some(2))
-    );
+    assert_eq!(track.disc_number, Some(2));
 }
 
 // `TrackSelected` must also copy the played song's `composer` into the
 // `known_tracks` entry the File info panel reads.
 #[test]
 fn known_tracks_record_the_played_songs_composer() {
-    let (mut player, _state) = test_player();
-    let mut songs = stepping_songs();
-    songs[0].composer = "Jane Doe".to_string();
-    let _ = update(&mut player, Message::SongsLoaded(songs));
+    let track = track_recorded_after_editing(|song| song.composer = "Jane Doe".to_string());
 
-    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
-
-    assert_eq!(
-        player
-            .known_tracks
-            .get("song-1")
-            .map(|track| track.composer.as_str()),
-        Some("Jane Doe")
-    );
+    assert_eq!(track.composer.as_str(), "Jane Doe");
 }
 
 // The number is the 1-based position of the row that selected the track, so
@@ -1122,18 +1087,12 @@ fn now_playing_number_survives_browsing_to_another_album() {
 // `known_tracks` entry the File info panel reads.
 #[test]
 fn known_tracks_record_the_played_songs_content_rating() {
-    let (mut player, _state) = test_player();
-    let mut songs = stepping_songs();
-    songs[0].content_rating = Some(crate::library::ContentRating::Clean);
-    let _ = update(&mut player, Message::SongsLoaded(songs));
-
-    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+    let track = track_recorded_after_editing(|song| {
+        song.content_rating = Some(crate::library::ContentRating::Clean)
+    });
 
     assert_eq!(
-        player
-            .known_tracks
-            .get("song-1")
-            .map(|track| track.content_rating),
-        Some(Some(crate::library::ContentRating::Clean))
+        track.content_rating,
+        Some(crate::library::ContentRating::Clean)
     );
 }
