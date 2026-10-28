@@ -254,6 +254,9 @@ pub(in crate::ui) enum Message {
     // show it under the All Albums view.
     ShowAllAlbums,
     ShowRecentlyAdded,
+    // The Artists view's Recently Played button: fetch the recently played
+    // songs and show them flat under the Recently Played view.
+    ShowRecentlyPlayed,
     // The Artists view's Playlists button: fetch the library's playlists and
     // show them under the Playlists view.
     ShowPlaylists,
@@ -278,6 +281,7 @@ pub(in crate::ui) enum Message {
     AllSongsLoaded(Vec<Song>),
     AllAlbumsLoaded(Vec<Album>),
     RecentlyAddedLoaded(Vec<Album>),
+    RecentlyPlayedLoaded(Vec<Song>),
     PlaylistsLoaded(Vec<Playlist>),
     // A browse fetch that returned an error. The payload is the formatted
     // report (see `loading::fetch_failure_report`): it names the failed fetch
@@ -289,6 +293,7 @@ pub(in crate::ui) enum Message {
     AllSongsLoadFailed(String),
     AllAlbumsLoadFailed(String),
     RecentlyAddedLoadFailed(String),
+    RecentlyPlayedLoadFailed(String),
     PlaylistsLoadFailed(String),
     // A browse reply stamped with the generation that produced it. The
     // mapper's `RequestGeneration::is_current` check runs on iced's executor

@@ -27,6 +27,7 @@ exactly one level up, and Back never falls through to the wrong level:
 - All Songs → Artists.
 - All Albums → Artists.
 - Recently Added → Artists.
+- Recently Played → Artists.
 - Playlists → Artists.
 - An active search's result list → Artists, not the album the search was issued from.
 
@@ -487,7 +488,7 @@ variants to those messages after its Control/Alt/Logo chord guard.
 
 **Guarantee.** With the window focused, Ctrl+Z (also with Shift) maps to `Message::FirstTrack` and
 Ctrl+B to `Message::LastTrack`. They play the first and last song of the list the current view
-draws from (`all_songs` in the flat All Songs view, `songs` otherwise), whatever Shuffle, Repeat,
+draws from (`all_songs` in the flat All Songs view, `recently_played` in the flat Recently Played view, `songs` otherwise), whatever Shuffle, Repeat,
 the current track, and the playback position are, and scroll the list to that row. An empty list
 schedules nothing. Plain and Shift Z/B keep stepping, and Alt or Logo chords with them stay unbound.
 A Ctrl-held click on the Previous or Next button (transport row, shade strip, library footer) does
@@ -517,7 +518,7 @@ epoch from the showing list without reading shared state or touching the play hi
 
 **Guarantee.** `JumpTracksBack` (keypad 1) and `JumpTracksForward` (keypad 3) play the song ten
 places before or after the current track in the list the current view draws from (`all_songs` in the
-flat All Songs view, `songs` otherwise), clamped to its first or last song and never wrapping, and
+flat All Songs view, `recently_played` in the flat Recently Played view, `songs` otherwise), clamped to its first or last song and never wrapping, and
 scroll the list to that row. With no current track, or one not in the list, forward plays the first
 song and backward the last. Shuffle, Repeat, and the playback position do not change the result, and
 `play_history` is untouched. An empty list schedules nothing.
@@ -759,9 +760,9 @@ refresh does not re-join and reformat every row.
   rather than an empty control.
 - The root `view` draws the browse level named by `CurrentView` from that level's own buffer and
   cached row text, with its loading, failure, or empty-search placeholder chosen from that same
-  level's flags, and marks the playing row only in the Songs and All Songs lists.
+  level's flags, and marks the playing row only in the Songs, All Songs, and Recently Played lists.
 - The root `view` draws Back on every level below Artists, Retry only on Artists while its fetch
-  has failed, and the All Songs, All Albums, Playlists, and Recently Added buttons only on Artists.
+  has failed, and the All Songs, All Albums, Playlists, Recently Added, and Recently Played buttons only on Artists.
 - The app bar and the two section bands are `TITLE_BAR_HEIGHT` tall. The app bar centers
   `NOSTALGIA` between gold tapes with its M and shade/minimize/close controls pinned at the
   edges. Normal mode draws `NOSTALGIA EQUALIZER` immediately above the equalizer and
@@ -1994,7 +1995,7 @@ and `jump_time_overlay_buttons_and_backdrop_publish_their_messages`
   `keyboard::listen`'s ignored-only feed never turns them into shortcuts; typing therefore
   filters, and `Close` or the backdrop closes the panel.
 - `handlers::jump::song_list` names the cached titles and epoch of the showing list: the browsed
-  Songs buffer or the flat All Songs buffer, and no list on every other view. `toggle_jump_file`
+  Songs buffer, the flat All Songs buffer, or the flat Recently Played buffer, and no list on every other view. `toggle_jump_file`
   opens only when that list exists; opening clears the query, closes About, Options, File info, and
   Jump to time, and while `shaded` first calls `toggle_window_shade`. Opening any of those panels
   closes Jump to File, and the flag is never persisted. Navigation that changes the showing view

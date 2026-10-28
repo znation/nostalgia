@@ -22,17 +22,20 @@ use crate::ui::{CurrentView, Message, WinampPlayer};
 const PREVIOUS_RESTART_SECS: u64 = 3;
 
 /// The song list the current view draws from, with the epoch that rendered it:
-/// the flat All Songs view's `all_songs`, otherwise the browsed `songs`. The
+/// the flat All Songs view's `all_songs`, the Recently Played view's
+/// `recently_played`, otherwise the browsed `songs`. The
 /// preview-end advance resolves its chosen id against this same buffer, so the
 /// scheduled `TrackSelected` index and epoch match the list the view drew.
 /// `step_track` selects the same list inline, because its backward branch also
 /// borrows `play_history` mutably and a slice borrowed through this helper
 /// would hold the whole player.
 pub(super) fn showing_songs(player: &WinampPlayer) -> (&[Song], u64) {
-    if player.current_view == CurrentView::AllSongs {
-        (&player.all_songs.items, player.all_songs.epoch)
-    } else {
-        (&player.songs.items, player.songs.epoch)
+    match player.current_view {
+        CurrentView::AllSongs => (&player.all_songs.items, player.all_songs.epoch),
+        CurrentView::RecentlyPlayed => {
+            (&player.recently_played.items, player.recently_played.epoch)
+        }
+        _ => (&player.songs.items, player.songs.epoch),
     }
 }
 
@@ -60,7 +63,8 @@ pub(super) fn forward_track_id(
 
 /// The task the Next/Previous buttons schedule: step the current track
 /// through the list the current view shows — `all_songs` for the flat All
-/// Songs view, the browsed `songs` otherwise — in the given direction — with
+/// Songs view, `recently_played` for the flat Recently Played view, the
+/// browsed `songs` otherwise — in the given direction — with
 /// Shuffle on a forward step picks a random non-current song via
 /// `transport::shuffled_track_id`, and a backward step first retraces the
 /// recorded play history via `PlayHistory::previous`, falling back to
@@ -115,11 +119,14 @@ pub(in crate::ui) fn step_track(player: &mut WinampPlayer, forward: bool) -> Tas
     let state = player.state.blocking_lock();
     // Step the list the current view draws from, so the scheduled
     // `TrackSelected` index and epoch match the list the arm resolves
-    // against: the flat All Songs view's `all_songs`, otherwise `songs`.
-    let (items, epoch) = if player.current_view == CurrentView::AllSongs {
-        (&player.all_songs.items, player.all_songs.epoch)
-    } else {
-        (&player.songs.items, player.songs.epoch)
+    // against: the flat All Songs view's `all_songs`, the Recently Played
+    // view's `recently_played`, otherwise `songs`.
+    let (items, epoch) = match player.current_view {
+        CurrentView::AllSongs => (&player.all_songs.items, player.all_songs.epoch),
+        CurrentView::RecentlyPlayed => {
+            (&player.recently_played.items, player.recently_played.epoch)
+        }
+        _ => (&player.songs.items, player.songs.epoch),
     };
     let stepped = if forward {
         forward_track_id(

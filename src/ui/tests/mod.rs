@@ -1379,6 +1379,7 @@ mod panels_tests;
 mod randomize_tests;
 mod readouts_tests;
 mod recently_added_tests;
+mod recently_played_tests;
 mod reverse_tests;
 mod scroll_tests;
 mod search_tests;

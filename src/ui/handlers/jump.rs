@@ -40,7 +40,7 @@ pub(in crate::ui) fn parse_jump_time(text: &str) -> Option<Duration> {
 }
 
 /// The cached row titles and epoch of the showing song list: the browsed Songs
-/// buffer, or the flat All Songs buffer, and `None` on every other view. The
+/// buffer, the flat All Songs buffer, or the flat Recently Played buffer, and `None` on every other view. The
 /// Jump to File panel names rows from this list and plays them through
 /// `TrackSelected`, so the titles shown and the epoch/index dispatched agree
 /// with the list the view drew.
@@ -48,6 +48,9 @@ fn song_list(player: &WinampPlayer) -> Option<(&[String], u64)> {
     match player.current_view {
         CurrentView::Songs => Some((&player.songs.titles, player.songs.epoch)),
         CurrentView::AllSongs => Some((&player.all_songs.titles, player.all_songs.epoch)),
+        CurrentView::RecentlyPlayed => {
+            Some((&player.recently_played.titles, player.recently_played.epoch))
+        }
         _ => None,
     }
 }

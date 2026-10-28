@@ -168,6 +168,32 @@ pub fn view_all_songs<'a>(
     )
 }
 
+/// The Recently Played browse view: one row per recently played song, most
+/// recent first as given. It mirrors [`view_all_songs`] over its own
+/// `recently_played` list.
+#[allow(clippy::too_many_arguments)]
+pub fn view_recently_played<'a>(
+    songs: &'a [Song],
+    titles: &'a [String],
+    labels: &'a [String],
+    epoch: u64,
+    selected: Option<usize>,
+    loading: bool,
+    error: Option<&'a str>,
+    current_track: Option<&str>,
+) -> Element<'a, Message> {
+    song_list(
+        songs,
+        titles,
+        labels,
+        &CurrentView::RecentlyPlayed,
+        epoch,
+        selected,
+        current_track,
+        browse_placeholder(&CurrentView::RecentlyPlayed, loading, error, false),
+    )
+}
+
 /// The All Albums browse view: one row per album in the whole library, in the
 /// order given, each selecting its row with [`Message::SelectRow`] (a second
 /// press opens it); `titles` and `labels` are the same cached display-title
@@ -340,6 +366,14 @@ pub fn view_all_albums_button() -> Element<'static, Message> {
     labeled_button("All Albums", Message::ShowAllAlbums).into()
 }
 
+/// The Artists view's Recently Played button, opening the user's recently
+/// played songs. Rendered only on the Artists view; the update loop's
+/// `ShowRecentlyPlayed` arm switches to `CurrentView::RecentlyPlayed` and
+/// issues the fetch.
+pub fn view_recently_played_button() -> Element<'static, Message> {
+    labeled_button("Recently Played", Message::ShowRecentlyPlayed).into()
+}
+
 /// The Artists view's Recently Added button, opening the library's recently
 /// added albums. Rendered only on the Artists view; the update loop's
 /// `ShowRecentlyAdded` arm switches to `CurrentView::RecentlyAdded` and
@@ -416,12 +450,13 @@ pub fn view_search_row(query: &str) -> Element<'_, Message> {
 /// naming the list once means a new view is added here rather than to each
 /// loop's literal.
 #[cfg(test)]
-pub const BROWSE_VIEWS: [CurrentView; 7] = [
+pub const BROWSE_VIEWS: [CurrentView; 8] = [
     CurrentView::Artists,
     CurrentView::Albums,
     CurrentView::Songs,
     CurrentView::AllSongs,
     CurrentView::AllAlbums,
     CurrentView::RecentlyAdded,
+    CurrentView::RecentlyPlayed,
     CurrentView::Playlists,
 ];

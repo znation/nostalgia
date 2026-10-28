@@ -53,6 +53,13 @@ pub(super) fn apply_overlays<'a>(
                 player.all_songs.epoch,
                 player.jump_file_selected,
             ),
+            CurrentView::RecentlyPlayed => views::view_jump_file_overlay(
+                base,
+                &player.jump_file_query,
+                &player.recently_played.titles,
+                player.recently_played.epoch,
+                player.jump_file_selected,
+            ),
             _ => base,
         }
     } else {

@@ -71,6 +71,9 @@ pub(in crate::ui) struct WinampPlayer {
     /// The library's recently added albums behind the Artists view's Recently
     /// Added button, newest first.
     pub(in crate::ui) recently_added: BrowseList<Album>,
+    /// The user's recently played songs behind the Artists view's Recently
+    /// Played button, most recent first.
+    pub(in crate::ui) recently_played: BrowseList<Song>,
     /// The library's playlists behind the Artists view's Playlists button.
     pub(in crate::ui) playlists: BrowseList<Playlist>,
     /// Which list the Songs view was opened from. `Album` returns to the
@@ -306,6 +309,7 @@ pub(in crate::ui) enum CurrentView {
     AllSongs,
     AllAlbums,
     RecentlyAdded,
+    RecentlyPlayed,
     Playlists,
 }
 
@@ -346,6 +350,7 @@ impl WinampPlayer {
             all_songs: BrowseList::new(false),
             all_albums: BrowseList::new(false),
             recently_added: BrowseList::new(false),
+            recently_played: BrowseList::new(false),
             playlists: BrowseList::new(false),
             songs_origin: SongsOrigin::Album,
             search_query: String::new(),

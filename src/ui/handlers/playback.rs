@@ -106,7 +106,8 @@ pub(in crate::ui) fn toggle_visualizer(player: &mut WinampPlayer) -> Task<Messag
 
 /// The play request: the message carries the pressed row's index plus the
 /// epoch of the list that rendered it. The Songs view draws from `songs`
-/// and the flat All Songs view draws from `all_songs`, so resolve the press
+/// and the flat All Songs and Recently Played views draw from `all_songs` and
+/// `recently_played`, so resolve the press
 /// against the list the current view shows; resolving it against the other
 /// list would no-op or play the wrong song. A mismatched epoch means the
 /// list was replaced after the row was rendered, so the index names a
@@ -119,10 +120,10 @@ pub(in crate::ui) fn track_selected(
     epoch: u64,
     index: usize,
 ) -> Task<Message> {
-    let selected = if player.current_view == CurrentView::AllSongs {
-        player.all_songs.select(epoch, index)
-    } else {
-        player.songs.select(epoch, index)
+    let selected = match player.current_view {
+        CurrentView::AllSongs => player.all_songs.select(epoch, index),
+        CurrentView::RecentlyPlayed => player.recently_played.select(epoch, index),
+        _ => player.songs.select(epoch, index),
     };
     let Some(song) = selected else {
         return Task::none();
@@ -222,10 +223,10 @@ pub(in crate::ui) fn track_played(
         let state = player.state.blocking_lock();
         if committed && let Some(current) = state.current_track.as_deref() {
             player.play_history.record(current);
-            let items = if player.current_view == CurrentView::AllSongs {
-                &player.all_songs.items
-            } else {
-                &player.songs.items
+            let items = match player.current_view {
+                CurrentView::AllSongs => &player.all_songs.items,
+                CurrentView::RecentlyPlayed => &player.recently_played.items,
+                _ => &player.songs.items,
             };
             player.shuffle_round.record(current, items);
         } else if !committed {

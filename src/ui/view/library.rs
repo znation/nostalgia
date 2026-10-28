@@ -80,6 +80,20 @@ pub(super) fn view_library<'a>(
             player.recently_added.loading,
             player.recently_added.error.as_deref(),
         ),
+        // Like All Songs, the flat recently played list marks its playing row.
+        CurrentView::RecentlyPlayed => {
+            let state = player.state.blocking_lock();
+            views::view_recently_played(
+                &player.recently_played.items,
+                &player.recently_played.titles,
+                &player.recently_played.labels,
+                player.recently_played.epoch,
+                player.recently_played.selected(),
+                player.recently_played.loading,
+                player.recently_played.error.as_deref(),
+                state.current_track.as_deref(),
+            )
+        }
         CurrentView::Playlists => views::view_playlists(
             &player.playlists.items,
             player.playlists.epoch,
@@ -109,7 +123,7 @@ pub(super) fn view_library<'a>(
     // with nothing selected it does nothing.
     library = library.push(views::view_open_button());
     library = library.push(views::view_browse_nav_buttons());
-    // The All Songs, All Albums, Playlists, and Recently Added buttons open the flat lists;
+    // The All Songs, All Albums, Playlists, Recently Added, and Recently Played buttons open the flat lists;
     // they live on the Artists view, beside Back/Retry, so each list is one
     // press from the top of the hierarchy.
     if matches!(player.current_view, CurrentView::Artists) {
@@ -117,7 +131,8 @@ pub(super) fn view_library<'a>(
             .push(views::view_all_songs_button())
             .push(views::view_all_albums_button())
             .push(views::view_playlists_button())
-            .push(views::view_recently_added_button());
+            .push(views::view_recently_added_button())
+            .push(views::view_recently_played_button());
     }
     // The search box and its Clear button sit on every browse screen, so a
     // query can be typed from (and cleared at) any level of the hierarchy.

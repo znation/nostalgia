@@ -181,7 +181,9 @@ fn open_selected_opens_the_selected_row_on_every_browse_level() {
             CurrentView::AllAlbums => player.all_albums.epoch,
             CurrentView::Playlists => player.playlists.epoch,
             CurrentView::Songs => unreachable!("the Songs level has its own Open test"),
-            CurrentView::RecentlyAdded => unreachable!("not in the views iterated above"),
+            CurrentView::RecentlyAdded | CurrentView::RecentlyPlayed => {
+                unreachable!("not in the views iterated above")
+            }
         };
 
         assert_message_schedules_no_work(&mut player, Message::SelectRow { epoch, index: 0 });
@@ -195,7 +197,7 @@ fn open_selected_opens_the_selected_row_on_every_browse_level() {
             CurrentView::Albums | CurrentView::AllAlbums | CurrentView::RecentlyAdded => {
                 matches!(&opened, Message::AlbumSelected { epoch: e, index: 0 } if *e == epoch)
             }
-            CurrentView::AllSongs => {
+            CurrentView::AllSongs | CurrentView::RecentlyPlayed => {
                 matches!(&opened, Message::TrackSelected { epoch: e, index: 0 } if *e == epoch)
             }
             CurrentView::Playlists => {

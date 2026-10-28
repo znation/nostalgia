@@ -78,7 +78,8 @@ pub(in crate::ui) fn songs_loaded(player: &mut WinampPlayer, songs: Vec<Song>) -
 
 /// Store a loaded song list, caching each row's display title and formatted
 /// length once (see `BrowseList::store_with_row_text`). Shared by
-/// [`songs_loaded`] and [`all_songs_loaded`] so the two stay in sync.
+/// [`songs_loaded`], [`all_songs_loaded`] and [`recently_played_loaded`] so they stay in
+/// sync.
 fn store_songs(list: &mut BrowseList<Song>, songs: Vec<Song>) {
     list.store_with_row_text(
         songs,
@@ -114,6 +115,16 @@ pub(in crate::ui) fn recently_added_loaded(
     albums: Vec<Album>,
 ) -> Task<Message> {
     store_albums(&mut player.recently_added, albums);
+    Task::none()
+}
+
+/// The recently played songs fetch landed: store the rows in the Recently
+/// Played list, with the same cached row text as the other song lists.
+pub(in crate::ui) fn recently_played_loaded(
+    player: &mut WinampPlayer,
+    songs: Vec<Song>,
+) -> Task<Message> {
+    store_songs(&mut player.recently_played, songs);
     Task::none()
 }
 
@@ -184,6 +195,15 @@ pub(in crate::ui) fn recently_added_load_failed(
     fail_list(&mut player.recently_added, report)
 }
 
+/// The recently played songs fetch failed: record the report on the Recently
+/// Played list.
+pub(in crate::ui) fn recently_played_load_failed(
+    player: &mut WinampPlayer,
+    report: String,
+) -> Task<Message> {
+    fail_list(&mut player.recently_played, report)
+}
+
 /// The playlists fetch failed: record the report on the playlists list.
 pub(in crate::ui) fn playlists_load_failed(
     player: &mut WinampPlayer,
@@ -218,6 +238,9 @@ pub(in crate::ui) fn browse_reply(
         }
         Message::RecentlyAddedLoaded(_) | Message::RecentlyAddedLoadFailed(_) => {
             player.recently_added.is_current(issued)
+        }
+        Message::RecentlyPlayedLoaded(_) | Message::RecentlyPlayedLoadFailed(_) => {
+            player.recently_played.is_current(issued)
         }
         Message::PlaylistsLoaded(_) | Message::PlaylistsLoadFailed(_) => {
             player.playlists.is_current(issued)

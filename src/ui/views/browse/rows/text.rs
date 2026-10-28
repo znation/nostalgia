@@ -23,6 +23,7 @@ pub(in crate::ui::views) fn empty_list_label(view: &CurrentView) -> &'static str
         CurrentView::AllSongs => "No songs",
         CurrentView::AllAlbums => "No albums",
         CurrentView::RecentlyAdded => "No recently added albums",
+        CurrentView::RecentlyPlayed => "No recently played songs",
         CurrentView::Playlists => "No playlists",
     }
 }

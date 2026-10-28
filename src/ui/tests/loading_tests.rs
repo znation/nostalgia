@@ -284,6 +284,11 @@ fn stale_flat_list_replies_superseded_before_update_are_not_stored() {
         Message::AllSongsLoadFailed
     );
     assert_list_rechecks_its_generation!(
+        recently_played,
+        Message::RecentlyPlayedLoaded(vec![sample_song()]),
+        Message::RecentlyPlayedLoadFailed
+    );
+    assert_list_rechecks_its_generation!(
         all_albums,
         Message::AllAlbumsLoaded(vec![sample_album()]),
         Message::AllAlbumsLoadFailed

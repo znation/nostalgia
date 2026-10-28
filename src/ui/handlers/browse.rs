@@ -136,6 +136,7 @@ pub(in crate::ui) fn select_row(
         CurrentView::AllSongs => player.all_songs.select_row(epoch, index),
         CurrentView::AllAlbums => player.all_albums.select_row(epoch, index),
         CurrentView::RecentlyAdded => player.recently_added.select_row(epoch, index),
+        CurrentView::RecentlyPlayed => player.recently_played.select_row(epoch, index),
         CurrentView::Playlists => player.playlists.select_row(epoch, index),
     };
     if already_selected == Some(true) {
@@ -174,6 +175,10 @@ pub(in crate::ui) fn open_selected(player: &mut WinampPlayer) -> Task<Message> {
             .recently_added
             .selected()
             .map(|index| (player.recently_added.epoch, index)),
+        CurrentView::RecentlyPlayed => player
+            .recently_played
+            .selected()
+            .map(|index| (player.recently_played.epoch, index)),
         CurrentView::Playlists => player
             .playlists
             .selected()
@@ -196,7 +201,7 @@ fn open_row(player: &WinampPlayer, epoch: u64, index: usize) -> Task<Message> {
         CurrentView::Albums | CurrentView::AllAlbums | CurrentView::RecentlyAdded => {
             Task::done(Message::AlbumSelected { epoch, index })
         }
-        CurrentView::Songs | CurrentView::AllSongs => {
+        CurrentView::Songs | CurrentView::AllSongs | CurrentView::RecentlyPlayed => {
             Task::done(Message::TrackSelected { epoch, index })
         }
         CurrentView::Playlists => Task::done(Message::PlaylistSelected { epoch, index }),
@@ -262,6 +267,7 @@ pub(in crate::ui) fn back(player: &mut WinampPlayer) -> Task<Message> {
             CurrentView::AllSongs => CurrentView::Artists,
             CurrentView::AllAlbums => CurrentView::Artists,
             CurrentView::RecentlyAdded => CurrentView::Artists,
+            CurrentView::RecentlyPlayed => CurrentView::Artists,
             CurrentView::Playlists => CurrentView::Artists,
             CurrentView::Artists => CurrentView::Artists,
         };
@@ -279,7 +285,7 @@ pub(in crate::ui) fn back(player: &mut WinampPlayer) -> Task<Message> {
             CurrentView::Playlists => player.playlists.restore_library_order(),
             // Back never lands on a song list, and both are refetched when
             // reopened, so neither can be the list being restored.
-            CurrentView::Songs | CurrentView::AllSongs => {}
+            CurrentView::Songs | CurrentView::AllSongs | CurrentView::RecentlyPlayed => {}
         }
         scroll::scroll_browse_to_top()
     } else {
@@ -321,6 +327,24 @@ pub(in crate::ui) fn show_all_albums(player: &mut WinampPlayer) -> Task<Message>
         |service| async move { service.get_all_albums().await },
         Message::AllAlbumsLoaded,
         Message::AllAlbumsLoadFailed,
+    ))
+}
+
+/// The Artists view's Recently Played button: fetch the user's recently
+/// played songs, most recent first, and show them flat under the Recently
+/// Played view. Like All Songs, the list hangs off the artists list: leave an
+/// active search behind and let Back return to Artists.
+pub(in crate::ui) fn show_recently_played(player: &mut WinampPlayer) -> Task<Message> {
+    switch_view(player, CurrentView::RecentlyPlayed);
+    // Clear the previous list before the new fetch lands, so a press
+    // during the fetch cannot resolve against stale rows.
+    fetch_at_top(fetch_level(
+        &mut player.recently_played,
+        &player.apple_music_service,
+        "loading recently played songs".to_string(),
+        |service| async move { service.get_recently_played_songs().await },
+        Message::RecentlyPlayedLoaded,
+        Message::RecentlyPlayedLoadFailed,
     ))
 }
 
@@ -386,6 +410,9 @@ pub(in crate::ui) fn sort_browse(player: &mut WinampPlayer) -> Task<Message> {
         CurrentView::RecentlyAdded => player
             .recently_added
             .sort_rows_by(|album| album.display_title().into_owned()),
+        CurrentView::RecentlyPlayed => player
+            .recently_played
+            .sort_rows_by(|song| song.display_title().into_owned()),
         CurrentView::Playlists => player
             .playlists
             .sort_rows_by(|playlist| playlist.name.clone()),
@@ -407,6 +434,7 @@ pub(in crate::ui) fn reverse_browse(player: &mut WinampPlayer) -> Task<Message> 
         CurrentView::AllSongs => player.all_songs.reverse_rows(),
         CurrentView::AllAlbums => player.all_albums.reverse_rows(),
         CurrentView::RecentlyAdded => player.recently_added.reverse_rows(),
+        CurrentView::RecentlyPlayed => player.recently_played.reverse_rows(),
         CurrentView::Playlists => player.playlists.reverse_rows(),
     }
     Task::none()
@@ -426,6 +454,7 @@ pub(in crate::ui) fn randomize_browse(player: &mut WinampPlayer) -> Task<Message
         CurrentView::AllSongs => player.all_songs.shuffle_rows(seed),
         CurrentView::AllAlbums => player.all_albums.shuffle_rows(seed),
         CurrentView::RecentlyAdded => player.recently_added.shuffle_rows(seed),
+        CurrentView::RecentlyPlayed => player.recently_played.shuffle_rows(seed),
         CurrentView::Playlists => player.playlists.shuffle_rows(seed),
     }
     Task::none()
@@ -445,6 +474,7 @@ pub(in crate::ui) fn move_selected_row(player: &mut WinampPlayer, down: bool) ->
         CurrentView::AllSongs => move_in(&mut player.all_songs, down),
         CurrentView::AllAlbums => move_in(&mut player.all_albums, down),
         CurrentView::RecentlyAdded => move_in(&mut player.recently_added, down),
+        CurrentView::RecentlyPlayed => move_in(&mut player.recently_played, down),
         CurrentView::Playlists => move_in(&mut player.playlists, down),
     };
     moved_to.map_or_else(Task::none, scroll::reveal_browse_row)

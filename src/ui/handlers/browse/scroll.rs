@@ -65,8 +65,8 @@ pub(in crate::ui) fn scroll_browse_page_down() -> Task<Message> {
 
 /// Keep the stepped-to playing row visible: reveal the browse row at `index`
 /// in the list, scrolling only as far as needed and not at all when the row
-/// is already fully visible, and only while a song list (`Songs` or
-/// `AllSongs`) is showing, since those are the levels whose rows carry the
+/// is already fully visible, and only while a song list (`Songs`,
+/// `AllSongs` or `RecentlyPlayed`) is showing, since those are the levels whose rows carry the
 /// `▶` playing marker. Another browse level leaves the list where it is, and
 /// so does a direct row press — the pressed row is already in view — which
 /// deliberately does not call this.
@@ -75,7 +75,9 @@ pub(in crate::ui) fn scroll_browse_to_playing_row(
     index: usize,
 ) -> Task<Message> {
     match player.current_view {
-        CurrentView::Songs | CurrentView::AllSongs => reveal_browse_row(index),
+        CurrentView::Songs | CurrentView::AllSongs | CurrentView::RecentlyPlayed => {
+            reveal_browse_row(index)
+        }
         _ => Task::none(),
     }
 }
