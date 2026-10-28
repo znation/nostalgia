@@ -182,7 +182,13 @@ pub(in crate::ui) fn playback_finished(
         }
         let (items, list_epoch) = showing_songs(player);
         let current = state.current_track.as_deref();
-        let picked = forward_track_id(items, current, state.shuffle, state.repeat);
+        let picked = forward_track_id(
+            items,
+            current,
+            state.shuffle,
+            state.repeat,
+            &player.shuffle_round,
+        );
         // A pick that is still the current song is a step only when Repeat
         // wraps a one-song list back to itself. With Repeat off, Next
         // re-lands on the last song at the end; with Shuffle on, a list with

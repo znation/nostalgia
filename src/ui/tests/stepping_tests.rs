@@ -364,6 +364,19 @@ fn next_with_shuffle_never_reselects_the_current_track() {
     ));
 }
 
+// Shuffle plays every song once before repeating: with song-1 and song-2
+// already played, the only unplayed song is song-3 (index 2).
+#[test]
+fn next_with_shuffle_plays_the_unplayed_song() {
+    let (mut player, state) = player_stepping_from(None);
+    state.blocking_lock().shuffle = true;
+    record_a_play(&mut player, &state, "song-1");
+    record_a_play(&mut player, &state, "song-2");
+
+    let task = update(&mut player, Message::NextTrack);
+    assert_track_selected(task, 0, 2);
+}
+
 // With Shuffle on, Previous retraces the recorded play order: the history
 // here is song-1, song-3, song-2, so the first press must land on song-3
 // (index 2), not the sequential song-1 (index 0), and the second press —
@@ -779,6 +792,24 @@ fn preview_end_with_shuffle_on_picks_the_other_song() {
     assert_eq!(
         state.blocking_lock().current_track.as_deref(),
         Some("song-2")
+    );
+}
+
+// The preview-end advance shares Next's round: with song-1 and song-2
+// played, a natural end on song-2 lands on song-3.
+#[test]
+fn preview_end_with_shuffle_on_plays_the_unplayed_song() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) = player_playing_stepping_song(&recording, "song-1");
+    state.blocking_lock().shuffle = true;
+    record_a_play(&mut player, &state, "song-1");
+    record_a_play(&mut player, &state, "song-2");
+
+    advance_on_preview_end(&mut player, 0, 2);
+
+    assert_eq!(
+        state.blocking_lock().current_track.as_deref(),
+        Some("song-3")
     );
 }
 

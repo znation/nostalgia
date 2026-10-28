@@ -2523,6 +2523,27 @@ in `src/ui/transport/history.rs` implements the recorded-play walk.
 - `play_into_maps_a_hanging_play_to_a_completed_message` (`src/ui/tests/`)
 - `play_into_reports_a_failed_play_and_still_completes` (`src/ui/tests/`)
 
+## Shuffle rounds
+
+**Guarantee.** A shuffled forward step (Next and the preview-end advance) picks only among the
+showing list's songs not yet played this round, so every song plays once before any repeats. Once
+every song has played, a new round starts from the song now playing. With no unplayed song left
+(for example a one-song list) the pick falls back to `transport::shuffled_track_id`. Only
+committed plays are recorded, whether or not Shuffle is on.
+
+**Enforced by.** `transport::ShuffleRound` in `src/ui/transport/round.rs`;
+`handlers::playback::track_played` records committed plays; `stepping::forward_track_id` picks
+through `ShuffleRound::pick`.
+
+**Pinned by.**
+
+- `pick_skips_songs_played_this_round` (`src/ui/transport/round.rs`)
+- `a_completed_round_starts_over_from_the_current_song` (`src/ui/transport/round.rs`)
+- `pick_falls_back_when_no_unplayed_song_remains` (`src/ui/transport/round.rs`)
+- `record_forgets_songs_the_list_no_longer_shows` (`src/ui/transport/round.rs`)
+- `next_with_shuffle_plays_the_unplayed_song` (`src/ui/tests/stepping_tests.rs`)
+- `preview_end_with_shuffle_on_plays_the_unplayed_song` (`src/ui/tests/stepping_tests.rs`)
+
 ## Previous restart
 
 **Guarantee.** A Previous press on a loaded preview whose last reported position is at least three

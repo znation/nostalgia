@@ -221,6 +221,12 @@ pub(in crate::ui) fn track_played(
         let state = player.state.blocking_lock();
         if committed && let Some(current) = state.current_track.as_deref() {
             player.play_history.record(current);
+            let items = if player.current_view == CurrentView::AllSongs {
+                &player.all_songs.items
+            } else {
+                &player.songs.items
+            };
+            player.shuffle_round.record(current, items);
         } else if !committed {
             // A failed play leaves shared state naming the jump's
             // target (the backend leaves `current_track` set), so keep

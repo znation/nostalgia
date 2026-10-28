@@ -105,6 +105,9 @@ pub(in crate::ui) struct WinampPlayer {
     /// Previous retraces it, and a list that no longer shows the previous
     /// entry falls back to sequential stepping.
     pub(in crate::ui) play_history: transport::PlayHistory,
+    /// The songs played this Shuffle round, so a shuffled forward step
+    /// plays each song of the showing list once before any repeats.
+    pub(in crate::ui) shuffle_round: transport::ShuffleRound,
     /// How far an overlong Now Playing title has scrolled: the character
     /// offset `views::view_now_playing` windows the combined number, artist,
     /// and title line by.
@@ -330,6 +333,7 @@ impl WinampPlayer {
             search_active: false,
             known_tracks: HashMap::new(),
             play_history: transport::PlayHistory::default(),
+            shuffle_round: transport::ShuffleRound::default(),
             marquee_offset: 0,
             title_drag: None,
             playback_position: None,

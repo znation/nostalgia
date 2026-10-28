@@ -37,7 +37,8 @@ pub(super) fn showing_songs(player: &WinampPlayer) -> (&[Song], u64) {
 }
 
 /// The id a forward step selects from `items`: with `shuffle` on, a random
-/// non-current song via `transport::shuffled_track_id`; otherwise the
+/// song not yet played this round via `ShuffleRound::pick` (so every song
+/// plays once before any repeats); otherwise the
 /// `transport::next_track_id` successor, which wraps at the end only when
 /// `repeat` is on. Next and the preview-end advance share this choice, so a
 /// preview that runs out steps exactly where the Next button would. Pure, and
@@ -48,9 +49,10 @@ pub(super) fn forward_track_id(
     current: Option<&str>,
     shuffle: bool,
     repeat: bool,
+    round: &transport::ShuffleRound,
 ) -> Option<String> {
     if shuffle {
-        transport::shuffled_track_id(items, current, transport::shuffle_roll())
+        round.pick(items, current, transport::shuffle_roll())
     } else {
         transport::next_track_id(items, current, repeat)
     }
@@ -125,6 +127,7 @@ pub(in crate::ui) fn step_track(player: &mut WinampPlayer, forward: bool) -> Tas
             state.current_track.as_deref(),
             state.shuffle,
             state.repeat,
+            &player.shuffle_round,
         )
     } else if state.shuffle {
         player

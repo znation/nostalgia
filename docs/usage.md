@@ -193,7 +193,8 @@ keys Play/Pause, Play, Pause, Stop, Next track, and Previous track drive the tra
 Pause, Stop, Next track, and Previous track match the on-screen controls, while Play/Pause
 toggles a loaded preview and stops a track with none. Previous — the button, the Z key, and the system Previous track key — restarts the
 loaded preview from its start once it has played at least three seconds, and steps back before
-that; with Shuffle on, such an earlier Previous retraces the
+that; with Shuffle on, Next picks a song not yet played this round (every song plays once before
+any repeats) and such an earlier Previous retraces the
 tracks actually played before the current one instead of stepping one row backward in the list.
 While a song list is showing, Next, Previous (including a shuffled retrace), the preview-end
 advance, Ctrl+Z/Ctrl+B edge jumps, and keypad 1/3 ten-song jumps scroll that list only as far as
@@ -225,7 +226,8 @@ the preview through the audio backend; a pause with no loaded preview stops the 
 since there is nothing to pause. Play resumes a paused preview, restarts a stopped one from the
 beginning, and restarts a playing one from its start. When a loaded preview reaches its end while playing, the player steps forward through the
 showing list: to the next song, to the first song with Repeat on at the end, or, with Shuffle on, to
-a shuffled song when another exists. With Repeat off on the last song it stops instead and keeps
+a shuffled song when another exists. Shuffle plays each song of the showing list once before any
+repeats, like Winamp. With Repeat off on the last song it stops instead and keeps
 that song queued for Play. The volume, balance, Repeat and Shuffle flags, the equalizer's on/off
 state, AUTO choice, curve, and preset, the elapsed/remaining readout choice, the visualizer's
 shown/hidden choice, the equalizer and library panels' shown/hidden choices, the always-on-top

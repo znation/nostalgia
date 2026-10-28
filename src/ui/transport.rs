@@ -13,8 +13,10 @@ use std::hash::{BuildHasher, Hasher};
 use crate::library::Song;
 
 mod history;
+mod round;
 
 pub use history::PlayHistory;
+pub use round::ShuffleRound;
 
 /// The id of the song one step from `current` in `songs`, in the given
 /// direction. With `repeat` (Repeat on) the step wraps around the ends:
