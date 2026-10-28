@@ -1977,8 +1977,9 @@ and `jump_time_overlay_buttons_and_backdrop_publish_their_messages`
   (Reload, Back, search, and the All Songs/All Albums/Playlists buttons) clears it, so a panel left
   open cannot reappear over a later song list. A plain or Shift-held Escape press also closes it (see
   `## Transient panel dismissal`).
-- `views::jump_file::jump_file_matches` trims the query and compares it case-insensitively as a
-  substring, matching every index for a blank query, in list order. The view and the submit handler
+- `views::jump_file::jump_file_matches` splits the query on whitespace; an index matches when its
+  title contains every word as a case-insensitive substring, in any order. A blank query has no
+  words and matches every index. Matches come in list order. The view and the submit handler
   call it, so the rows drawn and the row Enter plays agree.
 - `views::jump_file::jump_file_row_label` prefixes a row with `index + 1`, the source position the
   same 0-based index has in the showing list, followed by `". "` and the cached title. Filtering
@@ -2020,6 +2021,7 @@ and `jump_time_overlay_buttons_and_backdrop_publish_their_messages`
 jump-file branch of `ui::view::view`.
 
 **Pinned by.** `matches_blank_all_case_insensitive_trimmed_in_order`,
+`matches_every_whitespace_separated_word_in_any_order`,
 `jump_file_row_label_numbers_the_showing_list_position`,
 `jump_file_highlighted_prefers_a_selected_match_and_falls_back_to_first`,
 `jump_file_row_style_highlights_only_the_highlighted_row`,
@@ -2032,6 +2034,7 @@ jump-file branch of `ui::view::view`.
 (`src/ui/views/tests/jump_file.rs`) pins the match-row cache;
 `message_for_maps_j_to_jump_file`, `message_for_maps_ctrl_j_to_jump_time`, and
 `message_for_jump_file_maps_up_and_down_and_falls_back` (`src/ui/shortcuts.rs`);
+`submit_matches_the_artist_and_title_words_together`,
 `page_up_and_down_move_the_highlight_by_one_page_and_clamp`,
 `a_highlight_move_reveals_only_the_landed_row_in_the_match_list`,
 `jump_file_row_top_starts_at_the_padding_and_steps_by_one_row_and_gap`, and the other tests in

@@ -49,6 +49,22 @@ fn matches_blank_all_case_insensitive_trimmed_in_order() {
 }
 
 #[test]
+fn matches_every_whitespace_separated_word_in_any_order() {
+    let titles = vec![
+        "The Sample Band - One".to_string(),
+        "The Sample Band - Two".to_string(),
+        "Other Act - Two Step".to_string(),
+    ];
+    assert_eq!(jump_file_matches(&titles, "band two"), vec![1]);
+    assert_eq!(jump_file_matches(&titles, "two band"), vec![1]);
+    assert_eq!(jump_file_matches(&titles, "TWO"), vec![1, 2]);
+    assert_eq!(jump_file_matches(&titles, "two  step"), vec![2]);
+    assert_eq!(jump_file_matches(&titles, "two\tstep"), vec![2]);
+    assert_eq!(jump_file_matches(&titles, "band zzz"), Vec::<usize>::new());
+    assert_eq!(jump_file_matches(&titles, "- two"), vec![1, 2]);
+}
+
+#[test]
 fn jump_file_page_step_fits_the_visible_list() {
     let page_height = JUMP_FILE_PAGE_ROWS as f32 * JUMP_FILE_ROW_HEIGHT
         + (JUMP_FILE_PAGE_ROWS as f32 - 1.0) * JUMP_FILE_ROW_SPACING

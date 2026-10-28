@@ -39,15 +39,20 @@ pub const JUMP_FILE_PAGE_ROWS: isize = 5;
 
 /// The source indices of the `titles` matching `query`, in list order.
 ///
-/// The query is trimmed and compared case-insensitively as a substring; an
-/// empty query matches every index. The view and the submit handler both call
+/// The query is split on whitespace and an index matches when its title
+/// contains every word as a case-insensitive substring, in any order; a blank
+/// query has no words and matches every index. The view and the submit handler both call
 /// this one function, so the rows shown and the row Enter plays cannot drift.
 pub(crate) fn jump_file_matches(titles: &[String], query: &str) -> Vec<usize> {
-    let query = query.trim().to_lowercase();
+    let query = query.to_lowercase();
+    let words: Vec<&str> = query.split_whitespace().collect();
     titles
         .iter()
         .enumerate()
-        .filter(|(_, title)| query.is_empty() || title.to_lowercase().contains(&query))
+        .filter(|(_, title)| {
+            let title = title.to_lowercase();
+            words.iter().all(|word| title.contains(word))
+        })
         .map(|(index, _)| index)
         .collect()
 }

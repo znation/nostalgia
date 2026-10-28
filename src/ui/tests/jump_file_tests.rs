@@ -62,6 +62,18 @@ fn submit_plays_the_first_match_and_closes() {
 }
 
 #[test]
+fn submit_matches_the_artist_and_title_words_together() {
+    let (mut player, _state) = player_in_songs();
+    let _ = update(&mut player, Message::ToggleJumpFile);
+    let epoch = player.songs.epoch;
+
+    let task = submit(&mut player, "band two");
+
+    assert_track_selected(task, epoch, 1);
+    assert!(!player.jump_file_visible);
+}
+
+#[test]
 fn submit_uses_the_all_songs_list_when_it_is_showing() {
     let (mut player, _state) = test_player();
     let _ = update(&mut player, Message::AllSongsLoaded(stepping_songs()));
