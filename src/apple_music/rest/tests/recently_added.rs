@@ -79,3 +79,31 @@ fn get_recently_added_albums_rejects_a_nameless_library_album() {
     assert!(error.contains("without a name"), "{error}");
     assert!(error.contains("album-7"), "{error}");
 }
+
+// A mixed-type page that holds a library album with a blank id fails the load, like the other
+// album collections, rather than yielding an album nothing can open.
+#[test]
+fn get_recently_added_albums_rejects_a_blank_id_library_album() {
+    let error = error_over(
+        r#"{"data":[{"id":"  ","type":"library-albums","attributes":{"name":"Ghost"}}]}"#,
+        |library| library.get_recently_added_albums(&rest_session()),
+    );
+
+    assert!(error.contains("blank id"), "{error}");
+}
+
+// A resource of another type is dropped before mapping, so its own missing name or blank id
+// never fails the load.
+#[test]
+fn get_recently_added_albums_ignores_a_malformed_resource_of_another_type() {
+    let stub = StubTransport::returning(
+        r#"{"data":[{"id":"","type":"library-playlists","attributes":{}},
+            {"id":"l.1","type":"library-albums","attributes":{"name":"Kept"}}]}"#,
+    );
+    let library = library_over(&stub);
+
+    let albums = library.get_recently_added_albums(&rest_session()).unwrap();
+
+    assert_eq!(albums.len(), 1);
+    assert_eq!(albums[0].title, "Kept");
+}
