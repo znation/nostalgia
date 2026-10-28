@@ -1,4 +1,4 @@
-//! The LCD's timed `Volume: N%` readout after a key or wheel volume nudge.
+//! The LCD's timed mixer readout after a key or wheel nudge of the volume, balance, preamp, or a band.
 
 use super::*;
 
@@ -37,7 +37,7 @@ fn the_readout_lasts_four_ticks_then_the_title_returns() {
     let _ = update(&mut player, Message::MarqueeTick);
     assert!(root_view_draws(&player, "Tune"));
     assert!(!root_view_draws(&player, &readout));
-    assert_eq!(player.volume_flash_ticks, 0);
+    assert_eq!(player.mixer_flash_ticks, 0);
     assert_eq!(player.needs_lcd_tick(), player.needs_marquee());
 }
 
@@ -59,10 +59,10 @@ fn the_flash_pauses_a_scrolling_title() {
 #[test]
 fn the_wheel_flashes_but_a_zero_or_nan_roll_does_not() {
     let (player, _) = nudged(Message::VolumeWheel(1.0));
-    assert!(player.volume_flash_ticks > 0);
+    assert!(player.mixer_flash_ticks > 0);
     for direction in [0.0, f32::NAN] {
         let (player, _) = nudged(Message::VolumeWheel(direction));
-        assert_eq!(player.volume_flash_ticks, 0);
+        assert_eq!(player.mixer_flash_ticks, 0);
     }
 }
 
@@ -77,13 +77,65 @@ fn releasing_a_mixer_key_keeps_the_readout() {
 }
 
 #[test]
-fn a_balance_or_preamp_roll_clears_the_flash() {
-    for message in [Message::BalanceWheel(1.0), Message::EqPreampWheel(1.0)] {
-        let (mut player, _) = nudged(Message::VolumeUp);
-        let _ = update(&mut player, message);
-        assert_eq!(player.volume_flash_ticks, 0);
+fn a_slider_roll_flashes_that_sliders_readout() {
+    let (state_player, _) = nudged(Message::BalanceWheel(1.0));
+    assert_eq!(state_player.mixer_drag, None);
+    let cases = [
+        (Message::BalanceWheel(1.0), views::MixerDrag::Balance),
+        (Message::EqPreampWheel(1.0), views::MixerDrag::EqPreamp),
+        (Message::EqBandWheel(0, 1.0), views::MixerDrag::EqBand(0)),
+    ];
+    for (message, slider) in cases {
+        let (mut player, state) = nudged(message);
+        let text = {
+            let s = state.blocking_lock();
+            views::mixer_readout_text(
+                slider,
+                s.volume(),
+                s.balance(),
+                s.eq_preamp(),
+                &s.eq_bands(),
+            )
+        };
+        assert!(root_view_draws(&player, &text), "{text}");
+        assert!(!root_view_draws(&player, "Tune"));
+        assert_eq!(player.mixer_drag, None);
+        for _ in 0..4 {
+            let _ = update(&mut player, Message::MarqueeTick);
+        }
         assert!(root_view_draws(&player, "Tune"));
+        assert_eq!(player.mixer_flash_ticks, 0);
     }
+}
+
+#[test]
+fn a_no_op_slider_roll_flashes_nothing() {
+    let messages = [
+        Message::BalanceWheel(0.0),
+        Message::BalanceWheel(f32::NAN),
+        Message::EqPreampWheel(0.0),
+        Message::EqPreampWheel(f32::NAN),
+        Message::EqBandWheel(0, 0.0),
+        Message::EqBandWheel(0, f32::NAN),
+        Message::EqBandWheel(BAND_COUNT, 1.0),
+    ];
+    for message in messages {
+        let (player, _) = nudged(message);
+        assert_eq!(player.mixer_flash_ticks, 0);
+    }
+}
+
+#[test]
+fn a_slider_roll_and_a_volume_nudge_replace_each_other() {
+    let (mut player, _) = nudged(Message::VolumeUp);
+    let _ = update(&mut player, Message::BalanceWheel(1.0));
+    assert!(root_view_draws(&player, "Balance:"));
+    assert!(!root_view_draws(&player, "Volume:"));
+    let _ = update(&mut player, Message::MarqueeTick);
+    let _ = update(&mut player, Message::VolumeUp);
+    assert!(root_view_draws(&player, "Volume:"));
+    assert!(!root_view_draws(&player, "Balance:"));
+    assert_eq!(player.mixer_flash_ticks, 4);
 }
 
 #[test]
@@ -92,14 +144,6 @@ fn a_drag_readout_takes_precedence_over_the_flash() {
     player.mixer_drag = Some(views::MixerDrag::Balance);
     assert!(root_view_draws(&player, "Balance:"));
     assert!(!root_view_draws(&player, "Volume:"));
-}
-
-#[test]
-fn an_eq_band_roll_clears_the_flash() {
-    let (mut player, _) = nudged(Message::VolumeUp);
-    let _ = update(&mut player, Message::EqBandWheel(0, 1.0));
-    assert_eq!(player.volume_flash_ticks, 0);
-    assert!(root_view_draws(&player, "Tune"));
 }
 
 #[test]
@@ -113,8 +157,8 @@ fn a_no_op_mixer_roll_keeps_the_flash() {
     ];
     for message in rolls {
         let (mut player, _) = nudged(Message::VolumeUp);
-        let flash = player.volume_flash_ticks;
+        let flash = player.mixer_flash_ticks;
         let _ = update(&mut player, message);
-        assert_eq!(player.volume_flash_ticks, flash);
+        assert_eq!(player.mixer_flash_ticks, flash);
     }
 }

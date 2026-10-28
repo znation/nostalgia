@@ -246,8 +246,8 @@ pub(in crate::ui) fn track_played(
 /// the line is too long to fit the LCD's character budget (see
 /// `crate::ui::subscriptions::subscriptions`), so every tick scrolls the bar.
 pub(in crate::ui) fn marquee_tick(player: &mut WinampPlayer) -> Task<Message> {
-    if player.volume_flash_ticks > 0 {
-        player.volume_flash_ticks -= 1;
+    if player.mixer_flash_ticks > 0 {
+        player.mixer_flash_ticks -= 1;
     } else {
         player.marquee_offset = player.marquee_offset.wrapping_add(1);
     }

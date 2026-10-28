@@ -11,7 +11,7 @@ use iced::Task;
 use crate::apple_music::{AppleMusicError, AppleMusicService};
 use crate::equalizer::{BAND_COUNT, Preset, preset_for_genre};
 use crate::state::AppState;
-use crate::ui::player::VOLUME_FLASH_TICKS;
+use crate::ui::player::MIXER_FLASH_TICKS;
 use crate::ui::views;
 use crate::ui::{Message, WinampPlayer};
 
@@ -23,16 +23,23 @@ pub(in crate::ui) fn volume_change(player: &mut WinampPlayer, volume: f32) -> Ta
     mutate_volume(player, |state| state.set_volume(volume))
 }
 
+/// Shows `slider`'s readout in the LCD title's place for [`MIXER_FLASH_TICKS`]
+/// ticks, replacing any flash already showing.
+fn flash(player: &mut WinampPlayer, slider: views::MixerDrag) {
+    player.mixer_flash = slider;
+    player.mixer_flash_ticks = MIXER_FLASH_TICKS;
+}
+
 /// The up arrow: nudges the slider's value by its own step, so the keyboard
 /// and the drag share one granularity; `nudge_volume` clamps.
 pub(in crate::ui) fn volume_up(player: &mut WinampPlayer) -> Task<Message> {
-    player.volume_flash_ticks = VOLUME_FLASH_TICKS;
+    flash(player, views::MixerDrag::Volume);
     mutate_volume(player, |state| state.nudge_volume(views::VOLUME_STEP))
 }
 
 /// The down arrow: nudges the slider's value down by its own step.
 pub(in crate::ui) fn volume_down(player: &mut WinampPlayer) -> Task<Message> {
-    player.volume_flash_ticks = VOLUME_FLASH_TICKS;
+    flash(player, views::MixerDrag::Volume);
     mutate_volume(player, |state| state.nudge_volume(-views::VOLUME_STEP))
 }
 
@@ -54,13 +61,13 @@ pub(in crate::ui) fn volume_wheel(player: &mut WinampPlayer, direction: f32) -> 
 /// The balance slider's wheel roll: nudges the balance by one
 /// [`views::BALANCE_STEP`] in the roll's vertical direction, through the same
 /// clamped setter and backend forward as a drag. Unlike a drag it leaves
-/// `mixer_drag` alone, so the LCD keeps its title. A zero or `NaN` direction
+/// `mixer_drag` alone and flashes the balance readout instead. A zero or `NaN` direction
 /// is a no-op.
 pub(in crate::ui) fn balance_wheel(player: &mut WinampPlayer, direction: f32) -> Task<Message> {
     if direction == 0.0 || direction.is_nan() {
         return Task::none();
     }
-    player.volume_flash_ticks = 0;
+    flash(player, views::MixerDrag::Balance);
     mutate_balance(player, |state| {
         state.set_balance(state.balance() + direction.signum() * views::BALANCE_STEP)
     })
@@ -138,12 +145,12 @@ pub(in crate::ui) fn eq_preamp_change(player: &mut WinampPlayer, gain: f32) -> T
 /// The preamp slider's wheel roll: nudges the preamp by one
 /// [`views::EQ_STEP`] in the roll's vertical direction, through the same
 /// clamped setter and backend forward as a drag, but without setting
-/// `mixer_drag`. A zero or `NaN` direction is a no-op.
+/// `mixer_drag`; it flashes the slider's readout instead. A zero or `NaN` direction is a no-op.
 pub(in crate::ui) fn eq_preamp_wheel(player: &mut WinampPlayer, direction: f32) -> Task<Message> {
     if direction == 0.0 || direction.is_nan() {
         return Task::none();
     }
-    player.volume_flash_ticks = 0;
+    flash(player, views::MixerDrag::EqPreamp);
     mutate_equalizer(player, |state| {
         state.set_eq_preamp(state.eq_preamp() + direction.signum() * views::EQ_STEP)
     })
@@ -152,7 +159,7 @@ pub(in crate::ui) fn eq_preamp_wheel(player: &mut WinampPlayer, direction: f32) 
 /// A band slider's wheel roll: nudges only band `band` by one
 /// [`views::EQ_STEP`] in the roll's vertical direction, through the same
 /// clamped setter and backend forward as a drag, but without setting
-/// `mixer_drag`. A zero or `NaN` direction, or an out-of-range band, is a no-op
+/// `mixer_drag`; it flashes the slider's readout instead. A zero or `NaN` direction, or an out-of-range band, is a no-op
 /// before the state lock.
 pub(in crate::ui) fn eq_band_wheel(
     player: &mut WinampPlayer,
@@ -162,7 +169,7 @@ pub(in crate::ui) fn eq_band_wheel(
     if band >= BAND_COUNT || direction == 0.0 || direction.is_nan() {
         return Task::none();
     }
-    player.volume_flash_ticks = 0;
+    flash(player, views::MixerDrag::EqBand(band));
     mutate_equalizer(player, |state| {
         let gain = state.eq_bands()[band] + direction.signum() * views::EQ_STEP;
         state.set_eq_band(band, gain)

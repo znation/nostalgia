@@ -211,7 +211,8 @@ or balance slider is dragged, the LCD shows its level (`Volume: 72%`,
 `Balance: 31% Left`) in place of the title until release; an equalizer band or preamp drag does
 the same (`EQ: 60HZ +3 DB`, `Preamp: -12 DB`), and dragging the seek slider shows the target
 (`Seek to: 01:23/03:30 (39%)`) the same way. An up/down-arrow, keypad 8/2, or wheel volume nudge
-shows the same `Volume: N%` readout for about a second, like Winamp. The equalizer panel's on/off button,
+shows the same `Volume: N%` readout for about a second, like Winamp. A wheel roll over the balance
+slider, the preamp, or a band shows that slider's readout the same way. The equalizer panel's on/off button,
 sliders, and presets change the playing preview's curve live. The `AUTO` button loads a preset
 automatically when a song is selected: while it reads `AUTO: On`, a song whose trimmed primary
 genre matches a preset name case-insensitively (say `rock` or `Rock`) applies that preset's whole

@@ -83,9 +83,9 @@ pub(super) fn view_player_panels(
                         .map(|(target, length)| views::seek_readout_text(target, length))
                 })
                 .or_else(|| {
-                    (player.volume_flash_ticks > 0).then(|| {
+                    (player.mixer_flash_ticks > 0).then(|| {
                         views::mixer_readout_text(
-                            views::MixerDrag::Volume,
+                            player.mixer_flash,
                             volume,
                             balance,
                             eq_preamp,
