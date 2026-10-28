@@ -156,6 +156,67 @@ pub fn visualizer_bar_segments(height: f32) -> Vec<(f32, Color)> {
         .collect()
 }
 
+/// Builds one visualizer bar's fixed-size column for a bar of `height` and a peak marker at
+/// `peak_height`, drawing the ramp segments, the peak marker, and the spacers around them.
+fn visualizer_bar_column<'a, Theme, Renderer>(
+    height: f32,
+    peak_height: f32,
+) -> Column<'a, Message, Theme, Renderer>
+where
+    Theme: iced::widget::container::Catalog + 'a,
+    <Theme as iced::widget::container::Catalog>::Class<'a>:
+        From<iced::widget::container::StyleFn<'a, Theme>>,
+    Renderer: iced::advanced::text::Renderer + 'a,
+{
+    // The bar's ramp segments stack from the top down, above a spacer
+    // that fills the part of the strip its height does not reach. A
+    // silent bar keeps its fixed-width slot through the column alone:
+    // it draws no segment, but the column still has a nonzero fixed
+    // size, so `Row::push` does not drop it.
+    let mut column = Column::new()
+        .width(Length::Fixed(LCD_VISUALIZER_BAR_WIDTH))
+        .height(Length::Fixed(LCD_VISUALIZER_HEIGHT));
+    let marker_bottom = visualizer_peak_marker_bottom(height, peak_height);
+    // The marker's bottom edge caps the drawn bar, so a full-height
+    // bar gives its top pixel to the marker.
+    let drawn = marker_bottom.map_or(height, |bottom| height.min(bottom));
+    let segments = visualizer_bar_segments(drawn);
+    let spacer_height = match marker_bottom {
+        Some(bottom) => {
+            let above = LCD_VISUALIZER_HEIGHT - bottom - LCD_VISUALIZER_PEAK_HEIGHT;
+            if above > 0.0 {
+                column = column.push(Space::new().height(Length::Fixed(above)));
+            }
+            column = column.push(
+                Container::new(Space::new())
+                    .width(Length::Fill)
+                    .height(Length::Fixed(LCD_VISUALIZER_PEAK_HEIGHT))
+                    .style(|_theme| container::Style {
+                        background: Some(LCD_VISUALIZER_PEAK_COLOR.into()),
+                        ..container::Style::default()
+                    }),
+            );
+            bottom - drawn
+        }
+        None => LCD_VISUALIZER_HEIGHT - drawn,
+    };
+    if spacer_height > 0.0 {
+        column = column.push(Space::new().height(Length::Fixed(spacer_height)));
+    }
+    for (segment_height, color) in segments.into_iter().rev() {
+        column = column.push(
+            Container::new(Space::new())
+                .width(Length::Fill)
+                .height(Length::Fixed(segment_height))
+                .style(move |_theme| container::Style {
+                    background: Some(color.into()),
+                    ..container::Style::default()
+                }),
+        );
+    }
+    column
+}
+
 /// Builds the LCD's visualizer row: [`BAND_COUNT`] bottom-aligned bars, left to right in band
 /// order, inside a row of fixed [`LCD_VISUALIZER_HEIGHT`]. Each bar is shaded from dark green at
 /// the rail up its earned ramp steps to orange at its top. Every band keeps a fixed-width slot even
@@ -187,55 +248,7 @@ where
                 .height(Length::Fixed(LCD_VISUALIZER_HEIGHT))
                 .spacing(LCD_VISUALIZER_BAR_GAP)
                 .align_y(Vertical::Bottom),
-            |row, (height, peak_height)| {
-                // The bar's ramp segments stack from the top down, above a spacer
-                // that fills the part of the strip its height does not reach. A
-                // silent bar keeps its fixed-width slot through the column alone:
-                // it draws no segment, but the column still has a nonzero fixed
-                // size, so `Row::push` does not drop it.
-                let mut column = Column::new()
-                    .width(Length::Fixed(LCD_VISUALIZER_BAR_WIDTH))
-                    .height(Length::Fixed(LCD_VISUALIZER_HEIGHT));
-                let marker_bottom = visualizer_peak_marker_bottom(height, peak_height);
-                // The marker's bottom edge caps the drawn bar, so a full-height
-                // bar gives its top pixel to the marker.
-                let drawn = marker_bottom.map_or(height, |bottom| height.min(bottom));
-                let segments = visualizer_bar_segments(drawn);
-                let spacer_height = match marker_bottom {
-                    Some(bottom) => {
-                        let above = LCD_VISUALIZER_HEIGHT - bottom - LCD_VISUALIZER_PEAK_HEIGHT;
-                        if above > 0.0 {
-                            column = column.push(Space::new().height(Length::Fixed(above)));
-                        }
-                        column = column.push(
-                            Container::new(Space::new())
-                                .width(Length::Fill)
-                                .height(Length::Fixed(LCD_VISUALIZER_PEAK_HEIGHT))
-                                .style(|_theme| container::Style {
-                                    background: Some(LCD_VISUALIZER_PEAK_COLOR.into()),
-                                    ..container::Style::default()
-                                }),
-                        );
-                        bottom - drawn
-                    }
-                    None => LCD_VISUALIZER_HEIGHT - drawn,
-                };
-                if spacer_height > 0.0 {
-                    column = column.push(Space::new().height(Length::Fixed(spacer_height)));
-                }
-                for (segment_height, color) in segments.into_iter().rev() {
-                    column = column.push(
-                        Container::new(Space::new())
-                            .width(Length::Fill)
-                            .height(Length::Fixed(segment_height))
-                            .style(move |_theme| container::Style {
-                                background: Some(color.into()),
-                                ..container::Style::default()
-                            }),
-                    );
-                }
-                row.push(column)
-            },
+            |row, (height, peak_height)| row.push(visualizer_bar_column(height, peak_height)),
         );
     MouseArea::new(row)
         .on_press(Message::ToggleVisualizer)
