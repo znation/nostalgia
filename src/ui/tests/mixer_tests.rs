@@ -434,9 +434,8 @@ fn slider_wheels_forward_their_new_values_to_the_audio_backend() {
 // the message reached the failing backend rather than skipping the forward.
 #[test]
 fn a_volume_backend_failure_still_commits_the_state() {
-    let audio = Arc::new(FailingAudio::failing_volume_and_balance());
-    let (mut player, state) =
-        player_with_audio(Arc::clone(&audio) as Arc<dyn crate::audio::AudioOutput>);
+    let (audio, mut player, state) =
+        player_with_failing_audio(FailingAudio::failing_volume_and_balance());
 
     assert_message_schedules_no_work(&mut player, Message::VolumeChange(0.3));
 
@@ -450,9 +449,8 @@ fn a_volume_backend_failure_still_commits_the_state() {
 // in shared state and only logs the failure.
 #[test]
 fn a_balance_backend_failure_still_commits_the_state() {
-    let audio = Arc::new(FailingAudio::failing_volume_and_balance());
-    let (mut player, state) =
-        player_with_audio(Arc::clone(&audio) as Arc<dyn crate::audio::AudioOutput>);
+    let (audio, mut player, state) =
+        player_with_failing_audio(FailingAudio::failing_volume_and_balance());
 
     assert_message_schedules_no_work(&mut player, Message::BalanceChange(-0.4));
 
@@ -529,9 +527,7 @@ fn equalizer_messages_forward_to_the_audio_backend() {
 // backend rather than skipping the forward.
 #[test]
 fn an_equalizer_backend_failure_still_commits_the_state() {
-    let audio = Arc::new(FailingAudio::failing_equalizer());
-    let (mut player, state) =
-        player_with_audio(Arc::clone(&audio) as Arc<dyn crate::audio::AudioOutput>);
+    let (audio, mut player, state) = player_with_failing_audio(FailingAudio::failing_equalizer());
 
     assert_message_schedules_no_work(&mut player, Message::EqBandChange(0, 4.0));
 

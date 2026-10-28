@@ -31,6 +31,17 @@ fn test_player() -> (WinampPlayer, Arc<Mutex<AppState>>) {
     (WinampPlayer::new(state.clone(), service), state)
 }
 
+/// A fresh player over `audio`, which the caller keeps to read the attempts it
+/// counted. Shares `player_with_audio`'s construction.
+fn player_with_failing_audio(
+    audio: FailingAudio,
+) -> (Arc<FailingAudio>, WinampPlayer, Arc<Mutex<AppState>>) {
+    let audio = Arc::new(audio);
+    let (player, state) =
+        player_with_audio(Arc::clone(&audio) as Arc<dyn crate::audio::AudioOutput>);
+    (audio, player, state)
+}
+
 /// A fresh player over an injected playback backend and its own shared state,
 /// so a test can observe what the UI hands the service's audio seam.
 fn player_with_audio(

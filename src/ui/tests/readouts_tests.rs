@@ -827,9 +827,7 @@ fn seek_preview_released_invalidates_an_in_flight_position_reply() {
 // release reached the failing backend instead of skipping the forward.
 #[test]
 fn seek_preview_released_backend_failure_leaves_the_position_alone() {
-    let audio = Arc::new(FailingAudio::failing_seek());
-    let (mut player, _state) =
-        player_with_audio(Arc::clone(&audio) as Arc<dyn crate::audio::AudioOutput>);
+    let (audio, mut player, _state) = player_with_failing_audio(FailingAudio::failing_seek());
     player.playback_position = Some(Duration::from_secs(3));
     let epoch = player.position_epoch;
     let _ = update(&mut player, Message::SeekPreviewChanged(12.0));

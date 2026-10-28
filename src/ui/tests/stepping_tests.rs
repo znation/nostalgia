@@ -200,9 +200,7 @@ fn previous_with_shuffle_restarts_after_the_threshold_instead_of_retracing() {
 // rejection, proving the restart reached the failing backend.
 #[test]
 fn a_failed_previous_restart_leaves_the_track_queued() {
-    let audio = Arc::new(FailingAudio::failing_seek());
-    let (mut player, state) =
-        player_with_audio(Arc::clone(&audio) as Arc<dyn crate::audio::AudioOutput>);
+    let (audio, mut player, state) = player_with_failing_audio(FailingAudio::failing_seek());
     futures::executor::block_on(player.apple_music_service.play_track(
         "song-1",
         Some(PREVIEW_URL),

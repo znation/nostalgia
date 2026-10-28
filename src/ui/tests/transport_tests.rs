@@ -110,9 +110,7 @@ async fn transport_messages_drive_the_audio_backend() {
 // it, which a settled-and-unchanged assertion alone could not tell apart.
 #[tokio::test]
 async fn rejected_transport_commands_still_settle_and_keep_playing_state() {
-    let audio = Arc::new(FailingAudio::failing_transport());
-    let (mut player, state) =
-        player_with_audio(Arc::clone(&audio) as Arc<dyn crate::audio::AudioOutput>);
+    let (audio, mut player, state) = player_with_failing_audio(FailingAudio::failing_transport());
     player
         .apple_music_service
         .play_track("song-1", Some(PREVIEW_URL), || true)
@@ -195,9 +193,7 @@ fn seek_messages_drive_the_audio_backend() {
 // skipping the forward.
 #[test]
 fn a_seek_backend_failure_still_schedules_no_work() {
-    let audio = Arc::new(FailingAudio::failing_seek());
-    let (mut player, state) =
-        player_with_audio(Arc::clone(&audio) as Arc<dyn crate::audio::AudioOutput>);
+    let (audio, mut player, state) = player_with_failing_audio(FailingAudio::failing_seek());
 
     assert_message_schedules_no_work(&mut player, Message::SeekForward);
 
