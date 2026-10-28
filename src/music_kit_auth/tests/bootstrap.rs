@@ -386,3 +386,80 @@ fn authorize_keeps_the_state_nonce_out_of_the_opener_argument() {
         "the opener must receive a local path, not the sign-in URL: {path}"
     );
 }
+
+// The sweep's documented contract is that a failed removal "does not stop the
+// sweep", so one undeletable directory must not leave the other stale ones
+// behind, and a directory modified exactly at the cutoff counts as stale ("at
+// or before"). Every aged directory is offered to the remover, and each
+// failure is reported.
+#[cfg(unix)]
+#[test]
+fn the_bootstrap_sweep_keeps_going_after_a_failed_removal_and_includes_the_cutoff() {
+    let root = std::env::temp_dir().join(format!("nostalgia-sweep-continue-{}", random_nonce()));
+    std::fs::create_dir(&root).expect("create the sweep scratch root");
+    let now = std::time::SystemTime::now();
+    let stale_after = Duration::from_secs(600);
+    let names = ["a", "b", "edge"];
+    for (name, age) in names.iter().zip([3600, 7200, 600]) {
+        let dir = root.join(format!("{BOOTSTRAP_DIR_PREFIX}{name}"));
+        std::fs::create_dir(&dir).expect("create a bootstrap directory");
+        std::fs::File::open(&dir)
+            .expect("open the directory")
+            .set_modified(now - Duration::from_secs(age))
+            .expect("age the directory");
+    }
+
+    let attempted = Mutex::new(Vec::new());
+    let reports = Mutex::new(Vec::new());
+    sweep_stale_bootstrap_dirs_with(
+        &root,
+        now,
+        stale_after,
+        |path| {
+            attempted
+                .lock()
+                .expect("attempt lock")
+                .push(path.to_owned());
+            Err(io::Error::new(io::ErrorKind::PermissionDenied, "denied"))
+        },
+        |report| reports.lock().expect("report lock").push(report),
+    );
+
+    let mut attempted = attempted.into_inner().expect("attempt lock");
+    attempted.sort();
+    let expected: Vec<_> = names
+        .iter()
+        .map(|name| root.join(format!("{BOOTSTRAP_DIR_PREFIX}{name}")))
+        .collect();
+    assert_eq!(
+        attempted, expected,
+        "every aged directory, the one at the cutoff included, must be offered for removal"
+    );
+    assert_eq!(
+        reports.into_inner().expect("report lock").len(),
+        3,
+        "each failed removal must be reported"
+    );
+
+    std::fs::remove_dir_all(&root).expect("remove the sweep scratch root");
+}
+
+// A clock earlier than the staleness window (so `now - stale_after` is not
+// representable) must sweep nothing and report nothing rather than panic or
+// treat every directory as stale.
+#[test]
+fn the_bootstrap_sweep_does_nothing_when_the_cutoff_precedes_the_clock_epoch() {
+    let root = std::env::temp_dir().join(format!("nostalgia-sweep-epoch-{}", random_nonce()));
+    std::fs::create_dir(&root).expect("create the sweep scratch root");
+    std::fs::create_dir(root.join(format!("{BOOTSTRAP_DIR_PREFIX}x"))).expect("create a directory");
+
+    sweep_stale_bootstrap_dirs_with(
+        &root,
+        std::time::UNIX_EPOCH,
+        Duration::from_secs(1),
+        |_path| panic!("an unrepresentable cutoff must not remove anything"),
+        |report| panic!("an unrepresentable cutoff must not report, got: {report}"),
+    );
+
+    std::fs::remove_dir_all(&root).expect("remove the sweep scratch root");
+}
