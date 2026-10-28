@@ -131,3 +131,38 @@ fn jump_to_file_submits_against_the_recently_played_list() {
 
     assert_track_selected(task, epoch, 2);
 }
+
+// Open (Enter) on a selected Recently Played row dispatches that row's
+// track selection against the list's epoch, like the other flat song list.
+#[test]
+fn open_selected_in_recently_played_plays_the_selected_row() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::RecentlyPlayedLoaded(stepping_songs()));
+    player.current_view = CurrentView::RecentlyPlayed;
+    let epoch = player.recently_played.epoch;
+    assert_message_schedules_no_work(&mut player, Message::SelectRow { epoch, index: 1 });
+
+    let task = update(&mut player, Message::OpenSelected);
+
+    assert_track_selected(task, epoch, 1);
+}
+
+// Alt+Down moves the selected row within Recently Played only and keeps it
+// selected.
+#[test]
+fn move_selected_row_reorders_only_recently_played() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::RecentlyPlayedLoaded(stepping_songs()));
+    player.current_view = CurrentView::RecentlyPlayed;
+    let before = titles(&player);
+    let epoch = player.recently_played.epoch;
+    let _ = update(&mut player, Message::SelectRow { epoch, index: 0 });
+
+    let _ = update(&mut player, Message::MoveSelectedRowDown);
+
+    let mut expected = before;
+    expected.swap(0, 1);
+    assert_eq!(titles(&player), expected);
+    assert_eq!(player.recently_played.selected(), Some(1));
+    assert!(player.songs.items.is_empty());
+}
