@@ -506,6 +506,17 @@ mod tests {
         };
     }
 
+    /// Asserts that pressing `key` with `modifiers` maps to no message.
+    macro_rules! assert_unbound {
+        ($key:expr, $modifiers:expr) => {{
+            let (key, modifiers) = ($key, $modifiers);
+            assert!(
+                message_for(key_pressed(key.clone(), modifiers)).is_none(),
+                "{key:?} with {modifiers:?} must stay unbound"
+            )
+        }};
+    }
+
     /// Asserts each classic letter binding maps to its transport message, by
     /// driving `map` with every letter. The tests below pass different mappers:
     /// one wraps the letter in a `KeyPressed` event for `message_for`, the other
@@ -609,10 +620,7 @@ mod tests {
             Modifiers::CTRL | Modifiers::ALT,
             Modifiers::CTRL | Modifiers::LOGO,
         ] {
-            assert!(
-                message_for(key_pressed(Key::Character("v".into()), modifiers)).is_none(),
-                "v with {modifiers:?} must stay unbound"
-            );
+            assert_unbound!(Key::Character("v".into()), modifiers);
         }
     }
 
@@ -635,10 +643,7 @@ mod tests {
             Modifiers::CTRL | Modifiers::LOGO,
         ] {
             for character in ["a", "t"] {
-                assert!(
-                    message_for(key_pressed(Key::Character(character.into()), modifiers)).is_none(),
-                    "{character} with {modifiers:?} must stay unbound"
-                );
+                assert_unbound!(Key::Character(character.into()), modifiers);
             }
         }
     }
@@ -659,10 +664,7 @@ mod tests {
             Modifiers::CTRL | Modifiers::ALT,
             Modifiers::CTRL | Modifiers::LOGO,
         ] {
-            assert!(
-                message_for(key_pressed(Key::Named(key::Named::F1), modifiers)).is_none(),
-                "F1 with {modifiers:?} must stay unbound"
-            );
+            assert_unbound!(Key::Named(key::Named::F1), modifiers);
         }
     }
 
@@ -691,10 +693,7 @@ mod tests {
             Modifiers::CTRL | Modifiers::ALT,
             Modifiers::CTRL | Modifiers::LOGO,
         ] {
-            assert!(
-                message_for(key_pressed(Key::Character("f".into()), modifiers)).is_none(),
-                "{modifiers:?}+F must stay unbound"
-            );
+            assert_unbound!(Key::Character("f".into()), modifiers);
         }
     }
 
@@ -728,10 +727,7 @@ mod tests {
             Modifiers::CTRL | Modifiers::LOGO,
         ] {
             for letter in ["z", "b"] {
-                assert!(
-                    message_for(key_pressed(Key::Character(letter.into()), modifiers)).is_none(),
-                    "{letter} with {modifiers:?} must not map"
-                );
+                assert_unbound!(Key::Character(letter.into()), modifiers);
             }
         }
     }
@@ -995,10 +991,7 @@ mod tests {
             Modifiers::CTRL | Modifiers::ALT,
             Modifiers::CTRL | Modifiers::LOGO,
         ] {
-            assert!(
-                message_for(key_pressed(Key::Character("r".into()), modifiers)).is_none(),
-                "r with {modifiers:?} must not map"
-            );
+            assert_unbound!(Key::Character("r".into()), modifiers);
         }
     }
 
@@ -1016,10 +1009,7 @@ mod tests {
             Modifiers::CTRL | Modifiers::ALT,
             Modifiers::CTRL | Modifiers::LOGO,
         ] {
-            assert!(
-                message_for(key_pressed(Key::Character("w".into()), modifiers)).is_none(),
-                "w with {modifiers:?} must not map"
-            );
+            assert_unbound!(Key::Character("w".into()), modifiers);
         }
     }
 
@@ -1035,10 +1025,7 @@ mod tests {
             Modifiers::CTRL | Modifiers::SHIFT | Modifiers::ALT,
             Modifiers::CTRL | Modifiers::SHIFT | Modifiers::LOGO,
         ] {
-            assert!(
-                message_for(key_pressed(Key::Character("r".into()), modifiers)).is_none(),
-                "r with {modifiers:?} must not map"
-            );
+            assert_unbound!(Key::Character("r".into()), modifiers);
         }
         // Shift alone still toggles Repeat.
         assert!(!matches!(
@@ -1059,10 +1046,7 @@ mod tests {
             Modifiers::ALT | Modifiers::LOGO,
         ] {
             for named in [key::Named::ArrowUp, key::Named::ArrowDown] {
-                assert!(
-                    message_for(key_pressed(Key::Named(named), modifiers)).is_none(),
-                    "{named:?} with {modifiers:?} must not map"
-                );
+                assert_unbound!(Key::Named(named), modifiers);
             }
         }
         assert_maps!(Key::Named(key::Named::ArrowUp), Modifiers::NONE => Message::VolumeUp);
