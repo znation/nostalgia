@@ -162,6 +162,18 @@ pub(crate) fn sample_song() -> Song {
     }
 }
 
+/// `count` songs with ids `song-0`… and titles `Song 0`…, for tests that need
+/// a list longer than [`stepping_songs`], such as a ten-song jump.
+pub(crate) fn numbered_songs(count: usize) -> Vec<Song> {
+    (0..count)
+        .map(|number| Song {
+            id: format!("song-{number}"),
+            title: format!("Song {number}"),
+            ..sample_song()
+        })
+        .collect()
+}
+
 /// The session the browser sign-in flow returns in the tests, with
 /// recognizable tokens so a test can assert the service stored exactly what
 /// the flow produced. The `apple_music` sign-in tests and the `ui` startup

@@ -152,7 +152,7 @@ pub fn shuffle_roll() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{single_song_album, stepping_songs};
+    use crate::test_support::{numbered_songs, single_song_album, stepping_songs};
 
     /// Asserts Next from `current` — with Repeat `repeat` — lands on
     /// `expected` in the shared three-song fixture. The three-song tests all
@@ -368,16 +368,6 @@ mod tests {
             varied,
             "shuffle_roll returned {first} for sixteen calls, so Shuffle could not vary its pick"
         );
-    }
-
-    fn numbered_songs(count: usize) -> Vec<Song> {
-        (0..count)
-            .map(|number| Song {
-                id: format!("song-{number}"),
-                title: format!("Song {number}"),
-                ..crate::test_support::sample_song()
-            })
-            .collect()
     }
 
     fn jumped(current: Option<&str>, forward: bool) -> Option<usize> {

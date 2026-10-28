@@ -1,17 +1,5 @@
 use super::*;
 
-/// `count` songs with ids `song-0`… and matching titles, enough for a
-/// ten-song jump that `stepping_songs` is too short for.
-fn numbered_songs(count: usize) -> Vec<Song> {
-    (0..count)
-        .map(|number| Song {
-            id: format!("song-{number}"),
-            title: format!("Song {number}"),
-            ..sample_song()
-        })
-        .collect()
-}
-
 /// A player showing 25 numbered songs with `current` playing.
 fn player_jumping_from(current: &str) -> (WinampPlayer, Arc<Mutex<AppState>>) {
     let (mut player, state) = test_player();

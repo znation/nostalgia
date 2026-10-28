@@ -12,8 +12,9 @@ use crate::settings::seam::SettingsWriter;
 use crate::state::TransportMode;
 use crate::test_support::{
     AudioCall, FailingAudio, FailingCommand, PREVIEW_URL, RecordingAudio, StubTransport,
-    assert_ids, assert_preview_calls, recording_spectrum, rock_preset, sample_album, sample_artist,
-    sample_playlist, sample_song, second_album_songs, sign_in_session, stepping_songs,
+    assert_ids, assert_preview_calls, numbered_songs, recording_spectrum, rock_preset,
+    sample_album, sample_artist, sample_playlist, sample_song, second_album_songs, sign_in_session,
+    stepping_songs,
 };
 
 use std::sync::atomic::AtomicU64;

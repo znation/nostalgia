@@ -157,15 +157,9 @@ async fn track_selected_plays_the_songs_preview_url() {
     player.songs.items = vec![Song {
         id: "song-1".to_string(),
         title: "One".to_string(),
-        artist: "The Sample Band".to_string(),
         album: String::new(),
-        year: None,
-        genre: String::new(),
-        track_number: None,
-        composer: String::new(),
-        album_id: "album-1".to_string(),
-        duration_ms: 210_000,
         preview_url: Some(PREVIEW_URL.to_string()),
+        ..sample_song()
     }];
 
     let task = update(&mut player, Message::TrackSelected { epoch: 0, index: 0 });
