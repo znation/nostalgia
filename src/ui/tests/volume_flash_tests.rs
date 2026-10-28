@@ -13,14 +13,15 @@ fn level(state: &Arc<Mutex<AppState>>) -> u32 {
     (state.blocking_lock().volume() * 100.0).round() as u32
 }
 
+fn readout(state: &Arc<Mutex<AppState>>) -> String {
+    format!("Volume: {}%", level(state))
+}
+
 #[test]
 fn a_key_nudge_shows_the_level_in_the_title_s_place() {
     for message in [Message::VolumeUp, Message::VolumeDown] {
         let (player, state) = nudged(message);
-        assert!(root_view_draws(
-            &player,
-            &format!("Volume: {}%", level(&state))
-        ));
+        assert!(root_view_draws(&player, &readout(&state)));
         assert!(!root_view_draws(&player, "Tune"));
         assert!(player.needs_lcd_tick());
     }
@@ -29,7 +30,7 @@ fn a_key_nudge_shows_the_level_in_the_title_s_place() {
 #[test]
 fn the_readout_lasts_four_ticks_then_the_title_returns() {
     let (mut player, state) = nudged(Message::VolumeUp);
-    let readout = format!("Volume: {}%", level(&state));
+    let readout = readout(&state);
     for _ in 0..3 {
         let _ = update(&mut player, Message::MarqueeTick);
     }
@@ -70,10 +71,7 @@ fn the_wheel_flashes_but_a_zero_or_nan_roll_does_not() {
 fn releasing_a_mixer_key_keeps_the_readout() {
     let (mut player, state) = nudged(Message::VolumeUp);
     let _ = update(&mut player, Message::MixerReleased);
-    assert!(root_view_draws(
-        &player,
-        &format!("Volume: {}%", level(&state))
-    ));
+    assert!(root_view_draws(&player, &readout(&state)));
 }
 
 #[test]
