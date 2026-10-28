@@ -20,8 +20,6 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 ## Planned
 
-_None yet._
-
 ### Flash the balance or equalizer level on the LCD after a wheel roll over its slider (planned 2026-10-27 by the plan role)
 
 **Goal.** A drag on the balance, preamp, or an equalizer band slider shows its level
