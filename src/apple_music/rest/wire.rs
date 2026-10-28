@@ -194,6 +194,9 @@ struct Attributes {
     /// whole response.
     #[serde(rename = "trackNumber")]
     track_number: Option<serde_json::Number>,
+    /// The track's composer; absent when the API omits it.
+    #[serde(rename = "composerName")]
+    composer_name: Option<String>,
     /// The track's length in milliseconds; absent when the API omits it.
     /// Parsed as a JSON number so a negative value — or an integer beyond
     /// `u64` — maps to the model's `0` "no duration supplied" sentinel

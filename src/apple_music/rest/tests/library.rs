@@ -93,6 +93,7 @@ fn songs_from_album_maps_a_missing_duration_to_zero() {
             year: None,
             genre: String::new(),
             track_number: None,
+            composer: String::new(),
             album_id: "album-9".to_string(),
             duration_ms: 0,
             preview_url: None,
@@ -140,6 +141,26 @@ fn songs_from_album_maps_the_album_name() {
         song_from_attributes(r#"{"name":"Opening","albumName":"First Record"}"#).album,
         "First Record"
     );
+}
+
+#[test]
+fn songs_from_album_maps_the_composer() {
+    assert_eq!(
+        song_from_attributes(r#"{"name":"Opening","composerName":"Jane Doe"}"#).composer,
+        "Jane Doe"
+    );
+}
+
+#[test]
+fn songs_from_album_maps_a_missing_or_blank_composer_to_empty() {
+    for attributes in [
+        r#"{"name":"Opening"}"#,
+        r#"{"name":"Opening","composerName":null}"#,
+        r#"{"name":"Opening","composerName":""}"#,
+        r#"{"name":"Opening","composerName":"   "}"#,
+    ] {
+        assert_eq!(song_from_attributes(attributes).composer, "");
+    }
 }
 
 #[test]
@@ -406,6 +427,7 @@ fn search_library_maps_the_search_envelope_and_percent_encodes_the_term() {
             year: None,
             genre: String::new(),
             track_number: None,
+            composer: String::new(),
             album_id: String::new(),
             duration_ms: 210_000,
             preview_url: Some(PREVIEW_URL.to_string()),
@@ -534,6 +556,7 @@ fn get_all_songs_maps_the_library_songs_collection() {
             year: None,
             genre: String::new(),
             track_number: None,
+            composer: String::new(),
             album_id: String::new(),
             duration_ms: 210_000,
             preview_url: Some(PREVIEW_URL.to_string()),
@@ -800,6 +823,7 @@ fn get_songs_from_playlist_maps_the_playlist_tracks_collection() {
             year: None,
             genre: String::new(),
             track_number: None,
+            composer: String::new(),
             album_id: String::new(),
             duration_ms: 210_000,
             preview_url: Some(PREVIEW_URL.to_string()),

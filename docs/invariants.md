@@ -1865,7 +1865,8 @@ Keyboard access and the transient row highlight added 2026-10-26 by the feature 
   stacks `FILE INFO`, `Title: …`, `Artist: …` (left out for an empty artist), `Album: …` (left
   out for an empty album), `Year: …` (left out when `KnownTrack::year` is `None`), `Genre: …`
   (left out when `KnownTrack::genre` is empty), `Track #: …` (left out when
-  `KnownTrack::track_number` is `None`), `Length: …`,
+  `KnownTrack::track_number` is `None`), `Composer: …` (left out when `KnownTrack::composer` is
+  empty), `Length: …`,
   and a `Close` button over the base through `views::modal::modal_overlay`, the chrome About
   shares. `KnownTrack::year` is copied from `Song::year`, which `Resource::into_song` parses from
   the resource's `releaseDate` (only its leading four ASCII-digit year is kept).
@@ -1875,6 +1876,8 @@ Keyboard access and the transient row highlight added 2026-10-26 by the feature 
   `KnownTrack::track_number` is copied from `Song::track_number`, which `Resource::into_song`
   takes from the resource's `attributes.trackNumber` with an absent, `null`, non-positive, or
   above-`u32::MAX` number mapped to `None`.
+  `KnownTrack::composer` is copied from `Song::composer`, which `Resource::into_song` takes from
+  the resource's `attributes.composerName` with an absent or whitespace-only name mapped to `""`.
   Between `Length:` and `Close`, it also draws one `Format: …` line (`256 KBPS  44 KHZ STEREO`,
   or `44 KHZ MONO` when the backend reports no bitrate) only while
   `WinampPlayer::playback_format` is `Some`, formatted from
@@ -1903,12 +1906,20 @@ overlay branch of `ui::view::view`.
 `file_info_overlay_omits_the_genre_line_when_the_source_supplied_none`,
 `file_info_overlay_draws_the_tracks_track_number`,
 `file_info_overlay_omits_the_track_number_line_when_the_source_supplied_none`,
+`file_info_overlay_draws_the_tracks_composer`,
+`file_info_overlay_omits_the_composer_line_when_the_source_supplied_none`,
 `file_info_overlay_draws_the_loaded_previews_format`,
 `file_info_overlay_omits_the_format_line_without_a_loaded_preview`, and
 `file_info_overlay_closes_from_close_and_backdrop_but_ignores_its_chrome`
 (`src/ui/views/tests/chrome.rs`); `known_tracks_record_the_played_songs_year` and
 `known_tracks_record_the_played_songs_genre`, and
-`known_tracks_record_the_played_songs_track_number` (`src/ui/tests/readouts_tests.rs`);
+`known_tracks_record_the_played_songs_track_number`, and
+`known_tracks_record_the_played_songs_composer` (`src/ui/tests/readouts_tests.rs`);
+`songs_from_album_maps_the_composer` and
+`songs_from_album_maps_a_missing_or_blank_composer_to_empty`
+(`src/apple_music/rest/tests/library.rs`); `song_round_trips_its_composer`,
+`song_composer_defaults_to_empty_when_the_payload_omits_it` (`src/library.rs`);
+`songs_carry_the_documented_composers` (`src/sample_library.rs`);
 `release_date_maps_to_the_song_year` and
 `release_date_absent_or_malformed_maps_to_no_year`, `songs_from_album_maps_the_genre`,
 `songs_from_album_maps_a_missing_or_blank_genre_to_empty`,

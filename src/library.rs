@@ -110,6 +110,13 @@ pub struct Song {
     /// partial response may omit it.
     #[serde(default)]
     pub track_number: Option<u32>,
+    /// The track's composer; `""` means the source supplied none (the same
+    /// sentinel [`Self::album`] uses). The File info panel draws a `Composer:`
+    /// line only when it is non-empty. `#[serde(default)]` keeps a payload
+    /// without the field deserializable, as an older or partial response may
+    /// omit it.
+    #[serde(default)]
+    pub composer: String,
     /// The [`Album::id`] of the album this song belongs to.
     pub album_id: String,
     /// The track's length in milliseconds; `0` means the source supplied no
@@ -207,6 +214,7 @@ mod tests {
             "year": null,
             "genre": "",
             "track_number": null,
+            "composer": "",
             "album_id": "album-1",
             "duration_ms": 210_000,
             "preview_url": null
@@ -534,6 +542,26 @@ mod tests {
         // mapping to the `None` "source supplied none" sentinel.
         let parsed: Song = serde_json::from_value(song_required_fields_payload()).unwrap();
         assert_eq!(parsed.track_number, None);
+    }
+
+    #[test]
+    fn song_round_trips_its_composer() {
+        // The composer is part of the serialized model: it must survive a
+        // round trip and serialize under the `composer` key.
+        let mut song = sample_song();
+        song.composer = "Jane Doe".to_string();
+        let payload = serde_json::to_value(&song).unwrap();
+        assert_eq!(payload["composer"], json!("Jane Doe"));
+        let parsed: Song = serde_json::from_value(payload).unwrap();
+        assert_eq!(parsed.composer, "Jane Doe");
+    }
+
+    #[test]
+    fn song_composer_defaults_to_empty_when_the_payload_omits_it() {
+        // An older or partial response without `composer` must parse, mapping
+        // to the `""` "source supplied none" sentinel.
+        let parsed: Song = serde_json::from_value(song_required_fields_payload()).unwrap();
+        assert_eq!(parsed.composer, "");
     }
 
     #[test]

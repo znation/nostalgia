@@ -118,6 +118,7 @@ impl SampleLibrary {
                 year: Some(2001),
                 genre: "Rock".to_string(),
                 track_number: Some(1),
+                composer: "Sam Ample".to_string(),
                 album_id: "album-1".to_string(),
                 duration_ms: 210_000,
                 preview_url: None,
@@ -130,6 +131,7 @@ impl SampleLibrary {
                 year: Some(2001),
                 genre: "Rock".to_string(),
                 track_number: Some(2),
+                composer: "Sam Ample".to_string(),
                 album_id: "album-1".to_string(),
                 duration_ms: 240_000,
                 preview_url: None,
@@ -142,6 +144,7 @@ impl SampleLibrary {
                 year: Some(2001),
                 genre: "Rock".to_string(),
                 track_number: Some(3),
+                composer: "Sam Ample".to_string(),
                 album_id: "album-1".to_string(),
                 duration_ms: 180_000,
                 preview_url: None,
@@ -154,6 +157,7 @@ impl SampleLibrary {
                 year: Some(2003),
                 genre: "Alternative".to_string(),
                 track_number: Some(1),
+                composer: "".to_string(),
                 album_id: "album-2".to_string(),
                 duration_ms: 95_000,
                 preview_url: None,
@@ -166,6 +170,7 @@ impl SampleLibrary {
                 year: Some(2005),
                 genre: "Electronic".to_string(),
                 track_number: Some(1),
+                composer: "".to_string(),
                 album_id: "album-3".to_string(),
                 duration_ms: 200_000,
                 preview_url: None,
@@ -560,6 +565,28 @@ mod tests {
                 ("song-3", Some(3)),
                 ("song-4", Some(1)),
                 ("song-5", Some(1)),
+            ]
+        );
+    }
+
+    // The File info panel draws a `Composer:` line from `Song::composer`, so
+    // the sample library shows both the line and its omission. Pin every
+    // song's composer, in library order.
+    #[test]
+    fn songs_carry_the_documented_composers() {
+        let library = sample_library();
+        let composers: Vec<(&str, &str)> = songs_in_library_order(library)
+            .map(|song| (song.id.as_str(), song.composer.as_str()))
+            .collect();
+
+        assert_eq!(
+            composers,
+            vec![
+                ("song-1", "Sam Ample"),
+                ("song-2", "Sam Ample"),
+                ("song-3", "Sam Ample"),
+                ("song-4", ""),
+                ("song-5", ""),
             ]
         );
     }

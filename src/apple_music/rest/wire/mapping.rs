@@ -120,7 +120,7 @@ impl Resource {
     /// [`get_songs_from_playlist`](super::super::RestLibrary::get_songs_from_playlist), and
     /// [`RestLibrary::search_library`](super::super::RestLibrary::search_library)). The id and
     /// title are required (see [`required_id`] and [`required_name`]); the artist, album name,
-    /// genre, track number, duration, and preview URL fall back to their "source supplied none"
+    /// genre, track number, composer, duration, and preview URL fall back to their "source supplied none"
     /// sentinels. The whole-library path maps up to [`MAX_PAGES`](super::super::paging::MAX_PAGES)
     /// pages of songs, so consuming the parsed resource avoids re-allocating every string it
     /// already owns.
@@ -130,20 +130,30 @@ impl Resource {
     ) -> Result<Song, AppleMusicError> {
         let Resource { id, attributes, .. } = self;
         let id = required_id(id, "song")?;
-        let (title, artist, album, genre_names, release_date, track_number, duration_ms, previews) =
-            match attributes {
-                Some(attributes) => (
-                    attributes.name,
-                    attributes.artist_name,
-                    attributes.album_name,
-                    attributes.genre_names,
-                    attributes.release_date,
-                    attributes.track_number,
-                    attributes.duration_in_millis,
-                    attributes.previews,
-                ),
-                None => (None, None, None, None, None, None, None, None),
-            };
+        let (
+            title,
+            artist,
+            album,
+            genre_names,
+            release_date,
+            track_number,
+            composer_name,
+            duration_ms,
+            previews,
+        ) = match attributes {
+            Some(attributes) => (
+                attributes.name,
+                attributes.artist_name,
+                attributes.album_name,
+                attributes.genre_names,
+                attributes.release_date,
+                attributes.track_number,
+                attributes.composer_name,
+                attributes.duration_in_millis,
+                attributes.previews,
+            ),
+            None => (None, None, None, None, None, None, None, None, None),
+        };
         let title = required_name(title, &id, "song")?;
         let artist = artist_or_empty(artist);
         // An absent or whitespace-only album name is the same "source supplied
@@ -153,6 +163,11 @@ impl Resource {
             .filter(|album| !album.trim().is_empty())
             .unwrap_or_default();
         let genre = primary_genre(genre_names);
+        // Like the album, an absent or whitespace-only composer is the
+        // "source supplied none" sentinel.
+        let composer = composer_name
+            .filter(|name| !name.trim().is_empty())
+            .unwrap_or_default();
         // A blank URL (empty or only whitespace) can play nothing, so skip it
         // in favor of a later preview; a non-blank URL is returned exactly as
         // the resource carried it.
@@ -177,6 +192,7 @@ impl Resource {
                 .and_then(|number| number.as_u64())
                 .filter(|number| *number > 0)
                 .and_then(|number| u32::try_from(number).ok()),
+            composer,
             album_id: album_id.to_string(),
             duration_ms: duration_millis(duration_ms),
             preview_url,

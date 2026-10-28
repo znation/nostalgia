@@ -226,6 +226,7 @@ fn sample_known_track(artist: &str) -> KnownTrack {
         year: None,
         genre: String::new(),
         track_number: None,
+        composer: String::new(),
         number: "1. ".to_string(),
         time: "3:30".to_string(),
         duration_ms: 210_000,
@@ -352,6 +353,34 @@ fn file_info_overlay_omits_the_track_number_line_when_the_source_supplied_none()
     let track = sample_known_track("The Sample Band");
     let texts = file_info_texts(&track, None);
     assert_no_file_info_line(&texts, "Track #:");
+}
+
+#[test]
+fn file_info_overlay_draws_the_tracks_composer() {
+    let mut track = sample_known_track("The Sample Band");
+    track.track_number = Some(3);
+    track.composer = "Jane Doe".to_string();
+    let texts = file_info_texts(&track, None);
+    let number_at = texts.iter().position(|text| text == "Track #: 3").unwrap();
+    let composer_at = texts
+        .iter()
+        .position(|text| text == "Composer: Jane Doe")
+        .unwrap();
+    let length_at = texts
+        .iter()
+        .position(|text| text == "Length: 3:30")
+        .unwrap();
+    assert!(
+        number_at < composer_at && composer_at < length_at,
+        "the composer line must sit between Track # and Length: {texts:?}"
+    );
+}
+
+#[test]
+fn file_info_overlay_omits_the_composer_line_when_the_source_supplied_none() {
+    let track = sample_known_track("The Sample Band");
+    let texts = file_info_texts(&track, None);
+    assert_no_file_info_line(&texts, "Composer:");
 }
 
 #[test]

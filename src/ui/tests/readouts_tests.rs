@@ -80,6 +80,26 @@ fn known_tracks_record_the_played_songs_track_number() {
     );
 }
 
+// `TrackSelected` must also copy the played song's `composer` into the
+// `known_tracks` entry the File info panel reads.
+#[test]
+fn known_tracks_record_the_played_songs_composer() {
+    let (mut player, _state) = test_player();
+    let mut songs = stepping_songs();
+    songs[0].composer = "Jane Doe".to_string();
+    let _ = update(&mut player, Message::SongsLoaded(songs));
+
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+
+    assert_eq!(
+        player
+            .known_tracks
+            .get("song-1")
+            .map(|track| track.composer.as_str()),
+        Some("Jane Doe")
+    );
+}
+
 // The number is the 1-based position of the row that selected the track, so
 // the first row records `"1. "` and the second `"2. "`.
 #[test]

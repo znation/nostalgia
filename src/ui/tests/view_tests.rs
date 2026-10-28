@@ -197,6 +197,7 @@ fn view_constructs_when_the_window_is_shaded() {
             year: None,
             genre: String::new(),
             track_number: None,
+            composer: String::new(),
             number: String::new(),
             time: "3:30".to_string(),
             duration_ms: 210_000,

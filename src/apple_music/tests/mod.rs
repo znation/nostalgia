@@ -359,6 +359,7 @@ fn rest_song() -> Song {
         year: None,
         genre: String::new(),
         track_number: None,
+        composer: String::new(),
         album_id: String::new(),
         duration_ms: 0,
         preview_url: None,
