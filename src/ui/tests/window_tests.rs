@@ -113,16 +113,8 @@ pub(super) fn make_current_track_known(player: &mut WinampPlayer, state: &Arc<Mu
     player.known_tracks.insert(
         "song-1".to_string(),
         views::KnownTrack {
-            title: "Opening".to_string(),
-            artist: "The Sample Band".to_string(),
             album: "First Record".to_string(),
-            year: None,
-            genre: String::new(),
-            track_number: None,
-            composer: String::new(),
-            number: "1. ".to_string(),
-            time: "3:30".to_string(),
-            duration_ms: 210_000,
+            ..known_track("Opening", "The Sample Band", "1. ")
         },
     );
     state.blocking_lock().current_track = Some("song-1".to_string());
@@ -308,16 +300,8 @@ fn window_title_names_the_current_track() {
     player.known_tracks.insert(
         "song-1".to_string(),
         views::KnownTrack {
-            title: "Opening".to_string(),
-            artist: "The Sample Band".to_string(),
             album: "First Record".to_string(),
-            year: None,
-            genre: String::new(),
-            track_number: None,
-            composer: String::new(),
-            number: "1. ".to_string(),
-            time: "3:30".to_string(),
-            duration_ms: 210_000,
+            ..known_track("Opening", "The Sample Band", "1. ")
         },
     );
     state.blocking_lock().current_track = Some("song-1".to_string());

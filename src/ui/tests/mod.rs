@@ -1334,23 +1334,29 @@ fn root_right_press_messages(player: &WinampPlayer, bounds: iced::Rectangle) -> 
     )
 }
 
+/// A `KnownTrack` with the given title, artist and row-number prefix, the
+/// `3:30` label and 210-second duration the sample library's songs carry,
+/// and every other field empty.
+fn known_track(title: &str, artist: &str, number: &str) -> views::KnownTrack {
+    views::KnownTrack {
+        title: title.to_string(),
+        artist: artist.to_string(),
+        album: String::new(),
+        year: None,
+        genre: String::new(),
+        track_number: None,
+        composer: String::new(),
+        number: number.to_string(),
+        time: "3:30".to_string(),
+        duration_ms: 210_000,
+    }
+}
+
 /// Seeds a known current track titled `title` into `player` and `state`.
 fn seed_current_title(player: &mut WinampPlayer, state: &Arc<Mutex<AppState>>, title: &str) {
-    player.known_tracks.insert(
-        "song-1".to_string(),
-        views::KnownTrack {
-            title: title.to_string(),
-            artist: String::new(),
-            album: String::new(),
-            year: None,
-            genre: String::new(),
-            track_number: None,
-            composer: String::new(),
-            number: String::new(),
-            time: "3:30".to_string(),
-            duration_ms: 210_000,
-        },
-    );
+    player
+        .known_tracks
+        .insert("song-1".to_string(), known_track(title, "", ""));
     state.blocking_lock().current_track = Some("song-1".to_string());
 }
 

@@ -410,18 +410,7 @@ fn the_player_knows_when_the_now_playing_line_needs_the_marquee() {
     // 22-character budget.
     player.known_tracks.insert(
         "song-1".to_string(),
-        views::KnownTrack {
-            title: "One".to_string(),
-            artist: "The Sample Band".to_string(),
-            album: String::new(),
-            year: None,
-            genre: String::new(),
-            track_number: None,
-            composer: String::new(),
-            number: String::new(),
-            time: "3:30".to_string(),
-            duration_ms: 210_000,
-        },
+        known_track("One", "The Sample Band", ""),
     );
     state.blocking_lock().current_track = Some("song-1".to_string());
     assert!(!player.needs_marquee());
@@ -435,18 +424,7 @@ fn the_player_knows_when_the_now_playing_line_needs_the_marquee() {
     // A title that pushes the line past the LCD's budget needs the marquee.
     player.known_tracks.insert(
         "song-2".to_string(),
-        views::KnownTrack {
-            title: "A Title Too Long For The LCD".to_string(),
-            artist: "The Sample Band".to_string(),
-            album: String::new(),
-            year: None,
-            genre: String::new(),
-            track_number: None,
-            composer: String::new(),
-            number: "2. ".to_string(),
-            time: "3:30".to_string(),
-            duration_ms: 210_000,
-        },
+        known_track("A Title Too Long For The LCD", "The Sample Band", "2. "),
     );
     state.blocking_lock().current_track = Some("song-2".to_string());
     assert!(player.needs_marquee());
