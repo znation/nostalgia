@@ -836,6 +836,56 @@ fn get_songs_from_playlist_reports_a_transport_error_bare() {
 }
 
 #[test]
+fn get_songs_from_playlist_follows_a_next_page() {
+    assert_follows_next_page(
+        r#"{"data":[{"id":"song-1","attributes":{"name":"Opening"}}],"next":"/v1/me/library/playlists/playlist-9/tracks?offset=100"}"#,
+        r#"{"data":[{"id":"song-2","attributes":{"name":"Second"}}]}"#,
+        "https://api.music.apple.com/v1/me/library/playlists/playlist-9/tracks?offset=100",
+        |library| library.get_songs_from_playlist(&rest_session(), "playlist-9"),
+        |song| song.id.as_str(),
+        &["song-1", "song-2"],
+    );
+}
+
+#[test]
+fn get_songs_from_playlist_rejects_a_nameless_song() {
+    let error = error_over(r#"{"data":[{"id":"song-7","attributes":{}}]}"#, |library| {
+        library.get_songs_from_playlist(&rest_session(), "playlist-9")
+    });
+
+    assert!(error.contains("without a name"), "{error}");
+    assert!(error.contains("song-7"), "{error}");
+}
+
+// An album whose songs straddle a page boundary still sums into one total.
+#[test]
+fn get_album_durations_sums_an_album_across_pages() {
+    let stub = StubTransport::returning_bodies(&[
+        r#"{"data":[{"id":"song-1","attributes":{"name":"Opening","artistName":"The Sample Band","albumName":"First Record","durationInMillis":210000}}],"next":"/v1/me/library/songs?offset=100"}"#,
+        r#"{"data":[{"id":"song-2","attributes":{"name":"Middle","artistName":"The Sample Band","albumName":"First Record","durationInMillis":240000}}]}"#,
+    ]);
+    let library = library_over(&stub);
+
+    let durations = library.get_album_durations(&rest_session()).unwrap();
+
+    assert_eq!(
+        durations,
+        std::collections::HashMap::from([(
+            ("First Record".to_string(), "The Sample Band".to_string()),
+            450_000,
+        )])
+    );
+    assert_eq!(stub.calls().len(), 2);
+}
+
+#[test]
+fn get_album_durations_reports_a_transport_error_bare() {
+    let error = transport_error_over(|library| library.get_album_durations(&rest_session()));
+
+    assert_eq!(error, "network down");
+}
+
+#[test]
 fn encode_path_segment_leaves_unreserved_bytes_and_encodes_the_rest() {
     assert_eq!(encode_path_segment("i.abc-123_~"), "i.abc-123_~");
     assert_eq!(encode_path_segment("a b/c?d#e"), "a%20b%2Fc%3Fd%23e");
