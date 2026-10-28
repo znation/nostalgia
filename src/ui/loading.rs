@@ -434,4 +434,22 @@ mod tests {
         assert_eq!(generation.issued(), 0);
         assert!(generation.is_current());
     }
+
+    // A later request for the same list makes an earlier one stale, while a
+    // request on a different list's counter is unaffected.
+    #[test]
+    fn a_newer_request_makes_the_older_one_stale_on_the_same_counter_only() {
+        let latest = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let other = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let first = RequestGeneration::issue(&latest);
+        let elsewhere = RequestGeneration::issue(&other);
+        assert_eq!(first.issued(), 1);
+        assert!(first.is_current());
+
+        let second = RequestGeneration::issue(&latest);
+        assert_eq!(second.issued(), 2);
+        assert!(!first.is_current(), "the superseded request must be stale");
+        assert!(second.is_current());
+        assert!(elsewhere.is_current(), "another list's counter is separate");
+    }
 }
