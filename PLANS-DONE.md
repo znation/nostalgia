@@ -5,6 +5,107 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
+### Show the current track's disc number in the File info panel, like Winamp's ID3 panel (planned 2026-10-28 by the plan role) — done 2026-10-28 by the feature role
+
+**Goal.** Winamp's File info dialog lists a track's position in a multi-disc set beside its track
+number. Nostalgia's File info panel shows the title, artist, album, year, genre, track number,
+composer, length, and loaded preview format. `Song` carries no disc number even though Apple
+Music reports one as `attributes.discNumber`. This change carries that attribute through `Song`
+and the `KnownTrack` cache. The panel then draws a `Disc #: <n>` line between `Track #:` and
+`Composer:` while the source supplies a positive number. It adds no new state, handlers,
+settings, or playback behavior, and it leaves search and sorting alone. It mirrors the finished
+"Show the current track's composer in the File info panel" and "Show the current track's track
+number in the File info panel" plans in PLANS-DONE.md. It does not depend on the Recently Played
+series. Both edit `src/apple_music/rest/wire/mapping.rs`, but this plan touches only
+`Resource::into_song` (plus a new private helper) there, and Recently Played 1/2 adds
+`Resource::is_song` beside `Resource::is_library_album`.
+
+**Approach.**
+
+- `src/library.rs`: add `#[serde(default)] pub disc_number: Option<u32>` to `Song`, after
+  `track_number`. Its doc comment follows `Self::track_number`'s: the track's 1-based disc in its
+  album's set; `None` when the source supplied none or reported a non-positive number; the File
+  info panel draws a `Disc #:` line only while it is `Some`. In the test module:
+  - add the `"disc_number": null` key to `song_payload`;
+  - add `song_round_trips_its_disc_number` and
+    `song_disc_number_defaults_to_none_when_the_payload_omits_it` (built from
+    `song_required_fields_payload`) beside `song_round_trips_its_track_number`.
+- `src/apple_music/rest/wire.rs`: add `#[serde(rename = "discNumber")] disc_number:
+  Option<serde_json::Number>` to the private `Attributes`, after `track_number`. Its doc comment
+  matches `track_number`'s (parsed as a JSON number so an out-of-`u32` value maps to `None`
+  instead of failing the whole response).
+- `src/apple_music/rest/wire/mapping.rs`: move the `track_number` chain in `Resource::into_song`
+  (`as_u64`, `> 0`, `u32::try_from`) into a private
+  `fn positive_position(number: Option<serde_json::Number>) -> Option<u32>` beside
+  `primary_genre`, carrying the existing comment as its doc comment. Map both
+  `track_number` and `disc_number` through it. Carry `disc_number` through the attributes
+  destructure (add one more `None` to the fallback tuple). Name the disc number in
+  `into_song`'s doc comment among the fields it falls back for.
+- `src/sample_library.rs`: give Opening, Middle, and Ending (First Record) `disc_number:
+  Some(1)`, and give B-side and Headliner `None`. Signed out, the panel then shows both the line
+  and its omission. Add `songs_carry_the_documented_disc_numbers` beside
+  `songs_carry_the_documented_composers`, pinning every song's id and disc number in library
+  order.
+- `src/ui/views/now_playing/text.rs`: add `pub disc_number: Option<u32>` to `KnownTrack`, after
+  `track_number`. Its doc comment says it is copied from `Song::disc_number`, and that `None`
+  means the panel leaves the line out. In `src/ui/handlers/playback.rs`, the `KnownTrack` literal
+  that records `track_number: song.track_number` also records `disc_number: song.disc_number`.
+- `src/ui/views/file_info.rs`: add `const DISC_NUMBER_LABEL: &str = "Disc #: ";` between
+  `TRACK_NUMBER_LABEL` and `COMPOSER_LABEL`. In `view_file_info_overlay`, push a
+  `Disc #: <n>` line after the conditional track-number line and before the conditional composer
+  line, only while `track.disc_number` is `Some`. Name the disc number in the module and
+  `view_file_info_overlay` doc comments.
+- Tests:
+  - In `src/apple_music/rest/tests/library.rs`, use the existing `song_from_attributes` helper.
+    `songs_from_album_maps_the_disc_number` checks that `"discNumber":2` maps to `Some(2)`.
+    `songs_from_album_maps_a_missing_zero_negative_or_oversized_disc_number_to_none` checks that
+    an absent, `null`, `0`, `-1`, and `4294967296` disc number each map to `None`. The existing
+    track-number tests stay and pin that the helper extraction left that mapping unchanged.
+  - In `src/ui/tests/readouts_tests.rs`, add `known_tracks_record_the_played_songs_disc_number`,
+    modelled on `known_tracks_record_the_played_songs_track_number`.
+  - In `src/ui/views/tests/chrome.rs`, add `file_info_overlay_draws_the_tracks_disc_number` (with
+    a track number, disc number, and composer all set, the `Disc #: 2` line sits after
+    `Track #:` and before `Composer:`) and
+    `file_info_overlay_omits_the_disc_number_line_when_the_source_supplied_none`, modelled on the
+    two composer tests there.
+  - Add `disc_number: None` to `sample_known_track` in `src/ui/views/tests/chrome.rs`, and to every
+    other `Song` and `KnownTrack` literal the compiler reports (the composer commit touched
+    `src/test_support/fixtures.rs`, `src/apple_music/tests/mod.rs`,
+    `src/apple_music/rest/tests/library.rs`, `src/ui/views/tests/chrome.rs`, and several
+    `src/ui/tests/*.rs` files).
+- `docs/usage.md`: in the Alt+3 File info sentence, add the disc number after the track number in
+  the list of lines, and add it to the parenthetical of lines left out when the source supplies
+  none.
+- `docs/invariants.md` `## File info panel`: add `Disc #: …` (left out when
+  `KnownTrack::disc_number` is `None`) after `Track #: …` and before `Composer: …`. Add a
+  sentence that it is copied from `Song::disc_number`, which `Resource::into_song` takes from
+  `attributes.discNumber` with the same absent/`null`/non-positive/above-`u32::MAX` → `None`
+  rule as the track number. Name the new tests in its `Pinned by`, and leave every other
+  guarantee unchanged.
+
+**Files touched.** `src/library.rs`, `src/apple_music/rest/wire.rs`,
+`src/apple_music/rest/wire/mapping.rs`, `src/apple_music/rest/tests/library.rs`,
+`src/sample_library.rs`, `src/ui/views/now_playing/text.rs`, `src/ui/handlers/playback.rs`,
+`src/ui/views/file_info.rs`, `src/ui/views/tests/chrome.rs`,
+`src/ui/tests/readouts_tests.rs`, plus the one-line `disc_number` field in the other test-built
+`Song`/`KnownTrack` literals, `docs/usage.md`, and `docs/invariants.md`.
+
+**Acceptance criteria.**
+
+- A REST song resource whose `attributes.discNumber` is `2` maps to `Song::disc_number ==
+  Some(2)`. An absent, `null`, zero, negative, or above-`u32::MAX` disc number maps to `None`,
+  and a resource without the attribute still parses.
+- The track-number mapping behaves as before (its existing tests pass unchanged).
+- A serialized `Song` round-trips its disc number, and a payload without the `disc_number` key
+  parses with `None`.
+- The sample library's First Record songs carry `Some(1)`, and B-side and Headliner carry `None`.
+- Playing a song records its disc number in the `KnownTrack` the File info panel reads.
+- With `Some(n)`, the File info panel draws `Disc #: n` after the `Track #:` line (or after
+  whichever earlier line is present) and before `Composer:` (or `Length:` when there is no
+  composer). With `None` it draws no `Disc #:` line, and every other line is unchanged.
+- `docs/usage.md` and `docs/invariants.md` name the new line as above.
+- `make check` passes.
+
 ### Recently Played, part 2/2: show a Recently Played list on the Artists view (planned 2026-10-27 by the plan role; "requires part 1/2 landed") — done 2026-10-28 by the feature role
 
 **Goal.** Add a `Recently Played` button to the Artists view, after `Recently Added`. It opens a

@@ -110,6 +110,13 @@ pub struct Song {
     /// partial response may omit it.
     #[serde(default)]
     pub track_number: Option<u32>,
+    /// The track's 1-based disc in its album's set; `None` when the source
+    /// supplied none or reported a non-positive number. The File info panel
+    /// draws a `Disc #:` line only while it is `Some`. `#[serde(default)]`
+    /// keeps a payload without the field deserializable, as an older or
+    /// partial response may omit it.
+    #[serde(default)]
+    pub disc_number: Option<u32>,
     /// The track's composer; `""` means the source supplied none (the same
     /// sentinel [`Self::album`] uses). The File info panel draws a `Composer:`
     /// line only when it is non-empty. `#[serde(default)]` keeps a payload
@@ -214,6 +221,7 @@ mod tests {
             "year": null,
             "genre": "",
             "track_number": null,
+            "disc_number": null,
             "composer": "",
             "album_id": "album-1",
             "duration_ms": 210_000,
@@ -542,6 +550,26 @@ mod tests {
         // mapping to the `None` "source supplied none" sentinel.
         let parsed: Song = serde_json::from_value(song_required_fields_payload()).unwrap();
         assert_eq!(parsed.track_number, None);
+    }
+
+    #[test]
+    fn song_round_trips_its_disc_number() {
+        // The disc is part of the serialized model: a `Some(2)` number must
+        // survive a round trip and serialize under the `disc_number` key.
+        let mut song = sample_song();
+        song.disc_number = Some(2);
+        let payload = serde_json::to_value(&song).unwrap();
+        assert_eq!(payload["disc_number"], json!(2));
+        let parsed: Song = serde_json::from_value(payload).unwrap();
+        assert_eq!(parsed.disc_number, Some(2));
+    }
+
+    #[test]
+    fn song_disc_number_defaults_to_none_when_the_payload_omits_it() {
+        // An older or partial response without `disc_number` must parse,
+        // mapping to the `None` "source supplied none" sentinel.
+        let parsed: Song = serde_json::from_value(song_required_fields_payload()).unwrap();
+        assert_eq!(parsed.disc_number, None);
     }
 
     #[test]

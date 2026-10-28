@@ -80,6 +80,26 @@ fn known_tracks_record_the_played_songs_track_number() {
     );
 }
 
+// `TrackSelected` must also copy the played song's `disc_number` into the
+// `known_tracks` entry the File info panel reads.
+#[test]
+fn known_tracks_record_the_played_songs_disc_number() {
+    let (mut player, _state) = test_player();
+    let mut songs = stepping_songs();
+    songs[0].disc_number = Some(2);
+    let _ = update(&mut player, Message::SongsLoaded(songs));
+
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+
+    assert_eq!(
+        player
+            .known_tracks
+            .get("song-1")
+            .map(|track| track.disc_number),
+        Some(Some(2))
+    );
+}
+
 // `TrackSelected` must also copy the played song's `composer` into the
 // `known_tracks` entry the File info panel reads.
 #[test]

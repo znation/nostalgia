@@ -226,6 +226,7 @@ fn sample_known_track(artist: &str) -> KnownTrack {
         year: None,
         genre: String::new(),
         track_number: None,
+        disc_number: None,
         composer: String::new(),
         number: "1. ".to_string(),
         time: "3:30".to_string(),
@@ -353,6 +354,32 @@ fn file_info_overlay_omits_the_track_number_line_when_the_source_supplied_none()
     let track = sample_known_track("The Sample Band");
     let texts = file_info_texts(&track, None);
     assert_no_file_info_line(&texts, "Track #:");
+}
+
+#[test]
+fn file_info_overlay_draws_the_tracks_disc_number() {
+    let mut track = sample_known_track("The Sample Band");
+    track.track_number = Some(3);
+    track.disc_number = Some(2);
+    track.composer = "Jane Doe".to_string();
+    let texts = file_info_texts(&track, None);
+    let number_at = texts.iter().position(|text| text == "Track #: 3").unwrap();
+    let disc_at = texts.iter().position(|text| text == "Disc #: 2").unwrap();
+    let composer_at = texts
+        .iter()
+        .position(|text| text == "Composer: Jane Doe")
+        .unwrap();
+    assert!(
+        number_at < disc_at && disc_at < composer_at,
+        "the disc line must sit between Track # and Composer: {texts:?}"
+    );
+}
+
+#[test]
+fn file_info_overlay_omits_the_disc_number_line_when_the_source_supplied_none() {
+    let track = sample_known_track("The Sample Band");
+    let texts = file_info_texts(&track, None);
+    assert_no_file_info_line(&texts, "Disc #:");
 }
 
 #[test]

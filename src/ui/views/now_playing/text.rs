@@ -132,6 +132,9 @@ pub struct KnownTrack {
     /// The track's album position, copied from [`crate::library::Song::track_number`]; `None` means
     /// the source supplied none, and the File info panel leaves the track-number line out.
     pub track_number: Option<u32>,
+    /// The track's disc, copied from [`crate::library::Song::disc_number`]; `None` means the
+    /// source supplied none, and the File info panel leaves the disc-number line out.
+    pub disc_number: Option<u32>,
     /// The track's composer, copied from [`crate::library::Song::composer`]; `""` means the
     /// source supplied none, and the File info panel leaves the composer line out.
     pub composer: String,

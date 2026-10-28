@@ -1866,7 +1866,8 @@ Keyboard access and the transient row highlight added 2026-10-26 by the feature 
   stacks `FILE INFO`, `Title: …`, `Artist: …` (left out for an empty artist), `Album: …` (left
   out for an empty album), `Year: …` (left out when `KnownTrack::year` is `None`), `Genre: …`
   (left out when `KnownTrack::genre` is empty), `Track #: …` (left out when
-  `KnownTrack::track_number` is `None`), `Composer: …` (left out when `KnownTrack::composer` is
+  `KnownTrack::track_number` is `None`), `Disc #: …` (left out when `KnownTrack::disc_number` is
+  `None`), `Composer: …` (left out when `KnownTrack::composer` is
   empty), `Length: …`,
   and a `Close` button over the base through `views::modal::modal_overlay`, the chrome About
   shares. `KnownTrack::year` is copied from `Song::year`, which `Resource::into_song` parses from
@@ -1877,6 +1878,9 @@ Keyboard access and the transient row highlight added 2026-10-26 by the feature 
   `KnownTrack::track_number` is copied from `Song::track_number`, which `Resource::into_song`
   takes from the resource's `attributes.trackNumber` with an absent, `null`, non-positive, or
   above-`u32::MAX` number mapped to `None`.
+  `KnownTrack::disc_number` is copied from `Song::disc_number`, which `Resource::into_song` takes
+  from the resource's `attributes.discNumber` with the same absent, `null`, non-positive, or
+  above-`u32::MAX` → `None` rule as the track number.
   `KnownTrack::composer` is copied from `Song::composer`, which `Resource::into_song` takes from
   the resource's `attributes.composerName` with an absent or whitespace-only name mapped to `""`.
   Between `Length:` and `Close`, it also draws one `Format: …` line (`256 KBPS  44 KHZ STEREO`,
@@ -1907,6 +1911,8 @@ overlay branch of `ui::view::view`.
 `file_info_overlay_omits_the_genre_line_when_the_source_supplied_none`,
 `file_info_overlay_draws_the_tracks_track_number`,
 `file_info_overlay_omits_the_track_number_line_when_the_source_supplied_none`,
+`file_info_overlay_draws_the_tracks_disc_number`,
+`file_info_overlay_omits_the_disc_number_line_when_the_source_supplied_none`,
 `file_info_overlay_draws_the_tracks_composer`,
 `file_info_overlay_omits_the_composer_line_when_the_source_supplied_none`,
 `file_info_overlay_draws_the_loaded_previews_format`,
@@ -1915,7 +1921,13 @@ overlay branch of `ui::view::view`.
 (`src/ui/views/tests/chrome.rs`); `known_tracks_record_the_played_songs_year` and
 `known_tracks_record_the_played_songs_genre`, and
 `known_tracks_record_the_played_songs_track_number`, and
+`known_tracks_record_the_played_songs_disc_number`, and
 `known_tracks_record_the_played_songs_composer` (`src/ui/tests/readouts_tests.rs`);
+`songs_from_album_maps_the_disc_number` and
+`songs_from_album_maps_a_missing_zero_negative_or_oversized_disc_number_to_none`
+(`src/apple_music/rest/tests/library.rs`); `song_round_trips_its_disc_number`,
+`song_disc_number_defaults_to_none_when_the_payload_omits_it` (`src/library.rs`);
+`songs_carry_the_documented_disc_numbers` (`src/sample_library.rs`);
 `songs_from_album_maps_the_composer` and
 `songs_from_album_maps_a_missing_or_blank_composer_to_empty`
 (`src/apple_music/rest/tests/library.rs`); `song_round_trips_its_composer`,

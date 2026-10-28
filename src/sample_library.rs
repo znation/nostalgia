@@ -118,6 +118,7 @@ impl SampleLibrary {
                 year: Some(2001),
                 genre: "Rock".to_string(),
                 track_number: Some(1),
+                disc_number: Some(1),
                 composer: "Sam Ample".to_string(),
                 album_id: "album-1".to_string(),
                 duration_ms: 210_000,
@@ -131,6 +132,7 @@ impl SampleLibrary {
                 year: Some(2001),
                 genre: "Rock".to_string(),
                 track_number: Some(2),
+                disc_number: Some(1),
                 composer: "Sam Ample".to_string(),
                 album_id: "album-1".to_string(),
                 duration_ms: 240_000,
@@ -144,6 +146,7 @@ impl SampleLibrary {
                 year: Some(2001),
                 genre: "Rock".to_string(),
                 track_number: Some(3),
+                disc_number: Some(1),
                 composer: "Sam Ample".to_string(),
                 album_id: "album-1".to_string(),
                 duration_ms: 180_000,
@@ -157,6 +160,7 @@ impl SampleLibrary {
                 year: Some(2003),
                 genre: "Alternative".to_string(),
                 track_number: Some(1),
+                disc_number: None,
                 composer: "".to_string(),
                 album_id: "album-2".to_string(),
                 duration_ms: 95_000,
@@ -170,6 +174,7 @@ impl SampleLibrary {
                 year: Some(2005),
                 genre: "Electronic".to_string(),
                 track_number: Some(1),
+                disc_number: None,
                 composer: "".to_string(),
                 album_id: "album-3".to_string(),
                 duration_ms: 200_000,
@@ -565,6 +570,28 @@ mod tests {
                 ("song-3", Some(3)),
                 ("song-4", Some(1)),
                 ("song-5", Some(1)),
+            ]
+        );
+    }
+
+    // The File info panel draws a `Disc #:` line from `Song::disc_number`, so
+    // the sample library shows both the line and its omission. Pin every
+    // song's disc number, in library order.
+    #[test]
+    fn songs_carry_the_documented_disc_numbers() {
+        let library = sample_library();
+        let discs: Vec<(&str, Option<u32>)> = songs_in_library_order(library)
+            .map(|song| (song.id.as_str(), song.disc_number))
+            .collect();
+
+        assert_eq!(
+            discs,
+            vec![
+                ("song-1", Some(1u32)),
+                ("song-2", Some(1)),
+                ("song-3", Some(1)),
+                ("song-4", None),
+                ("song-5", None),
             ]
         );
     }

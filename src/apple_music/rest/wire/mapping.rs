@@ -111,8 +111,8 @@ impl Resource {
     }
 
     /// Maps this resource to a [`Song`] linked to `album_id`, moving its id,
-    /// title, artist, album name, primary genre, track number, and preview
-    /// URL into the model instead of cloning them.
+    /// title, artist, album name, primary genre, track number, disc number, and
+    /// preview URL into the model instead of cloning them.
     ///
     /// The all-songs, playlist-track, and search collections carry no album id, so those callers
     /// pass `""`; only an album's tracks pass a real id (see
@@ -120,7 +120,7 @@ impl Resource {
     /// [`get_songs_from_playlist`](super::super::RestLibrary::get_songs_from_playlist), and
     /// [`RestLibrary::search_library`](super::super::RestLibrary::search_library)). The id and
     /// title are required (see [`required_id`] and [`required_name`]); the artist, album name,
-    /// genre, track number, composer, duration, and preview URL fall back to their "source supplied none"
+    /// genre, track number, disc number, composer, duration, and preview URL fall back to their "source supplied none"
     /// sentinels. The whole-library path maps up to [`MAX_PAGES`](super::super::paging::MAX_PAGES)
     /// pages of songs, so consuming the parsed resource avoids re-allocating every string it
     /// already owns.
@@ -137,6 +137,7 @@ impl Resource {
             genre_names,
             release_date,
             track_number,
+            disc_number,
             composer_name,
             duration_ms,
             previews,
@@ -148,11 +149,12 @@ impl Resource {
                 attributes.genre_names,
                 attributes.release_date,
                 attributes.track_number,
+                attributes.disc_number,
                 attributes.composer_name,
                 attributes.duration_in_millis,
                 attributes.previews,
             ),
-            None => (None, None, None, None, None, None, None, None, None),
+            None => (None, None, None, None, None, None, None, None, None, None),
         };
         let title = required_name(title, &id, "song")?;
         let artist = artist_or_empty(artist);
@@ -183,21 +185,26 @@ impl Resource {
             album,
             year: release_date.as_deref().and_then(release_year),
             genre,
-            // An API-reported non-positive number is not a usable album
-            // position, so it maps to the same `None` sentinel an absent
-            // number does. A value too large for the model's `u32` — or even
-            // outside `i64` — is just as unusable, and must not fail the whole
-            // response either.
-            track_number: track_number
-                .and_then(|number| number.as_u64())
-                .filter(|number| *number > 0)
-                .and_then(|number| u32::try_from(number).ok()),
+            track_number: positive_position(track_number),
+            disc_number: positive_position(disc_number),
             composer,
             album_id: album_id.to_string(),
             duration_ms: duration_millis(duration_ms),
             preview_url,
         })
     }
+}
+
+/// The usable 1-based position (track or disc number) an optional JSON number carries.
+///
+/// An API-reported non-positive number is not a usable position, so it maps to the same `None`
+/// sentinel an absent number does. A value too large for the model's `u32` — or even outside
+/// `i64` — is just as unusable, and must not fail the whole response either.
+fn positive_position(number: Option<serde_json::Number>) -> Option<u32> {
+    number
+        .and_then(|number| number.as_u64())
+        .filter(|number| *number > 0)
+        .and_then(|number| u32::try_from(number).ok())
 }
 
 /// The usable length in milliseconds an optional `durationInMillis` carries.

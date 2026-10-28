@@ -93,6 +93,7 @@ fn songs_from_album_maps_a_missing_duration_to_zero() {
             year: None,
             genre: String::new(),
             track_number: None,
+            disc_number: None,
             composer: String::new(),
             album_id: "album-9".to_string(),
             duration_ms: 0,
@@ -314,6 +315,31 @@ fn songs_from_album_maps_an_oversized_track_number_to_none() {
 }
 
 #[test]
+fn songs_from_album_maps_the_disc_number() {
+    assert_eq!(
+        song_from_attributes(r#"{"name":"Opening","discNumber":2}"#).disc_number,
+        Some(2)
+    );
+}
+
+// An absent, null, zero, negative, or oversized disc number maps to the `None`
+// sentinel like the track number does, and never fails the album fetch. The
+// last value is outside the `i64` range.
+#[test]
+fn songs_from_album_maps_a_missing_zero_negative_or_oversized_disc_number_to_none() {
+    for attributes in [
+        r#"{"name":"Opening"}"#,
+        r#"{"name":"Opening","discNumber":null}"#,
+        r#"{"name":"Opening","discNumber":0}"#,
+        r#"{"name":"Opening","discNumber":-1}"#,
+        r#"{"name":"Opening","discNumber":4294967296}"#,
+        r#"{"name":"Opening","discNumber":18446744073709551616}"#,
+    ] {
+        assert_eq!(song_from_attributes(attributes).disc_number, None);
+    }
+}
+
+#[test]
 fn songs_from_album_maps_the_first_preview_url() {
     assert_eq!(
         preview_url_from(&format!(
@@ -427,6 +453,7 @@ fn search_library_maps_the_search_envelope_and_percent_encodes_the_term() {
             year: None,
             genre: String::new(),
             track_number: None,
+            disc_number: None,
             composer: String::new(),
             album_id: String::new(),
             duration_ms: 210_000,
@@ -556,6 +583,7 @@ fn get_all_songs_maps_the_library_songs_collection() {
             year: None,
             genre: String::new(),
             track_number: None,
+            disc_number: None,
             composer: String::new(),
             album_id: String::new(),
             duration_ms: 210_000,
@@ -823,6 +851,7 @@ fn get_songs_from_playlist_maps_the_playlist_tracks_collection() {
             year: None,
             genre: String::new(),
             track_number: None,
+            disc_number: None,
             composer: String::new(),
             album_id: String::new(),
             duration_ms: 210_000,

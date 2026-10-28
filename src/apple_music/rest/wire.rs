@@ -194,6 +194,12 @@ struct Attributes {
     /// whole response.
     #[serde(rename = "trackNumber")]
     track_number: Option<serde_json::Number>,
+    /// The track's 1-based disc in its album's set; absent when the API omits
+    /// it. Parsed as a JSON number so an out-of-`u32` value, including an
+    /// integer beyond `i64`, maps to the model's `None` instead of failing the
+    /// whole response.
+    #[serde(rename = "discNumber")]
+    disc_number: Option<serde_json::Number>,
     /// The track's composer; absent when the API omits it.
     #[serde(rename = "composerName")]
     composer_name: Option<String>,
