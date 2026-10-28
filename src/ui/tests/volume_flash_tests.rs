@@ -160,3 +160,37 @@ fn a_no_op_mixer_roll_keeps_the_flash() {
         assert_eq!(player.mixer_flash_ticks, flash);
     }
 }
+
+#[test]
+fn a_band_roll_flashes_the_rolled_band_with_its_new_gain() {
+    let (player, state) = nudged(Message::EqBandWheel(BAND_COUNT - 1, 1.0));
+    let gain = state.blocking_lock().eq_bands()[BAND_COUNT - 1];
+    assert!(gain > 0.0);
+    assert!(root_view_draws(&player, "16KHZ"));
+    assert!(root_view_draws(&player, &format!("+{gain:.0} DB")));
+    assert!(!root_view_draws(&player, "60HZ"));
+}
+
+#[test]
+fn a_roll_against_a_limit_still_flashes_the_clamped_level() {
+    for (limit, direction, text) in [
+        (GAIN_MAX_DB, 1.0, "Preamp: +12 DB"),
+        (GAIN_MIN_DB, -1.0, "Preamp: -12 DB"),
+    ] {
+        let (mut player, state) = test_player();
+        seed_current_title(&mut player, &state, "Tune");
+        state.blocking_lock().set_eq_preamp(limit);
+        let _ = update(&mut player, Message::EqPreampWheel(direction));
+        assert_eq!(state.blocking_lock().eq_preamp(), limit);
+        assert_eq!(player.mixer_flash_ticks, 4);
+        assert!(root_view_draws(&player, text), "{text}");
+    }
+}
+
+#[test]
+fn releasing_a_slider_keeps_a_slider_roll_flash() {
+    let (mut player, _) = nudged(Message::BalanceWheel(1.0));
+    let _ = update(&mut player, Message::MixerReleased);
+    assert!(root_view_draws(&player, "Balance:"));
+    assert_eq!(player.mixer_flash_ticks, 4);
+}
