@@ -8,7 +8,7 @@ use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB};
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::sample_library::sample_library;
 use crate::settings::Settings;
-use crate::settings::file_store::SettingsWriter;
+use crate::settings::seam::SettingsWriter;
 use crate::state::TransportMode;
 use crate::test_support::{
     AudioCall, FailingAudio, FailingCommand, PREVIEW_URL, RecordingAudio, StubTransport,

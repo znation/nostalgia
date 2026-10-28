@@ -8,8 +8,8 @@
 //! window-shade mode. All but the last six live in [`AppState`]; the readout
 //! mode, visualizer choice, panel choices, always-on-top flag, and shade mode
 //! live on the UI's `WinampPlayer`, so the player sets them on its snapshot
-//! before saving and restores them after loading. The file-backed store and the
-//! writer seam live in [`file_store`], and [`writer::BackgroundWriter`] runs the
+//! before saving and restores them after loading. The file-backed store lives in
+//! [`file_store`], the writer seam in [`seam`], and [`writer::BackgroundWriter`] runs the
 //! blocking write on a worker thread in production.
 //!
 //! [`file_store::FileStore`] loads the snapshot from a line-based text file
@@ -19,6 +19,7 @@
 
 pub mod atomic_write;
 pub mod file_store;
+pub mod seam;
 pub mod writer;
 
 use crate::equalizer::{self, Preset};

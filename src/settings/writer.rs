@@ -13,7 +13,7 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
 
 use super::Settings;
-use super::file_store::SettingsWriter;
+use super::seam::SettingsWriter;
 
 /// The name the worker thread carries, so a panic report attributes it.
 const WRITER_THREAD_NAME: &str = "nostalgia-settings-writer";

@@ -1,6 +1,5 @@
-//! The settings persistence seam: the [`SettingsWriter`] trait the UI holds
-//! behind a box, and [`FileStore`], the production writer that reads and
-//! writes the line-based settings file.
+//! [`FileStore`], the production [`SettingsWriter`] that reads and writes the
+//! line-based settings file.
 
 use std::ffi::OsString;
 use std::fs::File;
@@ -11,6 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::Settings;
 use super::atomic_write::{sweep_stale_temporaries, write_atomically};
+use super::seam::SettingsWriter;
 
 /// Whether `path` is not absolute, so it depends on a current directory.
 ///
@@ -19,15 +19,6 @@ use super::atomic_write::{sweep_stale_temporaries, write_atomically};
 /// `C:config`; only drive-rooted and UNC paths pass.
 fn starts_relative(path: &Path) -> bool {
     !path.is_absolute()
-}
-
-/// Writes a [`Settings`] snapshot somewhere. The UI's `WinampPlayer` holds one
-/// behind a `Box<dyn SettingsWriter>`; production uses [`FileStore`] and the
-/// tests use an in-memory recorder.
-pub trait SettingsWriter: Send + Sync {
-    /// Persist `settings`. A failure is logged by the implementation rather
-    /// than reported to the caller, so the UI's update loop never aborts.
-    fn save(&self, settings: &Settings);
 }
 
 /// The production [`SettingsWriter`]: a text file on disk.

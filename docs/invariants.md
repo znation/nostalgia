@@ -921,7 +921,7 @@ store to `WinampPlayer` and restores the snapshot through
 records the snapshot; `update` calls
 `WinampPlayer::persist_settings_if_changed` once after every message, and that method copies
 the six player-owned values into `Settings::from_state`, then compares that snapshot against the
-last one before calling `settings::file_store::SettingsWriter::save`. Production wraps the store
+last one before calling `settings::seam::SettingsWriter::save`. Production wraps the store
 in `settings::writer::BackgroundWriter`, so that `save` stores the snapshot in a one-slot mailbox
 and wakes its worker instead of writing on the update thread; the worker writes the newest queued
 snapshot with the wrapped store's blocking `save`, and dropping the writer closes the mailbox,
