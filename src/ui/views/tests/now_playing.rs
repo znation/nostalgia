@@ -982,6 +982,22 @@ fn format_playback_prefix_formats_khz_and_bitrate() {
 // artist is non-empty, so an artist-less track shows no dangling separator.
 // The app's empty state takes the same path — `now_playing_artist` answers ""
 // for an unknown or an absent track (both pinned above), so the bar reads
+/// Asserts that `expected` is one of the captured `texts`, naming `what` on failure.
+fn assert_text_drawn(texts: &[String], expected: &str, what: &str) {
+    assert!(
+        texts.iter().any(|text| text == expected),
+        "{what}: {texts:?}"
+    );
+}
+
+/// Asserts that `unexpected` is none of the captured `texts`, naming `what` on failure.
+fn assert_text_not_drawn(texts: &[String], unexpected: &str, what: &str) {
+    assert!(
+        !texts.iter().any(|text| text == unexpected),
+        "{what}: {texts:?}"
+    );
+}
+
 // "Now Playing: Nothing" before anything is played. Nothing pinned the row's
 // half of that contract: the test above always passed an artist, and the
 // empty-artist row was only constructed by the smoke test, never read back.
@@ -989,18 +1005,13 @@ fn format_playback_prefix_formats_khz_and_bitrate() {
 fn now_playing_row_omits_the_artist_separator_when_the_track_has_no_artist() {
     let texts = captured_now_playing_texts("00:00", "Opening", "", "", 0, TransportMode::Playing);
 
-    assert!(
-        texts.iter().any(|text| text == "Opening"),
-        "the title must be drawn: {texts:?}"
+    assert_text_drawn(&texts, "Opening", "the title must be drawn");
+    assert_text_not_drawn(
+        &texts,
+        " - ",
+        "a track without an artist must not draw the separator",
     );
-    assert!(
-        !texts.iter().any(|text| text == " - "),
-        "a track without an artist must not draw the separator: {texts:?}"
-    );
-    assert!(
-        texts.iter().any(|text| text == "3:30"),
-        "the length readout must be drawn: {texts:?}"
-    );
+    assert_text_drawn(&texts, "3:30", "the length readout must be drawn");
 }
 
 // The same artist-less track with a title too long for the LCD scrolls the
@@ -1016,13 +1027,15 @@ fn an_overlong_title_without_an_artist_scrolls_the_title_alone() {
 
     let texts = captured_now_playing_texts("00:00", label, "", "", 0, TransportMode::Playing);
 
-    assert!(
-        texts.iter().any(|text| text == &window),
-        "the window must be taken over the title alone: {texts:?}"
+    assert_text_drawn(
+        &texts,
+        &window,
+        "the window must be taken over the title alone",
     );
-    assert!(
-        !texts.iter().any(|text| text == " - "),
-        "a track without an artist must not draw the separator: {texts:?}"
+    assert_text_not_drawn(
+        &texts,
+        " - ",
+        "a track without an artist must not draw the separator",
     );
 }
 
@@ -1078,13 +1091,15 @@ fn an_overlong_now_playing_line_windows_the_number_with_the_title() {
     let texts =
         captured_now_playing_texts("00:00", label, artist, number, 0, TransportMode::Playing);
 
-    assert!(
-        texts.iter().any(|text| text == &window),
-        "the window must be taken over the prefixed line: {texts:?}"
+    assert_text_drawn(
+        &texts,
+        &window,
+        "the window must be taken over the prefixed line",
     );
-    assert!(
-        !texts.iter().any(|text| text == number),
-        "the scrolling branch must not draw the prefix separately: {texts:?}"
+    assert_text_not_drawn(
+        &texts,
+        number,
+        "the scrolling branch must not draw the prefix separately",
     );
 }
 
