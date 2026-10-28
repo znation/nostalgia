@@ -841,6 +841,61 @@ fn preview_end_with_shuffle_on_a_single_song_stops() {
     }
 }
 
+// With Shuffle on and Repeat off, the natural end of the song that completed
+// the round stops like the last song of an unshuffled list, keeping it queued.
+#[test]
+fn preview_end_with_shuffle_on_and_repeat_off_stops_after_the_round() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) = player_playing_stepping_song(&recording, "song-3");
+    state.blocking_lock().shuffle = true;
+    for id in ["song-1", "song-2", "song-3"] {
+        record_a_play(&mut player, &state, id);
+    }
+
+    let settled = drive_playback_finished(&mut player);
+    assert!(matches!(settled, Message::TransportSettled));
+    assert_eq!(recording.calls(), vec![AudioCall::Stop]);
+    let state = state.blocking_lock();
+    assert!(!state.is_playing);
+    assert_eq!(state.current_track.as_deref(), Some("song-3"));
+}
+
+// Repeat on starts a new round instead of stopping.
+#[test]
+fn preview_end_with_shuffle_and_repeat_on_starts_a_new_round() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) = player_playing_stepping_song(&recording, "song-3");
+    {
+        let mut state = state.blocking_lock();
+        state.shuffle = true;
+        state.repeat = true;
+    }
+    for id in ["song-1", "song-2", "song-3"] {
+        record_a_play(&mut player, &state, id);
+    }
+
+    match drive_playback_finished(&mut player) {
+        Message::TrackSelected { index, .. } => assert!(index == 0 || index == 1),
+        other => panic!("expected a new round's TrackSelected, got {other:?}"),
+    }
+}
+
+// Next is not a preview end: it starts a new round and never stops.
+#[test]
+fn next_with_shuffle_after_a_completed_round_keeps_playing() {
+    let (mut player, state) = player_stepping_from(None);
+    state.blocking_lock().shuffle = true;
+    for id in ["song-1", "song-2", "song-3"] {
+        record_a_play(&mut player, &state, id);
+    }
+
+    let task = update(&mut player, Message::NextTrack);
+    match futures::executor::block_on(task_output(task, "next")) {
+        Message::TrackSelected { index, .. } => assert!(index == 0 || index == 1),
+        other => panic!("expected TrackSelected, got {other:?}"),
+    }
+}
+
 // Pause and Stop never advance: the finished signal may still arrive from a
 // poll issued before the transport changed, and a paused or stopped player has
 // nothing to step past.

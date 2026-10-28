@@ -2532,11 +2532,14 @@ in `src/ui/transport/history.rs` implements the recorded-play walk.
 showing list's songs not yet played this round, so every song plays once before any repeats. Once
 every song has played, a new round starts from the song now playing. With no unplayed song left
 (for example a one-song list) the pick falls back to `transport::shuffled_track_id`. Only
-committed plays are recorded, whether or not Shuffle is on.
+committed plays are recorded, whether or not Shuffle is on. With Shuffle on and Repeat off, a
+natural preview end on the song that completed the round stops (keeping it queued for Play);
+Next and Repeat on start a new round.
 
 **Enforced by.** `transport::ShuffleRound` in `src/ui/transport/round.rs`;
 `handlers::playback::track_played` records committed plays; `stepping::forward_track_id` picks
-through `ShuffleRound::pick`.
+through `ShuffleRound::pick`; `ShuffleRound::ends_round` and `handlers::playback::playback_finished`
+stop at a round's end.
 
 **Pinned by.**
 
@@ -2546,6 +2549,11 @@ through `ShuffleRound::pick`.
 - `record_forgets_songs_the_list_no_longer_shows` (`src/ui/transport/round.rs`)
 - `next_with_shuffle_plays_the_unplayed_song` (`src/ui/tests/stepping_tests.rs`)
 - `preview_end_with_shuffle_on_plays_the_unplayed_song` (`src/ui/tests/stepping_tests.rs`)
+- `the_play_completing_a_round_ends_it` (`src/ui/transport/round.rs`)
+- `a_later_play_clears_the_round_end` (`src/ui/transport/round.rs`)
+- `preview_end_with_shuffle_on_and_repeat_off_stops_after_the_round` (`src/ui/tests/stepping_tests.rs`)
+- `preview_end_with_shuffle_and_repeat_on_starts_a_new_round` (`src/ui/tests/stepping_tests.rs`)
+- `next_with_shuffle_after_a_completed_round_keeps_playing` (`src/ui/tests/stepping_tests.rs`)
 
 ## Previous restart
 

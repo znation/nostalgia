@@ -15,6 +15,7 @@ use super::shuffled_track_id;
 #[derive(Debug, Default)]
 pub struct ShuffleRound {
     played: HashSet<String>,
+    completed_by: Option<String>,
 }
 
 impl ShuffleRound {
@@ -31,7 +32,19 @@ impl ShuffleRound {
         if !songs.is_empty() && songs.iter().all(|song| self.played.contains(&song.id)) {
             self.played.clear();
             self.played.insert(track_id.to_owned());
+            self.completed_by = Some(track_id.to_owned());
+        } else {
+            self.completed_by = None;
         }
+    }
+
+    /// Whether `current` is the song whose play completed the round, so a
+    /// natural end there ends the round. The round is the list that was
+    /// showing when that song's play was recorded; any later committed play
+    /// clears this.
+    #[must_use]
+    pub fn ends_round(&self, current: Option<&str>) -> bool {
+        current.is_some() && current == self.completed_by.as_deref()
     }
 
     /// The song a shuffled forward step selects: `roll` picks among the songs
@@ -112,5 +125,30 @@ mod tests {
             round.pick(&songs, Some("song-2"), 0).as_deref(),
             Some("song-1")
         );
+    }
+
+    #[test]
+    fn the_play_completing_a_round_ends_it() {
+        let songs = stepping_songs();
+        let mut round = ShuffleRound::default();
+        for id in ["song-1", "song-2", "song-3"] {
+            round.record(id, &songs);
+        }
+        assert!(round.ends_round(Some("song-3")));
+        assert!(!round.ends_round(Some("song-1")));
+        assert!(!round.ends_round(None));
+    }
+
+    #[test]
+    fn a_later_play_clears_the_round_end() {
+        let songs = stepping_songs();
+        let mut round = ShuffleRound::default();
+        round.record("song-1", &songs);
+        round.record("song-2", &songs);
+        assert!(!round.ends_round(Some("song-2")));
+        round.record("song-3", &songs);
+        assert!(round.ends_round(Some("song-3")));
+        round.record("song-3", &songs);
+        assert!(!round.ends_round(Some("song-3")));
     }
 }

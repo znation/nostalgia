@@ -229,7 +229,8 @@ beginning, and restarts a playing one from its start. When a loaded preview reac
 showing list: to the next song, to the first song with Repeat on at the end, or, with Shuffle on, to
 a shuffled song when another exists. Shuffle plays each song of the showing list once before any
 repeats, like Winamp. With Repeat off on the last song it stops instead and keeps
-that song queued for Play. The volume, balance, Repeat and Shuffle flags, the equalizer's on/off
+that song queued for Play; with Shuffle on and Repeat off it likewise stops once every song of the
+round has played, and Repeat on or Next starts a new round. The volume, balance, Repeat and Shuffle flags, the equalizer's on/off
 state, AUTO choice, curve, and preset, the elapsed/remaining readout choice, the visualizer's
 shown/hidden choice, the equalizer and library panels' shown/hidden choices, the always-on-top
 choice, and the window-shade mode are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or

@@ -161,7 +161,9 @@ pub(in crate::ui) fn playback_duration(
 /// advance. A natural end is a forward step, not a Previous, so it records
 /// nothing in `PlayHistory`. When `stop_after_current` is armed, a reply that
 /// passes those checks takes the [`stop`] path instead of picking a song, and
-/// disarms the flag; a dropped reply leaves it armed.
+/// disarms the flag; a dropped reply leaves it armed. With Shuffle on and
+/// Repeat off, a reply on the song that completed the Shuffle round also
+/// takes the [`stop`] path; Next and Repeat on start a new round.
 pub(in crate::ui) fn playback_finished(
     player: &mut WinampPlayer,
     epoch: u64,
@@ -178,6 +180,15 @@ pub(in crate::ui) fn playback_finished(
         if player.stop_after_current {
             drop(state);
             player.stop_after_current = false;
+            return stop(player);
+        }
+        if state.shuffle
+            && !state.repeat
+            && player
+                .shuffle_round
+                .ends_round(state.current_track.as_deref())
+        {
+            drop(state);
             return stop(player);
         }
         let (items, list_epoch) = showing_songs(player);
