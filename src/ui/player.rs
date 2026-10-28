@@ -22,6 +22,10 @@ use super::{transport, views};
 
 mod presentation;
 
+/// How many LCD ticks a volume nudge's readout shows: one second at
+/// `MARQUEE_TICK`.
+pub(in crate::ui) const VOLUME_FLASH_TICKS: u8 = 4;
+
 /// The app model the iced loop owns: the shared playback state, the Apple
 /// Music service, the browse lists and their view state, the Now Playing
 /// readouts and drag state, and the window flags and settings writer.
@@ -243,6 +247,10 @@ pub(in crate::ui) struct WinampPlayer {
     /// The mixer slider being dragged, whose live level the LCD shows in place
     /// of the title; transient, never saved to settings.
     pub(in crate::ui) mixer_drag: Option<views::MixerDrag>,
+    /// The LCD ticks the volume readout still has after a key or wheel nudge,
+    /// shown in place of the title like a drag's; 0 when none shows. Counted
+    /// down by `marquee_tick`; transient, never saved to settings.
+    pub(in crate::ui) volume_flash_ticks: u8,
     /// The last unsnapped balance value the current drag requested, so the
     /// center detent compares each move with the cursor's previous position
     /// rather than the (possibly snapped) stored balance. Cleared on release.
@@ -358,6 +366,7 @@ impl WinampPlayer {
             seek_preview: None,
             time_display: views::TimeDisplay::Elapsed,
             mixer_drag: None,
+            volume_flash_ticks: 0,
             balance_drag_raw: None,
             position_epoch: 0,
             pending_position_transitions: 0,
@@ -444,6 +453,12 @@ impl WinampPlayer {
         self.always_on_top = saved.always_on_top();
         self.shaded = saved.shaded();
         self.saved_settings = saved;
+    }
+
+    /// Whether the LCD timer must run: a volume flash is counting down, or the
+    /// title has to scroll ([`Self::needs_marquee`]).
+    pub(in crate::ui) fn needs_lcd_tick(&self) -> bool {
+        self.volume_flash_ticks > 0 || self.needs_marquee()
     }
 
     /// Whether the Now Playing line is too long for the LCD's character

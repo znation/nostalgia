@@ -11,6 +11,7 @@ use iced::Task;
 use crate::apple_music::{AppleMusicError, AppleMusicService};
 use crate::equalizer::{BAND_COUNT, Preset, preset_for_genre};
 use crate::state::AppState;
+use crate::ui::player::VOLUME_FLASH_TICKS;
 use crate::ui::views;
 use crate::ui::{Message, WinampPlayer};
 
@@ -25,11 +26,13 @@ pub(in crate::ui) fn volume_change(player: &mut WinampPlayer, volume: f32) -> Ta
 /// The up arrow: nudges the slider's value by its own step, so the keyboard
 /// and the drag share one granularity; `nudge_volume` clamps.
 pub(in crate::ui) fn volume_up(player: &mut WinampPlayer) -> Task<Message> {
+    player.volume_flash_ticks = VOLUME_FLASH_TICKS;
     mutate_volume(player, |state| state.nudge_volume(views::VOLUME_STEP))
 }
 
 /// The down arrow: nudges the slider's value down by its own step.
 pub(in crate::ui) fn volume_down(player: &mut WinampPlayer) -> Task<Message> {
+    player.volume_flash_ticks = VOLUME_FLASH_TICKS;
     mutate_volume(player, |state| state.nudge_volume(-views::VOLUME_STEP))
 }
 
@@ -57,6 +60,7 @@ pub(in crate::ui) fn balance_wheel(player: &mut WinampPlayer, direction: f32) ->
     if direction == 0.0 || direction.is_nan() {
         return Task::none();
     }
+    player.volume_flash_ticks = 0;
     mutate_balance(player, |state| {
         state.set_balance(state.balance() + direction.signum() * views::BALANCE_STEP)
     })
@@ -139,6 +143,7 @@ pub(in crate::ui) fn eq_preamp_wheel(player: &mut WinampPlayer, direction: f32) 
     if direction == 0.0 || direction.is_nan() {
         return Task::none();
     }
+    player.volume_flash_ticks = 0;
     mutate_equalizer(player, |state| {
         state.set_eq_preamp(state.eq_preamp() + direction.signum() * views::EQ_STEP)
     })
@@ -157,6 +162,7 @@ pub(in crate::ui) fn eq_band_wheel(
     if band >= BAND_COUNT || direction == 0.0 || direction.is_nan() {
         return Task::none();
     }
+    player.volume_flash_ticks = 0;
     mutate_equalizer(player, |state| {
         let gain = state.eq_bands()[band] + direction.signum() * views::EQ_STEP;
         state.set_eq_band(band, gain)

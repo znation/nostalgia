@@ -50,7 +50,7 @@ pub(super) use spectrum::{
 
 /// The subscriptions the UI runs: the keyboard listener, plus the marquee
 /// timer while the Now Playing line is too long to fit the LCD's character
-/// budget, plus the position poll while there is a position to refresh, plus
+/// budget or while a volume flash shows, plus the position poll while there is a position to refresh, plus
 /// the spectrum poll while playback is running.
 ///
 /// The marquee timer exists to advance the Now Playing title window, and the

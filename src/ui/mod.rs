@@ -86,7 +86,7 @@ pub fn init_ui(
     .resizable(false)
     .subscription(|player| {
         iced::Subscription::batch(subscriptions(
-            player.needs_marquee(),
+            player.needs_lcd_tick(),
             player.needs_position_poll(),
             player.needs_spectrum_poll(),
             player.mixer_drag.is_some(),

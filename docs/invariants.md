@@ -1117,18 +1117,21 @@ that area, so its `Scrollable` keeps the wheel and the volume is unchanged; a ho
 roll or a zero direction changes no volume and schedules no work. A drawn seek slider is one
 exception: it seeks instead (see `## Seek wheel`). The balance slider, the equalizer preamp, and
 each equalizer band are the others: a roll over one moves that slider instead (see
-`## Slider wheel`).
+`## Slider wheel`). Each nudge (key or wheel) also shows the `Volume: N%` readout in the LCD title's
+place for `VOLUME_FLASH_TICKS` (four) marquee ticks, about a second; a balance or equalizer wheel
+roll cancels it, a mixer drag readout takes precedence, and the title's scroll pauses meanwhile.
 
 **Enforced by.** `views::volume_wheel_message` and its `views::wheel_direction` sign mapping in
 `src/ui/views/mod.rs`, `Message::VolumeWheel` in `src/ui/message.rs`,
 `handlers::mixer::volume_wheel` in `src/ui/handlers/mixer.rs` (the zero/NaN no-op), and the two
 `MouseArea::on_scroll` wrappers in `src/ui/view/normal.rs` and `src/ui/view/shade.rs` (which also carry the options right-press), which the
-balance, preamp, and band wrappers nest inside.
+balance, preamp, and band wrappers nest inside; the flash is held by
+`WinampPlayer::volume_flash_ticks` and counted down by `handlers::playback::marquee_tick`.
 
 **Pinned by.** `volume_wheel_message_maps_a_vertical_roll_to_a_direction` and
 `volume_wheel_message_zeroes_a_horizontal_only_roll` in `src/ui/views/tests/transport.rs`, plus
 `volume_wheel_nudges_by_one_slider_step_and_ignores_zero` and `volume_wheel_clamps_at_the_ends`
-in `src/ui/tests/mixer_tests.rs`.
+in `src/ui/tests/mixer_tests.rs`, plus the tests in `src/ui/tests/volume_flash_tests.rs`.
 
 ## Seek wheel
 

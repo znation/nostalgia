@@ -81,6 +81,17 @@ pub(super) fn view_player_panels(
                         .seek_preview
                         .zip(player.playback_duration)
                         .map(|(target, length)| views::seek_readout_text(target, length))
+                })
+                .or_else(|| {
+                    (player.volume_flash_ticks > 0).then(|| {
+                        views::mixer_readout_text(
+                            views::MixerDrag::Volume,
+                            volume,
+                            balance,
+                            eq_preamp,
+                            &eq_bands,
+                        )
+                    })
                 }),
             views::IndicatorModes {
                 options_visible: player.options_visible,

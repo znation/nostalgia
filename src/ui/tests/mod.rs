@@ -1374,4 +1374,5 @@ mod stepping_tests;
 mod subscriptions_tests;
 mod transport_tests;
 mod view_tests;
+mod volume_flash_tests;
 mod window_tests;
