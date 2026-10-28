@@ -58,3 +58,46 @@ fn get_recently_played_songs_keeps_apples_order_and_follows_a_next_page() {
         "https://api.music.apple.com/v1/me/recent/played/tracks?offset=10"
     );
 }
+
+#[test]
+fn get_recently_played_songs_reports_a_transport_error_bare() {
+    let error = transport_error_over(|library| library.get_recently_played_songs(&rest_session()));
+
+    assert_eq!(error, "network down");
+}
+
+#[test]
+fn get_recently_played_songs_rejects_a_nameless_song() {
+    let error = error_over(
+        r#"{"data":[{"id":"s.7","type":"songs","attributes":{}}]}"#,
+        |library| library.get_recently_played_songs(&rest_session()),
+    );
+
+    assert!(error.contains("without a name"), "{error}");
+    assert!(error.contains("s.7"), "{error}");
+}
+
+#[test]
+fn get_recently_played_songs_rejects_a_blank_id_song() {
+    let error = error_over(
+        r#"{"data":[{"id":"  ","type":"library-songs","attributes":{"name":"Ghost"}}]}"#,
+        |library| library.get_recently_played_songs(&rest_session()),
+    );
+
+    assert!(error.contains("blank id"), "{error}");
+}
+
+// A resource of another type is dropped before mapping, so its own missing name or blank id
+// never fails the load.
+#[test]
+fn get_recently_played_songs_ignores_a_malformed_resource_of_another_type() {
+    let stub = StubTransport::returning(
+        r#"{"data":[{"id":"","type":"music-videos","attributes":{}},
+            {"id":"s.1","type":"songs","attributes":{"name":"Kept"}}]}"#,
+    );
+    let library = library_over(&stub);
+
+    let songs = library.get_recently_played_songs(&rest_session()).unwrap();
+
+    assert_ids(&songs, |song| song.id.as_str(), &["s.1"]);
+}
