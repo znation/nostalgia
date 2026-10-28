@@ -602,7 +602,7 @@ fn stop_clears_the_playback_format_while_pause_keeps_it() {
 // A spectrum reply stores exactly what the backend reported, and a later
 // `None` reply clears the visualizer instead of keeping the old bars.
 #[test]
-fn spectrum_reply_stores_the_loaded_previews_spectrum() {
+fn spectrum_reply_stores_the_bars_and_lets_a_quieter_band_fall() {
     let (mut player, _state) = test_player();
     let epoch = player.position_epoch;
     let spectrum = recording_spectrum();
@@ -627,7 +627,7 @@ fn spectrum_reply_stores_the_loaded_previews_spectrum() {
             spectrum: Some(lower),
         },
     );
-    assert_eq!(player.spectrum, Some(lower));
+    assert_eq!(player.spectrum.unwrap().bands[2], 0.25);
     assert_eq!(player.spectrum_peaks.unwrap().bands[2], 0.375);
 
     let _ = update(

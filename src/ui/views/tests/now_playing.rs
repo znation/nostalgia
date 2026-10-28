@@ -561,6 +561,31 @@ fn next_spectrum_peaks_follows_a_rising_band_and_falls_slowly_after_it() {
     assert_eq!(next_spectrum_peaks(Some(first), None), None);
 }
 
+// A bar jumps up at once, falls a quarter per reply, and clamps odd bands.
+#[test]
+fn next_spectrum_bars_rise_at_once_and_fall_a_quarter_per_reply() {
+    let bands = |first: f32, second: f32| {
+        let mut bands = [0.0; BAND_COUNT];
+        bands[0] = first;
+        bands[1] = second;
+        Spectrum { bands }
+    };
+    let full = next_spectrum_bars(None, Some(bands(1.0, 2.0))).unwrap();
+    assert_eq!(full.bands[0], 1.0);
+    assert_eq!(full.bands[1], 1.0);
+    let lower = next_spectrum_bars(Some(full), Some(bands(0.0, f32::NAN))).unwrap();
+    assert_eq!(lower.bands[0], 0.75);
+    assert_eq!(lower.bands[1], 0.75);
+    let lower = next_spectrum_bars(Some(lower), Some(bands(0.0, -1.0))).unwrap();
+    assert_eq!(lower.bands[0], 0.5);
+    let raised = next_spectrum_bars(Some(lower), Some(bands(0.9, 0.0))).unwrap();
+    assert_eq!(raised.bands[0], 0.9);
+    let bar = next_spectrum_bars(Some(full), Some(bands(0.0, 0.0))).unwrap();
+    let peak = next_spectrum_peaks(Some(full), Some(bands(0.0, 0.0))).unwrap();
+    assert!(bar.bands[0] < peak.bands[0]);
+    assert_eq!(next_spectrum_bars(Some(full), None), None);
+}
+
 // The marker sits on or above its bar and inside the 24 px strip, and only a
 // positive peak draws one.
 #[test]

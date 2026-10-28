@@ -33,7 +33,7 @@ pub use text::{
 };
 pub(in crate::ui::views) use text::{MARQUEE_WIDTH, display_len, marquee_text};
 use visualizer::now_playing_visualizer_row;
-pub use visualizer::{next_spectrum_peaks, visible_spectrum};
+pub use visualizer::{next_spectrum_bars, next_spectrum_peaks, visible_spectrum};
 
 /// The LCD's large elapsed-readout size in pixels, matching the mockup's big
 /// left-hand time readout.

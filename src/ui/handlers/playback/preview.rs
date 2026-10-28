@@ -225,7 +225,7 @@ pub(in crate::ui) fn spectrum_tick(player: &mut WinampPlayer) -> Task<Message> {
     )
 }
 
-/// The spectrum query's reply: store the reported bars and advance the peak
+/// The spectrum query's reply: advance the bars' falloff and the peak
 /// markers' hold-and-fall levels, or clear both when the backend reports no spectrum. A reply that
 /// [`reply_is_current`] rejects is dropped, so a poll in flight across a Stop
 /// or a new selection cannot restore the previous preview's bars, and neither
@@ -237,7 +237,7 @@ pub(in crate::ui) fn spectrum(
 ) -> Task<Message> {
     if reply_is_current(player, epoch) {
         player.spectrum_peaks = views::next_spectrum_peaks(player.spectrum_peaks, spectrum);
-        player.spectrum = spectrum;
+        player.spectrum = views::next_spectrum_bars(player.spectrum, spectrum);
     }
     Task::none()
 }

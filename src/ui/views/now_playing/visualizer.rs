@@ -37,6 +37,11 @@ const LCD_VISUALIZER_RAMP_STEP: f32 = 2.0;
 /// two seconds at the poll's four replies a second.
 const LCD_VISUALIZER_PEAK_FALL: f32 = 0.125;
 
+/// How far a bar may drop on each spectrum reply, as a fraction of full
+/// height, so a band falls from full to the rail in four polls (about one
+/// second at the poll's four replies a second).
+const LCD_VISUALIZER_BAR_FALL: f32 = 0.25;
+
 /// The height of one peak marker, in pixels.
 const LCD_VISUALIZER_PEAK_HEIGHT: f32 = 1.0;
 
@@ -78,12 +83,34 @@ pub fn next_spectrum_peaks(
     previous: Option<Spectrum>,
     spectrum: Option<Spectrum>,
 ) -> Option<Spectrum> {
+    fall_toward(previous, spectrum, LCD_VISUALIZER_PEAK_FALL)
+}
+
+/// The bar levels after a spectrum reply: each band jumps to a louder reported
+/// level at once and otherwise drops at most [`LCD_VISUALIZER_BAR_FALL`] below
+/// the previous bar, floored at zero. Clamping and the missing-`previous` and
+/// missing-`spectrum` cases follow [`next_spectrum_peaks`]. Pure so the
+/// falloff is testable.
+pub fn next_spectrum_bars(
+    previous: Option<Spectrum>,
+    spectrum: Option<Spectrum>,
+) -> Option<Spectrum> {
+    fall_toward(previous, spectrum, LCD_VISUALIZER_BAR_FALL)
+}
+
+/// Shared rule behind the bars and peaks: the higher of the clamped reported
+/// level and the previous level less `fall`, floored at zero.
+fn fall_toward(
+    previous: Option<Spectrum>,
+    spectrum: Option<Spectrum>,
+    fall: f32,
+) -> Option<Spectrum> {
     let spectrum = spectrum?;
     let held = previous.map_or([0.0; BAND_COUNT], |previous| previous.bands);
     let mut bands = [0.0; BAND_COUNT];
     for (band, (level, held)) in bands.iter_mut().zip(spectrum.bands.into_iter().zip(held)) {
         let level = clamp_with_nan_fallback(level, 0.0, 1.0, 0.0);
-        *band = level.max(held - LCD_VISUALIZER_PEAK_FALL).max(0.0);
+        *band = level.max(held - fall).max(0.0);
     }
     Some(Spectrum { bands })
 }

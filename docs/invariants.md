@@ -1284,10 +1284,14 @@ its internal id, whenever the id is in the known-track index:
   and the previous peak less 0.125; pinned by
   `next_spectrum_peaks_follows_a_rising_band_and_falls_slowly_after_it`) inside the same reply
   guard as the spectrum (`a_stale_spectrum_reply_leaves_the_peaks_alone`,
-  `spectrum_reply_stores_the_loaded_previews_spectrum`). Pause keeps them and Stop clears them
+  `spectrum_reply_stores_the_bars_and_lets_a_quieter_band_fall`). Pause keeps them and Stop clears them
   (`stop_clears_the_spectrum_while_pause_keeps_it`), and hiding the visualizer hides them
   while keeping the stored levels
-  (`toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum`).
+  (`toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum`). The drawn bars
+  are `WinampPlayer::spectrum`, advanced by `next_spectrum_bars` (the higher of the band and the
+  previous bar less 0.25; pinned by
+  `next_spectrum_bars_rise_at_once_and_fall_a_quarter_per_reply`) inside the same reply guard.
+  The peaks fall slower (0.125), so a peak is never below its bar.
 - The LCD's left edge always draws the five classic indicator letters `O`, `A`, `I`, `D`, `V`,
   in that order, at a fixed width, in every playback state including the empty `--:--` bar. `O`,
   `A`, `I`, and `V` are mouse areas: pressing `O` publishes `Message::ToggleOptions` (the same
@@ -1568,7 +1572,7 @@ rather than the panic unwinding the event loop.
 - `now_playing_visualizer_row_keeps_its_height_without_a_spectrum` (`src/ui/views/tests/lcd_display.rs`)
 - `now_playing_visualizer_row_draws_one_fixed_width_bar_per_band` (`src/ui/views/tests/lcd_display.rs`)
 - `now_playing_visualizer_row_paints_its_ramp_from_green_to_orange` (`src/ui/views/tests/lcd_display.rs`)
-- `spectrum_reply_stores_the_loaded_previews_spectrum`
+- `spectrum_reply_stores_the_bars_and_lets_a_quieter_band_fall`
 - `spectrum_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped`
 - `stop_clears_the_spectrum_while_pause_keeps_it`
 - `spectrum_tick_queries_spectrum_and_carries_the_epoch`
@@ -2420,7 +2424,7 @@ width, while `views::visible_spectrum` applies `WinampPlayer::visualizer_visible
 - `a_refused_spectrum_thread_ends_the_tick_stream_instead_of_panicking` (`src/ui/tests/`)
 - `a_refused_spectrum_thread_reports_the_cause_and_the_loss` (`src/ui/tests/`)
 - `the_spectrum_thread_is_named_nostalgia_spectrum_poll` (`src/ui/tests/`)
-- `spectrum_reply_stores_the_loaded_previews_spectrum`
+- `spectrum_reply_stores_the_bars_and_lets_a_quieter_band_fall`
 - `spectrum_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped`
 - `stop_clears_the_spectrum_while_pause_keeps_it`
 - `spectrum_tick_queries_spectrum_and_carries_the_epoch`
