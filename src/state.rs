@@ -170,8 +170,8 @@ impl AppState {
     /// `current_track` in place so the Now Playing bar keeps showing the
     /// interrupted track's title (matching Winamp). The on-screen Pause
     /// buttons and the keyboard's C key call this (through `Message::Pause`);
-    /// unlike [`AppState::toggle_playing`] it is an explicit, idempotent set,
-    /// so a second press keeps the player paused rather than resuming.
+    /// unlike [`AppState::toggle_playing`] it is an explicit, idempotent set;
+    /// the service resumes a paused preview before calling this.
     pub fn pause(&mut self) {
         self.is_playing = false;
         self.paused = true;

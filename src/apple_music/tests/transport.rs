@@ -195,6 +195,18 @@ async fn toggle_play_pause_resumes_while_paused() {
     assert_playback_state(&state, Some("song-1"), true).await;
 }
 
+#[tokio::test]
+async fn pause_while_paused_resumes_the_preview() {
+    let (service, state, recording) = recording_service_with_preview().await;
+
+    service.pause().await.unwrap();
+    service.pause().await.unwrap();
+
+    assert_preview_calls(&recording.calls(), &[AudioCall::Pause, AudioCall::Resume]);
+    assert_playback_state(&state, Some("song-1"), true).await;
+    assert_transport_mode(&state, TransportMode::Playing).await;
+}
+
 // Stop discards the backend's player, so `resume` cannot resume it; instead
 // the service replays the remembered preview URL, restarting it from the
 // beginning rather than claiming playback with nothing loaded. Without this,

@@ -467,7 +467,7 @@ explicit messages the on-screen controls and the classic X, C, V, B, and Z lette
 of those keys obeys that control's existing Shuffle, Repeat, and end-of-list rules and changes no
 browse, search, or LCD state beyond what the control already changes; the media Play/Pause key
 instead toggles playback through `Message::PlayPause`, which no on-screen control or letter
-dispatches. Ctrl/Alt/Logo chords with these keys stay unbound, and a key release binds nothing.
+dispatches. `Message::Pause` resumes a paused preview rather than keeping it paused. Ctrl/Alt/Logo chords with these keys stay unbound, and a key release binds nothing.
 
 **Enforced by.** `shortcuts::shortcut` in `src/ui/shortcuts.rs` maps the six `key::Named::Media…`
 variants to those messages after its Control/Alt/Logo chord guard.
@@ -477,6 +477,7 @@ variants to those messages after its Control/Alt/Logo chord guard.
 - `message_for_maps_media_keys_to_the_transport` (`src/ui/shortcuts.rs`)
 - `media_play_pause_key_toggles_playback` (`src/ui/tests/shortcuts_tests.rs`)
 - `shortcut_ignores_chord_modifiers` (`src/ui/shortcuts.rs`)
+- `pause_while_paused_resumes_the_preview` (`src/apple_music/tests/transport.rs`)
 
 **History.** Added with the system media-key transport bindings.
 

@@ -55,12 +55,15 @@ async fn play_and_pause_set_the_playback_flag_explicitly() {
     assert_transport_settled(task, "play again").await;
     assert!(state.lock().await.is_playing);
 
-    // C pauses even when already paused.
+    // C pauses, unpauses a paused song, and pauses again.
     let task = update(&mut player, Message::Pause);
     assert_transport_settled(task, "pause").await;
     assert!(!state.lock().await.is_playing);
     let task = update(&mut player, Message::Pause);
     assert_transport_settled(task, "pause again").await;
+    assert!(state.lock().await.is_playing);
+    let task = update(&mut player, Message::Pause);
+    assert_transport_settled(task, "pause a third time").await;
     assert!(!state.lock().await.is_playing);
 }
 

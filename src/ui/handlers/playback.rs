@@ -45,9 +45,10 @@ pub(in crate::ui) fn play(player: &mut WinampPlayer) -> Task<Message> {
     })
 }
 
-/// The transport row's Pause button and the keyboard's C key: an explicit
-/// pause rather than the media key's toggle. Pause pauses a loaded preview;
-/// with none loaded it stops the transport, since there is nothing to pause.
+/// The transport row's Pause button and the keyboard's C key. Pause pauses a
+/// playing preview and resumes a paused one, like Winamp; with none loaded it
+/// stops the transport, since there is nothing to pause. It differs from the
+/// media key's toggle only while stopped, where it does not start playback.
 pub(in crate::ui) fn pause(player: &mut WinampPlayer) -> Task<Message> {
     begin_position_transition(player);
     transport_into(&player.apple_music_service, "pause", |service| async move {

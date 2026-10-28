@@ -49,7 +49,7 @@ time (`-02:37`) and back; the choice stays until clicked again. The compact read
 footer and the shade strip are click targets too while playing or paused, switching the same mode;
 a stopped readout ignores the click. The bar sits above Previous,
 Play, Pause, Stop, and Next glyph controls with word tooltips: Play starts or resumes
-the loaded preview and Pause pauses it (stopping a track whose source supplied no preview),
+the loaded preview and Pause pauses it, or resumes it while paused, like Winamp (stopping a track whose source supplied no preview),
 then the Repeat and Shuffle
 toggles (each sinks while on), a volume slider whose groove runs from green when silent through orange at half volume to
 red at full volume, a balance slider whose groove is green at center and reddens toward either side,
@@ -163,7 +163,7 @@ while stopped, like Winamp's taskbar title. It keeps the interrupted track's nam
 reads just `nostalgia` when no known track is current.
 With the window focused, the classic Winamp keys drive playback: Z and B step back and forward
 (a Z press restarts the loaded preview from its start once it has played at least three seconds),
-X plays, C pauses, V stops, Ctrl+V arms (or disarms) Stop after current — the playing song then
+X plays, C pauses (or resumes while paused), V stops, Ctrl+V arms (or disarms) Stop after current — the playing song then
 plays to its natural end and playback stops instead of advancing, once, shown only by the
 options-menu row (`Stop after current: On/Off`), R toggles Repeat and S toggles Shuffle, A (or Ctrl+A) toggles
 always-on-top and T (or Ctrl+T) switches the large readout between elapsed and remaining time (the
