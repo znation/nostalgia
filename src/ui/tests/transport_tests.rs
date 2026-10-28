@@ -152,9 +152,7 @@ async fn rejected_transport_commands_still_settle_and_keep_playing_state() {
 // `preview_url.as_deref()` handoff exists for.
 #[tokio::test]
 async fn track_selected_plays_the_songs_preview_url() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (mut player, _state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    let (recording, mut player, _state) = player_with_recording();
 
     player.songs.items = vec![Song {
         id: "song-1".to_string(),
@@ -184,9 +182,7 @@ async fn track_selected_plays_the_songs_preview_url() {
 // constant the arms read would still pass if that documented step changed.
 #[test]
 fn seek_messages_drive_the_audio_backend() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (mut player, state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    let (recording, mut player, state) = player_with_recording();
 
     assert_message_schedules_no_work(&mut player, Message::SeekBackward);
     assert_message_schedules_no_work(&mut player, Message::SeekForward);

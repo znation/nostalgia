@@ -361,9 +361,7 @@ fn all_albums_loaded_stores_the_flat_list() {
 // press resolves against `songs` and plays the wrong song.
 #[tokio::test]
 async fn track_selected_in_all_songs_plays_the_flat_lists_song() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (mut player, state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    let (recording, mut player, state) = player_with_recording();
     // Both buffers have a song at index 0 and both epochs land on 1:
     // `songs` gets album-1's "song-1", the flat list gets album-2's
     // "song-4".
