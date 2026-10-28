@@ -344,16 +344,16 @@ async fn boot_schedules_loading_the_artist_list() {
     // The batched task carries both the artists fetch and the window-id query,
     // and iced runs both after the window opens; the fetch's `LoadArtists`
     // output is the first the stream yields.
-    await_boot_artist_loads(task, 1).await;
+    await_boot_artist_loads(task, false).await;
 }
 
 // The startup sign-in runs on a background thread, so the first artists fetch
 // can land before the session exists and answer from the sample library. The
-// boot task must watch for the session and re-issue `LoadArtists` when it
+// boot task must watch for the session and send `SessionReady` when it
 // arrives, or a signed-in user keeps seeing the sample artists for the rest of
 // the process. A regression that dropped that watch would exhaust the boot
 // stream after the initial fetch, so [`await_boot_artist_loads`] would time
-// out waiting for a second `LoadArtists`.
+// out waiting for `SessionReady`.
 #[tokio::test]
 async fn boot_reloads_artists_after_the_startup_sign_in_stores_a_session() {
     let state = Arc::new(Mutex::new(AppState::default()));
@@ -372,8 +372,8 @@ async fn boot_reloads_artists_after_the_startup_sign_in_stores_a_session() {
     });
 
     // The batched task carries the initial fetch, the session wait, and the
-    // window-id query; drive until the wait's second `LoadArtists` lands.
-    await_boot_artist_loads(task, 2).await;
+    // window-id query; drive until the wait's `SessionReady` lands.
+    await_boot_artist_loads(task, true).await;
     sign_in.join().expect("the sign-in thread must not panic");
 }
 

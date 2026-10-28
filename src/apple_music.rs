@@ -219,8 +219,9 @@ impl AppleMusicService {
     /// [`init_service`] runs the blocking sign-in on a background thread and
     /// returns immediately, so the UI's first artists fetch can answer from
     /// the sample library before the session exists. The UI's boot task awaits
-    /// this future and re-issues `Message::LoadArtists` when it resolves, so a
-    /// signed-in user's real library replaces the sample list. Returns
+    /// this future and sends `Message::SessionReady` when it resolves, which refetches the
+    /// artists list and any flat list showing, so a signed-in user's real
+    /// library replaces the sample rows. Returns
     /// immediately when a session is already stored (the sign-in finished
     /// first); when sign-in is skipped or fails, no session is ever stored and
     /// this never resolves — there is no library to load from.

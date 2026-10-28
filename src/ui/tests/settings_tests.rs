@@ -406,3 +406,79 @@ fn launch_position_opens_at_the_saved_point_or_the_default() {
         iced::window::Position::Default
     ));
 }
+
+fn saved_library_view(store: &MemorySettingsStore) -> crate::settings::library_view::LibraryView {
+    store
+        .snapshots()
+        .last()
+        .expect("a snapshot must have been saved")
+        .library_view()
+}
+
+#[test]
+fn library_view_reaches_the_saved_snapshot() {
+    use crate::settings::library_view::LibraryView;
+
+    let (mut player, _state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+
+    let _ = update(&mut player, Message::ShowAllSongs);
+    assert_eq!(saved_library_view(&store), LibraryView::AllSongs);
+
+    let _ = update(&mut player, Message::ShowPlaylists);
+    player.current_view = CurrentView::Songs;
+    player.songs_origin = SongsOrigin::Playlist;
+    let _ = update(&mut player, Message::Ignored);
+    assert_eq!(saved_library_view(&store), LibraryView::Playlists);
+
+    player.songs_origin = SongsOrigin::Album;
+    let _ = update(&mut player, Message::Ignored);
+    assert_eq!(saved_library_view(&store), LibraryView::Artists);
+
+    let _ = update(&mut player, Message::ShowAllAlbums);
+    assert_eq!(saved_library_view(&store), LibraryView::AllAlbums);
+    player.search_active = true;
+    let _ = update(&mut player, Message::Ignored);
+    assert_eq!(saved_library_view(&store), LibraryView::Artists);
+}
+
+#[test]
+fn restore_view_opens_the_saved_list() {
+    use crate::settings::library_view::LibraryView;
+
+    let (mut player, _state) = test_player();
+    let _ = crate::ui::handlers::browse::restore_view(&mut player, LibraryView::RecentlyAdded);
+    assert_eq!(player.current_view, CurrentView::RecentlyAdded);
+    let _ = crate::ui::handlers::browse::restore_view(&mut player, LibraryView::Artists);
+    assert_eq!(player.current_view, CurrentView::RecentlyAdded);
+
+    let (mut player, _state) = test_player();
+    let _ = crate::ui::handlers::browse::restore_view(&mut player, LibraryView::Artists);
+    assert_eq!(player.current_view, CurrentView::Artists);
+}
+
+#[test]
+fn session_ready_refetches_only_the_flat_list_showing() {
+    let (mut player, _state) = test_player();
+    player.current_view = CurrentView::AllAlbums;
+    player.artists.loading = false;
+    let _ = update(&mut player, Message::SessionReady);
+    assert_eq!(player.current_view, CurrentView::AllAlbums);
+    assert!(player.all_albums.loading);
+    assert!(player.artists.loading);
+
+    let (mut player, _state) = test_player();
+    player.current_view = CurrentView::Albums;
+    player.artists.loading = false;
+    let _ = update(&mut player, Message::SessionReady);
+    assert_eq!(player.current_view, CurrentView::Albums);
+    assert!(player.artists.loading);
+
+    let (mut player, _state) = test_player();
+    player.current_view = CurrentView::AllSongs;
+    player.search_active = true;
+    let _ = update(&mut player, Message::SessionReady);
+    assert_eq!(player.current_view, CurrentView::AllSongs);
+    assert!(player.search_active);
+}

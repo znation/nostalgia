@@ -863,24 +863,26 @@ async fn assert_stale_album_reply_is_dropped(
 // the wrong fetch — would open the app with an empty browse list, so the
 // wiring is pinned end to end.
 
-/// Drives a `boot` task's stream until `expected` `LoadArtists` outputs have
-/// landed, then returns. `boot` batches the artists fetch with the window-id
-/// query, whose runtime `Action::Window` this test runtime does not service,
-/// so [`drive_task`]'s single-output drive cannot be used; the wait is
-/// bounded by [`TASK_TIMEOUT`]. The two boot tests below both count
-/// `LoadArtists` outputs — one for the initial fetch, two once the session
-/// wait re-issues it — so the counting loop lives here once.
-async fn await_boot_artist_loads(task: Task<Message>, expected: usize) {
+/// Drives a `boot` task's stream until its initial `LoadArtists` output has
+/// landed and, when `expect_session_ready`, a `SessionReady` output after it,
+/// then returns. `boot` batches the artists fetch with the session wait and the
+/// window-id query, whose runtime `Action::Window` this test runtime does not
+/// service, so [`drive_task`]'s single-output drive cannot be used; the wait is
+/// bounded by [`TASK_TIMEOUT`].
+async fn await_boot_artist_loads(task: Task<Message>, expect_session_ready: bool) {
     use futures::StreamExt;
 
     let mut stream = iced_runtime::task::into_stream(task).expect("boot must schedule work");
-    let mut artist_loads = 0;
-    while artist_loads < expected {
+    let mut artist_loaded = false;
+    let mut session_ready = !expect_session_ready;
+    while !(artist_loaded && session_ready) {
         let action = await_or_timeout("boot", TASK_TIMEOUT, stream.next())
             .await
             .expect("boot task must yield the artists fetch");
-        if matches!(action, iced_runtime::Action::Output(Message::LoadArtists)) {
-            artist_loads += 1;
+        match action {
+            iced_runtime::Action::Output(Message::LoadArtists) => artist_loaded = true,
+            iced_runtime::Action::Output(Message::SessionReady) => session_ready = true,
+            _ => {}
         }
     }
 }

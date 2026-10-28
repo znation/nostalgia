@@ -857,7 +857,7 @@ The equalizer's EQ and AUTO buttons sink while on, through `eq_toggle` and `auto
 **Guarantee.** The values the user sets that outlive a track — volume, balance, Repeat, Shuffle, the
 equalizer's on/off state, AUTO choice, preamp, ten band gains, and selected preset, the large readout's
 elapsed/remaining choice, the visualizer's shown/hidden choice, the equalizer and library panels'
-shown/hidden choices, the LCD strip's always-on-top choice, the window's shade mode, and the window's last screen position — are
+shown/hidden choices, the LCD strip's always-on-top choice, the window's shade mode, the window's last screen position, and the library's top-level browse list — are
 loaded once before the first view is drawn and rewritten after any update that changes their snapshot, with the newest
 queued snapshot written once the worker is free: a burst of changes, such as a slider drag or key
 repeat, may collapse to its newest value instead of writing every intermediate one. An update that leaves the snapshot
@@ -913,7 +913,13 @@ waits for the window id every other window action uses: `window_id_resolved` sto
 schedules `iced::window::set_level` when the restored flag holds. A restored shade mode waits for
 the same id: no pre-shade size was captured at boot, so `window_id_resolved` also schedules
 `iced::window::size`, and the resulting measurement stores the launch size before rolling the
-window up (see `## Window shade`). The window's size is not persisted. Playback position, the browse level, the search box, and the current track are
+window up (see `## Window shade`). The library's top-level browse list is the eighth UI-owned value: `WinampPlayer::library_view` maps
+the current view to a `settings::library_view::LibraryView` (an active search counts as Artists, a
+Songs view as the list it was opened from), `persist_settings_if_changed` saves it as
+`library_view=<key>`, and an unknown or missing line leaves Artists. At launch `init_ui` batches
+`handlers::browse::restore_view` with the boot task to open that list; when the startup sign-in
+stores a session, `Message::SessionReady` (`handlers::browse::session_ready`) refetches the artists
+list and any flat list showing, unless a search is active. The window's size is not persisted. Playback position, any browse level below the top-level list, the search box, and the current track are
 deliberately not persisted.
 
 **Enforced by.** `src/main.rs` resolves the path with
@@ -951,7 +957,10 @@ With no store attached the method returns before taking the state lock, so tests
 no-op behavior. `shortcuts::message_for` maps `A` and Ctrl+A to `Message::ToggleAlwaysOnTop`, the
 arm those controls press.
 
-**Pinned by.** `to_text_round_trips_every_field`,
+**Pinned by.** `library_view_round_trips_and_ignores_unknown_words`,
+`keys_round_trip_for_every_variant`, `unknown_keys_are_none`,
+`library_view_reaches_the_saved_snapshot`, `restore_view_opens_the_saved_list`,
+`session_ready_refetches_only_the_flat_list_showing`, `to_text_round_trips_every_field`,
 `window_position_round_trips_and_ignores_malformed_values`, `window_moved_reaches_the_saved_snapshot`,
 `saved_window_position_is_restored_on_boot`, `window_moved_message_maps_only_move_events`,
 `launch_position_opens_at_the_saved_point_or_the_default`,

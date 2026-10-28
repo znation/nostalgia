@@ -3,6 +3,7 @@
 //! falling back to its default.
 
 use super::Settings;
+use super::library_view::LibraryView;
 use crate::equalizer;
 
 impl Settings {
@@ -44,6 +45,7 @@ impl Settings {
         if let Some((x, y)) = self.window_position {
             text.push_str(&format!("window_position={x},{y}\n"));
         }
+        text.push_str(&format!("library_view={}\n", self.library_view.key()));
         text
     }
 
@@ -97,6 +99,12 @@ impl Settings {
                 "shade" => parse_into(&mut settings.shade, value),
                 // A malformed pair leaves the position unset.
                 "window_position" => parse_window_position(&mut settings.window_position, value),
+                // An unrecognized word leaves the default Artists list.
+                "library_view" => {
+                    if let Some(view) = LibraryView::from_key(value) {
+                        settings.library_view = view;
+                    }
+                }
                 _ => settings.parse_eq_band(key, value),
             }
         }

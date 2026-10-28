@@ -76,7 +76,8 @@ pub fn init_ui(
             let (mut player, task) = boot(state.clone(), service.clone());
             player.settings_store = Some(Box::new(BackgroundWriter::new(store.clone())));
             player.adopt_saved_settings(saved.clone());
-            (player, task)
+            let restore = handlers::browse::restore_view(&mut player, saved.library_view());
+            (player, Task::batch([task, restore]))
         },
         update,
         view,
@@ -113,11 +114,11 @@ fn boot(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> (WinampPlaye
             Task::done(Message::LoadArtists),
             // The startup sign-in runs on a background thread, so the fetch
             // above can land before the session exists and answer from the
-            // sample library. Re-issue it when a session arrives, replacing
-            // the sample artists with the signed-in library.
+            // sample library. Refetch when a session arrives, replacing
+            // the sample artists and any flat list with the signed-in library.
             Task::perform(
                 async move { sign_in_service.wait_for_session().await },
-                |()| Message::LoadArtists,
+                |()| Message::SessionReady,
             ),
             iced::window::latest().map(Message::WindowIdResolved),
         ]),
@@ -249,6 +250,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::FocusSearch => handlers::browse::search::focus_search(),
         Message::ClearSearch => handlers::browse::search::clear_search(player),
         Message::LoadArtists => handlers::browse::fetch::load_artists(player),
+        Message::SessionReady => handlers::browse::session_ready(player),
         Message::ArtistsLoaded(artists) => handlers::browse::fetch::artists_loaded(player, artists),
         Message::AlbumsLoaded(albums) => handlers::browse::fetch::albums_loaded(player, albums),
         Message::SongsLoaded(songs) => handlers::browse::fetch::songs_loaded(player, songs),

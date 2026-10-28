@@ -14,6 +14,7 @@ use crate::apple_music::AppleMusicService;
 use crate::audio::{PlaybackFormat, Spectrum};
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::settings::Settings;
+use crate::settings::library_view::LibraryView;
 use crate::settings::seam::SettingsWriter;
 use crate::state::AppState;
 
@@ -459,6 +460,7 @@ impl WinampPlayer {
         snapshot.set_always_on_top(self.always_on_top);
         snapshot.set_shaded(self.shaded);
         snapshot.set_window_position(self.window_position);
+        snapshot.set_library_view(self.library_view());
         if snapshot == self.saved_settings {
             return;
         }
@@ -468,12 +470,37 @@ impl WinampPlayer {
         self.saved_settings = snapshot;
     }
 
+    /// The top-level browse list the current view belongs to, which the
+    /// settings file saves. An active search counts as Artists, because Back
+    /// from a search goes there; a Songs view counts as the list it was
+    /// opened from.
+    pub(in crate::ui) fn library_view(&self) -> LibraryView {
+        if self.search_active {
+            return LibraryView::Artists;
+        }
+        match self.current_view {
+            CurrentView::Artists | CurrentView::Albums => LibraryView::Artists,
+            CurrentView::AllSongs => LibraryView::AllSongs,
+            CurrentView::AllAlbums => LibraryView::AllAlbums,
+            CurrentView::RecentlyAdded => LibraryView::RecentlyAdded,
+            CurrentView::RecentlyPlayed => LibraryView::RecentlyPlayed,
+            CurrentView::Playlists => LibraryView::Playlists,
+            CurrentView::Songs => match self.songs_origin {
+                SongsOrigin::Album => LibraryView::Artists,
+                SongsOrigin::AllAlbums => LibraryView::AllAlbums,
+                SongsOrigin::RecentlyAdded => LibraryView::RecentlyAdded,
+                SongsOrigin::Playlist => LibraryView::Playlists,
+            },
+        }
+    }
+
     /// Adopt the snapshot `main` loaded before the first view: restore the
     /// player-owned readout mode, visualizer choice, panel choices,
     /// always-on-top flag, shade mode, and window position and remember the snapshot so the
     /// update loop's first comparison does not re-save it. The state-backed
     /// values were already applied to `AppState` by `main`, so this touches
-    /// only those seven UI-owned values.
+    /// only those seven UI-owned values. The saved browse list is left alone:
+    /// `handlers::browse::restore_view` opens it as a task.
     pub(in crate::ui) fn adopt_saved_settings(&mut self, saved: Settings) {
         self.time_display = if saved.time_display_remaining() {
             views::TimeDisplay::Remaining

@@ -11,6 +11,7 @@
 
 use iced::Task;
 
+use crate::settings::library_view::LibraryView;
 use crate::ui::browse::BrowseList;
 use crate::ui::loading::fetch_level;
 use crate::ui::{CurrentView, Message, SongsOrigin, WinampPlayer};
@@ -508,4 +509,38 @@ pub(in crate::ui) fn reload_library(player: &mut WinampPlayer) -> Task<Message> 
 /// scroll with the fetch keeps the two one operation from the update loop.
 pub(super) fn fetch_at_top(task: Task<Message>) -> Task<Message> {
     Task::batch([task, scroll::scroll_browse_to_top()])
+}
+
+/// Open the saved top-level browse list at launch: the matching `show_*`
+/// handler, or nothing for Artists, which `boot` already loads.
+pub(in crate::ui) fn restore_view(player: &mut WinampPlayer, view: LibraryView) -> Task<Message> {
+    match view {
+        LibraryView::Artists => Task::none(),
+        LibraryView::AllSongs => show_all_songs(player),
+        LibraryView::AllAlbums => show_all_albums(player),
+        LibraryView::RecentlyAdded => show_recently_added(player),
+        LibraryView::RecentlyPlayed => show_recently_played(player),
+        LibraryView::Playlists => show_playlists(player),
+    }
+}
+
+/// The startup sign-in stored a session: refetch the artists list, and a flat
+/// list showing now, so both replace their sample-library rows with the
+/// signed-in library. Albums, Songs, and search results stay as they are.
+pub(in crate::ui) fn session_ready(player: &mut WinampPlayer) -> Task<Message> {
+    let artists = fetch::load_artists(player);
+    let flat = match player.current_view {
+        CurrentView::AllSongs
+        | CurrentView::AllAlbums
+        | CurrentView::RecentlyAdded
+        | CurrentView::RecentlyPlayed
+        | CurrentView::Playlists
+            if !player.search_active =>
+        {
+            let view = player.library_view();
+            restore_view(player, view)
+        }
+        _ => Task::none(),
+    };
+    Task::batch([artists, flat])
 }

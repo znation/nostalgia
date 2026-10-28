@@ -5,9 +5,10 @@
 //! and AUTO states, preamp, band gains, and selected preset, the Now Playing readout's
 //! elapsed/remaining mode, the visualizer's shown/hidden choice, the equalizer
 //! and library panels' shown/hidden choices, the always-on-top flag, and the
-//! window-shade mode and the window's last screen position. All but the last
-//! seven live in [`AppState`]; the readout mode, visualizer choice, panel
-//! choices, always-on-top flag, shade mode, and window position live on the UI's `WinampPlayer`, so the player sets them on its snapshot
+//! window-shade mode, the window's last screen position, and the library's
+//! top-level browse list. All but the last
+//! eight live in [`AppState`]; the readout mode, visualizer choice, panel
+//! choices, always-on-top flag, shade mode, window position, and browse list live on the UI's `WinampPlayer`, so the player sets them on its snapshot
 //! before saving and restores them after loading. The file-backed store lives in
 //! [`file_store`], the text format in the private `text` module, the writer seam
 //! in [`seam`], and [`writer::BackgroundWriter`] runs the blocking write on a
@@ -15,29 +16,31 @@
 //!
 //! [`file_store::FileStore`] loads the snapshot from a line-based text file
 //! at startup and rewrites it whenever the UI changes one of those values.
-//! Playback position, the browse level, the search box, the current track,
+//! Playback position, any browse level below the top-level list, the search box, the current track,
 //! and the window's size are deliberately not persisted.
 
 pub mod atomic_write;
 pub mod file_store;
+pub mod library_view;
 pub mod seam;
 mod text;
 pub mod writer;
 
 use crate::equalizer::{self, Preset};
 use crate::state::AppState;
+use library_view::LibraryView;
 
 /// The persisted values the next launch restores: the mixer and equalizer
 /// subset of [`AppState`] plus the UI-owned readout mode, visualizer choice,
-/// equalizer and library panel choices, always-on-top flag, shade mode, and
-/// window screen position.
+/// equalizer and library panel choices, always-on-top flag, shade mode,
+/// window screen position, and top-level browse list.
 ///
 /// The fields are private; build a state-backed snapshot with
 /// [`Settings::from_state`] and restore it with [`Settings::apply_to`].
 /// `time_display_remaining`, `visualizer_visible`, `eq_panel_visible`,
-/// `library_panel_visible`, `always_on_top`, `shade`, and `window_position` are
+/// `library_panel_visible`, `always_on_top`, `shade`, `window_position`, and `library_view` are
 /// not held in [`AppState`]: `from_state` leaves them elapsed, shown (all
-/// three), unpinned, unshaded, and without a known position, and the player overwrites them from its own values before
+/// three), unpinned, unshaded, without a known position, and on Artists, and the player overwrites them from its own values before
 /// saving. `Default` mirrors [`AppState::default`] plus elapsed, shown,
 /// unpinned, and unshaded, so if one starting value changes the other must
 /// change with it.
@@ -59,6 +62,7 @@ pub struct Settings {
     always_on_top: bool,
     shade: bool,
     window_position: Option<(f32, f32)>,
+    library_view: LibraryView,
 }
 
 impl Default for Settings {
@@ -85,6 +89,7 @@ impl Default for Settings {
             always_on_top: false,
             shade: false,
             window_position: None,
+            library_view: LibraryView::Artists,
         }
     }
 }
@@ -111,6 +116,7 @@ impl Settings {
             always_on_top: false,
             shade: false,
             window_position: None,
+            library_view: LibraryView::Artists,
         }
     }
 
@@ -222,6 +228,21 @@ impl Settings {
         self.window_position = position;
     }
 
+    /// The top-level browse list the library reopens on. The player owns this
+    /// value, so it reads it back when saving and restores it from the loaded
+    /// snapshot at boot.
+    #[must_use]
+    pub fn library_view(&self) -> LibraryView {
+        self.library_view
+    }
+
+    /// Set the top-level browse list. The player calls this on its fresh
+    /// snapshot before saving; [`Self::apply_to`] deliberately leaves the
+    /// UI-owned value alone.
+    pub fn set_library_view(&mut self, view: LibraryView) {
+        self.library_view = view;
+    }
+
     /// Restore this snapshot into `state`.
     ///
     /// The private values go through the state's clamped setters
@@ -230,8 +251,8 @@ impl Settings {
     /// is restored last through `apply_eq_preset`, after the per-band writes
     /// have cleared the selection. The AUTO flag is a plain restored boolean.
     /// The UI-owned readout mode, visualizer
-    /// choice, panel choices, always-on-top flag, shade mode, and window
-    /// position are deliberately left alone.
+    /// choice, panel choices, always-on-top flag, shade mode, window
+    /// position, and browse list are deliberately left alone.
     pub fn apply_to(&self, state: &mut AppState) {
         state.set_volume(self.volume);
         state.set_balance(self.balance);
@@ -586,6 +607,23 @@ mod tests {
         assert_eq!(state.eq_preset(), Some(rock));
         assert_eq!(state.eq_preamp(), rock.preamp);
         assert_eq!(state.eq_bands(), rock.bands);
+    }
+
+    #[test]
+    fn library_view_round_trips_and_ignores_unknown_words() {
+        assert_eq!(Settings::default().library_view(), LibraryView::Artists);
+        let mut settings = Settings::default();
+        settings.set_library_view(LibraryView::Playlists);
+        assert!(settings.to_text().contains("library_view=playlists"));
+        assert_eq!(Settings::from_text(&settings.to_text()), settings);
+        assert_eq!(
+            Settings::from_text("library_view=bogus\n").library_view(),
+            LibraryView::Artists
+        );
+        assert_eq!(
+            Settings::from_text("volume=0.5\n").library_view(),
+            LibraryView::Artists
+        );
     }
 
     #[test]

@@ -278,6 +278,9 @@ pub(in crate::ui) enum Message {
     FocusSearch,
     ClearSearch,
     LoadArtists,
+    // The startup sign-in stored a session: refetch the artists list and any
+    // flat list showing, replacing sample rows with the signed-in library.
+    SessionReady,
     ArtistsLoaded(Vec<Artist>),
     AlbumsLoaded(Vec<Album>),
     SongsLoaded(Vec<Song>),
