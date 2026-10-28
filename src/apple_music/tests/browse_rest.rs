@@ -758,3 +758,23 @@ async fn get_all_albums_leaves_an_album_without_matching_songs_at_zero_duration(
         "a same-title album by another artist has no matching songs and keeps the placeholder duration"
     );
 }
+
+// The input guards run before the signed-in branch: a blank or
+// control-character id, or a blank search query, is a caller bug that must be
+// rejected without spending a request on it. The stub would answer any call,
+// so a guard moved behind the session check would return data (or record a
+// call) instead of the error.
+#[tokio::test]
+async fn a_signed_in_service_rejects_bad_input_without_sending_a_request() {
+    let stub = StubTransport::returning(r#"{"data":[]}"#);
+    let service = signed_in_service(&stub);
+
+    assert!(service.get_albums_by_artist("  ").await.is_err());
+    assert!(service.get_albums_by_artist("a\u{7}b").await.is_err());
+    assert!(service.get_songs_from_album("").await.is_err());
+    assert!(service.get_songs_from_playlist("\n").await.is_err());
+    let error = service.search_songs("   ").await.unwrap_err();
+    assert!(error.to_string().contains("must not be blank"));
+
+    assert!(stub.calls().is_empty(), "calls: {:?}", stub.calls());
+}
