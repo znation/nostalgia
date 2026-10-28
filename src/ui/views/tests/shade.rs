@@ -58,11 +58,11 @@ fn shade_controls_map_to_transport_messages_and_keep_fixed_widths() {
     assert_eq!(widths, vec![34.0, 30.0, 30.0, 30.0, 34.0]);
 
     let messages: Vec<&Message> = controls.iter().map(|(_, _, message)| message).collect();
-    assert!(matches!(messages[0], Message::PreviousTrack));
+    assert!(matches!(messages[0], Message::PreviousButton));
     assert!(matches!(messages[1], Message::Play));
     assert!(matches!(messages[2], Message::Pause));
     assert!(matches!(messages[3], Message::Stop));
-    assert!(matches!(messages[4], Message::NextTrack));
+    assert!(matches!(messages[4], Message::NextButton));
 }
 
 // The rolled-up window is exactly the title bar plus the strip; both the

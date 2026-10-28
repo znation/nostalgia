@@ -487,10 +487,14 @@ Ctrl+B to `Message::LastTrack`. They play the first and last song of the list th
 draws from (`all_songs` in the flat All Songs view, `songs` otherwise), whatever Shuffle, Repeat,
 the current track, and the playback position are, and scroll the list to that row. An empty list
 schedules nothing. Plain and Shift Z/B keep stepping, and Alt or Logo chords with them stay unbound.
+A Ctrl-held click on the Previous or Next button (transport row, shade strip, library footer) does
+the same jump; a plain click steps one song. Losing window focus clears the held Control.
 
 **Enforced by.** `shortcuts::shortcut` in `src/ui/shortcuts.rs` checks the two Control chords
 before its chord guard; `handlers::playback::stepping::jump_to_edge_track` picks the edge row and
 epoch from the showing list without reading shared state or touching the play history.
+`stepping::previous_button` / `next_button` choose between it and `step_track` from
+`WinampPlayer::control_held`, which `listeners::modifiers_message` keeps current.
 
 **Pinned by.**
 
@@ -500,6 +504,9 @@ epoch from the showing list without reading shared state or touching the play hi
   `edge_jumps_ignore_shuffle_and_repeat`, `edge_jumps_with_no_songs_loaded_do_nothing`,
   `edge_jumps_in_all_songs_use_the_flat_list`, and `edge_jumps_scroll_the_showing_song_list`
   (`src/ui/tests/stepping_tests.rs`)
+- `ctrl_click_previous_plays_the_first_song`, `ctrl_click_next_plays_the_last_song`,
+  `plain_button_clicks_step_one_song`, `control_release_restores_plain_steps`, and
+  `modifiers_message_tracks_control_and_focus_loss` (`src/ui/tests/ctrl_click_tests.rs`)
 
 **History.** Added with the Ctrl+Z / Ctrl+B list-edge shortcuts.
 
@@ -1605,8 +1612,8 @@ rather than the panic unwinding the event loop.
 - The strip shows Previous, Play, Pause, Stop, Next, the elapsed-over-total time readout, a seek
   slider while a preview position and length are known, and a volume slider. Its five buttons
   emit the same messages as their full transport-row twins
-  (`Message::PreviousTrack`, `Message::Play`, `Message::Pause`, `Message::Stop`,
-  `Message::NextTrack`), each pinned to a fixed width so the row cannot reflow. The strip builds
+  (`Message::PreviousButton`, `Message::Play`, `Message::Pause`, `Message::Stop`,
+  `Message::NextButton`), each pinned to a fixed width so the row cannot reflow. The strip builds
   them from the shared compact row's `mini_transport_controls`, which projects the full row's
   `transport_glyphs` spec, so the shade strip, the library footer, and the full row share the
   same glyphs, order, widths, and messages; the row is playback-independent and always draws
@@ -2091,8 +2098,8 @@ column, so hiding it drops this footer with the rest of the section. The footer 
 - The row is exactly `MINI_TRANSPORT_HEIGHT` tall and sits on the window face's raised chrome
   below the browse list.
 - It shows Previous, Play, Pause, Stop, Next, the elapsed-over-total time readout, and a volume
-  slider. The five buttons emit `Message::PreviousTrack`, `Message::Play`, `Message::Pause`,
-  `Message::Stop`, and `Message::NextTrack`, and the row is playback-independent, drawing both
+  slider. The five buttons emit `Message::PreviousButton`, `Message::Play`, `Message::Pause`,
+  `Message::Stop`, and `Message::NextButton`, and the row is playback-independent, drawing both
   `▶` and `II` in every mode. The time label joins
   the same `WinampPlayer::now_playing_elapsed` and `WinampPlayer::now_playing_time` strings the
   LCD shows as `<elapsed>/<total>`, so the elapsed/remaining choice and the total cannot disagree

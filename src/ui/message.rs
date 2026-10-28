@@ -156,6 +156,12 @@ pub(in crate::ui) enum Message {
     EqPresetSelected(Preset),
     NextTrack,
     PreviousTrack,
+    // A click on the Next button: the last song while Control is held, otherwise one step forward.
+    NextButton,
+    // A click on the Previous button: the first song while Control is held, otherwise one step back.
+    PreviousButton,
+    // Whether Control is held; false too when the window loses focus.
+    ControlHeld(bool),
     // Ctrl+Z: play the first song of the showing list, whatever Shuffle and Repeat say.
     FirstTrack,
     // Ctrl+B: play the last song of the showing list, whatever Shuffle and Repeat say.

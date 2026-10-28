@@ -211,3 +211,21 @@ pub(in crate::ui) fn jump_ten_tracks(player: &mut WinampPlayer, forward: bool) -
         super::super::browse::scroll::scroll_browse_to_playing_row(player, index),
     ])
 }
+
+/// A click on Previous: the list's first song while Control is held, otherwise one step back.
+pub(in crate::ui) fn previous_button(player: &mut WinampPlayer) -> Task<Message> {
+    if player.control_held {
+        jump_to_edge_track(player, false)
+    } else {
+        step_track(player, false)
+    }
+}
+
+/// A click on Next: the list's last song while Control is held, otherwise one step forward.
+pub(in crate::ui) fn next_button(player: &mut WinampPlayer) -> Task<Message> {
+    if player.control_held {
+        jump_to_edge_track(player, true)
+    } else {
+        step_track(player, true)
+    }
+}

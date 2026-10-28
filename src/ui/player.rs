@@ -41,6 +41,9 @@ pub(in crate::ui) struct WinampPlayer {
     /// `persist_settings_if_changed` and `adopt_saved_settings`, so a launch
     /// whose settings say shaded draws the rolled-up tree from the first view.
     pub(in crate::ui) shaded: bool,
+    /// Whether Control is held, tracked from modifier events so a click on Previous or Next can
+    /// jump to the list's edge instead of stepping. Not saved in settings.
+    pub(in crate::ui) control_held: bool,
     /// Whether the window is pinned above other windows. The LCD strip's `A`
     /// toggle and the `A` key flip it, and `update` schedules
     /// `iced::window::set_level` to match; `view` renders the strip's control
@@ -312,6 +315,7 @@ impl WinampPlayer {
             apple_music_service: service,
             window_id: None,
             shaded: false,
+            control_held: false,
             always_on_top: false,
             unshaded_size: None,
             current_view: CurrentView::Artists,

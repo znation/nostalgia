@@ -63,11 +63,11 @@ fn transport_glyphs_match_the_mockup_order_and_widths() {
     assert_eq!(words, ["Previous", "Play", "Pause", "Stop", "Next"]);
     let widths: Vec<f32> = glyphs.iter().map(|(_, _, width, _)| *width).collect();
     assert_eq!(widths, [34.0, 30.0, 30.0, 30.0, 34.0]);
-    assert!(matches!(glyphs[0].3, Message::PreviousTrack));
+    assert!(matches!(glyphs[0].3, Message::PreviousButton));
     assert!(matches!(glyphs[1].3, Message::Play));
     assert!(matches!(glyphs[2].3, Message::Pause));
     assert!(matches!(glyphs[3].3, Message::Stop));
-    assert!(matches!(glyphs[4].3, Message::NextTrack));
+    assert!(matches!(glyphs[4].3, Message::NextButton));
 }
 
 #[test]

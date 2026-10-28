@@ -169,6 +169,12 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::EqPresetSelected(preset) => handlers::mixer::eq_preset_selected(player, preset),
         Message::NextTrack => handlers::playback::stepping::step_track(player, true),
         Message::PreviousTrack => handlers::playback::stepping::step_track(player, false),
+        Message::NextButton => handlers::playback::stepping::next_button(player),
+        Message::PreviousButton => handlers::playback::stepping::previous_button(player),
+        Message::ControlHeld(held) => {
+            player.control_held = held;
+            Task::none()
+        }
         Message::FirstTrack => handlers::playback::stepping::jump_to_edge_track(player, false),
         Message::LastTrack => handlers::playback::stepping::jump_to_edge_track(player, true),
         Message::JumpTracksBack => handlers::playback::stepping::jump_ten_tracks(player, false),

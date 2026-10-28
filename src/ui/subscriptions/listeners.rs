@@ -62,6 +62,23 @@ pub(in crate::ui) fn mixer_key_message(
     }
 }
 
+/// Always subscribed: tracks whether Control is held, so a click on Previous or Next can jump to
+/// the list's edge. Losing window focus reports Control released, since its release may happen
+/// outside the window. Every other event sends nothing.
+pub(in crate::ui) fn modifiers_message(
+    event: iced::Event,
+    _status: iced::event::Status,
+    _window: iced::window::Id,
+) -> Option<Message> {
+    match event {
+        iced::Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
+            Some(Message::ControlHeld(modifiers.control()))
+        }
+        iced::Event::Window(iced::window::Event::Unfocused) => Some(Message::ControlHeld(false)),
+        _ => None,
+    }
+}
+
 /// Subscribed only while a readout is showing, so wheel rolls rebuild the
 /// screen only then. The Ctrl+wheel change that sets a readout arrives while
 /// this is absent; the next wheel roll or navigation key clears it.

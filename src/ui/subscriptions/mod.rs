@@ -24,7 +24,8 @@ use position::position_ticks;
 use spectrum::spectrum_ticks;
 
 pub(super) use listeners::{
-    escape_key_message, mixer_key_message, mixer_wheel_message, title_drag_message,
+    escape_key_message, mixer_key_message, mixer_wheel_message, modifiers_message,
+    title_drag_message,
 };
 
 // The timer internals are exercised by `ui::tests`, so only a test build needs
@@ -129,6 +130,7 @@ pub(super) fn subscriptions(
     let mut subscriptions = vec![
         keyboard_listener,
         iced::event::listen_with(mixer_key_message),
+        iced::event::listen_with(modifiers_message),
     ];
     if mixer_readout_showing {
         subscriptions.push(iced::event::listen_with(mixer_wheel_message));

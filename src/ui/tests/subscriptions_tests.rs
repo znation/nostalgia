@@ -200,20 +200,20 @@ fn marquee_tick_advances_the_offset() {
 // included while it shows, so the marquee timer must not run for a line that
 // fits the LCD whole: it would rebuild the UI four times a second to redraw a
 // bar that cannot change. The keyboard listener always runs, so the
-// subscription set is the two listeners until the line needs to scroll.
+// subscription set is the three listeners until the line needs to scroll.
 #[test]
 fn the_marquee_timer_runs_only_while_the_line_needs_to_scroll() {
     assert_eq!(
         subscriptions(false, false, false, false, false, false, false, false).len(),
-        2
+        3
     );
     assert_eq!(
         subscriptions(true, false, false, false, false, false, false, false).len(),
-        3
+        4
     );
     assert_eq!(
         subscriptions(false, false, false, true, false, false, false, false).len(),
-        3
+        4
     );
 }
 
@@ -227,11 +227,11 @@ fn the_marquee_timer_runs_only_while_the_line_needs_to_scroll() {
 fn the_escape_listener_runs_only_while_a_transient_panel_is_open() {
     assert_eq!(
         subscriptions(false, false, false, false, false, false, false, false).len(),
-        2
+        3
     );
     assert_eq!(
         subscriptions(false, false, false, false, false, false, true, false).len(),
-        3
+        4
     );
 }
 
@@ -315,15 +315,15 @@ fn escape_key_message_maps_escape_but_not_its_chords_or_other_keys() {
 fn the_mixer_nudge_listener_is_always_subscribed() {
     assert_eq!(
         subscriptions(false, false, false, false, false, false, false, false).len(),
-        2
+        3
     );
     assert_eq!(
         subscriptions(true, true, true, false, false, false, false, false).len(),
-        5
+        6
     );
     assert_eq!(
         subscriptions(false, false, false, true, false, false, false, false).len(),
-        3
+        4
     );
 }
 
@@ -337,11 +337,11 @@ fn the_mixer_nudge_listener_is_always_subscribed() {
 fn the_position_timer_runs_only_while_there_is_a_position_to_refresh() {
     assert_eq!(
         subscriptions(false, true, false, false, false, false, false, false).len(),
-        3
+        4
     );
     assert_eq!(
         subscriptions(true, true, false, false, false, false, false, false).len(),
-        4
+        5
     );
 
     let (mut player, state) = test_player();
@@ -366,15 +366,15 @@ fn the_position_timer_runs_only_while_there_is_a_position_to_refresh() {
 fn the_spectrum_timer_runs_only_while_playback_runs() {
     assert_eq!(
         subscriptions(false, false, false, false, false, false, false, false).len(),
-        2
-    );
-    assert_eq!(
-        subscriptions(false, false, true, false, false, false, false, false).len(),
         3
     );
     assert_eq!(
+        subscriptions(false, false, true, false, false, false, false, false).len(),
+        4
+    );
+    assert_eq!(
         subscriptions(true, true, true, false, false, false, false, false).len(),
-        5
+        6
     );
 
     let (player, state) = test_player();
@@ -721,11 +721,11 @@ fn title_drag_listener_is_subscribed_only_while_dragging_and_maps_pointer_events
     use iced::{Event, event::Status, keyboard, mouse, window};
     assert_eq!(
         subscriptions(false, false, false, false, false, false, false, false).len(),
-        2
+        3
     );
     assert_eq!(
         subscriptions(false, false, false, false, false, false, false, true).len(),
-        3
+        4
     );
     let map = |event| title_drag_message(event, Status::Captured, window::Id::unique());
     assert!(matches!(
