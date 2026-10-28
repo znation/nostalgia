@@ -90,3 +90,50 @@ fn recently_added_reverse_sort_and_back_restore_newest_first() {
     assert_view(&player, CurrentView::RecentlyAdded);
     assert_eq!(titles(&player), ["Zulu", "alpha"]);
 }
+
+fn three_albums() -> Vec<Album> {
+    ["one", "two", "three"]
+        .into_iter()
+        .map(|id| Album {
+            id: id.to_string(),
+            title: id.to_string(),
+            ..sample_album()
+        })
+        .collect()
+}
+
+// Open (Enter) on a selected Recently Added row opens that row's album
+// against the list's epoch.
+#[test]
+fn open_selected_in_recently_added_opens_the_selected_album() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::RecentlyAddedLoaded(three_albums()));
+    player.current_view = CurrentView::RecentlyAdded;
+    let epoch = player.recently_added.epoch;
+    assert_message_schedules_no_work(&mut player, Message::SelectRow { epoch, index: 2 });
+
+    let task = update(&mut player, Message::OpenSelected);
+    let opened = futures::executor::block_on(task_output(task, "open the selected row"));
+
+    assert!(
+        matches!(&opened, Message::AlbumSelected { epoch: e, index: 2 } if *e == epoch),
+        "Open must dispatch the selected album, got {opened:?}"
+    );
+}
+
+// Alt+Up moves the selected row within Recently Added only and keeps it
+// selected.
+#[test]
+fn move_selected_row_reorders_only_recently_added() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::RecentlyAddedLoaded(three_albums()));
+    player.current_view = CurrentView::RecentlyAdded;
+    let epoch = player.recently_added.epoch;
+    let _ = update(&mut player, Message::SelectRow { epoch, index: 2 });
+
+    let _ = update(&mut player, Message::MoveSelectedRowUp);
+
+    assert_eq!(titles(&player), ["one", "three", "two"]);
+    assert_eq!(player.recently_added.selected(), Some(1));
+    assert!(player.albums.items.is_empty());
+}
