@@ -37,7 +37,8 @@ pub(super) fn view_shade(player: &WinampPlayer) -> Element<'_, Message> {
                         duration,
                     )),
             )
-            .on_scroll(views::volume_wheel_message),
+            .on_scroll(views::volume_wheel_message)
+            .on_right_press(Message::ToggleOptions),
         )
         .into()
 }

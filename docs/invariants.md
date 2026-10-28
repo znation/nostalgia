@@ -1121,7 +1121,7 @@ each equalizer band are the others: a roll over one moves that slider instead (s
 **Enforced by.** `views::volume_wheel_message` and its `views::wheel_direction` sign mapping in
 `src/ui/views/mod.rs`, `Message::VolumeWheel` in `src/ui/message.rs`,
 `handlers::mixer::volume_wheel` in `src/ui/handlers/mixer.rs` (the zero/NaN no-op), and the two
-`MouseArea::on_scroll` wrappers in `src/ui/view/normal.rs` and `src/ui/view/shade.rs`, which the
+`MouseArea::on_scroll` wrappers in `src/ui/view/normal.rs` and `src/ui/view/shade.rs` (which also carry the options right-press), which the
 balance, preamp, and band wrappers nest inside.
 
 **Pinned by.** `volume_wheel_message_maps_a_vertical_roll_to_a_direction` and
@@ -1757,10 +1757,10 @@ on each rebuild rather than caching the source in UI state.
 
 ## Options panel
 
-**Guarantee.** The LCD strip's `O` and the transport row's lightning button open a transient,
+**Guarantee.** The LCD strip's `O`, the transport row's lightning button, and a right-press on the player panels or shade strip (not the library) open a transient,
 unpersisted options menu listing the app's existing on/off choices plus the 10 songs back, 10 songs forward, Jump to time and Jump to file rows, About, and Close:
 
-- Alt+O (without Control, Shift, or Logo) toggles the menu. Opening resets the layout-only
+- Alt+O (without Control, Shift, or Logo) toggles the menu, as does a right-press on the player panels (`MouseArea::on_right_press(Message::ToggleOptions)`); with the menu open the base is ignored, so a second right-press does nothing. Opening resets the layout-only
   `options_selected` index to zero. Up/Down clamp the highlight to the first/last row; Enter
   invokes the highlighted row through its existing mouse handler. Closed-menu navigation
   messages do nothing. The selected row uses blue `ROW_HIGHLIGHT` and white `PLAYING_ROW_TEXT`
@@ -1793,7 +1793,7 @@ unpersisted options menu listing the app's existing on/off choices plus the 10 s
 **Enforced by.** `views::options::view_options_overlay`, its eight label helpers, and `Message::ToggleOptions`
 and `Message::OptionsChoice`; `handlers::window::toggle_options` and
 `handlers::window::options_choice`; `WinampPlayer::options_visible`; the LCD strip's `O`
-mapping and the transport row's `options_button`; and the normal-mode branch of
+mapping and the transport row's `options_button`; the two `on_right_press` wrappers in `src/ui/view/normal.rs` and `src/ui/view/shade.rs`; and the normal-mode branch of
 `src/ui/view/overlay.rs`. `OptionsRow::ALL` and `OptionsRow::message` share row order and messages;
 `options_row_label` and `options_row_style` draw them. `options_shortcut` and
 `message_for_options` map the keys; `options_selection_up`, `options_selection_down`, and
@@ -1822,7 +1822,9 @@ label tests in `src/ui/views/options.rs` (including `stop_after_current_label_mi
 `escape_closes_each_transient_panel_without_touching_anything_else`
 (`src/ui/tests/panels_tests.rs`);
 `toggle_options_while_shaded_restores_the_window_first`
-(`src/ui/tests/window_tests.rs`); and
+(`src/ui/tests/window_tests.rs`); `right_press_on_the_player_panels_toggles_options`,
+`right_press_on_the_library_does_not_toggle_options`, and
+`right_press_on_the_shade_strip_toggles_options` (`src/ui/tests/panels_tests.rs`); and
 `options_panel_draws_over_the_player_and_drops_out_in_shade_mode`
 (`src/ui/tests/view_tests.rs`).
 

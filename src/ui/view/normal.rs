@@ -11,10 +11,14 @@ pub(super) fn view_normal(player: &WinampPlayer) -> Element<'_, Message> {
     // heaviest part of the tree (one per row, up to a whole-library list),
     // and an element that is never pushed into the tree is discarded anyway.
     let (player_panels, footer) = super::player_panels::view_player_panels(player);
-    // Player panels share the volume wheel area; the library stays outside so
-    // its Scrollable can consume the wheel without changing volume.
-    let mut column =
-        Column::new().push(MouseArea::new(player_panels).on_scroll(views::volume_wheel_message));
+    // Player panels share the volume wheel and the options right-press area;
+    // the library stays outside so its Scrollable can consume the wheel and a
+    // right-press over it opens nothing.
+    let mut column = Column::new().push(
+        MouseArea::new(player_panels)
+            .on_scroll(views::volume_wheel_message)
+            .on_right_press(Message::ToggleOptions),
+    );
     if let Some(footer) = footer {
         column = column.push(super::library::view_library(player, footer));
     }

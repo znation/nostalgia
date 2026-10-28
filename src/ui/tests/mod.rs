@@ -1288,6 +1288,25 @@ fn root_wheel_messages(player: &WinampPlayer, bounds: iced::Rectangle, y: f32) -
     )
 }
 
+/// Right-presses and releases at the center of `bounds` in the root view of
+/// `player` and returns what the view published.
+fn root_right_press_messages(player: &WinampPlayer, bounds: iced::Rectangle) -> Vec<Message> {
+    let mut renderer = layout_capture::headless_renderer();
+    layout_capture::publish_at(
+        view(player),
+        &mut renderer,
+        &[
+            iced::Event::Mouse(iced::mouse::Event::ButtonPressed(
+                iced::mouse::Button::Right,
+            )),
+            iced::Event::Mouse(iced::mouse::Event::ButtonReleased(
+                iced::mouse::Button::Right,
+            )),
+        ],
+        iced::Point::new(bounds.center_x(), bounds.center_y()),
+    )
+}
+
 /// Seeds a known current track titled `title` into `player` and `state`.
 fn seed_current_title(player: &mut WinampPlayer, state: &Arc<Mutex<AppState>>, title: &str) {
     player.known_tracks.insert(

@@ -628,3 +628,62 @@ fn toggle_options_opens_and_closes_and_excludes_each_other_panel() {
         );
     }
 }
+
+fn toggle_options_count(messages: &[Message]) -> usize {
+    messages
+        .iter()
+        .filter(|message| matches!(message, Message::ToggleOptions))
+        .count()
+}
+
+#[test]
+fn right_press_on_the_player_panels_toggles_options() {
+    let (player, _state) = test_player();
+    for id in [views::SEEK_STRIP_ID, views::BALANCE_SLIDER_ID] {
+        let bounds = captured_root_view_container(&player, id)
+            .unwrap_or_else(|| panic!("{id} must be laid out"));
+        let messages = root_right_press_messages(&player, bounds);
+        assert_eq!(messages.len(), 1, "{id}: {messages:?}");
+        assert_eq!(toggle_options_count(&messages), 1, "{id}");
+    }
+}
+
+#[test]
+fn right_press_on_the_library_does_not_toggle_options() {
+    let (player, _state) = test_player();
+    let footer = captured_root_view_container(&player, views::MINI_VOLUME_ID)
+        .expect("the library footer's volume slider must be laid out");
+    // The footer slider itself, and a spot above it inside the browse list.
+    let list = iced::Rectangle {
+        y: footer.y - 40.0,
+        ..footer
+    };
+    let balance = captured_root_view_container(&player, views::BALANCE_SLIDER_ID)
+        .expect("the balance slider must be laid out");
+    assert!(
+        list.y > balance.y + balance.height,
+        "the spot must sit in the library"
+    );
+    for bounds in [footer, list] {
+        let messages = root_right_press_messages(&player, bounds);
+        assert_eq!(
+            toggle_options_count(&messages),
+            0,
+            "{bounds:?}: {messages:?}"
+        );
+    }
+}
+
+#[test]
+fn right_press_on_the_shade_strip_toggles_options() {
+    let (mut player, _state) = player_with_window_id();
+    shade_with_known_size(&mut player);
+    let bounds = captured_root_view_container(&player, views::MINI_VOLUME_ID)
+        .expect("the shade strip's volume slider must be laid out");
+    let messages = root_right_press_messages(&player, bounds);
+    assert_eq!(toggle_options_count(&messages), 1, "{messages:?}");
+
+    assert_message_schedules_work(&mut player, Message::ToggleOptions);
+    assert!(player.options_visible);
+    assert!(!player.shaded);
+}
