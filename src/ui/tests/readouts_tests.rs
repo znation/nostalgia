@@ -747,9 +747,7 @@ fn playback_duration_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped
 // to the backend: only a release seeks.
 #[test]
 fn seek_preview_changed_tracks_the_drag_without_touching_the_backend() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (mut player, _state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    let (recording, mut player, _state) = player_with_recording();
 
     assert_no_task(update(&mut player, Message::SeekPreviewChanged(12.5)));
 
@@ -762,9 +760,7 @@ fn seek_preview_changed_tracks_the_drag_without_touching_the_backend() {
 // cannot restore the old position.
 #[test]
 fn seek_preview_released_seeks_once_to_the_dragged_position() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (mut player, _state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    let (recording, mut player, _state) = player_with_recording();
     player.playback_position = Some(Duration::from_secs(3));
     let epoch = player.position_epoch;
     let _ = update(&mut player, Message::SeekPreviewChanged(12.0));
@@ -784,9 +780,7 @@ fn seek_preview_released_seeks_once_to_the_dragged_position() {
 // change, and no epoch bump.
 #[test]
 fn seek_preview_released_without_a_drag_does_nothing() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (mut player, _state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    let (recording, mut player, _state) = player_with_recording();
     player.playback_position = Some(Duration::from_secs(3));
     let epoch = player.position_epoch;
 
@@ -801,9 +795,7 @@ fn seek_preview_released_without_a_drag_does_nothing() {
 // before the seek is dropped instead of restoring the old thumb position.
 #[test]
 fn seek_preview_released_invalidates_an_in_flight_position_reply() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (mut player, _state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    let (_recording, mut player, _state) = player_with_recording();
     player.playback_position = Some(Duration::from_secs(3));
     let old_epoch = player.position_epoch;
     let _ = update(&mut player, Message::SeekPreviewChanged(12.0));
@@ -901,9 +893,7 @@ fn position_tick_queries_position_and_format() {
 // the duration reply arrives beside the position.
 #[test]
 fn position_tick_queries_position_and_duration() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (mut player, _state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    let (_recording, mut player, _state) = player_with_recording();
     let (epoch, replies) = tick_replies(&mut player);
 
     assert_position_queried(&replies, epoch);
@@ -923,9 +913,7 @@ fn position_tick_queries_position_and_duration() {
 // reply carries the tick's epoch and the backend's state.
 #[test]
 fn position_tick_queries_preview_finished() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (mut player, _state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    let (recording, mut player, _state) = player_with_recording();
     for finished in [true, false] {
         recording.set_finished(finished);
         let (epoch, replies) = tick_replies(&mut player);
@@ -993,9 +981,7 @@ fn position_tick_blinks_the_elapsed_readout_only_while_paused() {
 
 #[test]
 fn position_tick_skips_the_format_and_length_once_both_are_known() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (mut player, _state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    let (_recording, mut player, _state) = player_with_recording();
     player.playback_format = Some(PlaybackFormat {
         sample_rate_hz: 44_100,
         channels: 2,
@@ -1019,9 +1005,7 @@ fn position_tick_skips_the_format_and_length_once_both_are_known() {
 // known one.
 #[test]
 fn position_tick_queries_only_the_missing_value() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (mut player, _state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    let (_recording, mut player, _state) = player_with_recording();
     player.playback_format = Some(PlaybackFormat {
         sample_rate_hz: 44_100,
         channels: 2,

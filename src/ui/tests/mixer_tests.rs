@@ -37,9 +37,7 @@ fn toggle_eq_auto_flips_only_the_auto_flag() {
 // forwarded calls alone.
 #[test]
 fn auto_on_applies_a_genre_matched_preset_on_track_selection() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (mut player, state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    let (recording, mut player, state) = player_with_recording();
     let mut songs = stepping_songs();
     songs[0].genre = "  rOcK  ".to_string();
     songs[1].genre = "Alternative".to_string();
@@ -339,9 +337,7 @@ fn balance_change_clamps_value_before_storing() {
 // including a `NaN` `VolumeChange` that stores and forwards the `0.0` clamp.
 #[test]
 fn volume_messages_forward_to_the_audio_backend() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (mut player, state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    let (recording, mut player, state) = player_with_recording();
 
     assert_message_schedules_no_work(&mut player, Message::VolumeChange(0.2));
     assert_eq!(state.blocking_lock().volume(), 0.2);
@@ -373,9 +369,7 @@ fn volume_messages_forward_to_the_audio_backend() {
 // out-of-range value and a `NaN` that stores and forwards the center.
 #[test]
 fn balance_messages_forward_to_the_audio_backend() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (mut player, state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    let (recording, mut player, state) = player_with_recording();
 
     assert_message_schedules_no_work(&mut player, Message::BalanceChange(-0.4));
     assert_eq!(state.blocking_lock().balance(), -0.4);
@@ -401,9 +395,7 @@ fn balance_messages_forward_to_the_audio_backend() {
 // recording backend and pin the forwarded value.
 #[test]
 fn slider_wheels_forward_their_new_values_to_the_audio_backend() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (mut player, _state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    let (recording, mut player, _state) = player_with_recording();
 
     assert_message_schedules_no_work(&mut player, Message::BalanceWheel(1.0));
     assert_message_schedules_no_work(&mut player, Message::EqPreampWheel(1.0));
@@ -477,9 +469,7 @@ fn equalizer_messages_forward_to_the_audio_backend() {
         }
     }
 
-    let recording = Arc::new(RecordingAudio::default());
-    let (mut player, state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    let (recording, mut player, state) = player_with_recording();
 
     let mut expected = Vec::new();
 

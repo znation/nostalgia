@@ -540,9 +540,7 @@ fn track_selected_resets_the_marquee_offset() {
 
 #[test]
 fn spectrum_tick_queries_spectrum_and_carries_the_epoch() {
-    let recording = Arc::new(RecordingAudio::default());
-    let (mut player, _state) =
-        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    let (_recording, mut player, _state) = player_with_recording();
     let epoch = player.position_epoch;
     let replies = task_outputs(update(&mut player, Message::SpectrumTick), "spectrum tick");
 

@@ -53,6 +53,15 @@ fn player_with_audio(
     (WinampPlayer::new(state.clone(), service), state)
 }
 
+/// A fresh player over a new [`RecordingAudio`], which the caller keeps to read
+/// the calls the UI forwarded. Shares `player_with_audio`'s construction.
+fn player_with_recording() -> (Arc<RecordingAudio>, WinampPlayer, Arc<Mutex<AppState>>) {
+    let recording = Arc::new(RecordingAudio::default());
+    let (player, state) =
+        player_with_audio(Arc::clone(&recording) as Arc<dyn crate::audio::AudioOutput>);
+    (recording, player, state)
+}
+
 /// A fresh player over `recording`, already playing `song-1`'s
 /// [`PREVIEW_URL`] — the precondition the transport-test setups build before
 /// driving a Play/Pause/Stop message. The player construction, the preview
