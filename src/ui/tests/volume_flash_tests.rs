@@ -93,3 +93,28 @@ fn a_drag_readout_takes_precedence_over_the_flash() {
     assert!(root_view_draws(&player, "Balance:"));
     assert!(!root_view_draws(&player, "Volume:"));
 }
+
+#[test]
+fn an_eq_band_roll_clears_the_flash() {
+    let (mut player, _) = nudged(Message::VolumeUp);
+    let _ = update(&mut player, Message::EqBandWheel(0, 1.0));
+    assert_eq!(player.volume_flash_ticks, 0);
+    assert!(root_view_draws(&player, "Tune"));
+}
+
+#[test]
+fn a_no_op_mixer_roll_keeps_the_flash() {
+    let rolls = [
+        Message::BalanceWheel(0.0),
+        Message::BalanceWheel(f32::NAN),
+        Message::EqPreampWheel(0.0),
+        Message::EqBandWheel(0, f32::NAN),
+        Message::EqBandWheel(usize::MAX, 1.0),
+    ];
+    for message in rolls {
+        let (mut player, _) = nudged(Message::VolumeUp);
+        let flash = player.volume_flash_ticks;
+        let _ = update(&mut player, message);
+        assert_eq!(player.volume_flash_ticks, flash);
+    }
+}
