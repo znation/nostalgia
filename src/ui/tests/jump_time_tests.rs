@@ -142,3 +142,17 @@ fn a_duration_reply_without_a_length_closes_the_panel() {
     assert!(player.playback_duration.is_none());
     assert!(!player.jump_time_visible);
 }
+
+#[test]
+fn selecting_a_track_closes_the_panel_whose_preview_length_it_clears() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    player.playback_duration = Some(Duration::from_secs(30));
+    let _ = update(&mut player, Message::ToggleJumpTime);
+    assert!(player.jump_time_visible);
+
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+
+    assert!(player.playback_duration.is_none());
+    assert!(!player.jump_time_visible);
+}
