@@ -7,6 +7,17 @@ use super::*;
 // moves means the thumb cannot reach the stored extreme; a bound the clamp
 // accepts but the slider cannot reach leaves part of the scale unusable.
 
+// The response curve's trace segments among the captured containers: the ones
+// exactly `RESPONSE_CURVE_LINE_HEIGHT` tall.
+fn curve_segments(captured: &CapturedContainers) -> Vec<Rectangle> {
+    captured
+        .0
+        .iter()
+        .filter(|bounds| bounds.height == RESPONSE_CURVE_LINE_HEIGHT)
+        .copied()
+        .collect()
+}
+
 // A left press on a dB scale label must publish the set-all message with that
 // label's gain, and nothing else.
 #[test]
@@ -119,12 +130,9 @@ fn equalizer_preamp_and_db_scale_sit_left_of_the_band_sliders() {
     let renderer = layout_capture::headless_renderer();
     let mut containers = CapturedContainers::default();
     layout_capture::operate(&mut element, &renderer, &mut containers);
-    let first_segment = containers
-        .0
-        .iter()
-        .filter(|bounds| bounds.height == RESPONSE_CURVE_LINE_HEIGHT)
+    let first_segment = curve_segments(&containers)
+        .into_iter()
         .min_by(|left, right| left.x.total_cmp(&right.x))
-        .copied()
         .expect("the curve draws a segment");
     assert!(
         (first_segment.x - first_frequency.x).abs() <= 0.5,
@@ -252,12 +260,7 @@ fn response_curve_row_keeps_its_height_and_draws_one_segment_per_column() {
 
     let mut captured = CapturedContainers::default();
     layout_capture::apply_operation(&mut element, &(), &mut tree, &node, &mut captured);
-    let segments: Vec<Rectangle> = captured
-        .0
-        .iter()
-        .filter(|bounds| bounds.height == RESPONSE_CURVE_LINE_HEIGHT)
-        .copied()
-        .collect();
+    let segments = curve_segments(&captured);
     assert_eq!(
         segments.len(),
         RESPONSE_CURVE_COLUMNS,
@@ -280,12 +283,7 @@ fn response_curve_row_keeps_its_height_and_draws_one_segment_per_column() {
         response_curve_row(&[0.0; BAND_COUNT]);
     let mut flat_captured = CapturedContainers::default();
     layout_capture::operate(&mut flat_element, &(), &mut flat_captured);
-    let flat_segments: Vec<Rectangle> = flat_captured
-        .0
-        .iter()
-        .filter(|bounds| bounds.height == RESPONSE_CURVE_LINE_HEIGHT)
-        .copied()
-        .collect();
+    let flat_segments = curve_segments(&flat_captured);
     assert_eq!(flat_segments.len(), RESPONSE_CURVE_COLUMNS);
     let midline = (RESPONSE_CURVE_HEIGHT - RESPONSE_CURVE_LINE_HEIGHT) / 2.0;
     assert!(
