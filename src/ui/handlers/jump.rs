@@ -57,8 +57,9 @@ fn song_list(player: &WinampPlayer) -> Option<(&[String], u64)> {
 
 /// Ctrl+J: flip the transient Jump to time panel. Opening needs a loaded
 /// preview with a known length; without one the flag stays as it was. Opening
-/// clears the query, closes About, Options, File info, and Jump to File, focuses the
-/// time box, and while shaded first restores the window as `toggle_about`
+/// fills the query with the current position (`M:SS`, or clears it when there is
+/// none), closes About, Options, File info, and Jump to File, focuses and
+/// selects the time box, and while shaded first restores the window as `toggle_about`
 /// does. Closing only clears the flag. The flag is layout-only and not
 /// persisted.
 pub(in crate::ui) fn toggle_jump_time(player: &mut WinampPlayer) -> Task<Message> {
@@ -71,8 +72,17 @@ pub(in crate::ui) fn toggle_jump_time(player: &mut WinampPlayer) -> Task<Message
     }
     player.close_transient_panels();
     player.jump_time_visible = true;
-    player.jump_time_query.clear();
-    let focus = iced::widget::operation::focus(views::JUMP_TIME_INPUT_ID);
+    match player.playback_position {
+        Some(position) => {
+            let ms = u64::try_from(position.as_millis()).unwrap_or(u64::MAX);
+            player.jump_time_query = views::format_minutes_seconds(ms);
+        }
+        None => player.jump_time_query.clear(),
+    }
+    let focus = Task::batch([
+        iced::widget::operation::focus(views::JUMP_TIME_INPUT_ID),
+        iced::widget::operation::select_all(views::JUMP_TIME_INPUT_ID),
+    ]);
     if player.shaded {
         Task::batch([toggle_window_shade(player), focus])
     } else {

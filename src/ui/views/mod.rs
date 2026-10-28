@@ -98,10 +98,10 @@ mod tests;
 /// hour or more reads as `60:00`/`61:05` rather than rolling over. This is the
 /// shared core of [`format_track_time`], whose zero case is the per-track
 /// `"--:--"` placeholder, and the browse song list's total-playing-time
-/// footer, whose zero total is a real `"0:00"`. Shared by the Now Playing bar
+/// footer, whose zero total is a real `"0:00"`, and the Jump to time box's prefill. Shared by the Now Playing bar
 /// and the browse rows, so it lives beside the other cross-panel helpers here
 /// rather than inside one panel.
-fn format_minutes_seconds(duration_ms: u64) -> String {
+pub(in crate::ui) fn format_minutes_seconds(duration_ms: u64) -> String {
     let total_seconds = duration_ms / 1000;
     format!("{}:{:02}", total_seconds / 60, total_seconds % 60)
 }

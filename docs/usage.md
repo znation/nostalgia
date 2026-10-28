@@ -124,7 +124,7 @@ track-number, disc-number, and composer lines are left out
 when the source supplies none), plus a `Format:` line
 (`256 KBPS  44 KHZ STEREO`) while a loaded preview reports its format and `44 KHZ MONO` when it
 reports no bitrate; its `Close` button, a click on the backdrop, or Alt+3 again closes it, and it
-opens only while a track is current. Ctrl+J opens a transient Jump to time panel: type seconds
+opens only while a track is current. Ctrl+J opens a transient Jump to time panel whose box opens holding the current position (`1:35`), selected so typing replaces it (empty when no position is known): type seconds
 (`95`) or `M:SS` (`1:35`) and press Enter or `Jump` to seek the loaded preview there (clamped to its
 length) and close the panel; `Close`, a click on the backdrop, or Ctrl+J again closes it, and it
 opens only while a preview with a known length is loaded. Plain `J` opens a transient Jump to File

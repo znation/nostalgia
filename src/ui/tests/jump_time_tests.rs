@@ -28,6 +28,38 @@ fn toggle_opens_with_an_empty_query_and_closes_again() {
 }
 
 #[test]
+fn toggle_opens_holding_the_current_position() {
+    let mut player = player_with_duration();
+    player.playback_position = Some(Duration::from_secs(95));
+
+    assert_message_schedules_work(&mut player, Message::ToggleJumpTime);
+    assert_eq!(player.jump_time_query, "1:35");
+}
+
+#[test]
+fn toggle_opens_holding_zero_at_the_start() {
+    let mut player = player_with_duration();
+    player.playback_position = Some(Duration::ZERO);
+
+    let _ = update(&mut player, Message::ToggleJumpTime);
+    assert_eq!(player.jump_time_query, "0:00");
+}
+
+#[test]
+fn submitting_the_prefilled_query_seeks_to_the_current_position() {
+    let mut player = player_with_duration();
+    player.playback_position = Some(Duration::from_secs(12));
+    let _ = update(&mut player, Message::ToggleJumpTime);
+    let epoch = player.position_epoch;
+
+    let _ = update(&mut player, Message::JumpTimeSubmitted);
+
+    assert_eq!(player.playback_position, Some(Duration::from_secs(12)));
+    assert_eq!(player.position_epoch, epoch.wrapping_add(1));
+    assert!(!player.jump_time_visible);
+}
+
+#[test]
 fn toggle_needs_a_known_preview_length() {
     let (mut player, _state) = test_player();
     assert_message_schedules_no_work(&mut player, Message::ToggleJumpTime);

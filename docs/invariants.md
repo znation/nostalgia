@@ -1965,8 +1965,9 @@ preview:
   `Message::ToggleJumpTime`; Ctrl+Shift+J, Ctrl+Alt+J, and Ctrl+Logo+J map to nothing (plain
   `j`/`J` opens Jump to File instead, see `## Jump to File panel`).
 - `handlers::jump::toggle_jump_time` flips `WinampPlayer::jump_time_visible`. Opening needs
-  `playback_duration` to be `Some`; without it the flag stays false. Opening clears the query,
-  `about_visible`, `options_visible`, `file_info_visible`, and `jump_file_visible`, and opening
+  `playback_duration` to be `Some`; without it the flag stays false. Opening sets the query to
+  `format_minutes_seconds` of `playback_position` (cleared when that is `None`), focuses and selects
+  the box, and clears `about_visible`, `options_visible`, `file_info_visible`, and `jump_file_visible`, and opening
   About, Options, File info, or Jump to File clears `jump_time_visible`. Opening while `shaded`
   holds first calls `toggle_window_shade`.
 - A plain or Shift-held Escape press also closes it (see `## Transient panel dismissal`).
@@ -1982,7 +1983,9 @@ preview:
 
 **Pinned by.** `parses_seconds_and_minutes_seconds` and `rejects_malformed_times`
 (`src/ui/handlers/jump.rs`); `message_for_maps_ctrl_j_to_jump_time` (`src/ui/shortcuts.rs`); the
-tests in `src/ui/tests/jump_time_tests.rs`; `jump_time_overlay_draws_its_heading_length_and_buttons`
+tests in `src/ui/tests/jump_time_tests.rs` (including `toggle_opens_holding_the_current_position`,
+`toggle_opens_holding_zero_at_the_start`, and
+`submitting_the_prefilled_query_seeks_to_the_current_position`); `jump_time_overlay_draws_its_heading_length_and_buttons`
 and `jump_time_overlay_buttons_and_backdrop_publish_their_messages`
 (`src/ui/views/tests/chrome.rs`); `view_constructs_when_the_window_is_shaded`
 (`src/ui/tests/view_tests.rs`); `the_escape_listener_runs_only_while_a_transient_panel_is_open`,
