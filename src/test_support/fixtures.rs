@@ -69,17 +69,10 @@ pub(crate) fn second_album_songs() -> Vec<Song> {
     vec![Song {
         id: "song-4".to_string(),
         title: "B-side".to_string(),
-        artist: "The Sample Band".to_string(),
         album: "Second Record".to_string(),
-        year: None,
-        genre: String::new(),
-        track_number: None,
-        disc_number: None,
-        composer: String::new(),
-        content_rating: None,
         album_id: "album-2".to_string(),
         duration_ms: 95_000,
-        preview_url: None,
+        ..sample_song()
     }]
 }
 
