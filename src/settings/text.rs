@@ -41,6 +41,9 @@ impl Settings {
         ));
         text.push_str(&format!("always_on_top={}\n", self.always_on_top));
         text.push_str(&format!("shade={}\n", self.shade));
+        if let Some((x, y)) = self.window_position {
+            text.push_str(&format!("window_position={x},{y}\n"));
+        }
         text
     }
 
@@ -92,6 +95,8 @@ impl Settings {
                 "always_on_top" => parse_into(&mut settings.always_on_top, value),
                 // A malformed value leaves the default unshaded window.
                 "shade" => parse_into(&mut settings.shade, value),
+                // A malformed pair leaves the position unset.
+                "window_position" => parse_window_position(&mut settings.window_position, value),
                 _ => settings.parse_eq_band(key, value),
             }
         }
@@ -153,5 +158,20 @@ fn parse_number_into(slot: &mut f32, value: &str) {
         && !parsed.is_nan()
     {
         *slot = parsed;
+    }
+}
+
+/// Assign an `x,y` pair to `slot` when both halves parse as finite numbers,
+/// leaving `slot` unchanged otherwise. Negative coordinates are valid: a
+/// monitor left of or above the primary has them.
+fn parse_window_position(slot: &mut Option<(f32, f32)>, value: &str) {
+    let Some((x, y)) = value.split_once(',') else {
+        return;
+    };
+    if let (Ok(x), Ok(y)) = (x.trim().parse::<f32>(), y.trim().parse::<f32>())
+        && x.is_finite()
+        && y.is_finite()
+    {
+        *slot = Some((x, y));
     }
 }

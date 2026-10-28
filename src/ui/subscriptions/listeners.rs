@@ -79,6 +79,19 @@ pub(in crate::ui) fn modifiers_message(
     }
 }
 
+/// Always subscribed: reports where the window system moved the window, so the
+/// settings can save its screen position. Every other event sends nothing.
+pub(in crate::ui) fn window_moved_message(
+    event: iced::Event,
+    _status: iced::event::Status,
+    _window: iced::window::Id,
+) -> Option<Message> {
+    match event {
+        iced::Event::Window(iced::window::Event::Moved(point)) => Some(Message::WindowMoved(point)),
+        _ => None,
+    }
+}
+
 /// Subscribed only while a readout is showing, so wheel rolls rebuild the
 /// screen only then. The Ctrl+wheel change that sets a readout arrives while
 /// this is absent; the next wheel roll or navigation key clears it.

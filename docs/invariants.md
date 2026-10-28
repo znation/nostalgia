@@ -857,7 +857,7 @@ The equalizer's EQ and AUTO buttons sink while on, through `eq_toggle` and `auto
 **Guarantee.** The values the user sets that outlive a track — volume, balance, Repeat, Shuffle, the
 equalizer's on/off state, AUTO choice, preamp, ten band gains, and selected preset, the large readout's
 elapsed/remaining choice, the visualizer's shown/hidden choice, the equalizer and library panels'
-shown/hidden choices, the LCD strip's always-on-top choice, and the window's shade mode — are
+shown/hidden choices, the LCD strip's always-on-top choice, the window's shade mode, and the window's last screen position — are
 loaded once before the first view is drawn and rewritten after any update that changes their snapshot, with the newest
 queued snapshot written once the worker is free: a burst of changes, such as a slider drag or key
 repeat, may collapse to its newest value instead of writing every intermediate one. An update that leaves the snapshot
@@ -889,25 +889,31 @@ they are old enough not to belong to an in-flight save. A symlinked settings fil
 save, the directory sync, and the stale-temp sweep all follow it to the file and directory it points
 at, so the link is never replaced; a dangling link or a missing file is used as the path given, and
 a new file takes the platform's default mode. The readout mode, the visualizer's shown/hidden
-choice, the two panel choices, the always-on-top choice, and the shade mode are the six persisted
+choice, the two panel choices, the always-on-top choice, and the shade mode are the persisted
 values not held in `AppState`: they live on `WinampPlayer::time_display`,
 `WinampPlayer::visualizer_visible`, `WinampPlayer::eq_panel_visible`,
 `WinampPlayer::library_panel_visible`, `WinampPlayer::always_on_top`, and
 `WinampPlayer::shaded`, `main` passes the loaded snapshot through to
-`WinampPlayer::adopt_saved_settings` (which restores all six before the first view), and
+`WinampPlayer::adopt_saved_settings` (which restores them all before the first view), and
 `persist_settings_if_changed` copies them into the snapshot before comparing and saving. A missing
 or malformed `time_display` line falls back to elapsed, a missing or malformed `always_on_top` line
 falls back to unpinned, a missing or malformed `shade` line falls back to unshaded, and a missing
 or malformed `visualizer_visible`, `eq_panel_visible`, or `library_panel_visible` line falls back
-to shown. The classic `A` key and Winamp's Ctrl+A reach
+to shown. The window's screen position is the seventh UI-owned value
+(`WinampPlayer::window_position`, restored by `adopt_saved_settings`): `Message::WindowMoved`,
+fed by `window_moved_message` from iced's `Moved` window event, stores it and the update loop saves
+it as `window_position=<x>,<y>`, a line written only once a position is known. A missing line, or one
+that is not two finite numbers (`abc`, `10`, `NaN,5`, `inf,5`), leaves it unset and the window opens
+where the window system puts it; a set value is passed to `.position(...)` through `launch_position`
+without clamping to monitors (iced cannot query them before the window opens). Wayland reports no
+moves, so no line is written there. The classic `A` key and Winamp's Ctrl+A reach
 the same `Message::ToggleAlwaysOnTop` arm through `shortcuts::message_for`, so they flip the flag
 and schedule the same window-level call as the on-screen A controls. The saved always-on-top level
 waits for the window id every other window action uses: `window_id_resolved` stores the id, then
 schedules `iced::window::set_level` when the restored flag holds. A restored shade mode waits for
 the same id: no pre-shade size was captured at boot, so `window_id_resolved` also schedules
 `iced::window::size`, and the resulting measurement stores the launch size before rolling the
-window up (see `## Window shade`). It is still not window placement: the window's size and position
-are not persisted. Playback position, the browse level, the search box, and the current track are
+window up (see `## Window shade`). The window's size is not persisted. Playback position, the browse level, the search box, and the current track are
 deliberately not persisted.
 
 **Enforced by.** `src/main.rs` resolves the path with
@@ -946,6 +952,9 @@ no-op behavior. `shortcuts::message_for` maps `A` and Ctrl+A to `Message::Toggle
 arm those controls press.
 
 **Pinned by.** `to_text_round_trips_every_field`,
+`window_position_round_trips_and_ignores_malformed_values`, `window_moved_reaches_the_saved_snapshot`,
+`saved_window_position_is_restored_on_boot`, `window_moved_message_maps_only_move_events`,
+`launch_position_opens_at_the_saved_point_or_the_default`,
 `time_display_round_trips_both_words_and_ignores_unknown_values`,
 `visualizer_visibility_round_trips_and_ignores_malformed_values`,
 `panel_visibility_round_trips_and_ignores_malformed_values`,
@@ -1012,7 +1021,7 @@ production writer moved its blocking write to a background thread, because a sli
 the snapshot on every movement and each synchronous save fsyncs the file and its directory, so the
 update thread stalled on the disk repeatedly during a drag. On 2026-10-26 the window's shade
 mode joined the file, so a saved-shaded launch opens rolled up and its first unshade restores the
-launch size; the window's size and position remain unpersisted. On 2026-10-26 the equalizer's
+launch size; the window's size and position were then unpersisted (the position joined on 2026-10-28). On 2026-10-26 the equalizer's
 AUTO choice joined the file as `eq_auto`, restoring the genre-matched preset behavior at launch.
 On 2026-10-26 a settings file that exists but cannot be read began refusing later saves for that
 run, because the app starts from defaults in that case and the first settings change would
@@ -1616,7 +1625,7 @@ rather than the panic unwinding the event loop.
   strip; once `WindowIdResolved` lands, `window_id_resolved` schedules `iced::window::size`
   (batched with a saved always-on-top level when both apply), and `WindowShadeMeasured` stores
   the launch size before resizing to `SHADED_HEIGHT`, so the first unshade restores it. An
-  unshaded launch schedules no measurement, and the size and position themselves stay
+  unshaded launch schedules no measurement, and the size itself stays
   unpersisted.
 
 - Shade mode builds exactly the title bar over the compact transport strip, and the window is

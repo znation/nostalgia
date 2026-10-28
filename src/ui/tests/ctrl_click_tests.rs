@@ -79,3 +79,37 @@ fn modifiers_message_tracks_control_and_focus_loss() {
     });
     assert!(modifiers_message(key, Status::Ignored, id).is_none());
 }
+
+#[test]
+fn window_moved_message_maps_only_move_events() {
+    use iced::event::Status;
+    let id = iced::window::Id::unique();
+    let point = iced::Point::new(12.0, 34.0);
+
+    assert!(matches!(
+        window_moved_message(
+            iced::Event::Window(iced::window::Event::Moved(point)),
+            Status::Ignored,
+            id
+        ),
+        Some(Message::WindowMoved(moved)) if moved == point
+    ));
+    assert!(
+        window_moved_message(
+            iced::Event::Window(iced::window::Event::Focused),
+            Status::Ignored,
+            id
+        )
+        .is_none()
+    );
+    let key = iced::Event::Keyboard(iced::keyboard::Event::KeyReleased {
+        key: iced::keyboard::Key::Character("a".into()),
+        location: iced::keyboard::Location::Standard,
+        modifiers: Modifiers::empty(),
+        modified_key: iced::keyboard::Key::Character("a".into()),
+        physical_key: iced::keyboard::key::Physical::Unidentified(
+            iced::keyboard::key::NativeCode::Unidentified,
+        ),
+    });
+    assert!(window_moved_message(key, Status::Ignored, id).is_none());
+}

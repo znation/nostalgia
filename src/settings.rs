@@ -5,9 +5,9 @@
 //! and AUTO states, preamp, band gains, and selected preset, the Now Playing readout's
 //! elapsed/remaining mode, the visualizer's shown/hidden choice, the equalizer
 //! and library panels' shown/hidden choices, the always-on-top flag, and the
-//! window-shade mode. All but the last six live in [`AppState`]; the readout
-//! mode, visualizer choice, panel choices, always-on-top flag, and shade mode
-//! live on the UI's `WinampPlayer`, so the player sets them on its snapshot
+//! window-shade mode and the window's last screen position. All but the last
+//! seven live in [`AppState`]; the readout mode, visualizer choice, panel
+//! choices, always-on-top flag, shade mode, and window position live on the UI's `WinampPlayer`, so the player sets them on its snapshot
 //! before saving and restores them after loading. The file-backed store lives in
 //! [`file_store`], the text format in the private `text` module, the writer seam
 //! in [`seam`], and [`writer::BackgroundWriter`] runs the blocking write on a
@@ -16,7 +16,7 @@
 //! [`file_store::FileStore`] loads the snapshot from a line-based text file
 //! at startup and rewrites it whenever the UI changes one of those values.
 //! Playback position, the browse level, the search box, the current track,
-//! and the window's size and position are deliberately not persisted.
+//! and the window's size are deliberately not persisted.
 
 pub mod atomic_write;
 pub mod file_store;
@@ -29,14 +29,15 @@ use crate::state::AppState;
 
 /// The persisted values the next launch restores: the mixer and equalizer
 /// subset of [`AppState`] plus the UI-owned readout mode, visualizer choice,
-/// equalizer and library panel choices, always-on-top flag, and shade mode.
+/// equalizer and library panel choices, always-on-top flag, shade mode, and
+/// window screen position.
 ///
 /// The fields are private; build a state-backed snapshot with
 /// [`Settings::from_state`] and restore it with [`Settings::apply_to`].
 /// `time_display_remaining`, `visualizer_visible`, `eq_panel_visible`,
-/// `library_panel_visible`, `always_on_top`, and `shade` are not held in
-/// [`AppState`]: `from_state` leaves them elapsed, shown (all three), unpinned,
-/// and unshaded, and the player overwrites them from its own values before
+/// `library_panel_visible`, `always_on_top`, `shade`, and `window_position` are
+/// not held in [`AppState`]: `from_state` leaves them elapsed, shown (all
+/// three), unpinned, unshaded, and without a known position, and the player overwrites them from its own values before
 /// saving. `Default` mirrors [`AppState::default`] plus elapsed, shown,
 /// unpinned, and unshaded, so if one starting value changes the other must
 /// change with it.
@@ -57,6 +58,7 @@ pub struct Settings {
     library_panel_visible: bool,
     always_on_top: bool,
     shade: bool,
+    window_position: Option<(f32, f32)>,
 }
 
 impl Default for Settings {
@@ -82,6 +84,7 @@ impl Default for Settings {
             library_panel_visible: true,
             always_on_top: false,
             shade: false,
+            window_position: None,
         }
     }
 }
@@ -107,6 +110,7 @@ impl Settings {
             library_panel_visible: true,
             always_on_top: false,
             shade: false,
+            window_position: None,
         }
     }
 
@@ -189,8 +193,8 @@ impl Settings {
 
     /// Whether the window is rolled up into shade mode. The player owns this
     /// value, so it reads it back when saving and restores it from the loaded
-    /// snapshot at boot. The window's size and position are separate and are
-    /// not persisted.
+    /// snapshot at boot. The window's position is separate, and its size is not
+    /// persisted.
     #[must_use]
     pub fn shaded(&self) -> bool {
         self.shade
@@ -203,6 +207,21 @@ impl Settings {
         self.shade = shaded;
     }
 
+    /// The window's last reported screen position, if one was saved. The
+    /// player owns this value, so it reads it back when saving and restores
+    /// it from the loaded snapshot at boot.
+    #[must_use]
+    pub fn window_position(&self) -> Option<(f32, f32)> {
+        self.window_position
+    }
+
+    /// Set the window's screen position. The player calls this on its fresh
+    /// snapshot before saving; [`Self::apply_to`] deliberately leaves the
+    /// UI-owned value alone.
+    pub fn set_window_position(&mut self, position: Option<(f32, f32)>) {
+        self.window_position = position;
+    }
+
     /// Restore this snapshot into `state`.
     ///
     /// The private values go through the state's clamped setters
@@ -211,8 +230,8 @@ impl Settings {
     /// is restored last through `apply_eq_preset`, after the per-band writes
     /// have cleared the selection. The AUTO flag is a plain restored boolean.
     /// The UI-owned readout mode, visualizer
-    /// choice, panel choices, always-on-top flag, and shade mode are
-    /// deliberately left alone.
+    /// choice, panel choices, always-on-top flag, shade mode, and window
+    /// position are deliberately left alone.
     pub fn apply_to(&self, state: &mut AppState) {
         state.set_volume(self.volume);
         state.set_balance(self.balance);
@@ -264,6 +283,7 @@ mod tests {
         settings.set_library_panel_visible(false);
         settings.set_always_on_top(true);
         settings.set_shaded(true);
+        settings.set_window_position(Some((120.0, -40.5)));
         assert_eq!(Settings::from_text(&settings.to_text()), settings);
         assert!(Settings::from_text(&settings.to_text()).time_display_remaining());
         assert!(!Settings::from_text(&settings.to_text()).visualizer_visible());
@@ -566,5 +586,26 @@ mod tests {
         assert_eq!(state.eq_preset(), Some(rock));
         assert_eq!(state.eq_preamp(), rock.preamp);
         assert_eq!(state.eq_bands(), rock.bands);
+    }
+
+    #[test]
+    fn window_position_round_trips_and_ignores_malformed_values() {
+        let mut settings = Settings::default();
+        assert!(!settings.to_text().contains("window_position"));
+
+        settings.set_window_position(Some((120.0, -40.5)));
+        assert!(settings.to_text().contains("window_position=120,-40.5"));
+        assert_eq!(
+            Settings::from_text(&settings.to_text()).window_position(),
+            Some((120.0, -40.5))
+        );
+
+        for bad in ["abc", "10", "NaN,5", "inf,5", "5,-inf", "1,2,3"] {
+            assert_eq!(
+                Settings::from_text(&format!("window_position={bad}\n")).window_position(),
+                None,
+                "{bad:?} must leave the position unset"
+            );
+        }
     }
 }

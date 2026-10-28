@@ -11,6 +11,23 @@ use iced::Task;
 use crate::ui::views;
 use crate::ui::{Message, OptionsChoice, OptionsRow, WinampPlayer};
 
+/// The window system moved the window: remember its screen position. The
+/// update loop's settings comparison then saves it; a drag's burst of moves
+/// collapses in the background writer.
+pub(in crate::ui) fn window_moved(player: &mut WinampPlayer, point: iced::Point) -> Task<Message> {
+    player.window_position = Some((point.x, point.y));
+    Task::none()
+}
+
+/// Where the window opens: the saved screen position, or the window
+/// system's choice when none was saved. The position is not clamped to the
+/// monitors, since iced cannot query them before the window opens.
+pub(in crate::ui) fn launch_position(saved: Option<(f32, f32)>) -> iced::window::Position {
+    saved.map_or(iced::window::Position::Default, |(x, y)| {
+        iced::window::Position::Specific(iced::Point::new(x, y))
+    })
+}
+
 /// The app window's id, resolved once at boot by `iced::window::latest()`:
 /// store it, so the title bar's window actions can act on the window. Until
 /// it lands (or if the query fails) those actions are no-ops (see

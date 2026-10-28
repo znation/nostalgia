@@ -359,3 +359,50 @@ fn a_fresh_artists_reply_drops_the_saved_sort_permutation() {
         "restoring a list with no saved sort must be a no-op"
     );
 }
+
+#[test]
+fn window_moved_reaches_the_saved_snapshot() {
+    let (mut player, _state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+
+    let _ = update(
+        &mut player,
+        Message::WindowMoved(iced::Point::new(300.0, 200.0)),
+    );
+    let snapshots = store.snapshots();
+    assert_eq!(snapshots.len(), 1);
+    assert_eq!(snapshots[0].window_position(), Some((300.0, 200.0)));
+
+    let _ = update(
+        &mut player,
+        Message::WindowMoved(iced::Point::new(300.0, 200.0)),
+    );
+    assert_eq!(store.snapshots().len(), 1);
+}
+
+#[test]
+fn saved_window_position_is_restored_on_boot() {
+    let (mut player, _state) = test_player();
+    let mut moved = Settings::default();
+    moved.set_window_position(Some((10.0, -20.0)));
+
+    player.adopt_saved_settings(moved);
+    assert_eq!(player.window_position, Some((10.0, -20.0)));
+
+    player.adopt_saved_settings(Settings::default());
+    assert_eq!(player.window_position, None);
+}
+
+#[test]
+fn launch_position_opens_at_the_saved_point_or_the_default() {
+    use crate::ui::handlers::window::launch_position;
+    assert!(matches!(
+        launch_position(Some((10.0, 20.0))),
+        iced::window::Position::Specific(point) if point == iced::Point::new(10.0, 20.0)
+    ));
+    assert!(matches!(
+        launch_position(None),
+        iced::window::Position::Default
+    ));
+}

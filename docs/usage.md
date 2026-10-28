@@ -239,9 +239,9 @@ that song queued for Play; with Shuffle on and Repeat off it likewise stops once
 round has played, and Repeat on or Next starts a new round. The volume, balance, Repeat and Shuffle flags, the equalizer's on/off
 state, AUTO choice, curve, and preset, the elapsed/remaining readout choice, the visualizer's
 shown/hidden choice, the equalizer and library panels' shown/hidden choices, the always-on-top
-choice, and the window-shade mode are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or
+choice, the window-shade mode, and the window's last screen position are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or
 `$HOME/.config/nostalgia/settings.ini`) and restored at the next launch; `NOSTALGIA_SETTINGS_PATH`
-overrides the path. A relative `XDG_CONFIG_HOME` is ignored (the XDG spec requires an absolute one), so the `$HOME/.config` location is used instead (or persistence is disabled when `$HOME` is unset). A missing or malformed entry falls back to its default (a `NaN` number counts
+overrides the path. The window reopens at its saved position without checking that a monitor is still there; delete the `window_position` line to reset an off-screen window. Wayland reports no window moves, so the position is not saved or restored there. A relative `XDG_CONFIG_HOME` is ignored (the XDG spec requires an absolute one), so the `$HOME/.config` location is used instead (or persistence is disabled when `$HOME` is unset). A missing or malformed entry falls back to its default (a `NaN` number counts
 as malformed; a byte that is not UTF-8 spoils only its own line, and a leading UTF-8 BOM is
 ignored), and a settings file that exists but cannot be read falls back to defaults with one line
 on stderr naming the file; the player then refuses to save for the rest of that run, printing a

@@ -45,6 +45,10 @@ pub(in crate::ui) struct WinampPlayer {
     /// `persist_settings_if_changed` and `adopt_saved_settings`, so a launch
     /// whose settings say shaded draws the rolled-up tree from the first view.
     pub(in crate::ui) shaded: bool,
+    /// The window's last screen position reported by the window system, saved
+    /// with the settings so the next launch opens there. `None` until a move
+    /// event arrives (none do on Wayland).
+    pub(in crate::ui) window_position: Option<(f32, f32)>,
     /// Whether Control is held, tracked from modifier events so a click on Previous or Next can
     /// jump to the list's edge instead of stepping. Not saved in settings.
     pub(in crate::ui) control_held: bool,
@@ -340,6 +344,7 @@ impl WinampPlayer {
             apple_music_service: service,
             window_id: None,
             shaded: false,
+            window_position: None,
             control_held: false,
             always_on_top: false,
             unshaded_size: None,
@@ -424,7 +429,8 @@ impl WinampPlayer {
     /// without a save call in each handler; an unchanged snapshot writes
     /// nothing, which keeps timer and backend poll messages from touching the
     /// file. The snapshot also carries the player-owned readout mode,
-    /// visualizer choice, panel choices, always-on-top flag, and shade mode, so
+    /// visualizer choice, panel choices, always-on-top flag, shade mode, and window
+    /// position, so
     /// a click on the LCD time, the strip's `V`, the LCD strip's `A`, or a shade
     /// toggle saves exactly one new snapshot.
     /// With no store attached (tests, and before `init_ui` attaches the
@@ -443,6 +449,7 @@ impl WinampPlayer {
         snapshot.set_library_panel_visible(self.library_panel_visible);
         snapshot.set_always_on_top(self.always_on_top);
         snapshot.set_shaded(self.shaded);
+        snapshot.set_window_position(self.window_position);
         if snapshot == self.saved_settings {
             return;
         }
@@ -454,10 +461,10 @@ impl WinampPlayer {
 
     /// Adopt the snapshot `main` loaded before the first view: restore the
     /// player-owned readout mode, visualizer choice, panel choices,
-    /// always-on-top flag, and shade mode and remember the snapshot so the
+    /// always-on-top flag, shade mode, and window position and remember the snapshot so the
     /// update loop's first comparison does not re-save it. The state-backed
     /// values were already applied to `AppState` by `main`, so this touches
-    /// only those six UI-owned values.
+    /// only those seven UI-owned values.
     pub(in crate::ui) fn adopt_saved_settings(&mut self, saved: Settings) {
         self.time_display = if saved.time_display_remaining() {
             views::TimeDisplay::Remaining
@@ -469,6 +476,7 @@ impl WinampPlayer {
         self.library_panel_visible = saved.library_panel_visible();
         self.always_on_top = saved.always_on_top();
         self.shaded = saved.shaded();
+        self.window_position = saved.window_position();
         self.saved_settings = saved;
     }
 

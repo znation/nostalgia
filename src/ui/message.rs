@@ -416,6 +416,9 @@ pub(in crate::ui) enum Message {
     // arm stores it and resizes the window down to the title-bar strip,
     // unless a newer toggle already left shade mode or captured the size.
     WindowShadeMeasured(iced::Size),
+    // The window system reported the window's new screen position; the arm
+    // stores it so the settings save it for the next launch.
+    WindowMoved(iced::Point),
 }
 
 /// A row of the transient options menu, each naming the existing on/off

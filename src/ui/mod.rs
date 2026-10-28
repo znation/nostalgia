@@ -70,6 +70,7 @@ pub fn init_ui(
     store: FileStore,
     saved: Settings,
 ) -> iced::Result {
+    let position = handlers::window::launch_position(saved.window_position());
     iced::application(
         move || {
             let (mut player, task) = boot(state.clone(), service.clone());
@@ -84,6 +85,7 @@ pub fn init_ui(
     .theme(|_: &WinampPlayer| theme::winamp_theme())
     .decorations(false)
     .resizable(false)
+    .position(position)
     .subscription(|player| {
         iced::Subscription::batch(subscriptions(
             player.needs_lcd_tick(),
@@ -299,6 +301,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::CloseWindow => handlers::window::close_window(player),
         Message::ToggleWindowShade => handlers::window::toggle_window_shade(player),
         Message::WindowShadeMeasured(size) => handlers::window::window_shade_measured(player, size),
+        Message::WindowMoved(point) => handlers::window::window_moved(player, point),
         Message::ToggleAbout => handlers::window::toggle_about(player),
         Message::ToggleOptions => handlers::window::toggle_options(player),
         Message::OptionsSelectionUp => handlers::window::options_selection_up(player),
