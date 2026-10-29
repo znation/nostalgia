@@ -140,3 +140,64 @@ fn a_full_fade_leaves_the_saved_settings_volume_alone() {
     futures::executor::block_on(assert_transport_settled(task, "fade stop"));
     assert_eq!(Settings::from_state(&state.blocking_lock()), before);
 }
+
+fn hold_shift(player: &mut WinampPlayer, shift: bool) {
+    let _ = update(
+        player,
+        Message::ModifiersHeld {
+            control: false,
+            shift,
+        },
+    );
+}
+
+#[test]
+fn shift_click_stop_starts_the_fade() {
+    let (recording, mut player, state) = playing_with_recording();
+    let saved = state.blocking_lock().volume();
+    hold_shift(&mut player, true);
+
+    let _ = update(&mut player, Message::StopButton);
+    assert!(recording.calls().is_empty());
+    assert_eq!(player.fade_out_ticks, crate::ui::player::FADE_OUT_TICKS);
+
+    for _ in 0..7 {
+        let _ = tick(&mut player);
+    }
+    let steps = volumes(&recording);
+    assert_eq!(steps.len(), 7);
+    for (index, step) in steps.iter().enumerate() {
+        let expected = saved * (7 - index) as f32 / 8.0;
+        assert!((step - expected).abs() < 1e-6, "{step} vs {expected}");
+    }
+    let task = tick(&mut player);
+    futures::executor::block_on(assert_transport_settled(task, "fade stop"));
+    let calls = recording.calls();
+    assert_eq!(calls[7], AudioCall::Stop);
+    assert_eq!(calls[8], AudioCall::SetVolume(saved));
+}
+
+#[test]
+fn plain_stop_click_stops_at_once() {
+    let (recording, mut player, _state) = playing_with_recording();
+    assert!(!player.shift_held);
+
+    let task = update(&mut player, Message::StopButton);
+
+    futures::executor::block_on(assert_transport_settled(task, "stop"));
+    assert!(recording.calls().contains(&AudioCall::Stop));
+    assert_eq!(player.fade_out_ticks, 0);
+}
+
+#[test]
+fn shift_release_restores_a_plain_stop_click() {
+    let (recording, mut player, _state) = playing_with_recording();
+    hold_shift(&mut player, true);
+    hold_shift(&mut player, false);
+
+    let task = update(&mut player, Message::StopButton);
+
+    futures::executor::block_on(assert_transport_settled(task, "stop"));
+    assert!(recording.calls().contains(&AudioCall::Stop));
+    assert_eq!(player.fade_out_ticks, 0);
+}

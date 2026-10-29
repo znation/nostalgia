@@ -66,7 +66,7 @@ fn transport_glyphs_match_the_mockup_order_and_widths() {
     assert!(matches!(glyphs[0].3, Message::PreviousButton));
     assert!(matches!(glyphs[1].3, Message::Play));
     assert!(matches!(glyphs[2].3, Message::Pause));
-    assert!(matches!(glyphs[3].3, Message::Stop));
+    assert!(matches!(glyphs[3].3, Message::StopButton));
     assert!(matches!(glyphs[4].3, Message::NextButton));
 }
 

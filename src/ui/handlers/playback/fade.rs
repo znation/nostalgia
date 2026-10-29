@@ -27,6 +27,15 @@ pub(in crate::ui) fn fade_out_and_stop(player: &mut WinampPlayer) -> Task<Messag
     Task::none()
 }
 
+/// A click on the Stop button: fades out while Shift is held, otherwise stops at once.
+pub(in crate::ui) fn stop_button(player: &mut WinampPlayer) -> Task<Message> {
+    if player.shift_held {
+        fade_out_and_stop(player)
+    } else {
+        stop(player)
+    }
+}
+
 /// One LCD tick of a running fade: lowers the backend gain one step, and on the
 /// last step stops and restores the saved level. Does nothing without a fade.
 pub(in crate::ui) fn fade_out_tick(player: &mut WinampPlayer) -> Task<Message> {

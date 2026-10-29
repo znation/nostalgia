@@ -62,9 +62,9 @@ pub(in crate::ui) fn mixer_key_message(
     }
 }
 
-/// Always subscribed: tracks whether Control is held, so a click on Previous or Next can jump to
-/// the list's edge. Losing window focus reports Control released, since its release may happen
-/// outside the window. Every other event sends nothing.
+/// Always subscribed: tracks whether Control and Shift are held, so a click on Previous or Next can
+/// jump to the list's edge and a click on Stop can fade out. Losing window focus reports both
+/// released, since their release may happen outside the window. Every other event sends nothing.
 pub(in crate::ui) fn modifiers_message(
     event: iced::Event,
     _status: iced::event::Status,
@@ -72,9 +72,15 @@ pub(in crate::ui) fn modifiers_message(
 ) -> Option<Message> {
     match event {
         iced::Event::Keyboard(keyboard::Event::ModifiersChanged(modifiers)) => {
-            Some(Message::ControlHeld(modifiers.control()))
+            Some(Message::ModifiersHeld {
+                control: modifiers.control(),
+                shift: modifiers.shift(),
+            })
         }
-        iced::Event::Window(iced::window::Event::Unfocused) => Some(Message::ControlHeld(false)),
+        iced::Event::Window(iced::window::Event::Unfocused) => Some(Message::ModifiersHeld {
+            control: false,
+            shift: false,
+        }),
         _ => None,
     }
 }

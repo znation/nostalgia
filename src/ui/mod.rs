@@ -174,8 +174,10 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::PreviousTrack => handlers::playback::stepping::step_track(player, false),
         Message::NextButton => handlers::playback::stepping::next_button(player),
         Message::PreviousButton => handlers::playback::stepping::previous_button(player),
-        Message::ControlHeld(held) => {
-            player.control_held = held;
+        Message::StopButton => handlers::playback::fade::stop_button(player),
+        Message::ModifiersHeld { control, shift } => {
+            player.control_held = control;
+            player.shift_held = shift;
             Task::none()
         }
         Message::FirstTrack => handlers::playback::stepping::jump_to_edge_track(player, false),

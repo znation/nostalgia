@@ -163,8 +163,13 @@ pub(in crate::ui) enum Message {
     NextButton,
     // A click on the Previous button: the first song while Control is held, otherwise one step back.
     PreviousButton,
-    // Whether Control is held; false too when the window loses focus.
-    ControlHeld(bool),
+    // A click on the Stop button: fade out and stop while Shift is held, otherwise stop at once.
+    StopButton,
+    // Whether Control and Shift are held; both false when the window loses focus.
+    ModifiersHeld {
+        control: bool,
+        shift: bool,
+    },
     // Ctrl+Z: play the first song of the showing list, whatever Shuffle and Repeat say.
     FirstTrack,
     // Ctrl+B: play the last song of the showing list, whatever Shuffle and Repeat say.

@@ -498,7 +498,7 @@ the same jump; a plain click steps one song. Losing window focus clears the held
 before its chord guard; `handlers::playback::stepping::jump_to_edge_track` picks the edge row and
 epoch from the showing list without reading shared state or touching the play history.
 `stepping::previous_button` / `next_button` choose between it and `step_track` from
-`WinampPlayer::control_held`, which `listeners::modifiers_message` keeps current.
+`WinampPlayer::control_held`, which `Message::ModifiersHeld` (from `listeners::modifiers_message`) keeps current.
 
 **Pinned by.**
 
@@ -1644,7 +1644,7 @@ rather than the panic unwinding the event loop.
 - The strip shows Previous, Play, Pause, Stop, Next, the elapsed-over-total time readout, a seek
   slider while a preview position and length are known, and a volume slider. Its five buttons
   emit the same messages as their full transport-row twins
-  (`Message::PreviousButton`, `Message::Play`, `Message::Pause`, `Message::Stop`,
+  (`Message::PreviousButton`, `Message::Play`, `Message::Pause`, `Message::StopButton`,
   `Message::NextButton`), each pinned to a fixed width so the row cannot reflow. The strip builds
   them from the shared compact row's `mini_transport_controls`, which projects the full row's
   `transport_glyphs` spec, so the shade strip, the library footer, and the full row share the
@@ -2175,7 +2175,7 @@ column, so hiding it drops this footer with the rest of the section. The footer 
   below the browse list.
 - It shows Previous, Play, Pause, Stop, Next, the elapsed-over-total time readout, and a volume
   slider. The five buttons emit `Message::PreviousButton`, `Message::Play`, `Message::Pause`,
-  `Message::Stop`, and `Message::NextButton`, and the row is playback-independent, drawing both
+  `Message::StopButton`, and `Message::NextButton`, and the row is playback-independent, drawing both
   `▶` and `II` in every mode. The time label joins
   the same `WinampPlayer::now_playing_elapsed` and `WinampPlayer::now_playing_time` strings the
   LCD shows as `<elapsed>/<total>`, so the elapsed/remaining choice and the total cannot disagree
@@ -2733,9 +2733,10 @@ backend; the eighth stops like Stop and then restores the saved volume. The shar
 is never written, so the slider and the settings file keep the pre-fade level. While paused or
 stopped it acts as Stop, and a second press mid-fade does not restart the countdown. Play, Pause,
 the Play/Pause toggle, and a track selection mid-fade end the fade and re-send the saved volume;
-Stop mid-fade stops and then re-sends it.
+Stop mid-fade stops and then re-sends it. A Shift-held click on the Stop button
+(`Message::StopButton`) does the same as Shift+V; without Shift it stops at once.
 
-**Enforced by.** `handlers::playback::fade` and the hooks in `handlers::playback`.
+**Enforced by.** `handlers::playback::fade` (including `fade::stop_button`), `listeners::modifiers_message`, and the hooks in `handlers::playback`.
 
 **Pinned by.**
 
@@ -2744,6 +2745,8 @@ Stop mid-fade stops and then re-sends it.
   `fade_out_while_not_playing_acts_as_stop`, `a_second_fade_press_does_not_restart_the_countdown`,
   `play_mid_fade_restores_the_volume_and_cancels_the_rest`,
   `a_track_selection_mid_fade_restores_the_volume`, `stop_mid_fade_stops_and_then_restores_the_volume`,
-  `a_full_fade_leaves_the_saved_settings_volume_alone` (`src/ui/tests/fade_tests.rs`)
+  `a_full_fade_leaves_the_saved_settings_volume_alone`, `shift_click_stop_starts_the_fade`,
+  `plain_stop_click_stops_at_once`, `shift_release_restores_a_plain_stop_click`
+  (`src/ui/tests/fade_tests.rs`)
 
 **History.** Added 2026-10-28 with the Shift+V fade-out plan.

@@ -4,7 +4,13 @@ use iced::keyboard::Modifiers;
 #[test]
 fn ctrl_click_previous_plays_the_first_song() {
     let (mut player, _state) = player_stepping_from(Some("song-2"));
-    let _ = update(&mut player, Message::ControlHeld(true));
+    let _ = update(
+        &mut player,
+        Message::ModifiersHeld {
+            control: true,
+            shift: false,
+        },
+    );
 
     let task = update(&mut player, Message::PreviousButton);
 
@@ -14,7 +20,13 @@ fn ctrl_click_previous_plays_the_first_song() {
 #[test]
 fn ctrl_click_next_plays_the_last_song() {
     let (mut player, _state) = player_stepping_from(Some("song-1"));
-    let _ = update(&mut player, Message::ControlHeld(true));
+    let _ = update(
+        &mut player,
+        Message::ModifiersHeld {
+            control: true,
+            shift: false,
+        },
+    );
 
     let task = update(&mut player, Message::NextButton);
 
@@ -38,8 +50,20 @@ fn plain_button_clicks_step_one_song() {
 #[test]
 fn control_release_restores_plain_steps() {
     let (mut player, _state) = player_stepping_from(Some("song-1"));
-    let _ = update(&mut player, Message::ControlHeld(true));
-    let _ = update(&mut player, Message::ControlHeld(false));
+    let _ = update(
+        &mut player,
+        Message::ModifiersHeld {
+            control: true,
+            shift: false,
+        },
+    );
+    let _ = update(
+        &mut player,
+        Message::ModifiersHeld {
+            control: false,
+            shift: false,
+        },
+    );
 
     let task = update(&mut player, Message::NextButton);
 
@@ -54,11 +78,17 @@ fn modifiers_message_tracks_control_and_focus_loss() {
 
     assert!(matches!(
         modifiers_message(modifiers(Modifiers::CTRL), Status::Ignored, id),
-        Some(Message::ControlHeld(true))
+        Some(Message::ModifiersHeld {
+            control: true,
+            shift: false
+        })
     ));
     assert!(matches!(
         modifiers_message(modifiers(Modifiers::SHIFT), Status::Ignored, id),
-        Some(Message::ControlHeld(false))
+        Some(Message::ModifiersHeld {
+            control: false,
+            shift: true
+        })
     ));
     assert!(matches!(
         modifiers_message(
@@ -66,7 +96,10 @@ fn modifiers_message_tracks_control_and_focus_loss() {
             Status::Ignored,
             id
         ),
-        Some(Message::ControlHeld(false))
+        Some(Message::ModifiersHeld {
+            control: false,
+            shift: false
+        })
     ));
     let key = iced::Event::Keyboard(iced::keyboard::Event::KeyReleased {
         key: iced::keyboard::Key::Character("a".into()),
@@ -112,4 +145,20 @@ fn window_moved_message_maps_only_move_events() {
         ),
     });
     assert!(window_moved_message(key, Status::Ignored, id).is_none());
+}
+
+#[test]
+fn shift_click_previous_steps_one_song() {
+    let (mut player, _state) = player_stepping_from(Some("song-2"));
+    let _ = update(
+        &mut player,
+        Message::ModifiersHeld {
+            control: false,
+            shift: true,
+        },
+    );
+
+    let task = update(&mut player, Message::PreviousButton);
+
+    assert_track_selected(task, 0, 0);
 }

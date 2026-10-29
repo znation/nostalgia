@@ -38,13 +38,14 @@ pub(super) fn shuffle_label(shuffle: bool) -> &'static str {
 /// The main row and both compact strips (the shade strip and the library footer) build from this
 /// one list, so their glyphs, order, widths, and messages cannot drift apart. The spec is
 /// playback-independent: Play always resumes and Pause always pauses, like the X and C keys.
-/// Previous and Next send the button messages, which jump to the list's edge while Control is held.
+/// Previous and Next send the button messages, which jump to the list's edge while Control is held;
+/// Stop sends its button message, which fades out while Shift is held.
 pub(super) fn transport_glyphs() -> [(&'static str, &'static str, f32, Message); 5] {
     [
         ("◀◀", "Previous", 34.0, Message::PreviousButton),
         ("▶", "Play", 30.0, Message::Play),
         ("II", "Pause", 30.0, Message::Pause),
-        ("■", "Stop", 30.0, Message::Stop),
+        ("■", "Stop", 30.0, Message::StopButton),
         ("▶▶", "Next", 34.0, Message::NextButton),
     ]
 }

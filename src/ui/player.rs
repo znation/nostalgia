@@ -57,6 +57,9 @@ pub(in crate::ui) struct WinampPlayer {
     /// Whether Control is held, tracked from modifier events so a click on Previous or Next can
     /// jump to the list's edge instead of stepping. Not saved in settings.
     pub(in crate::ui) control_held: bool,
+    /// Whether Shift is held, tracked from modifier events so a Shift-click on Stop fades out.
+    /// Not saved in settings.
+    pub(in crate::ui) shift_held: bool,
     /// Whether the window is pinned above other windows. The LCD strip's `A`
     /// toggle and the `A` key flip it, and `update` schedules
     /// `iced::window::set_level` to match; `view` renders the strip's control
@@ -355,6 +358,7 @@ impl WinampPlayer {
             shaded: false,
             window_position: None,
             control_held: false,
+            shift_held: false,
             always_on_top: false,
             unshaded_size: None,
             current_view: CurrentView::Artists,

@@ -61,7 +61,7 @@ fn shade_controls_map_to_transport_messages_and_keep_fixed_widths() {
     assert!(matches!(messages[0], Message::PreviousButton));
     assert!(matches!(messages[1], Message::Play));
     assert!(matches!(messages[2], Message::Pause));
-    assert!(matches!(messages[3], Message::Stop));
+    assert!(matches!(messages[3], Message::StopButton));
     assert!(matches!(messages[4], Message::NextButton));
 }
 
