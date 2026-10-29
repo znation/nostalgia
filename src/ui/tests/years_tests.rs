@@ -1,5 +1,6 @@
 use super::flat_lists_tests::{
-    assert_back_returns_to_artists, assert_navigation_clears_the_search,
+    assert_back_returns_to_artists, assert_group_opens_its_songs_and_back_unwinds,
+    assert_navigation_clears_the_search, assert_stale_group_press_does_nothing,
 };
 use super::*;
 
@@ -72,44 +73,27 @@ fn back_from_years_returns_to_the_artists_list() {
 
 #[test]
 fn year_selected_shows_that_years_songs_and_back_returns_to_years() {
-    let mut player = player_with_years();
+    let player = player_with_years();
     let epoch = player.years.epoch;
-
-    let _ = update(&mut player, Message::YearSelected { epoch, index: 0 });
-
-    assert_view(&player, CurrentView::Songs);
-    assert_eq!(player.songs_origin, SongsOrigin::Year);
-    let ids: Vec<&str> = player
-        .songs
-        .items
-        .iter()
-        .map(|song| song.id.as_str())
-        .collect();
-    assert_eq!(ids, ["song-1", "song-3"]);
-
-    let _ = update(&mut player, Message::Back);
-    assert_view(&player, CurrentView::Years);
-    let _ = update(&mut player, Message::Back);
-    assert_view(&player, CurrentView::Artists);
+    assert_group_opens_its_songs_and_back_unwinds(
+        player,
+        epoch,
+        |epoch, index| Message::YearSelected { epoch, index },
+        CurrentView::Years,
+        SongsOrigin::Year,
+    );
 }
 
 #[test]
 fn a_stale_year_press_does_nothing() {
-    let mut player = player_with_years();
-    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    let player = player_with_years();
     let epoch = player.years.epoch;
-
-    assert_message_schedules_no_work(
-        &mut player,
-        Message::YearSelected {
-            epoch: epoch - 1,
-            index: 0,
-        },
+    assert_stale_group_press_does_nothing(
+        player,
+        epoch,
+        |epoch, index| Message::YearSelected { epoch, index },
+        CurrentView::Years,
     );
-    assert_message_schedules_no_work(&mut player, Message::YearSelected { epoch, index: 9 });
-
-    assert_view(&player, CurrentView::Years);
-    assert_eq!(player.songs.items.len(), 3);
 }
 
 #[test]

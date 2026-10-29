@@ -27,6 +27,53 @@ pub(super) fn assert_back_returns_to_artists(view: CurrentView) {
     assert_view(&player, CurrentView::Artists);
 }
 
+/// Asserts that opening row 0 of a Genres, Years, or Composers list shows the
+/// group's first and third sample songs under the Songs view with `origin`, and
+/// that Back steps to `view` and then to Artists. `select` builds the row-press
+/// message from the list's epoch and a row index.
+pub(super) fn assert_group_opens_its_songs_and_back_unwinds(
+    mut player: WinampPlayer,
+    epoch: u64,
+    select: fn(u64, usize) -> Message,
+    view: CurrentView,
+    origin: SongsOrigin,
+) {
+    let _ = update(&mut player, select(epoch, 0));
+
+    assert_view(&player, CurrentView::Songs);
+    assert_eq!(player.songs_origin, origin);
+    let ids: Vec<&str> = player
+        .songs
+        .items
+        .iter()
+        .map(|song| song.id.as_str())
+        .collect();
+    assert_eq!(ids, ["song-1", "song-3"]);
+
+    let _ = update(&mut player, Message::Back);
+    assert_view(&player, view);
+    let _ = update(&mut player, Message::Back);
+    assert_view(&player, CurrentView::Artists);
+}
+
+/// Asserts that a press on a Genres, Years, or Composers row rendered before
+/// the list was replaced (`epoch - 1`), or past its last row, schedules nothing
+/// and leaves the `view` showing and the loaded songs alone.
+pub(super) fn assert_stale_group_press_does_nothing(
+    mut player: WinampPlayer,
+    epoch: u64,
+    select: fn(u64, usize) -> Message,
+    view: CurrentView,
+) {
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+
+    assert_message_schedules_no_work(&mut player, select(epoch - 1, 0));
+    assert_message_schedules_no_work(&mut player, select(epoch, 9));
+
+    assert_view(&player, view);
+    assert_eq!(player.songs.items.len(), 3);
+}
+
 // The All Songs button fetches the whole library flat and shows it under its
 // own view: the sample path returns every song in library order, and the
 // buffer is the dedicated `all_songs` list rather than the browsed `songs`.
@@ -472,45 +519,27 @@ fn back_from_genres_returns_to_the_artists_list() {
 // steps to Genres and then to Artists.
 #[test]
 fn genre_selected_shows_that_genres_songs_and_back_returns_to_genres() {
-    let mut player = player_with_genres();
+    let player = player_with_genres();
     let epoch = player.genres.epoch;
-
-    let _ = update(&mut player, Message::GenreSelected { epoch, index: 0 });
-
-    assert_view(&player, CurrentView::Songs);
-    assert_eq!(player.songs_origin, SongsOrigin::Genre);
-    let ids: Vec<&str> = player
-        .songs
-        .items
-        .iter()
-        .map(|song| song.id.as_str())
-        .collect();
-    assert_eq!(ids, ["song-1", "song-3"]);
-    assert_eq!(player.songs.titles.len(), 2);
-
-    let _ = update(&mut player, Message::Back);
-    assert_view(&player, CurrentView::Genres);
-    let _ = update(&mut player, Message::Back);
-    assert_view(&player, CurrentView::Artists);
+    assert_group_opens_its_songs_and_back_unwinds(
+        player,
+        epoch,
+        |epoch, index| Message::GenreSelected { epoch, index },
+        CurrentView::Genres,
+        SongsOrigin::Genre,
+    );
 }
 
 #[test]
 fn a_stale_genre_press_does_nothing() {
-    let mut player = player_with_genres();
-    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    let player = player_with_genres();
     let epoch = player.genres.epoch;
-
-    assert_message_schedules_no_work(
-        &mut player,
-        Message::GenreSelected {
-            epoch: epoch - 1,
-            index: 0,
-        },
+    assert_stale_group_press_does_nothing(
+        player,
+        epoch,
+        |epoch, index| Message::GenreSelected { epoch, index },
+        CurrentView::Genres,
     );
-    assert_message_schedules_no_work(&mut player, Message::GenreSelected { epoch, index: 9 });
-
-    assert_view(&player, CurrentView::Genres);
-    assert_eq!(player.songs.items.len(), 3);
 }
 
 // A song in an opened genre plays through the ordinary TrackSelected path.

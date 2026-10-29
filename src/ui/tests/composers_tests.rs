@@ -1,5 +1,6 @@
 use super::flat_lists_tests::{
-    assert_back_returns_to_artists, assert_navigation_clears_the_search,
+    assert_back_returns_to_artists, assert_group_opens_its_songs_and_back_unwinds,
+    assert_navigation_clears_the_search, assert_stale_group_press_does_nothing,
 };
 use super::*;
 
@@ -72,44 +73,27 @@ fn back_from_composers_returns_to_the_artists_list() {
 
 #[test]
 fn composer_selected_shows_that_composers_songs_and_back_returns_to_composers() {
-    let mut player = player_with_composers();
+    let player = player_with_composers();
     let epoch = player.composers.epoch;
-
-    let _ = update(&mut player, Message::ComposerSelected { epoch, index: 0 });
-
-    assert_view(&player, CurrentView::Songs);
-    assert_eq!(player.songs_origin, SongsOrigin::Composer);
-    let ids: Vec<&str> = player
-        .songs
-        .items
-        .iter()
-        .map(|song| song.id.as_str())
-        .collect();
-    assert_eq!(ids, ["song-1", "song-3"]);
-
-    let _ = update(&mut player, Message::Back);
-    assert_view(&player, CurrentView::Composers);
-    let _ = update(&mut player, Message::Back);
-    assert_view(&player, CurrentView::Artists);
+    assert_group_opens_its_songs_and_back_unwinds(
+        player,
+        epoch,
+        |epoch, index| Message::ComposerSelected { epoch, index },
+        CurrentView::Composers,
+        SongsOrigin::Composer,
+    );
 }
 
 #[test]
 fn a_stale_composer_press_does_nothing() {
-    let mut player = player_with_composers();
-    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    let player = player_with_composers();
     let epoch = player.composers.epoch;
-
-    assert_message_schedules_no_work(
-        &mut player,
-        Message::ComposerSelected {
-            epoch: epoch - 1,
-            index: 0,
-        },
+    assert_stale_group_press_does_nothing(
+        player,
+        epoch,
+        |epoch, index| Message::ComposerSelected { epoch, index },
+        CurrentView::Composers,
     );
-    assert_message_schedules_no_work(&mut player, Message::ComposerSelected { epoch, index: 9 });
-
-    assert_view(&player, CurrentView::Composers);
-    assert_eq!(player.songs.items.len(), 3);
 }
 
 #[test]
