@@ -276,6 +276,40 @@ pub fn view_playlists<'a>(
     )
 }
 
+/// Builds a Genres, Years, or Composers list: one row per name, each beside
+/// its cached song-count label (an index without one shows none), under the
+/// item-count footer for `view` (`epoch`, `selected`, `loading`, `error` and the nouns are the
+/// list's epoch and selection, loading flag and error, and singular and
+/// plural noun).
+fn grouped_list<'a>(
+    names: impl ExactSizeIterator<Item = &'a str>,
+    labels: &'a [String],
+    view: &CurrentView,
+    (epoch, selected): (u64, Option<usize>),
+    (loading, error): (bool, Option<&'a str>),
+    (singular, plural): (&'static str, &'static str),
+) -> Element<'a, Message> {
+    let count = names.len();
+    list_with_count(
+        scrollable_list(
+            names.enumerate().map(|(index, name)| {
+                (
+                    Cow::Borrowed(name),
+                    Cow::Borrowed(labels.get(index).map_or("", String::as_str)),
+                    false,
+                )
+            }),
+            view,
+            epoch,
+            selected,
+            browse_placeholder(view, loading, error, false),
+        ),
+        count,
+        singular,
+        plural,
+    )
+}
+
 /// The Genres browse view: one row per genre, in the order given, each
 /// showing its song-count and playing-time label (`labels`, cached when the list loaded; an
 /// index without one shows none) and selecting its row with
@@ -289,23 +323,13 @@ pub fn view_genres<'a>(
     loading: bool,
     error: Option<&'a str>,
 ) -> Element<'a, Message> {
-    list_with_count(
-        scrollable_list(
-            genres.iter().enumerate().map(|(index, genre)| {
-                (
-                    Cow::Borrowed(genre.name.as_str()),
-                    Cow::Borrowed(labels.get(index).map_or("", String::as_str)),
-                    false,
-                )
-            }),
-            &CurrentView::Genres,
-            epoch,
-            selected,
-            browse_placeholder(&CurrentView::Genres, loading, error, false),
-        ),
-        genres.len(),
-        "genre",
-        "genres",
+    grouped_list(
+        genres.iter().map(|genre| genre.name.as_str()),
+        labels,
+        &CurrentView::Genres,
+        (epoch, selected),
+        (loading, error),
+        ("genre", "genres"),
     )
 }
 
@@ -319,23 +343,13 @@ pub fn view_years<'a>(
     loading: bool,
     error: Option<&'a str>,
 ) -> Element<'a, Message> {
-    list_with_count(
-        scrollable_list(
-            years.iter().enumerate().map(|(index, year)| {
-                (
-                    Cow::Borrowed(year.name.as_str()),
-                    Cow::Borrowed(labels.get(index).map_or("", String::as_str)),
-                    false,
-                )
-            }),
-            &CurrentView::Years,
-            epoch,
-            selected,
-            browse_placeholder(&CurrentView::Years, loading, error, false),
-        ),
-        years.len(),
-        "year",
-        "years",
+    grouped_list(
+        years.iter().map(|year| year.name.as_str()),
+        labels,
+        &CurrentView::Years,
+        (epoch, selected),
+        (loading, error),
+        ("year", "years"),
     )
 }
 
@@ -458,23 +472,13 @@ pub fn view_composers<'a>(
     loading: bool,
     error: Option<&'a str>,
 ) -> Element<'a, Message> {
-    list_with_count(
-        scrollable_list(
-            composers.iter().enumerate().map(|(index, composer)| {
-                (
-                    Cow::Borrowed(composer.name.as_str()),
-                    Cow::Borrowed(labels.get(index).map_or("", String::as_str)),
-                    false,
-                )
-            }),
-            &CurrentView::Composers,
-            epoch,
-            selected,
-            browse_placeholder(&CurrentView::Composers, loading, error, false),
-        ),
-        composers.len(),
-        "composer",
-        "composers",
+    grouped_list(
+        composers.iter().map(|composer| composer.name.as_str()),
+        labels,
+        &CurrentView::Composers,
+        (epoch, selected),
+        (loading, error),
+        ("composer", "composers"),
     )
 }
 
