@@ -88,29 +88,41 @@ fn sample_album_titles_by_id() -> HashMap<&'static str, String> {
         .collect()
 }
 
-/// Every sample-library song whose title, artist, album title, genre,
-/// composer, or release year contains `query` case-insensitively, in library
-/// order.
+/// Every sample-library song for which each whitespace-separated word of
+/// `query` is contained case-insensitively in its title, artist, album title,
+/// genre, composer, or release year, in library order. Each word may match a
+/// different field, in any order.
+///
+/// `AppleMusicService::search_songs` rejects a blank query before this runs,
+/// so the no-words case is unreachable there.
 ///
 /// Walks [`sample_songs_in_library_order`], so the matches keep the same
 /// stable order the Songs view shows a browsed album. Pure, so the filter is
 /// testable without a service.
 pub(super) fn sample_songs_matching(query: &str) -> Vec<Song> {
-    let needle = query.to_lowercase();
+    let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
     let album_titles = sample_album_titles_by_id();
     sample_songs_in_library_order()
         .filter(|song| {
-            song.title.to_lowercase().contains(&needle)
-                || song.artist.to_lowercase().contains(&needle)
-                || song.genre.to_lowercase().contains(&needle)
-                || song.composer.to_lowercase().contains(&needle)
-                || song
-                    .year
-                    .is_some_and(|year| year.to_string().contains(&needle))
-                || album_titles
-                    .get(song.album_id.as_str())
-                    .is_some_and(|title| title.contains(&needle))
+            words
+                .iter()
+                .all(|word| song_matches_word(song, &album_titles, word))
         })
         .cloned()
         .collect()
+}
+
+/// Whether the case-folded `word` appears in the song's title, artist, genre,
+/// composer, release year, or album title (looked up in `album_titles`).
+fn song_matches_word(song: &Song, album_titles: &HashMap<&str, String>, word: &str) -> bool {
+    song.title.to_lowercase().contains(word)
+        || song.artist.to_lowercase().contains(word)
+        || song.genre.to_lowercase().contains(word)
+        || song.composer.to_lowercase().contains(word)
+        || song
+            .year
+            .is_some_and(|year| year.to_string().contains(word))
+        || album_titles
+            .get(song.album_id.as_str())
+            .is_some_and(|title| title.contains(word))
 }

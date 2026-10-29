@@ -176,13 +176,14 @@ active-search case so the two affordances cannot drift apart.
 ## Library search matching
 
 **Guarantee.** With no Apple Music session, a library search returns every sample-library song
-whose title, artist, album title, genre, composer, or release year contains the trimmed query case-insensitively, in library
-order. A query that matches none of those fields returns an empty list, and a blank query (empty
+for which each whitespace-separated word of the query appears case-insensitively in its title,
+artist, album title, genre, composer, or release year (each word free to match a different field),
+in library order. A query that matches none of those fields returns an empty list, and a blank query (empty
 or only whitespace) is rejected with an error rather than answered, so empty input never reads as
 "everything matches". With a session, the REST search service's results are returned unchanged.
 
 **Enforced by.** `sample_songs_matching` in `src/apple_music/sample.rs` filters the ordered
-library walk (title, artist, genre, composer, release year, and album title) against the folded query, using `sample_album_titles_by_id` to look up each song's
+library walk, keeping songs where every folded query word matches one of title, artist, genre, composer, release year, or album title (`song_matches_word`), using `sample_album_titles_by_id` to look up each song's
 album title by its `album_id`. `AppleMusicService::search_songs` in `src/apple_music/browse.rs`
 trims the query, rejects a blank one, and answers through the signed-in REST client or the sample
 fallback.
@@ -193,12 +194,14 @@ fallback.
 - `search_songs_matches_the_sample_library_by_album_title` (`src/apple_music/tests/browse_sample.rs`)
 - `search_songs_matches_the_sample_library_by_genre_or_composer` (`src/apple_music/tests/browse_sample.rs`)
 - `search_songs_matches_the_sample_library_by_release_year` (`src/apple_music/tests/browse_sample.rs`)
+- `search_songs_matches_every_word_across_fields` (`src/apple_music/tests/browse_sample.rs`)
 - `search_songs_rejects_a_blank_query` (`src/apple_music/tests/browse_sample.rs`)
 - `search_songs_uses_the_rest_library_when_signed_in` (`src/apple_music/tests/browse_rest.rs`)
 
 **History.** Added the album-title match so typing an album name the browse lists show finds
 that album's songs offline. Added the genre and composer matches so typing a name the Genres and
-Composers lists show finds its songs offline.
+Composers lists show finds its songs offline. Matched each word separately so a query mixing
+fields, like Winamp's Media Library search, finds its songs offline.
 
 ## Browse selection
 

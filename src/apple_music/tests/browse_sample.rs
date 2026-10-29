@@ -295,11 +295,12 @@ async fn search_songs_matches_the_sample_library_by_genre_or_composer() {
     let electronic = service.search_songs("electronic").await.unwrap();
     assert_ids(&electronic, |song| song.id.as_str(), &["song-5"]);
 
+    // Both words are in the composer "Sam Ample" and also in song-4's artist "Sample Band".
     let composer = service.search_songs("sam ample").await.unwrap();
     assert_ids(
         &composer,
         |song| song.id.as_str(),
-        &["song-1", "song-2", "song-3"],
+        &["song-1", "song-2", "song-3", "song-4"],
     );
 
     let alternative = service.search_songs("alternative").await.unwrap();
@@ -332,6 +333,23 @@ async fn search_songs_matches_the_sample_library_by_release_year() {
     );
 
     assert!(service.search_songs("1999").await.unwrap().is_empty());
+}
+
+// Each whitespace-separated word must match some field, and different words may match different fields.
+#[tokio::test]
+async fn search_songs_matches_every_word_across_fields() {
+    let service = test_service();
+
+    for (query, ids) in [
+        ("sample 2003", &["song-4"][..]),
+        ("  ROCK   ending ", &["song-3"]),
+        ("debut echo", &["song-5"]),
+        ("echo 2001", &[]),
+        ("opening zzz", &[]),
+    ] {
+        let found = service.search_songs(query).await.unwrap();
+        assert_ids(&found, |song| song.id.as_str(), ids);
+    }
 }
 
 // The All Songs backend returns the whole sample library, flat and in
