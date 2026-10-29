@@ -496,14 +496,13 @@ impl WinampPlayer {
             CurrentView::RecentlyAdded => LibraryView::RecentlyAdded,
             CurrentView::RecentlyPlayed => LibraryView::RecentlyPlayed,
             CurrentView::Playlists => LibraryView::Playlists,
-            // Part 2/2 gives Genres its own saved view.
-            CurrentView::Genres => LibraryView::Artists,
+            CurrentView::Genres => LibraryView::Genres,
             CurrentView::Songs => match self.songs_origin {
                 SongsOrigin::Album => LibraryView::Artists,
                 SongsOrigin::AllAlbums => LibraryView::AllAlbums,
                 SongsOrigin::RecentlyAdded => LibraryView::RecentlyAdded,
                 SongsOrigin::Playlist => LibraryView::Playlists,
-                SongsOrigin::Genre => LibraryView::Artists,
+                SongsOrigin::Genre => LibraryView::Genres,
             },
         }
     }

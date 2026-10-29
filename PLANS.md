@@ -22,37 +22,6 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 _None yet._
 
-### Reopen the library at the Genres list across launches (part 2/2) ("requires part 1/2 landed") (planned 2026-10-29 by the plan role)
-
-**Goal.** The library reopens at the last top-level list (`LibraryView` in
-`src/settings/library_view.rs`, saved as `library_view`), but part 1/2 ("Browse the library by
-genre from a Genres list") saves the Genres list and a genre's Songs as `Artists`. Save and
-restore Genres like every other top-level list.
-
-**Approach.**
-- `src/settings/library_view.rs`: add `LibraryView::Genres` with key `"genres"`, and add it to
-  the `from_key` array and the `keys_round_trip_for_every_variant` test.
-- `src/ui/player.rs` `library_view`: map `CurrentView::Genres` and `SongsOrigin::Genre` to
-  `LibraryView::Genres`.
-- `src/ui/handlers/browse.rs`: add `LibraryView::Genres => show_genres(player)` to
-  `restore_view`, and add `CurrentView::Genres` to the flat-list arm of `session_ready` so
-  sign-in refetches it.
-- Docs: in `docs/usage.md`, add Genres to the settings paragraph's list of remembered lists.
-  In `docs/invariants.md` `## Settings persistence`, add the key and name the new tests.
-
-**Tests.**
-- In `src/ui/tests/settings_tests.rs`, following the Playlists cases:
-  - showing Genres, and a genre's Songs, saves `library_view = genres`;
-  - booting with `genres` saved opens the Genres list and issues its fetch.
-- In `loading_tests.rs` or the matching `session_ready` test file: a session landing while
-  Genres shows refetches it.
-
-**Acceptance criteria.**
-- Quitting on the Genres list, or on a genre's songs, reopens the library at Genres on the next
-  launch. Every other saved list behaves as before.
-- An unknown stored word still falls back to Artists.
-- The new tests pass, the docs name Genres, and `make check` passes.
-
 ### Browse the library by release year from a Years list, like Winamp's Media Library (part 1/2) (planned 2026-10-29 by the plan role)
 
 **Goal.** Winamp's Media Library can filter the audio library by Year. Nostalgia already carries

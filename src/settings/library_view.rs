@@ -18,6 +18,8 @@ pub enum LibraryView {
     RecentlyPlayed,
     /// The Playlists list.
     Playlists,
+    /// The Genres list.
+    Genres,
 }
 
 impl LibraryView {
@@ -31,6 +33,7 @@ impl LibraryView {
             Self::RecentlyAdded => "recently_added",
             Self::RecentlyPlayed => "recently_played",
             Self::Playlists => "playlists",
+            Self::Genres => "genres",
         }
     }
 
@@ -45,6 +48,7 @@ impl LibraryView {
             Self::RecentlyAdded,
             Self::RecentlyPlayed,
             Self::Playlists,
+            Self::Genres,
         ]
         .into_iter()
         .find(|view| view.key() == key)
@@ -64,6 +68,7 @@ mod tests {
             LibraryView::RecentlyAdded,
             LibraryView::RecentlyPlayed,
             LibraryView::Playlists,
+            LibraryView::Genres,
         ] {
             assert_eq!(LibraryView::from_key(view.key()), Some(view));
         }
