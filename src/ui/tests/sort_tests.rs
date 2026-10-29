@@ -444,7 +444,10 @@ fn sort_leaves_other_lists_view_search_and_playback_untouched() {
             CurrentView::AllSongs => 3,
             CurrentView::AllAlbums => 4,
             CurrentView::Playlists => 5,
-            CurrentView::RecentlyAdded | CurrentView::RecentlyPlayed | CurrentView::Genres => {
+            CurrentView::RecentlyAdded
+            | CurrentView::RecentlyPlayed
+            | CurrentView::Genres
+            | CurrentView::Years => {
                 unreachable!("not in the views iterated above")
             }
         };
@@ -453,7 +456,10 @@ fn sort_leaves_other_lists_view_search_and_playback_untouched() {
             CurrentView::Albums | CurrentView::AllAlbums => vec!["alpha", "zulu"],
             CurrentView::Songs | CurrentView::AllSongs => vec!["song-1", "song-3", "song-2"],
             CurrentView::Playlists => vec!["alpha", "zulu"],
-            CurrentView::RecentlyAdded | CurrentView::RecentlyPlayed | CurrentView::Genres => {
+            CurrentView::RecentlyAdded
+            | CurrentView::RecentlyPlayed
+            | CurrentView::Genres
+            | CurrentView::Years => {
                 unreachable!("not in the views iterated above")
             }
         };
@@ -682,4 +688,25 @@ fn back_from_a_playlists_songs_restores_a_sorted_list_to_library_order() {
         .collect();
     assert_view(&player, CurrentView::Playlists);
     assert_eq!(restored, ["zulu", "alpha"]);
+}
+
+#[test]
+fn sort_reorders_years_by_name() {
+    let (mut player, _state) = test_player();
+    player.current_view = CurrentView::Years;
+    let year = |name: &str| Year {
+        name: name.to_string(),
+        songs: Vec::new(),
+    };
+    player.years.items = vec![year("2005"), year("Unknown"), year("2001")];
+
+    let _ = update(&mut player, Message::SortBrowse);
+
+    let names: Vec<&str> = player
+        .years
+        .items
+        .iter()
+        .map(|year| year.name.as_str())
+        .collect();
+    assert_eq!(names, ["2001", "2005", "Unknown"]);
 }

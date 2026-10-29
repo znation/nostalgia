@@ -99,19 +99,21 @@ the query case-insensitively against each song's title, artist, and album title)
 search for the artists
 list. A `Clear` button beside the search box empties the typed query; when a search is showing it
 also returns to the artists list exactly as Back does, and otherwise it changes only the box's
-text. The Artists list also has `All Songs`, `All Albums`, `Playlists`, `Genres`, `Recently Added`, and `Recently Played` buttons: the first
+text. The Artists list also has `All Songs`, `All Albums`, `Playlists`, `Genres`, `Years`, `Recently Added`, and `Recently Played` buttons: the first
 opens a flat list of every song in the library, whose rows play like any other song row, the
 second opens a flat list of every album, whose rows open that album's songs, the third opens a
-flat list of every playlist, whose rows open that playlist's songs, the fourth lists the library's genres (described below), the fifth lists the library's
+flat list of every playlist, whose rows open that playlist's songs, the fourth lists the library's genres (described below), the fifth lists the library's release years (described below), the sixth lists the library's
 recently added albums newest first (the sample library's albums in reverse order when
-signed out), whose rows open that album's songs, and the sixth lists the songs you played most recently
+signed out), whose rows open that album's songs, and the seventh lists the songs you played most recently
 first (the sample library's songs in reverse order when signed out), whose rows play like any
 other song row. `Genres` lists the library's genres by name, each with its song count and any
 songs without a genre under `Unknown` last; opening a genre lists its songs, which play like any
+other song row. `Years` lists the library's release years oldest first, each with its song count and
+any songs without a year under `Unknown` last; opening a year lists its songs, which play like any
 other song row. Back from any of these lists
 returns to the artists list, Back from songs opened through All Albums returns to All Albums, Back from songs opened through
 Recently Added returns to Recently Added, Back
-from songs opened through Playlists returns to Playlists, Back from a genre's songs returns to Genres, and Next/Previous step through the flat
+from songs opened through Playlists returns to Playlists, Back from a genre's songs returns to Genres, Back from a year's songs returns to Years, and Next/Previous step through the flat
 song list (All Songs or Recently Played) while it is showing. A `Top` button above every browse list returns it to its first row,
 and opening a list starts it at the top. A `Sort` button beside `Top` reorders the showing list
 alphabetically by its rows' rendered text, ignoring case; the reorder is one-shot, so reopening

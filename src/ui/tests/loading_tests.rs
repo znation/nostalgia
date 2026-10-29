@@ -304,6 +304,11 @@ fn stale_flat_list_replies_superseded_before_update_are_not_stored() {
         Message::GenresLoadFailed
     );
     assert_list_rechecks_its_generation!(
+        years,
+        Message::YearsLoaded(group_by_year(vec![sample_song()])),
+        Message::YearsLoadFailed
+    );
+    assert_list_rechecks_its_generation!(
         playlists,
         Message::PlaylistsLoaded(vec![sample_playlist()]),
         Message::PlaylistsLoadFailed

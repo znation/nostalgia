@@ -8,6 +8,7 @@ use crate::audio::{PlaybackFormat, Spectrum};
 use crate::equalizer::Preset;
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::ui::genres::Genre;
+use crate::ui::years::Year;
 
 /// Every event the iced loop routes to `update`: transport and playback
 /// controls, LCD and equalizer changes, browse navigation, search, sort, and
@@ -219,6 +220,13 @@ pub(in crate::ui) enum Message {
         epoch: u64,
         index: usize,
     },
+    // A year row was opened: show that year's songs under the Songs view.
+    // The epoch and index name the row in the Years list that rendered it,
+    // so a press rendered before the list was replaced is ignored.
+    YearSelected {
+        epoch: u64,
+        index: usize,
+    },
     // The browse view's Open button: open the row selected in the showing
     // list through the same message a second press dispatches. With nothing
     // selected it is a no-op and schedules no task.
@@ -279,6 +287,9 @@ pub(in crate::ui) enum Message {
     // The Artists view's Genres button: group the library's songs by genre
     // and show them under the Genres view.
     ShowGenres,
+    // The Artists view's Years button: group the library's songs by release
+    // year and show them under the Years view.
+    ShowYears,
     // The library search box: `SearchChanged` carries each keystroke into
     // `search_query`; `SearchSubmitted` takes that stored text when Enter is
     // pressed and replaces the songs list with the search results. The submit
@@ -307,6 +318,8 @@ pub(in crate::ui) enum Message {
     PlaylistsLoaded(Vec<Playlist>),
     // The library's songs grouped by genre.
     GenresLoaded(Vec<Genre>),
+    // The library's songs grouped by release year.
+    YearsLoaded(Vec<Year>),
     // A browse fetch that returned an error. The payload is the formatted
     // report (see `loading::fetch_failure_report`): it names the failed fetch
     // and carries the backend's cause, so the browse panel can show why the
@@ -320,6 +333,7 @@ pub(in crate::ui) enum Message {
     RecentlyPlayedLoadFailed(String),
     PlaylistsLoadFailed(String),
     GenresLoadFailed(String),
+    YearsLoadFailed(String),
     // A browse reply stamped with the generation that produced it. The
     // mapper's `RequestGeneration::is_current` check runs on iced's executor
     // thread; `update` stores the reply later on the UI thread, and a

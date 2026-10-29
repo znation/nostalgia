@@ -25,12 +25,14 @@ exactly one level up, and Back never falls through to the wrong level:
 - Songs → Recently Added when the songs were opened from the Recently Added list.
 - Songs → Playlists when the songs were opened from a playlist.
 - Songs → Genres when the songs were opened from a genre.
+- Songs → Years when the songs were opened from a year.
 - All Songs → Artists.
 - All Albums → Artists.
 - Recently Added → Artists.
 - Recently Played → Artists.
 - Playlists → Artists.
 - Genres → Artists.
+- Years → Artists.
 - An active search's result list → Artists, not the album the search was issued from.
 
 Artists itself has no level above it, so Back there is a no-op (and the Back button is not shown).
@@ -75,6 +77,15 @@ clears the search flag and view and calls `fetch_at_top(fetch::load_artists(play
 - `a_track_selected_in_a_genre_plays_it`
 - `genres_loaded_stores_rows_with_song_count_labels`
 - `sort_reorders_genres_by_name`
+- `back_from_years_returns_to_the_artists_list`
+- `year_selected_shows_that_years_songs_and_back_returns_to_years`
+- `a_stale_year_press_does_nothing`
+- `years_loaded_stores_rows_with_song_count_labels`
+- `show_years_fetches_and_switches_view`
+- `show_years_clears_an_active_search`
+- `a_superseded_years_load_is_dropped`
+- `sort_reorders_years_by_name`
+- `groups_are_ordered_oldest_first_with_songs_in_library_order`, `missing_years_form_a_last_unknown_group` (`src/ui/years.rs`)
 - `album_selected_in_all_albums_loads_its_songs_and_back_returns_to_all_albums`
 - `back_leaves_an_active_search_for_the_artists_list`
 - `backspace_steps_back_from_albums`
@@ -770,7 +781,7 @@ refresh does not re-join and reformat every row.
   cached row text, with its loading, failure, or empty-search placeholder chosen from that same
   level's flags, and marks the playing row only in the Songs, All Songs, and Recently Played lists.
 - The root `view` draws Back on every level below Artists, Retry only on Artists while its fetch
-  has failed, and the All Songs, All Albums, Playlists, Genres, Recently Added, and Recently Played buttons only on Artists.
+  has failed, and the All Songs, All Albums, Playlists, Genres, Years, Recently Added, and Recently Played buttons only on Artists.
 - The app bar and the two section bands are `TITLE_BAR_HEIGHT` tall. The app bar centers
   `NOSTALGIA` between gold tapes with its M and shade/minimize/close controls pinned at the
   edges. Normal mode draws `NOSTALGIA EQUALIZER` immediately above the equalizer and

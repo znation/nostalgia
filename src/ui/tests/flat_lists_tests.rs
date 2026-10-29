@@ -4,7 +4,7 @@ use super::*;
 /// All Albums, or Playlists — opens `view` with an active search left behind:
 /// none of those lists is built from a search's results. Used by the three
 /// `show_*_clears_an_active_search` tests.
-fn assert_navigation_clears_the_search(message: Message, view: CurrentView) {
+pub(super) fn assert_navigation_clears_the_search(message: Message, view: CurrentView) {
     let (mut player, _state) = test_player();
     player.search_active = true;
     player.current_view = CurrentView::Songs;
@@ -18,7 +18,7 @@ fn assert_navigation_clears_the_search(message: Message, view: CurrentView) {
 /// Asserts Back from `view` — one of the views that hangs off the Artists list
 /// — returns to Artists. Used by the three `back_from_*_returns_to_the_artists_list`
 /// tests.
-fn assert_back_returns_to_artists(view: CurrentView) {
+pub(super) fn assert_back_returns_to_artists(view: CurrentView) {
     let (mut player, _state) = test_player();
     player.current_view = view;
 

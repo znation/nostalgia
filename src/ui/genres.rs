@@ -52,7 +52,12 @@ pub(in crate::ui) fn group_by_genre(songs: Vec<Song>) -> Vec<Genre> {
 
 /// The secondary label a Genres row shows: `1 song` or `N songs`.
 pub(in crate::ui) fn song_count_label(genre: &Genre) -> String {
-    match genre.songs.len() {
+    songs_label(genre.songs.len())
+}
+
+/// `1 song` or `N songs`, shared by the lists that count a group's songs.
+pub(in crate::ui) fn songs_label(count: usize) -> String {
+    match count {
         1 => "1 song".to_string(),
         count => format!("{count} songs"),
     }

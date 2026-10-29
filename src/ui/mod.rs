@@ -33,6 +33,7 @@ mod theme;
 mod transport;
 mod view;
 mod views;
+mod years;
 
 pub(in crate::ui) use message::{Message, OptionsChoice, OptionsRow};
 pub(in crate::ui) use player::{CurrentView, SongsOrigin, WinampPlayer};
@@ -255,6 +256,14 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::GenresLoaded(genres) => handlers::browse::fetch::genres_loaded(player, genres),
         Message::GenresLoadFailed(report) => {
             handlers::browse::fetch::genres_load_failed(player, report)
+        }
+        Message::ShowYears => handlers::browse::show_years(player),
+        Message::YearSelected { epoch, index } => {
+            handlers::browse::year_selected(player, epoch, index)
+        }
+        Message::YearsLoaded(years) => handlers::browse::fetch::years_loaded(player, years),
+        Message::YearsLoadFailed(report) => {
+            handlers::browse::fetch::years_load_failed(player, report)
         }
         Message::SearchChanged(text) => handlers::browse::search::search_changed(player, text),
         Message::SearchSubmitted => handlers::browse::search::search_submitted(player),
