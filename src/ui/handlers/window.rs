@@ -237,6 +237,7 @@ pub(in crate::ui) fn options_choice(
         }
         OptionsChoice::JumpTime => super::jump::toggle_jump_time(player),
         OptionsChoice::JumpFile => super::jump::toggle_jump_file(player),
+        OptionsChoice::FileInfo => toggle_file_info(player),
     }
 }
 

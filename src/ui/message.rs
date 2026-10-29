@@ -504,6 +504,8 @@ pub(in crate::ui) enum OptionsChoice {
     JumpTime,
     /// Opens the Jump to File panel while a song list is showing.
     JumpFile,
+    /// Opens the File info panel while a known track is current.
+    FileInfo,
 }
 
 /// Options rows in their shared drawing and keyboard order.
@@ -521,12 +523,13 @@ pub(in crate::ui) enum OptionsRow {
     JumpTracksForward,
     JumpTime,
     JumpFile,
+    FileInfo,
     About,
     Close,
 }
 
 impl OptionsRow {
-    pub(in crate::ui) const ALL: [Self; 14] = [
+    pub(in crate::ui) const ALL: [Self; 15] = [
         Self::AlwaysOnTop,
         Self::TimeDisplay,
         Self::Visualizer,
@@ -539,6 +542,7 @@ impl OptionsRow {
         Self::JumpTracksForward,
         Self::JumpTime,
         Self::JumpFile,
+        Self::FileInfo,
         Self::About,
         Self::Close,
     ];
@@ -557,6 +561,7 @@ impl OptionsRow {
             Self::JumpTracksForward => Message::OptionsChoice(OptionsChoice::JumpTracksForward),
             Self::JumpTime => Message::OptionsChoice(OptionsChoice::JumpTime),
             Self::JumpFile => Message::OptionsChoice(OptionsChoice::JumpFile),
+            Self::FileInfo => Message::OptionsChoice(OptionsChoice::FileInfo),
             Self::About => Message::ToggleAbout,
             Self::Close => Message::ToggleOptions,
         }
@@ -585,6 +590,7 @@ mod options_tests {
                 Message::OptionsChoice(OptionsChoice::JumpTracksForward),
                 Message::OptionsChoice(OptionsChoice::JumpTime),
                 Message::OptionsChoice(OptionsChoice::JumpFile),
+                Message::OptionsChoice(OptionsChoice::FileInfo),
                 Message::ToggleAbout,
                 Message::ToggleOptions,
             ]

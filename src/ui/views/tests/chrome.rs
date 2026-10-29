@@ -597,6 +597,7 @@ fn options_overlay_draws_each_row_with_its_state() {
             "10 songs forward",
             "Jump to time",
             "Jump to file",
+            "File info",
             "About Nostalgia",
             "Close",
         ]) {
@@ -627,6 +628,7 @@ fn options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop() {
         "10 songs forward",
         "Jump to time",
         "Jump to file",
+        "File info",
         "About Nostalgia",
         "Close",
         "OPTIONS",
@@ -729,6 +731,13 @@ fn options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop() {
                     Message::OptionsChoice(OptionsChoice::JumpFile)
                 )),
                 "the jump-to-file row must publish its choice: {messages:?}"
+            ),
+            "File info" => assert!(
+                messages.iter().any(|message| matches!(
+                    message,
+                    Message::OptionsChoice(OptionsChoice::FileInfo)
+                )),
+                "the file-info row must publish its choice: {messages:?}"
             ),
             "About Nostalgia" => assert!(
                 messages

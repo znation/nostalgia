@@ -150,6 +150,35 @@ fn toggle_file_info_needs_a_known_current_track() {
 }
 
 #[test]
+fn options_file_info_row_opens_the_panel_or_just_closes() {
+    let position = crate::ui::OptionsRow::ALL
+        .iter()
+        .position(|row| matches!(row, crate::ui::OptionsRow::FileInfo))
+        .expect("File info is listed in OptionsRow::ALL");
+    for by_keyboard in [false, true] {
+        for known in [true, false] {
+            let (mut player, state) = test_player();
+            if known {
+                make_current_track_known(&mut player, &state);
+            }
+            player.options_visible = true;
+            let _ = if by_keyboard {
+                player.options_selected = position;
+                update(&mut player, Message::OptionsActivate)
+            } else {
+                update(&mut player, crate::ui::OptionsRow::FileInfo.message())
+            };
+            let context = format!("keyboard: {by_keyboard}, known: {known}");
+            assert!(!player.options_visible, "menu must close ({context})");
+            assert_eq!(
+                player.file_info_visible, known,
+                "file info flag ({context})"
+            );
+        }
+    }
+}
+
+#[test]
 fn file_info_and_about_close_each_other() {
     let (mut player, state) = test_player();
     make_current_track_known(&mut player, &state);

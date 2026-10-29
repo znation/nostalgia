@@ -520,6 +520,9 @@ fn options_choice_applies_each_toggle_and_closes_the_panel() {
                 OptionsChoice::JumpTime | OptionsChoice::JumpFile => {
                     unreachable!("covered by options_jump_rows_open_their_panels_or_just_close")
                 }
+                OptionsChoice::FileInfo => {
+                    unreachable!("covered by options_file_info_row_opens_the_panel_or_just_closes")
+                }
             };
             assert_eq!(
                 (

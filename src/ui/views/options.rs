@@ -1,5 +1,5 @@
 //! The transient options menu: a modal overlay listing the app's existing on/off choices plus Jump
-//! to time, Jump to file, and About rows, each applying that choice and closing the menu like a
+//! to time, Jump to file, File info, and About rows, each applying that choice and closing the menu like a
 //! Winamp menu item. Its highlight is layout-only and unpersisted.
 
 use iced::{
@@ -122,6 +122,7 @@ pub(super) fn options_row_label(row: OptionsRow, state: OptionsState) -> &'stati
         OptionsRow::JumpTracksForward => "10 songs forward",
         OptionsRow::JumpTime => "Jump to time",
         OptionsRow::JumpFile => "Jump to file",
+        OptionsRow::FileInfo => "File info",
         OptionsRow::About => "About Nostalgia",
         OptionsRow::Close => "Close",
     }

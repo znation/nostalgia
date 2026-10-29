@@ -1833,7 +1833,7 @@ on each rebuild rather than caching the source in UI state.
 ## Options panel
 
 **Guarantee.** The LCD strip's `O`, the transport row's lightning button, and a right-press on the player panels or shade strip (not the library) open a transient,
-unpersisted options menu listing the app's existing on/off choices plus the 10 songs back, 10 songs forward, Jump to time and Jump to file rows, About, and Close:
+unpersisted options menu listing the app's existing on/off choices plus the 10 songs back, 10 songs forward, Jump to time and Jump to file rows, File info, About, and Close:
 
 - Alt+O (without Control, Shift, or Logo) toggles the menu, as does a right-press on the player panels (`MouseArea::on_right_press(Message::ToggleOptions)`); with the menu open the base is ignored, so a second right-press does nothing. Opening resets the layout-only
   `options_selected` index to zero. Up/Down clamp the highlight to the first/last row; Enter
@@ -1852,13 +1852,13 @@ unpersisted options menu listing the app's existing on/off choices plus the 10 s
 - `views::view_options_overlay` stacks an `OPTIONS` panel over the otherwise unchanged normal-mode
   base through `views::modal::modal_overlay`. Its rows are `Always on Top: On/Off`, `Time:
   Remaining/Elapsed`, `Visualizer: Shown/Hidden`, `Equalizer: Shown/Hidden`, `Library:
-  Shown/Hidden`, `Stop after current: On/Off`, `Repeat: On/Off`, `Shuffle: On/Off`, `10 songs back`, `10 songs forward`, `Jump to time`, `Jump to file`, `About Nostalgia`, and `Close`, with the labels resolved from the passed current
+  Shown/Hidden`, `Stop after current: On/Off`, `Repeat: On/Off`, `Shuffle: On/Off`, `10 songs back`, `10 songs forward`, `Jump to time`, `Jump to file`, `File info`, `About Nostalgia`, and `Close`, with the labels resolved from the passed current
   state on every rebuild. Each choice row publishes `Message::OptionsChoice(..)`; the About row
   publishes `Message::ToggleAbout`; `Close`, the full-window backdrop, and Escape close the menu.
 - `handlers::window::options_choice` clears `options_visible` first, then dispatches to the
   existing `toggle_always_on_top`, `handlers::playback::toggle_time_display`,
   `handlers::playback::toggle_visualizer`, `handlers::window::toggle_equalizer_panel`, or
-  `handlers::window::toggle_library_panel`, `handlers::playback::toggle_stop_after_current`, `handlers::playback::toggle_repeat`, `handlers::playback::toggle_shuffle`, `handlers::playback::stepping::jump_ten_tracks` (back or forward, pinned by `options_ten_song_rows_jump_like_the_keypad`), `handlers::jump::toggle_jump_time`, or `handlers::jump::toggle_jump_file` and returns its task, so each row's non-menu behavior is
+  `handlers::window::toggle_library_panel`, `handlers::playback::toggle_stop_after_current`, `handlers::playback::toggle_repeat`, `handlers::playback::toggle_shuffle`, `handlers::playback::stepping::jump_ten_tracks` (back or forward, pinned by `options_ten_song_rows_jump_like_the_keypad`), `handlers::jump::toggle_jump_time`, `handlers::jump::toggle_jump_file`, or `handlers::window::toggle_file_info` (pinned by `options_file_info_row_opens_the_panel_or_just_closes`) and returns its task, so each row's non-menu behavior is
   exactly that toggle's.
 - The overlay assembly in `src/ui/view/overlay.rs` wraps the base tree only while `options_visible &&
   !shaded` holds and passes the current always-on-top, elapsed/remaining, visualizer, equalizer
@@ -1883,6 +1883,7 @@ mapping and the transport row's `options_button`; the two `on_right_press` wrapp
 `options_rows_map_to_mouse_messages_in_draw_order` (`src/ui/message.rs`);
 `options_row_style_highlights_selection_in_each_status` (`src/ui/views/options.rs`);
 `options_jump_rows_open_their_panels_or_just_close` (`src/ui/tests/jump_tests.rs`);
+`options_file_info_row_opens_the_panel_or_just_closes` (`src/ui/tests/window_tests.rs`);
 `options_keyboard_selection_clamps_and_activates_each_row` and the mouse/keyboard toggle
 expectations in `options_choice_applies_each_toggle_and_closes_the_panel`
 (`src/ui/tests/panels_tests.rs`); `options_overlay_draws_each_row_with_its_state`,

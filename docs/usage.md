@@ -162,9 +162,9 @@ end of the transport row, or a right-click anywhere on the player (title bar, LC
 transport row, equalizer, or the rolled-up shade strip, but not the library), like Winamp's
 main-window menu, opens an `OPTIONS` menu over the player listing `Always on Top: On/Off`,
 `Time: Remaining/Elapsed`, `Visualizer: Shown/Hidden`, `Equalizer: Shown/Hidden`,
-`Library: Shown/Hidden`, `Stop after current: On/Off`, `Repeat: On/Off`, `Shuffle: On/Off`, `10 songs back`, `10 songs forward`, `Jump to time`, `Jump to file`, `About Nostalgia`, and `Close`, with each label reflecting the current
+`Library: Shown/Hidden`, `Stop after current: On/Off`, `Repeat: On/Off`, `Shuffle: On/Off`, `10 songs back`, `10 songs forward`, `Jump to time`, `Jump to file`, `File info`, `About Nostalgia`, and `Close`, with each label reflecting the current
 state. Choosing a row applies that one toggle and closes the menu; `10 songs back` and `10 songs forward` jump ten songs back or forward exactly like keypad 1 and 3 (doing nothing beyond closing the menu with no song list showing); `Jump to time` and `Jump to file` open the Ctrl+J and J panels (doing nothing beyond closing
-the menu while that panel is unavailable); `About Nostalgia` opens the
+the menu while that panel is unavailable); `File info` opens the Alt+3 File info panel (doing nothing beyond closing the menu while no track is current); `About Nostalgia` opens the
 About panel, and `Close`, a click on the backdrop, or Escape closes the menu. Opening it while the
 window is rolled up restores the window first, and the menu is not saved. Alt+O also closes it
 and works while the search box has focus, without changing the query. Opening highlights the
