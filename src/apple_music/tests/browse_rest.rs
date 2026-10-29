@@ -847,3 +847,42 @@ async fn get_recently_played_songs_uses_the_rest_library_when_signed_in() {
         &["https://api.music.apple.com/v1/me/recent/played/tracks"],
     );
 }
+
+// A failed `recently-added` request surfaces as the query's error, and the songs request for
+// running times is not attempted after it.
+#[tokio::test]
+async fn get_recently_added_albums_fails_when_the_albums_request_fails() {
+    let stub = StubTransport::returning_results(&[
+        Err(AppleMusicError::new("recent down")),
+        Ok(r#"{"data":[]}"#.to_string()),
+    ]);
+    let service = signed_in_service(&stub);
+
+    let error = service.get_recently_added_albums().await.unwrap_err();
+
+    assert_eq!(error.to_string(), "recent down");
+    assert_call_urls(
+        &stub,
+        &["https://api.music.apple.com/v1/me/library/recently-added"],
+    );
+}
+
+#[tokio::test]
+async fn get_recently_played_songs_fails_when_the_request_fails() {
+    let stub = StubTransport::returning_results(&[Err(AppleMusicError::new("played down"))]);
+    let service = signed_in_service(&stub);
+
+    let error = service.get_recently_played_songs().await.unwrap_err();
+
+    assert_eq!(error.to_string(), "played down");
+}
+
+#[tokio::test]
+async fn get_recently_played_songs_returns_no_songs_for_an_empty_signed_in_result() {
+    let stub = StubTransport::returning(r#"{"data":[]}"#);
+    let service = signed_in_service(&stub);
+
+    let songs = service.get_recently_played_songs().await.unwrap();
+
+    assert!(songs.is_empty());
+}
