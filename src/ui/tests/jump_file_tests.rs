@@ -404,3 +404,55 @@ fn the_root_view_draws_only_the_filtered_row_in_the_panel() {
     assert!(!texts.contains(&"1. The Sample Band - One"), "{texts:?}");
     assert!(!texts.contains(&"3. The Sample Band - Three"), "{texts:?}");
 }
+
+// The root view picks the list the panel filters from the showing view, so
+// each flat list must draw its own titles, and a view without a song list
+// (or a shaded window) must draw no panel at all.
+#[test]
+fn the_root_view_filters_the_all_songs_and_recently_played_lists() {
+    for (label, view) in [
+        ("all songs", CurrentView::AllSongs),
+        ("recently played", CurrentView::RecentlyPlayed),
+    ] {
+        let (mut player, _state) = test_player();
+        // Only the showing view's list is loaded, so drawing another
+        // view's list would draw nothing.
+        let loaded = match label {
+            "all songs" => Message::AllSongsLoaded(stepping_songs()),
+            _ => Message::RecentlyPlayedLoaded(stepping_songs()),
+        };
+        let _ = update(&mut player, loaded);
+        player.current_view = view;
+        player.library_panel_visible = false;
+        player.jump_file_visible = true;
+        player.jump_file_query = "three".to_string();
+
+        let capture = captured_root_view_text_bounds(&player);
+        let texts: Vec<&str> = capture.texts().collect();
+        assert!(texts.contains(&"JUMP TO FILE"), "{label}: {texts:?}");
+        assert!(
+            texts.contains(&"3. The Sample Band - Three"),
+            "{label}: {texts:?}"
+        );
+        assert!(
+            !texts.contains(&"1. The Sample Band - One"),
+            "{label}: {texts:?}"
+        );
+    }
+}
+
+#[test]
+fn the_root_view_draws_no_jump_file_panel_without_a_song_list_or_when_shaded() {
+    let (mut player, _state) = player_in_songs();
+    player.library_panel_visible = false;
+    player.jump_file_visible = true;
+
+    player.current_view = CurrentView::Genres;
+    let capture = captured_root_view_text_bounds(&player);
+    assert!(!capture.texts().any(|text| text == "JUMP TO FILE"));
+
+    player.current_view = CurrentView::Songs;
+    player.shaded = true;
+    let capture = captured_root_view_text_bounds(&player);
+    assert!(!capture.texts().any(|text| text == "JUMP TO FILE"));
+}
