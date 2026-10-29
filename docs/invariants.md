@@ -2322,6 +2322,20 @@ and total strings; its shaded branch returns before that push.
 **History.** Added 2026-10-23 with the mockups' library-panel transport row; the shade strip was
 refactored onto the same shared row in the same change.
 
+## Command line
+
+With no arguments launch is unchanged. A flag (`--version`/`-V`, `--help`/`-h`) or an
+unrecognized argument is handled at the top of `main`, before settings load, sign-in, or the
+window; an unrecognized argument exits with status 2. A non-UTF-8 argument is reported lossily
+rather than panicking, because `main` reads `std::env::args_os()`.
+
+**Enforced by:** `cli::parse` and `main` (`src/cli.rs`, `src/main.rs`). **Pinned by:**
+`no_arguments_runs_the_player`, `version_flags_print_the_version`, `help_flags_print_the_help`,
+`an_unknown_argument_is_unrecognized`, `a_second_argument_is_unrecognized`,
+`a_non_utf8_argument_is_reported_lossily`, `version_text_names_the_package_version`,
+`help_text_names_every_flag_and_variable`, and `unrecognized_text_names_the_argument_and_help`
+(`src/cli.rs`).
+
 ## Sign-in server
 
 **Guarantee.** The loopback sign-in server never waits for one connection to finish before it reads

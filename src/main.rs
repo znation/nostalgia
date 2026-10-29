@@ -62,6 +62,7 @@ use tokio::sync::Mutex;
 pub mod apple_music;
 pub mod audio;
 pub mod clamp;
+pub mod cli;
 pub mod equalizer;
 pub mod http;
 pub mod library;
@@ -79,6 +80,22 @@ pub mod ui;
 use crate::state::AppState;
 
 fn main() -> iced::Result {
+    // Flags are answered before settings load, sign-in, or the window.
+    match cli::parse(std::env::args_os().skip(1)) {
+        cli::CliAction::Run => {}
+        cli::CliAction::PrintVersion => {
+            println!("{}", cli::VERSION_TEXT);
+            return Ok(());
+        }
+        cli::CliAction::PrintHelp => {
+            println!("{}", cli::HELP_TEXT);
+            return Ok(());
+        }
+        cli::CliAction::Unrecognized(arg) => {
+            eprintln!("{}", cli::unrecognized_text(&arg));
+            std::process::exit(2);
+        }
+    }
     // Resolve the persisted mixer and equalizer snapshot once, before the
     // first view, and hand both the store and the restored snapshot to the
     // UI so its update loop can save later changes.

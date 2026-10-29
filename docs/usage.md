@@ -273,4 +273,6 @@ with the window pinned once boot resolves its window id. The shade mode (the tit
 button, a double-click on the bar or the rolled-up strip, or Ctrl+W) is remembered too: a
 saved-shaded launch opens rolled up and the same controls unroll it to the size the window opened
 at. The library reopens on its saved top-level list, and a list showing when sign-in completes is
-refetched from the signed-in library. There are no CLI flags yet.
+refetched from the signed-in library. `nostalgia --version` (or `-V`) prints the version and `nostalgia --help` (or `-h`) prints the
+flags and environment variables, each exiting without opening the window; any other argument
+prints an error and exits with status 2.
