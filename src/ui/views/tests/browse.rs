@@ -898,3 +898,28 @@ fn album_list_summary_counts_albums_and_sums_their_running_time() {
             .starts_with("2 albums - ")
     );
 }
+
+#[test]
+fn artist_list_summary_counts_artists_and_totals_their_albums() {
+    let with_albums = |counts: &[usize]| -> Vec<_> {
+        counts
+            .iter()
+            .map(|&album_count| {
+                let mut artist = sample_artist();
+                artist.album_count = album_count;
+                artist
+            })
+            .collect()
+    };
+    assert_eq!(
+        artist_list_summary(&with_albums(&[1])),
+        "1 artist - 1 album"
+    );
+    assert_eq!(
+        artist_list_summary(&with_albums(&[2, 0, 3])),
+        "3 artists - 5 albums"
+    );
+    assert_eq!(artist_list_summary(&with_albums(&[0])), "1 artist");
+    assert_eq!(artist_list_summary(&with_albums(&[0, 0])), "2 artists");
+    assert!(artist_list_summary(&with_albums(&[usize::MAX, 1])).starts_with("2 artists - "));
+}

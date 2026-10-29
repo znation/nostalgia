@@ -302,11 +302,15 @@ pub(in crate::ui::views) fn album_list<'a>(
 
 /// Appends a loaded list's footer line beneath it, filling the browse panel.
 /// The shared layout of the item-count footer ([`list_with_count`]) and the
+/// count-and-total footer of the Artists list ([`super::view_artists`]) and the
 /// count-and-time footers of the album ([`album_list_summary`]) and song
 /// ([`song_list_summary`]) lists. Callers skip
 /// this for an empty list, whose loading, error, or empty placeholder must
 /// stay alone beneath the rows it replaces.
-fn with_footer<'a>(list: Element<'a, Message>, footer: String) -> Element<'a, Message> {
+pub(in crate::ui::views) fn with_footer<'a>(
+    list: Element<'a, Message>,
+    footer: String,
+) -> Element<'a, Message> {
     Column::new()
         .push(list)
         .push(Text::new(footer).size(14))

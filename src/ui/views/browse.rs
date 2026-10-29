@@ -28,8 +28,10 @@ use super::labeled_button;
 
 pub(super) mod rows;
 
-use rows::text::{album_count_label, artist_row, browse_placeholder, playlist_row};
-use rows::{album_list, list_with_count, scrollable_list, song_list};
+use rows::text::{
+    album_count_label, artist_list_summary, artist_row, browse_placeholder, playlist_row,
+};
+use rows::{album_list, list_with_count, scrollable_list, song_list, with_footer};
 
 pub use rows::{BROWSE_LIST_ID, BROWSE_LIST_PADDING, BROWSE_PAGE_HEIGHT, BROWSE_ROW_HEIGHT};
 
@@ -50,7 +52,8 @@ pub(crate) fn artist_album_count_label(artist: &Artist) -> Cow<'static, str> {
 /// row's blue bar without adding the `▶` playing marker. `loading` and `error`
 /// select the placeholder wording (see [`browse_placeholder`]); a fetch
 /// failure wins. Built by [`scrollable_list`] from the [`artist_row`] mapping;
-/// a non-empty list also appends its item-count footer ([`list_with_count`]).
+/// a non-empty list also appends its artist-count and album-total footer
+/// ([`artist_list_summary`]).
 pub fn view_artists<'a>(
     artists: &'a [Artist],
     labels: &'a [String],
@@ -59,21 +62,21 @@ pub fn view_artists<'a>(
     loading: bool,
     error: Option<&'a str>,
 ) -> Element<'a, Message> {
-    list_with_count(
-        scrollable_list(
-            artists
-                .iter()
-                .enumerate()
-                .map(|(index, artist)| artist_row(artist, labels.get(index).map(String::as_str))),
-            &CurrentView::Artists,
-            epoch,
-            selected,
-            browse_placeholder(&CurrentView::Artists, loading, error, false),
-        ),
-        artists.len(),
-        "artist",
-        "artists",
-    )
+    let list = scrollable_list(
+        artists
+            .iter()
+            .enumerate()
+            .map(|(index, artist)| artist_row(artist, labels.get(index).map(String::as_str))),
+        &CurrentView::Artists,
+        epoch,
+        selected,
+        browse_placeholder(&CurrentView::Artists, loading, error, false),
+    );
+    if artists.is_empty() {
+        list
+    } else {
+        with_footer(list, artist_list_summary(artists))
+    }
 }
 
 /// The Albums browse view: one row per album, in the order given, each

@@ -1102,6 +1102,24 @@ fn root_view_draws_the_current_browse_levels_own_rows() {
     }
 }
 
+// The Artists footer adds the total of the rows' album counts after the
+// artist count.
+#[test]
+fn root_view_artists_footer_totals_the_album_counts() {
+    let (mut player, _state) = test_player();
+    let mut artist = sample_artist();
+    artist.album_count = 2;
+    player.artists.items = vec![artist];
+    player.artists.loading = false;
+    player.current_view = CurrentView::Artists;
+    let capture = captured_root_view_text_bounds(&player);
+    assert!(
+        capture.texts().any(|text| text == "1 artist - 2 albums"),
+        "{:?}",
+        capture.fragments()
+    );
+}
+
 // A browse list with no rows shows only its empty wording: `list_with_count`
 // returns the list unchanged at a zero count, and `song_list` skips its
 // count-and-time footer, so the loading, error, or empty placeholder stays

@@ -118,6 +118,24 @@ pub(in crate::ui::views) fn album_count_label(count: usize) -> Cow<'static, str>
     }
 }
 
+/// The footer beneath a loaded Artists list: `"<count> artist(s)"`, followed
+/// by `" - "` and the [`album_count_label`] of the artists' summed
+/// `album_count` (saturating). A sum of `0` leaves the artist part alone, like
+/// the row rule that shows no count for `0`: a signed-in artist whose name
+/// matched no album has a count of `0`, and `0 albums` would mislead.
+pub(in crate::ui::views) fn artist_list_summary(artists: &[Artist]) -> String {
+    let summary = list_count_summary(artists.len(), "artist", "artists");
+    let total = artists
+        .iter()
+        .fold(0usize, |sum, artist| sum.saturating_add(artist.album_count));
+    let albums = album_count_label(total);
+    if albums.is_empty() {
+        summary
+    } else {
+        format!("{summary} - {albums}")
+    }
+}
+
 /// The browse row an album becomes: its display title (`<artist> - <title>`,
 /// or the title alone when the artist is empty; see [`Album::display_title`]),
 /// its release year (when known) and total running time ([`album_row_label`]; `--:--` when the source
@@ -192,7 +210,7 @@ pub(in crate::ui::views) fn song_row<'a>(
     (title, label, Some(song.id.as_str()) == current_track)
 }
 
-/// The item-count footer for a loaded artist or playlist list:
+/// The item-count footer for a loaded playlist or grouped list:
 /// `"<count> <noun>"`, with `singular` chosen exactly when `count == 1` and
 /// `plural` otherwise. Unlike [`song_list_summary`] it has no time total and
 /// formats any count, including `0`, so the wording is testable without an
