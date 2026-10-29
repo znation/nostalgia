@@ -402,6 +402,29 @@ fn options_stop_after_current_toggles_the_flag_and_closes_the_panel() {
     assert!(!player.options_visible);
 }
 
+// The Manual playlist advance row flips the shared AppState flag and closes
+// the menu; activating it by keyboard flips it back.
+#[test]
+fn options_manual_advance_toggles_the_flag_and_closes_the_panel() {
+    let (mut player, state) = test_player();
+    player.options_visible = true;
+    let _ = update(
+        &mut player,
+        Message::OptionsChoice(OptionsChoice::ManualAdvance),
+    );
+    assert!(state.blocking_lock().manual_advance);
+    assert!(!player.options_visible);
+
+    player.options_visible = true;
+    player.options_selected = OptionsRow::ALL
+        .iter()
+        .position(|row| matches!(row, OptionsRow::ManualAdvance))
+        .unwrap();
+    let _ = update(&mut player, Message::OptionsActivate);
+    assert!(!state.blocking_lock().manual_advance);
+    assert!(!player.options_visible);
+}
+
 // The Repeat and Shuffle rows flip only their shared AppState flag and close
 // the menu; activating each by keyboard flips it back.
 #[test]
@@ -517,6 +540,11 @@ fn options_choice_applies_each_toggle_and_closes_the_panel() {
                 OptionsChoice::Repeat | OptionsChoice::Shuffle => {
                     unreachable!(
                         "covered by options_repeat_and_shuffle_toggle_shared_state_and_close_the_panel"
+                    )
+                }
+                OptionsChoice::ManualAdvance => {
+                    unreachable!(
+                        "covered by options_manual_advance_toggles_the_flag_and_closes_the_panel"
                     )
                 }
                 OptionsChoice::JumpTracksBack | OptionsChoice::JumpTracksForward => {

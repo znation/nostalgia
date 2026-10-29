@@ -16,6 +16,7 @@ impl Settings {
         text.push_str(&format!("balance={}\n", self.balance));
         text.push_str(&format!("repeat={}\n", self.repeat));
         text.push_str(&format!("shuffle={}\n", self.shuffle));
+        text.push_str(&format!("manual_advance={}\n", self.manual_advance));
         text.push_str(&format!("eq_enabled={}\n", self.eq_enabled));
         text.push_str(&format!("eq_auto={}\n", self.eq_auto));
         text.push_str(&format!("eq_preamp={}\n", self.eq_preamp));
@@ -72,6 +73,8 @@ impl Settings {
                 "balance" => parse_number_into(&mut settings.balance, value),
                 "repeat" => parse_into(&mut settings.repeat, value),
                 "shuffle" => parse_into(&mut settings.shuffle, value),
+                // A malformed value leaves the default advance-along list.
+                "manual_advance" => parse_into(&mut settings.manual_advance, value),
                 "eq_enabled" => parse_into(&mut settings.eq_enabled, value),
                 // A malformed value leaves the default AUTO off.
                 "eq_auto" => parse_into(&mut settings.eq_auto, value),

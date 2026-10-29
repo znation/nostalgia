@@ -498,6 +498,9 @@ pub(in crate::ui) enum OptionsChoice {
     Repeat,
     /// Reuses [`Message::ToggleShuffle`].
     Shuffle,
+    /// Reuses the shared Manual playlist advance toggle
+    /// (`AppState::toggle_manual_advance`).
+    ManualAdvance,
     /// Reuses [`Message::JumpTracksBack`].
     JumpTracksBack,
     /// Reuses [`Message::JumpTracksForward`].
@@ -530,6 +533,7 @@ pub(in crate::ui) enum OptionsRow {
     StopAfterCurrent,
     Repeat,
     Shuffle,
+    ManualAdvance,
     JumpTracksBack,
     JumpTracksForward,
     SeekBackward,
@@ -544,7 +548,7 @@ pub(in crate::ui) enum OptionsRow {
 }
 
 impl OptionsRow {
-    pub(in crate::ui) const ALL: [Self; 20] = [
+    pub(in crate::ui) const ALL: [Self; 21] = [
         Self::AlwaysOnTop,
         Self::TimeDisplay,
         Self::Visualizer,
@@ -554,6 +558,7 @@ impl OptionsRow {
         Self::StopAfterCurrent,
         Self::Repeat,
         Self::Shuffle,
+        Self::ManualAdvance,
         Self::JumpTracksBack,
         Self::JumpTracksForward,
         Self::SeekBackward,
@@ -578,6 +583,7 @@ impl OptionsRow {
             Self::StopAfterCurrent => Message::OptionsChoice(OptionsChoice::StopAfterCurrent),
             Self::Repeat => Message::OptionsChoice(OptionsChoice::Repeat),
             Self::Shuffle => Message::OptionsChoice(OptionsChoice::Shuffle),
+            Self::ManualAdvance => Message::OptionsChoice(OptionsChoice::ManualAdvance),
             Self::JumpTracksBack => Message::OptionsChoice(OptionsChoice::JumpTracksBack),
             Self::JumpTracksForward => Message::OptionsChoice(OptionsChoice::JumpTracksForward),
             Self::SeekBackward => Message::OptionsChoice(OptionsChoice::SeekBackward),
@@ -612,6 +618,7 @@ mod options_tests {
                 Message::OptionsChoice(OptionsChoice::StopAfterCurrent),
                 Message::OptionsChoice(OptionsChoice::Repeat),
                 Message::OptionsChoice(OptionsChoice::Shuffle),
+                Message::OptionsChoice(OptionsChoice::ManualAdvance),
                 Message::OptionsChoice(OptionsChoice::JumpTracksBack),
                 Message::OptionsChoice(OptionsChoice::JumpTracksForward),
                 Message::OptionsChoice(OptionsChoice::SeekBackward),

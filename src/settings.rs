@@ -46,6 +46,7 @@ pub struct Settings {
     balance: f32,
     repeat: bool,
     shuffle: bool,
+    manual_advance: bool,
     eq_enabled: bool,
     eq_auto: bool,
     eq_preamp: f32,
@@ -63,7 +64,7 @@ pub struct Settings {
 
 impl Default for Settings {
     /// The same starting values as [`AppState::default`]: half volume, a
-    /// centered balance, both toggles off, and the equalizer off with AUTO off,
+    /// centered balance, the toggles off, and the equalizer off with AUTO off,
     /// a flat curve, and no preset, plus the elapsed readout mode, the shown
     /// visualizer and both panels, and an unpinned, unshaded window. A missing
     /// or unreadable settings file starts here.
@@ -73,6 +74,7 @@ impl Default for Settings {
             balance: 0.0,
             repeat: false,
             shuffle: false,
+            manual_advance: false,
             eq_enabled: false,
             eq_auto: false,
             eq_preamp: 0.0,
@@ -100,6 +102,7 @@ impl Settings {
             balance: state.balance(),
             repeat: state.repeat,
             shuffle: state.shuffle,
+            manual_advance: state.manual_advance,
             eq_enabled: state.eq_enabled,
             eq_auto: state.eq_auto,
             eq_preamp: state.eq_preamp(),
@@ -254,6 +257,7 @@ impl Settings {
         state.set_balance(self.balance);
         state.repeat = self.repeat;
         state.shuffle = self.shuffle;
+        state.manual_advance = self.manual_advance;
         state.eq_enabled = self.eq_enabled;
         state.eq_auto = self.eq_auto;
         state.set_eq_preamp(self.eq_preamp);
@@ -276,6 +280,7 @@ mod tests {
         state.set_balance(-0.35);
         state.repeat = true;
         state.shuffle = true;
+        state.manual_advance = true;
         state.eq_enabled = true;
         state.eq_auto = true;
         state.set_eq_preamp(3.5);
@@ -454,6 +459,38 @@ mod tests {
     }
 
     #[test]
+    fn manual_advance_round_trips_and_ignores_malformed_values() {
+        let off = Settings::default();
+        assert!(!off.manual_advance);
+        assert!(
+            !Settings::from_text("volume=0.5\n").manual_advance,
+            "a missing manual_advance line must fall back to off"
+        );
+        assert!(!Settings::from_text(&off.to_text()).manual_advance);
+
+        let mut on = off.clone();
+        on.manual_advance = true;
+        assert!(on.to_text().contains("manual_advance=true"));
+        assert!(
+            Settings::from_text(&on.to_text()).manual_advance,
+            "an enabled manual advance must survive the round trip"
+        );
+
+        assert!(
+            !Settings::from_text("manual_advance=false\n").manual_advance,
+            "an explicit false must stay off"
+        );
+        assert!(
+            !Settings::from_text("manual_advance=\n").manual_advance,
+            "an empty value must fall back to off"
+        );
+        assert!(
+            !Settings::from_text("manual_advance=yes\n").manual_advance,
+            "an unknown word must fall back to off"
+        );
+    }
+
+    #[test]
     fn eq_auto_round_trips_and_ignores_malformed_values() {
         let off = Settings::default();
         assert!(!off.eq_auto);
@@ -506,7 +543,9 @@ mod tests {
                     balance=abc\n\
                     repeat=yes\n\
                     shuffle=1\n\
+                    manual_advance=maybe\n\
                     eq_enabled=maybe\n\
+                    eq_auto=maybe\n\
                     eq_auto=maybe\n\
                     eq_preamp=high\n\
                     eq_band_10=3\n\

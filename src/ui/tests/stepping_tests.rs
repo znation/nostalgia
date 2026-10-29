@@ -1108,3 +1108,106 @@ fn toggle_stop_after_current_flips_only_the_flag() {
     assert!(state.blocking_lock().is_playing);
     assert!(recording.calls().is_empty());
 }
+
+// With Manual playlist advance on, a natural end takes the Stop path even
+// though a next song exists: playback stops, the ended song stays queued for
+// Play, and the flag stays on.
+#[test]
+fn preview_end_with_manual_advance_stops_and_keeps_the_song() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) = player_playing_stepping_song(&recording, "song-1");
+    state.blocking_lock().manual_advance = true;
+
+    let settled = drive_playback_finished(&mut player);
+    assert!(matches!(settled, Message::TransportSettled));
+
+    let state = state.blocking_lock();
+    assert!(!state.is_playing);
+    assert_eq!(state.current_track.as_deref(), Some("song-1"));
+    assert!(state.manual_advance);
+}
+
+// Manual advance outranks Repeat: Repeat would replay the one-song list, but
+// the natural end stops instead.
+#[test]
+fn preview_end_with_manual_advance_overrides_repeat() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) = player_playing_stepping_song(&recording, "song-1");
+    player.songs.items.truncate(1);
+    {
+        let mut state = state.blocking_lock();
+        state.repeat = true;
+        state.manual_advance = true;
+    }
+
+    let settled = drive_playback_finished(&mut player);
+    assert!(matches!(settled, Message::TransportSettled));
+
+    let state = state.blocking_lock();
+    assert!(!state.is_playing);
+    assert_eq!(state.current_track.as_deref(), Some("song-1"));
+}
+
+// Manual advance outranks Shuffle: Shuffle would advance to the other song of
+// the list, but the natural end stops instead.
+#[test]
+fn preview_end_with_manual_advance_overrides_shuffle() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) = player_playing_stepping_song(&recording, "song-1");
+    {
+        let mut state = state.blocking_lock();
+        state.shuffle = true;
+        state.manual_advance = true;
+    }
+
+    let settled = drive_playback_finished(&mut player);
+    assert!(matches!(settled, Message::TransportSettled));
+
+    let state = state.blocking_lock();
+    assert!(!state.is_playing);
+    assert_eq!(state.current_track.as_deref(), Some("song-1"));
+}
+
+// After the options row disables Manual playlist advance, the natural end
+// follows the ordinary advance rules again.
+#[test]
+fn preview_end_after_disabling_manual_advance_advances_again() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) = player_playing_stepping_song(&recording, "song-1");
+    state.blocking_lock().manual_advance = true;
+
+    // The options row toggles through the shared state method; flip it off
+    // exactly as the row does, closing the menu like every choice does.
+    player.options_visible = true;
+    let _ = update(
+        &mut player,
+        Message::OptionsChoice(OptionsChoice::ManualAdvance),
+    );
+    assert!(!player.options_visible);
+    assert!(!state.blocking_lock().manual_advance);
+
+    let advanced = drive_playback_finished(&mut player);
+    assert!(matches!(advanced, Message::TrackSelected { .. }));
+}
+
+// The shared toggle flips only the manual-advance flag: nothing else in the
+// state or the transport moves, and no audio command is issued.
+#[test]
+fn stepping_toggle_manual_advance_flips_only_the_flag() {
+    let recording = Arc::new(RecordingAudio::default());
+    let (mut player, state) = player_playing_stepping_song(&recording, "song-1");
+
+    let task = crate::ui::handlers::playback::toggle_manual_advance(&mut player);
+    assert!(iced_runtime::task::into_stream(task).is_none());
+    assert!(state.blocking_lock().manual_advance);
+
+    let task = crate::ui::handlers::playback::toggle_manual_advance(&mut player);
+    assert!(iced_runtime::task::into_stream(task).is_none());
+    {
+        let state = state.blocking_lock();
+        assert!(!state.manual_advance);
+        assert!(state.is_playing);
+        assert_eq!(state.current_track.as_deref(), Some("song-1"));
+    }
+    assert!(recording.calls().is_empty());
+}

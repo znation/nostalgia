@@ -95,6 +95,11 @@ pub(in crate::ui) fn toggle_shuffle(player: &mut WinampPlayer) -> Task<Message> 
     mutate_state(player, AppState::toggle_shuffle)
 }
 
+/// The Manual playlist advance toggle: flips the shared manual-advance flag.
+pub(in crate::ui) fn toggle_manual_advance(player: &mut WinampPlayer) -> Task<Message> {
+    mutate_state(player, AppState::toggle_manual_advance)
+}
+
 /// The LCD readout's click: flips the large left-hand time between elapsed and
 /// remaining. It touches no playback state and clears no stored position, so
 /// the chosen mode survives transports and a new selection.

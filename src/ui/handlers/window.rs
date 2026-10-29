@@ -232,6 +232,7 @@ pub(in crate::ui) fn options_choice(
         OptionsChoice::StopAfterCurrent => super::playback::toggle_stop_after_current(player),
         OptionsChoice::Repeat => super::playback::toggle_repeat(player),
         OptionsChoice::Shuffle => super::playback::toggle_shuffle(player),
+        OptionsChoice::ManualAdvance => super::playback::toggle_manual_advance(player),
         OptionsChoice::JumpTracksBack => super::playback::stepping::jump_ten_tracks(player, false),
         OptionsChoice::JumpTracksForward => {
             super::playback::stepping::jump_ten_tracks(player, true)

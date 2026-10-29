@@ -1833,7 +1833,7 @@ on each rebuild rather than caching the source in UI state.
 ## Options panel
 
 **Guarantee.** The LCD strip's `O`, the transport row's lightning button, and a right-press on the player panels or shade strip (not the library) open a transient,
-unpersisted options menu listing the app's existing on/off choices plus the Stop with fadeout row, the 10 songs back, 10 songs forward, Back 5 seconds, Fwd 5 seconds, Start of list and End of list
+unpersisted options menu listing the app's existing on/off choices plus the Stop with fadeout row, the Manual playlist advance row, the 10 songs back, 10 songs forward, Back 5 seconds, Fwd 5 seconds, Start of list and End of list
 rows, the Jump to time and
 Jump to file rows, File info, About, and Close:
 
@@ -1854,7 +1854,7 @@ Jump to file rows, File info, About, and Close:
 - `views::view_options_overlay` stacks an `OPTIONS` panel over the otherwise unchanged normal-mode
   base through `views::modal::modal_overlay`. Its rows are `Always on Top: On/Off`, `Time:
   Remaining/Elapsed`, `Visualizer: Shown/Hidden`, `Equalizer: Shown/Hidden`, `Library:
-  Shown/Hidden`, `Stop with fadeout`, `Stop after current: On/Off`, `Repeat: On/Off`, `Shuffle: On/Off`, `10 songs back`, `10 songs forward`, `Back 5
+  Shown/Hidden`, `Stop with fadeout`, `Stop after current: On/Off`, `Repeat: On/Off`, `Shuffle: On/Off`, `Manual playlist advance: On/Off`, `10 songs back`, `10 songs forward`, `Back 5
   seconds`, `Fwd 5 seconds`, `Start of list`, `End of list`, `Jump to time`, `Jump to file`, `File info`, `About Nostalgia`, and `Close`, with the labels resolved from the passed current
   state on every rebuild (the Stop with fadeout, Back 5 seconds, Fwd 5 seconds, Start of list, and End of list labels are fixed). Each choice row publishes `Message::OptionsChoice(..)`; the About row
   publishes `Message::ToggleAbout`; `Close`, the full-window backdrop, and Escape close the menu.
@@ -1862,14 +1862,14 @@ Jump to file rows, File info, About, and Close:
   existing `toggle_always_on_top`, `handlers::playback::toggle_time_display`,
   `handlers::playback::toggle_visualizer`, `handlers::window::toggle_equalizer_panel`, or
   `handlers::window::toggle_library_panel`, `handlers::playback::fade::fade_out_and_stop`,
-  `handlers::playback::toggle_stop_after_current`, `handlers::playback::toggle_repeat`, `handlers::playback::toggle_shuffle`, `handlers::playback::stepping::jump_ten_tracks` (back or forward, pinned by `options_ten_song_rows_jump_like_the_keypad`), `handlers::mixer::seek_backward` and `handlers::mixer::seek_forward` (the arrows' five-second step, pinned by `options_back_and_fwd_seconds_rows_seek_like_the_arrows`), `handlers::playback::stepping::jump_to_edge_track` (first or last song, pinned by `options_start_and_end_of_list_rows_jump_like_the_keys`), `handlers::jump::toggle_jump_time`, `handlers::jump::toggle_jump_file`, or `handlers::window::toggle_file_info` (pinned by `options_file_info_row_opens_the_panel_or_just_closes`) and returns its task, so each row's non-menu behavior is
+  `handlers::playback::toggle_stop_after_current`, `handlers::playback::toggle_repeat`, `handlers::playback::toggle_shuffle`, `handlers::playback::toggle_manual_advance`, `handlers::playback::stepping::jump_ten_tracks` (back or forward, pinned by `options_ten_song_rows_jump_like_the_keypad`), `handlers::mixer::seek_backward` and `handlers::mixer::seek_forward` (the arrows' five-second step, pinned by `options_back_and_fwd_seconds_rows_seek_like_the_arrows`), `handlers::playback::stepping::jump_to_edge_track` (first or last song, pinned by `options_start_and_end_of_list_rows_jump_like_the_keys`), `handlers::jump::toggle_jump_time`, `handlers::jump::toggle_jump_file`, or `handlers::window::toggle_file_info` (pinned by `options_file_info_row_opens_the_panel_or_just_closes`) and returns its task, so each row's non-menu behavior is
   exactly that toggle's.
 - The overlay assembly in `src/ui/view/overlay.rs` wraps the base tree only while `options_visible &&
   !shaded` holds and passes the current always-on-top, elapsed/remaining, visualizer, equalizer
-  panel, library panel, stop-after-current, repeat, and shuffle state (repeat and shuffle read from the shared state) through `views::OptionsState`; the shade branch never draws it.
+  panel, library panel, stop-after-current, repeat, shuffle, and manual-advance state (repeat, shuffle, and manual advance read from the shared state) through `views::OptionsState`; the shade branch never draws it.
 - A plain or Shift-held Escape press also closes it (see `## Transient panel dismissal`).
 
-**Enforced by.** `views::options::view_options_overlay`, its eight label helpers, and `Message::ToggleOptions`
+**Enforced by.** `views::options::view_options_overlay`, its nine label helpers, and `Message::ToggleOptions`
 and `Message::OptionsChoice`; `handlers::window::toggle_options` and
 `handlers::window::options_choice`; `WinampPlayer::options_visible`; the LCD strip's `O`
 mapping and the transport row's `options_button`; the two `on_right_press` wrappers in `src/ui/view/normal.rs` and `src/ui/view/shade.rs`; and the normal-mode branch of
@@ -1895,7 +1895,8 @@ expectations in `options_choice_applies_each_toggle_and_closes_the_panel`
 (`src/ui/tests/panels_tests.rs`); `options_overlay_draws_each_row_with_its_state`,
 `options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop`, and
 `transport_options_button_publishes_toggle_options` (`src/ui/views/tests/chrome.rs`); the
-label tests in `src/ui/views/options.rs` (including `stop_after_current_label_mirrors_the_flag` and `repeat_and_shuffle_labels_mirror_their_flags`); `options_repeat_and_shuffle_toggle_shared_state_and_close_the_panel` (`src/ui/tests/panels_tests.rs`); `options_stop_after_current_toggles_the_flag_and_closes_the_panel`
+label tests in `src/ui/views/options.rs` (including `stop_after_current_label_mirrors_the_flag`, `manual_advance_label_mirrors_the_flag`, and `repeat_and_shuffle_labels_mirror_their_flags`); `options_repeat_and_shuffle_toggle_shared_state_and_close_the_panel` (`src/ui/tests/panels_tests.rs`); `options_stop_after_current_toggles_the_flag_and_closes_the_panel`
+(`src/ui/tests/panels_tests.rs`); `options_manual_advance_toggles_the_flag_and_closes_the_panel`
 (`src/ui/tests/panels_tests.rs`); `lcd_indicator_message_arms_o_a_i_and_v_and_leaves_d_inert`,
 `indicator_label_color_lights_only_the_active_mode`, and
 `lcd_indicator_strip_publishes_options_on_o_always_on_top_on_a_visualizer_on_v_and_file_info_on_i`
@@ -2659,7 +2660,11 @@ readout, status row's reported format, visualizer, and seek bar clear together. 
 stale epoch, a pending transition, and a not-finished reply never advance. Ctrl+V arms a one-shot
 "Stop after current" flag (`WinampPlayer::stop_after_current`, not persisted): a finished reply that
 passes those checks then takes the Stop path instead of advancing and disarms the flag, while a
-dropped reply leaves it armed.
+dropped reply leaves it armed. With Manual playlist advance on (the shared
+`AppState::manual_advance` flag, persisted like Repeat and Shuffle), a finished reply that passes
+those checks takes the Stop path before any advance or Shuffle-round rule — whatever Repeat or
+Shuffle say — leaving the ended song queued for Play; the flag itself is never changed by a natural
+end.
 
 **Enforced by.** `audio::AudioOutput::is_finished` in `src/audio.rs` defaults to false, and
 `audio::player::rodio_player::RodioPlayer::is_finished` in `src/audio/player/rodio_player.rs`
@@ -2701,6 +2706,11 @@ same list/Shuffle/Repeat rules as Next, and the no-next-song case reuses `handle
 - `stop_after_current_survives_a_dropped_finished_reply` (`src/ui/tests/stepping_tests.rs`)
 - `toggle_stop_after_current_flips_only_the_flag` (`src/ui/tests/stepping_tests.rs`)
 - `message_for_maps_ctrl_v_to_stop_after_current` (`src/ui/shortcuts.rs`)
+- `preview_end_with_manual_advance_stops_and_keeps_the_song` (`src/ui/tests/stepping_tests.rs`)
+- `preview_end_with_manual_advance_overrides_repeat` (`src/ui/tests/stepping_tests.rs`)
+- `preview_end_with_manual_advance_overrides_shuffle` (`src/ui/tests/stepping_tests.rs`)
+- `preview_end_after_disabling_manual_advance_advances_again` (`src/ui/tests/stepping_tests.rs`)
+- `stepping_toggle_manual_advance_flips_only_the_flag` (`src/ui/tests/stepping_tests.rs`)
 
 ## Play history
 

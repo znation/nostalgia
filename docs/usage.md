@@ -162,7 +162,7 @@ end of the transport row, or a right-click anywhere on the player (title bar, LC
 transport row, equalizer, or the rolled-up shade strip, but not the library), like Winamp's
 main-window menu, opens an `OPTIONS` menu over the player listing `Always on Top: On/Off`,
 `Time: Remaining/Elapsed`, `Visualizer: Shown/Hidden`, `Equalizer: Shown/Hidden`,
-`Library: Shown/Hidden`, `Stop with fadeout`, `Stop after current: On/Off`, `Repeat: On/Off`, `Shuffle: On/Off`, `10 songs back`, `10 songs forward`, `Back 5 seconds`, `Fwd 5 seconds`, `Start of list`, `End of list`, `Jump to time`, `Jump to file`, `File info`, `About Nostalgia`, and `Close`, with each label reflecting the current
+`Library: Shown/Hidden`, `Stop with fadeout`, `Stop after current: On/Off`, `Repeat: On/Off`, `Shuffle: On/Off`, `Manual playlist advance: On/Off`, `10 songs back`, `10 songs forward`, `Back 5 seconds`, `Fwd 5 seconds`, `Start of list`, `End of list`, `Jump to time`, `Jump to file`, `File info`, `About Nostalgia`, and `Close`, with each label reflecting the current
 state. Choosing a row applies that one toggle and closes the menu; `Stop with fadeout` fades out and stops exactly like Shift+V while a preview plays and stops like V while paused or stopped; `10 songs back` and `10 songs forward` jump ten songs back or forward exactly like keypad 1 and 3 (doing nothing beyond closing the menu with no song list showing); `Back 5 seconds` and `Fwd 5 seconds` seek five seconds back or forward exactly like the Left and Right arrows (scheduling no work, exactly like the arrows); `Start of list` and `End of list` jump to the first or last song of the list exactly like Ctrl+Z and Ctrl+B (only closing the menu with no song list showing); `Jump to time` and `Jump to file` open the Ctrl+J and J panels (doing nothing beyond closing
 the menu while that panel is unavailable); `File info` opens the Alt+3 File info panel (doing nothing beyond closing the menu while no track is current); `About Nostalgia` opens the
 About panel, and `Close`, a click on the backdrop, or Escape closes the menu. Opening it while the
@@ -250,7 +250,11 @@ showing list: to the next song, to the first song with Repeat on at the end, or,
 a shuffled song when another exists. Shuffle plays each song of the showing list once before any
 repeats, like Winamp. With Repeat off on the last song it stops instead and keeps
 that song queued for Play; with Shuffle on and Repeat off it likewise stops once every song of the
-round has played, and Repeat on or Next starts a new round. The volume, balance, Repeat and Shuffle flags, the equalizer's on/off
+round has played, and Repeat on or Next starts a new round. With Manual playlist advance on (the
+options menu's `Manual playlist advance: On/Off` row, persisted in the settings file like Repeat and
+Shuffle), a song that plays to its end stops instead of advancing, whatever Repeat or Shuffle say;
+Repeat, Next, Previous, Ctrl+Z/Ctrl+B, and the jump rows still move you, and turning it off restores
+the normal end-of-song advance. The volume, balance, Repeat, Shuffle, and Manual playlist advance flags, the equalizer's on/off
 state, AUTO choice, curve, and preset, the elapsed/remaining readout choice, the visualizer's
 shown/hidden choice, the equalizer and library panels' shown/hidden choices, the always-on-top
 choice, the window-shade mode, the window's last screen position, and the library's top-level browse list (Artists, All

@@ -553,6 +553,7 @@ fn options_overlay_element(all_on: bool) -> Element<'static, Message> {
         stop_after_current: all_on,
         repeat: all_on,
         shuffle: all_on,
+        manual_advance: all_on,
     };
     super::super::view_options_overlay(base, state, 0)
 }
@@ -572,6 +573,7 @@ fn options_overlay_draws_each_row_with_its_state() {
                 "Stop after current: Off",
                 "Repeat: Off",
                 "Shuffle: Off",
+                "Manual playlist advance: Off",
             ],
         ),
         (
@@ -586,6 +588,7 @@ fn options_overlay_draws_each_row_with_its_state() {
                 "Stop after current: On",
                 "Repeat: On",
                 "Shuffle: On",
+                "Manual playlist advance: On",
             ],
         ),
     ];
@@ -631,6 +634,7 @@ fn options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop() {
         "Stop after current: Off",
         "Repeat: Off",
         "Shuffle: Off",
+        "Manual playlist advance: Off",
         "10 songs back",
         "10 songs forward",
         "Back 5 seconds",
@@ -721,6 +725,13 @@ fn options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop() {
                     Message::OptionsChoice(OptionsChoice::Shuffle)
                 )),
                 "the shuffle row must publish its choice: {messages:?}"
+            ),
+            "Manual playlist advance: Off" => assert!(
+                messages.iter().any(|message| matches!(
+                    message,
+                    Message::OptionsChoice(OptionsChoice::ManualAdvance)
+                )),
+                "the manual-advance row must publish its choice: {messages:?}"
             ),
             "10 songs back" => assert!(
                 messages.iter().any(|message| matches!(

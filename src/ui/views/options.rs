@@ -1,5 +1,5 @@
-//! The transient options menu: a modal overlay listing the app's existing on/off choices plus the Back
-//! 5 seconds, Fwd 5 seconds, Start of list, End of list, Jump to time, Jump to file, File info, and
+//! The transient options menu: a modal overlay listing the app's existing on/off choices plus the
+//! Manual playlist advance, Back 5 seconds, Fwd 5 seconds, Start of list, End of list, Jump to time, Jump to file, File info, and
 //! About rows, each applying that choice and closing the menu like a Winamp menu item. Its
 //! highlight is layout-only and unpersisted.
 
@@ -87,6 +87,16 @@ pub(super) fn shuffle_label(shuffle: bool) -> &'static str {
     }
 }
 
+/// The manual-advance row's label: `On` while a song that plays to its end
+/// stops instead of advancing, `Off` otherwise.
+pub(super) fn manual_advance_label(manual_advance: bool) -> &'static str {
+    if manual_advance {
+        "Manual playlist advance: On"
+    } else {
+        "Manual playlist advance: Off"
+    }
+}
+
 /// The current toggle state the options menu's labels are resolved from.
 #[derive(Debug, Clone, Copy)]
 pub struct OptionsState {
@@ -106,6 +116,8 @@ pub struct OptionsState {
     pub repeat: bool,
     /// Shuffle is enabled.
     pub shuffle: bool,
+    /// A song that plays to its natural end stops instead of advancing.
+    pub manual_advance: bool,
 }
 
 /// Resolve a row's label from the current toggle state.
@@ -120,6 +132,7 @@ pub(super) fn options_row_label(row: OptionsRow, state: OptionsState) -> &'stati
         OptionsRow::StopAfterCurrent => stop_after_current_label(state.stop_after_current),
         OptionsRow::Repeat => repeat_label(state.repeat),
         OptionsRow::Shuffle => shuffle_label(state.shuffle),
+        OptionsRow::ManualAdvance => manual_advance_label(state.manual_advance),
         OptionsRow::JumpTracksBack => "10 songs back",
         OptionsRow::JumpTracksForward => "10 songs forward",
         OptionsRow::SeekBackward => "Back 5 seconds",
@@ -230,6 +243,12 @@ mod tests {
         assert_eq!(repeat_label(false), "Repeat: Off");
         assert_eq!(shuffle_label(true), "Shuffle: On");
         assert_eq!(shuffle_label(false), "Shuffle: Off");
+    }
+
+    #[test]
+    fn manual_advance_label_mirrors_the_flag() {
+        assert_eq!(manual_advance_label(true), "Manual playlist advance: On");
+        assert_eq!(manual_advance_label(false), "Manual playlist advance: Off");
     }
 
     #[test]

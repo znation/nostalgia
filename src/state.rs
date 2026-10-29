@@ -32,6 +32,10 @@ pub struct AppState {
     /// Whether Next picks a random song from the loaded song list (Shuffle on)
     /// or the next in order (Shuffle off). Starts off, as in Winamp.
     pub shuffle: bool,
+    /// Whether a song that plays to its natural end stops instead of advancing
+    /// (Manual playlist advance on) or follows the Repeat/Shuffle advance
+    /// rules (off). Starts off, as in Winamp.
+    pub manual_advance: bool,
     /// Playback volume in `[0.0, 1.0]`, never NaN. Kept private so the only
     /// way to change it is [`AppState::set_volume`], which clamps. Read it
     /// with [`AppState::volume`].
@@ -104,6 +108,7 @@ impl Default for AppState {
             paused: false,
             repeat: false,
             shuffle: false,
+            manual_advance: false,
             volume: 0.5,
             balance: 0.0,
             eq_enabled: false,
@@ -140,6 +145,15 @@ impl AppState {
     /// semantics next to the field they mutate, like `toggle_repeat`.
     pub fn toggle_shuffle(&mut self) {
         self.shuffle = !self.shuffle;
+    }
+
+    /// Flip the Manual playlist advance flag in place. The options menu's
+    /// `Manual playlist advance` row calls this (through
+    /// `Message::OptionsChoice(OptionsChoice::ManualAdvance)`); keeping the
+    /// flip here (rather than inlined at the call site) puts the toggling
+    /// semantics next to the field they mutate, like `toggle_repeat`.
+    pub fn toggle_manual_advance(&mut self) {
+        self.manual_advance = !self.manual_advance;
     }
 
     /// Clear the playback flag and the paused flag in place, leaving
@@ -547,6 +561,13 @@ mod tests {
     #[test]
     fn toggle_repeat_flips_only_the_repeat_flag() {
         assert_toggle_flips_only_its_flag(AppState::toggle_repeat, |state| state.repeat);
+    }
+
+    #[test]
+    fn toggle_manual_advance_flips_only_the_manual_advance_flag() {
+        assert_toggle_flips_only_its_flag(AppState::toggle_manual_advance, |state| {
+            state.manual_advance
+        });
     }
 
     #[test]

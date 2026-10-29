@@ -161,7 +161,11 @@ pub(in crate::ui) fn playback_duration(
 /// advance. A natural end is a forward step, not a Previous, so it records
 /// nothing in `PlayHistory`. When `stop_after_current` is armed, a reply that
 /// passes those checks takes the [`stop`] path instead of picking a song, and
-/// disarms the flag; a dropped reply leaves it armed. With Shuffle on and
+/// disarms the flag; a dropped reply leaves it armed. With Manual playlist
+/// advance on, a reply that passes those checks (after that check armed a
+/// clear) takes the [`stop`] path before any advance or Shuffle-round rule —
+/// whatever Repeat or Shuffle say — so the ended song stays current and queued
+/// for Play exactly as that Shuffle-round end does. With Shuffle on and
 /// Repeat off, a reply on the song that completed the Shuffle round also
 /// takes the [`stop`] path; Next and Repeat on start a new round.
 pub(in crate::ui) fn playback_finished(
@@ -180,6 +184,12 @@ pub(in crate::ui) fn playback_finished(
         if player.stop_after_current {
             drop(state);
             player.stop_after_current = false;
+            return stop(player);
+        }
+        // Manual playlist advance: a natural end stops, whatever Repeat or
+        // Shuffle would advance to, leaving the ended song queued for Play.
+        if state.manual_advance {
+            drop(state);
             return stop(player);
         }
         if state.shuffle
