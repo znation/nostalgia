@@ -253,7 +253,7 @@ impl AppleMusicService {
     }
 
     /// Songs in the library matching `query`: every song whose title, artist,
-    /// album title, genre, or composer contains `query` case-insensitively, in library order.
+    /// album title, genre, composer, or release year contains `query` case-insensitively, in library order.
     ///
     /// A signed-in service answers from the signed-in user's Apple Music
     /// library through [`rest::RestLibrary::search_library`]; a signed-out one

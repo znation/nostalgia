@@ -88,8 +88,9 @@ fn sample_album_titles_by_id() -> HashMap<&'static str, String> {
         .collect()
 }
 
-/// Every sample-library song whose title, artist, album title, genre, or
-/// composer contains `query` case-insensitively, in library order.
+/// Every sample-library song whose title, artist, album title, genre,
+/// composer, or release year contains `query` case-insensitively, in library
+/// order.
 ///
 /// Walks [`sample_songs_in_library_order`], so the matches keep the same
 /// stable order the Songs view shows a browsed album. Pure, so the filter is
@@ -103,6 +104,9 @@ pub(super) fn sample_songs_matching(query: &str) -> Vec<Song> {
                 || song.artist.to_lowercase().contains(&needle)
                 || song.genre.to_lowercase().contains(&needle)
                 || song.composer.to_lowercase().contains(&needle)
+                || song
+                    .year
+                    .is_some_and(|year| year.to_string().contains(&needle))
                 || album_titles
                     .get(song.album_id.as_str())
                     .is_some_and(|title| title.contains(&needle))

@@ -306,6 +306,34 @@ async fn search_songs_matches_the_sample_library_by_genre_or_composer() {
     assert_ids(&alternative, |song| song.id.as_str(), &["song-4"]);
 }
 
+// The search also finds a song by its release year, written as a plain number.
+#[tokio::test]
+async fn search_songs_matches_the_sample_library_by_release_year() {
+    let service = test_service();
+
+    let first = service.search_songs("  2001  ").await.unwrap();
+    assert_ids(
+        &first,
+        |song| song.id.as_str(),
+        &["song-1", "song-2", "song-3"],
+    );
+
+    let b_side = service.search_songs("2003").await.unwrap();
+    assert_ids(&b_side, |song| song.id.as_str(), &["song-4"]);
+
+    let last = service.search_songs("2005").await.unwrap();
+    assert_ids(&last, |song| song.id.as_str(), &["song-5"]);
+
+    let decade = service.search_songs("200").await.unwrap();
+    assert_ids(
+        &decade,
+        |song| song.id.as_str(),
+        &["song-1", "song-2", "song-3", "song-4", "song-5"],
+    );
+
+    assert!(service.search_songs("1999").await.unwrap().is_empty());
+}
+
 // The All Songs backend returns the whole sample library, flat and in
 // library order: a regression that dropped a song or shuffled the albums
 // would leave the flat view incomplete even though every other browse query
