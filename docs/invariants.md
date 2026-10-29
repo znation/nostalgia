@@ -2225,6 +2225,25 @@ form.
 
 **History.** Added with the selected-running-time footer, like the song-list footer.
 
+## Grouped-list footer
+
+**Guarantee.** A non-empty Genres, Years, or Composers list draws a footer beneath its rows. With
+no selection it reads `<count> <noun> - <total>`. While the list's own `selected` index names a
+group, it reads `<count> <noun> - <selected playing time>/<total>`, for example
+`2 genres - 3:30/7:10`; a group with a song of unknown length (`duration_ms` 0) gets a trailing
+`+` on its time. An index past the list falls back to the plain form.
+
+**Enforced by.** `song_groups::group_list_summary` formats both forms; `views::browse::grouped_list`
+passes its `selected` argument to it.
+
+**Pinned by.** `list_summary_counts_groups_and_totals_every_song` (plain form),
+`list_summary_puts_the_selected_group_time_before_the_total`,
+`list_summary_marks_an_unknown_selected_group_time`,
+`list_summary_ignores_a_selection_past_the_list` (`src/ui/song_groups.rs`), and
+`root_view_genres_footer_shows_the_selected_group_time` (`src/ui/tests/view_tests.rs`).
+
+**History.** Added with the selected-group-time footer, like the song-list footer.
+
 ## Library footer
 
 **Guarantee.** While the library panel is shown in normal mode, it draws exactly one compact

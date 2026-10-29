@@ -282,7 +282,8 @@ pub fn view_playlists<'a>(
 
 /// Builds a Genres, Years, or Composers list: one row per group, each beside
 /// its cached song-count label (an index without one shows none), under the
-/// count-and-time footer ([`group_list_summary`]) for `view` (`epoch`,
+/// count-and-time footer ([`group_list_summary`], which includes the selected
+/// group's playing time) for `view` (`epoch`,
 /// `selected`, `loading`, `error` and the nouns are the list's epoch and
 /// selection, loading flag and error, and singular and plural noun). An empty
 /// list returns only its placeholder.
@@ -310,7 +311,7 @@ fn grouped_list<'a>(
     if groups.is_empty() {
         return list;
     }
-    with_footer(list, group_list_summary(groups, singular, plural))
+    with_footer(list, group_list_summary(groups, selected, singular, plural))
 }
 
 /// The Genres browse view: one row per genre, in the order given, each

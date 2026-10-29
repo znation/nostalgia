@@ -1121,6 +1121,29 @@ fn root_view_artists_footer_totals_the_album_counts() {
 }
 
 #[test]
+fn root_view_genres_footer_shows_the_selected_group_time() {
+    let (mut player, _state) = test_player();
+    let group = |name: &str, duration_ms| crate::ui::song_groups::SongGroup {
+        name: name.to_string(),
+        songs: vec![crate::library::Song {
+            duration_ms,
+            ..sample_song()
+        }],
+    };
+    player.genres.items = vec![group("Rock", 210_000), group("Jazz", 120_000)];
+    player.genres.loading = false;
+    player.current_view = CurrentView::Genres;
+    let epoch = player.genres.epoch;
+    player.genres.select_row(epoch, 0);
+    let capture = captured_root_view_text_bounds(&player);
+    assert!(
+        capture.texts().any(|text| text == "2 genres - 3:30/5:30"),
+        "{:?}",
+        capture.fragments()
+    );
+}
+
+#[test]
 fn root_view_album_footer_shows_the_selected_running_time() {
     let (mut player, _state) = test_player();
     let mut first = sample_album();

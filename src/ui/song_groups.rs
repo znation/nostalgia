@@ -97,15 +97,26 @@ pub(in crate::ui) fn group_row_label(group: &SongGroup) -> String {
 /// The footer a grouped list shows: `"<count> <noun> - <total>"`, like the
 /// album-list footer (`2 genres - 7:10`). `noun` is `singular` exactly when
 /// there is one group; the total is [`songs_total`] of every song in every
-/// group, so it carries the same trailing `+` for unknown lengths.
+/// group, so it carries the same trailing `+` for unknown lengths. When
+/// `selected` names a group the footer reads `"<count> <noun> -
+/// <selected>/<total>"`, where `<selected>` is [`songs_total`] of that group's
+/// songs; an index past the list gives the plain form.
 pub(in crate::ui) fn group_list_summary(
     groups: &[SongGroup],
+    selected: Option<usize>,
     singular: &str,
     plural: &str,
 ) -> String {
     let noun = if groups.len() == 1 { singular } else { plural };
     let total = songs_total(groups.iter().flat_map(|group| &group.songs));
-    format!("{} {noun} - {total}", groups.len())
+    match selected.and_then(|index| groups.get(index)) {
+        Some(group) => format!(
+            "{} {noun} - {}/{total}",
+            groups.len(),
+            songs_total(&group.songs)
+        ),
+        None => format!("{} {noun} - {total}", groups.len()),
+    }
 }
 
 #[cfg(test)]
@@ -118,6 +129,13 @@ mod tests {
             id: id.to_string(),
             genre: genre.to_string(),
             ..sample_song()
+        }
+    }
+
+    fn timed(id: &str, genre: &str, duration_ms: u64) -> Song {
+        Song {
+            duration_ms,
+            ..song(id, genre)
         }
     }
 
@@ -191,33 +209,60 @@ mod tests {
 
     #[test]
     fn list_summary_counts_groups_and_totals_every_song() {
-        let timed = |id: &str, genre: &str, duration_ms: u64| Song {
-            duration_ms,
-            ..song(id, genre)
-        };
         let two = by_genre(vec![
             timed("1", "a", 180_000),
             timed("2", "a", 120_000),
             timed("3", "b", 330_000),
         ]);
         assert_eq!(
-            group_list_summary(&two, "genre", "genres"),
+            group_list_summary(&two, None, "genre", "genres"),
             "2 genres - 10:30"
         );
 
         let one = by_genre(vec![timed("1", "a", 210_000)]);
         assert_eq!(
-            group_list_summary(&one, "genre", "genres"),
+            group_list_summary(&one, None, "genre", "genres"),
             "1 genre - 3:30"
         );
 
         let unknown = by_genre(vec![timed("1", "a", 210_000), timed("2", "b", 0)]);
         assert_eq!(
-            group_list_summary(&unknown, "genre", "genres"),
+            group_list_summary(&unknown, None, "genre", "genres"),
             "2 genres - 3:30+"
         );
 
         let huge = by_genre(vec![timed("1", "a", u64::MAX), timed("2", "b", 5)]);
-        assert!(group_list_summary(&huge, "genre", "genres").starts_with("2 genres - "));
+        assert!(group_list_summary(&huge, None, "genre", "genres").starts_with("2 genres - "));
+    }
+
+    #[test]
+    fn list_summary_puts_the_selected_group_time_before_the_total() {
+        let groups = by_genre(vec![
+            timed("1", "a", 180_000),
+            timed("2", "a", 120_000),
+            timed("3", "b", 330_000),
+        ]);
+        assert_eq!(
+            group_list_summary(&groups, Some(1), "genre", "genres"),
+            "2 genres - 5:30/10:30"
+        );
+    }
+
+    #[test]
+    fn list_summary_marks_an_unknown_selected_group_time() {
+        let groups = by_genre(vec![timed("1", "a", 210_000), timed("2", "b", 0)]);
+        assert_eq!(
+            group_list_summary(&groups, Some(1), "genre", "genres"),
+            "2 genres - 0:00+/3:30+"
+        );
+    }
+
+    #[test]
+    fn list_summary_ignores_a_selection_past_the_list() {
+        let groups = by_genre(vec![timed("1", "a", 210_000)]);
+        assert_eq!(
+            group_list_summary(&groups, Some(5), "genre", "genres"),
+            "1 genre - 3:30"
+        );
     }
 }
