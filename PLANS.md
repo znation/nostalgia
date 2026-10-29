@@ -78,4 +78,115 @@ the REST mapping tests (`src/apple_music/rest/tests/library.rs`), `docs/usage.md
   touches `src/ui/genres.rs`, `src/ui/years.rs` and the grouped-list views, not album rows or the
   `Album` model.
 
+### Browse the library by composer from a Composers list, like Winamp's Media Library (part 1/2) (planned 2026-10-29 by the plan role)
+
+**Goal.** Winamp's Media Library can filter the audio library by Composer. Every `Song` already
+carries `composer: String` (`src/library.rs`, shown by File info's `Composer:` line, empty when the
+source supplied none). Add a `Composers` button to the Artists view. It opens a Composers list
+with one row per composer and its song count. Opening a row shows that composer's songs in the
+Songs view, and Back returns to Composers. Part 2/2 ("Reopen the library at the Composers list
+across launches") makes the list persist across launches.
+
+**Approach.** Mirror every Years touchpoint (`grep -rn "Year" src/ui` lists them; the finished
+Years plan in PLANS-DONE.md names each one).
+- New file `src/ui/composers.rs` (declared in `src/ui/mod.rs` beside `years`), shaped like
+  `src/ui/genres.rs`: `pub(in crate::ui) type Composer = SongGroup;` and
+  `pub(in crate::ui) fn group_by_composer(songs: Vec<Song>) -> Vec<Composer>` calling
+  `song_groups::group_songs` with the genre key's rule applied to `song.composer`: trim it, a
+  blank composer is `None` (the `Unknown` group, last), otherwise
+  `Some((trimmed.to_lowercase(), trimmed.to_string()))`. Signed out, the sample library
+  (`src/sample_library.rs`, pinned by `songs_carry_the_documented_composers`) shows
+  `Sam Ample` (3 songs) then `Unknown` (2 songs). Row labels use the existing
+  `song_groups::song_count_label`.
+- `src/ui/player.rs`: add `CurrentView::Composers`, `SongsOrigin::Composer`, and a field
+  `composers: BrowseList<Composer>` (started like `years`). In `library_view`, map both to
+  `LibraryView::Artists` for now; part 2/2 replaces that.
+- `src/ui/message.rs`: add `ShowComposers`, `ComposersLoaded(Vec<Composer>)`,
+  `ComposersLoadFailed(String)`, and `ComposerSelected { epoch: u64, index: usize }`, documented
+  like their Years twins, and route them in `src/ui/mod.rs`'s `update`.
+- `src/ui/handlers/browse.rs`: `show_composers` (a copy of `show_years` mapping `get_all_songs`
+  through `group_by_composer`, logging `"loading library composers"`) and `composer_selected`
+  (a copy of `year_selected` setting `SongsOrigin::Composer`). Add a `CurrentView::Composers`
+  arm wherever `CurrentView::Years` has one (`select_row`, `open_selected`, `open_row`, both
+  matches in `back` — `Composers → Artists`, `SongsOrigin::Composer → Composers` with
+  `player.composers.restore_library_order()` — `sort_browse` by name, `reverse_browse`,
+  `randomize_browse`, `move_selected_row`).
+- `src/ui/handlers/browse/fetch.rs`: `composers_loaded` (`store_with_labels(composers,
+  song_count_label)` as `years_loaded` does), `composers_load_failed`, and a
+  `ComposersLoaded | ComposersLoadFailed` arm in `browse_reply` checking
+  `player.composers.is_current`.
+- Views: in `src/ui/views/browse.rs`, `view_composers` (a copy of `view_years`, count nouns
+  `composer`/`composers`) and `view_composers_button` (`labeled_button("Composers",
+  Message::ShowComposers)`), and add `Composers` to that file's list of every `CurrentView`. In
+  `src/ui/views/browse/rows/text.rs`, a `"No composers"` arm in `empty_list_label`. In
+  `src/ui/view/library.rs`, render the view beside the `CurrentView::Years` arm and push
+  `view_composers_button()` right after `view_years_button()` in the Artists-only button
+  column; update that block's comment, which names the buttons (it currently omits Genres and
+  Years too — list all eight).
+- Fix any other non-exhaustive match the compiler flags (for example the `CurrentView` arrays in
+  `src/ui/tests/browse_tests.rs`) in the Years style.
+- Docs: in `docs/usage.md`, name `Composers` in the Artists-list buttons sentence after `Years`
+  (renumbering the ordinals that follow), say what its rows show (composer, song count, by name
+  ignoring case, `Unknown` last for songs without one), that opening a row lists its songs, and
+  that Back returns to Composers; add Composers wherever the doc lists the flat lists Back
+  returns to. In `docs/invariants.md`, add `Composers → Artists` and `Songs → Composers` to
+  `## Browse hierarchy`, add Composers to the `## UI layout` sentence on the Artists-only
+  buttons, and list the new tests under Pinned by.
+
+**Tests.**
+- Unit tests in `src/ui/composers.rs`: names compare case-insensitively and trim (`Jane Doe`
+  and ` jane doe ` share one group named `Jane Doe`); blank composers form a last `Unknown`
+  group; groups order by lowercase name, not first appearance.
+- New `src/ui/tests/composers_tests.rs` (registered in `src/ui/tests/mod.rs`), mirroring
+  `years_tests.rs` case for case: `ComposersLoaded` stores rows labelled like `3 songs`;
+  `show_composers` clears an active search; Back from Composers returns to Artists;
+  `ComposerSelected` shows exactly that composer's songs in `CurrentView::Songs` and Back returns
+  to Composers; a stale-epoch `ComposerSelected` does nothing; a superseded `ComposersLoaded` is
+  dropped.
+- `sort_reorders_composers_by_name` in `src/ui/tests/sort_tests.rs`, beside
+  `sort_reorders_years_by_name`, and a Composers case beside the Years one in
+  `src/ui/tests/loading_tests.rs` if that file enumerates every loaded/failed message pair.
+
+**Acceptance criteria.**
+- The Artists view shows a `Composers` button that lists the library's composers with song
+  counts, ordered by name ignoring case, with `Unknown` last when any song has no composer.
+- Opening a composer shows only its songs, which play, step, and jump like any Songs list. Back
+  returns to Composers, and Back again to Artists.
+- Sort, reverse, randomize, and Alt+Up/Down work on the Composers list like on Years.
+- The new tests pass, docs/usage.md and docs/invariants.md describe the view, and `make check`
+  passes.
+- Independent of "Show each album row's release year beside its running time": that plan
+  touches album rows and the `Album` model, not the grouped lists.
+
+### Reopen the library at the Composers list across launches (part 2/2) ("requires part 1/2 landed") (planned 2026-10-29 by the plan role)
+
+**Goal.** Part 1/2 ("Browse the library by composer from a Composers list") saves the Composers
+list and a composer's Songs as `LibraryView::Artists`. Save and restore Composers like every
+other top-level list (`LibraryView` in `src/settings/library_view.rs`, saved as `library_view`).
+
+**Approach.**
+- `src/settings/library_view.rs`: add `LibraryView::Composers` with key `"composers"`, and add
+  it to the `from_key` array and the `keys_round_trip_for_every_variant` test.
+- `src/ui/player.rs` `library_view`: map `CurrentView::Composers` and `SongsOrigin::Composer` to
+  `LibraryView::Composers`.
+- `src/ui/handlers/browse.rs`: add `LibraryView::Composers => show_composers(player)` to
+  `restore_view`, and add `CurrentView::Composers` to the flat-list arm of `session_ready` so
+  sign-in refetches it.
+- Docs: in `docs/usage.md`, add Composers to the settings paragraph's list of remembered lists.
+  In `docs/invariants.md` `## Settings persistence`, add the key (beside `years`) and name the
+  new tests.
+
+**Tests.**
+- In `src/ui/tests/settings_tests.rs`, following the Years cases: showing Composers, and a
+  composer's Songs, saves `library_view = composers`; booting with `composers` saved opens the
+  Composers list and issues its fetch.
+- In the test file holding the `session_ready` refetch cases: a session landing while Composers
+  shows refetches it.
+
+**Acceptance criteria.**
+- Quitting on the Composers list, or on a composer's songs, reopens the library at Composers on
+  the next launch. Every other saved list behaves as before, and an unknown stored word still
+  falls back to Artists.
+- The new tests pass, the docs name Composers, and `make check` passes.
+
 ## Done
