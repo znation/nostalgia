@@ -5,6 +5,23 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### A stale `PLANS.md.bak` copy of PLANS.md ships in the repository root (found by the bugfix role 2026-10-29) — fixed 2026-10-29 by the bugfix role
+
+- Symptom: `git ls-files` lists `PLANS.md.bak`, a stale snapshot of PLANS.md as it
+  stood before the Manual playlist advance plan landed, committed at the root by
+  a10c0361b. Nothing references it and its contents have already drifted from
+  the real PLANS.md.
+- Reproduce: `git ls-files | grep -Ei '\.(bak|orig|rej|sw[po])$|~$'` lists it.
+- Cause: the edit that moved the plan entry left a backup file beside
+  `PLANS.md` and the merge picked it up.
+- Fix: delete the file and guard against a recurrence with
+  `repo_hygiene::tests::no_backup_artifacts_ship_in_the_repository`
+  (`src/repo_hygiene.rs`), which fails while any `*.bak`/`*.orig`/`*.rej`/`*~`
+  artifact sits in the checkout (`.git` and `target` excluded).
+
+**Validation gap:** no-observability — the stray file broke no build or test and
+left no trace, so a tree-hygiene test was needed to surface it at all.
+
 ### A song tagged literally "Unknown" shows a second "Unknown" row in Genres or Composers, apart from the blank-field Unknown group (found by the bugfix role 2026-10-29) — fixed 2026-10-29 by the bugfix role
 
 Song lists grouped by genre or composer name every group after its field's trimmed

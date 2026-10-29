@@ -68,6 +68,7 @@ pub mod http;
 pub mod library;
 pub mod music_error;
 pub mod music_kit_auth;
+pub mod repo_hygiene;
 pub mod sample_library;
 pub mod settings;
 pub mod state;
