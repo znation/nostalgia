@@ -7,6 +7,13 @@ Music as the music library.
 
 <!-- tumwater:prompt:start -->
 Nostalgia is a (very close if not pixel-perfect) clone of the classic Winamp UI, but built in Rust, and using Apple Music as the music library.
+
+The UI to clone is the classic Winamp 2.x base skin. Reference screenshots of the real thing —
+Winamp 0.2a through 2.95 — live in `winamp-screenshots/`, indexed with their sources in
+`winamp-screenshots/README.md`. When a change touches anything visible (a window, panel, button,
+readout, color, or layout), compare the result against the closest reference screenshot and match
+it; name the screenshot you compared against in the change's summary. `docs/screenshots/` holds
+Nostalgia's own captures, not the target.
 <!-- tumwater:prompt:end -->
 
 ## Status
@@ -42,6 +49,18 @@ The equalizer with presets, plus window-shade mode:
 
 The player on its own: [docs/screenshots/player.png](docs/screenshots/player.png).
 
+Everything above is Nostalgia's own output. The target it is measured against is a set of
+reference captures of the real thing in
+[winamp-screenshots/](winamp-screenshots/README.md) — classic Winamp from 0.2a through 2.95,
+indexed by window and version with their sources:
+
+![Classic Winamp 2.95 with its main window, equalizer and playlist](winamp-screenshots/winamp-2.95-stack.png)
+
+![Classic Winamp 2.05 main window](winamp-screenshots/winamp-2.05-main.jpg)
+
+When a change touches anything visible, compare it against the closest of those captures (the
+windowshade strip, the docked stack, the equalizer states) before calling it done.
+
 ## Usage
 
 Build and run with `cargo run`; the player opens an iced window with the Winamp-style Now
@@ -65,6 +84,11 @@ one behavior; `make fix` applies formatting and clippy's machine-applicable fixe
 
 `docs/invariants.md` records each subsystem's guarantees, the code that enforces them, and the
 tests that pin them; update a section when a change alters its guarantee.
+
+`winamp-screenshots/` is the visual ground truth for UI work: real Winamp captures from 0.2a
+through 2.95, indexed by window and version in
+[winamp-screenshots/README.md](winamp-screenshots/README.md). Compare against them when
+changing anything visible.
 
 On Linux the build links against the system audio library, so install the ALSA
 development headers first — `libasound2-dev` on Debian/Ubuntu, `alsa-lib-devel`

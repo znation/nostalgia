@@ -1,0 +1,17 @@
+# Image assets are tracked with Git LFS.
+#
+# Screenshots (Nostalgia's own captures under docs/screenshots/ and the classic Winamp
+# reference captures under winamp-screenshots/) are binary and change often, so they live in
+# Git LFS: the repository stores a small pointer per file and the bytes live in LFS storage.
+# Run `git lfs install` once per clone (it also installs the pre-push hook that uploads new
+# LFS objects). Text-based image formats (SVG) are deliberately not listed: they diff well
+# and gain nothing from LFS.
+*.png filter=lfs diff=lfs merge=lfs -text
+*.jpg filter=lfs diff=lfs merge=lfs -text
+*.jpeg filter=lfs diff=lfs merge=lfs -text
+*.gif filter=lfs diff=lfs merge=lfs -text
+*.webp filter=lfs diff=lfs merge=lfs -text
+*.bmp filter=lfs diff=lfs merge=lfs -text
+*.ico filter=lfs diff=lfs merge=lfs -text
+*.tif filter=lfs diff=lfs merge=lfs -text
+*.tiff filter=lfs diff=lfs merge=lfs -text

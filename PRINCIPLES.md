@@ -12,3 +12,4 @@ and will tune it to this project.
 - Keep the usage reference (`docs/usage.md`) current: a change to what the player shows or how a control behaves updates it in the same change.
 - Small, complete, and correct beats big and half-done: one focused change per tick.
 - Keep external integrations behind a narrow seam so a stub can stand in until the real service lands.
+- Match the original: when a change touches anything visible, compare it against the closest reference screenshot in `winamp-screenshots/` (indexed in `winamp-screenshots/README.md`) and keep the Winamp 2.x base-skin chrome, palette, bevels, and layout.
