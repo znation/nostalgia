@@ -11,6 +11,7 @@
 
 use iced::Task;
 
+use crate::library::Song;
 use crate::settings::library_view::LibraryView;
 use crate::ui::browse::BrowseList;
 use crate::ui::genres::group_by_genre;
@@ -252,6 +253,21 @@ pub(in crate::ui) fn playlist_selected(
     ))
 }
 
+/// Show an in-memory song group (a genre's or a year's) in the shared songs
+/// buffer and record its origin for Back. Starting a songs fetch generation
+/// makes an in-flight album or playlist reply stale.
+fn show_group_songs(
+    player: &mut WinampPlayer,
+    songs: Vec<Song>,
+    origin: SongsOrigin,
+) -> Task<Message> {
+    player.songs.begin_fetch();
+    fetch::store_songs(&mut player.songs, songs);
+    player.songs_origin = origin;
+    switch_view(player, CurrentView::Songs);
+    scroll::scroll_browse_to_top()
+}
+
 /// A genre's row was opened: show the genre's songs, already grouped in
 /// memory, in the shared songs buffer and record the origin for Back. A stale
 /// epoch or out-of-range index is rejected like the playlist twin's. Starting
@@ -265,11 +281,7 @@ pub(in crate::ui) fn genre_selected(
         return Task::none();
     };
     let songs = genre.songs.clone();
-    player.songs.begin_fetch();
-    fetch::store_songs(&mut player.songs, songs);
-    player.songs_origin = SongsOrigin::Genre;
-    switch_view(player, CurrentView::Songs);
-    scroll::scroll_browse_to_top()
+    show_group_songs(player, songs, SongsOrigin::Genre)
 }
 
 /// A year's row was opened: the Years twin of [`genre_selected`], showing the
@@ -283,11 +295,7 @@ pub(in crate::ui) fn year_selected(
         return Task::none();
     };
     let songs = year.songs.clone();
-    player.songs.begin_fetch();
-    fetch::store_songs(&mut player.songs, songs);
-    player.songs_origin = SongsOrigin::Year;
-    switch_view(player, CurrentView::Songs);
-    scroll::scroll_browse_to_top()
+    show_group_songs(player, songs, SongsOrigin::Year)
 }
 
 /// Step back up the browse hierarchy: the browse hierarchy is navigable both
