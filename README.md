@@ -14,8 +14,8 @@ Nostalgia is a (very close if not pixel-perfect) clone of the classic Winamp UI,
 <!-- tumwater:status:start -->
 Early skeleton (0.1.0): an iced (0.14) desktop clone of the Winamp 2.x UI, with a themed player
 (Now Playing LCD, transport, volume and balance, equalizer) and an artist → album → song browser
-with library search and flat All Songs, All Albums, Playlists, Recently Added, and Recently Played
-views. Apple Music browse/search and preview playback sit behind injectable seams and fall back to
+with library search and flat All Songs, All Albums, Playlists, Genres, Recently Added, and Recently
+Played views. Apple Music browse/search and preview playback sit behind injectable seams and fall back to
 the sample library and silence.
 Open work lives in PLANS.md, BUGS.md, and QUESTIONS.md.
 <!-- tumwater:status:end -->
