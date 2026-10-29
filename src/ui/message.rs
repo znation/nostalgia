@@ -502,6 +502,10 @@ pub(in crate::ui) enum OptionsChoice {
     JumpTracksBack,
     /// Reuses [`Message::JumpTracksForward`].
     JumpTracksForward,
+    /// Reuses [`Message::SeekBackward`].
+    SeekBackward,
+    /// Reuses [`Message::SeekForward`].
+    SeekForward,
     /// Opens the Jump to time panel when a preview of known length is loaded.
     JumpTime,
     /// Opens the Jump to File panel while a song list is showing.
@@ -524,6 +528,8 @@ pub(in crate::ui) enum OptionsRow {
     Shuffle,
     JumpTracksBack,
     JumpTracksForward,
+    SeekBackward,
+    SeekForward,
     JumpTime,
     JumpFile,
     FileInfo,
@@ -532,7 +538,7 @@ pub(in crate::ui) enum OptionsRow {
 }
 
 impl OptionsRow {
-    pub(in crate::ui) const ALL: [Self; 16] = [
+    pub(in crate::ui) const ALL: [Self; 18] = [
         Self::AlwaysOnTop,
         Self::TimeDisplay,
         Self::Visualizer,
@@ -544,6 +550,8 @@ impl OptionsRow {
         Self::Shuffle,
         Self::JumpTracksBack,
         Self::JumpTracksForward,
+        Self::SeekBackward,
+        Self::SeekForward,
         Self::JumpTime,
         Self::JumpFile,
         Self::FileInfo,
@@ -564,6 +572,8 @@ impl OptionsRow {
             Self::Shuffle => Message::OptionsChoice(OptionsChoice::Shuffle),
             Self::JumpTracksBack => Message::OptionsChoice(OptionsChoice::JumpTracksBack),
             Self::JumpTracksForward => Message::OptionsChoice(OptionsChoice::JumpTracksForward),
+            Self::SeekBackward => Message::OptionsChoice(OptionsChoice::SeekBackward),
+            Self::SeekForward => Message::OptionsChoice(OptionsChoice::SeekForward),
             Self::JumpTime => Message::OptionsChoice(OptionsChoice::JumpTime),
             Self::JumpFile => Message::OptionsChoice(OptionsChoice::JumpFile),
             Self::FileInfo => Message::OptionsChoice(OptionsChoice::FileInfo),
@@ -594,6 +604,8 @@ mod options_tests {
                 Message::OptionsChoice(OptionsChoice::Shuffle),
                 Message::OptionsChoice(OptionsChoice::JumpTracksBack),
                 Message::OptionsChoice(OptionsChoice::JumpTracksForward),
+                Message::OptionsChoice(OptionsChoice::SeekBackward),
+                Message::OptionsChoice(OptionsChoice::SeekForward),
                 Message::OptionsChoice(OptionsChoice::JumpTime),
                 Message::OptionsChoice(OptionsChoice::JumpFile),
                 Message::OptionsChoice(OptionsChoice::FileInfo),

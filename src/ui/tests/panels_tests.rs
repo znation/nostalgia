@@ -522,6 +522,11 @@ fn options_choice_applies_each_toggle_and_closes_the_panel() {
                 OptionsChoice::JumpTracksBack | OptionsChoice::JumpTracksForward => {
                     unreachable!("covered by options_ten_song_rows_jump_like_the_keypad")
                 }
+                OptionsChoice::SeekBackward | OptionsChoice::SeekForward => {
+                    unreachable!(
+                        "covered by options_back_and_fwd_seconds_rows_seek_like_the_arrows"
+                    )
+                }
                 OptionsChoice::JumpTime | OptionsChoice::JumpFile => {
                     unreachable!("covered by options_jump_rows_open_their_panels_or_just_close")
                 }

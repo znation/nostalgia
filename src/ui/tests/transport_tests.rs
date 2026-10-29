@@ -189,6 +189,49 @@ fn seek_messages_drive_the_audio_backend() {
     assert_eq!(*state.blocking_lock(), AppState::default());
 }
 
+// The options menu's Back 5 seconds and Fwd 5 seconds rows must reuse the
+// arrow arms exactly: choosing either by mouse or by Enter closes the menu,
+// schedules no work, and forwards the same signed five-second offset to the
+// backend, pinned as a literal like `seek_messages_drive_the_audio_backend`
+// above. Keyboard activation reaches the choice through the row's position
+// in `OptionsRow::ALL` (`OptionsRow` has no `PartialEq`), so both routes are
+// driven.
+#[test]
+fn options_back_and_fwd_seconds_rows_seek_like_the_arrows() {
+    for (choice, expected) in [
+        (OptionsChoice::SeekBackward, -5),
+        (OptionsChoice::SeekForward, 5),
+    ] {
+        let (recording, mut player, state) = player_with_recording();
+
+        // Mouse: the row's own message.
+        player.options_visible = true;
+        assert_message_schedules_no_work(&mut player, Message::OptionsChoice(choice));
+        assert!(!player.options_visible, "{choice:?} must close the menu");
+
+        // Keyboard: the highlighted row activated with Enter.
+        player.options_visible = true;
+        player.options_selected = OptionsRow::ALL
+            .iter()
+            .position(|row| {
+                matches!(
+                    (row, choice),
+                    (OptionsRow::SeekBackward, OptionsChoice::SeekBackward)
+                        | (OptionsRow::SeekForward, OptionsChoice::SeekForward)
+                )
+            })
+            .unwrap();
+        assert_message_schedules_no_work(&mut player, Message::OptionsActivate);
+        assert!(!player.options_visible, "{choice:?} must close the menu");
+
+        assert_eq!(
+            recording.calls(),
+            vec![AudioCall::SeekBy(expected), AudioCall::SeekBy(expected)]
+        );
+        assert_eq!(*state.blocking_lock(), AppState::default());
+    }
+}
+
 // A rejection from the seek backend must only be logged: the seek arm still
 // schedules no work and leaves shared state alone. The fake counts its
 // rejected calls, proving the message reached the failing backend instead of

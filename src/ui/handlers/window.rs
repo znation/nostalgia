@@ -236,6 +236,8 @@ pub(in crate::ui) fn options_choice(
         OptionsChoice::JumpTracksForward => {
             super::playback::stepping::jump_ten_tracks(player, true)
         }
+        OptionsChoice::SeekBackward => super::mixer::seek_backward(player),
+        OptionsChoice::SeekForward => super::mixer::seek_forward(player),
         OptionsChoice::JumpTime => super::jump::toggle_jump_time(player),
         OptionsChoice::JumpFile => super::jump::toggle_jump_file(player),
         OptionsChoice::FileInfo => toggle_file_info(player),

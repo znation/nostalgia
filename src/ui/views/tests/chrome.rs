@@ -597,6 +597,8 @@ fn options_overlay_draws_each_row_with_its_state() {
         for expected in ["OPTIONS"].into_iter().chain(rows).chain([
             "10 songs back",
             "10 songs forward",
+            "Back 5 seconds",
+            "Fwd 5 seconds",
             "Jump to time",
             "Jump to file",
             "File info",
@@ -629,6 +631,8 @@ fn options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop() {
         "Shuffle: Off",
         "10 songs back",
         "10 songs forward",
+        "Back 5 seconds",
+        "Fwd 5 seconds",
         "Jump to time",
         "Jump to file",
         "File info",
@@ -727,6 +731,20 @@ fn options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop() {
                     Message::OptionsChoice(OptionsChoice::JumpTracksForward)
                 )),
                 "the ten-songs-forward row must publish its choice: {messages:?}"
+            ),
+            "Back 5 seconds" => assert!(
+                messages.iter().any(|message| matches!(
+                    message,
+                    Message::OptionsChoice(OptionsChoice::SeekBackward)
+                )),
+                "the back-5-seconds row must publish its choice: {messages:?}"
+            ),
+            "Fwd 5 seconds" => assert!(
+                messages.iter().any(|message| matches!(
+                    message,
+                    Message::OptionsChoice(OptionsChoice::SeekForward)
+                )),
+                "the fwd-5-seconds row must publish its choice: {messages:?}"
             ),
             "Jump to time" => assert!(
                 messages.iter().any(|message| matches!(
