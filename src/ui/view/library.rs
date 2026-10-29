@@ -139,9 +139,9 @@ pub(super) fn view_library<'a>(
     // with nothing selected it does nothing.
     library = library.push(views::view_open_button());
     library = library.push(views::view_browse_nav_buttons());
-    // The All Songs, All Albums, Playlists, Recently Added, and Recently Played buttons open the flat lists;
-    // they live on the Artists view, beside Back/Retry, so each list is one
-    // press from the top of the hierarchy.
+    // The All Songs, All Albums, Playlists, Recently Added, and Recently Played buttons open the
+    // flat lists; they live on the Artists view, beside Back/Retry, so each list is one press from
+    // the top of the hierarchy.
     if matches!(player.current_view, CurrentView::Artists) {
         library = library
             .push(views::view_all_songs_button())

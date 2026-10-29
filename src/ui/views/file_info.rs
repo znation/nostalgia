@@ -1,6 +1,6 @@
-//! The transient File info panel: a modal overlay over the normal-mode screen
-//! naming the current track's title, artist, album, year, genre, track number,
-//! disc number, composer, content rating, length, and — while the loaded preview reports one — its format.
+//! The transient File info panel: a modal overlay over the normal-mode screen naming the current
+//! track's title, artist, album, year, genre, track number, disc number, composer, content rating,
+//! length, and — while the loaded preview reports one — its format.
 
 use iced::{
     Element,
@@ -50,15 +50,13 @@ const FORMAT_LABEL: &str = "Format: ";
 
 /// Stacks the transient File info panel for `track` over `base`.
 ///
-/// The panel is modal (see [`modal_overlay`]): `Close` and the backdrop each
-/// publish [`Message::ToggleFileInfo`]. It lists the title, the artist, the
-/// album, the release year, the genre, the track number, the disc number, the composer, and the content rating (each left out
-/// when the source supplied none), the length, which is `--:--` for an unknown
-/// duration, and — after the length
-/// and only while the loaded preview reports one (`format` is `Some`) — the
-/// format line built from the LCD status row's prefix and channel label, for
-/// example `Format: 256 KBPS  44 KHZ STEREO`. No state or playback is touched
-/// here.
+/// The panel is modal (see [`modal_overlay`]): `Close` and the backdrop each publish
+/// [`Message::ToggleFileInfo`]. It lists the title, the artist, the album, the release year, the
+/// genre, the track number, the disc number, the composer, and the content rating (each left out
+/// when the source supplied none), the length, which is `--:--` for an unknown duration, and —
+/// after the length and only while the loaded preview reports one (`format` is `Some`) — the format
+/// line built from the LCD status row's prefix and channel label, for example
+/// `Format: 256 KBPS  44 KHZ STEREO`. No state or playback is touched here.
 pub fn view_file_info_overlay<'a>(
     base: Element<'a, Message>,
     track: &'a KnownTrack,

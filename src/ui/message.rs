@@ -163,7 +163,8 @@ pub(in crate::ui) enum Message {
     PreviousTrack,
     // A click on the Next button: the last song while Control is held, otherwise one step forward.
     NextButton,
-    // A click on the Previous button: the first song while Control is held, otherwise one step back.
+    // A click on the Previous button: the first song while Control is held, otherwise one step
+    // back.
     PreviousButton,
     // A click on the Stop button: fade out and stop while Shift is held, otherwise stop at once.
     StopButton,

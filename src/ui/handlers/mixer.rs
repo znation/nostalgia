@@ -156,11 +156,10 @@ pub(in crate::ui) fn eq_preamp_wheel(player: &mut WinampPlayer, direction: f32) 
     })
 }
 
-/// A band slider's wheel roll: nudges only band `band` by one
-/// [`views::EQ_STEP`] in the roll's vertical direction, through the same
-/// clamped setter and backend forward as a drag, but without setting
-/// `mixer_drag`; it flashes the slider's readout instead. A zero or `NaN` direction, or an out-of-range band, is a no-op
-/// before the state lock.
+/// A band slider's wheel roll: nudges only band `band` by one [`views::EQ_STEP`] in the roll's
+/// vertical direction, through the same clamped setter and backend forward as a drag, but without
+/// setting `mixer_drag`; it flashes the slider's readout instead. A zero or `NaN` direction, or an
+/// out-of-range band, is a no-op before the state lock.
 pub(in crate::ui) fn eq_band_wheel(
     player: &mut WinampPlayer,
     band: usize,

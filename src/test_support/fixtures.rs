@@ -1,4 +1,5 @@
-//! Sample model values, stepping fixtures, sessions, and the `"Rock"` preset shared by the crate's tests.
+//! Sample model values, stepping fixtures, sessions, and the `"Rock"` preset shared by the crate's
+//! tests.
 
 use crate::equalizer::{PRESETS, Preset};
 use crate::library::{Album, Artist, Playlist, Song};

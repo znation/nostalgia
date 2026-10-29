@@ -94,11 +94,10 @@ pub(in crate::ui) struct WinampPlayer {
     pub(in crate::ui) genres: BrowseList<Genre>,
     /// The library's songs grouped by release year behind the Artists view's Years button.
     pub(in crate::ui) years: BrowseList<Year>,
-    /// Which list the Songs view was opened from. `Album` returns to the
-    /// per-artist Albums view on Back; `AllAlbums` returns to the flat All
-    /// Albums view; `RecentlyAdded` returns to the Recently Added view; `Playlist` returns to the Playlists view. Set by the
-    /// selection arm from the view that rendered the pressed row, so Back
-    /// always steps to the level the row came from.
+    /// Which list the Songs view was opened from. `Album` returns to the per-artist Albums view on
+    /// Back; `AllAlbums` returns to the flat All Albums view; `RecentlyAdded` returns to the
+    /// Recently Added view; `Playlist` returns to the Playlists view. Set by the selection arm from
+    /// the view that rendered the pressed row, so Back always steps to the level the row came from.
     pub(in crate::ui) songs_origin: SongsOrigin,
     /// The library search box's text, as typed. `Message::SearchChanged`
     /// stores each keystroke here and the search box renders it back; a submit
@@ -549,10 +548,9 @@ impl WinampPlayer {
     /// combined artist and title exceed `views::MARQUEE_WIDTH` characters.
     ///
     /// The marquee timer is subscribed only while this holds (see
-    /// [`super::subscriptions::subscriptions`]), so the bar is not rebuilt four times a second for a
-    /// line that fits whole. The label, artist, and number are resolved exactly
-    /// as `view` resolves them, so the timer scrolls precisely the lines the
-    /// bar windows.
+    /// [`super::subscriptions::subscriptions`]), so the bar is not rebuilt four times a second for
+    /// a line that fits whole. The label, artist, and number are resolved exactly as `view`
+    /// resolves them, so the timer scrolls precisely the lines the bar windows.
     pub(in crate::ui) fn needs_marquee(&self) -> bool {
         if self.mixer_drag.is_some() || self.seek_preview.is_some() || self.title_drag.is_some() {
             return false;

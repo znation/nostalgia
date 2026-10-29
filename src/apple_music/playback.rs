@@ -27,11 +27,11 @@ pub(super) struct TransportState {
 /// Play/Pause, Play, Pause, and Stop arms call one method each, and each
 /// reuses the matching [`crate::state::AppState`] mutator so none of those goes dead.
 impl AppleMusicService {
-    /// Pauses the audio, or resumes it when the player is already paused with a
-    /// preview loaded (Winamp's Pause toggles). Pausing clears the shared playing flag, and sets the shared
-    /// paused flag when a preview is loaded, keeping `current_track` set so the
-    /// Now Playing bar still names the track. The paused flag is what tells
-    /// this state apart from a Stop, which clears both flags.
+    /// Pauses the audio, or resumes it when the player is already paused with a preview loaded
+    /// (Winamp's Pause toggles). Pausing clears the shared playing flag, and sets the shared paused
+    /// flag when a preview is loaded, keeping `current_track` set so the Now Playing bar still
+    /// names the track. The paused flag is what tells this state apart from a Stop, which clears
+    /// both flags.
     ///
     /// The backend is called first: one that cannot accept the request reports
     /// it before shared state claims playback stopped. A pause with no loaded

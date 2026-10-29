@@ -271,12 +271,11 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
         return Some(Message::FocusSearch);
     }
 
-    // Ctrl+Z and Ctrl+B jump to the first and last song of the list Z and B
-    // step through, Ctrl+R reverses the showing list, Ctrl+Shift+R shuffles it,
-    // and Ctrl+W rolls the window up into shade mode and back, Ctrl+J flips the
-    // Jump to time panel, Ctrl+A and Ctrl+T repeat the classic always-on-top and
-    // elapsed/remaining toggles, Ctrl+V arms Stop after current, and Ctrl+F1 opens the About panel, under the
-    // same no-Alt, no-Logo rule as Ctrl+F.
+    // Ctrl+Z and Ctrl+B jump to the first and last song of the list Z and B step through, Ctrl+R
+    // reverses the showing list, Ctrl+Shift+R shuffles it, and Ctrl+W rolls the window up into
+    // shade mode and back, Ctrl+J flips the Jump to time panel, Ctrl+A and Ctrl+T repeat the
+    // classic always-on-top and elapsed/remaining toggles, Ctrl+V arms Stop after current, and
+    // Ctrl+F1 opens the About panel, under the same no-Alt, no-Logo rule as Ctrl+F.
     if modifiers.control() && !modifiers.alt() && !modifiers.logo() {
         match key {
             Key::Character(character) if character.eq_ignore_ascii_case("z") => {

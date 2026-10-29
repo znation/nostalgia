@@ -120,10 +120,10 @@ impl Resource {
     /// [`get_songs_from_playlist`](super::super::RestLibrary::get_songs_from_playlist), and
     /// [`RestLibrary::search_library`](super::super::RestLibrary::search_library)). The id and
     /// title are required (see [`required_id`] and [`required_name`]); the artist, album name,
-    /// genre, track number, disc number, composer, content rating, duration, and preview URL fall back to their "source supplied none"
-    /// sentinels. The whole-library path maps up to [`MAX_PAGES`](super::super::paging::MAX_PAGES)
-    /// pages of songs, so consuming the parsed resource avoids re-allocating every string it
-    /// already owns.
+    /// genre, track number, disc number, composer, content rating, duration, and preview URL fall
+    /// back to their "source supplied none" sentinels. The whole-library path maps up to
+    /// [`MAX_PAGES`](super::super::paging::MAX_PAGES) pages of songs, so consuming the parsed
+    /// resource avoids re-allocating every string it already owns.
     pub(in crate::apple_music::rest) fn into_song(
         self,
         album_id: &str,

@@ -1,6 +1,6 @@
-//! The transient options menu: a modal overlay listing the app's existing
-//! on/off choices plus Jump to time, Jump to file, and About rows, each applying that choice and closing the
-//! menu like a Winamp menu item. Its highlight is layout-only and unpersisted.
+//! The transient options menu: a modal overlay listing the app's existing on/off choices plus Jump
+//! to time, Jump to file, and About rows, each applying that choice and closing the menu like a
+//! Winamp menu item. Its highlight is layout-only and unpersisted.
 
 use iced::{
     Element,
@@ -139,11 +139,11 @@ pub(super) fn options_row_style(
     chrome
 }
 
-/// Stacks the transient options menu over `base` through [`modal_overlay`].
-/// The backdrop and Close publish [`Message::ToggleOptions`]; toggle rows
-/// publish [`Message::OptionsChoice`] (so do the Jump rows) and About publishes [`Message::ToggleAbout`].
-/// Each row closes the menu through its existing handler. `selected` highlights
-/// the keyboard row without changing the labels or mouse messages.
+/// Stacks the transient options menu over `base` through [`modal_overlay`]. The backdrop and Close
+/// publish [`Message::ToggleOptions`]; toggle rows publish [`Message::OptionsChoice`] (so do the
+/// Jump rows) and About publishes [`Message::ToggleAbout`]. Each row closes the menu through its
+/// existing handler. `selected` highlights the keyboard row without changing the labels or mouse
+/// messages.
 pub fn view_options_overlay<'a>(
     base: Element<'a, Message>,
     state: OptionsState,

@@ -39,9 +39,10 @@ fn is_numeric_component(part: &str) -> bool {
 /// embedding an internal IPv4 address. IPv6 documentation (`2001:db8::/32`)
 /// and benchmarking (`2001:2::/48`) addresses are allowed.
 ///
-/// Shared with [`crate::audio`], whose preview agent resolves a preview URL's
-/// hostname and rejects any internal address it resolves to — the check that
-/// closes the gap [`preview_url_problem`](super::validation::preview_url_problem) leaves for a name it never resolves.
+/// Shared with [`crate::audio`], whose preview agent resolves a preview URL's hostname and rejects
+/// any internal address it resolves to — the check that closes the gap
+/// [`preview_url_problem`](super::validation::preview_url_problem) leaves for a name it never
+/// resolves.
 pub(crate) fn ip_is_internal(ip: std::net::IpAddr) -> bool {
     match ip {
         std::net::IpAddr::V4(v4) => {

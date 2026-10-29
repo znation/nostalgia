@@ -1,18 +1,16 @@
 //! The user's mixer and equalizer settings, persisted across launches.
 //!
-//! [`Settings`] is a small snapshot of the values the player keeps while it
-//! runs: the volume, balance, Repeat and Shuffle flags, the equalizer's on/off
-//! and AUTO states, preamp, band gains, and selected preset, the Now Playing readout's
-//! elapsed/remaining mode, the visualizer's shown/hidden choice, the equalizer
-//! and library panels' shown/hidden choices, the always-on-top flag, and the
-//! window-shade mode, the window's last screen position, and the library's
-//! top-level browse list. All but the last
-//! eight live in [`AppState`]; the readout mode, visualizer choice, panel
-//! choices, always-on-top flag, shade mode, window position, and browse list live on the UI's `WinampPlayer`, so the player sets them on its snapshot
-//! before saving and restores them after loading. The file-backed store lives in
-//! [`file_store`], the text format in the private `text` module, the writer seam
-//! in [`seam`], and [`writer::BackgroundWriter`] runs the blocking write on a
-//! worker thread in production.
+//! [`Settings`] is a small snapshot of the values the player keeps while it runs: the volume,
+//! balance, Repeat and Shuffle flags, the equalizer's on/off and AUTO states, preamp, band gains,
+//! and selected preset, the Now Playing readout's elapsed/remaining mode, the visualizer's
+//! shown/hidden choice, the equalizer and library panels' shown/hidden choices, the always-on-top
+//! flag, and the window-shade mode, the window's last screen position, and the library's top-level
+//! browse list. All but the last eight live in [`AppState`]; the readout mode, visualizer choice,
+//! panel choices, always-on-top flag, shade mode, window position, and browse list live on the UI's
+//! `WinampPlayer`, so the player sets them on its snapshot before saving and restores them after
+//! loading. The file-backed store lives in [`file_store`], the text format in the private `text`
+//! module, the writer seam in [`seam`], and [`writer::BackgroundWriter`] runs the blocking write on
+//! a worker thread in production.
 //!
 //! [`file_store::FileStore`] loads the snapshot from a line-based text file
 //! at startup and rewrites it whenever the UI changes one of those values.
@@ -35,15 +33,13 @@ use library_view::LibraryView;
 /// equalizer and library panel choices, always-on-top flag, shade mode,
 /// window screen position, and top-level browse list.
 ///
-/// The fields are private; build a state-backed snapshot with
-/// [`Settings::from_state`] and restore it with [`Settings::apply_to`].
-/// `time_display_remaining`, `visualizer_visible`, `eq_panel_visible`,
-/// `library_panel_visible`, `always_on_top`, `shade`, `window_position`, and `library_view` are
-/// not held in [`AppState`]: `from_state` leaves them elapsed, shown (all
-/// three), unpinned, unshaded, without a known position, and on Artists, and the player overwrites them from its own values before
-/// saving. `Default` mirrors [`AppState::default`] plus elapsed, shown,
-/// unpinned, and unshaded, so if one starting value changes the other must
-/// change with it.
+/// The fields are private; build a state-backed snapshot with [`Settings::from_state`] and restore
+/// it with [`Settings::apply_to`]. `time_display_remaining`, `visualizer_visible`,
+/// `eq_panel_visible`, `library_panel_visible`, `always_on_top`, `shade`, `window_position`, and
+/// `library_view` are not held in [`AppState`]: `from_state` leaves them elapsed, shown (all
+/// three), unpinned, unshaded, without a known position, and on Artists, and the player overwrites
+/// them from its own values before saving. `Default` mirrors [`AppState::default`] plus elapsed,
+/// shown, unpinned, and unshaded, so if one starting value changes the other must change with it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
     volume: f32,

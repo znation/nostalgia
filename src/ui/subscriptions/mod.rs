@@ -48,10 +48,10 @@ pub(super) use spectrum::{
     spectrum_tick_stream_with,
 };
 
-/// The subscriptions the UI runs: the keyboard listener, plus the marquee
-/// timer while the Now Playing line is too long to fit the LCD's character
-/// budget or while a volume flash shows, plus the position poll while there is a position to refresh, plus
-/// the spectrum poll while playback is running.
+/// The subscriptions the UI runs: the keyboard listener, plus the marquee timer while the Now
+/// Playing line is too long to fit the LCD's character budget or while a volume flash shows, plus
+/// the position poll while there is a position to refresh, plus the spectrum poll while playback is
+/// running.
 ///
 /// The marquee timer exists to advance the Now Playing title window, and the
 /// view ignores that window while the line fits — so ticking for a fitting line

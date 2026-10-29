@@ -1,4 +1,5 @@
-//! The LCD's timed mixer readout after a key or wheel nudge of the volume, balance, preamp, or a band.
+//! The LCD's timed mixer readout after a key or wheel nudge of the volume, balance, preamp, or a
+//! band.
 
 use super::*;
 
