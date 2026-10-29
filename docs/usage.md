@@ -73,7 +73,8 @@ their album count and total playing time beneath theirs (`3 albums - 45:30`, wit
 trailing `+` when an album has no known running time; while an album row is selected, the footer
 shows that album's running time before the total, `3 albums - 10:30/45:30`), the artists list showing its
 artist count and the total of its rows' album counts beneath it (`3 artists - 5 albums`, or just
-`3 artists` when no artist has a counted album), the Genres, Years, and Composers lists showing their count and total playing time beneath
+`3 artists` when no artist has a counted album; while an artist with albums is selected, the footer
+shows its album count before the total, `3 artists - 2/5 albums`), the Genres, Years, and Composers lists showing their count and total playing time beneath
 theirs (`2 genres - 7:10`, with the same trailing `+`; while a row is selected, the footer
 shows that group's playing time before the total, `2 genres - 3:30/7:10`), and playlist lists showing their item
 count beneath theirs. An `EQ` button beside the balance slider shows and

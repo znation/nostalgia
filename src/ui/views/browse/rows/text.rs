@@ -119,20 +119,35 @@ pub(in crate::ui::views) fn album_count_label(count: usize) -> Cow<'static, str>
 }
 
 /// The footer beneath a loaded Artists list: `"<count> artist(s)"`, followed
-/// by `" - "` and the [`album_count_label`] of the artists' summed
-/// `album_count` (saturating). A sum of `0` leaves the artist part alone, like
-/// the row rule that shows no count for `0`: a signed-in artist whose name
-/// matched no album has a count of `0`, and `0 albums` would mislead.
-pub(in crate::ui::views) fn artist_list_summary(artists: &[Artist]) -> String {
+/// by `" - "` and the artists' summed `album_count` (saturating). While
+/// `selected` names an artist with a non-zero `album_count`, the sum is
+/// preceded by that artist's count (`3 artists - 2/5 albums`), the noun
+/// following the total. Otherwise (no selection, an index past the list, or a
+/// selected count of `0`) the plain [`album_count_label`] of the total follows.
+/// A sum of `0` leaves the artist part alone, like the row rule that shows no
+/// count for `0`: a signed-in artist whose name matched no album has a count
+/// of `0`, and `0 albums` or `0/5 albums` would mislead.
+pub(in crate::ui::views) fn artist_list_summary(
+    artists: &[Artist],
+    selected: Option<usize>,
+) -> String {
     let summary = list_count_summary(artists.len(), "artist", "artists");
     let total = artists
         .iter()
         .fold(0usize, |sum, artist| sum.saturating_add(artist.album_count));
-    let albums = album_count_label(total);
-    if albums.is_empty() {
-        summary
-    } else {
-        format!("{summary} - {albums}")
+    if total == 0 {
+        return summary;
+    }
+    match selected
+        .and_then(|index| artists.get(index))
+        .map(|artist| artist.album_count)
+        .filter(|&count| count != 0)
+    {
+        Some(count) => {
+            let noun = if total == 1 { "album" } else { "albums" };
+            format!("{summary} - {count}/{total} {noun}")
+        }
+        None => format!("{summary} - {}", album_count_label(total)),
     }
 }
 

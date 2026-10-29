@@ -926,27 +926,55 @@ fn album_list_summary_ignores_a_selection_past_the_list() {
     );
 }
 
+fn artists_with_albums(counts: &[usize]) -> Vec<crate::library::Artist> {
+    counts
+        .iter()
+        .map(|&album_count| {
+            let mut artist = sample_artist();
+            artist.album_count = album_count;
+            artist
+        })
+        .collect()
+}
+
 #[test]
 fn artist_list_summary_counts_artists_and_totals_their_albums() {
-    let with_albums = |counts: &[usize]| -> Vec<_> {
-        counts
-            .iter()
-            .map(|&album_count| {
-                let mut artist = sample_artist();
-                artist.album_count = album_count;
-                artist
-            })
-            .collect()
-    };
+    let summary = |counts: &[usize]| artist_list_summary(&artists_with_albums(counts), None);
+    assert_eq!(summary(&[1]), "1 artist - 1 album");
+    assert_eq!(summary(&[2, 0, 3]), "3 artists - 5 albums");
+    assert_eq!(summary(&[0]), "1 artist");
+    assert_eq!(summary(&[0, 0]), "2 artists");
+    assert!(summary(&[usize::MAX, 1]).starts_with("2 artists - "));
+}
+
+#[test]
+fn artist_list_summary_puts_the_selected_album_count_before_the_total() {
     assert_eq!(
-        artist_list_summary(&with_albums(&[1])),
-        "1 artist - 1 album"
+        artist_list_summary(&artists_with_albums(&[2, 0, 3]), Some(0)),
+        "3 artists - 2/5 albums"
     );
     assert_eq!(
-        artist_list_summary(&with_albums(&[2, 0, 3])),
+        artist_list_summary(&artists_with_albums(&[1]), Some(0)),
+        "1 artist - 1/1 album"
+    );
+}
+
+#[test]
+fn artist_list_summary_keeps_the_plain_form_for_a_selected_artist_without_albums() {
+    assert_eq!(
+        artist_list_summary(&artists_with_albums(&[2, 0, 3]), Some(1)),
         "3 artists - 5 albums"
     );
-    assert_eq!(artist_list_summary(&with_albums(&[0])), "1 artist");
-    assert_eq!(artist_list_summary(&with_albums(&[0, 0])), "2 artists");
-    assert!(artist_list_summary(&with_albums(&[usize::MAX, 1])).starts_with("2 artists - "));
+    assert_eq!(
+        artist_list_summary(&artists_with_albums(&[0, 0]), Some(0)),
+        "2 artists"
+    );
+}
+
+#[test]
+fn artist_list_summary_ignores_a_selection_past_the_list() {
+    assert_eq!(
+        artist_list_summary(&artists_with_albums(&[2, 3]), Some(5)),
+        "2 artists - 5 albums"
+    );
 }

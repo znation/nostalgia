@@ -2244,6 +2244,26 @@ passes its `selected` argument to it.
 
 **History.** Added with the selected-group-time footer, like the song-list footer.
 
+## Artists footer
+
+**Guarantee.** A non-empty Artists list draws a footer beneath its rows. With no selection it
+reads `<count> artist(s) - <total> album(s)`, or just `<count> artist(s)` when the summed
+`album_count` is `0`. While `selected` names an artist with a non-zero `album_count`, it reads
+`<count> artist(s) - <selected>/<total> album(s)`, for example `3 artists - 2/5 albums`. A selected
+artist with `0` albums, or an index past the list, gives the plain form.
+
+**Enforced by.** `artist_list_summary` (`src/ui/views/browse/rows/text.rs`) formats both forms;
+`view_artists` passes its `selected` argument to it and draws no footer for an empty list.
+
+**Pinned by.** `artist_list_summary_counts_artists_and_totals_their_albums` (plain form),
+`artist_list_summary_puts_the_selected_album_count_before_the_total`,
+`artist_list_summary_keeps_the_plain_form_for_a_selected_artist_without_albums`,
+`artist_list_summary_ignores_a_selection_past_the_list` (`src/ui/views/tests/browse.rs`),
+`root_view_artists_footer_totals_the_album_counts`, and
+`root_view_artists_footer_shows_the_selected_album_count` (`src/ui/tests/view_tests.rs`).
+
+**History.** Added with the selected-artist album count, like the song-list footer.
+
 ## Library footer
 
 **Guarantee.** While the library panel is shown in normal mode, it draws exactly one compact

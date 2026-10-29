@@ -1121,6 +1121,27 @@ fn root_view_artists_footer_totals_the_album_counts() {
 }
 
 #[test]
+fn root_view_artists_footer_shows_the_selected_album_count() {
+    let (mut player, _state) = test_player();
+    let artists = [2, 3].map(|album_count| {
+        let mut artist = sample_artist();
+        artist.album_count = album_count;
+        artist
+    });
+    player.artists.items = artists.to_vec();
+    player.artists.loading = false;
+    player.current_view = CurrentView::Artists;
+    let epoch = player.artists.epoch;
+    player.artists.select_row(epoch, 1);
+    let capture = captured_root_view_text_bounds(&player);
+    assert!(
+        capture.texts().any(|text| text == "2 artists - 3/5 albums"),
+        "{:?}",
+        capture.fragments()
+    );
+}
+
+#[test]
 fn root_view_genres_footer_shows_the_selected_group_time() {
     let (mut player, _state) = test_player();
     let group = |name: &str, duration_ms| crate::ui::song_groups::SongGroup {

@@ -54,7 +54,8 @@ pub(crate) fn artist_album_count_label(artist: &Artist) -> Cow<'static, str> {
 /// select the placeholder wording (see [`browse_placeholder`]); a fetch
 /// failure wins. Built by [`scrollable_list`] from the [`artist_row`] mapping;
 /// a non-empty list also appends its artist-count and album-total footer
-/// ([`artist_list_summary`]).
+/// ([`artist_list_summary`]), which puts the selected artist's album count
+/// before the total.
 pub fn view_artists<'a>(
     artists: &'a [Artist],
     labels: &'a [String],
@@ -76,7 +77,7 @@ pub fn view_artists<'a>(
     if artists.is_empty() {
         list
     } else {
-        with_footer(list, artist_list_summary(artists))
+        with_footer(list, artist_list_summary(artists, selected))
     }
 }
 
