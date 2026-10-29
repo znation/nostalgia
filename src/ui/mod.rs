@@ -27,6 +27,7 @@ mod loading;
 mod message;
 mod player;
 mod shortcuts;
+mod song_groups;
 mod style;
 mod subscriptions;
 mod theme;

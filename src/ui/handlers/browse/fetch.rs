@@ -11,10 +11,11 @@ use iced::Task;
 
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::ui::browse::BrowseList;
-use crate::ui::genres::{Genre, song_count_label};
+use crate::ui::genres::Genre;
 use crate::ui::loading::fetch_level;
+use crate::ui::song_groups::song_count_label;
 use crate::ui::views;
-use crate::ui::years::{self, Year};
+use crate::ui::years::Year;
 use crate::ui::{Message, WinampPlayer};
 
 /// The artists level is fetched: `boot` schedules this for the initial load,
@@ -207,9 +208,7 @@ pub(in crate::ui) fn genres_loaded(player: &mut WinampPlayer, genres: Vec<Genre>
 /// The years grouping landed: store the rows in the years list, caching each
 /// row's song-count label.
 pub(in crate::ui) fn years_loaded(player: &mut WinampPlayer, years: Vec<Year>) -> Task<Message> {
-    player
-        .years
-        .store_with_labels(years, years::song_count_label);
+    player.years.store_with_labels(years, song_count_label);
     Task::none()
 }
 
