@@ -231,7 +231,7 @@ async fn get_songs_from_playlist_rejects_a_control_character_id() {
 // The library search is the UI search box's backend: it answers with the
 // sample songs whose title or artist contains the query, case-insensitively,
 // so a user can find a track by either field without matching the exact case.
-// The album-title match has its own test below.
+// The album-title match and the genre/composer match have their own tests.
 #[tokio::test]
 async fn search_songs_matches_the_sample_library_by_title_or_artist() {
     let service = test_service();
@@ -277,6 +277,33 @@ async fn search_songs_matches_the_sample_library_by_album_title() {
         |song| song.id.as_str(),
         &["song-1", "song-2", "song-3"],
     );
+}
+
+// The search also finds a song by its genre or composer, so typing a name the
+// Genres and Composers lists show returns that entry's songs offline.
+#[tokio::test]
+async fn search_songs_matches_the_sample_library_by_genre_or_composer() {
+    let service = test_service();
+
+    let rock = service.search_songs("  ROCK  ").await.unwrap();
+    assert_ids(
+        &rock,
+        |song| song.id.as_str(),
+        &["song-1", "song-2", "song-3"],
+    );
+
+    let electronic = service.search_songs("electronic").await.unwrap();
+    assert_ids(&electronic, |song| song.id.as_str(), &["song-5"]);
+
+    let composer = service.search_songs("sam ample").await.unwrap();
+    assert_ids(
+        &composer,
+        |song| song.id.as_str(),
+        &["song-1", "song-2", "song-3"],
+    );
+
+    let alternative = service.search_songs("alternative").await.unwrap();
+    assert_ids(&alternative, |song| song.id.as_str(), &["song-4"]);
 }
 
 // The All Songs backend returns the whole sample library, flat and in
