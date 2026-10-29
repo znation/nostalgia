@@ -111,3 +111,13 @@ fn a_stale_composer_press_does_nothing() {
     assert_view(&player, CurrentView::Composers);
     assert_eq!(player.songs.items.len(), 3);
 }
+
+#[test]
+fn composers_view_footer_counts_composers_and_totals_their_songs() {
+    let player = player_with_composers();
+    assert_eq!(player.current_view, CurrentView::Composers);
+
+    let capture = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = capture.texts().collect();
+    assert!(texts.contains(&"2 composers - 7:10"), "{texts:?}");
+}

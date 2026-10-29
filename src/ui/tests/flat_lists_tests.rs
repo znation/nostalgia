@@ -544,3 +544,13 @@ async fn a_track_selected_in_a_genre_plays_it() {
 
     assert_eq!(state.lock().await.current_track.as_deref(), Some("song-3"));
 }
+
+#[test]
+fn genres_view_footer_counts_genres_and_totals_their_songs() {
+    let player = player_with_genres();
+    assert_eq!(player.current_view, CurrentView::Genres);
+
+    let capture = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = capture.texts().collect();
+    assert!(texts.contains(&"2 genres - 7:10"), "{texts:?}");
+}

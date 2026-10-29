@@ -303,8 +303,9 @@ pub(in crate::ui::views) fn album_list<'a>(
 /// Appends a loaded list's footer line beneath it, filling the browse panel.
 /// The shared layout of the item-count footer ([`list_with_count`]) and the
 /// count-and-total footer of the Artists list ([`super::view_artists`]) and the
-/// count-and-time footers of the album ([`album_list_summary`]) and song
-/// ([`song_list_summary`]) lists. Callers skip
+/// count-and-time footers of the album ([`album_list_summary`]), song
+/// ([`song_list_summary`]), and Genres, Years, and Composers
+/// ([`crate::ui::song_groups::group_list_summary`]) lists. Callers skip
 /// this for an empty list, whose loading, error, or empty placeholder must
 /// stay alone beneath the rows it replaces.
 pub(in crate::ui::views) fn with_footer<'a>(
@@ -319,8 +320,8 @@ pub(in crate::ui::views) fn with_footer<'a>(
         .into()
 }
 
-/// Wraps an artist or playlist list in a footer naming how many rows it holds;
-/// album and song lists use their count-and-time footers instead. A zero count
+/// Wraps a playlist list in a footer naming how many rows it holds; the other
+/// lists use their count-and-total or count-and-time footers instead. A zero count
 /// returns `list` unchanged: the list is then showing its loading, error, or
 /// empty placeholder, and a `0 artists` footer beneath that wording would
 /// describe rows the panel does not have.

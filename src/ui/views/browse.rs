@@ -21,6 +21,7 @@ use iced::{
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::ui::composers::Composer;
 use crate::ui::genres::Genre;
+use crate::ui::song_groups::{SongGroup, group_list_summary};
 use crate::ui::years::Year;
 use crate::ui::{CurrentView, Message, style};
 
@@ -279,45 +280,44 @@ pub fn view_playlists<'a>(
     )
 }
 
-/// Builds a Genres, Years, or Composers list: one row per name, each beside
+/// Builds a Genres, Years, or Composers list: one row per group, each beside
 /// its cached song-count label (an index without one shows none), under the
-/// item-count footer for `view` (`epoch`, `selected`, `loading`, `error` and the nouns are the
-/// list's epoch and selection, loading flag and error, and singular and
-/// plural noun).
+/// count-and-time footer ([`group_list_summary`]) for `view` (`epoch`,
+/// `selected`, `loading`, `error` and the nouns are the list's epoch and
+/// selection, loading flag and error, and singular and plural noun). An empty
+/// list returns only its placeholder.
 fn grouped_list<'a>(
-    names: impl ExactSizeIterator<Item = &'a str>,
+    groups: &'a [SongGroup],
     labels: &'a [String],
     view: &CurrentView,
     (epoch, selected): (u64, Option<usize>),
     (loading, error): (bool, Option<&'a str>),
     (singular, plural): (&'static str, &'static str),
 ) -> Element<'a, Message> {
-    let count = names.len();
-    list_with_count(
-        scrollable_list(
-            names.enumerate().map(|(index, name)| {
-                (
-                    Cow::Borrowed(name),
-                    Cow::Borrowed(labels.get(index).map_or("", String::as_str)),
-                    false,
-                )
-            }),
-            view,
-            epoch,
-            selected,
-            browse_placeholder(view, loading, error, false),
-        ),
-        count,
-        singular,
-        plural,
-    )
+    let list = scrollable_list(
+        groups.iter().enumerate().map(|(index, group)| {
+            (
+                Cow::Borrowed(group.name.as_str()),
+                Cow::Borrowed(labels.get(index).map_or("", String::as_str)),
+                false,
+            )
+        }),
+        view,
+        epoch,
+        selected,
+        browse_placeholder(view, loading, error, false),
+    );
+    if groups.is_empty() {
+        return list;
+    }
+    with_footer(list, group_list_summary(groups, singular, plural))
 }
 
 /// The Genres browse view: one row per genre, in the order given, each
 /// showing its song-count and playing-time label (`labels`, cached when the list loaded; an
 /// index without one shows none) and selecting its row with
 /// [`Message::SelectRow`] (a second press opens it). Built like
-/// [`view_playlists`]; a non-empty list also appends its item-count footer.
+/// [`view_playlists`]; a non-empty list also appends its count-and-time footer.
 pub fn view_genres<'a>(
     genres: &'a [Genre],
     labels: &'a [String],
@@ -327,7 +327,7 @@ pub fn view_genres<'a>(
     error: Option<&'a str>,
 ) -> Element<'a, Message> {
     grouped_list(
-        genres.iter().map(|genre| genre.name.as_str()),
+        genres,
         labels,
         &CurrentView::Genres,
         (epoch, selected),
@@ -347,7 +347,7 @@ pub fn view_years<'a>(
     error: Option<&'a str>,
 ) -> Element<'a, Message> {
     grouped_list(
-        years.iter().map(|year| year.name.as_str()),
+        years,
         labels,
         &CurrentView::Years,
         (epoch, selected),
@@ -476,7 +476,7 @@ pub fn view_composers<'a>(
     error: Option<&'a str>,
 ) -> Element<'a, Message> {
     grouped_list(
-        composers.iter().map(|composer| composer.name.as_str()),
+        composers,
         labels,
         &CurrentView::Composers,
         (epoch, selected),

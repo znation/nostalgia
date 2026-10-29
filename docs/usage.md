@@ -72,8 +72,9 @@ length, or such a selected song's length, gets a trailing `+`, as in `2 songs - 
 their album count and total playing time beneath theirs (`3 albums - 45:30`, with the same
 trailing `+` when an album has no known running time), the artists list showing its
 artist count and the total of its rows' album counts beneath it (`3 artists - 5 albums`, or just
-`3 artists` when no artist has a counted album), and playlist lists showing their item count
-beneath theirs. An `EQ` button beside the balance slider shows and
+`3 artists` when no artist has a counted album), the Genres, Years, and Composers lists showing their count and total playing time beneath
+theirs (`2 genres - 7:10`, with the same trailing `+`), and playlist lists showing their item
+count beneath theirs. An `EQ` button beside the balance slider shows and
 hides the equalizer panel, which is open on a first launch and then reopens as last left;
 hiding it gives its height to the browse list without changing EQ processing. A `PL` button
 directly beside `EQ` shows and hides the whole library section — its `NOSTALGIA LIBRARY` band,

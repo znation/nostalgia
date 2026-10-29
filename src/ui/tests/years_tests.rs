@@ -111,3 +111,13 @@ fn a_stale_year_press_does_nothing() {
     assert_view(&player, CurrentView::Years);
     assert_eq!(player.songs.items.len(), 3);
 }
+
+#[test]
+fn years_view_footer_counts_years_and_totals_their_songs() {
+    let player = player_with_years();
+    assert_eq!(player.current_view, CurrentView::Years);
+
+    let capture = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = capture.texts().collect();
+    assert!(texts.contains(&"2 years - 7:10"), "{texts:?}");
+}

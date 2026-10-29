@@ -1,5 +1,5 @@
-//! The grouped browse lists' shared rows: songs bucketed under a key, as the
-//! Genres and Years lists show them. Pure, so the grouping and its ordering
+//! The grouped browse lists' shared rows and footer: songs bucketed under a
+//! key, as the Genres, Years, and Composers lists show them. Pure, so the grouping and its ordering
 //! are testable without a player.
 
 use crate::library::Song;
@@ -62,28 +62,50 @@ pub(in crate::ui) fn trimmed_text_key(text: &str) -> Option<(String, String)> {
     (!text.is_empty()).then(|| (text.to_lowercase(), text.to_string()))
 }
 
+/// The total playing time of `songs`: the `u64::saturating_add` sum of their
+/// `duration_ms` formatted by `format_minutes_seconds`, with a trailing `+`
+/// when any song has no known length (`duration_ms == 0`). No songs read `0:00`.
+fn songs_total<'a>(songs: impl IntoIterator<Item = &'a Song>) -> String {
+    let (total_ms, unknown) = songs
+        .into_iter()
+        .fold((0u64, false), |(total, unknown), song| {
+            (
+                total.saturating_add(song.duration_ms),
+                unknown || song.duration_ms == 0,
+            )
+        });
+    let mark = if unknown { "+" } else { "" };
+    format!("{}{mark}", format_minutes_seconds(total_ms))
+}
+
 /// The secondary label a grouped row shows: `"<count> song(s) - <total>"`,
-/// like the song-list footer (`1 song - 3:30`, `2 songs - 7:00`). The total is
-/// the `u64::saturating_add` sum of the group's `duration_ms` formatted by
-/// `format_minutes_seconds`, with a trailing `+` when any song has no known
-/// length (`duration_ms == 0`).
+/// like the song-list footer (`1 song - 3:30`, `2 songs - 7:00`). The total
+/// is [`songs_total`] of the group's songs.
 pub(in crate::ui) fn group_row_label(group: &SongGroup) -> String {
-    let total_ms = group
-        .songs
-        .iter()
-        .fold(0u64, |total, song| total.saturating_add(song.duration_ms));
-    let mark = if group.songs.iter().any(|song| song.duration_ms == 0) {
-        "+"
-    } else {
-        ""
-    };
     let noun = if group.songs.len() == 1 {
         "song"
     } else {
         "songs"
     };
-    let total = format_minutes_seconds(total_ms);
-    format!("{} {noun} - {total}{mark}", group.songs.len())
+    format!(
+        "{} {noun} - {}",
+        group.songs.len(),
+        songs_total(&group.songs)
+    )
+}
+
+/// The footer a grouped list shows: `"<count> <noun> - <total>"`, like the
+/// album-list footer (`2 genres - 7:10`). `noun` is `singular` exactly when
+/// there is one group; the total is [`songs_total`] of every song in every
+/// group, so it carries the same trailing `+` for unknown lengths.
+pub(in crate::ui) fn group_list_summary(
+    groups: &[SongGroup],
+    singular: &str,
+    plural: &str,
+) -> String {
+    let noun = if groups.len() == 1 { singular } else { plural };
+    let total = songs_total(groups.iter().flat_map(|group| &group.songs));
+    format!("{} {noun} - {total}", groups.len())
 }
 
 #[cfg(test)]
@@ -165,5 +187,37 @@ mod tests {
             group_row_label(&group(vec![unknown, known])),
             "2 songs - 3:30+"
         );
+    }
+
+    #[test]
+    fn list_summary_counts_groups_and_totals_every_song() {
+        let timed = |id: &str, genre: &str, duration_ms: u64| Song {
+            duration_ms,
+            ..song(id, genre)
+        };
+        let two = by_genre(vec![
+            timed("1", "a", 180_000),
+            timed("2", "a", 120_000),
+            timed("3", "b", 330_000),
+        ]);
+        assert_eq!(
+            group_list_summary(&two, "genre", "genres"),
+            "2 genres - 10:30"
+        );
+
+        let one = by_genre(vec![timed("1", "a", 210_000)]);
+        assert_eq!(
+            group_list_summary(&one, "genre", "genres"),
+            "1 genre - 3:30"
+        );
+
+        let unknown = by_genre(vec![timed("1", "a", 210_000), timed("2", "b", 0)]);
+        assert_eq!(
+            group_list_summary(&unknown, "genre", "genres"),
+            "2 genres - 3:30+"
+        );
+
+        let huge = by_genre(vec![timed("1", "a", u64::MAX), timed("2", "b", 5)]);
+        assert!(group_list_summary(&huge, "genre", "genres").starts_with("2 genres - "));
     }
 }
