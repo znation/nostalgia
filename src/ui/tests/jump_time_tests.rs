@@ -188,3 +188,44 @@ fn selecting_a_track_closes_the_panel_whose_preview_length_it_clears() {
     assert!(player.playback_duration.is_none());
     assert!(!player.jump_time_visible);
 }
+
+// The root view draws the panel only while a preview length is known and the
+// window is not shaded; flags set directly isolate the overlay choice.
+#[test]
+fn the_root_view_draws_the_panel_with_the_track_length() {
+    let mut player = player_with_duration();
+    player.jump_time_visible = true;
+
+    let capture = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = capture.texts().collect();
+    assert!(texts.contains(&"JUMP TO TIME"), "{texts:?}");
+    assert!(texts.contains(&"Track length: 0:30"), "{texts:?}");
+}
+
+#[test]
+fn the_root_view_draws_no_panel_without_a_length_or_while_shaded() {
+    let mut player = player_with_duration();
+    player.jump_time_visible = true;
+    player.shaded = true;
+    let capture = captured_root_view_text_bounds(&player);
+    assert!(!capture.texts().any(|t| t == "JUMP TO TIME"));
+
+    player.shaded = false;
+    player.playback_duration = None;
+    let capture = captured_root_view_text_bounds(&player);
+    assert!(!capture.texts().any(|t| t == "JUMP TO TIME"));
+}
+
+#[test]
+fn the_root_view_draws_file_info_ahead_of_the_jump_time_panel() {
+    let (mut player, state) = test_player();
+    make_current_track_known(&mut player, &state);
+    player.playback_duration = Some(Duration::from_secs(30));
+    player.file_info_visible = true;
+    player.jump_time_visible = true;
+
+    let capture = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = capture.texts().collect();
+    assert!(texts.contains(&"FILE INFO"), "{texts:?}");
+    assert!(!texts.contains(&"JUMP TO TIME"), "{texts:?}");
+}
