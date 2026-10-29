@@ -29,21 +29,27 @@ use crate::state::AppState;
 use library_view::LibraryView;
 
 /// The persisted values the next launch restores: the mixer and equalizer
-/// subset of [`AppState`] plus the UI-owned readout mode, visualizer choice,
-/// equalizer and library panel choices, always-on-top flag, shade mode,
-/// window screen position, and top-level browse list.
+/// subset of [`AppState`], the last-played track id, and the UI-owned readout
+/// mode, visualizer choice, equalizer and library panel choices,
+/// always-on-top flag, shade mode, window screen position, and top-level
+/// browse list.
 ///
 /// The fields are private; build a state-backed snapshot with [`Settings::from_state`] and restore
 /// it with [`Settings::apply_to`]. `time_display_remaining`, `visualizer_visible`,
 /// `eq_panel_visible`, `library_panel_visible`, `always_on_top`, `shade`, `window_position`, and
 /// `library_view` are not held in [`AppState`]: `from_state` leaves them elapsed, shown (all
 /// three), unpinned, unshaded, without a known position, and on Artists, and the player overwrites
-/// them from its own values before saving. `Default` mirrors [`AppState::default`] plus elapsed,
+/// them from its own values before saving. `current_track` is the last-played
+/// track id, held in [`AppState`]: the snapshot carries it straight from the
+/// state, and `apply_to` restores the track stopped with a blank elapsed
+/// readout, the state Stop leaves; the position within the track stays out
+/// of the file. `Default` mirrors [`AppState::default`] plus elapsed,
 /// shown, unpinned, and unshaded, so if one starting value changes the other must change with it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
     volume: f32,
     balance: f32,
+    current_track: Option<String>,
     repeat: bool,
     shuffle: bool,
     manual_advance: bool,
@@ -64,14 +70,15 @@ pub struct Settings {
 
 impl Default for Settings {
     /// The same starting values as [`AppState::default`]: half volume, a
-    /// centered balance, the toggles off, and the equalizer off with AUTO off,
-    /// a flat curve, and no preset, plus the elapsed readout mode, the shown
-    /// visualizer and both panels, and an unpinned, unshaded window. A missing
-    /// or unreadable settings file starts here.
+    /// centered balance, no track loaded, the toggles off, and the equalizer
+    /// off with AUTO off, a flat curve, and no preset, plus the elapsed
+    /// readout mode, the shown visualizer and both panels, and an unpinned,
+    /// unshaded window. A missing or unreadable settings file starts here.
     fn default() -> Self {
         Self {
             volume: 0.5,
             balance: 0.0,
+            current_track: None,
             repeat: false,
             shuffle: false,
             manual_advance: false,
@@ -100,6 +107,7 @@ impl Settings {
         Self {
             volume: state.volume(),
             balance: state.balance(),
+            current_track: state.current_track.clone(),
             repeat: state.repeat,
             shuffle: state.shuffle,
             manual_advance: state.manual_advance,
@@ -248,13 +256,16 @@ impl Settings {
     /// (`set_volume`, `set_balance`, `set_eq_preamp`, and `set_eq_band`), so a
     /// hand-edited file cannot push the state out of range. An applied preset
     /// is restored last through `apply_eq_preset`, after the per-band writes
-    /// have cleared the selection. The AUTO flag is a plain restored boolean.
+    /// have cleared the selection. The AUTO flag and the last-played track id
+    /// (`current_track`, held in [`AppState`]) are plain restored fields: the
+    /// track comes back stopped with a blank elapsed readout.
     /// The UI-owned readout mode, visualizer
     /// choice, panel choices, always-on-top flag, shade mode, window
     /// position, and browse list are deliberately left alone.
     pub fn apply_to(&self, state: &mut AppState) {
         state.set_volume(self.volume);
         state.set_balance(self.balance);
+        state.current_track = self.current_track.clone();
         state.repeat = self.repeat;
         state.shuffle = self.shuffle;
         state.manual_advance = self.manual_advance;
@@ -277,6 +288,7 @@ mod tests {
     fn state_with_every_field_set() -> AppState {
         let mut state = AppState::default();
         state.set_volume(0.8);
+        state.current_track = Some("song-1".to_string());
         state.set_balance(-0.35);
         state.repeat = true;
         state.shuffle = true;
@@ -680,5 +692,60 @@ mod tests {
                 "{bad:?} must leave the position unset"
             );
         }
+    }
+
+    #[test]
+    fn current_track_round_trips_and_defaults_to_none() {
+        let none = Settings::default();
+        assert_eq!(none.current_track, None);
+        assert!(
+            none.to_text().lines().any(|line| line == "current_track="),
+            "a missing track writes an empty current_track line"
+        );
+        assert_eq!(
+            Settings::from_text(&none.to_text()).current_track,
+            None,
+            "an empty value must fall back to no track"
+        );
+        assert_eq!(
+            Settings::from_text("volume=0.5\n").current_track,
+            None,
+            "a missing current_track line must fall back to no track"
+        );
+
+        let mut saved = none.clone();
+        saved.current_track = Some("song-42".to_string());
+        assert!(saved.to_text().contains("current_track=song-42"));
+        assert_eq!(
+            Settings::from_text(&saved.to_text()).current_track,
+            Some("song-42".to_string()),
+            "a saved id must survive the round trip"
+        );
+        assert_eq!(
+            Settings::from_text("current_track=a=b\n").current_track,
+            Some("a=b".to_string()),
+            "an id containing '=' must keep everything past the first '='"
+        );
+    }
+
+    #[test]
+    fn apply_to_restores_the_saved_current_track_stopped() {
+        let saved = Settings {
+            current_track: Some("song-1".to_string()),
+            ..Settings::default()
+        };
+        let mut state = AppState::default();
+        saved.apply_to(&mut state);
+        assert_eq!(state.current_track.as_deref(), Some("song-1"));
+        assert!(!state.is_playing, "the restored track sits stopped");
+        assert!(!state.paused, "the restored track is not paused");
+
+        let mut second = AppState::default();
+        second.current_track = Some("song-1".to_string());
+        Settings::default().apply_to(&mut second);
+        assert_eq!(
+            second.current_track, None,
+            "a boot with no saved track loads none"
+        );
     }
 }

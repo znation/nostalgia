@@ -900,7 +900,7 @@ The equalizer's EQ and AUTO buttons sink while on, through `eq_toggle` and `auto
 **Guarantee.** The values the user sets that outlive a track — volume, balance, Repeat, Shuffle, the
 equalizer's on/off state, AUTO choice, preamp, ten band gains, and selected preset, the large readout's
 elapsed/remaining choice, the visualizer's shown/hidden choice, the equalizer and library panels'
-shown/hidden choices, the LCD strip's always-on-top choice, the window's shade mode, the window's last screen position, and the library's top-level browse list — are
+shown/hidden choices, the LCD strip's always-on-top choice, the window's shade mode, the window's last screen position, the last-played track, and the library's top-level browse list — are
 loaded once before the first view is drawn and rewritten after any update that changes their snapshot, with the newest
 queued snapshot written once the worker is free: a burst of changes, such as a slider drag or key
 repeat, may collapse to its newest value instead of writing every intermediate one. An update that leaves the snapshot
@@ -931,7 +931,12 @@ write or rename removes the temp file, and a load sweeps temp files a killed sav
 they are old enough not to belong to an in-flight save. A symlinked settings file stays a link: the
 save, the directory sync, and the stale-temp sweep all follow it to the file and directory it points
 at, so the link is never replaced; a dangling link or a missing file is used as the path given, and
-a new file takes the platform's default mode. The readout mode, the visualizer's shown/hidden
+a new file takes the platform's default mode. The last-played track is a plain `apply_to` field,
+not one of the UI-owned values: the id is held in `AppState` (`current_track`), `from_state`
+carries it straight from the snapshot, and the boot `apply_to` restores the track stopped with a
+blank elapsed readout, the state Stop leaves; a track change or stop rewrites the line on the
+next message's save. A missing or empty `current_track` line — or a stale id no longer in the
+library, which degrades through the existing id-fallback label — leaves no track. The readout mode, the visualizer's shown/hidden
 choice, the two panel choices, the always-on-top choice, and the shade mode are the persisted
 values not held in `AppState`: they live on `WinampPlayer::time_display`,
 `WinampPlayer::visualizer_visible`, `WinampPlayer::eq_panel_visible`,
@@ -962,7 +967,7 @@ Songs view as the list it was opened from), `persist_settings_if_changed` saves 
 `library_view=<key>`, and an unknown or missing line leaves Artists. At launch `init_ui` batches
 `handlers::browse::restore_view` with the boot task to open that list; when the startup sign-in
 stores a session, `Message::SessionReady` (`handlers::browse::session_ready`) refetches the artists
-list and any flat list showing (Genres included, saved as `genres`, as is a genre's Songs; Years likewise, saved as `years`, as is a year's Songs; Composers likewise, saved as `composers`, as is a composer's Songs), unless a search is active. The window's size is not persisted. Playback position, any browse level below the top-level list, the search box, and the current track are
+list and any flat list showing (Genres included, saved as `genres`, as is a genre's Songs; Years likewise, saved as `years`, as is a year's Songs; Composers likewise, saved as `composers`, as is a composer's Songs), unless a search is active. The window's size is not persisted. Playback position, any browse level below the top-level list, and the search box are
 deliberately not persisted.
 
 **Enforced by.** `src/main.rs` resolves the path with

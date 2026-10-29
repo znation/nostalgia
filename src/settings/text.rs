@@ -9,8 +9,9 @@ use crate::equalizer;
 impl Settings {
     /// Render the snapshot as the line-based `key=value` text the settings
     /// file holds. Floats use their shortest round-tripping `Display` form,
-    /// and a custom curve stores an empty `eq_preset` value.
-    pub(super) fn to_text(&self) -> String {
+    /// and a custom curve stores an empty `eq_preset` value. Visible crate-
+    /// wide so the UI-level round-trip tests can drive the file format too.
+    pub(crate) fn to_text(&self) -> String {
         let mut text = String::new();
         text.push_str(&format!("volume={}\n", self.volume));
         text.push_str(&format!("balance={}\n", self.balance));
@@ -46,6 +47,10 @@ impl Settings {
         if let Some((x, y)) = self.window_position {
             text.push_str(&format!("window_position={x},{y}\n"));
         }
+        text.push_str(&format!(
+            "current_track={}\n",
+            self.current_track.as_deref().unwrap_or("")
+        ));
         text.push_str(&format!("library_view={}\n", self.library_view.key()));
         text
     }
@@ -58,8 +63,9 @@ impl Settings {
     /// leading UTF-8 BOM is an encoding marker, not part of the first key, so
     /// it is dropped before the lines are read. A `NaN` is malformed rather
     /// than a number: `f32::from_str` accepts it, but it is not a value the
-    /// player can hold, so the field keeps its default.
-    pub(super) fn from_text(text: &str) -> Self {
+    /// player can hold, so the field keeps its default. Visible crate-wide so
+    /// the UI-level round-trip tests can drive the file format too.
+    pub(crate) fn from_text(text: &str) -> Self {
         let text = text.strip_prefix('\u{feff}').unwrap_or(text);
         let mut settings = Self::default();
         for line in text.lines() {
@@ -102,6 +108,17 @@ impl Settings {
                 "shade" => parse_into(&mut settings.shade, value),
                 // A malformed pair leaves the position unset.
                 "window_position" => parse_window_position(&mut settings.window_position, value),
+                // An empty or missing line leaves no track loaded; a
+                // non-empty value is the id verbatim (`split_once` stops at
+                // the first `=`), and an unknown or stale id falls back to
+                // the view-level id label downstream.
+                "current_track" => {
+                    settings.current_track = if value.is_empty() {
+                        None
+                    } else {
+                        Some(value.to_string())
+                    };
+                }
                 // An unrecognized word leaves the default Artists list.
                 "library_view" => {
                     if let Some(view) = LibraryView::from_key(value) {

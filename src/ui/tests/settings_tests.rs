@@ -81,6 +81,28 @@ fn saved_eq_auto_is_restored_through_apply_to() {
 }
 
 #[test]
+fn saved_current_track_survives_the_persist_round_trip() {
+    let mut state = AppState::default();
+    state.current_track = Some("song-1".to_string());
+    assert!(!state.is_playing && !state.paused, "the track sits stopped");
+
+    // The save path, end to end: snapshot, render, parse.
+    let loaded = Settings::from_text(&Settings::from_state(&state).to_text());
+
+    // The boot path: apply the loaded snapshot to a fresh state.
+    let mut booted = AppState::default();
+    loaded.apply_to(&mut booted);
+    assert_eq!(booted.current_track.as_deref(), Some("song-1"));
+    assert!(!booted.is_playing, "the restored track sits stopped");
+    assert!(!booted.paused, "the restored track is not paused");
+
+    // A missing settings file boots with no track.
+    let mut from_defaults = AppState::default();
+    Settings::default().apply_to(&mut from_defaults);
+    assert_eq!(from_defaults.current_track, None);
+}
+
+#[test]
 fn toggle_time_display_reaches_the_saved_snapshot() {
     let (mut player, _state) = test_player();
     let store = MemorySettingsStore::default();
