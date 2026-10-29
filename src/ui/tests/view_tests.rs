@@ -1019,7 +1019,7 @@ fn root_view_draws_the_current_browse_levels_own_rows() {
         (
             CurrentView::Albums,
             "The Sample Band - Album Level Row",
-            "1 album",
+            "1 album - 0:00+",
             "",
             false,
         ),
@@ -1040,7 +1040,7 @@ fn root_view_draws_the_current_browse_levels_own_rows() {
         (
             CurrentView::AllAlbums,
             "The Sample Band - All Albums Level Row",
-            "1 album",
+            "1 album - 0:00+",
             "",
             false,
         ),
@@ -1122,10 +1122,10 @@ fn an_empty_browse_level_draws_no_count_footer() {
 
     let cases = [
         (CurrentView::Artists, "No artists", "0 artists"),
-        (CurrentView::Albums, "No albums", "0 albums"),
+        (CurrentView::Albums, "No albums", "0 albums - 0:00"),
         (CurrentView::Songs, "No songs", "0 songs - 0:00"),
         (CurrentView::AllSongs, "No songs", "0 songs - 0:00"),
-        (CurrentView::AllAlbums, "No albums", "0 albums"),
+        (CurrentView::AllAlbums, "No albums", "0 albums - 0:00"),
         (CurrentView::Playlists, "No playlists", "0 playlists"),
     ];
 

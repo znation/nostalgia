@@ -871,3 +871,30 @@ fn row_prefix_numbers_rows_and_puts_the_play_marker_first() {
     assert_eq!(row_prefix(99, false), "100. ");
     assert_eq!(row_prefix(0, true), "▶ 1. ");
 }
+
+fn summary_album(duration_ms: u64) -> Album {
+    let mut album = sample_album();
+    album.duration_ms = duration_ms;
+    album
+}
+
+#[test]
+fn album_list_summary_counts_albums_and_sums_their_running_time() {
+    assert_eq!(
+        album_list_summary(&[summary_album(630_000)]),
+        "1 album - 10:30"
+    );
+    assert_eq!(
+        album_list_summary(&[summary_album(630_000), summary_album(210_000)]),
+        "2 albums - 14:00"
+    );
+    assert_eq!(
+        album_list_summary(&[summary_album(630_000), summary_album(0)]),
+        "2 albums - 10:30+"
+    );
+    assert_eq!(album_list_summary(&[summary_album(0)]), "1 album - 0:00+");
+    assert!(
+        album_list_summary(&[summary_album(u64::MAX), summary_album(1_000)])
+            .starts_with("2 albums - ")
+    );
+}

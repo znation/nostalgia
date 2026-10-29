@@ -26,7 +26,9 @@ pub(in crate::ui::views) mod text;
 // the same build-on-key-change cache.
 pub(in crate::ui::views) use self::lazy::LazyRow;
 
-use self::text::{album_row, list_count_summary, row_prefix, song_list_summary, song_row};
+use self::text::{
+    album_list_summary, album_row, list_count_summary, row_prefix, song_list_summary, song_row,
+};
 
 /// The style for a browse row, colored by whether it is playing or selected.
 ///
@@ -268,8 +270,8 @@ fn row_button(
 /// at the same index (see [`album_row`]). `epoch` and `selected` reach
 /// [`scrollable_list`], so every row press selects and the selected row draws
 /// the blue bar. `placeholder` is the caller's [`text::browse_placeholder`] wording
-/// for an empty list. A non-empty list also appends its item-count footer
-/// ([`list_with_count`]).
+/// for an empty list. A non-empty list also appends its count-and-time footer
+/// ([`album_list_summary`]).
 pub(in crate::ui::views) fn album_list<'a>(
     albums: &'a [Album],
     titles: &'a [String],
@@ -279,29 +281,29 @@ pub(in crate::ui::views) fn album_list<'a>(
     selected: Option<usize>,
     placeholder: &'a str,
 ) -> Element<'a, Message> {
-    list_with_count(
-        scrollable_list(
-            albums.iter().enumerate().map(|(index, album)| {
-                album_row(
-                    album,
-                    titles.get(index).map(String::as_str),
-                    labels.get(index).map(String::as_str),
-                )
-            }),
-            list,
-            epoch,
-            selected,
-            placeholder,
-        ),
-        albums.len(),
-        "album",
-        "albums",
-    )
+    let rows = scrollable_list(
+        albums.iter().enumerate().map(|(index, album)| {
+            album_row(
+                album,
+                titles.get(index).map(String::as_str),
+                labels.get(index).map(String::as_str),
+            )
+        }),
+        list,
+        epoch,
+        selected,
+        placeholder,
+    );
+    if albums.is_empty() {
+        return rows;
+    }
+    with_footer(rows, album_list_summary(albums))
 }
 
 /// Appends a loaded list's footer line beneath it, filling the browse panel.
 /// The shared layout of the item-count footer ([`list_with_count`]) and the
-/// song list's count-and-time footer ([`song_list_summary`]). Callers skip
+/// count-and-time footers of the album ([`album_list_summary`]) and song
+/// ([`song_list_summary`]) lists. Callers skip
 /// this for an empty list, whose loading, error, or empty placeholder must
 /// stay alone beneath the rows it replaces.
 fn with_footer<'a>(list: Element<'a, Message>, footer: String) -> Element<'a, Message> {
@@ -313,8 +315,8 @@ fn with_footer<'a>(list: Element<'a, Message>, footer: String) -> Element<'a, Me
         .into()
 }
 
-/// Wraps a non-song browse list in a footer naming how many rows it holds,
-/// matching the song list's count-and-time footer above it. A zero count
+/// Wraps an artist or playlist list in a footer naming how many rows it holds;
+/// album and song lists use their count-and-time footers instead. A zero count
 /// returns `list` unchanged: the list is then showing its loading, error, or
 /// empty placeholder, and a `0 artists` footer beneath that wording would
 /// describe rows the panel does not have.

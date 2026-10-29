@@ -192,7 +192,7 @@ pub(in crate::ui::views) fn song_row<'a>(
     (title, label, Some(song.id.as_str()) == current_track)
 }
 
-/// The item-count footer for a loaded artist, album, or playlist list:
+/// The item-count footer for a loaded artist or playlist list:
 /// `"<count> <noun>"`, with `singular` chosen exactly when `count == 1` and
 /// `plural` otherwise. Unlike [`song_list_summary`] it has no time total and
 /// formats any count, including `0`, so the wording is testable without an
@@ -204,6 +204,32 @@ pub(in crate::ui::views) fn list_count_summary(
 ) -> String {
     let noun = if count == 1 { singular } else { plural };
     format!("{count} {noun}")
+}
+
+/// The count-and-time footer beneath a loaded album list: `"<count> album(s) -
+/// <total>"`, with the singular `album` for a count of one and the total, the
+/// sum of the albums' `duration_ms` from [`format_minutes_seconds`], followed by
+/// a `+` when any album has `duration_ms == 0` (no reported songs), like
+/// [`song_list_summary`]'s unknown-length rule. The sum uses `u64::saturating_add`
+/// so a large list cannot overflow. Selecting a row does not change it. Pure so
+/// the wording is testable without an iced renderer.
+pub(in crate::ui::views) fn album_list_summary(albums: &[Album]) -> String {
+    let total_ms = albums
+        .iter()
+        .fold(0u64, |total, album| total.saturating_add(album.duration_ms));
+    let noun = if albums.len() == 1 { "album" } else { "albums" };
+    let mark = if albums.iter().all(|album| album.duration_ms != 0) {
+        ""
+    } else {
+        "+"
+    };
+    format!(
+        "{} {} - {}{}",
+        albums.len(),
+        noun,
+        format_minutes_seconds(total_ms),
+        mark
+    )
 }
 
 /// The count-and-time footer beneath a loaded song list: `"<count> song(s) -
