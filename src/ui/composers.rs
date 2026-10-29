@@ -2,7 +2,7 @@
 //! composer. Pure, so the grouping and its ordering are testable without a
 //! player.
 
-use super::song_groups::{SongGroup, group_songs};
+use super::song_groups::{SongGroup, group_songs, trimmed_text_key};
 use crate::library::Song;
 
 /// One row of the Composers list: a composer's name and the songs they wrote.
@@ -13,10 +13,7 @@ pub(in crate::ui) type Composer = SongGroup;
 /// Groups are ordered by lowercase name, with the `Unknown` group for blank
 /// composers always last, and songs keep their input order inside a group.
 pub(in crate::ui) fn group_by_composer(songs: Vec<Song>) -> Vec<Composer> {
-    group_songs(songs, |song| {
-        let composer = song.composer.trim();
-        (!composer.is_empty()).then(|| (composer.to_lowercase(), composer.to_string()))
-    })
+    group_songs(songs, |song| trimmed_text_key(&song.composer))
 }
 
 #[cfg(test)]

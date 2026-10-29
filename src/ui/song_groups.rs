@@ -53,6 +53,14 @@ pub(in crate::ui) fn group_songs<K: Ord>(
     groups
 }
 
+/// The grouping key for a free-text field such as genre or composer: `None`
+/// when `text` is blank, otherwise its lowercase form (the sort key) paired
+/// with its trimmed spelling (the display name).
+pub(in crate::ui) fn trimmed_text_key(text: &str) -> Option<(String, String)> {
+    let text = text.trim();
+    (!text.is_empty()).then(|| (text.to_lowercase(), text.to_string()))
+}
+
 /// The secondary label a grouped row shows: `1 song` or `N songs`.
 pub(in crate::ui) fn song_count_label(group: &SongGroup) -> String {
     match group.songs.len() {

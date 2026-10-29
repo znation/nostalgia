@@ -2,7 +2,7 @@
 //! genre. Pure, so the grouping and its ordering are testable without a
 //! player.
 
-use super::song_groups::{SongGroup, group_songs};
+use super::song_groups::{SongGroup, group_songs, trimmed_text_key};
 use crate::library::Song;
 
 /// One row of the Genres list: a genre's name and the songs filed under it.
@@ -13,10 +13,7 @@ pub(in crate::ui) type Genre = SongGroup;
 /// lowercase name, with the `Unknown` group for blank genres always last, and
 /// songs keep their input order inside a group.
 pub(in crate::ui) fn group_by_genre(songs: Vec<Song>) -> Vec<Genre> {
-    group_songs(songs, |song| {
-        let genre = song.genre.trim();
-        (!genre.is_empty()).then(|| (genre.to_lowercase(), genre.to_string()))
-    })
+    group_songs(songs, |song| trimmed_text_key(&song.genre))
 }
 
 #[cfg(test)]
