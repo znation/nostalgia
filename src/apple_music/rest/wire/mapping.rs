@@ -58,9 +58,13 @@ impl Resource {
     ) -> Result<Album, AppleMusicError> {
         let Resource { id, attributes, .. } = self;
         let id = required_id(id, "album")?;
-        let (title, artist_name) = match attributes {
-            Some(attributes) => (attributes.name, attributes.artist_name),
-            None => (None, None),
+        let (title, artist_name, release_date) = match attributes {
+            Some(attributes) => (
+                attributes.name,
+                attributes.artist_name,
+                attributes.release_date,
+            ),
+            None => (None, None, None),
         };
         let title = required_name(title, &id, "album")?;
         let artist = artist_or_empty(artist_name);
@@ -70,6 +74,7 @@ impl Resource {
             artist_id: artist_id.to_string(),
             artist,
             duration_ms: 0,
+            year: release_date.as_deref().and_then(release_year),
         })
     }
 

@@ -680,6 +680,9 @@ skipped, an album with no matching song is `0`, and a failure in either request 
 existing album-load failure and its Retry path. An absent or unusable duration — negative,
 fractional, or above `u64` — counts as `0` instead of failing the response. `Album::duration_ms`
 is derived data, not an Apple Music album field: it is skipped by serde and deserializes to `0`.
+When `Album::year` is known (from the album's `releaseDate`, or the sample albums' 2001, 2003 and
+2005) the row label puts it before the time with two spaces (`2001  10:30`); without one the label is
+the time alone.
 
 **Enforced by.** `Album::duration_ms` in `src/library.rs`; `SampleLibrary::new` in
 `src/sample_library.rs` derives each sample album's total from its indexed songs;
@@ -687,7 +690,8 @@ is derived data, not an Apple Music album field: it is skipped by serde and dese
 `browse::with_album_durations` in `src/apple_music/browse.rs` fetches the whole-library durations
 and fills both signed-in album lists. `views::browse::rows::text::album_row` in
 `src/ui/views/browse/rows/text.rs` renders the
-formatted time or placeholder as the row's secondary text. The loaded album lists cache each
+formatted time or placeholder as the row's secondary text, built by `views::album_row_label` in
+`src/ui/views/mod.rs`. The loaded album lists cache each
 row's display title and formatted running time through `BrowseList::store_with_row_text`
 (`store_albums` in `src/ui/handlers/browse/fetch.rs`), and `album_row` borrows them, falling back
 to composing the title and formatting the duration for an index without a cached value, so a view
@@ -697,16 +701,19 @@ refresh does not re-join and reformat every row.
 
 - `album_row_uses_title_and_duration`
 - `album_row_prefers_the_lists_cached_title_and_running_time`
+- `album_row_shows_the_release_year_before_the_running_time`
 - `album_row_shows_the_title_alone_when_the_artist_is_empty`
 - `album_row_shows_a_placeholder_when_the_duration_is_unknown`
   (all in `src/ui/views/tests/`)
 - `albums_loaded_populates_list`
 - `all_albums_loaded_stores_the_flat_list`
+- `all_albums_loaded_caches_the_year_and_running_time_labels`
   (both in `src/ui/tests/`)
 - `albums_carry_their_songs_total_durations`
   (in `src/sample_library.rs`)
 - `album_duration_is_not_serialized_and_defaults_to_zero`
   (in `src/library.rs`)
+- `get_all_albums_maps_the_release_year`
 - `get_album_durations_groups_and_sums_library_songs`
 - `get_album_durations_counts_an_unusable_duration_as_zero`
   (both in `src/apple_music/rest/tests/library.rs`)

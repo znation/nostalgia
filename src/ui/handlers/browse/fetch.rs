@@ -65,7 +65,7 @@ fn store_albums(list: &mut BrowseList<Album>, albums: Vec<Album>) {
     list.store_with_row_text(
         albums,
         |album| album.display_title().into_owned(),
-        |album| views::format_track_time(album.duration_ms),
+        views::album_row_label,
     );
 }
 

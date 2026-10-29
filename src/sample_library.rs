@@ -70,6 +70,7 @@ impl SampleLibrary {
                 artist_id: "artist-1".to_string(),
                 artist: "The Sample Band".to_string(),
                 duration_ms: 0,
+                year: Some(2001),
             },
             Album {
                 id: "album-2".to_string(),
@@ -77,6 +78,7 @@ impl SampleLibrary {
                 artist_id: "artist-1".to_string(),
                 artist: "The Sample Band".to_string(),
                 duration_ms: 0,
+                year: Some(2003),
             },
             Album {
                 id: "album-3".to_string(),
@@ -84,6 +86,7 @@ impl SampleLibrary {
                 artist_id: "artist-2".to_string(),
                 artist: "Echo Chamber".to_string(),
                 duration_ms: 0,
+                year: Some(2005),
             },
         ];
         let album_count = |artist_id: &str| {

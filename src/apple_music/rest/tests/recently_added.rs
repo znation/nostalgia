@@ -26,6 +26,7 @@ fn get_recently_added_albums_keeps_only_library_albums() {
             artist_id: String::new(),
             artist: "The Sample Band".to_string(),
             duration_ms: 0,
+            year: None,
         }]
     );
     assert_single_call(&stub, URL);

@@ -27,6 +27,7 @@ use iced::{
     widget::{Button, Slider, Space, Text},
 };
 
+use crate::library::Album;
 use crate::ui::{Message, style};
 
 mod about;
@@ -117,6 +118,17 @@ pub fn format_track_time(duration_ms: u64) -> String {
         return "--:--".to_string();
     }
     format_minutes_seconds(duration_ms)
+}
+
+/// The secondary label an album row shows: the release year and the running
+/// time (`2001  10:30`) when [`Album::year`] is known, else just the running
+/// time ([`format_track_time`], `--:--` when the source supplied no songs).
+/// Pure so the formatting is testable without an iced renderer.
+pub fn album_row_label(album: &Album) -> String {
+    match album.year {
+        Some(year) => format!("{year}  {}", format_track_time(album.duration_ms)),
+        None => format_track_time(album.duration_ms),
+    }
 }
 
 /// A fixed-width horizontal gap between adjacent widgets.

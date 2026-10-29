@@ -330,6 +330,7 @@ async fn album_selected_fetches_the_albums_songs_into_the_player() {
         artist_id: "artist-2".to_string(),
         artist: "Echo Chamber".to_string(),
         duration_ms: 0,
+        year: None,
     }];
 
     let task = update(&mut player, Message::AlbumSelected { epoch: 0, index: 0 });

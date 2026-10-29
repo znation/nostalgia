@@ -240,6 +240,16 @@ fn album_row_uses_title_and_duration() {
 }
 
 #[test]
+fn album_row_shows_the_release_year_before_the_running_time() {
+    let mut album = sample_album();
+    album.year = Some(2001);
+    album.duration_ms = 630_000;
+    assert_eq!(album_row(&album, None, None).1, "2001  10:30");
+    album.duration_ms = 0;
+    assert_eq!(album_row(&album, None, None).1, "2001  --:--");
+}
+
+#[test]
 fn album_row_prefers_the_lists_cached_title_and_running_time() {
     // The loaded album list caches each row's display title and formatted
     // running time, and the row builder must borrow them rather than joining

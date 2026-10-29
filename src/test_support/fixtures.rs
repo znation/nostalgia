@@ -101,6 +101,7 @@ pub(crate) fn sample_album() -> Album {
         artist_id: "artist-1".to_string(),
         artist: "The Sample Band".to_string(),
         duration_ms: 0,
+        year: None,
     }
 }
 

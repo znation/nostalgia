@@ -1175,6 +1175,7 @@ fn seed_lists_for_sort_locality(player: &mut WinampPlayer) {
                 artist_id: "artist-1".to_string(),
                 artist: "Zulu".to_string(),
                 duration_ms: 0,
+                year: None,
             },
             Album {
                 id: "alpha".to_string(),
@@ -1182,6 +1183,7 @@ fn seed_lists_for_sort_locality(player: &mut WinampPlayer) {
                 artist_id: "artist-1".to_string(),
                 artist: "alpha".to_string(),
                 duration_ms: 0,
+                year: None,
             },
         ]
     };

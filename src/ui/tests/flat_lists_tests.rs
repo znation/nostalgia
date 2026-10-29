@@ -271,6 +271,7 @@ async fn album_selected_in_all_albums_loads_its_songs_and_back_returns_to_all_al
         artist_id: String::new(),
         artist: "Echo Chamber".to_string(),
         duration_ms: 0,
+        year: None,
     };
     let _ = update(&mut player, Message::AllAlbumsLoaded(vec![flat_album]));
     player.current_view = CurrentView::AllAlbums;
@@ -320,6 +321,25 @@ fn all_songs_loaded_stores_the_flat_list() {
         ]
     );
     assert_eq!(player.all_songs.labels, ["3:30", "2:05", "1:35"]);
+}
+
+#[test]
+fn all_albums_loaded_caches_the_year_and_running_time_labels() {
+    // The cached row label must match `album_row_label`, so the sample
+    // albums' release years show beside their derived running times.
+    let (mut player, _state) = test_player();
+    let mut albums: Vec<Album> = sample_library()
+        .albums_by_artist
+        .values()
+        .flatten()
+        .cloned()
+        .collect();
+    albums.sort_by(|a, b| a.id.cmp(&b.id));
+    let _ = update(&mut player, Message::AllAlbumsLoaded(albums));
+    assert_eq!(
+        player.all_albums.labels,
+        ["2001  10:30", "2003  1:35", "2005  3:20"]
+    );
 }
 
 #[test]

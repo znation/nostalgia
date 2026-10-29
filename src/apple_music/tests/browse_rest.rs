@@ -547,6 +547,7 @@ async fn get_all_albums_uses_the_rest_library_when_signed_in() {
             artist_id: String::new(),
             artist: "The Sample Band".to_string(),
             duration_ms: 211_000,
+            year: None,
         }]
     );
     assert_call_urls(
@@ -802,6 +803,7 @@ async fn get_recently_added_albums_uses_the_rest_library_when_signed_in() {
             artist_id: String::new(),
             artist: "The Sample Band".to_string(),
             duration_ms: 211_000,
+            year: None,
         }]
     );
     assert_call_urls(

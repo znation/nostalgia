@@ -14,6 +14,7 @@ fn display_title_albums(first_duration_ms: u64, second_duration_ms: u64) -> Vec<
             artist_id: "artist-1".to_string(),
             artist: "Zulu".to_string(),
             duration_ms: first_duration_ms,
+            year: None,
         },
         Album {
             id: "alpha".to_string(),
@@ -21,6 +22,7 @@ fn display_title_albums(first_duration_ms: u64, second_duration_ms: u64) -> Vec<
             artist_id: "artist-1".to_string(),
             artist: "alpha".to_string(),
             duration_ms: second_duration_ms,
+            year: None,
         },
     ]
 }
@@ -583,6 +585,7 @@ fn back_from_songs_restores_a_sorted_albums_list_to_library_order() {
                 artist_id: "artist-1".to_string(),
                 artist: "Zulu".to_string(),
                 duration_ms: 0,
+                year: None,
             },
             Album {
                 id: "alpha".to_string(),
@@ -590,6 +593,7 @@ fn back_from_songs_restores_a_sorted_albums_list_to_library_order() {
                 artist_id: "artist-1".to_string(),
                 artist: "alpha".to_string(),
                 duration_ms: 0,
+                year: None,
             },
         ]),
     );
@@ -620,6 +624,7 @@ fn back_from_all_albums_songs_restores_a_sorted_flat_list_to_library_order() {
             artist_id: "artist-1".to_string(),
             artist: "Zulu".to_string(),
             duration_ms: 0,
+            year: None,
         },
         Album {
             id: "alpha".to_string(),
@@ -627,6 +632,7 @@ fn back_from_all_albums_songs_restores_a_sorted_flat_list_to_library_order() {
             artist_id: "artist-1".to_string(),
             artist: "alpha".to_string(),
             duration_ms: 0,
+            year: None,
         },
     ];
 

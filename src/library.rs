@@ -46,6 +46,10 @@ pub struct Album {
     /// deserializes to `0`; the service fills it from the library's songs.
     #[serde(skip)]
     pub duration_ms: u64,
+    /// The album's release year, parsed from the source's release date; `None`
+    /// means the source supplied no usable release date.
+    #[serde(default)]
+    pub year: Option<u16>,
 }
 
 impl Album {
@@ -224,7 +228,7 @@ mod tests {
     /// The [`Album`] twin of [`artist_payload`]: the full, valid wire payload
     /// the album round-trip and missing-field tests share.
     fn album_payload() -> serde_json::Value {
-        json!({ "id": "album-1", "title": "First Record", "artist_id": "artist-1", "artist": "The Sample Band" })
+        json!({ "id": "album-1", "title": "First Record", "artist_id": "artist-1", "artist": "The Sample Band", "year": null })
     }
 
     /// The [`Playlist`] twin of [`artist_payload`]: the full, valid wire

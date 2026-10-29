@@ -746,9 +746,25 @@ fn get_all_albums_maps_the_library_albums_collection() {
             artist_id: String::new(),
             artist: "The Sample Band".to_string(),
             duration_ms: 0,
+            year: None,
         }]
     );
     assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/albums");
+}
+
+// A `releaseDate` maps to the album's release year; an absent one maps to
+// `None`.
+#[test]
+fn get_all_albums_maps_the_release_year() {
+    let stub = StubTransport::returning(
+        r#"{"data":[{"id":"a1","attributes":{"name":"One","releaseDate":"2003-05-01"}},{"id":"a2","attributes":{"name":"Two"}}]}"#,
+    );
+    let library = library_over(&stub);
+
+    let albums = library.get_all_albums(&rest_session()).unwrap();
+
+    assert_eq!(albums[0].year, Some(2003));
+    assert_eq!(albums[1].year, None);
 }
 
 // An album resource without `attributes.artistName` must map to the model's

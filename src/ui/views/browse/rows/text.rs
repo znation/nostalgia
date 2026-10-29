@@ -8,7 +8,7 @@ use std::borrow::Cow;
 
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::ui::CurrentView;
-use crate::ui::views::{format_minutes_seconds, format_track_time};
+use crate::ui::views::{album_row_label, format_minutes_seconds, format_track_time};
 
 /// The placeholder a browse view shows when its list has no rows: one wording
 /// per browse level, so an empty Artists, Albums, Songs, All Songs, All
@@ -119,7 +119,7 @@ pub(in crate::ui::views) fn album_count_label(count: usize) -> Cow<'static, str>
 
 /// The browse row an album becomes: its display title (`<artist> - <title>`,
 /// or the title alone when the artist is empty; see [`Album::display_title`]),
-/// its total running time ([`format_track_time`], or `--:--` when the source
+/// its release year (when known) and total running time ([`album_row_label`]; `--:--` when the source
 /// supplied no songs), and the current-track flag. Albums are never the
 /// currently playing row, so the flag is always false. [`super::scrollable_list`]
 /// supplies the press message from the row's position and list epoch.
@@ -141,7 +141,7 @@ pub(in crate::ui::views) fn album_row<'a>(
     };
     let label = match cached_label {
         Some(label) => Cow::Borrowed(label),
-        None => Cow::Owned(format_track_time(album.duration_ms)),
+        None => Cow::Owned(album_row_label(album)),
     };
     (title, label, false)
 }

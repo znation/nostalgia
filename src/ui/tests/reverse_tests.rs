@@ -19,6 +19,7 @@ fn album(id: &str) -> Album {
         artist_id: "artist-1".to_string(),
         artist: "Band".to_string(),
         duration_ms: 0,
+        year: None,
     }
 }
 

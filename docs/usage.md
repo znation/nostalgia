@@ -63,7 +63,7 @@ a lightning button at the end of the row,
 and a browse list whose song rows read `artist - title` (or the title alone when the source
 supplies no artist) and show each track's length at the right, whose album rows read
 `artist - title` (or the title alone when the source supplies no artist) and show the album's
-total running time at the right (`10:30`, or `--:--` when the source supplied none), and whose
+release year (when known) and total running time at the right (`2001  10:30`, `10:30` with no known year, or `--:--` when the source supplied no songs), and whose
 artist rows show their album count at the right (`2 albums`, `1 album`, and no count for an
 artist with none), with each song list showing its song count and total playing time beneath
 the rows (while a song row is selected, the footer shows that song's length before the total,
