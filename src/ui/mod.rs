@@ -19,6 +19,7 @@ use tokio::sync::Mutex;
 
 mod bevel;
 mod browse;
+mod composers;
 mod genres;
 mod handlers;
 #[cfg(test)]
@@ -262,6 +263,16 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::YearsLoaded(years) => handlers::browse::fetch::years_loaded(player, years),
         Message::YearsLoadFailed(report) => {
             handlers::browse::fetch::years_load_failed(player, report)
+        }
+        Message::ShowComposers => handlers::browse::show_composers(player),
+        Message::ComposerSelected { epoch, index } => {
+            handlers::browse::composer_selected(player, epoch, index)
+        }
+        Message::ComposersLoaded(composers) => {
+            handlers::browse::fetch::composers_loaded(player, composers)
+        }
+        Message::ComposersLoadFailed(report) => {
+            handlers::browse::fetch::composers_load_failed(player, report)
         }
         Message::SearchChanged(text) => handlers::browse::search::search_changed(player, text),
         Message::SearchSubmitted => handlers::browse::search::search_submitted(player),

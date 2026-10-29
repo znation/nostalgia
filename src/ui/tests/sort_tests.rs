@@ -449,7 +449,8 @@ fn sort_leaves_other_lists_view_search_and_playback_untouched() {
             CurrentView::RecentlyAdded
             | CurrentView::RecentlyPlayed
             | CurrentView::Genres
-            | CurrentView::Years => {
+            | CurrentView::Years
+            | CurrentView::Composers => {
                 unreachable!("not in the views iterated above")
             }
         };
@@ -461,7 +462,8 @@ fn sort_leaves_other_lists_view_search_and_playback_untouched() {
             CurrentView::RecentlyAdded
             | CurrentView::RecentlyPlayed
             | CurrentView::Genres
-            | CurrentView::Years => {
+            | CurrentView::Years
+            | CurrentView::Composers => {
                 unreachable!("not in the views iterated above")
             }
         };
@@ -715,4 +717,25 @@ fn sort_reorders_years_by_name() {
         .map(|year| year.name.as_str())
         .collect();
     assert_eq!(names, ["2001", "2005", "Unknown"]);
+}
+
+#[test]
+fn sort_reorders_composers_by_name() {
+    let (mut player, _state) = test_player();
+    player.current_view = CurrentView::Composers;
+    let composer = |name: &str| Composer {
+        name: name.to_string(),
+        songs: Vec::new(),
+    };
+    player.composers.items = vec![composer("Zed"), composer("Unknown"), composer("Amy")];
+
+    let _ = update(&mut player, Message::SortBrowse);
+
+    let names: Vec<&str> = player
+        .composers
+        .items
+        .iter()
+        .map(|composer| composer.name.as_str())
+        .collect();
+    assert_eq!(names, ["Amy", "Unknown", "Zed"]);
 }

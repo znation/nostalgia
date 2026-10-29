@@ -110,6 +110,14 @@ pub(super) fn view_library<'a>(
             player.years.loading,
             player.years.error.as_deref(),
         ),
+        CurrentView::Composers => views::view_composers(
+            &player.composers.items,
+            &player.composers.labels,
+            player.composers.epoch,
+            player.composers.selected(),
+            player.composers.loading,
+            player.composers.error.as_deref(),
+        ),
         CurrentView::Playlists => views::view_playlists(
             &player.playlists.items,
             player.playlists.epoch,
@@ -139,8 +147,8 @@ pub(super) fn view_library<'a>(
     // with nothing selected it does nothing.
     library = library.push(views::view_open_button());
     library = library.push(views::view_browse_nav_buttons());
-    // The All Songs, All Albums, Playlists, Recently Added, and Recently Played buttons open the
-    // flat lists; they live on the Artists view, beside Back/Retry, so each list is one press from
+    // The All Songs, All Albums, Playlists, Genres, Years, Composers, Recently Added, and Recently
+    // Played buttons open the flat lists; they live on the Artists view, beside Back/Retry, so each list is one press from
     // the top of the hierarchy.
     if matches!(player.current_view, CurrentView::Artists) {
         library = library
@@ -149,6 +157,7 @@ pub(super) fn view_library<'a>(
             .push(views::view_playlists_button())
             .push(views::view_genres_button())
             .push(views::view_years_button())
+            .push(views::view_composers_button())
             .push(views::view_recently_added_button())
             .push(views::view_recently_played_button());
     }

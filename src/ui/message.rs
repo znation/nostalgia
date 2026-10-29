@@ -7,6 +7,7 @@ use std::time::Duration;
 use crate::audio::{PlaybackFormat, Spectrum};
 use crate::equalizer::Preset;
 use crate::library::{Album, Artist, Playlist, Song};
+use crate::ui::composers::Composer;
 use crate::ui::genres::Genre;
 use crate::ui::years::Year;
 
@@ -228,6 +229,13 @@ pub(in crate::ui) enum Message {
         epoch: u64,
         index: usize,
     },
+    // A composer row was opened: show that composer's songs under the Songs
+    // view. The epoch and index name the row in the Composers list that
+    // rendered it, so a press rendered before the list was replaced is ignored.
+    ComposerSelected {
+        epoch: u64,
+        index: usize,
+    },
     // The browse view's Open button: open the row selected in the showing
     // list through the same message a second press dispatches. With nothing
     // selected it is a no-op and schedules no task.
@@ -291,6 +299,9 @@ pub(in crate::ui) enum Message {
     // The Artists view's Years button: group the library's songs by release
     // year and show them under the Years view.
     ShowYears,
+    // The Artists view's Composers button: group the library's songs by
+    // composer and show them under the Composers view.
+    ShowComposers,
     // The library search box: `SearchChanged` carries each keystroke into
     // `search_query`; `SearchSubmitted` takes that stored text when Enter is
     // pressed and replaces the songs list with the search results. The submit
@@ -321,6 +332,8 @@ pub(in crate::ui) enum Message {
     GenresLoaded(Vec<Genre>),
     // The library's songs grouped by release year.
     YearsLoaded(Vec<Year>),
+    // The library's songs grouped by composer.
+    ComposersLoaded(Vec<Composer>),
     // A browse fetch that returned an error. The payload is the formatted
     // report (see `loading::fetch_failure_report`): it names the failed fetch
     // and carries the backend's cause, so the browse panel can show why the
@@ -335,6 +348,7 @@ pub(in crate::ui) enum Message {
     PlaylistsLoadFailed(String),
     GenresLoadFailed(String),
     YearsLoadFailed(String),
+    ComposersLoadFailed(String),
     // A browse reply stamped with the generation that produced it. The
     // mapper's `RequestGeneration::is_current` check runs on iced's executor
     // thread; `update` stores the reply later on the UI thread, and a

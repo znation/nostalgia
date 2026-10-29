@@ -19,6 +19,7 @@ use crate::settings::seam::SettingsWriter;
 use crate::state::AppState;
 
 use super::browse::BrowseList;
+use super::composers::Composer;
 use super::genres::Genre;
 use super::years::Year;
 use super::{transport, views};
@@ -94,6 +95,8 @@ pub(in crate::ui) struct WinampPlayer {
     pub(in crate::ui) genres: BrowseList<Genre>,
     /// The library's songs grouped by release year behind the Artists view's Years button.
     pub(in crate::ui) years: BrowseList<Year>,
+    /// The library's songs grouped by composer behind the Artists view's Composers button.
+    pub(in crate::ui) composers: BrowseList<Composer>,
     /// Which list the Songs view was opened from. `Album` returns to the per-artist Albums view on
     /// Back; `AllAlbums` returns to the flat All Albums view; `RecentlyAdded` returns to the
     /// Recently Added view; `Playlist` returns to the Playlists view. Set by the selection arm from
@@ -334,6 +337,7 @@ pub(in crate::ui) enum CurrentView {
     Playlists,
     Genres,
     Years,
+    Composers,
 }
 
 /// Which browse list a Songs view was opened from, so `Back` can step to it.
@@ -352,6 +356,8 @@ pub(in crate::ui) enum SongsOrigin {
     Genre,
     /// The Years view: Back returns to `CurrentView::Years`.
     Year,
+    /// The Composers view: Back returns to `CurrentView::Composers`.
+    Composer,
 }
 
 impl WinampPlayer {
@@ -383,6 +389,7 @@ impl WinampPlayer {
             playlists: BrowseList::new(false),
             genres: BrowseList::new(false),
             years: BrowseList::new(false),
+            composers: BrowseList::new(false),
             songs_origin: SongsOrigin::Album,
             search_query: String::new(),
             search_active: false,
@@ -504,6 +511,8 @@ impl WinampPlayer {
             CurrentView::Playlists => LibraryView::Playlists,
             CurrentView::Genres => LibraryView::Genres,
             CurrentView::Years => LibraryView::Years,
+            // Part 2/2 saves Composers as its own `LibraryView`.
+            CurrentView::Composers => LibraryView::Artists,
             CurrentView::Songs => match self.songs_origin {
                 SongsOrigin::Album => LibraryView::Artists,
                 SongsOrigin::AllAlbums => LibraryView::AllAlbums,
@@ -511,6 +520,7 @@ impl WinampPlayer {
                 SongsOrigin::Playlist => LibraryView::Playlists,
                 SongsOrigin::Genre => LibraryView::Genres,
                 SongsOrigin::Year => LibraryView::Years,
+                SongsOrigin::Composer => LibraryView::Artists,
             },
         }
     }

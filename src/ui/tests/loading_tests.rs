@@ -309,6 +309,11 @@ fn stale_flat_list_replies_superseded_before_update_are_not_stored() {
         Message::YearsLoadFailed
     );
     assert_list_rechecks_its_generation!(
+        composers,
+        Message::ComposersLoaded(group_by_composer(vec![sample_song()])),
+        Message::ComposersLoadFailed
+    );
+    assert_list_rechecks_its_generation!(
         playlists,
         Message::PlaylistsLoaded(vec![sample_playlist()]),
         Message::PlaylistsLoadFailed

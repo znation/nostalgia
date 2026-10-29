@@ -1,4 +1,5 @@
 use super::browse::BrowseList;
+use super::composers::{Composer, group_by_composer};
 use super::genres::{Genre, group_by_genre};
 use super::loading::{RequestGeneration, fetch_into, play_into};
 use super::subscriptions::*;
@@ -1376,6 +1377,7 @@ fn root_view_draws(player: &WinampPlayer, fragment: &str) -> bool {
 }
 
 mod browse_tests;
+mod composers_tests;
 mod ctrl_click_tests;
 mod fade_tests;
 mod flat_lists_tests;

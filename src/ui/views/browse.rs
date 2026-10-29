@@ -19,6 +19,7 @@ use iced::{
 };
 
 use crate::library::{Album, Artist, Playlist, Song};
+use crate::ui::composers::Composer;
 use crate::ui::genres::Genre;
 use crate::ui::years::Year;
 use crate::ui::{CurrentView, Message, style};
@@ -447,6 +448,42 @@ pub fn view_recently_added_button() -> Element<'static, Message> {
     labeled_button("Recently Added", Message::ShowRecentlyAdded).into()
 }
 
+/// The Composers browse view: one row per composer, in the order given, each
+/// showing its song-count label. The Composers twin of [`view_years`].
+pub fn view_composers<'a>(
+    composers: &'a [Composer],
+    labels: &'a [String],
+    epoch: u64,
+    selected: Option<usize>,
+    loading: bool,
+    error: Option<&'a str>,
+) -> Element<'a, Message> {
+    list_with_count(
+        scrollable_list(
+            composers.iter().enumerate().map(|(index, composer)| {
+                (
+                    Cow::Borrowed(composer.name.as_str()),
+                    Cow::Borrowed(labels.get(index).map_or("", String::as_str)),
+                    false,
+                )
+            }),
+            &CurrentView::Composers,
+            epoch,
+            selected,
+            browse_placeholder(&CurrentView::Composers, loading, error, false),
+        ),
+        composers.len(),
+        "composer",
+        "composers",
+    )
+}
+
+/// The Artists view's Composers button, opening the library's composer list.
+/// The update loop's `ShowComposers` arm switches to `CurrentView::Composers`.
+pub fn view_composers_button<'a>() -> Element<'a, Message> {
+    labeled_button("Composers", Message::ShowComposers).into()
+}
+
 /// The Artists view's Years button, opening the library's release-year list.
 /// The update loop's `ShowYears` arm switches to `CurrentView::Years`.
 pub fn view_years_button<'a>() -> Element<'a, Message> {
@@ -527,7 +564,7 @@ pub fn view_search_row(query: &str) -> Element<'_, Message> {
 /// naming the list once means a new view is added here rather than to each
 /// loop's literal.
 #[cfg(test)]
-pub const BROWSE_VIEWS: [CurrentView; 10] = [
+pub const BROWSE_VIEWS: [CurrentView; 11] = [
     CurrentView::Artists,
     CurrentView::Albums,
     CurrentView::Songs,
@@ -538,4 +575,5 @@ pub const BROWSE_VIEWS: [CurrentView; 10] = [
     CurrentView::Playlists,
     CurrentView::Genres,
     CurrentView::Years,
+    CurrentView::Composers,
 ];

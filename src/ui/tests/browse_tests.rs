@@ -184,7 +184,8 @@ fn open_selected_opens_the_selected_row_on_every_browse_level() {
             CurrentView::RecentlyAdded
             | CurrentView::RecentlyPlayed
             | CurrentView::Genres
-            | CurrentView::Years => {
+            | CurrentView::Years
+            | CurrentView::Composers => {
                 unreachable!("not in the views iterated above")
             }
         };
@@ -206,7 +207,10 @@ fn open_selected_opens_the_selected_row_on_every_browse_level() {
             CurrentView::Playlists => {
                 matches!(&opened, Message::PlaylistSelected { epoch: e, index: 0 } if *e == epoch)
             }
-            CurrentView::Songs | CurrentView::Genres | CurrentView::Years => {
+            CurrentView::Songs
+            | CurrentView::Genres
+            | CurrentView::Years
+            | CurrentView::Composers => {
                 unreachable!("not in the views iterated above")
             }
         };

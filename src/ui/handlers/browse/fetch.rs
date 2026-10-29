@@ -11,6 +11,7 @@ use iced::Task;
 
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::ui::browse::BrowseList;
+use crate::ui::composers::Composer;
 use crate::ui::genres::Genre;
 use crate::ui::loading::fetch_level;
 use crate::ui::song_groups::song_count_label;
@@ -217,6 +218,26 @@ pub(in crate::ui) fn years_load_failed(player: &mut WinampPlayer, report: String
     fail_list(&mut player.years, report)
 }
 
+/// The composers grouping landed: store the rows in the composers list,
+/// caching each row's song-count label.
+pub(in crate::ui) fn composers_loaded(
+    player: &mut WinampPlayer,
+    composers: Vec<Composer>,
+) -> Task<Message> {
+    player
+        .composers
+        .store_with_labels(composers, song_count_label);
+    Task::none()
+}
+
+/// The composers fetch failed: record the report on the composers list.
+pub(in crate::ui) fn composers_load_failed(
+    player: &mut WinampPlayer,
+    report: String,
+) -> Task<Message> {
+    fail_list(&mut player.composers, report)
+}
+
 /// The recently played songs fetch failed: record the report on the Recently
 /// Played list.
 pub(in crate::ui) fn recently_played_load_failed(
@@ -277,6 +298,9 @@ pub(in crate::ui) fn browse_reply(
         }
         Message::GenresLoaded(_) | Message::GenresLoadFailed(_) => player.genres.is_current(issued),
         Message::YearsLoaded(_) | Message::YearsLoadFailed(_) => player.years.is_current(issued),
+        Message::ComposersLoaded(_) | Message::ComposersLoadFailed(_) => {
+            player.composers.is_current(issued)
+        }
         _ => true,
     };
     if current {

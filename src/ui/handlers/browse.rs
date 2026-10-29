@@ -14,6 +14,7 @@ use iced::Task;
 use crate::library::Song;
 use crate::settings::library_view::LibraryView;
 use crate::ui::browse::BrowseList;
+use crate::ui::composers::group_by_composer;
 use crate::ui::genres::group_by_genre;
 use crate::ui::loading::fetch_level;
 use crate::ui::years::group_by_year;
@@ -144,6 +145,7 @@ pub(in crate::ui) fn select_row(
         CurrentView::Playlists => player.playlists.select_row(epoch, index),
         CurrentView::Genres => player.genres.select_row(epoch, index),
         CurrentView::Years => player.years.select_row(epoch, index),
+        CurrentView::Composers => player.composers.select_row(epoch, index),
     };
     if already_selected == Some(true) {
         open_row(player, epoch, index)
@@ -197,6 +199,10 @@ pub(in crate::ui) fn open_selected(player: &mut WinampPlayer) -> Task<Message> {
             .years
             .selected()
             .map(|index| (player.years.epoch, index)),
+        CurrentView::Composers => player
+            .composers
+            .selected()
+            .map(|index| (player.composers.epoch, index)),
     };
     let Some((epoch, index)) = selection else {
         return Task::none();
@@ -221,6 +227,7 @@ fn open_row(player: &WinampPlayer, epoch: u64, index: usize) -> Task<Message> {
         CurrentView::Playlists => Task::done(Message::PlaylistSelected { epoch, index }),
         CurrentView::Genres => Task::done(Message::GenreSelected { epoch, index }),
         CurrentView::Years => Task::done(Message::YearSelected { epoch, index }),
+        CurrentView::Composers => Task::done(Message::ComposerSelected { epoch, index }),
     }
 }
 
@@ -298,6 +305,21 @@ pub(in crate::ui) fn year_selected(
     show_group_songs(player, songs, SongsOrigin::Year)
 }
 
+/// A composer's row was opened: the Composers twin of [`year_selected`],
+/// showing the composer's songs in the shared songs buffer with
+/// `SongsOrigin::Composer` for Back.
+pub(in crate::ui) fn composer_selected(
+    player: &mut WinampPlayer,
+    epoch: u64,
+    index: usize,
+) -> Task<Message> {
+    let Some(composer) = player.composers.select(epoch, index) else {
+        return Task::none();
+    };
+    let songs = composer.songs.clone();
+    show_group_songs(player, songs, SongsOrigin::Composer)
+}
+
 /// Step back up the browse hierarchy: the browse hierarchy is navigable both
 /// ways — `ArtistSelected`, `AlbumSelected`, and `PlaylistSelected` step down
 /// (Artists → Albums → Songs, or into a playlist's songs), Back steps up
@@ -325,6 +347,7 @@ pub(in crate::ui) fn back(player: &mut WinampPlayer) -> Task<Message> {
                 SongsOrigin::Playlist => CurrentView::Playlists,
                 SongsOrigin::Genre => CurrentView::Genres,
                 SongsOrigin::Year => CurrentView::Years,
+                SongsOrigin::Composer => CurrentView::Composers,
             },
             CurrentView::Albums => CurrentView::Artists,
             CurrentView::AllSongs => CurrentView::Artists,
@@ -334,6 +357,7 @@ pub(in crate::ui) fn back(player: &mut WinampPlayer) -> Task<Message> {
             CurrentView::Playlists => CurrentView::Artists,
             CurrentView::Genres => CurrentView::Artists,
             CurrentView::Years => CurrentView::Artists,
+            CurrentView::Composers => CurrentView::Artists,
             CurrentView::Artists => CurrentView::Artists,
         };
     }
@@ -350,6 +374,7 @@ pub(in crate::ui) fn back(player: &mut WinampPlayer) -> Task<Message> {
             CurrentView::Playlists => player.playlists.restore_library_order(),
             CurrentView::Genres => player.genres.restore_library_order(),
             CurrentView::Years => player.years.restore_library_order(),
+            CurrentView::Composers => player.composers.restore_library_order(),
             // Back never lands on a song list, and both are refetched when
             // reopened, so neither can be the list being restored.
             CurrentView::Songs | CurrentView::AllSongs | CurrentView::RecentlyPlayed => {}
@@ -465,6 +490,20 @@ pub(in crate::ui) fn show_years(player: &mut WinampPlayer) -> Task<Message> {
     ))
 }
 
+/// The Artists view's Composers button: group the library's songs by composer
+/// and show them under the Composers view, hanging off the artists list like Years.
+pub(in crate::ui) fn show_composers(player: &mut WinampPlayer) -> Task<Message> {
+    switch_view(player, CurrentView::Composers);
+    fetch_at_top(fetch_level(
+        &mut player.composers,
+        &player.apple_music_service,
+        "loading library composers".to_string(),
+        |service| async move { service.get_all_songs().await.map(group_by_composer) },
+        Message::ComposersLoaded,
+        Message::ComposersLoadFailed,
+    ))
+}
+
 /// The Artists view's Genres button: group the library's songs by genre and
 /// show them under the Genres view. Like Playlists, Genres hangs off the
 /// artists list: leave an active search behind and let Back return to Artists.
@@ -514,6 +553,9 @@ pub(in crate::ui) fn sort_browse(player: &mut WinampPlayer) -> Task<Message> {
             .sort_rows_by(|playlist| playlist.name.clone()),
         CurrentView::Genres => player.genres.sort_rows_by(|genre| genre.name.clone()),
         CurrentView::Years => player.years.sort_rows_by(|year| year.name.clone()),
+        CurrentView::Composers => player
+            .composers
+            .sort_rows_by(|composer| composer.name.clone()),
     }
     Task::none()
 }
@@ -536,6 +578,7 @@ pub(in crate::ui) fn reverse_browse(player: &mut WinampPlayer) -> Task<Message> 
         CurrentView::Playlists => player.playlists.reverse_rows(),
         CurrentView::Genres => player.genres.reverse_rows(),
         CurrentView::Years => player.years.reverse_rows(),
+        CurrentView::Composers => player.composers.reverse_rows(),
     }
     Task::none()
 }
@@ -558,6 +601,7 @@ pub(in crate::ui) fn randomize_browse(player: &mut WinampPlayer) -> Task<Message
         CurrentView::Playlists => player.playlists.shuffle_rows(seed),
         CurrentView::Genres => player.genres.shuffle_rows(seed),
         CurrentView::Years => player.years.shuffle_rows(seed),
+        CurrentView::Composers => player.composers.shuffle_rows(seed),
     }
     Task::none()
 }
@@ -580,6 +624,7 @@ pub(in crate::ui) fn move_selected_row(player: &mut WinampPlayer, down: bool) ->
         CurrentView::Playlists => move_in(&mut player.playlists, down),
         CurrentView::Genres => move_in(&mut player.genres, down),
         CurrentView::Years => move_in(&mut player.years, down),
+        CurrentView::Composers => move_in(&mut player.composers, down),
     };
     moved_to.map_or_else(Task::none, scroll::reveal_browse_row)
 }
