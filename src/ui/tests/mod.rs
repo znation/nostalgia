@@ -1387,6 +1387,7 @@ mod jump_time_tests;
 mod loading_tests;
 mod mixer_tests;
 mod move_row_tests;
+mod overlay_tests;
 mod panels_tests;
 mod randomize_tests;
 mod readouts_tests;
