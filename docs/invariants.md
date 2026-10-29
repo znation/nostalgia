@@ -24,11 +24,13 @@ exactly one level up, and Back never falls through to the wrong level:
 - Songs → All Albums when the songs were opened from the All Albums list.
 - Songs → Recently Added when the songs were opened from the Recently Added list.
 - Songs → Playlists when the songs were opened from a playlist.
+- Songs → Genres when the songs were opened from a genre.
 - All Songs → Artists.
 - All Albums → Artists.
 - Recently Added → Artists.
 - Recently Played → Artists.
 - Playlists → Artists.
+- Genres → Artists.
 - An active search's result list → Artists, not the album the search was issued from.
 
 Artists itself has no level above it, so Back there is a no-op (and the Back button is not shown).
@@ -67,6 +69,12 @@ clears the search flag and view and calls `fetch_at_top(fetch::load_artists(play
 - `back_from_all_albums_returns_to_the_artists_list`
 - `back_from_playlists_returns_to_the_artists_list`
 - `playlist_selected_in_playlists_loads_its_songs_and_back_returns_to_playlists`
+- `back_from_genres_returns_to_the_artists_list`
+- `genre_selected_shows_that_genres_songs_and_back_returns_to_genres`
+- `a_stale_genre_press_does_nothing`
+- `a_track_selected_in_a_genre_plays_it`
+- `genres_loaded_stores_rows_with_song_count_labels`
+- `sort_reorders_genres_by_name`
 - `album_selected_in_all_albums_loads_its_songs_and_back_returns_to_all_albums`
 - `back_leaves_an_active_search_for_the_artists_list`
 - `backspace_steps_back_from_albums`
@@ -762,7 +770,7 @@ refresh does not re-join and reformat every row.
   cached row text, with its loading, failure, or empty-search placeholder chosen from that same
   level's flags, and marks the playing row only in the Songs, All Songs, and Recently Played lists.
 - The root `view` draws Back on every level below Artists, Retry only on Artists while its fetch
-  has failed, and the All Songs, All Albums, Playlists, Recently Added, and Recently Played buttons only on Artists.
+  has failed, and the All Songs, All Albums, Playlists, Genres, Recently Added, and Recently Played buttons only on Artists.
 - The app bar and the two section bands are `TITLE_BAR_HEIGHT` tall. The app bar centers
   `NOSTALGIA` between gold tapes with its M and shade/minimize/close controls pinned at the
   edges. Normal mode draws `NOSTALGIA EQUALIZER` immediately above the equalizer and

@@ -50,9 +50,9 @@ pub use browse::{
     BROWSE_LIST_ID, BROWSE_LIST_PADDING, BROWSE_PAGE_HEIGHT, BROWSE_ROW_HEIGHT, BROWSE_SEARCH_ID,
     can_go_back, can_retry_artists, view_albums, view_all_albums, view_all_albums_button,
     view_all_songs, view_all_songs_button, view_artists, view_back_button, view_browse_nav_buttons,
-    view_open_button, view_playlists, view_playlists_button, view_recently_added,
-    view_recently_added_button, view_recently_played, view_recently_played_button,
-    view_retry_button, view_search_row, view_songs,
+    view_genres, view_genres_button, view_open_button, view_playlists, view_playlists_button,
+    view_recently_added, view_recently_added_button, view_recently_played,
+    view_recently_played_button, view_retry_button, view_search_row, view_songs,
 };
 pub use equalizer::view_equalizer;
 pub use file_info::view_file_info_overlay;

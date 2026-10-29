@@ -1,4 +1,5 @@
 use super::browse::BrowseList;
+use super::genres::{Genre, group_by_genre};
 use super::loading::{RequestGeneration, fetch_into, play_into};
 use super::subscriptions::*;
 use super::views::{BROWSE_LIST_ID, BROWSE_PAGE_HEIGHT, BROWSE_SEARCH_ID, BROWSE_VIEWS};

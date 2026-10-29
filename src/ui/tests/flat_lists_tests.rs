@@ -377,3 +377,150 @@ async fn track_selected_in_all_songs_plays_the_flat_lists_song() {
     assert_eq!(state.lock().await.current_track.as_deref(), Some("song-4"));
     assert_preview_calls(&recording.calls(), &[]);
 }
+
+/// Two zydeco songs (a genre with no EQ preset, so playing one leaves AUTO
+/// alone) and one blank-genre song, in library order.
+fn genre_songs() -> Vec<Song> {
+    let mut songs = stepping_songs();
+    songs[0].genre = "Zydeco".to_string();
+    songs[1].genre = String::new();
+    songs[2].genre = "zydeco".to_string();
+    songs
+}
+
+/// A player showing the Genres list loaded from [`genre_songs`]: `Zydeco`
+/// (songs 0 and 2), then `Unknown` (song 1).
+fn player_with_genres() -> WinampPlayer {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::ShowGenres);
+    let _ = update(
+        &mut player,
+        Message::GenresLoaded(group_by_genre(genre_songs())),
+    );
+    player
+}
+
+// The Genres button groups the library's songs by genre and shows them under
+// their own view, leaving the other browse buffers alone.
+#[tokio::test]
+async fn show_genres_fetches_and_switches_view() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+
+    let task = update(&mut player, Message::ShowGenres);
+    drive_fetch_and_assert_loaded(
+        &mut player,
+        task,
+        "load library genres",
+        |player| &mut player.genres.items,
+        |genre| genre.name.as_str(),
+        &["Alternative", "Electronic", "Rock"],
+    )
+    .await;
+
+    assert_view(&player, CurrentView::Genres);
+    assert!(!player.search_active);
+    assert_eq!(player.songs.items.len(), 3);
+}
+
+#[test]
+fn genres_loaded_stores_rows_with_song_count_labels() {
+    let player = player_with_genres();
+
+    let names: Vec<&str> = player
+        .genres
+        .items
+        .iter()
+        .map(|genre| genre.name.as_str())
+        .collect();
+    assert_eq!(names, ["Zydeco", "Unknown"]);
+    assert_eq!(player.genres.labels, ["2 songs", "1 song"]);
+    assert!(!player.genres.loading);
+}
+
+#[test]
+fn show_genres_clears_an_active_search() {
+    assert_navigation_clears_the_search(Message::ShowGenres, CurrentView::Genres);
+}
+
+#[test]
+fn back_from_genres_returns_to_the_artists_list() {
+    assert_back_returns_to_artists(CurrentView::Genres);
+}
+
+// Opening a genre shows exactly its songs under the Songs view, and Back
+// steps to Genres and then to Artists.
+#[test]
+fn genre_selected_shows_that_genres_songs_and_back_returns_to_genres() {
+    let mut player = player_with_genres();
+    let epoch = player.genres.epoch;
+
+    let _ = update(&mut player, Message::GenreSelected { epoch, index: 0 });
+
+    assert_view(&player, CurrentView::Songs);
+    assert_eq!(player.songs_origin, SongsOrigin::Genre);
+    let ids: Vec<&str> = player
+        .songs
+        .items
+        .iter()
+        .map(|song| song.id.as_str())
+        .collect();
+    assert_eq!(ids, ["song-1", "song-3"]);
+    assert_eq!(player.songs.titles.len(), 2);
+
+    let _ = update(&mut player, Message::Back);
+    assert_view(&player, CurrentView::Genres);
+    let _ = update(&mut player, Message::Back);
+    assert_view(&player, CurrentView::Artists);
+}
+
+#[test]
+fn a_stale_genre_press_does_nothing() {
+    let mut player = player_with_genres();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    let epoch = player.genres.epoch;
+
+    assert_message_schedules_no_work(
+        &mut player,
+        Message::GenreSelected {
+            epoch: epoch - 1,
+            index: 0,
+        },
+    );
+    assert_message_schedules_no_work(&mut player, Message::GenreSelected { epoch, index: 9 });
+
+    assert_view(&player, CurrentView::Genres);
+    assert_eq!(player.songs.items.len(), 3);
+}
+
+// A song in an opened genre plays through the ordinary TrackSelected path.
+#[tokio::test]
+async fn a_track_selected_in_a_genre_plays_it() {
+    let (mut player, state) = test_player();
+    let _ = update(&mut player, Message::ShowGenres);
+    let _ = update(
+        &mut player,
+        Message::GenresLoaded(group_by_genre(genre_songs())),
+    );
+    let epoch = player.genres.epoch;
+    let _ = update(&mut player, Message::GenreSelected { epoch, index: 0 });
+    let songs_epoch = player.songs.epoch;
+
+    drive_task(
+        update(
+            &mut player,
+            Message::TrackSelected {
+                epoch: songs_epoch,
+                index: 1,
+            },
+        ),
+        "playback",
+        |message| match message {
+            Message::TrackPlayed { committed, .. } => assert!(committed),
+            other => panic!("unexpected playback task output: {other:?}"),
+        },
+    )
+    .await;
+
+    assert_eq!(state.lock().await.current_track.as_deref(), Some("song-3"));
+}

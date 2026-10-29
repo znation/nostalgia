@@ -11,6 +11,7 @@ use iced::Task;
 
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::ui::browse::BrowseList;
+use crate::ui::genres::{Genre, song_count_label};
 use crate::ui::loading::fetch_level;
 use crate::ui::views;
 use crate::ui::{Message, WinampPlayer};
@@ -80,7 +81,7 @@ pub(in crate::ui) fn songs_loaded(player: &mut WinampPlayer, songs: Vec<Song>) -
 /// length once (see `BrowseList::store_with_row_text`). Shared by
 /// [`songs_loaded`], [`all_songs_loaded`] and [`recently_played_loaded`] so they stay in
 /// sync.
-fn store_songs(list: &mut BrowseList<Song>, songs: Vec<Song>) {
+pub(super) fn store_songs(list: &mut BrowseList<Song>, songs: Vec<Song>) {
     list.store_with_row_text(
         songs,
         |song| song.display_title().into_owned(),
@@ -195,6 +196,13 @@ pub(in crate::ui) fn recently_added_load_failed(
     fail_list(&mut player.recently_added, report)
 }
 
+/// The genres grouping landed: store the rows in the genres list, caching
+/// each row's song-count label.
+pub(in crate::ui) fn genres_loaded(player: &mut WinampPlayer, genres: Vec<Genre>) -> Task<Message> {
+    player.genres.store_with_labels(genres, song_count_label);
+    Task::none()
+}
+
 /// The recently played songs fetch failed: record the report on the Recently
 /// Played list.
 pub(in crate::ui) fn recently_played_load_failed(
@@ -210,6 +218,14 @@ pub(in crate::ui) fn playlists_load_failed(
     report: String,
 ) -> Task<Message> {
     fail_list(&mut player.playlists, report)
+}
+
+/// The genres fetch failed: record the report on the genres list.
+pub(in crate::ui) fn genres_load_failed(
+    player: &mut WinampPlayer,
+    report: String,
+) -> Task<Message> {
+    fail_list(&mut player.genres, report)
 }
 
 /// A browse reply stamped with the generation that produced it. The
@@ -245,6 +261,7 @@ pub(in crate::ui) fn browse_reply(
         Message::PlaylistsLoaded(_) | Message::PlaylistsLoadFailed(_) => {
             player.playlists.is_current(issued)
         }
+        Message::GenresLoaded(_) | Message::GenresLoadFailed(_) => player.genres.is_current(issued),
         _ => true,
     };
     if current {

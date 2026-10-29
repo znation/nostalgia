@@ -19,6 +19,7 @@ use iced::{
 };
 
 use crate::library::{Album, Artist, Playlist, Song};
+use crate::ui::genres::Genre;
 use crate::ui::{CurrentView, Message, style};
 
 use super::labeled_button;
@@ -273,6 +274,39 @@ pub fn view_playlists<'a>(
     )
 }
 
+/// The Genres browse view: one row per genre, in the order given, each
+/// showing its song-count label (`labels`, cached when the list loaded; an
+/// index without one shows none) and selecting its row with
+/// [`Message::SelectRow`] (a second press opens it). Built like
+/// [`view_playlists`]; a non-empty list also appends its item-count footer.
+pub fn view_genres<'a>(
+    genres: &'a [Genre],
+    labels: &'a [String],
+    epoch: u64,
+    selected: Option<usize>,
+    loading: bool,
+    error: Option<&'a str>,
+) -> Element<'a, Message> {
+    list_with_count(
+        scrollable_list(
+            genres.iter().enumerate().map(|(index, genre)| {
+                (
+                    Cow::Borrowed(genre.name.as_str()),
+                    Cow::Borrowed(labels.get(index).map_or("", String::as_str)),
+                    false,
+                )
+            }),
+            &CurrentView::Genres,
+            epoch,
+            selected,
+            browse_placeholder(&CurrentView::Genres, loading, error, false),
+        ),
+        genres.len(),
+        "genre",
+        "genres",
+    )
+}
+
 /// Whether the browse view has a level above it to return to. Every view
 /// below the top-level Artists list does — the Back button is shown above
 /// their lists — while Artists itself has nothing to go back to.
@@ -382,6 +416,12 @@ pub fn view_recently_added_button() -> Element<'static, Message> {
     labeled_button("Recently Added", Message::ShowRecentlyAdded).into()
 }
 
+/// The Artists view's Genres button, opening the library's genre list. The
+/// update loop's `ShowGenres` arm switches to `CurrentView::Genres`.
+pub fn view_genres_button() -> Element<'static, Message> {
+    labeled_button("Genres", Message::ShowGenres).into()
+}
+
 /// The Artists view's Playlists button, opening the library's playlist list.
 /// Rendered only on the Artists view, beside the All Songs and All Albums
 /// buttons; the update loop's `ShowPlaylists` arm switches to
@@ -450,7 +490,7 @@ pub fn view_search_row(query: &str) -> Element<'_, Message> {
 /// naming the list once means a new view is added here rather than to each
 /// loop's literal.
 #[cfg(test)]
-pub const BROWSE_VIEWS: [CurrentView; 8] = [
+pub const BROWSE_VIEWS: [CurrentView; 9] = [
     CurrentView::Artists,
     CurrentView::Albums,
     CurrentView::Songs,
@@ -459,4 +499,5 @@ pub const BROWSE_VIEWS: [CurrentView; 8] = [
     CurrentView::RecentlyAdded,
     CurrentView::RecentlyPlayed,
     CurrentView::Playlists,
+    CurrentView::Genres,
 ];

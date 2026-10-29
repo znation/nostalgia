@@ -299,6 +299,11 @@ fn stale_flat_list_replies_superseded_before_update_are_not_stored() {
         Message::RecentlyAddedLoadFailed
     );
     assert_list_rechecks_its_generation!(
+        genres,
+        Message::GenresLoaded(group_by_genre(vec![sample_song()])),
+        Message::GenresLoadFailed
+    );
+    assert_list_rechecks_its_generation!(
         playlists,
         Message::PlaylistsLoaded(vec![sample_playlist()]),
         Message::PlaylistsLoadFailed

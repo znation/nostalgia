@@ -94,6 +94,14 @@ pub(super) fn view_library<'a>(
                 state.current_track.as_deref(),
             )
         }
+        CurrentView::Genres => views::view_genres(
+            &player.genres.items,
+            &player.genres.labels,
+            player.genres.epoch,
+            player.genres.selected(),
+            player.genres.loading,
+            player.genres.error.as_deref(),
+        ),
         CurrentView::Playlists => views::view_playlists(
             &player.playlists.items,
             player.playlists.epoch,
@@ -131,6 +139,7 @@ pub(super) fn view_library<'a>(
             .push(views::view_all_songs_button())
             .push(views::view_all_albums_button())
             .push(views::view_playlists_button())
+            .push(views::view_genres_button())
             .push(views::view_recently_added_button())
             .push(views::view_recently_played_button());
     }

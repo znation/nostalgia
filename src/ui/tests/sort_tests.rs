@@ -240,6 +240,27 @@ fn sort_reorders_playlists_by_name() {
     assert_eq!(names, ["Apple", "banana", "cherry"]);
 }
 
+#[test]
+fn sort_reorders_genres_by_name() {
+    let (mut player, _state) = test_player();
+    player.current_view = CurrentView::Genres;
+    let genre = |name: &str| Genre {
+        name: name.to_string(),
+        songs: Vec::new(),
+    };
+    player.genres.items = vec![genre("rock"), genre("Blues"), genre("Pop")];
+
+    let _ = update(&mut player, Message::SortBrowse);
+
+    let names: Vec<&str> = player
+        .genres
+        .items
+        .iter()
+        .map(|genre| genre.name.as_str())
+        .collect();
+    assert_eq!(names, ["Blues", "Pop", "rock"]);
+}
+
 /// Asserts a sorted `stepping_songs()` list holds its rows in title order with each row's cached
 /// title and running time still beside it.
 fn assert_sorted_stepping_songs(list: &BrowseList<Song>) {
@@ -423,7 +444,7 @@ fn sort_leaves_other_lists_view_search_and_playback_untouched() {
             CurrentView::AllSongs => 3,
             CurrentView::AllAlbums => 4,
             CurrentView::Playlists => 5,
-            CurrentView::RecentlyAdded | CurrentView::RecentlyPlayed => {
+            CurrentView::RecentlyAdded | CurrentView::RecentlyPlayed | CurrentView::Genres => {
                 unreachable!("not in the views iterated above")
             }
         };
@@ -432,7 +453,7 @@ fn sort_leaves_other_lists_view_search_and_playback_untouched() {
             CurrentView::Albums | CurrentView::AllAlbums => vec!["alpha", "zulu"],
             CurrentView::Songs | CurrentView::AllSongs => vec!["song-1", "song-3", "song-2"],
             CurrentView::Playlists => vec!["alpha", "zulu"],
-            CurrentView::RecentlyAdded | CurrentView::RecentlyPlayed => {
+            CurrentView::RecentlyAdded | CurrentView::RecentlyPlayed | CurrentView::Genres => {
                 unreachable!("not in the views iterated above")
             }
         };

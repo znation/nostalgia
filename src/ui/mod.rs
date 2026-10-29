@@ -19,6 +19,7 @@ use tokio::sync::Mutex;
 
 mod bevel;
 mod browse;
+mod genres;
 mod handlers;
 #[cfg(test)]
 pub(crate) mod layout_capture;
@@ -247,6 +248,14 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::ShowRecentlyAdded => handlers::browse::show_recently_added(player),
         Message::ShowRecentlyPlayed => handlers::browse::show_recently_played(player),
         Message::ShowPlaylists => handlers::browse::show_playlists(player),
+        Message::ShowGenres => handlers::browse::show_genres(player),
+        Message::GenreSelected { epoch, index } => {
+            handlers::browse::genre_selected(player, epoch, index)
+        }
+        Message::GenresLoaded(genres) => handlers::browse::fetch::genres_loaded(player, genres),
+        Message::GenresLoadFailed(report) => {
+            handlers::browse::fetch::genres_load_failed(player, report)
+        }
         Message::SearchChanged(text) => handlers::browse::search::search_changed(player, text),
         Message::SearchSubmitted => handlers::browse::search::search_submitted(player),
         Message::FocusSearch => handlers::browse::search::focus_search(),
