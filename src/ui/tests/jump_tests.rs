@@ -96,6 +96,32 @@ fn options_ten_song_rows_jump_like_the_keypad() {
     }
 }
 
+// The edge-jump rows run the Ctrl+Z / Ctrl+B jumps, by mouse and by keyboard,
+// and with no song list they only close the menu.
+#[test]
+fn options_start_and_end_of_list_rows_jump_like_the_keys() {
+    for (row, expected) in [(OptionsRow::StartOfList, 0), (OptionsRow::EndOfList, 24)] {
+        for by_keyboard in [false, true] {
+            let (mut player, _state) = player_jumping_from("song-15");
+            player.options_visible = true;
+            let task = if by_keyboard {
+                player.options_selected = options_position(row);
+                update(&mut player, Message::OptionsActivate)
+            } else {
+                update(&mut player, row.message())
+            };
+            assert!(!player.options_visible, "menu must close ({row:?})");
+            assert_track_selected(task, 0, expected);
+
+            let (mut player, _state) = test_player();
+            player.options_visible = true;
+            let task = update(&mut player, row.message());
+            assert!(!player.options_visible, "menu must close empty ({row:?})");
+            assert_no_task(task);
+        }
+    }
+}
+
 // The Jump rows close the menu and open their panel when it is available, by
 // mouse and by keyboard; when it is not, they only close the menu.
 #[test]

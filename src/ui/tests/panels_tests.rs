@@ -527,6 +527,9 @@ fn options_choice_applies_each_toggle_and_closes_the_panel() {
                         "covered by options_back_and_fwd_seconds_rows_seek_like_the_arrows"
                     )
                 }
+                OptionsChoice::StartOfList | OptionsChoice::EndOfList => {
+                    unreachable!("covered by options_start_and_end_of_list_rows_jump_like_the_keys")
+                }
                 OptionsChoice::JumpTime | OptionsChoice::JumpFile => {
                     unreachable!("covered by options_jump_rows_open_their_panels_or_just_close")
                 }

@@ -1,6 +1,7 @@
 //! The transient options menu: a modal overlay listing the app's existing on/off choices plus the Back
-//! 5 seconds, Fwd 5 seconds, Jump to time, Jump to file, File info, and About rows, each applying that
-//! choice and closing the menu like a Winamp menu item. Its highlight is layout-only and unpersisted.
+//! 5 seconds, Fwd 5 seconds, Start of list, End of list, Jump to time, Jump to file, File info, and
+//! About rows, each applying that choice and closing the menu like a Winamp menu item. Its
+//! highlight is layout-only and unpersisted.
 
 use iced::{
     Element,
@@ -123,6 +124,8 @@ pub(super) fn options_row_label(row: OptionsRow, state: OptionsState) -> &'stati
         OptionsRow::JumpTracksForward => "10 songs forward",
         OptionsRow::SeekBackward => "Back 5 seconds",
         OptionsRow::SeekForward => "Fwd 5 seconds",
+        OptionsRow::StartOfList => "Start of list",
+        OptionsRow::EndOfList => "End of list",
         OptionsRow::JumpTime => "Jump to time",
         OptionsRow::JumpFile => "Jump to file",
         OptionsRow::FileInfo => "File info",
@@ -145,7 +148,8 @@ pub(super) fn options_row_style(
 
 /// Stacks the transient options menu over `base` through [`modal_overlay`]. The backdrop and Close
 /// publish [`Message::ToggleOptions`]; toggle rows publish [`Message::OptionsChoice`] (so do the
-/// Stop with fadeout, Back/Fwd 5 seconds, and Jump rows) and About publishes [`Message::ToggleAbout`]. Each row closes the menu through its
+/// Stop with fadeout, Back/Fwd 5 seconds, Start/End of list, and Jump rows) and About publishes
+/// [`Message::ToggleAbout`]. Each row closes the menu through its
 /// existing handler. `selected` highlights the keyboard row without changing the labels or mouse
 /// messages.
 pub fn view_options_overlay<'a>(

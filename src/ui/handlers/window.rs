@@ -238,6 +238,8 @@ pub(in crate::ui) fn options_choice(
         }
         OptionsChoice::SeekBackward => super::mixer::seek_backward(player),
         OptionsChoice::SeekForward => super::mixer::seek_forward(player),
+        OptionsChoice::StartOfList => super::playback::stepping::jump_to_edge_track(player, false),
+        OptionsChoice::EndOfList => super::playback::stepping::jump_to_edge_track(player, true),
         OptionsChoice::JumpTime => super::jump::toggle_jump_time(player),
         OptionsChoice::JumpFile => super::jump::toggle_jump_file(player),
         OptionsChoice::FileInfo => toggle_file_info(player),
