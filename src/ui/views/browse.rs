@@ -277,7 +277,7 @@ pub fn view_playlists<'a>(
 }
 
 /// The Genres browse view: one row per genre, in the order given, each
-/// showing its song-count label (`labels`, cached when the list loaded; an
+/// showing its song-count and playing-time label (`labels`, cached when the list loaded; an
 /// index without one shows none) and selecting its row with
 /// [`Message::SelectRow`] (a second press opens it). Built like
 /// [`view_playlists`]; a non-empty list also appends its item-count footer.
@@ -310,7 +310,7 @@ pub fn view_genres<'a>(
 }
 
 /// The Years browse view: one row per release year, in the order given, each
-/// showing its song-count label. The Years twin of [`view_genres`].
+/// showing its song-count and playing-time label. The Years twin of [`view_genres`].
 pub fn view_years<'a>(
     years: &'a [Year],
     labels: &'a [String],
@@ -449,7 +449,7 @@ pub fn view_recently_added_button() -> Element<'static, Message> {
 }
 
 /// The Composers browse view: one row per composer, in the order given, each
-/// showing its song-count label. The Composers twin of [`view_years`].
+/// showing its song-count and playing-time label. The Composers twin of [`view_years`].
 pub fn view_composers<'a>(
     composers: &'a [Composer],
     labels: &'a [String],

@@ -14,7 +14,7 @@ use crate::ui::browse::BrowseList;
 use crate::ui::composers::Composer;
 use crate::ui::genres::Genre;
 use crate::ui::loading::fetch_level;
-use crate::ui::song_groups::song_count_label;
+use crate::ui::song_groups::group_row_label;
 use crate::ui::views;
 use crate::ui::years::Year;
 use crate::ui::{Message, WinampPlayer};
@@ -200,16 +200,16 @@ pub(in crate::ui) fn recently_added_load_failed(
 }
 
 /// The genres grouping landed: store the rows in the genres list, caching
-/// each row's song-count label.
+/// each row's song-count and playing-time label.
 pub(in crate::ui) fn genres_loaded(player: &mut WinampPlayer, genres: Vec<Genre>) -> Task<Message> {
-    player.genres.store_with_labels(genres, song_count_label);
+    player.genres.store_with_labels(genres, group_row_label);
     Task::none()
 }
 
 /// The years grouping landed: store the rows in the years list, caching each
-/// row's song-count label.
+/// row's song-count and playing-time label.
 pub(in crate::ui) fn years_loaded(player: &mut WinampPlayer, years: Vec<Year>) -> Task<Message> {
-    player.years.store_with_labels(years, song_count_label);
+    player.years.store_with_labels(years, group_row_label);
     Task::none()
 }
 
@@ -219,14 +219,14 @@ pub(in crate::ui) fn years_load_failed(player: &mut WinampPlayer, report: String
 }
 
 /// The composers grouping landed: store the rows in the composers list,
-/// caching each row's song-count label.
+/// caching each row's song-count and playing-time label.
 pub(in crate::ui) fn composers_loaded(
     player: &mut WinampPlayer,
     composers: Vec<Composer>,
 ) -> Task<Message> {
     player
         .composers
-        .store_with_labels(composers, song_count_label);
+        .store_with_labels(composers, group_row_label);
     Task::none()
 }
 

@@ -106,12 +106,12 @@ flat list of every playlist, whose rows open that playlist's songs, the fourth l
 recently added albums newest first (the sample library's albums in reverse order when
 signed out), whose rows open that album's songs, and the eighth lists the songs you played most recently
 first (the sample library's songs in reverse order when signed out), whose rows play like any
-other song row. `Genres` lists the library's genres by name, each with its song count and any
+other song row. `Genres` lists the library's genres by name, each with its song count and total playing time and any
 songs without a genre under `Unknown` last; opening a genre lists its songs, which play like any
-other song row. `Years` lists the library's release years oldest first, each with its song count and
+other song row. `Years` lists the library's release years oldest first, each with its song count and total playing time and
 any songs without a year under `Unknown` last; opening a year lists its songs, which play like any
 other song row. `Composers` lists the library's composers by name ignoring case, each with its song
-count and any songs without a composer under `Unknown` last; opening a composer lists its songs,
+count and total playing time and any songs without a composer under `Unknown` last; opening a composer lists its songs,
 which play like any other song row. Back from any of these lists
 returns to the artists list, Back from songs opened through All Albums returns to All Albums, Back from songs opened through
 Recently Added returns to Recently Added, Back

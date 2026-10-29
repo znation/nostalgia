@@ -56,7 +56,7 @@ fn composers_loaded_stores_rows_with_song_count_labels() {
         .map(|composer| composer.name.as_str())
         .collect();
     assert_eq!(names, ["Zed", "Unknown"]);
-    assert_eq!(player.composers.labels, ["2 songs", "1 song"]);
+    assert_eq!(player.composers.labels, ["2 songs - 5:05", "1 song - 2:05"]);
     assert!(!player.composers.loading);
 }
 

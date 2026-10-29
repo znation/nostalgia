@@ -454,7 +454,7 @@ fn genres_loaded_stores_rows_with_song_count_labels() {
         .map(|genre| genre.name.as_str())
         .collect();
     assert_eq!(names, ["Zydeco", "Unknown"]);
-    assert_eq!(player.genres.labels, ["2 songs", "1 song"]);
+    assert_eq!(player.genres.labels, ["2 songs - 5:05", "1 song - 2:05"]);
     assert!(!player.genres.loading);
 }
 

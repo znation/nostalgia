@@ -3,6 +3,7 @@
 //! are testable without a player.
 
 use crate::library::Song;
+use crate::ui::views::format_minutes_seconds;
 
 /// The name a song with no key value is grouped under.
 const UNKNOWN: &str = "Unknown";
@@ -61,12 +62,28 @@ pub(in crate::ui) fn trimmed_text_key(text: &str) -> Option<(String, String)> {
     (!text.is_empty()).then(|| (text.to_lowercase(), text.to_string()))
 }
 
-/// The secondary label a grouped row shows: `1 song` or `N songs`.
-pub(in crate::ui) fn song_count_label(group: &SongGroup) -> String {
-    match group.songs.len() {
-        1 => "1 song".to_string(),
-        count => format!("{count} songs"),
-    }
+/// The secondary label a grouped row shows: `"<count> song(s) - <total>"`,
+/// like the song-list footer (`1 song - 3:30`, `2 songs - 7:00`). The total is
+/// the `u64::saturating_add` sum of the group's `duration_ms` formatted by
+/// `format_minutes_seconds`, with a trailing `+` when any song has no known
+/// length (`duration_ms == 0`).
+pub(in crate::ui) fn group_row_label(group: &SongGroup) -> String {
+    let total_ms = group
+        .songs
+        .iter()
+        .fold(0u64, |total, song| total.saturating_add(song.duration_ms));
+    let mark = if group.songs.iter().any(|song| song.duration_ms == 0) {
+        "+"
+    } else {
+        ""
+    };
+    let noun = if group.songs.len() == 1 {
+        "song"
+    } else {
+        "songs"
+    };
+    let total = format_minutes_seconds(total_ms);
+    format!("{} {noun} - {total}{mark}", group.songs.len())
 }
 
 #[cfg(test)]
@@ -121,10 +138,32 @@ mod tests {
     }
 
     #[test]
-    fn count_label_pluralizes() {
+    fn row_label_pluralizes_and_totals_the_playing_time() {
         let groups = by_genre(vec![song("1", "a"), song("2", "b"), song("3", "b")]);
 
-        assert_eq!(song_count_label(&groups[0]), "1 song");
-        assert_eq!(song_count_label(&groups[1]), "2 songs");
+        assert_eq!(group_row_label(&groups[0]), "1 song - 3:30");
+        assert_eq!(group_row_label(&groups[1]), "2 songs - 7:00");
+    }
+
+    #[test]
+    fn row_label_marks_a_total_with_an_unknown_length_with_a_plus() {
+        let unknown = Song {
+            duration_ms: 0,
+            ..song("1", "a")
+        };
+        let known = song("2", "a");
+        let group = |songs| SongGroup {
+            name: "a".to_string(),
+            songs,
+        };
+
+        assert_eq!(
+            group_row_label(&group(vec![unknown.clone()])),
+            "1 song - 0:00+"
+        );
+        assert_eq!(
+            group_row_label(&group(vec![unknown, known])),
+            "2 songs - 3:30+"
+        );
     }
 }
