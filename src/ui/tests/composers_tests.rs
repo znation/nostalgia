@@ -1,6 +1,7 @@
 use super::flat_lists_tests::{
     assert_back_returns_to_artists, assert_group_opens_its_songs_and_back_unwinds,
-    assert_navigation_clears_the_search, assert_stale_group_press_does_nothing,
+    assert_navigation_clears_the_search, assert_show_fetches_the_list_and_switches_view,
+    assert_stale_group_press_does_nothing,
 };
 use super::*;
 
@@ -27,23 +28,15 @@ fn player_with_composers() -> WinampPlayer {
 
 #[tokio::test]
 async fn show_composers_fetches_and_switches_view() {
-    let (mut player, _state) = test_player();
-    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
-
-    let task = update(&mut player, Message::ShowComposers);
-    drive_fetch_and_assert_loaded(
-        &mut player,
-        task,
+    assert_show_fetches_the_list_and_switches_view(
+        Message::ShowComposers,
         "load library composers",
         |player| &mut player.composers.items,
         |composer| composer.name.as_str(),
         &["Sam Ample", "Unknown"],
+        CurrentView::Composers,
     )
     .await;
-
-    assert_view(&player, CurrentView::Composers);
-    assert!(!player.search_active);
-    assert_eq!(player.songs.items.len(), 3);
 }
 
 #[test]

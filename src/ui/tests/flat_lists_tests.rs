@@ -56,6 +56,36 @@ pub(super) fn assert_group_opens_its_songs_and_back_unwinds(
     assert_view(&player, CurrentView::Artists);
 }
 
+/// Asserts that a Show<Playlists|Genres|Years|Composers> press fetches that
+/// list from the seeded library (whose fetch run is `load_call`), stores the
+/// loaded rows under the view's own buffer, and switches to `view`, leaving
+/// the browsed songs alone and any active search behind. `buffer` names the
+/// list, `key` extracts a row's stored text, and `expected` lists those texts
+/// in library order. Used by the four `show_*_fetches_and_switches_view`
+/// tests; the flat All Songs and All Albums fetches seed more state first and
+/// keep their own bodies.
+pub(super) async fn assert_show_fetches_the_list_and_switches_view<T, Buffer, Key>(
+    show: Message,
+    load_call: &str,
+    buffer: Buffer,
+    key: Key,
+    expected: &[&str],
+    view: CurrentView,
+) where
+    Buffer: Fn(&mut WinampPlayer) -> &mut Vec<T>,
+    Key: Fn(&T) -> &str,
+{
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+
+    let task = update(&mut player, show);
+    drive_fetch_and_assert_loaded(&mut player, task, load_call, buffer, key, expected).await;
+
+    assert_view(&player, view);
+    assert!(!player.search_active);
+    assert_eq!(player.songs.items.len(), 3);
+}
+
 /// Asserts that a press on a Genres, Years, or Composers row rendered before
 /// the list was replaced (`epoch - 1`), or past its last row, schedules nothing
 /// and leaves the `view` showing and the loaded songs alone.
@@ -189,23 +219,15 @@ async fn show_all_albums_fetches_the_flat_list_and_switches_view() {
 // their own view, leaving the other browse buffers alone.
 #[tokio::test]
 async fn show_playlists_fetches_and_switches_view() {
-    let (mut player, _state) = test_player();
-    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
-
-    let task = update(&mut player, Message::ShowPlaylists);
-    drive_fetch_and_assert_loaded(
-        &mut player,
-        task,
+    assert_show_fetches_the_list_and_switches_view(
+        Message::ShowPlaylists,
         "load library playlists",
         |player| &mut player.playlists.items,
         |playlist| playlist.id.as_str(),
         &["playlist-1", "playlist-2", "playlist-3"],
+        CurrentView::Playlists,
     )
     .await;
-
-    assert_view(&player, CurrentView::Playlists);
-    assert!(!player.search_active);
-    assert_eq!(player.songs.items.len(), 3);
 }
 
 #[test]
@@ -471,23 +493,15 @@ fn player_with_genres() -> WinampPlayer {
 // their own view, leaving the other browse buffers alone.
 #[tokio::test]
 async fn show_genres_fetches_and_switches_view() {
-    let (mut player, _state) = test_player();
-    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
-
-    let task = update(&mut player, Message::ShowGenres);
-    drive_fetch_and_assert_loaded(
-        &mut player,
-        task,
+    assert_show_fetches_the_list_and_switches_view(
+        Message::ShowGenres,
         "load library genres",
         |player| &mut player.genres.items,
         |genre| genre.name.as_str(),
         &["Alternative", "Electronic", "Rock"],
+        CurrentView::Genres,
     )
     .await;
-
-    assert_view(&player, CurrentView::Genres);
-    assert!(!player.search_active);
-    assert_eq!(player.songs.items.len(), 3);
 }
 
 #[test]
