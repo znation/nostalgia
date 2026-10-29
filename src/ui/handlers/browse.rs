@@ -671,6 +671,7 @@ pub(in crate::ui) fn restore_view(player: &mut WinampPlayer, view: LibraryView) 
         LibraryView::Playlists => show_playlists(player),
         LibraryView::Genres => show_genres(player),
         LibraryView::Years => show_years(player),
+        LibraryView::Composers => show_composers(player),
     }
 }
 
@@ -687,6 +688,7 @@ pub(in crate::ui) fn session_ready(player: &mut WinampPlayer) -> Task<Message> {
         | CurrentView::Playlists
         | CurrentView::Genres
         | CurrentView::Years
+        | CurrentView::Composers
             if !player.search_active =>
         {
             let view = player.library_view();

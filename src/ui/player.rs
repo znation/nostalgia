@@ -511,8 +511,7 @@ impl WinampPlayer {
             CurrentView::Playlists => LibraryView::Playlists,
             CurrentView::Genres => LibraryView::Genres,
             CurrentView::Years => LibraryView::Years,
-            // Part 2/2 saves Composers as its own `LibraryView`.
-            CurrentView::Composers => LibraryView::Artists,
+            CurrentView::Composers => LibraryView::Composers,
             CurrentView::Songs => match self.songs_origin {
                 SongsOrigin::Album => LibraryView::Artists,
                 SongsOrigin::AllAlbums => LibraryView::AllAlbums,
@@ -520,7 +519,7 @@ impl WinampPlayer {
                 SongsOrigin::Playlist => LibraryView::Playlists,
                 SongsOrigin::Genre => LibraryView::Genres,
                 SongsOrigin::Year => LibraryView::Years,
-                SongsOrigin::Composer => LibraryView::Artists,
+                SongsOrigin::Composer => LibraryView::Composers,
             },
         }
     }

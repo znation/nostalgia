@@ -22,39 +22,6 @@ Each plan: goal, approach, files touched, acceptance criteria. Move finished pla
 
 _None yet._
 
-
-
-### Reopen the library at the Composers list across launches (part 2/2) ("requires part 1/2 landed") (planned 2026-10-29 by the plan role)
-
-**Goal.** Part 1/2 ("Browse the library by composer from a Composers list") saves the Composers
-list and a composer's Songs as `LibraryView::Artists`. Save and restore Composers like every
-other top-level list (`LibraryView` in `src/settings/library_view.rs`, saved as `library_view`).
-
-**Approach.**
-- `src/settings/library_view.rs`: add `LibraryView::Composers` with key `"composers"`, and add
-  it to the `from_key` array and the `keys_round_trip_for_every_variant` test.
-- `src/ui/player.rs` `library_view`: map `CurrentView::Composers` and `SongsOrigin::Composer` to
-  `LibraryView::Composers`.
-- `src/ui/handlers/browse.rs`: add `LibraryView::Composers => show_composers(player)` to
-  `restore_view`, and add `CurrentView::Composers` to the flat-list arm of `session_ready` so
-  sign-in refetches it.
-- Docs: in `docs/usage.md`, add Composers to the settings paragraph's list of remembered lists.
-  In `docs/invariants.md` `## Settings persistence`, add the key (beside `years`) and name the
-  new tests.
-
-**Tests.**
-- In `src/ui/tests/settings_tests.rs`, following the Years cases: showing Composers, and a
-  composer's Songs, saves `library_view = composers`; booting with `composers` saved opens the
-  Composers list and issues its fetch.
-- In the test file holding the `session_ready` refetch cases: a session landing while Composers
-  shows refetches it.
-
-**Acceptance criteria.**
-- Quitting on the Composers list, or on a composer's songs, reopens the library at Composers on
-  the next launch. Every other saved list behaves as before, and an unknown stored word still
-  falls back to Artists.
-- The new tests pass, the docs name Composers, and `make check` passes.
-
 ### Match genre and composer names in the offline library search, like Winamp's quick search (planned 2026-10-29 by the plan role)
 
 **Goal.** Winamp's Media Library quick search matches across a track's metadata fields, but with
