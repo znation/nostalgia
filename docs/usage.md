@@ -244,7 +244,7 @@ round has played, and Repeat on or Next starts a new round. The volume, balance,
 state, AUTO choice, curve, and preset, the elapsed/remaining readout choice, the visualizer's
 shown/hidden choice, the equalizer and library panels' shown/hidden choices, the always-on-top
 choice, the window-shade mode, the window's last screen position, and the library's top-level browse list (Artists, All
-Songs, All Albums, Recently Added, Recently Played, Playlists, or Genres; a list opened from one of them
+Songs, All Albums, Recently Added, Recently Played, Playlists, Genres, or Years; a list opened from one of them
 saves that one) are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or
 `$HOME/.config/nostalgia/settings.ini`) and restored at the next launch; `NOSTALGIA_SETTINGS_PATH`
 overrides the path. The window reopens at its saved position without checking that a monitor is still there; delete the `window_position` line to reset an off-screen window. Wayland reports no window moves, so the position is not saved or restored there. A relative `XDG_CONFIG_HOME` is ignored (the XDG spec requires an absolute one), so the `$HOME/.config` location is used instead (or persistence is disabled when `$HOME` is unset). A missing or malformed entry falls back to its default (a `NaN` number counts

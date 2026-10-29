@@ -449,6 +449,13 @@ fn library_view_reaches_the_saved_snapshot() {
     player.songs_origin = SongsOrigin::Genre;
     let _ = update(&mut player, Message::Ignored);
     assert_eq!(saved_library_view(&store), LibraryView::Genres);
+
+    let _ = update(&mut player, Message::ShowYears);
+    assert_eq!(saved_library_view(&store), LibraryView::Years);
+    player.current_view = CurrentView::Songs;
+    player.songs_origin = SongsOrigin::Year;
+    let _ = update(&mut player, Message::Ignored);
+    assert_eq!(saved_library_view(&store), LibraryView::Years);
 }
 
 #[test]
@@ -469,6 +476,11 @@ fn restore_view_opens_the_saved_list() {
     let _ = crate::ui::handlers::browse::restore_view(&mut player, LibraryView::Genres);
     assert_eq!(player.current_view, CurrentView::Genres);
     assert!(player.genres.loading);
+
+    let (mut player, _state) = test_player();
+    let _ = crate::ui::handlers::browse::restore_view(&mut player, LibraryView::Years);
+    assert_eq!(player.current_view, CurrentView::Years);
+    assert!(player.years.loading);
 }
 
 #[test]
@@ -487,6 +499,13 @@ fn session_ready_refetches_only_the_flat_list_showing() {
     let _ = update(&mut player, Message::SessionReady);
     assert_eq!(player.current_view, CurrentView::Genres);
     assert!(player.genres.loading);
+
+    let (mut player, _state) = test_player();
+    player.current_view = CurrentView::Years;
+    player.artists.loading = false;
+    let _ = update(&mut player, Message::SessionReady);
+    assert_eq!(player.current_view, CurrentView::Years);
+    assert!(player.years.loading);
 
     let (mut player, _state) = test_player();
     player.current_view = CurrentView::Albums;

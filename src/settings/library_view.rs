@@ -20,6 +20,8 @@ pub enum LibraryView {
     Playlists,
     /// The Genres list.
     Genres,
+    /// The Years list.
+    Years,
 }
 
 impl LibraryView {
@@ -34,6 +36,7 @@ impl LibraryView {
             Self::RecentlyPlayed => "recently_played",
             Self::Playlists => "playlists",
             Self::Genres => "genres",
+            Self::Years => "years",
         }
     }
 
@@ -49,6 +52,7 @@ impl LibraryView {
             Self::RecentlyPlayed,
             Self::Playlists,
             Self::Genres,
+            Self::Years,
         ]
         .into_iter()
         .find(|view| view.key() == key)
@@ -69,6 +73,7 @@ mod tests {
             LibraryView::RecentlyPlayed,
             LibraryView::Playlists,
             LibraryView::Genres,
+            LibraryView::Years,
         ] {
             assert_eq!(LibraryView::from_key(view.key()), Some(view));
         }

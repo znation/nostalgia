@@ -938,7 +938,7 @@ Songs view as the list it was opened from), `persist_settings_if_changed` saves 
 `library_view=<key>`, and an unknown or missing line leaves Artists. At launch `init_ui` batches
 `handlers::browse::restore_view` with the boot task to open that list; when the startup sign-in
 stores a session, `Message::SessionReady` (`handlers::browse::session_ready`) refetches the artists
-list and any flat list showing (Genres included, saved as `genres`, as is a genre's Songs), unless a search is active. The window's size is not persisted. Playback position, any browse level below the top-level list, the search box, and the current track are
+list and any flat list showing (Genres included, saved as `genres`, as is a genre's Songs; Years likewise, saved as `years`, as is a year's Songs), unless a search is active. The window's size is not persisted. Playback position, any browse level below the top-level list, the search box, and the current track are
 deliberately not persisted.
 
 **Enforced by.** `src/main.rs` resolves the path with

@@ -504,15 +504,14 @@ impl WinampPlayer {
             CurrentView::RecentlyPlayed => LibraryView::RecentlyPlayed,
             CurrentView::Playlists => LibraryView::Playlists,
             CurrentView::Genres => LibraryView::Genres,
-            // Until the library view can name Years, it reopens at Artists.
-            CurrentView::Years => LibraryView::Artists,
+            CurrentView::Years => LibraryView::Years,
             CurrentView::Songs => match self.songs_origin {
                 SongsOrigin::Album => LibraryView::Artists,
                 SongsOrigin::AllAlbums => LibraryView::AllAlbums,
                 SongsOrigin::RecentlyAdded => LibraryView::RecentlyAdded,
                 SongsOrigin::Playlist => LibraryView::Playlists,
                 SongsOrigin::Genre => LibraryView::Genres,
-                SongsOrigin::Year => LibraryView::Artists,
+                SongsOrigin::Year => LibraryView::Years,
             },
         }
     }

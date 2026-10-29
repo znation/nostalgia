@@ -5,6 +5,36 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
+### Reopen the library at the Years list across launches (part 2/2) ("requires part 1/2 landed") (planned 2026-10-29 by the plan role) — done 2026-10-29 by the feature role
+
+**Goal.** Part 1/2 ("Browse the library by release year from a Years list") saves the Years list
+and a year's Songs as `LibraryView::Artists`. Save and restore Years like every other top-level
+list (`LibraryView` in `src/settings/library_view.rs`, saved as `library_view`).
+
+**Approach.**
+- `src/settings/library_view.rs`: add `LibraryView::Years` with key `"years"`, and add it to the
+  `from_key` array and the `keys_round_trip_for_every_variant` test.
+- `src/ui/player.rs` `library_view`: map `CurrentView::Years` and `SongsOrigin::Year` to
+  `LibraryView::Years`.
+- `src/ui/handlers/browse.rs`: add `LibraryView::Years => show_years(player)` to
+  `restore_view`, and add `CurrentView::Years` to the flat-list arm of `session_ready` so sign-in
+  refetches it.
+- Docs: in `docs/usage.md`, add Years to the settings paragraph's list of remembered lists. In
+  `docs/invariants.md` `## Settings persistence`, add the key and name the new tests.
+
+**Tests.**
+- In `src/ui/tests/settings_tests.rs`, following the Playlists cases: showing Years, and a year's
+  Songs, saves `library_view = years`; booting with `years` saved opens the Years list and issues
+  its fetch.
+- In the test file holding the `session_ready` refetch cases: a session landing while Years
+  shows refetches it.
+
+**Acceptance criteria.**
+- Quitting on the Years list, or on a year's songs, reopens the library at Years on the next
+  launch. Every other saved list behaves as before, and an unknown stored word still falls back
+  to Artists.
+- The new tests pass, the docs name Years, and `make check` passes.
+
 ### Browse the library by release year from a Years list, like Winamp's Media Library (part 1/2) (planned 2026-10-29 by the plan role) — done 2026-10-29 by the feature role
 
 **Goal.** Winamp's Media Library can filter the audio library by Year. Nostalgia already carries
