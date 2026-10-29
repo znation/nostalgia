@@ -221,7 +221,8 @@ fn release_date_maps_to_the_song_year() {
 
 // A missing release date, or one with no usable leading year, maps to the
 // `None` "source supplied none" sentinel so the File info panel omits the
-// year line rather than drawing a bogus year.
+// year line rather than drawing a bogus year. `0000` names no real calendar
+// year, so a date carrying it is malformed too.
 #[test]
 fn release_date_absent_or_malformed_maps_to_no_year() {
     for attributes in [
@@ -231,6 +232,8 @@ fn release_date_absent_or_malformed_maps_to_no_year() {
         r#"{"name":"Opening","releaseDate":"20"}"#,
         r#"{"name":"Opening","releaseDate":"20x1-06-05"}"#,
         r#"{"name":"Opening","releaseDate":"not-a-date"}"#,
+        r#"{"name":"Opening","releaseDate":"0000"}"#,
+        r#"{"name":"Opening","releaseDate":"0000-00-00"}"#,
     ] {
         assert_eq!(song_from_attributes(attributes).year, None);
     }

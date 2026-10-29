@@ -247,15 +247,16 @@ fn duration_millis(duration: Option<serde_json::Number>) -> u64 {
 ///
 /// Apple documents `releaseDate` as `YYYY-MM-DD` but also returns `YYYY` and `YYYY-MM`, so only the
 /// first four bytes must be ASCII digits; the rest of the date does not affect the year. A blank,
-/// short, or non-numeric date has no usable year and maps to `None`, matching [`Song::year`]'s
-/// "source supplied none" sentinel. The date is trimmed first so surrounding whitespace does not
-/// hide a valid year.
+/// short, non-numeric, or `0000`-dated source has no usable year and maps to `None`, matching
+/// [`Song::year`]'s "source supplied none" sentinel. The date is trimmed first so surrounding
+/// whitespace does not hide a valid year.
 fn release_year(date: &str) -> Option<u16> {
     let year = date.trim().get(..4)?;
-    if year.bytes().all(|byte| byte.is_ascii_digit()) {
-        year.parse().ok()
-    } else {
-        None
+    match year.parse::<u16>() {
+        // `0000` names no real calendar year, so a date carrying it is as
+        // malformed as a non-numeric one.
+        Ok(0) | Err(_) => None,
+        Ok(year) => Some(year),
     }
 }
 

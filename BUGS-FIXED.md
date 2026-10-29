@@ -5,6 +5,25 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### A `releaseDate` of `0000…` maps to a displayable year 0 instead of no year (found by the bugfix role 2026-10-29) — fixed 2026-10-29 by the bugfix role
+
+`release_year` in `src/apple_music/rest/wire/mapping.rs` accepted any four
+ASCII digits as a year, so a `releaseDate` of `"0000"` or `"0000-00-00"`
+mapped to `Some(0)` rather than the `None` "malformed" sentinel that
+`Song::year` documents. `Some(0)` is user-visible: the File info panel drew
+"Year: 0" and the Years browse list showed a group named "0".
+
+**Reproduce:** run `make test-one
+TEST=release_date_absent_or_malformed_maps_to_no_year` with
+`{"name":"Opening","releaseDate":"0000"}` in its case list; before the fix it
+failed with `left: Some(0)`, `right: None`.
+
+**Fix:** `release_year` now parses the leading four digits and maps a parsed
+`0` to `None`, like a non-numeric date.
+
+**Validation gap:** none — `release_date_absent_or_malformed_maps_to_no_year`
+reproduced it once the `"0000"` cases were added, and confirmed the fix.
+
 ### A balance-drag doc comment starts mid-sentence after its first line was dropped (found by the bugfix role 2026-10-26) — fixed 2026-10-26 by the bugfix role
 
 `balance_change`'s doc comment in `src/ui/handlers/mixer.rs` began with
