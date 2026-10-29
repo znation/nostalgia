@@ -56,8 +56,8 @@ keyboard and mouse bindings, the settings file, and how sign-in and playback wor
 ## Development
 
 `make check` runs the whole landing gate in one command — `cargo fmt --check`, `cargo clippy
---all-targets -- -D warnings`, a `cargo doc` build that fails on any rustdoc warning, and the test
-suite — and is the fastest way to see whether a change is merge-ready. The individual stages are
+--all-targets -- -D warnings`, a `cargo doc` build that fails on any rustdoc warning, the test
+suite, and a self-check of `make test-one` — and is the fastest way to see whether a change is merge-ready. The individual stages are
 available separately (`make fmt`, `make lint`, `make docs`, `make test`); `make test-one
 TEST=<name>` runs only the tests whose names contain `<name>`, for a fast loop while iterating on
 one behavior; `make fix` applies formatting and clippy's machine-applicable fixes in place, and
