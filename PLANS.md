@@ -4,4 +4,93 @@
 
 _None yet._
 
+### Show Manual playlist advance in the options menu, like Winamp's Playback menu (planned 2026-10-29 by the plan role)
+
+**Goal.** Winamp's Playback menu lists `Manual playlist advance`: with it on, a song that
+plays to its natural end stops instead of starting the next song, and the only ways onward
+are Play, Next, or a jump row. Nostalgia's end-of-preview advance
+(`handlers::playback::preview::playback_finished` in `src/ui/handlers/playback/preview.rs`)
+always moves on by its Stop-after-current / Shuffle-round / Repeat rules, with no opt-out.
+Add that switch as a persisted settings flag with an options-menu toggle row, mirroring how
+`Repeat`/`Shuffle` work. For anything visible, compare the options menu against the closest
+reference in `winamp-screenshots/` (there is no menu capture there yet; keep the existing
+toggle-row label shape).
+
+**Approach.** This row groups with the playlist toggles, so it does **not** stack at the
+`JumpTime` slot the `Start/End of list` entry uses; either land order works, and the second
+lander updates the `OptionsRow::ALL` length, its array declaration,
+`options_rows_map_to_mouse_messages_in_draw_order`, and the row lists.
+- `src/state.rs`: add `pub manual_advance: bool` (default `false`) beside `AppState::repeat`
+  and `pub fn toggle_manual_advance` mirroring `AppState::toggle_repeat`; add a unit test
+  beside `toggle_repeat_flips_only_the_repeat_flag`.
+- `src/settings.rs`: add `manual_advance: bool` to `Settings` (default `false`), read it in
+  `from_state` and apply it in `apply_to`, and serialize it in the settings text format like
+  `repeat` (`manual_advance=yes`); unit test in the file's existing round-trip tests,
+  including a missing-key default.
+- `src/ui/message.rs`: add `OptionsState::manual_advance: bool`; add `OptionsChoice::ManualAdvance`
+  and `OptionsRow::ManualAdvance`, placing the row in `OptionsRow::ALL` directly **after**
+  `Shuffle` (before `JumpTracksBack`) so the playlist toggles group, map it in
+  `OptionsRow::message` to `Message::OptionsChoice(OptionsChoice::ManualAdvance)`, and
+  update `options_rows_map_to_mouse_messages_in_draw_order` in the same position.
+- `src/ui/view/overlay.rs`: build the new `OptionsState` field from `state.manual_advance`.
+- `src/ui/handlers/playback.rs`: add `pub(in crate::ui) fn toggle_manual_advance` calling
+  `mutate_state(player, AppState::toggle_manual_advance)`, beside `toggle_repeat`.
+- `src/ui/handlers/window.rs` `options_choice`: new arm dispatching
+  `super::playback::toggle_manual_advance(player)` (the existing `options_visible = false`
+  close applies to every arm already).
+- `src/ui/handlers/playback/preview.rs` `playback_finished`: immediately **after** the
+  existing `stop_after_current` check (which keeps its own clear-then-stop semantics) and
+  **before** the Shuffle-round check, stop when `state.manual_advance` is on: return
+  `stop(player)` — the same call the Shuffle-round end already makes, so the ended song stays
+  current and queued for Play exactly as that path does. The check sits inside the existing
+  `state` lock block; no new `Message`, task, or epoch handling.
+- `src/ui/views/options.rs`: `options_row_label` maps the row through a new
+  `manual_advance_label` returning `Manual playlist advance: On/Off` (the exact
+  `repeat_label` shape); name the row in the module doc and the `view_options_overlay` doc.
+- Tests:
+  - `src/ui/tests/stepping_tests.rs`: `preview_end_with_manual_advance_stops_and_keeps_the_song`
+    (finished reply → stopped, the ended song still current, nothing advanced),
+    `manual_advance_overrides_repeat_and_shuffle` (Repeat on with a one-song list and, after
+    toggling it off, Shuffle on → still stops rather than replaying or advancing;
+    `toggle_manual_advance` flips only the flag, mirroring
+    `toggle_stop_after_current_flips_only_the_flag`), and
+    `preview_end_after_disabling_manual_advance_advances_again`.
+  - `src/ui/tests/panels_tests.rs`: `options_manual_advance_toggles_the_flag_and_closes_the_panel`
+    modeled on `options_stop_after_current_toggles_the_flag_and_closes_the_panel`; the
+    exhaustive `OptionsChoice` match there gets an arm naming that test.
+  - `src/ui/views/tests/chrome.rs`: add the row to the label lists in
+    `options_overlay_draws_each_row_with_its_state` and
+    `options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop`, asserting it
+    publishes its `OptionsChoice`.
+- Docs:
+  - `docs/usage.md`: insert `Manual playlist advance: On/Off` after `Shuffle: On/Off` in the
+    options-menu row list, and add a line in the playback section: with it on (persisted in
+    the settings file like Repeat and Shuffle), a song that plays to its end stops instead of
+    advancing, whatever Repeat or Shuffle say; Repeat, Next, Previous, and the jump rows still
+    move you, and turning it off restores the normal end-of-song advance.
+  - `docs/invariants.md` `## Options panel`: add the row to the row summary, row list,
+    `options_choice` bullet, and label-mirror/test pins; and the preview-end section that
+    describes `stop_after_current` gains the manual-advance precedence sentence (its
+    `playback_finished` check sits between Stop-after-current and the Shuffle-round end).
+
+**Files touched.** `src/state.rs`, `src/settings.rs`, `src/ui/message.rs`,
+`src/ui/view/overlay.rs`, `src/ui/handlers/playback.rs`,
+`src/ui/handlers/playback/preview.rs`, `src/ui/handlers/window.rs`,
+`src/ui/views/options.rs`, `src/ui/tests/stepping_tests.rs`, `src/ui/tests/panels_tests.rs`,
+`src/ui/views/tests/chrome.rs`, `docs/usage.md`, `docs/invariants.md`.
+
+**Acceptance criteria.**
+- The options menu draws a `Manual playlist advance: On/Off` row directly below
+  `Shuffle: On/Off`; Up/Down reach it, and Enter or a click toggles the flag and closes the
+  menu, exactly like the Repeat and Shuffle rows.
+- With the flag on, a preview that reaches its natural end stops and leaves the ended song
+  current and queued for Play, regardless of Repeat or Shuffle — while Play, Next, Previous,
+  Ctrl+Z/Ctrl+B, and the jump rows are unchanged. A dropped or stale finished reply changes
+  nothing, matching the existing reply-currency rules.
+- With the flag off (the default, also the value a missing settings key yields), the
+  end-of-song behavior is byte-for-byte the current one, including Stop-after-current and the
+  Shuffle-round end.
+- The flag persists to the settings file and survives a restart, like Repeat and Shuffle;
+  `make check` passes.
+
 ## Done
