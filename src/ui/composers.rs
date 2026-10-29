@@ -11,7 +11,8 @@ pub(in crate::ui) type Composer = SongGroup;
 /// Groups `songs` by their trimmed composer, comparing names
 /// case-insensitively and naming each group after the first spelling seen.
 /// Groups are ordered by lowercase name, with the `Unknown` group for blank
-/// composers always last, and songs keep their input order inside a group.
+/// composers and composers spelled `unknown` always last, and songs keep
+/// their input order inside a group.
 pub(in crate::ui) fn group_by_composer(songs: Vec<Song>) -> Vec<Composer> {
     group_songs(songs, |song| trimmed_text_key(&song.composer))
 }
@@ -43,6 +44,15 @@ mod tests {
 
         assert_eq!(names(&composers), ["Jane Doe"]);
         assert_eq!(ids(&composers[0]), ["1", "2"]);
+    }
+
+    #[test]
+    fn composers_spelled_unknown_merge_into_the_last_unknown_group() {
+        let composers =
+            group_by_composer(vec![song("1", "unknown"), song("2", "Zed"), song("3", "")]);
+
+        assert_eq!(names(&composers), ["Zed", "Unknown"]);
+        assert_eq!(ids(&composers[1]), ["1", "3"]);
     }
 
     #[test]

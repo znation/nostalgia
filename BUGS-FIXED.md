@@ -5,6 +5,23 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### A song tagged literally "Unknown" shows a second "Unknown" row in Genres or Composers, apart from the blank-field Unknown group (found by the bugfix role 2026-10-29) — fixed 2026-10-29 by the bugfix role
+
+Song lists grouped by genre or composer name every group after its field's trimmed
+spelling; only a blank or all-space field joins the sentinel `Unknown` group forced last.
+A song spelled exactly `Unknown` (any case) got its own group sorted under "u": with songs
+tagged `Unknown` and others left blank, the Genres or Composers list showed two rows both
+named `Unknown`, the spelled one (say) fourth in a mixed list and the sentinel last.
+Reproduce: group songs with genres `Unknown`, `Rock`, blank — the list read Rock, Unknown,
+Unknown. Cause: `trimmed_text_key` in `src/ui/song_groups.rs` returned a key for any
+non-blank text. Fix: it now returns `None` for text spelling `unknown` case-insensitively,
+merging it with blank text into the one sentinel group (tests in `src/ui/genres.rs`,
+`src/ui/composers.rs`, and `src/ui/song_groups.rs`).
+**Validation gap:** unclear-invariant — the grouping never pinned what a field value spelled
+`unknown` should do; the reconstructed invariant (a literally spelled "unknown" field joins
+the blank-field Unknown group, so a grouped list shows at most one row named "Unknown") is
+recorded in docs/invariants.md in the same commit.
+
 ### A `releaseDate` of `0000…` maps to a displayable year 0 instead of no year (found by the bugfix role 2026-10-29) — fixed 2026-10-29 by the bugfix role
 
 `release_year` in `src/apple_music/rest/wire/mapping.rs` accepted any four

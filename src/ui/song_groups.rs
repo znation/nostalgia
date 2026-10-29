@@ -55,11 +55,16 @@ pub(in crate::ui) fn group_songs<K: Ord>(
 }
 
 /// The grouping key for a free-text field such as genre or composer: `None`
-/// when `text` is blank, otherwise its lowercase form (the sort key) paired
-/// with its trimmed spelling (the display name).
+/// when `text` is blank or spells `unknown` in any case (both join the
+/// sentinel [`UNKNOWN`] group), otherwise its lowercase form (the sort key)
+/// paired with its trimmed spelling (the display name). Treating the spelled
+/// word as missing keeps one `Unknown` row: `trimmed_text_key("Unknown")`
+/// would otherwise sort a group named `Unknown` among the named rows, next to
+/// or apart from the sentinel.
 pub(in crate::ui) fn trimmed_text_key(text: &str) -> Option<(String, String)> {
     let text = text.trim();
-    (!text.is_empty()).then(|| (text.to_lowercase(), text.to_string()))
+    (!text.is_empty() && !text.eq_ignore_ascii_case("unknown"))
+        .then(|| (text.to_lowercase(), text.to_string()))
 }
 
 /// The total playing time of `songs`: the `u64::saturating_add` sum of their
@@ -166,6 +171,17 @@ mod tests {
 
         assert_eq!(names(&groups), ["Pop"]);
         assert_eq!(groups[0].songs.len(), 2);
+    }
+
+    #[test]
+    fn unknown_spelled_text_is_keyless_like_blank_text() {
+        assert_eq!(trimmed_text_key("Unknown"), None);
+        assert_eq!(trimmed_text_key("  UNKNOWN "), None);
+        assert_eq!(trimmed_text_key(""), None);
+        assert_eq!(
+            trimmed_text_key(" Pop "),
+            Some(("pop".to_string(), "Pop".to_string()))
+        );
     }
 
     #[test]

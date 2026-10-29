@@ -10,7 +10,8 @@ pub(in crate::ui) type Genre = SongGroup;
 
 /// Groups `songs` by their trimmed genre, comparing names case-insensitively
 /// and naming each group after the first spelling seen. Groups are ordered by
-/// lowercase name, with the `Unknown` group for blank genres always last, and
+/// lowercase name, with the `Unknown` group for blank genres and genres
+/// spelled `unknown` always last, and
 /// songs keep their input order inside a group.
 pub(in crate::ui) fn group_by_genre(songs: Vec<Song>) -> Vec<Genre> {
     group_songs(songs, |song| trimmed_text_key(&song.genre))
@@ -53,6 +54,20 @@ mod tests {
         assert_eq!(genres.len(), 1);
         assert_eq!(genres[0].name, "hip-hop");
         assert_eq!(ids(&genres[0]), ["1", "2"]);
+    }
+
+    #[test]
+    fn genres_spelled_unknown_merge_into_the_last_unknown_group() {
+        let genres = group_by_genre(vec![
+            song("1", "Unknown"),
+            song("2", "Rock"),
+            song("3", "  "),
+            song("4", "UNKNOWN"),
+        ]);
+
+        let names: Vec<&str> = genres.iter().map(|genre| genre.name.as_str()).collect();
+        assert_eq!(names, ["Rock", "Unknown"]);
+        assert_eq!(ids(&genres[1]), ["1", "3", "4"]);
     }
 
     #[test]

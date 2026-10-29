@@ -2234,6 +2234,28 @@ form.
 
 **History.** Added with the selected-running-time footer, like the song-list footer.
 
+## Grouped list Unknown group
+
+**Guarantee.** In the Genres and Composers lists, each song joins a group named after its
+field's trimmed spelling compared case-insensitively; a song whose field is blank or spells
+`unknown` in any case instead joins the single sentinel group named `Unknown`, which comes
+after every named group and only when non-empty. A grouped list therefore shows at most one
+row named `Unknown`, and it is last.
+
+**Enforced by.** `song_groups::trimmed_text_key` returns `None` for blank text and for text
+spelling `unknown` case-insensitively; `song_groups::group_songs` files keyless songs in the
+`Unknown` group forced last.
+
+**Pinned by.** `genres_spelled_unknown_merge_into_the_last_unknown_group` (`src/ui/genres.rs`),
+`composers_spelled_unknown_merge_into_the_last_unknown_group` (`src/ui/composers.rs`),
+`unknown_spelled_text_is_keyless_like_blank_text`,
+`keyless_songs_form_a_last_unknown_group_only_when_present` (`src/ui/song_groups.rs`), and
+`blank_genres_form_a_last_unknown_group` (`src/ui/genres.rs`).
+
+**History.** Reconstructed from "A song tagged literally `Unknown` shows a second `Unknown`
+row in Genres or Composers" in `BUGS-FIXED.md`: the key was written to key only blank text,
+leaving a spelled `Unknown` to sort under "u".
+
 ## Grouped-list footer
 
 **Guarantee.** A non-empty Genres, Years, or Composers list draws a footer beneath its rows. With
