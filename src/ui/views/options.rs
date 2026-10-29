@@ -115,6 +115,7 @@ pub(super) fn options_row_label(row: OptionsRow, state: OptionsState) -> &'stati
         OptionsRow::Visualizer => visualizer_label(state.visualizer_visible),
         OptionsRow::EqualizerPanel => equalizer_label(state.eq_panel_visible),
         OptionsRow::LibraryPanel => library_label(state.library_panel_visible),
+        OptionsRow::FadeOutAndStop => "Stop with fadeout",
         OptionsRow::StopAfterCurrent => stop_after_current_label(state.stop_after_current),
         OptionsRow::Repeat => repeat_label(state.repeat),
         OptionsRow::Shuffle => shuffle_label(state.shuffle),
@@ -142,7 +143,7 @@ pub(super) fn options_row_style(
 
 /// Stacks the transient options menu over `base` through [`modal_overlay`]. The backdrop and Close
 /// publish [`Message::ToggleOptions`]; toggle rows publish [`Message::OptionsChoice`] (so do the
-/// Jump rows) and About publishes [`Message::ToggleAbout`]. Each row closes the menu through its
+/// Stop with fadeout row and the Jump rows) and About publishes [`Message::ToggleAbout`]. Each row closes the menu through its
 /// existing handler. `selected` highlights the keyboard row without changing the labels or mouse
 /// messages.
 pub fn view_options_overlay<'a>(

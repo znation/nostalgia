@@ -189,6 +189,58 @@ fn plain_stop_click_stops_at_once() {
     assert_eq!(player.fade_out_ticks, 0);
 }
 
+// The options menu's `Stop with fadeout` row reuses `Message::FadeOutAndStop`:
+// choosing it (by mouse or by keyboard) closes the menu and then fades like
+// Shift+V while a preview plays, or acts as Stop while paused or stopped.
+#[test]
+fn options_stop_with_fadeout_row_fades_or_stops_and_closes() {
+    let row_index = OptionsRow::ALL
+        .iter()
+        .position(|row| matches!(row, OptionsRow::FadeOutAndStop))
+        .unwrap();
+    for keyboard in [false, true] {
+        // While a preview plays: fade like Shift+V, with no backend call on
+        // the press and no change to the playing state.
+        let (recording, mut player, _state) = playing_with_recording();
+        player.options_visible = true;
+        if keyboard {
+            player.options_selected = row_index;
+        }
+        let task = update(
+            &mut player,
+            if keyboard {
+                Message::OptionsActivate
+            } else {
+                OptionsRow::FadeOutAndStop.message()
+            },
+        );
+        assert!(!player.options_visible, "the row must close the menu");
+        assert_eq!(player.fade_out_ticks, crate::ui::player::FADE_OUT_TICKS);
+        assert!(recording.calls().is_empty());
+        assert_no_task(task);
+
+        // While paused: stop at once, with no countdown.
+        let (recording, mut player, state) = playing_with_recording();
+        state.blocking_lock().is_playing = false;
+        player.options_visible = true;
+        if keyboard {
+            player.options_selected = row_index;
+        }
+        let task = update(
+            &mut player,
+            if keyboard {
+                Message::OptionsActivate
+            } else {
+                OptionsRow::FadeOutAndStop.message()
+            },
+        );
+        futures::executor::block_on(assert_transport_settled(task, "stop"));
+        assert!(!player.options_visible, "the row must close the menu");
+        assert_eq!(player.fade_out_ticks, 0);
+        assert_eq!(recording.calls(), vec![AudioCall::Stop]);
+    }
+}
+
 #[test]
 fn shift_release_restores_a_plain_stop_click() {
     let (recording, mut player, _state) = playing_with_recording();

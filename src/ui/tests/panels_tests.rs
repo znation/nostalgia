@@ -504,6 +504,11 @@ fn options_choice_applies_each_toggle_and_closes_the_panel() {
                     (before.0, before.1, before.2, !before.3, before.4)
                 }
                 OptionsChoice::LibraryPanel => (before.0, before.1, before.2, before.3, !before.4),
+                OptionsChoice::FadeOutAndStop => {
+                    unreachable!(
+                        "covered by options_stop_with_fadeout_row_fades_or_stops_and_closes"
+                    )
+                }
                 OptionsChoice::StopAfterCurrent => {
                     unreachable!(
                         "covered by options_stop_after_current_toggles_the_flag_and_closes_the_panel"

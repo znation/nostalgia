@@ -490,6 +490,8 @@ pub(in crate::ui) enum OptionsChoice {
     EqualizerPanel,
     /// Reuses [`Message::ToggleLibraryPanel`].
     LibraryPanel,
+    /// Reuses [`Message::FadeOutAndStop`].
+    FadeOutAndStop,
     /// Reuses [`Message::ToggleStopAfterCurrent`].
     StopAfterCurrent,
     /// Reuses [`Message::ToggleRepeat`].
@@ -516,6 +518,7 @@ pub(in crate::ui) enum OptionsRow {
     Visualizer,
     EqualizerPanel,
     LibraryPanel,
+    FadeOutAndStop,
     StopAfterCurrent,
     Repeat,
     Shuffle,
@@ -529,12 +532,13 @@ pub(in crate::ui) enum OptionsRow {
 }
 
 impl OptionsRow {
-    pub(in crate::ui) const ALL: [Self; 15] = [
+    pub(in crate::ui) const ALL: [Self; 16] = [
         Self::AlwaysOnTop,
         Self::TimeDisplay,
         Self::Visualizer,
         Self::EqualizerPanel,
         Self::LibraryPanel,
+        Self::FadeOutAndStop,
         Self::StopAfterCurrent,
         Self::Repeat,
         Self::Shuffle,
@@ -554,6 +558,7 @@ impl OptionsRow {
             Self::Visualizer => Message::OptionsChoice(OptionsChoice::Visualizer),
             Self::EqualizerPanel => Message::OptionsChoice(OptionsChoice::EqualizerPanel),
             Self::LibraryPanel => Message::OptionsChoice(OptionsChoice::LibraryPanel),
+            Self::FadeOutAndStop => Message::OptionsChoice(OptionsChoice::FadeOutAndStop),
             Self::StopAfterCurrent => Message::OptionsChoice(OptionsChoice::StopAfterCurrent),
             Self::Repeat => Message::OptionsChoice(OptionsChoice::Repeat),
             Self::Shuffle => Message::OptionsChoice(OptionsChoice::Shuffle),
@@ -583,6 +588,7 @@ mod options_tests {
                 Message::OptionsChoice(OptionsChoice::Visualizer),
                 Message::OptionsChoice(OptionsChoice::EqualizerPanel),
                 Message::OptionsChoice(OptionsChoice::LibraryPanel),
+                Message::OptionsChoice(OptionsChoice::FadeOutAndStop),
                 Message::OptionsChoice(OptionsChoice::StopAfterCurrent),
                 Message::OptionsChoice(OptionsChoice::Repeat),
                 Message::OptionsChoice(OptionsChoice::Shuffle),

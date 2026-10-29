@@ -162,8 +162,8 @@ end of the transport row, or a right-click anywhere on the player (title bar, LC
 transport row, equalizer, or the rolled-up shade strip, but not the library), like Winamp's
 main-window menu, opens an `OPTIONS` menu over the player listing `Always on Top: On/Off`,
 `Time: Remaining/Elapsed`, `Visualizer: Shown/Hidden`, `Equalizer: Shown/Hidden`,
-`Library: Shown/Hidden`, `Stop after current: On/Off`, `Repeat: On/Off`, `Shuffle: On/Off`, `10 songs back`, `10 songs forward`, `Jump to time`, `Jump to file`, `File info`, `About Nostalgia`, and `Close`, with each label reflecting the current
-state. Choosing a row applies that one toggle and closes the menu; `10 songs back` and `10 songs forward` jump ten songs back or forward exactly like keypad 1 and 3 (doing nothing beyond closing the menu with no song list showing); `Jump to time` and `Jump to file` open the Ctrl+J and J panels (doing nothing beyond closing
+`Library: Shown/Hidden`, `Stop with fadeout`, `Stop after current: On/Off`, `Repeat: On/Off`, `Shuffle: On/Off`, `10 songs back`, `10 songs forward`, `Jump to time`, `Jump to file`, `File info`, `About Nostalgia`, and `Close`, with each label reflecting the current
+state. Choosing a row applies that one toggle and closes the menu; `Stop with fadeout` fades out and stops exactly like Shift+V while a preview plays and stops like V while paused or stopped; `10 songs back` and `10 songs forward` jump ten songs back or forward exactly like keypad 1 and 3 (doing nothing beyond closing the menu with no song list showing); `Jump to time` and `Jump to file` open the Ctrl+J and J panels (doing nothing beyond closing
 the menu while that panel is unavailable); `File info` opens the Alt+3 File info panel (doing nothing beyond closing the menu while no track is current); `About Nostalgia` opens the
 About panel, and `Close`, a click on the backdrop, or Escape closes the menu. Opening it while the
 window is rolled up restores the window first, and the menu is not saved. Alt+O also closes it
@@ -183,7 +183,7 @@ while stopped, like Winamp's taskbar title. It keeps the interrupted track's nam
 reads just `nostalgia` when no known track is current.
 With the window focused, the classic Winamp keys drive playback: Z and B step back and forward
 (a Z press restarts the loaded preview from its start once it has played at least three seconds),
-X plays, C pauses (or resumes while paused), V stops, Shift+V fades the playing song out over about two seconds and then stops (the volume setting is left unchanged; while paused or stopped it acts as Stop; a Shift-held click on the Stop button, in the transport row, the shade strip, or the library footer, does the same, while a plain click stops at once), Ctrl+V arms (or disarms) Stop after current — the playing song then
+X plays, C pauses (or resumes while paused), V stops, Shift+V fades the playing song out over about two seconds and then stops (the volume setting is left unchanged; while paused or stopped it acts as Stop; a Shift-held click on the Stop button, in the transport row, the shade strip, or the library footer, and the options menu's `Stop with fadeout` row do the same, while a plain click stops at once), Ctrl+V arms (or disarms) Stop after current — the playing song then
 plays to its natural end and playback stops instead of advancing, once, shown only by the
 options-menu row (`Stop after current: On/Off`), R toggles Repeat and S toggles Shuffle, A (or Ctrl+A) toggles
 always-on-top and T (or Ctrl+T) switches the large readout between elapsed and remaining time (the
