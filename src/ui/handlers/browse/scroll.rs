@@ -212,4 +212,22 @@ mod tests {
             Some(row_bottom - ROW / 2.0)
         );
     }
+
+    // Both edges are inclusive: a row whose top sits exactly at the scroll
+    // offset, or whose bottom sits exactly at the viewport's bottom, is fully
+    // visible and must not nudge the list.
+    #[test]
+    fn a_row_flush_with_either_viewport_edge_needs_no_scroll() {
+        let row_top = PAD + 3.0 * ROW;
+        assert_eq!(reveal_row_offset(3, row_top, 2.0 * ROW), None);
+        assert_eq!(reveal_row_offset(3, row_top - ROW, 2.0 * ROW), None);
+    }
+
+    // The Jump to File list calls `reveal_offset` with its own row geometry.
+    #[test]
+    fn reveal_offset_uses_the_callers_row_geometry() {
+        assert_eq!(reveal_offset(10.0, 20.0, 50.0, 100.0), Some(10.0));
+        assert_eq!(reveal_offset(200.0, 20.0, 50.0, 100.0), Some(120.0));
+        assert_eq!(reveal_offset(60.0, 20.0, 50.0, 100.0), None);
+    }
 }
