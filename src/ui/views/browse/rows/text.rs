@@ -225,29 +225,37 @@ pub(in crate::ui::views) fn list_count_summary(
 }
 
 /// The count-and-time footer beneath a loaded album list: `"<count> album(s) -
-/// <total>"`, with the singular `album` for a count of one and the total, the
+/// <total>"`, or `"<count> album(s) - <selected>/<total>"` while `selected`
+/// indexes an album in the list (an index past the list falls back to the plain
+/// form), with the singular `album` for a count of one and the total, the
 /// sum of the albums' `duration_ms` from [`format_minutes_seconds`], followed by
 /// a `+` when any album has `duration_ms == 0` (no reported songs), like
-/// [`song_list_summary`]'s unknown-length rule. The sum uses `u64::saturating_add`
-/// so a large list cannot overflow. Selecting a row does not change it. Pure so
-/// the wording is testable without an iced renderer.
-pub(in crate::ui::views) fn album_list_summary(albums: &[Album]) -> String {
+/// [`song_list_summary`]'s unknown-length rule; an unknown-length selection gets
+/// the same `+`. The sum uses `u64::saturating_add` so a large list cannot
+/// overflow. Pure so the wording is testable without an iced renderer.
+pub(in crate::ui::views) fn album_list_summary(
+    albums: &[Album],
+    selected: Option<usize>,
+) -> String {
     let total_ms = albums
         .iter()
         .fold(0u64, |total, album| total.saturating_add(album.duration_ms));
     let noun = if albums.len() == 1 { "album" } else { "albums" };
-    let mark = if albums.iter().all(|album| album.duration_ms != 0) {
-        ""
-    } else {
-        "+"
+    let mark = |known: bool, ms: u64| {
+        let time = format_minutes_seconds(ms);
+        if known { time } else { format!("{time}+") }
     };
-    format!(
-        "{} {} - {}{}",
-        albums.len(),
-        noun,
-        format_minutes_seconds(total_ms),
-        mark
-    )
+    let total = mark(albums.iter().all(|album| album.duration_ms != 0), total_ms);
+    match selected.and_then(|index| albums.get(index)) {
+        Some(album) => format!(
+            "{} {} - {}/{}",
+            albums.len(),
+            noun,
+            mark(album.duration_ms != 0, album.duration_ms),
+            total
+        ),
+        None => format!("{} {} - {}", albums.len(), noun, total),
+    }
 }
 
 /// The count-and-time footer beneath a loaded song list: `"<count> song(s) -

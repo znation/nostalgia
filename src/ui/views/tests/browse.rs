@@ -881,21 +881,48 @@ fn summary_album(duration_ms: u64) -> Album {
 #[test]
 fn album_list_summary_counts_albums_and_sums_their_running_time() {
     assert_eq!(
-        album_list_summary(&[summary_album(630_000)]),
+        album_list_summary(&[summary_album(630_000)], None),
         "1 album - 10:30"
     );
     assert_eq!(
-        album_list_summary(&[summary_album(630_000), summary_album(210_000)]),
+        album_list_summary(&[summary_album(630_000), summary_album(210_000)], None),
         "2 albums - 14:00"
     );
     assert_eq!(
-        album_list_summary(&[summary_album(630_000), summary_album(0)]),
+        album_list_summary(&[summary_album(630_000), summary_album(0)], None),
         "2 albums - 10:30+"
     );
-    assert_eq!(album_list_summary(&[summary_album(0)]), "1 album - 0:00+");
+    assert_eq!(
+        album_list_summary(&[summary_album(0)], None),
+        "1 album - 0:00+"
+    );
     assert!(
-        album_list_summary(&[summary_album(u64::MAX), summary_album(1_000)])
+        album_list_summary(&[summary_album(u64::MAX), summary_album(1_000)], None)
             .starts_with("2 albums - ")
+    );
+}
+
+#[test]
+fn album_list_summary_puts_the_selected_running_time_before_the_total() {
+    assert_eq!(
+        album_list_summary(&[summary_album(630_000), summary_album(210_000)], Some(1)),
+        "2 albums - 3:30/14:00"
+    );
+}
+
+#[test]
+fn album_list_summary_marks_an_unknown_selected_running_time() {
+    assert_eq!(
+        album_list_summary(&[summary_album(0), summary_album(210_000)], Some(0)),
+        "2 albums - 0:00+/3:30+"
+    );
+}
+
+#[test]
+fn album_list_summary_ignores_a_selection_past_the_list() {
+    assert_eq!(
+        album_list_summary(&[summary_album(630_000)], Some(5)),
+        "1 album - 10:30"
     );
 }
 

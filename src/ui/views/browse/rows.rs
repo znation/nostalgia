@@ -271,7 +271,7 @@ fn row_button(
 /// [`scrollable_list`], so every row press selects and the selected row draws
 /// the blue bar. `placeholder` is the caller's [`text::browse_placeholder`] wording
 /// for an empty list. A non-empty list also appends its count-and-time footer
-/// ([`album_list_summary`]).
+/// ([`album_list_summary`]), which includes the selected album's running time.
 pub(in crate::ui::views) fn album_list<'a>(
     albums: &'a [Album],
     titles: &'a [String],
@@ -297,7 +297,7 @@ pub(in crate::ui::views) fn album_list<'a>(
     if albums.is_empty() {
         return rows;
     }
-    with_footer(rows, album_list_summary(albums))
+    with_footer(rows, album_list_summary(albums, selected))
 }
 
 /// Appends a loaded list's footer line beneath it, filling the browse panel.

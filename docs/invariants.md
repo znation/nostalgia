@@ -2205,6 +2205,26 @@ covers a song with no known length (`duration_ms` 0) and an unknown-length selec
 
 **History.** Added with the selected-length footer, like Winamp's playlist status line.
 
+## Album-list footer
+
+**Guarantee.** A non-empty album list (Albums, All Albums, Recently Added) draws a footer beneath
+its rows. With no selection it reads `<count> album(s) - <total>`. While the list's own `selected`
+index names an album, it reads `<count> album(s) - <selected running time>/<total>`, for example
+`3 albums - 10:30/45:30`; a total covering an album with no known running time (`duration_ms` 0)
+and an unknown-length selection get a trailing `+`. An index past the list falls back to the plain
+form.
+
+**Enforced by.** `views::browse::rows::text::album_list_summary` formats both forms;
+`views::browse::rows::album_list` passes its `selected` argument to it.
+
+**Pinned by.** `album_list_summary_counts_albums_and_sums_their_running_time` (plain form),
+`album_list_summary_puts_the_selected_running_time_before_the_total`,
+`album_list_summary_marks_an_unknown_selected_running_time`,
+`album_list_summary_ignores_a_selection_past_the_list` (`src/ui/views/tests/browse.rs`), and
+`root_view_album_footer_shows_the_selected_running_time` (`src/ui/tests/view_tests.rs`).
+
+**History.** Added with the selected-running-time footer, like the song-list footer.
+
 ## Library footer
 
 **Guarantee.** While the library panel is shown in normal mode, it draws exactly one compact

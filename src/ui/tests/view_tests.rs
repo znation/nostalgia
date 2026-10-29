@@ -1120,6 +1120,26 @@ fn root_view_artists_footer_totals_the_album_counts() {
     );
 }
 
+#[test]
+fn root_view_album_footer_shows_the_selected_running_time() {
+    let (mut player, _state) = test_player();
+    let mut first = sample_album();
+    first.duration_ms = 630_000;
+    let mut second = sample_album();
+    second.duration_ms = 210_000;
+    player.all_albums.items = vec![first, second];
+    player.all_albums.loading = false;
+    player.current_view = CurrentView::AllAlbums;
+    let epoch = player.all_albums.epoch;
+    player.all_albums.select_row(epoch, 1);
+    let capture = captured_root_view_text_bounds(&player);
+    assert!(
+        capture.texts().any(|text| text == "2 albums - 3:30/14:00"),
+        "{:?}",
+        capture.fragments()
+    );
+}
+
 // A browse list with no rows shows only its empty wording: `list_with_count`
 // returns the list unchanged at a zero count, and `song_list` skips its
 // count-and-time footer, so the loading, error, or empty placeholder stays
