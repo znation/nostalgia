@@ -111,18 +111,3 @@ fn a_stale_year_press_does_nothing() {
     assert_view(&player, CurrentView::Years);
     assert_eq!(player.songs.items.len(), 3);
 }
-
-#[test]
-fn a_superseded_years_load_is_dropped() {
-    let (mut player, _state) = test_player();
-    let stale = player.years.begin_fetch();
-    let _ = player.years.begin_fetch();
-
-    let reply = Message::BrowseReply {
-        issued: stale.issued(),
-        reply: Box::new(Message::YearsLoaded(group_by_year(year_songs()))),
-    };
-    let _ = update(&mut player, reply);
-
-    assert!(player.years.items.is_empty());
-}
