@@ -12,6 +12,7 @@ use std::sync::atomic::Ordering;
 
 use iced::Task;
 
+use crate::apple_music::AppleMusicService;
 use crate::library::Song;
 use crate::state::AppState;
 use crate::ui::loading::{
@@ -81,21 +82,25 @@ fn replay_from_stopped(player: &mut WinampPlayer, context: &'static str) -> Task
         }
         Some(track_id) => {
             let service = player.apple_music_service.clone();
-            Task::perform(
-                {
-                    let track_id = track_id.clone();
-                    async move {
-                        match service.get_song_by_id(&track_id).await {
-                            Ok(song) => song,
-                            Err(error) => {
-                                eprintln!("{}", replay_failure_report(&track_id, &error));
-                                None
-                            }
-                        }
-                    }
-                },
-                move |song| Message::ReplayResolved { track_id, song },
-            )
+            let resolution = resolve_replay_song(service, track_id.clone());
+            Task::perform(resolution, move |song| Message::ReplayResolved {
+                track_id,
+                song,
+            })
+        }
+    }
+}
+
+/// Resolves the replay id through the service's library seam. A failed
+/// lookup is reported to stdout with [`replay_failure_report`] and carried
+/// as no song, so [`replay_resolved`]'s none-branch ships the same
+/// `nothing to replay` report it prints when a transport-side lookup fails.
+async fn resolve_replay_song(service: AppleMusicService, track_id: String) -> Option<Song> {
+    match service.get_song_by_id(&track_id).await {
+        Ok(song) => song,
+        Err(error) => {
+            eprintln!("{}", replay_failure_report(&track_id, &error));
+            None
         }
     }
 }

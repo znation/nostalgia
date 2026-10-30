@@ -124,6 +124,22 @@ fn options_start_and_end_of_list_rows_jump_like_the_keys() {
 
 // The Jump rows close the menu and open their panel when it is available, by
 // mouse and by keyboard; when it is not, they only close the menu.
+// Give a Jump panel its prerequisite: the time row needs a playback duration
+// on the loaded track, the file row needs the song list its view reads.
+// `available: false` leaves the fresh player untouched, so the panel reports
+// itself unavailable there.
+fn prepare_jump_source(player: &mut WinampPlayer, is_time: bool, available: bool) {
+    if !available {
+        return;
+    }
+    if is_time {
+        player.playback_duration = Some(Duration::from_secs(90));
+        return;
+    }
+    let _ = update(player, Message::SongsLoaded(stepping_songs()));
+    player.current_view = CurrentView::Songs;
+}
+
 #[test]
 fn options_jump_rows_open_their_panels_or_just_close() {
     for (row, is_time) in [(OptionsRow::JumpTime, true), (OptionsRow::JumpFile, false)] {
@@ -131,14 +147,7 @@ fn options_jump_rows_open_their_panels_or_just_close() {
         for by_keyboard in [false, true] {
             for available in [true, false] {
                 let (mut player, _state) = test_player();
-                if available {
-                    if is_time {
-                        player.playback_duration = Some(Duration::from_secs(90));
-                    } else {
-                        let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
-                        player.current_view = CurrentView::Songs;
-                    }
-                }
+                prepare_jump_source(&mut player, is_time, available);
                 player.options_visible = true;
                 let _ = if by_keyboard {
                     player.options_selected = position;
