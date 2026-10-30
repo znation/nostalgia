@@ -5,6 +5,28 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### A pasted line break in a save-preset name splits its settings row in two, injecting settings lines of its own (found by the bugfix role 2026-10-29) — fixed 2026-10-29 by the bugfix role
+
+**Symptom:** a preset name pasted into the equalizer's `Save preset…` naming panel could carry a
+`\n` or `\r` (iced's text input inserts a multi-line paste verbatim). Saving it wrote the name
+raw into the settings file's `eq_custom_preset=<name>:<curve>` line, so the row split at the
+paste's line break: the preset silently vanished on the next load, and the name's tail became
+fresh settings lines of its own — a name like `Fuzz\neq_auto=on` flipped a visible setting on
+the next launch. The only free text the file carries and the writer did not guard.
+
+**Reproduce:** `cargo test -- a_line_broken_preset_name_writes_one_whole_settings_line
+save_preset_submitted_refuses_a_name_with_a_line_break` — before the fix the written file carried
+`eq_custom_preset=Fuzz\nBass:…` (the round-trip test saw two lost presets and a broken file), and
+the naming panel saved the flagged name instead of refusing it.
+
+**Cause:** `to_text` pushed `preset.name` verbatim into a line-based `key=value` file, and
+`save_preset_submitted` refused only empty, built-in, and colon names. The fix refuses a name
+with a line break at the panel (`Use one line` note) and flattens line breaks to spaces in
+`to_text` as defense in depth.
+
+**Validation gap:** none — the added codec round-trip and handler-refusal tests reproduced the
+broken write and the unmet refusal before the fix and pass after.
+
 ### A persist before a relaunch's sign-in lands erases the saved `music_kit_user_token=` line from the settings file — fixed 2026-10-29 by the bugfix role
 
 **Symptom:** a launch that passes a saved token to `init_service` but whose session never arrives

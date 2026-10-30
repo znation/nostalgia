@@ -14,7 +14,8 @@ use crate::state::AppState;
 use crate::ui::player::MIXER_FLASH_TICKS;
 use crate::ui::views;
 use crate::ui::views::{
-    BUILT_IN_NAME_NOTE, COLON_NAME_NOTE, EMPTY_NAME_NOTE, SAVE_PRESET_INPUT_ID,
+    BUILT_IN_NAME_NOTE, COLON_NAME_NOTE, EMPTY_NAME_NOTE, LINE_BREAK_NAME_NOTE,
+    SAVE_PRESET_INPUT_ID,
 };
 use crate::ui::{Message, WinampPlayer};
 
@@ -264,8 +265,10 @@ pub(in crate::ui) fn save_preset_name_changed(
 /// applied curve — its stored preamp and band gains — under the trimmed
 /// typed name and close the panel; an empty name keeps the panel open with
 /// the `Type a name` note, a name that is a built-in's (any case) shows
-/// `Already a preset` and saves nothing, and a name containing `:` shows
-/// `Use it without a colon`. On success an existing save of the same name
+/// `Already a preset` and saves nothing, a name containing `:` shows
+/// `Use it without a colon`, and a name carrying a line break (a multi-line
+/// paste can put one in the box; typing cannot) shows `Use one line`. On
+/// success an existing save of the same name
 /// (case-insensitive) is replaced in place — its stored name as first saved
 /// stays, only the curve updates — otherwise the curve pushes onto the end
 /// of the saved list. The persist runs through the shared
@@ -285,6 +288,15 @@ pub(in crate::ui) fn save_preset_submitted(player: &mut WinampPlayer) -> Task<Me
     }
     if name.contains(':') {
         player.save_preset_note = Some(COLON_NAME_NOTE);
+        return Task::none();
+    }
+    // A `\n` or `\r` in the name would split the row's
+    // `eq_custom_preset=<name>:<curve>` line in two in the saved file and
+    // let the name's tail be read as settings lines of its own, so the
+    // save refuses it like a colon name (the file writer's flatten guard
+    // in `to_text` stays as defense in depth over this seam).
+    if name.contains(['\n', '\r']) {
+        player.save_preset_note = Some(LINE_BREAK_NAME_NOTE);
         return Task::none();
     }
     if crate::equalizer::PRESETS

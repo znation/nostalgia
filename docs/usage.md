@@ -256,8 +256,9 @@ type a name and press Enter (or the panel's `Save` button) to save the equalizer
 — its stored preamp and band gains — under that name, and the panel's backdrop, `Close` button,
 Escape, or opening any other panel closes it. An empty name keeps the panel open with an inline
 `Type a name` note, a name already used by a built-in (any case) shows an inline `Already a
-preset` note and saves nothing, and a name containing `:` shows `Use it without a colon` (the
-settings line's separator is the colon); typing clears the note. Saving over an existing custom's
+preset` note and saves nothing, a name containing `:` shows `Use it without a colon` (the
+settings line's separator is the colon), and a name carrying a line break (a multi-line paste
+can put one in the box) shows `Use one line`; typing clears the note. Saving over an existing custom's
 name (any case) keeps one row and replaces only its curve, keeping the name as first saved. The
 pick list then offers the saved curves after the built-ins; choosing one applies its whole curve
 (and the closed label reads `Custom` while it is applied, exactly as a hand-tuned curve does),

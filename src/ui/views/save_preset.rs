@@ -27,6 +27,12 @@ pub const BUILT_IN_NAME_NOTE: &str = "Already a preset";
 /// `eq_custom_preset=<name>:<curve>` line uses the colon as its separator.
 pub const COLON_NAME_NOTE: &str = "Use it without a colon";
 
+/// The panel's note for a name containing a line break: Enter refuses it
+/// (`Use one line`), because the settings file is line-based and a name
+/// carrying `\n` or `\r` would split its `eq_custom_preset=` row in two and
+/// let the name's tail be read as settings lines of its own.
+pub const LINE_BREAK_NAME_NOTE: &str = "Use one line";
+
 /// Stacks the transient Save preset panel over `base`.
 ///
 /// The panel is modal (see [`modal_overlay`]): `Close` and the backdrop each

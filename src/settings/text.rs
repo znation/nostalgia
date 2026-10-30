@@ -29,7 +29,13 @@ impl Settings {
         // format the `eq_preamp`/`eq_band_*` lines use.
         for preset in &self.eq_custom_presets {
             text.push_str("eq_custom_preset=");
-            text.push_str(&preset.name);
+            // A preset name is free text, but this file is line-based: a
+            // pasted line break in the name would split its row in two and
+            // let the name's tail be read as settings lines of its own, so
+            // the writer flattens line breaks to spaces. The naming panel
+            // refuses such a name outright; this guard covers any other
+            // producer of a saved curve.
+            text.push_str(preset.name.replace(['\r', '\n'], " ").as_str());
             text.push(':');
             text.push_str(&format!("{}", preset.preamp));
             for gain in preset.bands {

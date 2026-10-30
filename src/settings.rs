@@ -678,6 +678,32 @@ mod tests {
         assert!(!Settings::default().to_text().contains("eq_custom_preset"));
     }
 
+    // A saved custom's name is free text, but the file is line-based: a
+    // pasted line break in the name would split its `eq_custom_preset=`
+    // row in two and let the name's tail be read as settings lines of its
+    // own (a name like `Fuzz\neq_auto=on` would even flip a visible
+    // setting). The writer therefore flattens line breaks to spaces, so
+    // every saved curve keeps one whole line and round-trips under a
+    // line-break-free name.
+    #[test]
+    fn a_line_broken_preset_name_writes_one_whole_settings_line() {
+        let mut bands = [0.0; equalizer::BAND_COUNT];
+        bands[0] = 2.0;
+        let mut settings = Settings::default();
+        settings.set_eq_custom_presets(vec![
+            equalizer::CustomPreset::from_curve(String::from("Fuzz\nBass"), 2.5, bands),
+            equalizer::CustomPreset::from_curve(String::from("Fuzz\rBass"), -1.0, bands),
+        ]);
+        let mut scrubbed = Settings::default();
+        scrubbed.set_eq_custom_presets(vec![
+            equalizer::CustomPreset::from_curve(String::from("Fuzz Bass"), 2.5, bands),
+            equalizer::CustomPreset::from_curve(String::from("Fuzz Bass"), -1.0, bands),
+        ]);
+
+        assert_eq!(settings.to_text(), scrubbed.to_text());
+        assert_eq!(Settings::from_text(&settings.to_text()), scrubbed);
+    }
+
     #[test]
     fn from_text_reads_the_last_band_and_trims_around_the_equals_sign() {
         let last = equalizer::BAND_COUNT - 1;
