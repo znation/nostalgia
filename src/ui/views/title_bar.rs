@@ -14,6 +14,10 @@ use super::fixed_width_button;
 /// The custom title bar's app name.
 const TITLE_BAR_TEXT: &str = "NOSTALGIA";
 
+/// The band label's size in pixels: a multiple of 8, so the letterform face
+/// draws it crisp (the split's on-grid mapping, 14 → 16).
+const TITLE_BAR_LABEL_SIZE: f32 = 16.0;
+
 /// The custom title bar's height in px: short, like the classic Winamp title
 /// bar, rather than the OS frame's.
 pub const TITLE_BAR_HEIGHT: f32 = 24.0;
@@ -69,7 +73,12 @@ fn title_tape() -> Element<'static, Message> {
 fn title_band_content(label: &'static str) -> Row<'static, Message> {
     Row::new()
         .push(title_tape())
-        .push(Text::new(label).size(14).color(theme::TEXT))
+        .push(
+            Text::new(label)
+                .size(TITLE_BAR_LABEL_SIZE)
+                .font(theme::ui_font())
+                .color(theme::TEXT),
+        )
         .push(title_tape())
         .spacing(6)
         .padding([0, 6])
@@ -118,7 +127,7 @@ pub fn view_title_bar(about_visible: bool) -> Element<'static, Message> {
     .on_press(Message::WindowDragged)
     .on_double_click(Message::ToggleWindowShade);
 
-    let menu_button = Button::new(Text::new("M"))
+    let menu_button = Button::new(Text::new("M").font(theme::ui_font()))
         .on_press(Message::ToggleAbout)
         .width(Length::Fixed(TITLE_BAR_LEFT_BUTTON_WIDTH))
         .style(move |_theme, status| style::toggle_button_style(about_visible, status));
@@ -129,18 +138,24 @@ pub fn view_title_bar(about_visible: bool) -> Element<'static, Message> {
                 .push(menu_button)
                 .push(drag_region)
                 .push(fixed_width_button(
-                    "▭",
+                    // `▭` is uncovered by both embedded faces (see part 1/4's
+                    // probe in `PLANS.md`); `□` is the closest covered
+                    // substitute and draws crisp in Tiny5.
+                    "□",
                     TITLE_BAR_BUTTON_WIDTH,
+                    theme::shape_font(),
                     Message::ToggleWindowShade,
                 ))
                 .push(fixed_width_button(
                     "–",
                     TITLE_BAR_BUTTON_WIDTH,
+                    theme::shape_font(),
                     Message::MinimizeWindow,
                 ))
                 .push(fixed_width_button(
                     "✕",
                     TITLE_BAR_BUTTON_WIDTH,
+                    theme::shape_font(),
                     Message::CloseWindow,
                 )),
         )
@@ -161,6 +176,15 @@ mod tests {
     // and no other test reads them, so a zeroed or widened button could pass
     // the suite while the bar reflowed. Pin the widths; the 22 > 18 split is
     // the documented narrow M slot.
+    // Part 2/4 of the pixel-font split re-based every size the chrome hands
+    // iced onto the 8px grid — only multiples of 8 keep the embedded faces
+    // crisp — so pin each size as a multiple of 8 as well as its exact value.
+    #[test]
+    fn title_bar_text_sizes_stay_on_the_pixel_grid() {
+        assert_eq!(TITLE_BAR_LABEL_SIZE, 16.0);
+        assert_eq!(TITLE_BAR_LABEL_SIZE % 8.0, 0.0);
+    }
+
     #[test]
     fn title_bar_buttons_keep_their_pinned_widths() {
         assert_eq!(TITLE_BAR_BUTTON_WIDTH, 22.0);

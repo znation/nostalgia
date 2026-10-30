@@ -476,3 +476,63 @@ fn shuffle_led_toggle_label_fits_its_pinned_face() {
         bounds.height
     );
 }
+
+// Part 2/4 of the pixel-font split gave the row's five glyph buttons the
+// vendored Tiny5 shape face and their hover tooltips' words the Silkscreen
+// letterform face at the on-grid 16px word size (12 left the system sans).
+// A fixed-width button reports its content box rather than the text's own
+// advance, so the faces are pinned through the same widgets shrunk to them:
+// each probe carries exactly the `Text` the row's builders hand iced. The
+// widths are the probed Tiny5/Silkscreen advances part 1/4 recorded (▶ 8.0
+// and ■ 10.0 at 16; the glyph button colors were pinned by the part 1/4 seam
+// test), plus the engraved `SHUFFLE`	Run at 76.0; a lost registration or a
+// swapped family moves them.
+#[test]
+fn transport_glyph_buttons_draw_the_vendored_shape_face() {
+    let renderer = layout_capture::headless_renderer();
+    let spec = transport_glyphs().map(|(glyph, _, _, message)| (glyph, message));
+    let widths = spec
+        .into_iter()
+        .map(|(glyph, message)| {
+            let mut button: iced::Element<'_, Message, iced::Theme, iced::Renderer> =
+                iced::widget::Button::new(iced::widget::Text::new(glyph).font(theme::shape_font()))
+                    .on_press(message)
+                    .into();
+            let capture = layout_capture::capture_text(&mut button, &renderer);
+            let fragment = capture.find(glyph);
+            fragment.width
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(widths, [16.0, 8.0, 8.0, 10.0, 16.0]);
+}
+
+#[test]
+fn transport_tooltip_words_and_shuffle_label_draw_the_silkscreen_face() {
+    let renderer = layout_capture::headless_renderer();
+    let words = transport_glyphs().map(|(_, word, _, _)| word.to_string());
+    let mut labels: Vec<&str> = words.iter().map(String::as_str).collect();
+    labels.push("SHUFFLE");
+    let widths: Vec<f32> = labels
+        .iter()
+        .map(|word| {
+            let mut element: iced::Element<'_, (), iced::Theme, iced::Renderer> =
+                iced::widget::Text::new(*word)
+                    .size(16.0)
+                    .font(theme::ui_font())
+                    .into();
+            let capture = layout_capture::capture_text(&mut element, &renderer);
+            let fragment = capture.find(word);
+            fragment.width
+        })
+        .collect::<Vec<_>>();
+    // The bounds surface f32 rounding on the way out of the layout replay, so
+    // the pins compare each width within a hundredth of a pixel.
+    let expected = [90.0, 48.0, 58.0, 46.0, 48.0, 76.0];
+    for ((word, measured), face) in labels.iter().zip(widths.iter()).zip(expected) {
+        assert!(
+            (*measured - face).abs() < 0.01,
+            "the tooltip words and Shuffle label must draw in the vendored \
+             Silkscreen face: {word} measured {measured}, Silkscreen pins {face}"
+        );
+    }
+}

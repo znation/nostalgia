@@ -959,7 +959,9 @@ refresh does not re-join and reformat every row.
   dispatches `Message::ToggleLibraryPanel` by physical key, its other modifier chords stay unbound,
   and shade mode changes nothing because the toggle leaves `library_panel_visible` alone while
   `WinampPlayer::shaded` holds.
-- The main transport row's fixed-width lightning button follows `PL`, separated by the row's
+- The main transport row's fixed-width options button (`≡`, the glyph part 2/4 of the
+  pixel-font split swapped the lightning `⚡` in for so the shape face draws it crisp)
+  follows `PL`, separated by the row's
   usual gap, and publishes `Message::ToggleOptions`, the same message as the LCD strip's `O`.
   The root `view` draws the options menu only while `WinampPlayer::options_visible` holds outside
   shade mode, so the button never changes playback, browse, search, equalizer audio, volume, or
@@ -1587,7 +1589,7 @@ its internal id, whenever the id is in the known-track index:
 - The LCD's left edge always draws the five classic indicator letters `O`, `A`, `I`, `D`, `V`,
   in that order, at a fixed width, in every playback state including the empty `--:--` bar. `O`,
   `A`, `I`, and `V` are mouse areas: pressing `O` publishes `Message::ToggleOptions` (the same
-  options menu as the transport row's lightning button), pressing `A` publishes
+  options menu as the transport row's `≡` button), pressing `A` publishes
   `Message::ToggleAlwaysOnTop` (the LCD strip's own always-on-top control), pressing `I`
   publishes `Message::ToggleFileInfo` (the same panel as Alt+3), and pressing `V` publishes
   `Message::ToggleVisualizer`, which flips only the LCD's display flag. `D` stays decorative and
@@ -2067,7 +2069,7 @@ on each rebuild rather than caching the source in UI state.
 
 ## Options panel
 
-**Guarantee.** The LCD strip's `O`, the transport row's lightning button, and a right-press on the player panels or shade strip (not the library) open a transient,
+**Guarantee.** The LCD strip's `O`, the transport row's `≡` button, and a right-press on the player panels or shade strip (not the library) open a transient,
 unpersisted options menu listing the app's existing on/off choices plus the Stop with fadeout row, the Manual playlist advance row, the 10 songs back, 10 songs forward, Back 5 seconds, Fwd 5 seconds, Start of list and End of list
 rows, the Jump to time and
 Jump to file rows, File info, About, and Close:

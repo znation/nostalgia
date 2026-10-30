@@ -18,7 +18,7 @@ const LCD_STATUS_HEIGHT: f32 = 16.0;
 
 /// The status text's size in pixels: small enough to sit quietly beneath the
 /// title line.
-const LCD_STATUS_SIZE: f32 = 12.0;
+const LCD_STATUS_SIZE: f32 = 16.0;
 
 /// The LCD status row's channel indicators, in the mockup's left-to-right
 /// order: the mono label first, then stereo.
@@ -50,6 +50,7 @@ where
     Theme: iced::widget::text::Catalog + 'a,
     Theme::Class<'a>: From<iced::widget::text::StyleFn<'a, Theme>>,
     Renderer: iced::advanced::text::Renderer + 'a,
+    <Renderer as iced::advanced::text::Renderer>::Font: From<iced::Font>,
 {
     let mut row = Row::new().height(Length::Fixed(LCD_STATUS_HEIGHT));
     let channels = format.map(|format| format.channels);
@@ -57,6 +58,7 @@ where
         row = row.push(
             Text::new(format_playback_prefix(format))
                 .size(LCD_STATUS_SIZE)
+                .font(crate::ui::theme::ui_font())
                 .color(theme::LCD_GREEN),
         );
     }
@@ -68,8 +70,23 @@ where
         row = row.push(
             Text::new(*label)
                 .size(LCD_STATUS_SIZE)
+                .font(crate::ui::theme::ui_font())
                 .color(channel_label_color(channels, label)),
         );
     }
     row
+}
+
+#[cfg(test)]
+mod size_pins {
+    // Part 2/4 of the pixel-font split re-based the status row onto the 8px
+    // grid (12 -> 16; only multiples of 8 keep the embedded faces crisp), so
+    // pin it.
+    use super::LCD_STATUS_SIZE;
+
+    #[test]
+    fn status_text_sizes_stay_on_the_pixel_grid() {
+        assert_eq!(LCD_STATUS_SIZE, 16.0);
+        assert_eq!(LCD_STATUS_SIZE % 8.0, 0.0);
+    }
 }

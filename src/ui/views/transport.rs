@@ -32,6 +32,12 @@ pub(super) fn transport_glyphs() -> [(&'static str, &'static str, f32, Message);
     ]
 }
 
+/// The glyph buttons' hover-tooltip word size in pixels: a multiple of 8, so
+/// the letterform face draws each word crisp (the split's on-grid mapping,
+/// 12 → 16). Consequently the toggle labels out on the face keep iced's own
+/// 16.
+const TOOLTIP_WORD_SIZE: f32 = 16.0;
+
 /// The transport row's seven chrome buttons, in row order: Previous, Play, Pause, Stop, Next,
 /// Repeat, and Shuffle. `repeat` and `shuffle` light their button's LED instead of changing its
 /// label, so the other labels and tooltips are static literals.
@@ -48,10 +54,14 @@ pub(super) fn transport_buttons(repeat: bool, shuffle: bool) -> [Element<'static
     // already had. The glyph widths live in `transport_glyphs`.
     let [previous, play, pause, stop, next] =
         transport_glyphs().map(|(glyph, word, width, message)| {
-            let button = fixed_width_button(glyph, width, message);
+            let button = fixed_width_button(glyph, width, theme::shape_font(), message);
             Element::from(Tooltip::new(
                 button,
-                Text::new(word).size(12),
+                // Tooltip words draw in the app face at the split's on-grid
+                // word size: 12 left the system sans and is off the 8px grid.
+                Text::new(word)
+                    .size(TOOLTIP_WORD_SIZE)
+                    .font(theme::ui_font()),
                 tooltip::Position::Top,
             ))
         });
@@ -133,7 +143,7 @@ fn led_toggle(
         .align_y(iced::Alignment::Center)
         .push(led_square(on))
         .push(iced::widget::Space::new().width(Length::Fixed(LED_GAP)))
-        .push(Text::new(label))
+        .push(Text::new(label).font(theme::ui_font()))
         .into();
     Button::new(face)
         .on_press(message)
@@ -189,10 +199,21 @@ pub(super) fn library_panel_toggle() -> (&'static str, f32, Message) {
 /// change cannot reflow the row.
 pub(super) const OPTIONS_BUTTON_WIDTH: f32 = 30.0;
 
-/// The lightning button at the end of the player row: opens the same transient options menu as the
+/// The options button (`≡`, the shape face's substitute for the lightning
+/// `⚡` the split's part 2/4 swapped out when it re-based the chrome's
+/// glyphs) at the end of the player row: opens the same transient options menu as the
 /// LCD strip's `O` through [`Message::ToggleOptions`].
 pub(super) fn options_button() -> Element<'static, Message> {
-    fixed_width_button("⚡", OPTIONS_BUTTON_WIDTH, Message::ToggleOptions).into()
+    // `⚡` is uncovered by both embedded faces (see part 1/4's probe in
+    // `PLANS.md`); `≡` is the closest covered substitute and draws crisp in
+    // Tiny5.
+    fixed_width_button(
+        "≡",
+        OPTIONS_BUTTON_WIDTH,
+        theme::shape_font(),
+        Message::ToggleOptions,
+    )
+    .into()
 }
 
 /// One of the transport row's panel toggles, built from its spec and pinned to the spec's width.
@@ -204,7 +225,7 @@ fn panel_toggle_button(
     (label, width, message): (&'static str, f32, Message),
     open: bool,
 ) -> Button<'static, Message> {
-    fixed_width_toggle_button(label, width, message, open)
+    fixed_width_toggle_button(label, width, theme::ui_font(), message, open)
 }
 
 /// The balance slider's container id, used only by the layout tests to find the laid-out slider and
@@ -214,13 +235,13 @@ pub(crate) const BALANCE_SLIDER_ID: &str = "transport-balance";
 
 /// The transport row: the Previous, Play, Pause, Stop, Next, Repeat, and Shuffle buttons, the
 /// volume slider, the balance slider, the fixed-width `EQ` and `PL` panel toggles, and the
-/// lightning options-menu button. `volume` and `balance` are the sliders' current values; dragging
+/// `≡` options-menu button. `volume` and `balance` are the sliders' current values; dragging
 /// them emits `Message::VolumeChange` and `Message::BalanceChange` respectively. `repeat` is the
 /// shared Repeat flag and `shuffle` the shared Shuffle flag, each shown on its button by the square
 /// LED and toggled by pressing it: pressing a toggle swaps the lit and dark LED square, not the
 /// label or the chrome. The five glyph buttons carry word tooltips. `eq_panel_visible` sinks the EQ button while the equalizer section is drawn and leaves
 /// its chrome raised while the section is hidden; `library_panel_visible` does the same for the PL
-/// button and the library section. The lightning button publishes [`Message::ToggleOptions`] and is
+/// button and the library section. The options button publishes [`Message::ToggleOptions`] and is
 /// separated from PL by the row's usual gap.
 pub fn view_transport_controls(
     volume: f32,
@@ -269,4 +290,18 @@ pub fn view_transport_controls(
         .push(spacer(20.0))
         .push(options_button());
     row.into()
+}
+
+#[cfg(test)]
+mod size_pins {
+    // Part 2/4 of the pixel-font split re-based every size the transport row
+    // hands iced onto the 8px grid — only multiples of 8 keep the embedded
+    // faces crisp — so pin the tooltip word's size on the grid.
+    use super::TOOLTIP_WORD_SIZE;
+
+    #[test]
+    fn transport_text_sizes_stay_on_the_pixel_grid() {
+        assert_eq!(TOOLTIP_WORD_SIZE, 16.0);
+        assert_eq!(TOOLTIP_WORD_SIZE % 8.0, 0.0);
+    }
 }

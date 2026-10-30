@@ -576,3 +576,61 @@ fn view_seek_bar_constructs_with_and_without_a_length() {
     let _known = view_seek_bar(Some(Duration::from_secs(10)), Some(Duration::from_secs(30)));
     let _unknown = view_seek_bar(Some(Duration::from_secs(10)), None);
 }
+
+// Part 2/4 of the pixel-font split re-based the LCD's text onto the vendored
+// faces at on-grid sizes: the elapsed readout 32px, the Now Playing line's
+// green fragments 24px in Silkscreen, and the transport glyph 24px in the
+// Tiny5 shape face (crisp numbers recorded by part 1/4's grid probe: Tiny5's
+// ▶ advance at 16 is 8.0, Silkscreen's H at 16 is 12.0 — the ▶/II/■ at 24
+// measure 12.0). The captured bounds are the fragments' own advances, so a
+// lost registration, a swapped family, or an off-grid size moves the numbers.
+#[test]
+fn the_lcd_draws_the_vendored_pixel_faces() {
+    let renderer = layout_capture::headless_renderer();
+    let mut element: iced::Element<'_, Message, iced::Theme, iced::Renderer> = now_playing_row(
+        Cow::Borrowed("0:42"),
+        Cow::Borrowed("Roxanne"),
+        Cow::Borrowed("AC/DC"),
+        Cow::Borrowed("7."),
+        Cow::Borrowed("3:30"),
+        0,
+        TransportMode::Playing,
+        true,
+        None,
+    )
+    .into();
+    let capture = layout_capture::capture_text(&mut element, &renderer);
+
+    // The bounds surface f32 rounding on the way out of the layout replay,
+    // so the pins compare within a hundredth of a pixel.
+    let within = |a: f32, b: f32| (a - b).abs() < 0.01;
+
+    let glyph = capture.find("▶");
+    assert!(
+        within(glyph.width, 12.0),
+        "the LCD transport glyph must draw Tiny5's advance at 24: {glyph:?}"
+    );
+    assert_eq!(
+        glyph.x, 0.0,
+        "the glyph must keep its fixed slot at the row's left edge: {glyph:?}"
+    );
+    let elapsed = capture.find("0:42");
+    assert!(
+        within(elapsed.width, 84.0),
+        "the elapsed readout must draw Silkscreen's advance at 32: {elapsed:?}"
+    );
+    assert_eq!(
+        elapsed.x, 16.0,
+        "the elapsed readout must follow the glyph's fixed slot"
+    );
+    let caption = capture.find("Now Playing: ");
+    assert!(
+        within(caption.width, 213.0),
+        "the caption must draw Silkscreen's advance at 24: {caption:?}"
+    );
+    let total = capture.find("3:30");
+    assert!(
+        within(total.width, 63.0),
+        "the total must draw Silkscreen's advance at 24: {total:?}"
+    );
+}

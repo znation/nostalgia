@@ -170,7 +170,20 @@ fn spacer(width: f32) -> Space {
 /// resulting button is `'static` like the view builders that
 /// push it.
 fn labeled_button(label: &'static str, message: Message) -> Button<'static, Message> {
-    Button::new(Text::new(label))
+    text_button(label, iced::Font::default(), message)
+}
+
+/// A [`labeled_button`]-style button whose label draws with `font`: the pixel-font
+/// split gives every in-scope button an explicit face (word buttons take the
+/// letterform face through `theme::ui_font`, glyph buttons the shape-glyph face
+/// through `theme::shape_font` — see `theme` in `src/ui/theme.rs`), while the
+/// views later parts convert keep sharing [`labeled_button`].
+fn text_button(
+    label: &'static str,
+    font: iced::Font,
+    message: Message,
+) -> Button<'static, Message> {
+    Button::new(Text::new(label).font(font))
         .on_press(message)
         .style(|_theme, status| style::chrome_button_style(status))
 }
@@ -180,9 +193,10 @@ fn labeled_button(label: &'static str, message: Message) -> Button<'static, Mess
 fn fixed_width_button(
     label: &'static str,
     width: f32,
+    font: iced::Font,
     message: Message,
 ) -> Button<'static, Message> {
-    labeled_button(label, message).width(Length::Fixed(width))
+    text_button(label, font, message).width(Length::Fixed(width))
 }
 
 /// A [`labeled_button`] that sinks while `on` (see [`style::toggle_button_style`]), for a toggle
@@ -199,10 +213,11 @@ fn toggle_button(label: &'static str, message: Message, on: bool) -> Button<'sta
 fn fixed_width_toggle_button(
     label: &'static str,
     width: f32,
+    font: iced::Font,
     message: Message,
     on: bool,
 ) -> Button<'static, Message> {
-    fixed_width_button(label, width, message)
+    fixed_width_button(label, width, font, message)
         .style(move |_theme, status| style::toggle_button_style(on, status))
 }
 

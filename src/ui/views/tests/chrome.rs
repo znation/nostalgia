@@ -1035,10 +1035,12 @@ fn transport_options_button_publishes_toggle_options() {
     let mut element = view_transport_controls(0.5, 0.0, false, false, true, true);
     let capture = layout_capture::capture_text(&mut element, &renderer);
     let library = capture.find("PL");
-    let options = capture.find("⚡");
+    // Part 2/4 of the pixel-font split swapped the lightning glyph for `≡`,
+    // which the shape face covers crisply.
+    let options = capture.find("≡");
     assert!(
         options.x > library.x,
-        "the lightning button must sit after PL: PL {:?}, options {:?}",
+        "the options button must sit after PL: PL {:?}, options {:?}",
         library,
         options
     );
@@ -1053,7 +1055,7 @@ fn transport_options_button_publishes_toggle_options() {
             .filter(|message| matches!(message, Message::ToggleOptions))
             .count(),
         1,
-        "a press on the lightning button must publish exactly one ToggleOptions: {messages:?}"
+        "a press on the options button must publish exactly one ToggleOptions: {messages:?}"
     );
 }
 
@@ -1086,4 +1088,25 @@ fn file_info_overlay_omits_the_content_rating_line_when_the_source_supplied_none
     let track = sample_known_track("The Sample Band");
     let texts = file_info_texts(&track, None);
     assert_no_file_info_line(&texts, "Rating:");
+}
+
+// Part 2/4 of the pixel-font split put the app bar's label in the vendored
+// Silkscreen face at the on-grid 16px size. A fixed-width button reports its
+// content box rather than the text's advance, but the band's label is the one
+// chrome text iced hands its own shrink width, so the pin carries the family's
+// measured run: "NOSTALGIA" at 16 measures 100.0, the exact number part 1/4's
+// seam test pinned for the vendored face. A lost registration or a swapped
+// family (the system sans measured `H` at 11.856) moves the number, so the
+// regression fails here instead of silently reaping the chrome look.
+#[test]
+fn title_band_label_draws_the_silkscreen_face() {
+    let renderer = layout_capture::headless_renderer();
+    let mut band: iced::Element<'_, Message, iced::Theme, iced::Renderer> =
+        view_title_band("NOSTALGIA");
+    let capture = layout_capture::capture_text(&mut band, &renderer);
+    let label = capture.find("NOSTALGIA");
+    assert_eq!(
+        label.width, 100.0,
+        "the band label must draw in the vendored Silkscreen face: {label:?}"
+    );
 }

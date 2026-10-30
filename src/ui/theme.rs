@@ -149,33 +149,25 @@ pub const EQ_GAIN_HIGH: Color = Color::from_rgb(1.0, 0.2, 0.1);
 /// as `assets/fonts/Silkscreen-Regular.ttf` with its source recorded in
 /// `assets/fonts/README.md`.
 ///
-// Nothing in production names the family yet — part 2/4 of the pixel-font
-// split adopts these faces control by control, and until it lands only the
-// layout-capture seam test — through `ui_font` — reaches them.
+/// The family name of the vendored letterform face the chrome's text renders
+/// in. The TTF ships as `assets/fonts/Silkscreen-Regular.ttf` with its source
+/// recorded in `assets/fonts/README.md`.
 pub const UI_FONT_FAMILY: &str = "Silkscreen";
 
 /// The family name of the vendored shape-glyph face the transport's markers
 /// render in. The TTF ships as `assets/fonts/Tiny5.ttf` with its source
 /// recorded in `assets/fonts/README.md`.
 ///
-// Referenced only by `shape_font`, which stays dead until part 2/4 adopts
-// it; see [`UI_FONT_FAMILY`].
 pub const SHAPE_FONT_FAMILY: &str = "Tiny5";
 
 /// The letterform face the chrome's text renders in, addressed by
 /// [`UI_FONT_FAMILY`] so no view spells the family as a literal.
-///
-// Dead only until part 2/4 adopts it; see [`UI_FONT_FAMILY`].
-#[cfg_attr(not(test), expect(dead_code))]
 pub fn ui_font() -> Font {
     Font::with_name(UI_FONT_FAMILY)
 }
 
 /// The shape-glyph face the chrome's markers render in, addressed by
 /// [`SHAPE_FONT_FAMILY`] so no view spells the family as a literal.
-///
-// Dead only until part 2/4 adopts it; see [`UI_FONT_FAMILY`].
-#[cfg_attr(not(test), expect(dead_code))]
 pub fn shape_font() -> Font {
     Font::with_name(SHAPE_FONT_FAMILY)
 }

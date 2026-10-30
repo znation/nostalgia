@@ -5,6 +5,105 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
+### Re-base the main window's chrome — LCD, title bar and transport row — onto the pixel faces (part 2/4 of the pixel-font split, requires part 1/4 landed) (planned 2026-10-30 by the plan role) — done 2026-10-30 by the feature role
+
+**Goal.** The main window's every text — the LCD's elapsed readout, status row and
+indicator strip, the Now Playing line, the title-band label, the transport row's
+glyph and word buttons, the compact mini-transport strip — renders in the vendored
+faces at on-grid sizes, matching the base skin's bitmap look of
+`winamp-screenshots/winamp-2.05-main.jpg` and `winamp-2.x-stack.png`. Scoped to
+whole controls so nothing is half-converted: each control's face, size and glyphs
+land in this part (part 1/4 supplies `theme::ui_font`/`shape_font`, parts 3/4 and
+4/4 do the other views).
+
+**Files touched.** `src/ui/views/now_playing.rs`, `now_playing/indicator.rs`,
+`now_playing/status.rs`, `views/title_bar.rs`, `views/transport.rs`,
+`views/mini_transport.rs`, `views/mod.rs` (the shared `labeled_button`, whose
+`Text` carries no font today), plus the test modules that capture these views'
+fragments (`views/tests/chrome.rs`, `lcd_display.rs`, `now_playing.rs`,
+`transport.rs`, `shade.rs`, and the `src/ui/tests/` modules that read their text
+bounds).
+
+**Approach.**
+
+1. Face and glyph swaps: the button glyphs strings — `transport_glyphs()`'s
+   `◀◀/▶/II/■/▶▶` (`views/transport.rs:43`), the LCD's `▶/II/■`
+   (`now_playing.rs`'s `transport_glyph`), title_bar's `–` and `✕` — render with
+   `theme::shape_font()` (Tiny5, probed crisp at 16). The options button's `⚡`
+   becomes `≡` and the title bar's shade `▭` becomes `□` (uncovered by both
+   faces; the covered substitutes, probed crisp). Give `views/mod.rs`'s
+   `labeled_button` a font parameter (private — all callers are in `views/`):
+   word buttons and tooltips take `theme::ui_font()`, glyph buttons
+   `theme::shape_font()`. The LCD readout, status row, indicator strip,
+   title-band label and mini-transport readout take `theme::ui_font()`.
+2. Size re-base onto the grid (only multiples of 8 draw crisp):
+   `LCD_ELAPSED_SIZE` 34→32, `LCD_TRANSPORT_SIZE` 22→24, `lcd_text`'s 20→24,
+   the literal `Now Playing: ` 20→24, `LCD_INDICATOR_SIZE` 10→8,
+   `LCD_STATUS_SIZE` 12→16, the title-band label 14→16, the mini-transport
+   readout 14→16, tooltip words 12→16; button labels stay at iced's 16. Keep
+   each control's fixed box (`LCD_TRANSPORT_WIDTH`, `LCD_STATUS_HEIGHT`,
+   `OPTIONS_BUTTON_WIDTH` 30.0, the Repeat/Shuffle pinned widths, the title-bar
+   `TITLE_BAR_BUTTON_WIDTH`) unless the face's measured advance no longer fits
+   it; where it does not, re-derive the width from the run and note the change.
+3. Re-derive, rather than re-pin blindly, the affected text-bound assertions: a
+   test whose claim is a relationship (a neighbour gap, a slot that does not
+   reflow when the glyph swaps, one control left of another) keeps the claim and
+   takes its new numbers from the run; a test that pinned only the old face's
+   metrics is updated to the measured numbers, with the comparison recorded in
+   the change's summary.
+4. Compare the visible result against `winamp-screenshots/winamp-2.05-main.jpg`
+   (and `winamp-2.x-stack.png` for the docked context); the summary names the
+   screenshot compared and the deviations left for the palette/geometry bug
+   entries BUGS.md already tracks.
+
+**Recorded when done (2026-10-30, feature).** Three anchors moved as planned and
+three changed during the work, recorded here so no one re-derives them:
+
+- The shared builders now carry the face on a font parameter, but
+  `labeled_button` keeps its no-font signature: it is still shared by the
+  browse views (part 3/4's rows) and the panel views (part 4/4), so
+  converting their labels here would have re-styled texts another part must
+  re-base on-grid. A private `text_button(label, font, message)` core does
+  the work; `fixed_width_button`/`fixed_width_toggle_button` take `font`
+  (their callers are all this part's views) and the equalizer's `auto_toggle`
+  plus its reference-row test pass `iced::Font::default()` explicitly until
+  part 3/4 converts the equalizer.
+- Fixed-width buttons report their content box, not the text's advance, so
+  the face pins for the row's glyph buttons, the tooltip words, and the
+  `SHUFFLE` engraving carry the same widgets shrunk to width (the shrink
+  probe reports the probed Tiny5/Silkscreen advances exactly); the LCD row's
+  shrink fragments (elapsed 84.0 at 32, caption 213.0 at 24, Tiny5 `▶` 12.0 at
+  24) and the band's `NOSTALGIA` (100.0 at 16, part 1/4's own number) pin
+  theirs directly. The glyph colors' exactly-2 proof stays in part 1/4's
+  seam test, which pins it per glyph.
+- The Repeat face's `↻` loop glyph stays on the default face: neither vendored
+  face covers it (part 1/4's probe), so it falls back at draw time exactly as
+  before; the LCD's `▶/II/■`, the five row glyphs, the `M`, the `SHUFFLE`
+  engraving, and `≡`/`□`/`–`/`✕` all take the vendored faces.
+- No existing captured assertion moved: the harness's geometry tests are
+  relationship claims, so only the `⚡`→`≡` fragment lookup in
+  `chrome.rs::transport_options_button_publishes_toggle_options` needed
+  re-pinning. Sizes: LCD 34→32 elapsed, 22→24 glyph, 20→24 line, 10→8
+  indicators, 12→16 status; 14→16 band label; 12→16 tooltip words; 14→16
+  mini readout — literals re-based to the grid were pinned as constants
+  (`LCD_TEXT_SIZE`, `TITLE_BAR_LABEL_SIZE`, `TOOLTIP_WORD_SIZE`,
+  `MINI_TRANSPORT_READOUT_SIZE`), each with an on-grid pin test.
+- Docs synced for the glyph swaps: `docs/usage.md` and the OPTIONS guarantee
+  text in `docs/invariants.md` re-name the lightning button to the `≡`
+  options button.
+
+**Acceptance criteria.**
+
+- Every text size the six modules hand iced is a multiple of 8, pinned by the
+  rewritten constants' tests.
+- A capture test per area proves the face: the elapsed readout, the title-band
+  label and a transport word draw with Silkscreen's advance (e.g. `H` = 12.0 px
+  at 16), and a glyph-bearing button draws its probed Tiny5 width (e.g. `▶` 8.0
+  at 16, 2 colors).
+- The transport row's buttons keep their fixed widths: a label-swap reflow test
+  still passes.
+- No control in scope is left on the system face; `make check` passes.
+
 ### Surface a stale Apple Music sign-in in the browse failure reports (classify HTTP 401/403 at the service seam)
 
 (planned 2026-10-29 by the plan role, as option 1 of the open

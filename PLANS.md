@@ -8,69 +8,6 @@ together was one run's worth of re-derived assertions too many). They cross-refe
 parts 2–4 each scope whole controls — a control's face, size and glyphs never land in
 different parts, so nothing is left half-converted between merges.
 
-### Re-base the main window's chrome — LCD, title bar and transport row — onto the pixel faces (part 2/4 of the pixel-font split, requires part 1/4 landed) (planned 2026-10-30 by the plan role)
-
-**Goal.** The main window's every text — the LCD's elapsed readout, status row and
-indicator strip, the Now Playing line, the title-band label, the transport row's
-glyph and word buttons, the compact mini-transport strip — renders in the vendored
-faces at on-grid sizes, matching the base skin's bitmap look of
-`winamp-screenshots/winamp-2.05-main.jpg` and `winamp-2.x-stack.png`. Scoped to
-whole controls so nothing is half-converted: each control's face, size and glyphs
-land in this part (part 1/4 supplies `theme::ui_font`/`shape_font`, parts 3/4 and
-4/4 do the other views).
-
-**Files touched.** `src/ui/views/now_playing.rs`, `now_playing/indicator.rs`,
-`now_playing/status.rs`, `views/title_bar.rs`, `views/transport.rs`,
-`views/mini_transport.rs`, `views/mod.rs` (the shared `labeled_button`, whose
-`Text` carries no font today), plus the test modules that capture these views'
-fragments (`views/tests/chrome.rs`, `lcd_display.rs`, `now_playing.rs`,
-`transport.rs`, `shade.rs`, and the `src/ui/tests/` modules that read their text
-bounds).
-
-**Approach.**
-
-1. Face and glyph swaps: the button glyphs strings — `transport_glyphs()`'s
-   `◀◀/▶/II/■/▶▶` (`views/transport.rs:43`), the LCD's `▶/II/■`
-   (`now_playing.rs`'s `transport_glyph`), title_bar's `–` and `✕` — render with
-   `theme::shape_font()` (Tiny5, probed crisp at 16). The options button's `⚡`
-   becomes `≡` and the title bar's shade `▭` becomes `□` (uncovered by both
-   faces; the covered substitutes, probed crisp). Give `views/mod.rs`'s
-   `labeled_button` a font parameter (private — all callers are in `views/`):
-   word buttons and tooltips take `theme::ui_font()`, glyph buttons
-   `theme::shape_font()`. The LCD readout, status row, indicator strip,
-   title-band label and mini-transport readout take `theme::ui_font()`.
-2. Size re-base onto the grid (only multiples of 8 draw crisp):
-   `LCD_ELAPSED_SIZE` 34→32, `LCD_TRANSPORT_SIZE` 22→24, `lcd_text`'s 20→24,
-   the literal `Now Playing: ` 20→24, `LCD_INDICATOR_SIZE` 10→8,
-   `LCD_STATUS_SIZE` 12→16, the title-band label 14→16, the mini-transport
-   readout 14→16, tooltip words 12→16; button labels stay at iced's 16. Keep
-   each control's fixed box (`LCD_TRANSPORT_WIDTH`, `LCD_STATUS_HEIGHT`,
-   `OPTIONS_BUTTON_WIDTH` 30.0, the Repeat/Shuffle pinned widths, the title-bar
-   `TITLE_BAR_BUTTON_WIDTH`) unless the face's measured advance no longer fits
-   it; where it does not, re-derive the width from the run and note the change.
-3. Re-derive, rather than re-pin blindly, the affected text-bound assertions: a
-   test whose claim is a relationship (a neighbour gap, a slot that does not
-   reflow when the glyph swaps, one control left of another) keeps the claim and
-   takes its new numbers from the run; a test that pinned only the old face's
-   metrics is updated to the measured numbers, with the comparison recorded in
-   the change's summary.
-4. Compare the visible result against `winamp-screenshots/winamp-2.05-main.jpg`
-   (and `winamp-2.x-stack.png` for the docked context); the summary names the
-   screenshot compared and the deviations left for the palette/geometry bug
-   entries BUGS.md already tracks.
-
-**Acceptance criteria.**
-
-- Every text size the six modules hand iced is a multiple of 8, pinned by the
-  rewritten constants' tests.
-- A capture test per area proves the face: the elapsed readout, the title-band
-  label and a transport word draw with Silkscreen's advance (e.g. `H` = 12.0 px
-  at 16), and a glyph-bearing button draws its probed Tiny5 width (e.g. `▶` 8.0
-  at 16, 2 colors).
-- The transport row's buttons keep their fixed widths: a label-swap reflow test
-  still passes.
-- No control in scope is left on the system face; `make check` passes.
-
 ### Re-base the browse list and equalizer text onto the pixel faces (part 3/4 of the pixel-font split, requires part 1/4 landed) (planned 2026-10-30 by the plan role)
 
 **Goal.** The browse list's rows and footer and the equalizer's labels render in

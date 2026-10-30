@@ -61,7 +61,8 @@ plot marks the 0 dB midline and the ten bands with dim guides behind the green t
 preset pick list names the applied preset and reads `Custom` when no preset is applied, whether
 on a fresh launch or after a slider move makes the curve your own, and offers the `Save preset…`
 row and the curves saved through it after the built-ins),
-a lightning button at the end of the row,
+an options button (`≡` — the glyph the pixel-font split swapped the lightning `⚡` for so the
+shape face draws it crisp) at the end of the row,
 and a browse list whose song rows read `artist - title` (or the title alone when the source
 supplies no artist) and show each track's length at the right, whose album rows read
 `artist - title` (or the title alone when the source supplies no artist) and show the album's
@@ -196,7 +197,7 @@ a transient About panel naming the app, showing its `v`-prefixed package version
 library source (`Library: Apple Music` once a MusicKit session is stored, `Library: Sample
 library` otherwise); `M` (through the backdrop over its slot), `Ctrl+F1`, the panel's `Close`
 button, or a click on the backdrop outside the panel closes it, and opening it while the window is
-rolled up restores the window first. The LCD's `O` letter, Alt+O, the lightning button at the
+rolled up restores the window first. The LCD's `O` letter, Alt+O, the options button at the
 end of the transport row, or a right-click anywhere on the player (title bar, LCD, seek strip,
 transport row, equalizer, or the rolled-up shade strip, but not the library), like Winamp's
 main-window menu, opens an `OPTIONS` menu over the player listing `Always on Top: On/Off`,

@@ -135,7 +135,7 @@ pub(in crate::ui) fn toggle_about(player: &mut WinampPlayer) -> Task<Message> {
     }
 }
 
-/// The LCD strip's `O` or the transport row's lightning button: flip the
+/// The LCD strip's `O` or the transport row's options (`≡`) button: flip the
 /// transient options menu. Opening it while the window is shaded first calls
 /// [`toggle_window_shade`] and returns that task, so the window restores before
 /// the menu draws; opening it also closes every other transient panel. Closing

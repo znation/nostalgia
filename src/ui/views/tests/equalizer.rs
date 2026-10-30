@@ -568,6 +568,9 @@ fn reference_header_row(
         .push(fixed_width_button(
             auto_label(false),
             AUTO_BUTTON_WIDTH,
+            // The equalizer keeps the app's default face until part 3/4
+            // of the pixel-font split converts this view.
+            iced::Font::default(),
             Message::ToggleEqAuto,
         ))
         .push(spacer(8.0))

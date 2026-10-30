@@ -469,7 +469,7 @@ pub(in crate::ui) enum Message {
     // while the window is shaded first restores the window, so the panel never
     // draws in shade mode. The flag is not persisted.
     ToggleAbout,
-    // The LCD strip's `O` or the transport row's lightning button: flips the
+    // The LCD strip's `O` or the transport row's options (`≡`) button: flips the
     // transient options menu. Opening it closes every other transient panel,
     // and opening while shaded first restores the window. The flag is not
     // persisted.

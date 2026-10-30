@@ -81,9 +81,13 @@ pub(super) fn eq_toggle(enabled: bool) -> Button<'static, Message> {
 
 /// The AUTO button: sunken while `auto`, ordinary while off, pinned to [`AUTO_BUTTON_WIDTH`].
 pub(super) fn auto_toggle(auto: bool) -> Button<'static, Message> {
+    // Part 2/4 of the pixel-font split added the font parameter to the
+    // shared builder; the equalizer keeps the app's default face until part
+    // 3/4 converts this view, so it passes the current default explicitly.
     fixed_width_toggle_button(
         auto_label(auto),
         AUTO_BUTTON_WIDTH,
+        iced::Font::default(),
         Message::ToggleEqAuto,
         auto,
     )

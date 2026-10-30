@@ -27,6 +27,10 @@ use super::{
     transport::transport_glyphs,
 };
 
+/// The compact row readout's size in pixels: a multiple of 8, so the
+/// letterform face draws it crisp (the split's on-grid mapping, 14 → 16).
+const MINI_TRANSPORT_READOUT_SIZE: f32 = 16.0;
+
 /// The compact row's fixed height in px. The shade strip and the library footer both occupy exactly
 /// this height.
 pub(crate) const MINI_TRANSPORT_HEIGHT: f32 = 28.0;
@@ -174,12 +178,14 @@ fn mini_transport_row_with_optional_seek<'a>(
     for (label, width, message) in mini_transport_controls() {
         // The button is `'static`; shorten it to the row's lifetime so the
         // borrowed time readout can share the row.
-        let button: Element<'static, Message> = fixed_width_button(label, width, message).into();
+        let button: Element<'static, Message> =
+            fixed_width_button(label, width, theme::shape_font(), message).into();
         let button: Element<'a, Message> = button;
         row = row.push(button).push(spacer(6.0));
     }
     let readout = Text::new(mini_transport_readout(elapsed, total))
-        .size(14)
+        .size(MINI_TRANSPORT_READOUT_SIZE)
+        .font(theme::ui_font())
         .color(compact_readout_color(mode, elapsed_visible));
     let readout: Element<'a, Message> = if super::now_playing::elapsed_readout_clickable(mode) {
         MouseArea::new(readout)
@@ -308,4 +314,18 @@ pub fn view_library_strip<'a>(
         total,
         MINI_TRANSPORT_HEIGHT,
     ))
+}
+
+#[cfg(test)]
+mod size_pins {
+    // Part 2/4 of the pixel-font split re-based every size the compact strips
+    // hand iced onto the 8px grid — only multiples of 8 keep the embedded
+    // faces crisp — so pin the readout's size on the grid.
+    use super::MINI_TRANSPORT_READOUT_SIZE;
+
+    #[test]
+    fn mini_transport_text_sizes_stay_on_the_pixel_grid() {
+        assert_eq!(MINI_TRANSPORT_READOUT_SIZE, 16.0);
+        assert_eq!(MINI_TRANSPORT_READOUT_SIZE % 8.0, 0.0);
+    }
 }

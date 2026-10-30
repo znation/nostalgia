@@ -35,18 +35,26 @@ pub(in crate::ui::views) use text::{MARQUEE_WIDTH, display_len, marquee_text};
 use visualizer::now_playing_visualizer_row;
 pub use visualizer::{next_spectrum_bars, next_spectrum_peaks, visible_spectrum};
 
-/// The LCD's large elapsed-readout size in pixels, matching the mockup's big
-/// left-hand time readout.
-const LCD_ELAPSED_SIZE: f32 = 34.0;
+/// The LCD's large elapsed-readout size in pixels: a multiple of 8 so the
+/// letterform face draws it crisp (the split's on-grid mapping, 34 -> 32;
+/// matching the mockup's big
+/// left-hand time readout).
+const LCD_ELAPSED_SIZE: f32 = 32.0;
 
-/// The transport glyph's size in pixels, small enough to sit beside the large
+/// The transport glyph's size in pixels: a multiple of 8 so the shape face
+/// draws it crisp (22 -> 24), small enough to sit beside the large
 /// elapsed readout.
-const LCD_TRANSPORT_SIZE: f32 = 22.0;
+const LCD_TRANSPORT_SIZE: f32 = 24.0;
 
 /// The fixed width of the transport glyph's slot in pixels. Keeping the slot
 /// fixed leaves the elapsed readout at the same x position as the glyph
 /// changes between `▶`, `II`, and `■`.
 const LCD_TRANSPORT_WIDTH: f32 = 16.0;
+
+/// The Now Playing line's green fragments' size in pixels: a multiple of 8 so
+/// the letterform face draws them crisp and a single constant so the
+/// `Now Playing: ` caption and every [`lcd_text`] fragment cannot drift apart.
+const LCD_TEXT_SIZE: f32 = 24.0;
 
 /// The Now Playing bar: a small `O A I D V` strip down the LCD's left edge (with `O` opening the
 /// options menu, `A` toggling always-on-top, `I` opening File info, and `V` the visualizer while
@@ -131,6 +139,7 @@ where
     <Theme as iced::widget::container::Catalog>::Class<'a>:
         From<iced::widget::container::StyleFn<'a, Theme>>,
     Renderer: iced::advanced::text::Renderer + 'a,
+    <Renderer as iced::advanced::text::Renderer>::Font: From<iced::Font>,
 {
     Row::new().push(lcd_indicator_strip(modes)).push(
         Column::new()
@@ -160,13 +169,15 @@ where
     Theme: iced::widget::text::Catalog + 'a,
     Theme::Class<'a>: From<iced::widget::text::StyleFn<'a, Theme>>,
     Renderer: iced::advanced::text::Renderer,
+    <Renderer as iced::advanced::text::Renderer>::Font: From<iced::Font>,
 {
     Text::new(fragment)
         .size(LCD_ELAPSED_SIZE)
+        .font(theme::ui_font())
         .color(theme::LCD_GREEN)
 }
 
-/// The LCD's text style: 20px in [`theme::LCD_GREEN`], shared by every green
+/// The LCD's text style: 24px in [`theme::LCD_GREEN`], shared by every green
 /// fragment of the Now Playing line so no branch drifts from another.
 fn lcd_text<'a, Theme, Renderer>(
     fragment: impl iced::widget::text::IntoFragment<'a>,
@@ -175,8 +186,12 @@ where
     Theme: iced::widget::text::Catalog + 'a,
     Theme::Class<'a>: From<iced::widget::text::StyleFn<'a, Theme>>,
     Renderer: iced::advanced::text::Renderer,
+    <Renderer as iced::advanced::text::Renderer>::Font: From<iced::Font>,
 {
-    Text::new(fragment).size(20).color(theme::LCD_GREEN)
+    Text::new(fragment)
+        .size(LCD_TEXT_SIZE)
+        .font(theme::ui_font())
+        .color(theme::LCD_GREEN)
 }
 
 /// The transport glyph [`now_playing_row`] draws for `mode`: a green `▶`
@@ -250,6 +265,7 @@ where
     <Theme as iced::widget::container::Catalog>::Class<'a>:
         From<iced::widget::container::StyleFn<'a, Theme>>,
     Renderer: iced::advanced::text::Renderer + 'a,
+    <Renderer as iced::advanced::text::Renderer>::Font: From<iced::Font>,
 {
     let line_len = display_len(&label, &artist, &number);
     let mut row = Row::new()
@@ -257,6 +273,7 @@ where
             Container::new(
                 Text::new(transport_glyph(mode))
                     .size(LCD_TRANSPORT_SIZE)
+                    .font(theme::shape_font())
                     .color(transport_glyph_color(mode)),
             )
             .width(Length::Fixed(LCD_TRANSPORT_WIDTH)),
@@ -276,7 +293,11 @@ where
     if let Some(text) = mixer_readout {
         row = row.push(lcd_text(text));
     } else {
-        row = row.push(Text::new("Now Playing: ").size(20));
+        row = row.push(
+            Text::new("Now Playing: ")
+                .size(LCD_TEXT_SIZE)
+                .font(theme::ui_font()),
+        );
         row = push_title(row, label, artist, number, marquee_offset, line_len);
     }
     row.push(Space::new().width(Length::Fill))
@@ -297,6 +318,7 @@ where
     Theme: iced::widget::text::Catalog + 'a,
     <Theme as iced::widget::text::Catalog>::Class<'a>: From<iced::widget::text::StyleFn<'a, Theme>>,
     Renderer: iced::advanced::text::Renderer + 'a,
+    <Renderer as iced::advanced::text::Renderer>::Font: From<iced::Font>,
 {
     if line_len <= MARQUEE_WIDTH {
         if !number.is_empty() {
@@ -319,4 +341,24 @@ where
         );
     }
     row
+}
+
+#[cfg(test)]
+mod size_pins {
+    // Part 2/4 of the pixel-font split re-based every size the LCD hands
+    // iced onto the 8px grid — only multiples of 8 keep the embedded faces
+    // crisp — so pin each size on the grid and its exact re-based value.
+    use super::{LCD_ELAPSED_SIZE, LCD_TEXT_SIZE, LCD_TRANSPORT_SIZE};
+
+    #[test]
+    fn lcd_text_sizes_stay_on_the_pixel_grid() {
+        for (size, re_based_from, new) in [
+            (LCD_ELAPSED_SIZE, 34.0, 32.0),
+            (LCD_TRANSPORT_SIZE, 22.0, 24.0),
+            (LCD_TEXT_SIZE, 20.0, 24.0),
+        ] {
+            assert_eq!(size, new);
+            assert_eq!(size % 8.0, 0.0, "re-based from {re_based_from}");
+        }
+    }
 }

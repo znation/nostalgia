@@ -48,9 +48,9 @@ pub fn indicator_label_color(label: &str, modes: IndicatorModes) -> Color {
 /// the remaining width.
 pub const LCD_INDICATOR_WIDTH: f32 = 12.0;
 
-/// The indicator letters' size in pixels: small enough to read as a column
-/// beside the large elapsed readout.
-const LCD_INDICATOR_SIZE: f32 = 10.0;
+/// The indicator letters' size in pixels: a multiple of 8, so the letterform
+/// face draws each letter crisp (the split's on-grid mapping, 10 \u2192 8).
+const LCD_INDICATOR_SIZE: f32 = 8.0;
 
 /// The message an indicator letter publishes when pressed: `O` opens the
 /// options menu through [`Message::ToggleOptions`], `A` toggles always-on-top
@@ -82,12 +82,14 @@ where
     Theme: iced::widget::text::Catalog + 'a,
     Theme::Class<'a>: From<iced::widget::text::StyleFn<'a, Theme>>,
     Renderer: iced::advanced::text::Renderer + 'a,
+    <Renderer as iced::advanced::text::Renderer>::Font: From<iced::Font>,
 {
     LCD_INDICATOR_LABELS.into_iter().fold(
         Column::new().width(Length::Fixed(LCD_INDICATOR_WIDTH)),
         |column, label| {
             let text = Text::new(label)
                 .size(LCD_INDICATOR_SIZE)
+                .font(theme::ui_font())
                 .color(indicator_label_color(label, modes));
             match lcd_indicator_message(label) {
                 Some(message) => column.push(
@@ -99,4 +101,18 @@ where
             }
         },
     )
+}
+
+#[cfg(test)]
+mod size_pins {
+    // Part 2/4 of the pixel-font split re-based the indicator letters onto
+    // the 8px grid (10 -> 8; only multiples of 8 keep the embedded faces
+    // crisp), so pin it.
+    use super::LCD_INDICATOR_SIZE;
+
+    #[test]
+    fn indicator_text_sizes_stay_on_the_pixel_grid() {
+        assert_eq!(LCD_INDICATOR_SIZE, 8.0);
+        assert_eq!(LCD_INDICATOR_SIZE % 8.0, 0.0);
+    }
 }
