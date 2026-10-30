@@ -307,13 +307,15 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::ClearSearch => handlers::browse::search::clear_search(player),
         Message::LoadArtists => handlers::browse::fetch::load_artists(player),
         Message::SessionReady => handlers::browse::lists::session_ready(player),
-        Message::ResolveCurrentTrack => handlers::playback::resolve_current_track(player),
+        Message::ResolveCurrentTrack => handlers::playback::resolve::resolve_current_track(player),
         Message::CurrentTrackResolved { id, song } => {
-            handlers::playback::current_track_resolved(player, id, song)
+            handlers::playback::resolve::current_track_resolved(player, id, song)
         }
-        Message::ResolveRecentlyPlayed => handlers::playback::resolve_recently_played(player),
+        Message::ResolveRecentlyPlayed => {
+            handlers::playback::resolve::resolve_recently_played(player)
+        }
         Message::RecentlyPlayedResolved { songs } => {
-            handlers::playback::recently_played_resolved(player, songs)
+            handlers::playback::resolve::recently_played_resolved(player, songs)
         }
         Message::ArtistsLoaded(artists) => handlers::browse::fetch::artists_loaded(player, artists),
         Message::AlbumsLoaded(albums) => handlers::browse::fetch::albums_loaded(player, albums),
@@ -365,7 +367,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             committed,
         } => handlers::playback::track_played(player, generation, committed),
         Message::ReplayResolved { track_id, song } => {
-            handlers::playback::replay_resolved(player, &track_id, song)
+            handlers::playback::resolve::replay_resolved(player, &track_id, song)
         }
         Message::WindowIdResolved(id) => handlers::window::window_id_resolved(player, id),
         Message::WindowDragged => handlers::window::window_dragged(player),

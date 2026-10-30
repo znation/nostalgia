@@ -163,7 +163,7 @@ impl KnownTrack {
     /// construction sites — the play path (`handlers::playback::track_selected`,
     /// which stores the entry in `known_tracks` and whose per-field mapping the
     /// `known_tracks_record_the_played_songs_*` tests pin), the restored
-    /// track's launch resolution (`handlers::playback::current_track_resolved`,
+    /// track's launch resolution (`handlers::playback::resolve::current_track_resolved`,
     /// which also stores it, with a blank `number`), and the File info
     /// panel's selected-row resolver (`WinampPlayer::file_info_track`, which
     /// builds an ephemeral entry) — cannot drift apart. Every field maps exactly

@@ -6,7 +6,8 @@
 //! completion, the elapsed/remaining toggle, the marquee tick in `playback`;
 //! the track stepping and the edge and ten-song jumps in
 //! `playback::stepping`; the seek drag and release and the backend polls in
-//! `playback::preview`; the volume, balance, seek nudges, and equalizer audio
+//! `playback::preview`; the track-id-to-song resolutions through the service
+//! seam in `playback::resolve`; the volume, balance, seek nudges, and equalizer audio
 //! controls in `mixer`; the browse row presses in `browse::selection`, the
 //! Artist-view lists and the Back/Reload navigation in `browse::lists`, and
 //! the row-order edits in `browse::ordering`; the library search with its

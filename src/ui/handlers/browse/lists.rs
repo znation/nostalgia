@@ -18,7 +18,7 @@ use crate::ui::loading::fetch_level;
 use crate::ui::years::group_by_year;
 use crate::ui::{CurrentView, Message, SongsOrigin, WinampPlayer};
 
-use super::super::playback::resolve_current_track;
+use super::super::playback::resolve::resolve_current_track;
 use super::{fetch, fetch_at_top, scroll, switch_view};
 
 /// ways — `ArtistSelected`, `AlbumSelected`, and `PlaylistSelected` step down

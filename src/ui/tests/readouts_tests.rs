@@ -1250,10 +1250,10 @@ fn current_track_resolved_skips_a_stale_or_failed_resolution() {
 fn resolve_current_track_skips_the_work_an_already_known_track_needs() {
     let (mut player, state) = test_player();
     seed_current_title(&mut player, &state, "Playing");
-    let task = super::handlers::playback::resolve_current_track(&mut player);
+    let task = super::handlers::playback::resolve::resolve_current_track(&mut player);
     assert_no_task(task);
 
     let (mut player, _state) = test_player();
-    let task = super::handlers::playback::resolve_current_track(&mut player);
+    let task = super::handlers::playback::resolve::resolve_current_track(&mut player);
     assert_no_task(task);
 }

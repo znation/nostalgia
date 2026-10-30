@@ -336,9 +336,9 @@ history's `HISTORY_LIMIT` cap;
 `transport::PlayedSongs::restore` walks the saved-reply rows oldest first through `record`, so
 replays dedupe and the cap holds mid-restore;
 `handlers::playback::track_played`'s committed arm records only a track the showing list names;
-`handlers::playback::resolve_recently_played` resolves the seed only when no session is stored
+`handlers::playback::resolve::resolve_recently_played` resolves the seed only when no session is stored
 and the seed is non-empty, and never re-issues at `session_ready`;
-`handlers::playback::recently_played_resolved` skips a restore whose session landed under it,
+`handlers::playback::resolve::recently_played_resolved` skips a restore whose session landed under it,
 and re-records the mid-restore plays on top of the walk's answer (the resolve is the only
 non-live writer of the rows, so the rows standing before the reply are exactly the plays
 committed since the boot);
@@ -1111,7 +1111,8 @@ carries it straight from the snapshot, and the boot `apply_to` restores the trac
 blank elapsed readout, the state Stop leaves; a track change or stop rewrites the line on the
 next message's save. The writer flattens a `\r`/`\n` in the saved id to spaces, keeping the
 line-based file whole, like the `recently_played=` ids above. The restored id is resolved into a `known_tracks` entry at launch
-(`Message::ResolveCurrentTrack` → `handlers::playback::resolve_current_track` and
+(`Message::ResolveCurrentTrack` →
+`handlers::playback::resolve::resolve_current_track` and
 `current_track_resolved`; `AppleMusicService::resolve_song` answers a sample-library id
 immediately and an Apple Music id once a session is stored, through
 `rest::RestLibrary::get_library_song`; a failed fetch, an unknown id, or a track resolved
