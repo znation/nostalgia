@@ -17,7 +17,7 @@ use crate::ui::loading::fetch_level;
 use crate::ui::song_groups::group_row_label;
 use crate::ui::views;
 use crate::ui::years::Year;
-use crate::ui::{Message, WinampPlayer};
+use crate::ui::{Message, SAVED_PLAYLIST_ROW_ID, WinampPlayer};
 
 /// The artists level is fetched: `boot` schedules this for the initial load,
 /// and again once the startup sign-in stores a session; it is also the Retry
@@ -132,12 +132,22 @@ pub(in crate::ui) fn recently_played_loaded(
     Task::none()
 }
 
-/// The playlists fetch landed: store the rows in the playlists list.
+/// The playlists fetch landed: store the rows in the playlists list, then
+/// append one sentinel row per saved song list, so the Playlists view renders
+/// them after the library's own rows with continued row numbering through
+/// the ordinary row builder and the footer counts them. The failure view is
+/// unchanged: a failed fetch stores the report instead, so a saved list row
+/// cannot be pressed against a list that never landed.
 pub(in crate::ui) fn playlists_loaded(
     player: &mut WinampPlayer,
     playlists: Vec<Playlist>,
 ) -> Task<Message> {
-    player.playlists.store(playlists);
+    let mut rows = playlists;
+    rows.extend(player.saved_playlists.iter().map(|saved| Playlist {
+        id: SAVED_PLAYLIST_ROW_ID.to_string(),
+        name: saved.name.clone(),
+    }));
+    player.playlists.store(rows);
     Task::none()
 }
 
@@ -281,6 +291,7 @@ pub(in crate::ui) fn browse_reply(
         }
         Message::AlbumsLoaded(_) | Message::AlbumsLoadFailed(_) => player.albums.is_current(issued),
         Message::SongsLoaded(_) | Message::SongsLoadFailed(_) => player.songs.is_current(issued),
+        Message::UserPlaylistLoaded(_) => player.songs.is_current(issued),
         Message::AllSongsLoaded(_) | Message::AllSongsLoadFailed(_) => {
             player.all_songs.is_current(issued)
         }

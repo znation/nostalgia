@@ -2236,8 +2236,10 @@ transient, unpersisted Save preset panel that saves the equalizer's applied curv
 name:
 
 - `handlers::mixer::eq_preset_selected` routes `PresetChoice::Save` to
-  `toggle_save_preset`, which flips `WinampPlayer::save_preset_open`. Opening closes `about_visible`,
-  `options_visible`, `file_info_visible`, `jump_time_visible`, and `jump_file_visible` through
+  `toggle_save_preset`, which flips `WinampPlayer::save_preset_open`. Opening closes every other
+  transient panel (`about_visible`,
+  `options_visible`, `file_info_visible`, `jump_time_visible`, `save_list_open`, and
+  `jump_file_visible`) through
   `close_transient_panels`, focuses the name box, and while `shaded` holds first calls
   `toggle_window_shade`. Opening any of those panels closes the Save preset panel, and the flag is
   never persisted. A plain or Shift-held Escape press also closes it (see
@@ -2290,18 +2292,60 @@ transient_panel_open, persist_settings_if_changed, adopt_saved_settings}`, `Sett
 `escape_closes_each_transient_panel_without_touching_anything_else`
 (`src/ui/tests/panels_tests.rs`) pins the Escape route.
 
+## Saved playlists
+
+**Guarantee.** The browse button row's `Save list` button opens a naming panel that saves the
+showing song list by name, as ids only, in a `Settings::saved_playlists` entry:
+
+- The toggle is a no-op off the shared songs buffer (`CurrentView::Songs`) and while that list
+  is empty, loading, or failed — no panel opens, nothing is persisted, and no fetch is
+  disturbed. This covers All Songs and Recently Played: their buffers (`all_songs`,
+  `recently_played`) are not the shared one, so the press saves nothing there either.
+- `save_list_submitted` refuses an empty name inline (`Type a name`, panel stays open) and a
+  name containing `:` (`Use it without a colon`, the settings line's separator), always with no
+  save; a keystroke in the box clears the note. A save under a name equal case-insensitively to
+  an existing one replaces that list's ids in place and keeps its stored name as first saved;
+  otherwise the list pushes onto the end. The showing list is untouched by saving (Winamp's save
+  clears nothing in the playlist editor).
+- The persisted form is a `user_playlist=<name>:<id>,<id>,…` line per saved list; parsing skips
+  a line without a `:`, a blank name, or an empty id list, and keeps a whole list round-tripping
+  through `to_text` → `from_text` untouched.
+- Every Playlists fetch that lands appends one sentinel row (`id: SAVED_PLAYLIST_ROW_ID`, the
+  saved name) per saved list after the library's rows; the rows render with continued numbering
+  and the footer counts them. A failed fetch stores the report instead, so no sentinel exists
+  against a list that never landed.
+- Opening a saved list clears the songs buffer, issues a songs-request generation, resolves each
+  id in saved order through `resolve_song`, drops the ids the library no longer answers, and
+  stores the songs through the group path under `SongsOrigin::UserPlaylist`, wrapped in
+  `BrowseReply` so a newer songs request supersedes the reply. Back returns to the Playlists
+  view, and the rows play, sort, reverse, shuffle, and report exactly like a genre's songs.
+  The panel is modal and its flag is never persisted.
+
+**Enforced by.** `Settings::saved_playlists` and `settings::text`'s `user_playlist` line
+handling, `handlers::save_list::{toggle_save_list, save_list_name_changed, save_list_submitted,
+user_playlist_selected, user_playlist_loaded}`, `handlers::browse::{playlist_selected,
+show_group_songs, switch_view}`, `handlers::browse::fetch::playlists_loaded`, and
+`browse::BrowseReply`'s re-check for `Message::UserPlaylistLoaded`.
+
+**Pinned by.** `user_playlist_lines_round_trip_and_skip_the_malformed_ones`
+(`src/settings.rs`); the save-list tests in `src/ui/tests/save_list_tests.rs`;
+`a_saved_song_list_reaches_the_saved_snapshot` and `saved_song_lists_are_restored_on_boot`
+(`src/ui/tests/settings_tests.rs`); `the_save_list_button_lays_out_in_the_nav_row`
+(`src/ui/tests/save_list_tests.rs`); the Save list overlay render tests
+(`src/ui/views/tests/chrome.rs`).
+
 ## Transient panel dismissal
 
 **Guarantee.** A plain or Shift-held Escape press closes whichever transient panel is showing —
-About, Options, File info, Jump to time, Save preset, or Jump to File — including while its
+About, Options, File info, Jump to time, Save preset, Save list, or Jump to File — including while its
 filter, name, or time box
-has focus. It changes only the six visibility flags; no query, selection, playback, transport,
+has focus. It changes only the seven visibility flags; no query, selection, playback, transport,
 mixer, browse, or settings state changes, no work is scheduled, and nothing is persisted. Escape
 with Control, Alt, or Logo held, and Escape releases, map to nothing. With no panel open the
 listener is not subscribed, so Escape stays unbound there and a focused `Search library` box keeps
 it for clearing its own focus; `Message::EscapePressed` is still a no-op.
 
-- `WinampPlayer::transient_panel_open` is the read side of the six flags
+- `WinampPlayer::transient_panel_open` is the read side of the seven flags
   `WinampPlayer::close_transient_panels` clears, so the subscription gate and the closer share one
   set.
 - `ui::subscriptions::escape_key_message` maps the press through `iced::event::listen_with`, ignoring the

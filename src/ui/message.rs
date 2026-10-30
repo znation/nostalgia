@@ -460,6 +460,28 @@ pub(in crate::ui) enum Message {
     // name (reprompting inline on an empty name, a built-in's name, or a
     // colon) and closes the panel.
     SavePresetSubmitted,
+    // The browse button row's `Save list` button: flips the naming panel for
+    // the showing song list, when the shared songs list is showing, loaded,
+    // and non-empty (the toggle is a no-op otherwise, like Sort's no-ops).
+    // Opening it closes every other transient panel, and while shaded first
+    // restores the window, exactly like the other panel toggles. The flag is
+    // not persisted.
+    ToggleSaveList,
+    // A keystroke in the Save list box: stores the typed name and clears
+    // the panel's inline note.
+    SaveListNameChanged(String),
+    // Enter or the panel's `Save` button: saves the showing song list's ids
+    // under the typed name (reprompting inline on an empty name or a colon)
+    // and closes the panel. Saving the same name (any case) again replaces
+    // that list's ids in place.
+    SaveListSubmitted,
+    // One resolved saved song list: the ids were resolved to songs through
+    // `resolve_song` (ids the library no longer answers are already dropped)
+    // and the songs are to be shown in the shared songs list under
+    // `SongsOrigin::UserPlaylist`, exactly as a genre's songs store. Wrapped
+    // in `BrowseReply` like every fetch reply, so a newer songs request
+    // supersedes it.
+    UserPlaylistLoaded(Vec<Song>),
     // Plain J: flips the transient Jump to File panel. Opening needs a showing
     // song list (Songs or All Songs), closes About, Options, File info, and Jump
     // to time, and while shaded first restores the window. The flag is not
@@ -492,9 +514,9 @@ pub(in crate::ui) enum Message {
     },
     // A plain or Shift-held Escape press while a transient panel is open:
     // close the showing About, Options, File info, Jump to time, Save preset,
-    // or Jump to File panel by clearing only those six visibility flags. No
-    // other state changes and no work is scheduled; with no panel open the
-    // arm is a no-op.
+    // Save list, or Jump to File panel by clearing only those seven visibility
+    // flags. No other state changes and no work is scheduled; with no panel
+    // open the arm is a no-op.
     EscapePressed,
     // The LCD strip's always-on-top toggle. The arm flips the flag and
     // schedules `iced::window::set_level` for the resolved window, which is a

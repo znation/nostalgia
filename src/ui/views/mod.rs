@@ -40,6 +40,7 @@ mod mini_transport;
 mod modal;
 mod now_playing;
 mod options;
+mod save_list;
 mod save_preset;
 mod seek_bar;
 mod shade;
@@ -75,6 +76,10 @@ pub use now_playing::{
     seek_readout_text, view_now_playing, visible_spectrum,
 };
 pub use options::{OptionsState, view_options_overlay};
+pub use save_list::{
+    SAVE_LIST_COLON_NAME_NOTE, SAVE_LIST_EMPTY_NAME_NOTE, SAVE_LIST_INPUT_ID,
+    view_save_list_overlay,
+};
 pub use save_preset::{
     BUILT_IN_NAME_NOTE, COLON_NAME_NOTE, EMPTY_NAME_NOTE, LINE_BREAK_NAME_NOTE,
     SAVE_PRESET_INPUT_ID, view_save_preset_overlay,

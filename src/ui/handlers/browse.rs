@@ -18,7 +18,7 @@ use crate::ui::composers::group_by_composer;
 use crate::ui::genres::group_by_genre;
 use crate::ui::loading::fetch_level;
 use crate::ui::years::group_by_year;
-use crate::ui::{CurrentView, Message, SongsOrigin, WinampPlayer};
+use crate::ui::{CurrentView, Message, SAVED_PLAYLIST_ROW_ID, SongsOrigin, WinampPlayer};
 
 pub(in crate::ui) mod fetch;
 pub(in crate::ui) mod scroll;
@@ -28,7 +28,7 @@ pub(in crate::ui) mod search;
 /// active search behind, and closes Jump to File. A replaced list's rows must
 /// not stay reachable through Back or the panel, and the search's songs are
 /// about to be replaced, so neither can still be treated as current.
-fn switch_view(player: &mut WinampPlayer, view: CurrentView) {
+pub(super) fn switch_view(player: &mut WinampPlayer, view: CurrentView) {
     player.search_active = false;
     player.current_view = view;
     player.jump_file_visible = false;
@@ -243,6 +243,12 @@ pub(in crate::ui) fn playlist_selected(
     let Some(playlist) = player.playlists.select(epoch, index) else {
         return Task::none();
     };
+    if playlist.id == SAVED_PLAYLIST_ROW_ID {
+        // A saved song list's sentinel row: open the saved list the row
+        // names instead of querying the server for the sentinel id.
+        let name = playlist.name.clone();
+        return super::save_list::user_playlist_selected(player, &name);
+    }
     let context = fetch_context("loading songs from playlist", &playlist.name, &playlist.id);
     let playlist_id = playlist.id.clone();
     player.songs_origin = SongsOrigin::Playlist;
@@ -263,7 +269,7 @@ pub(in crate::ui) fn playlist_selected(
 /// Show an in-memory song group (a genre's or a year's) in the shared songs
 /// buffer and record its origin for Back. Starting a songs fetch generation
 /// makes an in-flight album or playlist reply stale.
-fn show_group_songs(
+pub(super) fn show_group_songs(
     player: &mut WinampPlayer,
     songs: Vec<Song>,
     origin: SongsOrigin,
@@ -348,6 +354,7 @@ pub(in crate::ui) fn back(player: &mut WinampPlayer) -> Task<Message> {
                 SongsOrigin::Genre => CurrentView::Genres,
                 SongsOrigin::Year => CurrentView::Years,
                 SongsOrigin::Composer => CurrentView::Composers,
+                SongsOrigin::UserPlaylist => CurrentView::Playlists,
             },
             CurrentView::Albums => CurrentView::Artists,
             CurrentView::AllSongs => CurrentView::Artists,

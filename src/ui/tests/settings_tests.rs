@@ -128,6 +128,56 @@ fn the_stored_sessions_token_reaches_the_saved_snapshot() {
 }
 
 #[test]
+fn a_saved_song_list_reaches_the_saved_snapshot() {
+    let (mut player, _state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+
+    let _ = update(&mut player, Message::SongsLoaded(numbered_songs(2)));
+    player.current_view = CurrentView::Songs;
+    let _ = update(&mut player, Message::ToggleSaveList);
+    let _ = update(
+        &mut player,
+        Message::SaveListNameChanged("Morning Drive".to_string()),
+    );
+    let _ = update(&mut player, Message::SaveListSubmitted);
+    let _ = update(&mut player, Message::Ignored);
+
+    let snapshots = store.snapshots();
+    assert_eq!(snapshots.len(), 1);
+    assert_eq!(snapshots[0].saved_playlists().len(), 1);
+    assert_eq!(snapshots[0].saved_playlists()[0].name, "Morning Drive");
+    assert_eq!(
+        snapshots[0].saved_playlists()[0].song_ids,
+        vec!["song-0", "song-1"]
+    );
+    assert!(
+        snapshots[0]
+            .to_text()
+            .contains("user_playlist=Morning Drive:song-0,song-1")
+    );
+
+    // An unchanged follow-up writes nothing more.
+    let _ = update(&mut player, Message::Ignored);
+    assert_eq!(store.snapshots().len(), 1);
+}
+
+#[test]
+fn saved_song_lists_are_restored_on_boot() {
+    let (mut player, _state) = test_player();
+    let mut saved = Settings::default();
+    saved.set_saved_playlists(vec![crate::settings::SavedPlaylist {
+        name: "Morning Drive".to_string(),
+        song_ids: vec!["song-1".to_string()],
+    }]);
+
+    player.adopt_saved_settings(saved);
+
+    assert_eq!(player.saved_playlists.len(), 1);
+    assert_eq!(player.saved_playlists[0].name, "Morning Drive");
+}
+
+#[test]
 fn an_unchanged_token_writes_nothing() {
     let (mut player, _state) = test_player();
     let store = MemorySettingsStore::default();

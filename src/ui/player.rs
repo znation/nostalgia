@@ -10,10 +10,17 @@ use std::time::Duration;
 
 use tokio::sync::Mutex;
 
+/// The browse row id the Playlists view's sentinel rows for the player's
+/// saved song lists carry. A pressed row whose id is this opens the saved
+/// list; the real library rows never carry it, so the ordinary playlist
+/// paths step aside on it.
+pub(in crate::ui) const SAVED_PLAYLIST_ROW_ID: &str = "nostalgia-saved-playlist";
+
 use crate::apple_music::AppleMusicService;
 use crate::audio::{PlaybackFormat, Spectrum};
 use crate::equalizer::CustomPreset;
 use crate::library::{Album, Artist, Playlist, Song};
+use crate::settings::SavedPlaylist;
 use crate::settings::Settings;
 use crate::settings::library_view::LibraryView;
 use crate::settings::seam::SettingsWriter;
@@ -259,12 +266,23 @@ pub(in crate::ui) struct WinampPlayer {
     pub(in crate::ui) jump_file_visible: bool,
     /// The Jump to File panel's typed filter text, cleared each time it opens.
     pub(in crate::ui) jump_file_query: String,
+    /// Whether the naming panel for saving the showing song list is drawn
+    /// over the normal-mode screen. `Message::ToggleSaveList` — the browse
+    /// button row's `Save list` button — flips it; it is closed at launch and
+    /// deliberately not persisted. At most one of this and
+    /// [`Self::about_visible`], [`Self::options_visible`],
+    /// [`Self::file_info_visible`], [`Self::jump_time_visible`],
+    /// [`Self::save_preset_open`], and [`Self::jump_file_visible`] holds.
+    pub(in crate::ui) save_list_open: bool,
+    /// The save-list panel's typed name, cleared each time it opens.
+    pub(in crate::ui) save_list_name: String,
     /// Whether the transient Save preset panel is drawn over the normal-mode
     /// tree. `Message::ToggleSavePreset` — the pick list's `Save preset…` row —
     /// flips it; it is closed at launch and deliberately not persisted. At
     /// most one of this and [`Self::about_visible`],
     /// [`Self::options_visible`], [`Self::file_info_visible`],
-    /// [`Self::jump_time_visible`], and [`Self::jump_file_visible`] holds.
+    /// [`Self::jump_time_visible`], [`Self::save_list_open`], and
+    /// [`Self::jump_file_visible`] holds.
     pub(in crate::ui) save_preset_open: bool,
     /// The Save preset panel's typed name, cleared each time it opens.
     pub(in crate::ui) save_preset_name: String,
@@ -281,6 +299,17 @@ pub(in crate::ui) struct WinampPlayer {
     /// the closed pick-list label reads `Custom` exactly as a hand-tuned
     /// curve does.
     pub(in crate::ui) custom_eq_presets: Vec<CustomPreset>,
+    /// The save-list naming panel's inline note after a refused save (`Type
+    /// a name` or `Use it without a colon`), cleared when the panel opens or
+    /// the name changes. Layout-only and not persisted.
+    pub(in crate::ui) save_list_note: Option<&'static str>,
+    /// The song lists saved through the browse `Save list` button, in saved
+    /// order. `SaveListSubmitted` pushes one (or replaces an existing save of
+    /// the same name in place); the settings file carries them through the
+    /// snapshot's `user_playlist=` lines, reloaded by
+    /// [`Self::adopt_saved_settings`] and re-saved by
+    /// [`Self::persist_settings_if_changed`]. Not held in [`AppState`].
+    pub(in crate::ui) saved_playlists: Vec<SavedPlaylist>,
     /// The Jump to File panel's highlighted match, as the source index of the
     /// showing list. `None` means the first match, as on opening or after
     /// typing a new filter; Up and Down move it within the filtered matches.
@@ -386,6 +415,10 @@ pub(in crate::ui) enum SongsOrigin {
     Year,
     /// The Composers view: Back returns to `CurrentView::Composers`.
     Composer,
+    /// A saved song list opened from its row in the Playlists view:
+    /// Back returns to `CurrentView::Playlists`, like the library's own
+    /// playlists do.
+    UserPlaylist,
 }
 
 impl WinampPlayer {
@@ -447,6 +480,10 @@ impl WinampPlayer {
             save_preset_name: String::new(),
             save_preset_note: None,
             custom_eq_presets: Vec::new(),
+            save_list_open: false,
+            save_list_name: String::new(),
+            save_list_note: None,
+            saved_playlists: Vec::new(),
             jump_file_visible: false,
             jump_file_query: String::new(),
             jump_file_selected: None,
@@ -466,8 +503,8 @@ impl WinampPlayer {
     }
 
     /// Close every transient panel — About, Options, File info, Jump to
-    /// time, Save preset, and Jump to File — so that at most one is open (the
-    /// invariant the `*_visible`/`save_preset_open` fields document). A
+    /// time, Save preset, Save list, and Jump to File — so that at most one
+    /// is open (the invariant the `*_visible`/`*_open` fields document). A
     /// toggle handler that opens its panel calls this first, then sets its
     /// own flag, so the full set of panels lives here instead of being listed
     /// again in each opener.
@@ -477,19 +514,21 @@ impl WinampPlayer {
         self.file_info_visible = false;
         self.jump_time_visible = false;
         self.save_preset_open = false;
+        self.save_list_open = false;
         self.jump_file_visible = false;
     }
 
     /// Whether any transient panel — About, Options, File info, Jump to
-    /// time, Save preset, or Jump to File — is open. The read side of the
-    /// same six flags [`Self::close_transient_panels`] clears, so the
-    /// subscription gate and the closer cannot drift.
+    /// time, Save preset, Save list, or Jump to File — is open. The read
+    /// side of the same seven flags [`Self::close_transient_panels`] clears,
+    /// so the subscription gate and the closer cannot drift.
     pub(in crate::ui) fn transient_panel_open(&self) -> bool {
         self.about_visible
             || self.options_visible
             || self.file_info_visible
             || self.jump_time_visible
             || self.save_preset_open
+            || self.save_list_open
             || self.jump_file_visible
     }
 
@@ -534,6 +573,7 @@ impl WinampPlayer {
         snapshot.set_music_kit_user_token(token);
         snapshot.set_library_view(self.library_view());
         snapshot.set_eq_custom_presets(self.custom_eq_presets.clone());
+        snapshot.set_saved_playlists(self.saved_playlists.clone());
         if snapshot == self.saved_settings {
             return;
         }
@@ -569,6 +609,7 @@ impl WinampPlayer {
                 SongsOrigin::Genre => LibraryView::Genres,
                 SongsOrigin::Year => LibraryView::Years,
                 SongsOrigin::Composer => LibraryView::Composers,
+                SongsOrigin::UserPlaylist => LibraryView::Playlists,
             },
         }
     }
@@ -596,6 +637,7 @@ impl WinampPlayer {
         self.shaded = saved.shaded();
         self.window_position = saved.window_position();
         self.custom_eq_presets = saved.eq_custom_presets().to_vec();
+        self.saved_playlists = saved.saved_playlists().to_vec();
         self.saved_settings = saved;
     }
 

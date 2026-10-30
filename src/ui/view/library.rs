@@ -140,11 +140,11 @@ pub(super) fn view_library<'a>(
     if views::can_retry_artists(&player.current_view, player.artists.error.as_deref()) {
         library = library.push(views::view_retry_button());
     }
-    // The Top, Sort, and Reload buttons share one row, Reload beside Sort, so
-    // the current list can always be returned to its first row, reordered in
-    // place, or replaced with a freshly fetched artists list. Open sits above
-    // them, on every browse level, and opens the row a first click selected;
-    // with nothing selected it does nothing.
+    // The Top, Sort, Reload, and Save list buttons share one row, so the
+    // current list can always be returned to its first row, reordered in
+    // place, replaced with a freshly fetched artists list, or named. Open
+    // sits above them, on every browse level, and opens the row a first
+    // click selected; with nothing selected it does nothing.
     library = library.push(views::view_open_button());
     library = library.push(views::view_browse_nav_buttons());
     // The All Songs, All Albums, Playlists, Genres, Years, Composers, Recently Added, and Recently

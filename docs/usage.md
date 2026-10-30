@@ -112,7 +112,9 @@ also returns to the artists list exactly as Back does, and otherwise it changes 
 text. The Artists list also has `All Songs`, `All Albums`, `Playlists`, `Genres`, `Years`, `Composers`, `Recently Added`, and `Recently Played` buttons: the first
 opens a flat list of every song in the library, whose rows play like any other song row, the
 second opens a flat list of every album, whose rows open that album's songs, the third opens a
-flat list of every playlist, whose rows open that playlist's songs, the fourth lists the library's genres (described below), the fifth lists the library's release years (described below), the sixth lists the library's composers (described below), the seventh lists the library's
+flat list of every playlist, whose rows open that playlist's songs (the song lists you saved with
+`Save list` list beneath them, each opening its saved songs, numbered from 1 and counted in the
+footer like any song list, and Back from them returns to Playlists), the fourth lists the library's genres (described below), the fifth lists the library's release years (described below), the sixth lists the library's composers (described below), the seventh lists the library's
 recently added albums newest first (the sample library's albums in reverse order when
 signed out), whose rows open that album's songs, and the eighth lists the songs you played most recently
 first (while signed out, the songs whose plays committed this run, newest first — the sample
@@ -161,7 +163,19 @@ needed to keep the row in view, and Enter or `Jump` plays the highlighted row �
 that row — closing the panel; `Close` or a click on the backdrop closes it, and it opens only on
 those song lists. A `Reload` button beside `Sort`
 refetches the library's artists list and returns to the Artists list, clearing any active search
-while leaving the typed query in the search box. The title bar's `M` button (or `Ctrl+F1`) opens
+while leaving the typed query in the search box. A `Save list` button beside `Reload` opens a
+transient naming panel over the showing list, like Winamp's playlist editor's Save list button:
+type a name and press Enter (or the panel's `Save` button) to save the showing song list's song
+ids under that name in showing order — the rows themselves are not copied — with an empty box
+keeping the panel open with an inline `Type a name` note and a name containing `:` showing
+`Use it without a colon` (the settings line's separator is the colon; typing clears the note).
+Saving over an existing list's name (any case) keeps one saved list and replaces only its ids,
+keeping the name as first saved, and the showing list is left showing. The panel's backdrop,
+`Close` button, or Escape closes it without saving, and opening any other panel closes it too.
+The press changes nothing when the showing list is not a song list the shared songs buffer holds
+(an album's or server playlist's songs, a search result, a genre/year/composer group, or a saved
+list's songs) or when that list is empty, loading, or failed — like Sort's no-ops, no panel
+opens, nothing is persisted, and no fetch is disturbed. The title bar's `M` button (or `Ctrl+F1`) opens
 a transient About panel naming the app, showing its `v`-prefixed package version, the line
 `The classic Winamp look, rebuilt in Rust — with Apple Music as the library.`, and the active
 library source (`Library: Apple Music` once a MusicKit session is stored, `Library: Sample
@@ -291,14 +305,18 @@ options menu's `Manual playlist advance: On/Off` row, persisted in the settings 
 Shuffle), a song that plays to its end stops instead of advancing, whatever Repeat or Shuffle say;
 Repeat, Next, Previous, Ctrl+Z/Ctrl+B, and the jump rows still move you, and turning it off restores
 the normal end-of-song advance. The volume, balance, Repeat, Shuffle, and Manual playlist advance flags, the equalizer's on/off
-state, AUTO choice, curve, and preset, the equalizer's saved custom preset curves, the elapsed/remaining readout choice, the visualizer's
+state, AUTO choice, curve, and preset, the equalizer's saved custom preset curves, the song lists saved through the browse
+`Save list` button (`user_playlist=<name>:<id>,<id>,…` lines, one per list), the elapsed/remaining readout choice, the visualizer's
 shown/hidden choice, the equalizer and library panels' shown/hidden choices, the always-on-top
 choice, the window-shade mode, the window's last screen position, the last-played track, the saved
 MusicKit sign-in token, and the library's top-level browse list (Artists, All
 Songs, All Albums, Recently Added, Recently Played, Playlists, Genres, Years, or Composers; a list opened from one of them
 saves that one) are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or
 `$HOME/.config/nostalgia/settings.ini`) and restored at the next launch; `NOSTALGIA_SETTINGS_PATH`
-overrides the path. The last-played track is restored at the next launch stopped: the Now Playing bar shows it, names it by title and artist once the launch can find the song — immediately from the built-in sample library when the saved id is a sample-library id, and after signing in from your Apple Music library otherwise — while the saved id text shows until then, Play — the transport button, the X key, or the media play/pause key — starts it again from the beginning, and the position within it is not remembered. The window reopens at its saved position without checking that a monitor is still there; delete the `window_position` line to reset an off-screen window. Wayland reports no window moves, so the position is not saved or restored there. A relative `XDG_CONFIG_HOME` is ignored (the XDG spec requires an absolute one), so the `$HOME/.config` location is used instead (or persistence is disabled when `$HOME` is unset). A missing or malformed entry falls back to its default (a `NaN` number counts
+overrides the path. The saved song lists survive relaunches too: the Playlists view lists them
+again after the library's playlists, and opening one shows the saved order (ids the library no
+longer answers are dropped); a `user_playlist=` line without a `:`, with a blank name, or with an
+empty id list is skipped like every other malformed line, and the other lines still load. The last-played track is restored at the next launch stopped: the Now Playing bar shows it, names it by title and artist once the launch can find the song — immediately from the built-in sample library when the saved id is a sample-library id, and after signing in from your Apple Music library otherwise — while the saved id text shows until then, Play — the transport button, the X key, or the media play/pause key — starts it again from the beginning, and the position within it is not remembered. The window reopens at its saved position without checking that a monitor is still there; delete the `window_position` line to reset an off-screen window. Wayland reports no window moves, so the position is not saved or restored there. A relative `XDG_CONFIG_HOME` is ignored (the XDG spec requires an absolute one), so the `$HOME/.config` location is used instead (or persistence is disabled when `$HOME` is unset). A missing or malformed entry falls back to its default (a `NaN` number counts
 as malformed; a byte that is not UTF-8 spoils only its own line, and a leading UTF-8 BOM is
 ignored), and a settings file that exists but cannot be read falls back to defaults with one line
 on stderr naming the file; the player then refuses to save for the rest of that run, printing a

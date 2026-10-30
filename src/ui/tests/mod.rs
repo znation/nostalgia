@@ -1394,6 +1394,7 @@ mod readouts_tests;
 mod recently_added_tests;
 mod recently_played_tests;
 mod reverse_tests;
+mod save_list_tests;
 mod scroll_tests;
 mod search_tests;
 mod settings_tests;

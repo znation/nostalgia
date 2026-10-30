@@ -248,7 +248,7 @@ pub(in crate::ui) fn options_choice(
 }
 
 /// A plain or Shift-held Escape press: close every transient panel, leaving
-/// only the six visibility flags changed. `ui::subscriptions` delivers this message
+/// only the visibility flags changed. `ui::subscriptions` delivers this message
 /// only while [`WinampPlayer::transient_panel_open`] holds, but with no panel
 /// open it is still a no-op. It is not a toggle, so it never opens a panel.
 pub(in crate::ui) fn escape_pressed(player: &mut WinampPlayer) -> Task<Message> {

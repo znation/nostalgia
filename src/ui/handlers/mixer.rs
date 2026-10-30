@@ -225,7 +225,8 @@ pub(in crate::ui) fn eq_preset_selected(
 
 /// The pick list's `Save preset…` row or the panel's `Close` button: flip
 /// the transient Save preset panel. Opening it opens with an empty box and
-/// closes About, Options, File info, Jump to time, and Jump to File through
+/// closes every other transient panel (About, Options, File info, Jump to
+/// time, Save list, and Jump to File) through
 /// [`WinampPlayer::close_transient_panels`], focuses and selects the name
 /// box, and while shaded first restores the window as [`toggle_save_preset`]'s
 /// panel openers do. Closing only clears the flag. The flag is layout-only

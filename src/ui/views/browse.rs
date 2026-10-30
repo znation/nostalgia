@@ -406,6 +406,15 @@ pub fn view_sort_button() -> Element<'static, Message> {
     labeled_button("Sort", Message::SortBrowse).into()
 }
 
+/// The browse view's Save list button: open the naming panel that saves the
+/// showing song list's song ids under a name the Playlists view reopens.
+/// Rendered above every browse level beside Top, Sort, and Reload; the
+/// update loop's `ToggleSaveList` arm is a no-op off the shared songs list
+/// and while it is empty, loading, or failed, exactly like Sort's no-ops.
+pub fn view_save_list_button() -> Element<'static, Message> {
+    labeled_button("Save list", Message::ToggleSaveList).into()
+}
+
 /// The browse view's Reload button, refetching the library's top-level
 /// artists list and returning to the Artists view. Rendered above every browse
 /// level beside Top and Sort; the update loop's `ReloadLibrary` arm clears an
@@ -424,15 +433,16 @@ pub fn view_open_button() -> Element<'static, Message> {
     labeled_button("Open", Message::OpenSelected).into()
 }
 
-/// The Top, Sort, and Reload buttons as one row, so Sort and Reload render
-/// beside Top rather than on the row below it, as the README and the Browse
-/// row order invariant promise. Rendered above every browse level; Reload
-/// refetches the artists list and returns to Artists.
+/// The Top, Sort, Reload, and Save list buttons as one row, so Sort, Reload,
+/// and Save list render beside Top rather than on the row below it, as the
+/// README and the Browse row order invariant promise. Rendered above every
+/// browse level; Reload refetches the artists list and returns to Artists.
 pub fn view_browse_nav_buttons() -> Element<'static, Message> {
     Row::new()
         .push(view_top_button())
         .push(view_sort_button())
         .push(view_reload_button())
+        .push(view_save_list_button())
         .into()
 }
 

@@ -504,6 +504,80 @@ fn save_preset_element() -> Element<'static, Message> {
     super::super::view_save_preset_overlay(base, "Very Fuzzed", Some(super::super::EMPTY_NAME_NOTE))
 }
 
+fn save_list_element() -> Element<'static, Message> {
+    let base: Element<'_, Message> = iced::widget::Space::new()
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into();
+    super::super::view_save_list_overlay(
+        base,
+        "Morning Drive",
+        Some(super::super::save_list::SAVE_LIST_EMPTY_NAME_NOTE),
+    )
+}
+
+// The Save list overlay draws its heading, box, note, and buttons through the
+// same modal script the Save preset overlay uses.
+#[test]
+fn save_list_overlay_draws_its_heading_note_and_buttons() {
+    let mut element = save_list_element();
+    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+    let texts: Vec<&str> = capture.texts().collect();
+    for expected in ["SAVE LIST", "Type a name", "Save", "Close"] {
+        assert!(
+            texts.contains(&expected),
+            "the Save list overlay must draw {expected:?}: {texts:?}"
+        );
+    }
+}
+
+// A Save list panel without a stored note draws none, so a just-opened panel
+// shows only the heading, the box, and the buttons.
+#[test]
+fn save_list_overlay_without_a_note_draws_no_note() {
+    let base: Element<'_, Message> = iced::widget::Space::new()
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into();
+    let mut element = super::super::view_save_list_overlay(base, "", None);
+    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+    let texts: Vec<&str> = capture.texts().collect();
+    assert!(
+        !texts.contains(&"Type a name"),
+        "a fresh panel must not pre-draw the empty-name note: {texts:?}"
+    );
+}
+
+// `Close` and the backdrop each publish one ToggleSaveList and `Save`
+// publishes one SaveListSubmitted: the same modal script the other naming
+// panels use.
+#[test]
+fn save_list_overlay_buttons_and_backdrop_publish_their_messages() {
+    let mut renderer = layout_capture::headless_renderer();
+    for target in ["Close", "BACKDROP", "Save"] {
+        let mut element = save_list_element();
+        let capture = layout_capture::capture_text(&mut element, &renderer);
+        let point = if target == "BACKDROP" {
+            iced::Point::new(2.0, capture.size().height - 2.0)
+        } else {
+            let bounds = capture.find(target);
+            iced::Point::new(bounds.center_x(), bounds.center_y())
+        };
+        let messages = layout_capture::click_at(element, &mut renderer, point);
+        if target == "Save" {
+            assert!(
+                matches!(messages.as_slice(), [Message::SaveListSubmitted]),
+                "Save must publish one SaveListSubmitted: {messages:?}"
+            );
+        } else {
+            assert!(
+                matches!(messages.as_slice(), [Message::ToggleSaveList]),
+                "{target} must publish one ToggleSaveList: {messages:?}"
+            );
+        }
+    }
+}
+
 #[test]
 fn save_preset_overlay_draws_its_heading_note_and_buttons() {
     // The box's own text is iced's, not an ordinary text draw, so the

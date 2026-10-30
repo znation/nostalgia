@@ -38,7 +38,7 @@ mod views;
 mod years;
 
 pub(in crate::ui) use message::{Message, OptionsChoice, OptionsRow};
-pub(in crate::ui) use player::{CurrentView, SongsOrigin, WinampPlayer};
+pub(in crate::ui) use player::{CurrentView, SAVED_PLAYLIST_ROW_ID, SongsOrigin, WinampPlayer};
 pub(in crate::ui) use view::view;
 
 use subscriptions::subscriptions;
@@ -237,6 +237,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::PlaylistSelected { epoch, index } => {
             handlers::browse::playlist_selected(player, epoch, index)
         }
+        // (the saved-list sentinel rows route inside `playlist_selected`)
         Message::OpenSelected => handlers::browse::open_selected(player),
         Message::Back => handlers::browse::back(player),
         Message::ScrollBrowseToTop => handlers::browse::scroll::scroll_browse_to_top(),
@@ -293,6 +294,8 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::ArtistsLoaded(artists) => handlers::browse::fetch::artists_loaded(player, artists),
         Message::AlbumsLoaded(albums) => handlers::browse::fetch::albums_loaded(player, albums),
         Message::SongsLoaded(songs) => handlers::browse::fetch::songs_loaded(player, songs),
+        // A resolved saved song list is wrapped in `BrowseReply` and
+        // re-checked like every fetch reply before its `update` call.
         Message::AllSongsLoaded(songs) => handlers::browse::fetch::all_songs_loaded(player, songs),
         Message::AllAlbumsLoaded(albums) => {
             handlers::browse::fetch::all_albums_loaded(player, albums)
@@ -358,6 +361,14 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::ToggleJumpTime => handlers::jump::toggle_jump_time(player),
         Message::JumpTimeChanged(text) => handlers::jump::jump_time_changed(player, text),
         Message::JumpTimeSubmitted => handlers::jump::jump_time_submitted(player),
+        Message::ToggleSaveList => handlers::save_list::toggle_save_list(player),
+        Message::SaveListNameChanged(text) => {
+            handlers::save_list::save_list_name_changed(player, text)
+        }
+        Message::SaveListSubmitted => handlers::save_list::save_list_submitted(player),
+        Message::UserPlaylistLoaded(songs) => {
+            handlers::save_list::user_playlist_loaded(player, songs)
+        }
         Message::ToggleSavePreset => handlers::mixer::toggle_save_preset(player),
         Message::SavePresetNameChanged(text) => {
             handlers::mixer::save_preset_name_changed(player, text)

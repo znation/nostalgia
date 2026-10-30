@@ -31,6 +31,19 @@ use crate::equalizer::{self, CustomPreset, Preset};
 use crate::state::AppState;
 use library_view::LibraryView;
 
+/// A song list the user saved from the browse view's `Save list` button, by
+/// name, through the naming panel. It stores only the song ids in showing
+/// order — the same ids a row press resolves to `play_track` — because the
+/// song rows come back through `resolve_song` at open time, and a saved list
+/// opened after a relaunch shows whatever the library still answers.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SavedPlaylist {
+    /// The display name the Playlists view renders it under.
+    pub name: String,
+    /// The showing list's song ids, in showing order.
+    pub song_ids: Vec<String>,
+}
+
 /// The persisted values the next launch restores: the mixer and equalizer
 /// subset of [`AppState`], the last-played track id, and the UI-owned readout
 /// mode, visualizer choice, equalizer and library panel choices,
@@ -64,6 +77,7 @@ pub struct Settings {
     eq_bands: [f32; equalizer::BAND_COUNT],
     eq_preset: Option<Preset>,
     eq_custom_presets: Vec<CustomPreset>,
+    saved_playlists: Vec<SavedPlaylist>,
     time_display_remaining: bool,
     visualizer_visible: bool,
     eq_panel_visible: bool,
@@ -95,6 +109,7 @@ impl Default for Settings {
             eq_bands: [0.0; equalizer::BAND_COUNT],
             eq_preset: None,
             eq_custom_presets: Vec::new(),
+            saved_playlists: Vec::new(),
             time_display_remaining: false,
             visualizer_visible: true,
             eq_panel_visible: true,
@@ -129,6 +144,9 @@ impl Settings {
             // player overwrites it before saving, like the UI-owned flags
             // below.
             eq_custom_presets: Vec::new(),
+            // The player's saved song lists: same UI-owned rule as the
+            // saved curves above.
+            saved_playlists: Vec::new(),
             time_display_remaining: false,
             visualizer_visible: true,
             eq_panel_visible: true,
@@ -329,6 +347,21 @@ impl Settings {
     /// the list alone.
     pub fn set_eq_custom_presets(&mut self, presets: Vec<CustomPreset>) {
         self.eq_custom_presets = presets;
+    }
+
+    /// The song lists the player saved through the browse `Save list`
+    /// button, in saved order. The player owns this value, so it overwrites
+    /// it on its fresh snapshot before saving and restores it from the loaded
+    /// snapshot at boot.
+    #[must_use]
+    pub fn saved_playlists(&self) -> &[SavedPlaylist] {
+        &self.saved_playlists
+    }
+
+    /// Set the saved song lists. The player calls this on its fresh snapshot
+    /// before saving; [`Self::apply_to`] deliberately leaves the list alone.
+    pub fn set_saved_playlists(&mut self, playlists: Vec<SavedPlaylist>) {
+        self.saved_playlists = playlists;
     }
 }
 
@@ -646,6 +679,33 @@ mod tests {
     // `:`, a blank name, the wrong field count, or a malformed-or-NaN gain
     // is skipped without failing the load. The whole list must round-trip
     // through `to_text` → `from_text` untouched.
+    // The saved song lists are a repeated `user_playlist=` line: every
+    // valid line loads in file order, and a line without a `:`, a blank
+    // name, or an empty id list is skipped without failing the load. The
+    // whole list must round-trip through `to_text` → `from_text` untouched.
+    #[test]
+    fn user_playlist_lines_round_trip_and_skip_the_malformed_ones() {
+        let text = "user_playlist=Morning Drive:song-1, song-2 ,song-3\n\
+                    user_playlist:no\n\
+                    user_playlist=:song-1\n\
+                    user_playlist=Empty list:\n\
+                    ignore-me=x\n";
+        let settings = Settings::from_text(text);
+        assert_eq!(settings.saved_playlists().len(), 1);
+        let saved = &settings.saved_playlists()[0];
+        assert_eq!(saved.name, "Morning Drive");
+        assert_eq!(saved.song_ids, vec!["song-1", "song-2", "song-3"]);
+
+        assert_eq!(Settings::from_text(&settings.to_text()), settings);
+        assert!(
+            settings
+                .to_text()
+                .contains("user_playlist=Morning Drive:song-1,song-2,song-3")
+        );
+        // A default snapshot writes no saved-list lines at all.
+        assert!(!Settings::default().to_text().contains("user_playlist"));
+    }
+
     #[test]
     fn eq_custom_preset_lines_round_trip_and_skip_the_malformed_ones() {
         let text = "eq_custom_preset=Very Fuzzed:2.5,1,2,3,4,5,6,7,8,9,10\n\

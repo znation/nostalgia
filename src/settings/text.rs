@@ -5,6 +5,7 @@
 use super::Settings;
 use super::library_view::LibraryView;
 use crate::equalizer::{self, CustomPreset};
+use crate::settings::SavedPlaylist;
 
 impl Settings {
     /// Render the snapshot as the line-based `key=value` text the settings
@@ -48,6 +49,23 @@ impl Settings {
             "eq_preset={}\n",
             self.eq_preset.map_or("", |preset| preset.name)
         ));
+        // One line per saved song list, after `eq_preset=` like the
+        // equalizer values before it. A name is file text and a song id is
+        // a catalog id or a `song-N`-shaped sample id, so the comma-split
+        // after the first `:` is safe; `parse_user_playlist` skips its
+        // malformed forms.
+        for saved in &self.saved_playlists {
+            text.push_str("user_playlist=");
+            text.push_str(&saved.name);
+            text.push(':');
+            for (position, id) in saved.song_ids.iter().enumerate() {
+                if position > 0 {
+                    text.push(',');
+                }
+                text.push_str(id);
+            }
+            text.push('\n');
+        }
         text.push_str(&format!(
             "time_display={}\n",
             if self.time_display_remaining {
@@ -114,6 +132,7 @@ impl Settings {
                 "eq_preamp" => parse_number_into(&mut settings.eq_preamp, value),
                 "eq_custom_preset" => settings.parse_eq_custom_preset(value),
                 "eq_preset" => settings.parse_eq_preset(value),
+                "user_playlist" => settings.parse_user_playlist(value),
                 // Only the two written words are recognized; any other value
                 // leaves the default elapsed mode.
                 "time_display" => match value {
@@ -210,6 +229,35 @@ impl Settings {
             self.eq_custom_presets
                 .push(CustomPreset::from_curve(name.to_string(), *gain, bands));
         }
+    }
+
+    /// Apply a `user_playlist` line as `<name>:<id>,<id>,…,<id>`. A line
+    /// without a `:`, a blank name, or one whose trimmed, comma-split id
+    /// tokens are all empty is skipped like the other malformed-value lines;
+    /// the text before the first `:` becomes the name. Repeated lines each
+    /// push one saved list in file order, and ids arrived with by the player
+    /// (an id the library no longer answers is dropped at open time) are kept
+    /// verbatim here.
+    fn parse_user_playlist(&mut self, value: &str) {
+        let Some((name, ids)) = value.split_once(':') else {
+            return;
+        };
+        if name.is_empty() {
+            return;
+        }
+        let song_ids: Vec<String> = ids
+            .split(',')
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .map(str::to_string)
+            .collect();
+        if song_ids.is_empty() {
+            return;
+        }
+        self.saved_playlists.push(SavedPlaylist {
+            name: name.to_string(),
+            song_ids,
+        });
     }
 
     /// Apply an `eq_preset` line: empty clears the preset, a known name selects
