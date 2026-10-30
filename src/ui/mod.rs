@@ -85,6 +85,16 @@ pub fn init_ui(
     )
     .title(|player: &WinampPlayer| player.window_title())
     .theme(|_: &WinampPlayer| theme::winamp_theme())
+    // The vendored pixel faces the chrome's text will render in: the bytes
+    // load at startup, so `Font::with_name` addresses them app-wide. No
+    // `.default_font` yet — unconverted text keeps the system face until its
+    // control adopts the faces.
+    .font(std::borrow::Cow::Borrowed(
+        include_bytes!("../../assets/fonts/Silkscreen-Regular.ttf").as_slice(),
+    ))
+    .font(std::borrow::Cow::Borrowed(
+        include_bytes!("../../assets/fonts/Tiny5.ttf").as_slice(),
+    ))
     .decorations(false)
     .resizable(false)
     .position(position)

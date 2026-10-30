@@ -9,7 +9,7 @@
 
 use std::sync::OnceLock;
 
-use iced::{Color, Theme};
+use iced::{Color, Font, Theme};
 
 /// The steel-blue window face every panel is drawn on, sampled from the
 /// mockups' chrome face (`docs/screenshots/player.png` reads (53,53,84) at
@@ -133,6 +133,42 @@ pub const EQ_GAIN_MID: Color = Color::from_rgb(0.85, 0.85, 0.0);
 /// The equalizer band tint at [`GAIN_MAX_DB`](crate::equalizer::GAIN_MAX_DB):
 /// a full boost, a hot red-orange.
 pub const EQ_GAIN_HIGH: Color = Color::from_rgb(1.0, 0.2, 0.1);
+
+/// The family name of the vendored letterform face the chrome's labels
+/// render in: the bitmap-text look of the reference captures. The TTF ships
+/// as `assets/fonts/Silkscreen-Regular.ttf` with its source recorded in
+/// `assets/fonts/README.md`.
+///
+// Nothing in production names the family yet — part 2/4 of the pixel-font
+// split adopts these faces control by control, and until it lands only the
+// layout-capture seam test — through `ui_font` — reaches them.
+pub const UI_FONT_FAMILY: &str = "Silkscreen";
+
+/// The family name of the vendored shape-glyph face the transport's markers
+/// render in. The TTF ships as `assets/fonts/Tiny5.ttf` with its source
+/// recorded in `assets/fonts/README.md`.
+///
+// Referenced only by `shape_font`, which stays dead until part 2/4 adopts
+// it; see [`UI_FONT_FAMILY`].
+pub const SHAPE_FONT_FAMILY: &str = "Tiny5";
+
+/// The letterform face the chrome's text renders in, addressed by
+/// [`UI_FONT_FAMILY`] so no view spells the family as a literal.
+///
+// Dead only until part 2/4 adopts it; see [`UI_FONT_FAMILY`].
+#[cfg_attr(not(test), expect(dead_code))]
+pub fn ui_font() -> Font {
+    Font::with_name(UI_FONT_FAMILY)
+}
+
+/// The shape-glyph face the chrome's markers render in, addressed by
+/// [`SHAPE_FONT_FAMILY`] so no view spells the family as a literal.
+///
+// Dead only until part 2/4 adopts it; see [`UI_FONT_FAMILY`].
+#[cfg_attr(not(test), expect(dead_code))]
+pub fn shape_font() -> Font {
+    Font::with_name(SHAPE_FONT_FAMILY)
+}
 
 /// The base-skin colors as an iced [`Palette`](iced::theme::Palette): the
 /// dark window face and light text are the background/foreground pair,

@@ -28,12 +28,37 @@ pub(crate) fn limits() -> Limits {
 /// tiny-skia measures text in software, so a tree containing the fallback
 /// renderer's bevel widgets still lays out without a window or GPU.
 pub(crate) fn headless_renderer() -> iced::Renderer {
+    load_vendored_fonts();
     futures::executor::block_on(<iced::Renderer as Headless>::new(
         Font::default(),
         Pixels(16.0),
         Some("tiny-skia"),
     ))
     .expect("the headless tiny-skia renderer")
+}
+
+/// Registers the vendored pixel faces — the letterform and shape-glyph TTFs
+/// under `assets/fonts/` — in the process-wide [`font_system`] every headless
+/// capture resolves texts through, so a test can address either face with
+/// `iced::Font::with_name` without a per-test load. Name-less text keeps
+/// resolving to the system face, so existing captured numbers do not move.
+/// Idempotent: the `OnceLock` runs it once, and `FontSystem::load_font`
+/// itself records its borrowed bytes by address and skips repeats.
+fn load_vendored_fonts() {
+    use std::borrow::Cow;
+
+    static VENDORED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+    VENDORED.get_or_init(|| {
+        let mut font_system = iced::advanced::graphics::text::font_system()
+            .write()
+            .expect("the global font system the headless captures record texts through");
+        font_system.load_font(Cow::Borrowed(
+            include_bytes!("../../assets/fonts/Silkscreen-Regular.ttf").as_slice(),
+        ));
+        font_system.load_font(Cow::Borrowed(
+            include_bytes!("../../assets/fonts/Tiny5.ttf").as_slice(),
+        ));
+    });
 }
 
 /// The text fragments a laid-out tree draws and the resolved root size.
@@ -355,6 +380,70 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ui::theme;
+
+    /// The `headless_renderer` seam itself: the vendored pixel faces
+    /// (`assets/fonts/`) load into the global font system the captures
+    /// resolve texts through, so a capture can address either face, and the
+    /// widths and colors match the probes the vendoring run recorded on the
+    /// 8-px grid. A capture that resolves the faces to tofu or the system
+    /// sans fails here instead of as a shifted number in a geometry test
+    /// elsewhere.
+    #[test]
+    fn headless_captures_resolve_the_vendored_pixel_faces() {
+        let renderer = headless_renderer();
+        let mut word = text(
+            iced::widget::Text::new("NOSTALGIA")
+                .font(theme::ui_font())
+                .size(16.0)
+                .width(iced::Length::Shrink),
+        );
+        let word_capture = capture_text(&mut word, &renderer);
+
+        let word_bounds = word_capture.find("NOSTALGIA");
+        assert_eq!(word_bounds.width, 100.0);
+
+        let mut glyph = centered_text(
+            iced::widget::Text::new("▶")
+                .font(theme::shape_font())
+                .size(16.0),
+        );
+        let theme = iced::Theme::Dark;
+        let mut renderer = headless_renderer();
+        let (glyph_capture, pixels) = capture_text_and_pixels(&mut glyph, &mut renderer, &theme);
+
+        let glyph_bounds = glyph_capture.find("▶");
+        assert_eq!(glyph_bounds.width, 8.0);
+
+        let whole = Rectangle::new(
+            Point::ORIGIN,
+            Size::new(pixels.size.width as f32, pixels.size.height as f32),
+        );
+        let colors = pixels
+            .region(whole)
+            .chunks(4)
+            .map(|rgba| [rgba[0], rgba[1], rgba[2], rgba[3]])
+            .collect::<std::collections::HashSet<_>>();
+        assert_eq!(colors.len(), 2, "glyph colors: {colors:?}");
+    }
+
+    /// A bare text shrunk to its measured face width.
+    fn text(
+        text: iced::widget::Text<'static>,
+    ) -> Element<'static, (), iced::Theme, iced::Renderer> {
+        text.into()
+    }
+
+    /// A text centered in a fixed 32x32 square, so the capture's pixels span
+    /// one glyph and its margins.
+    fn centered_text(
+        text: iced::widget::Text<'static>,
+    ) -> Element<'static, (), iced::Theme, iced::Renderer> {
+        iced::widget::container(text)
+            .width(iced::Length::Fixed(32.0))
+            .height(iced::Length::Fixed(32.0))
+            .into()
+    }
 
     fn two_label_column() -> Element<'static, (), iced::Theme, iced::Renderer> {
         iced::widget::container(
