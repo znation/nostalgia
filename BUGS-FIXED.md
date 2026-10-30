@@ -5,6 +5,43 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### Transport buttons draw dark faces with light glyphs, inverting the base skin's light metal buttons (found by the reference-comparison pass 2026-10-29) — fixed 2026-10-30 by the bugfix role
+
+**Symptom.** Every transport-row button (Previous, Play, Pause, Stop, Next, Repeat,
+Shuffle, EQ, PL) is a dark `#4C4C4C` (76,76,76) tile with a light `#DEDEDE` (222,222,222)
+glyph. The base skin's buttons are light metal — faces (189,198,198)/(173,181,181)/
+(198,206,206) — with the glyph engraved dark and a white highlight; the repo's mockup
+(`docs/screenshots/player.png`) draws them the same way (light face, dark glyph). The
+app's rendering reads as the photographic negative of both.
+
+**How to reproduce.** Run the app and sample the transport row: the Previous button's
+face at (5,137) reads (76,76,76) and its glyph at (14,147) reads (222,222,222). In
+`winamp-2.x-stack.png` the same button (x 16..40, y 88..103) has face pixels
+(189,198,198)/(173,181,181) and near-black glyph pixels with (239,255,255) highlights.
+
+**Suspected cause.** `theme.rs`'s `BUTTON_FACE = Color::from_rgb(0.30, 0.30, 0.30)`
+(plus `BUTTON_FACE_HOVERED`/`BUTTON_FACE_PRESSED`) is the gray that every button style
+fills with, and the button text/glyph styles use the light `TEXT`/`PLAYING_ROW_TEXT`
+colors, so the light-face/dark-glyph convention was never encoded.
+
+**Fixed by.** Re-sampled the mockup (`docs/screenshots/player.png`): resting transport
+button face (185,196,209), engraved glyph (57,57,90), near-white top bevel (239,255,255).
+`theme.rs` now carries that light metal ladder (`BUTTON_FACE`/`BUTTON_FACE_HOVERED`
+(195,206,219)/`BUTTON_FACE_PRESSED` (167,178,191)), the new `BUTTON_TEXT` engraved-glyph
+and `BUTTON_EDGE_LIGHT` highlight constants, and `style.rs`'s `chrome_button_style` paints
+the shared chrome with them — covering the transport row's five glyph buttons, its
+Repeat/Shuffle and EQ/PL toggles, and the dialog/Dock controls built from the same style.
+Consequential flips for readability on the once-dark shared face: the search box value and
+icon, the preset pick list's label, and the preset menu's options now draw `BUTTON_TEXT` on
+the light face, and browse rows hover within the dark well (`PANEL_EDGE_LIGHT`/`PANEL_EDGE_DARK`)
+instead of lifting to metal, whose face would swallow their green text. Regression tests:
+`chrome_button_face_is_lighter_than_its_glyph_text`, `transport_button_face_renders_light_metal`,
+and the palette pins.
+
+**Validation gap:** none — the existing suite already had the headless pixel harness and
+status-driven style builders that reproduced and confirmed the fix; only the
+light-face/dark-glyph convention itself was untested before.
+
 ### The whole chrome renders neutral gray where the base skin — and the repo's own mockups — are steel blue (found by the reference-comparison pass 2026-10-29) — fixed 2026-10-30 by the bugfix role
 
 **Symptom.** Every chrome surface the app paints is a neutral gray: the window face is

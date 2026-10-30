@@ -50,25 +50,6 @@ window's outer edge is drawn as a light bevel only, with no dark outline outside
 from the mockups, which agree on hue) and replace the gray constants with them; keep the
 two-part outer border (dark outline outside the light bevel).
 
-### Transport buttons draw dark faces with light glyphs, inverting the base skin's light metal buttons (found by the reference-comparison pass 2026-10-29)
-
-**Symptom.** Every transport-row button (Previous, Play, Pause, Stop, Next, Repeat,
-Shuffle, EQ, PL) is a dark `#4C4C4C` (76,76,76) tile with a light `#DEDEDE` (222,222,222)
-glyph. The base skin's buttons are light metal — faces (189,198,198)/(173,181,181)/
-(198,206,206) — with the glyph engraved dark and a white highlight; the repo's mockup
-(`docs/screenshots/player.png`) draws them the same way (light face, dark glyph). The
-app's rendering reads as the photographic negative of both.
-
-**How to reproduce.** Run the app and sample the transport row: the Previous button's
-face at (5,137) reads (76,76,76) and its glyph at (14,147) reads (222,222,222). In
-`winamp-2.x-stack.png` the same button (x 16..40, y 88..103) has face pixels
-(189,198,198)/(173,181,181) and near-black glyph pixels with (239,255,255) highlights.
-
-**Suspected cause.** `theme.rs`'s `BUTTON_FACE = Color::from_rgb(0.30, 0.30, 0.30)`
-(plus `BUTTON_FACE_HOVERED`/`BUTTON_FACE_PRESSED`) is the gray that every button style
-fills with, and the button text/glyph styles use the light `TEXT`/`PLAYING_ROW_TEXT`
-colors, so the light-face/dark-glyph convention was never encoded.
-
 ### The transport row omits the base skin's Eject button and its LED-marked Shuffle/Repeat buttons (found by the reference-comparison pass 2026-10-29)
 
 **Symptom.** The app's transport row is Previous, Play, Pause, Stop, Next, then two wide

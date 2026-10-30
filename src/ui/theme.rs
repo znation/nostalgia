@@ -69,15 +69,33 @@ pub const PANEL_EDGE_DARK: Color = Color::from_rgb8(49, 57, 74);
 /// `docs/screenshots/player.png` (20,20,31) at the same mockup edge).
 pub const WINDOW_EDGE_OUTLINE: Color = Color::from_rgb8(20, 20, 31);
 
-/// The raised chrome button face, lighter than [`WINDOW_BACKGROUND`] so the
-/// button reads as raised off the window face.
-pub const BUTTON_FACE: Color = Color::from_rgb(0.30, 0.30, 0.30);
+/// The raised chrome button face: the mockups' light metal
+/// (`docs/screenshots/player.png` reads (185,196,209) on a resting transport
+/// button), matching the base skin's light metal faces
+/// (`winamp-2.x-stack.png` reads (189,198,198) and (173,181,181) on its
+/// transport row) at the mockup's flat-render brightness.
+pub const BUTTON_FACE: Color = Color::from_rgb8(185, 196, 209);
 
-/// The button face while hovered.
-pub const BUTTON_FACE_HOVERED: Color = Color::from_rgb(0.38, 0.38, 0.38);
+/// The button face while hovered, a slightly lighter lift of
+/// [`BUTTON_FACE`].
+pub const BUTTON_FACE_HOVERED: Color = Color::from_rgb8(195, 206, 219);
 
 /// The pressed (sunken) button face, darker than the resting face.
-pub const BUTTON_FACE_PRESSED: Color = Color::from_rgb(0.22, 0.22, 0.22);
+pub const BUTTON_FACE_PRESSED: Color = Color::from_rgb8(167, 178, 191);
+
+/// The glyph color engraved into the light metal button faces: the mockups'
+/// dark navy text (`docs/screenshots/player.png` reads (57,57,90) on a
+/// transport button's glyph), dark against [`BUTTON_FACE`] as the base
+/// skin's near-black engraved glyphs read against their light metal
+/// (`winamp-2.x-stack.png` (16..40, 88..103)).
+pub const BUTTON_TEXT: Color = Color::from_rgb8(57, 57, 90);
+
+/// The near-white top-left bevel highlight of a light metal button
+/// (`docs/screenshots/player.png` reads (239,255,255) on a resting transport
+/// button's top edge). The window's own [`PANEL_EDGE_LIGHT`] bevel — a
+/// mid-value blue-gray — disappears into the metal face, so light metal
+/// chrome takes this highlight instead.
+pub const BUTTON_EDGE_LIGHT: Color = Color::from_rgb8(239, 255, 255);
 
 /// The near-black recess behind the green Now Playing title.
 pub const LCD_BACKGROUND: Color = Color::from_rgb(0.05, 0.05, 0.05);
@@ -225,9 +243,23 @@ mod tests {
         assert_eq!(PANEL_EDGE_LIGHT, Color::from_rgb8(98, 98, 118));
         assert_eq!(PANEL_EDGE_DARK, Color::from_rgb8(49, 57, 74));
         assert_eq!(WINDOW_EDGE_OUTLINE, Color::from_rgb8(20, 20, 31));
-        assert_eq!(BUTTON_FACE, Color::from_rgb(0.30, 0.30, 0.30));
-        assert_eq!(BUTTON_FACE_HOVERED, Color::from_rgb(0.38, 0.38, 0.38));
-        assert_eq!(BUTTON_FACE_PRESSED, Color::from_rgb(0.22, 0.22, 0.22));
+        assert_eq!(BUTTON_FACE, Color::from_rgb8(185, 196, 209));
+        assert_eq!(BUTTON_FACE_HOVERED, Color::from_rgb8(195, 206, 219));
+        assert_eq!(BUTTON_FACE_PRESSED, Color::from_rgb8(167, 178, 191));
+        assert_eq!(BUTTON_TEXT, Color::from_rgb8(57, 57, 90));
+        assert_eq!(BUTTON_EDGE_LIGHT, Color::from_rgb8(239, 255, 255));
+        // The light-metal convention the transport row is measured against: the
+        // face and its bezel highlight are lighter than the engraved glyph color.
+        const {
+            assert!(
+                BUTTON_FACE.r + BUTTON_FACE.g + BUTTON_FACE.b
+                    > BUTTON_TEXT.r + BUTTON_TEXT.g + BUTTON_TEXT.b
+            );
+            assert!(
+                BUTTON_EDGE_LIGHT.r + BUTTON_EDGE_LIGHT.g + BUTTON_EDGE_LIGHT.b
+                    > BUTTON_TEXT.r + BUTTON_TEXT.g + BUTTON_TEXT.b
+            );
+        }
         assert_eq!(VOLUME_SLIDER_FILL, Color::from_rgb(0.88, 0.49, 0.15));
         assert_eq!(BALANCE_SLIDER_FILL, Color::from_rgb(0.09, 0.57, 0.04));
         assert_eq!(EQ_GAIN_LOW, LCD_GREEN);

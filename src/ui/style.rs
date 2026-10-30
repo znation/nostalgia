@@ -88,26 +88,31 @@ pub fn title_bar_style() -> container::Style {
 
 /// The raised (Active/Hovered) and sunken (Pressed) chrome style for a button.
 ///
-/// iced's [`Border`] carries a single color, so the two-tone edge reuses [`bevel_edges`]: raised,
-/// it is a 1px light border on the top/left and a dark no-blur [`Shadow`] offset down-right on the
-/// bottom/right; pressing sinks the pair. The face comes from [`chrome_face`], which darkens it on
-/// hover and sinks it while pressed. Pure, so the color rule is testable without building a widget.
+/// iced's [`Border`] carries a single color, so the two-tone edge reuses [`bevel_edges`] for its
+/// geometry: raised, it is a 1px border on the top/left and a dark no-blur [`Shadow`] offset
+/// down-right on the bottom/right; pressing sinks the pair. The face comes from [`chrome_face`],
+/// which lightens it on hover and sinks it while pressed. On the light metal face the window's
+/// [`theme::PANEL_EDGE_LIGHT`] bevel disappears, so a raised button takes the near-white
+/// [`theme::BUTTON_EDGE_LIGHT`] highlight and the engraved dark [`theme::BUTTON_TEXT`] glyph the
+/// base skin's buttons carry. Pure, so the color rule is testable without building a widget.
 pub fn chrome_button_style(status: button::Status) -> button::Style {
-    let (top_left, bottom_right) = bevel_edges(!matches!(status, button::Status::Pressed));
-    let face = chrome_face(
-        matches!(status, button::Status::Hovered),
-        matches!(status, button::Status::Pressed),
-    );
+    let raised = !matches!(status, button::Status::Pressed);
+    let (top_left, bottom_right) = bevel_edges(raised);
+    let face = chrome_face(matches!(status, button::Status::Hovered), !raised);
 
     let text_color = match status {
-        button::Status::Disabled => theme::TEXT.scale_alpha(0.5),
-        _ => theme::TEXT,
+        button::Status::Disabled => theme::BUTTON_TEXT.scale_alpha(0.5),
+        _ => theme::BUTTON_TEXT,
     };
 
     button::Style {
         background: Some(Background::Color(face)),
         text_color,
-        border: square_border(top_left),
+        border: square_border(if raised {
+            theme::BUTTON_EDGE_LIGHT
+        } else {
+            top_left
+        }),
         shadow: square_shadow(bottom_right),
         ..button::Style::default()
     }
@@ -127,13 +132,13 @@ pub fn toggle_button_style(on: bool, status: button::Status) -> button::Style {
 
 /// The chrome style for the library search box.
 ///
-/// The raised face, light [`theme::TEXT`] value, and light top-left bevel edge mirror
-/// [`chrome_button_style`]: resting and hovered stay raised, while focus sinks the face to
-/// [`theme::BUTTON_FACE_PRESSED`] and reverses the edge to [`theme::PANEL_EDGE_DARK`], the same
-/// press the buttons use. iced's [`text_input::Style`] carries a single border color and no shadow,
-/// so the bevel's bottom-right dark half is not drawn. The placeholder uses the lighter
-/// [`theme::PANEL_EDGE_LIGHT`] so an empty box reads as empty, and the selection uses the title-bar
-/// [`theme::TITLE_BLUE`]. Pure, so the color rule is testable without building a widget.
+/// The raised face and dark [`theme::BUTTON_TEXT`] value mirror [`chrome_button_style`]: resting
+/// and hovered stay raised, while focus sinks the face to [`theme::BUTTON_FACE_PRESSED`] and
+/// reverses the edge to [`theme::PANEL_EDGE_DARK`], the same press the buttons use. iced's
+/// [`text_input::Style`] carries a single border color and no shadow, so the bevel's bottom-right
+/// dark half is not drawn. The placeholder uses the darker [`theme::PANEL_EDGE_LIGHT`] so an empty
+/// box reads as empty, and the selection uses the title-bar [`theme::TITLE_BLUE`]. Pure, so the
+/// color rule is testable without building a widget.
 pub fn chrome_text_input_style(status: text_input::Status) -> text_input::Style {
     let focused = matches!(status, text_input::Status::Focused { .. });
     let (top_left, _) = bevel_edges(!focused);
@@ -142,29 +147,30 @@ pub fn chrome_text_input_style(status: text_input::Status) -> text_input::Style 
     text_input::Style {
         background: Background::Color(face),
         border: square_border(top_left),
-        icon: theme::TEXT,
+        icon: theme::BUTTON_TEXT,
         placeholder: theme::PANEL_EDGE_LIGHT,
-        value: theme::TEXT,
+        value: theme::BUTTON_TEXT,
         selection: theme::TITLE_BLUE,
     }
 }
 
 /// The chrome style for the equalizer's preset pick list.
 ///
-/// The closed control is flat chrome, like the transport buttons: a [`theme::BUTTON_FACE`] face
-/// with the dark 1px outline and [`theme::TEXT`] label. Unlike the buttons and sliders, hovering
-/// the closed control does not lift the face — the base skin's combo boxes give no hover feedback —
-/// but opening the menu sinks the face to [`theme::BUTTON_FACE_PRESSED`] through [`chrome_face`],
-/// the same press shade the other chrome uses. The placeholder (the `Custom` custom-curve label) is
-/// drawn in [`theme::TEXT`] like a selected preset, because it names a real curve rather than an
-/// empty control. Pure, so the color rule is testable without building a widget.
+/// The closed control is flat chrome, like the transport buttons: a [`theme::BUTTON_FACE`] metal
+/// face with the dark 1px outline and the engraved [`theme::BUTTON_TEXT`] label. Unlike the
+/// buttons and sliders, hovering the closed control does not lift the face — the base skin's combo
+/// boxes give no hover feedback — but opening the menu sinks the face to
+/// [`theme::BUTTON_FACE_PRESSED`] through [`chrome_face`], the same press shade the other chrome
+/// uses. The placeholder (the `Custom` custom-curve label) is drawn in [`theme::BUTTON_TEXT`] like
+/// a selected preset, because it names a real curve rather than an empty control. Pure, so the
+/// color rule is testable without building a widget.
 pub fn chrome_pick_list_style(status: pick_list::Status) -> pick_list::Style {
     let opened = matches!(status, pick_list::Status::Opened { .. });
 
     pick_list::Style {
-        text_color: theme::TEXT,
-        placeholder_color: theme::TEXT,
-        handle_color: theme::TEXT,
+        text_color: theme::BUTTON_TEXT,
+        placeholder_color: theme::BUTTON_TEXT,
+        handle_color: theme::BUTTON_TEXT,
         background: Background::Color(chrome_face(false, opened)),
         border: square_border(theme::PANEL_EDGE_DARK),
     }
@@ -172,16 +178,16 @@ pub fn chrome_pick_list_style(status: pick_list::Status) -> pick_list::Style {
 
 /// The base-skin style for the preset pick list's open menu.
 ///
-/// The dropdown is a [`theme::BUTTON_FACE`] panel with the dark 1px chrome outline; its options are
-/// [`theme::TEXT`] on that face, and the highlighted option uses the title-bar
-/// [`theme::TITLE_BLUE`] with the same light text, matching Winamp's selection blue. No drop
-/// shadow, so the menu stays flat like the rest of the base-skin chrome. Pure, so the color rule is
-/// testable without building a widget.
+/// The dropdown is a [`theme::BUTTON_FACE`] metal panel with the dark 1px chrome outline; its
+/// options are the engraved [`theme::BUTTON_TEXT`] on that face, and the highlighted option uses
+/// the title-bar [`theme::TITLE_BLUE`] with light [`theme::TEXT`], matching Winamp's selection
+/// blue. No drop shadow, so the menu stays flat like the rest of the base-skin chrome. Pure, so
+/// the color rule is testable without building a widget.
 pub fn preset_menu_style() -> menu::Style {
     menu::Style {
         background: theme::BUTTON_FACE.into(),
         border: square_border(theme::PANEL_EDGE_DARK),
-        text_color: theme::TEXT,
+        text_color: theme::BUTTON_TEXT,
         selected_text_color: theme::TEXT,
         selected_background: theme::TITLE_BLUE.into(),
         shadow: Shadow::default(),
@@ -192,14 +198,15 @@ pub fn preset_menu_style() -> menu::Style {
 ///
 /// The base skin's playlist rows are flat green text on the near-black well:
 /// no bevel, so the resting and disabled faces are transparent and let the
-/// well show through, while hover lifts the row to [`theme::BUTTON_FACE`] and
-/// press sinks it to [`theme::BUTTON_FACE_PRESSED`] — the same face ladder
-/// [`chrome_face`] names. Pure and status-driven, so the row rule is testable
-/// without building a widget.
+/// well show through, while hover lifts the row to [`theme::PANEL_EDGE_LIGHT`]
+/// and press drops it to [`theme::PANEL_EDGE_DARK`] — a lift within the well's
+/// dark chrome, not the light metal [`theme::BUTTON_FACE`] ladder, whose face
+/// would swallow the rows' green text. Pure and status-driven, so the row rule
+/// is testable without building a widget.
 pub fn playlist_row_style(status: button::Status) -> button::Style {
     let background = match status {
-        button::Status::Hovered => Some(Background::Color(theme::BUTTON_FACE)),
-        button::Status::Pressed => Some(Background::Color(theme::BUTTON_FACE_PRESSED)),
+        button::Status::Hovered => Some(Background::Color(theme::PANEL_EDGE_LIGHT)),
+        button::Status::Pressed => Some(Background::Color(theme::PANEL_EDGE_DARK)),
         button::Status::Active | button::Status::Disabled => None,
     };
 
@@ -310,8 +317,8 @@ mod tests {
             style.background,
             Some(Background::Color(theme::BUTTON_FACE))
         );
-        assert_eq!(style.text_color, theme::TEXT);
-        assert_eq!(style.border.color, theme::PANEL_EDGE_LIGHT);
+        assert_eq!(style.text_color, theme::BUTTON_TEXT);
+        assert_eq!(style.border.color, theme::BUTTON_EDGE_LIGHT);
         assert_eq!(style.border.width, 1.0);
         assert_eq!(style.border.radius, 0.0.into());
         assert_eq!(style.shadow.color, theme::PANEL_EDGE_DARK);
@@ -323,7 +330,7 @@ mod tests {
     fn chrome_text_input_style_active_is_raised_chrome() {
         let style = chrome_text_input_style(text_input::Status::Active);
         assert_eq!(style.background, Background::Color(theme::BUTTON_FACE));
-        assert_eq!(style.value, theme::TEXT);
+        assert_eq!(style.value, theme::BUTTON_TEXT);
         assert_eq!(style.placeholder, theme::PANEL_EDGE_LIGHT);
         assert_eq!(style.selection, theme::TITLE_BLUE);
         assert_eq!(style.border.color, theme::PANEL_EDGE_LIGHT);
@@ -370,7 +377,7 @@ mod tests {
             Background::Color(theme::BUTTON_FACE_PRESSED)
         );
         assert_eq!(focused.border.color, theme::PANEL_EDGE_DARK);
-        assert_eq!(focused.value, theme::TEXT);
+        assert_eq!(focused.value, theme::BUTTON_TEXT);
         // Focus changes the face and edge colors, not the 1px square
         // geometry.
         assert_eq!(focused.border.width, active.border.width);
@@ -389,10 +396,10 @@ mod tests {
         assert_eq!(hovered.shadow.color, active.shadow.color);
         // Only Disabled dims the text (its own test pins the alpha drop), so a
         // hovered button keeps full-strength chrome text. The Active test above
-        // pins `TEXT` for the shared `_` arm's first status; assert it here for
-        // Hovered too, or a match split that dimmed Hovered would clear every
-        // other test while the hovered label faded.
-        assert_eq!(hovered.text_color, theme::TEXT);
+        // pins `BUTTON_TEXT` for the shared `_` arm's first status; assert it
+        // here for Hovered too, or a match split that dimmed Hovered would clear
+        // every other test while the hovered label faded.
+        assert_eq!(hovered.text_color, theme::BUTTON_TEXT);
         // "Lifts the face" is the name's contract: hovering swaps only the
         // background. The edge colors are asserted unchanged above; assert the
         // geometry too, or a change that made (say) a hovered button's border
@@ -412,12 +419,38 @@ mod tests {
         assert_eq!(pressed.border.color, theme::PANEL_EDGE_DARK);
         assert_eq!(pressed.shadow.color, theme::PANEL_EDGE_LIGHT);
         // The Pressed twin of the Hovered text-color assertion above.
-        assert_eq!(pressed.text_color, theme::TEXT);
+        assert_eq!(pressed.text_color, theme::BUTTON_TEXT);
         // "Sinks and reverses the edge" is the name's contract: pressing swaps
         // the two edge colors and the face, but the 1px geometry stays. Assert
         // it, or a status-dependent border width, radius, or shadow offset
         // could pass every test while the pressed bevel changed shape.
         assert_same_edge_geometry(&active, &pressed);
+    }
+
+    // The base skin's metal buttons are a light face with the glyph engraved
+    // dark (`winamp-2.x-stack.png` reads (189,198,198)/(173,181,181) faces
+    // against near-black glyphs; the mockups agree, reading (185,196,209)
+    // against (57,57,90)). A chrome face darker than its own text renders the
+    // photographic negative, so pin the order for every status.
+    #[test]
+    fn chrome_button_face_is_lighter_than_its_glyph_text() {
+        for status in [
+            button::Status::Active,
+            button::Status::Hovered,
+            button::Status::Pressed,
+            button::Status::Disabled,
+        ] {
+            let style = chrome_button_style(status);
+            let face = match style.background {
+                Some(Background::Color(face)) => face,
+                other => panic!("chrome buttons paint a flat face, got {other:?}"),
+            };
+            let text = style.text_color;
+            assert!(
+                face.r + face.g + face.b > text.r + text.g + text.b,
+                "{status:?}: the chrome face {face:?} must be lighter than the engraved glyph text {text:?}, or the buttons render the base skin's photographic negative"
+            );
+        }
     }
 
     #[test]
@@ -427,7 +460,7 @@ mod tests {
         assert_eq!(disabled.border.color, active.border.color);
         assert_eq!(disabled.shadow.color, active.shadow.color);
         assert_eq!(disabled.background, active.background);
-        assert!(disabled.text_color.a < theme::TEXT.a);
+        assert!(disabled.text_color.a < theme::BUTTON_TEXT.a);
         // "Keeps the edges" is the name's contract: Disabled dims only the
         // text, so the face and both edge colors (asserted above) and the 1px
         // geometry all stay. Assert the geometry too, or a status-dependent
@@ -468,11 +501,11 @@ mod tests {
         assert_eq!(playlist_row_style(button::Status::Active).background, None);
         assert_eq!(
             playlist_row_style(button::Status::Hovered).background,
-            Some(Background::Color(theme::BUTTON_FACE))
+            Some(Background::Color(theme::PANEL_EDGE_LIGHT))
         );
         assert_eq!(
             playlist_row_style(button::Status::Pressed).background,
-            Some(Background::Color(theme::BUTTON_FACE_PRESSED))
+            Some(Background::Color(theme::PANEL_EDGE_DARK))
         );
         assert_eq!(
             playlist_row_style(button::Status::Disabled).background,
@@ -554,9 +587,9 @@ mod tests {
     fn chrome_pick_list_style_sinks_the_face_when_opened() {
         let active = chrome_pick_list_style(pick_list::Status::Active);
         assert_eq!(active.background, Background::Color(theme::BUTTON_FACE));
-        assert_eq!(active.text_color, theme::TEXT);
-        assert_eq!(active.placeholder_color, theme::TEXT);
-        assert_eq!(active.handle_color, theme::TEXT);
+        assert_eq!(active.text_color, theme::BUTTON_TEXT);
+        assert_eq!(active.placeholder_color, theme::BUTTON_TEXT);
+        assert_eq!(active.handle_color, theme::BUTTON_TEXT);
         assert_eq!(active.border.color, theme::PANEL_EDGE_DARK);
         assert_eq!(active.border.width, 1.0);
         assert_eq!(active.border.radius, 0.0.into());
@@ -565,14 +598,14 @@ mod tests {
         // changes face when the menu opens.
         let hovered = chrome_pick_list_style(pick_list::Status::Hovered);
         assert_eq!(hovered.background, Background::Color(theme::BUTTON_FACE));
-        assert_eq!(hovered.text_color, theme::TEXT);
+        assert_eq!(hovered.text_color, theme::BUTTON_TEXT);
 
         let opened = chrome_pick_list_style(pick_list::Status::Opened { is_hovered: false });
         assert_eq!(
             opened.background,
             Background::Color(theme::BUTTON_FACE_PRESSED)
         );
-        assert_eq!(opened.text_color, theme::TEXT);
+        assert_eq!(opened.text_color, theme::BUTTON_TEXT);
     }
 
     #[test]
@@ -581,7 +614,7 @@ mod tests {
         assert_eq!(style.background, Background::Color(theme::BUTTON_FACE));
         assert_eq!(style.border.color, theme::PANEL_EDGE_DARK);
         assert_eq!(style.border.width, 1.0);
-        assert_eq!(style.text_color, theme::TEXT);
+        assert_eq!(style.text_color, theme::BUTTON_TEXT);
         assert_eq!(style.selected_text_color, theme::TEXT);
         assert_eq!(
             style.selected_background,

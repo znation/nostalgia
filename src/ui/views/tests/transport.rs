@@ -314,3 +314,29 @@ fn repeat_and_shuffle_toggles_sink_while_on() {
         );
     }
 }
+
+// The base skin's transport buttons are light metal with the glyph engraved dark:
+// `winamp-2.x-stack.png` reads (189,198,198)/(173,181,181) faces against near-black
+// glyphs, and the mockups agree — `docs/screenshots/player.png` reads (185,196,209)
+// against (57,57,90). Sample the resting face through the pixel harness: it must read
+// that light metal blue-gray, not the dark gray tile the old palette produced.
+#[test]
+fn transport_button_face_renders_light_metal() {
+    let mut renderer = layout_capture::headless_renderer();
+    let mut element: Element<'_, Message, iced::Theme, iced::Renderer> =
+        repeat_toggle(false).into();
+    let (text, pixels) =
+        layout_capture::capture_text_and_pixels(&mut element, &mut renderer, &iced::Theme::Dark);
+    // The left padding strip, clear of the 1px border and the glyphs: antialiased
+    // text blends the label color into the face and can land on the other face's
+    // color (see the sink test above).
+    let size = text.size();
+    let face = Rectangle::new(
+        iced::Point::new(2.0, 2.0),
+        Size::new(4.0, size.height - 4.0),
+    );
+    assert!(
+        pixels.max_red_in(face) >= 150,
+        "the transport button's resting face must read the light metal blue-gray, not a dark gray tile"
+    );
+}
