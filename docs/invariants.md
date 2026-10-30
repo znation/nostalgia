@@ -2853,6 +2853,35 @@ reads it through `take(MAX_RESPONSE_BYTES + 1)` and checks the decoded length be
 (its 10 MiB `MAX_BODY_SIZE` sits under `ureq`'s gzip decoder), leaving a compressed REST reply
 unbounded after decoding — the same exposure the preview downloader had closed.
 
+## REST auth failures
+
+**Guarantee.** An Apple Music REST reply with HTTP status 401 or 403 — a stale or revoked
+MusicKit user token, an expired developer token — is classified at the transport as
+`AppleMusicErrorKind::Auth` with its message byte-identical to a plain failure's. The browse
+fetches reach the report through `fetch_into`/`fetch_level`, whose futures return
+`AppleMusicError`, so a stale-sign-in failure is recognizable without parsing the status text. The browse failure report
+(both the stderr line and the text the `*LoadFailed` message shows in the browse panel) appends
+the recovery hint naming sign-in again; non-auth failures report byte-identically to a plain
+failure's format.
+
+**Enforced by.** `UreqTransport::request`'s non-success branch in
+`src/apple_music/rest/transport.rs` (the 401/403 → `AppleMusicError::new_auth` classification)
+and `fetch_failure_report` in `src/ui/loading.rs` (the hint, held in `AUTH_RECOVERY_HINT`).
+
+**Pinned by.**
+
+- `an_http_401_reply_is_classified_as_an_auth_error_with_todays_message` (`src/apple_music/rest/tests/transport.rs`)
+- `an_http_403_reply_is_classified_as_an_auth_error_with_todays_message` (`src/apple_music/rest/tests/transport.rs`)
+- `an_http_500_reply_classifies_as_other` (`src/apple_music/rest/tests/transport.rs`)
+- `new_auth_carries_the_auth_kind_and_new_the_other_kind` (`src/music_error.rs`)
+- `the_kind_survives_clone_and_equality` (`src/music_error.rs`)
+- `an_auth_error_report_appends_the_sign_in_hint` (`src/ui/loading.rs`)
+- `fetch_failure_report_names_the_fetch_and_includes_the_error` (`src/ui/loading.rs`)
+
+**History.** Added 2026-10-30 when a stale stored MusicKit token was found to seed a session
+whose every signed-in fetch fails with a bare `HTTP 401/403` report, indistinguishable from any
+other REST failure.
+
 ## Preview download
 
 **Guarantee.** The preview download buffers at most `MAX_PREVIEW_BYTES + 1` bytes from either the

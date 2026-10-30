@@ -41,7 +41,7 @@ use crate::state::AppState;
 use playback::TransportState;
 use threads::{browser_sign_in, start_sign_in, startup_token};
 
-pub use crate::music_error::AppleMusicError;
+pub use crate::music_error::{AppleMusicError, AppleMusicErrorKind};
 
 use crate::music_kit_auth::{validate_developer_token, validate_user_token};
 

@@ -315,8 +315,11 @@ in a `music_kit_user_token=` line, and a later launch that has a saved token plu
 variable reuses that sign-in — no browser, no sign-in page, and the first library fetch is already
 the signed-in one. A blank, malformed, or stale saved token (one Apple Music has stopped
 answering) is ignored or fails over exactly like the unset case: the sign-in page opens again on a
-stale or malformed one, a stale one's queries are answered by the sample library, and the saved
-line is left alone until a fresh browser sign-in overwrites it; a user who wants a fresh flow
+stale or malformed one, and the saved line is left alone until a fresh browser sign-in overwrites
+it. Once a stale token does seed a session, its queries are not answered by the sample library —
+they reach Apple Music and fail with a browse-panel failure report naming the rejected sign-in
+("Apple Music rejected the signed-in request — sign in again and restart the player"), which a
+fresh browser sign-in overwrites. a user who wants a fresh flow
 anyway deletes the `music_kit_user_token=` line (with the variable still set) and relaunches. The
 token is stored unencrypted in the settings file like the rest of its content
 (a brand-new settings file is created readable only by its owner, `0600` on

@@ -1,4 +1,5 @@
 use super::*;
+use crate::apple_music::AppleMusicError;
 
 #[test]
 fn await_or_timeout_returns_the_output_when_the_future_completes() {
@@ -477,7 +478,7 @@ async fn fetch_into_maps_a_failed_fetch_to_a_load_failed_message() {
         "loading albums for artist \"artist-1\"".to_string(),
         generation,
         std::time::Duration::from_secs(1),
-        |_service| async { Err::<Vec<Album>, String>("boom".to_string()) },
+        |_service| async { Err::<Vec<Album>, AppleMusicError>(AppleMusicError::new("boom")) },
         Message::AlbumsLoaded,
         Message::AlbumsLoadFailed,
     );
@@ -510,7 +511,7 @@ async fn fetch_into_maps_a_hanging_fetch_to_a_failed_message() {
         "loading favorite artists".to_string(),
         generation,
         std::time::Duration::from_millis(50),
-        |_service| std::future::pending::<Result<Vec<Artist>, String>>(),
+        |_service| std::future::pending::<Result<Vec<Artist>, AppleMusicError>>(),
         Message::ArtistsLoaded,
         Message::ArtistsLoadFailed,
     );

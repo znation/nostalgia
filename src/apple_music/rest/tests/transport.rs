@@ -1,4 +1,5 @@
 use super::*;
+use crate::music_error::AppleMusicErrorKind;
 
 // `ureq` defaults every network timeout to `None`, so a server that accepts
 // the connection and never sends a response used to block `UreqTransport::get`
@@ -290,6 +291,61 @@ fn a_non_success_status_without_an_api_error_body_reports_just_the_status() {
     let url = format!("http://{addr}/me/library/artists");
     let error = UreqTransport::new().get(&url, &rest_session()).unwrap_err();
     assert_eq!(error.to_string(), "HTTP 404 Not Found");
+    assert_eq!(error.kind(), AppleMusicErrorKind::Other);
+}
+
+// A 401 reply is Apple Music rejecting the request's authorization — a stale
+// or revoked MusicKit user token, an expired developer token — so the error
+// is classified `Auth` while the message stays byte-identical to today's
+// `HTTP <status>: <detail>` pin (the report above keeps it readable).
+#[test]
+fn an_http_401_reply_is_classified_as_an_auth_error_with_todays_message() {
+    let body = r#"{"errors":[{"title":"Unauthorized","detail":"Invalid developer token"}]}"#;
+    let addr = serve_one_response(&http_response("401 Unauthorized", "application/json", body));
+
+    let url = format!("http://{addr}/me/library/artists");
+    let error = UreqTransport::new().get(&url, &rest_session()).unwrap_err();
+    assert_eq!(error.kind(), AppleMusicErrorKind::Auth);
+    assert_eq!(
+        error.to_string(),
+        "HTTP 401 Unauthorized: Invalid developer token"
+    );
+}
+
+// The 403 twin: a revoked token is the same recovery (sign in again), so it
+// classifies `Auth` too, message unchanged.
+#[test]
+fn an_http_403_reply_is_classified_as_an_auth_error_with_todays_message() {
+    let body = r#"{"errors":[{"title":"Forbidden","detail":"User token was revoked"}]}"#;
+    let addr = serve_one_response(&http_response("403 Forbidden", "application/json", body));
+
+    let url = format!("http://{addr}/me/library/artists");
+    let error = UreqTransport::new().get(&url, &rest_session()).unwrap_err();
+    assert_eq!(error.kind(), AppleMusicErrorKind::Auth);
+    assert_eq!(
+        error.to_string(),
+        "HTTP 403 Forbidden: User token was revoked"
+    );
+}
+
+// A 500 is not an auth rejection — the recovery is not signing in again — so
+// it stays `Other` even though it is a non-success status.
+#[test]
+fn an_http_500_reply_classifies_as_other() {
+    let body = r#"{"errors":[{"title":"Internal","detail":"try later"}]}"#;
+    let addr = serve_one_response(&http_response(
+        "500 Internal Server Error",
+        "application/json",
+        body,
+    ));
+
+    let url = format!("http://{addr}/me/library/artists");
+    let error = UreqTransport::new().get(&url, &rest_session()).unwrap_err();
+    assert_eq!(error.kind(), AppleMusicErrorKind::Other);
+    assert_eq!(
+        error.to_string(),
+        "HTTP 500 Internal Server Error: try later"
+    );
 }
 
 // `UreqTransport::get` has a second failure path the stalled-server test does

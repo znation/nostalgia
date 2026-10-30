@@ -174,10 +174,20 @@ impl UreqTransport {
         if status.is_success() {
             Ok(body)
         } else {
-            Err(AppleMusicError::new(match api_error_cause(&body) {
+            // A 401 or 403 is Apple Music rejecting this request's
+            // authorization — a stale or revoked MusicKit user token, an
+            // expired developer token. It is classified as `Auth` (while the
+            // message stays byte-identical to a plain failure's) so the UI's
+            // report can hint at the recovery — signing in again — without
+            // parsing the status text.
+            let message = match api_error_cause(&body) {
                 Some(cause) => format!("HTTP {status}: {cause}"),
                 None => format!("HTTP {status}"),
-            }))
+            };
+            Err(match status.as_u16() {
+                401 | 403 => AppleMusicError::new_auth(message),
+                _ => AppleMusicError::new(message),
+            })
         }
     }
 }

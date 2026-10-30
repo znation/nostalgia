@@ -21,7 +21,7 @@ use std::time::Duration;
 
 use iced::Task;
 
-use crate::apple_music::AppleMusicService;
+use crate::apple_music::{AppleMusicError, AppleMusicErrorKind, AppleMusicService};
 use crate::timeout::with_timeout;
 
 use super::Message;
@@ -113,6 +113,13 @@ where
     })
 }
 
+/// The recovery hint the browse failure report appends when the fetch's
+/// error is an auth rejection — Apple Music answered a signed-in request with
+/// HTTP 401 or 403, meaning the stored `MusicKit` token has gone stale or
+/// revoked. The wording is pinned by a test so the hint cannot drift.
+const AUTH_RECOVERY_HINT: &str =
+    "; Apple Music rejected the signed-in request — sign in again and restart the player";
+
 /// Formats the browse-fetch failure report: names the fetch that failed
 /// (e.g. "loading albums for artist \"The Sample Band\" (id \"artist-1\")")
 /// and includes the underlying
@@ -123,9 +130,17 @@ where
 /// the report contract is testable without capturing stderr. The error is
 /// formatted with `Display`, not `Debug`, so a real backend's error reads as
 /// its human-readable cause (see `AppleMusicError`'s `Display` impl) rather
-/// than a struct dump.
-fn fetch_failure_report<E: std::fmt::Display>(context: &str, err: &E) -> String {
-    format!("music-library fetch failed ({context}): {err}")
+/// than a struct dump. When the error is an auth rejection
+/// ([`AppleMusicErrorKind::Auth`], which the REST transport builds for an
+/// HTTP 401/403 reply) one hint line naming the recovery — signing in again
+/// — is appended, so a user whose token went stale is pointed at the fix;
+/// every other error reports byte-identically to a plain failure's format.
+fn fetch_failure_report(context: &str, err: &AppleMusicError) -> String {
+    let mut report = format!("music-library fetch failed ({context}): {err}");
+    if err.kind() == AppleMusicErrorKind::Auth {
+        report.push_str(AUTH_RECOVERY_HINT);
+    }
+    report
 }
 
 /// Formats the playback failure report: names the offending track and
@@ -264,7 +279,7 @@ fn play_timeout_report(track_id: &str, timeout: Duration) -> String {
 /// leaving the panel on "Loading…". [`fetch_level`] drives every browse-level
 /// fetch through here, so no arm repeats the clone-the-service-then-
 /// `Task::perform` boilerplate.
-pub(super) fn fetch_into<T, E, Fut>(
+pub(super) fn fetch_into<T, Fut>(
     service: &AppleMusicService,
     context: String,
     generation: RequestGeneration,
@@ -275,8 +290,7 @@ pub(super) fn fetch_into<T, E, Fut>(
 ) -> Task<Message>
 where
     T: Send + 'static,
-    E: std::fmt::Display + Send + 'static,
-    Fut: Future<Output = Result<Vec<T>, E>> + Send + 'static,
+    Fut: Future<Output = Result<Vec<T>, AppleMusicError>> + Send + 'static,
 {
     let service = service.clone();
     Task::perform(
@@ -318,7 +332,7 @@ where
 /// here once instead of at each arm. `list` and `service` are separate borrows
 /// of the player's fields, so a caller can pass `&mut player.songs` and
 /// `&player.apple_music_service` together.
-pub(super) fn fetch_level<T, E, Fut>(
+pub(super) fn fetch_level<T, Fut>(
     list: &mut BrowseList<T>,
     service: &AppleMusicService,
     context: String,
@@ -328,8 +342,7 @@ pub(super) fn fetch_level<T, E, Fut>(
 ) -> Task<Message>
 where
     T: Send + 'static,
-    E: std::fmt::Display + Send + 'static,
-    Fut: Future<Output = Result<Vec<T>, E>> + Send + 'static,
+    Fut: Future<Output = Result<Vec<T>, AppleMusicError>> + Send + 'static,
 {
     list.clear();
     let generation = list.begin_fetch();
@@ -372,10 +385,34 @@ mod tests {
         // otherwise a broken backend would log identical lines for several
         // browse paths with no way to tell which query failed. The format is
         // pinned here so the contract can't drift.
-        let report = fetch_failure_report("loading albums for artist \"artist-1\"", &"boom");
+        let report = fetch_failure_report(
+            "loading albums for artist \"artist-1\"",
+            &AppleMusicError::new("boom"),
+        );
         assert_eq!(
             report,
             "music-library fetch failed (loading albums for artist \"artist-1\"): boom"
+        );
+    }
+
+    // An auth rejection (a 401/403 the transport classified as
+    // `AppleMusicErrorKind::Auth`) is the one failure whose report names the
+    // recovery — signing in again — because the message alone reads like any
+    // other REST failure with no hint the stored token went stale. The full
+    // format is pinned here so the hint's wording and placement cannot drift.
+    #[test]
+    fn an_auth_error_report_appends_the_sign_in_hint() {
+        let report = fetch_failure_report(
+            "loading favorite artists",
+            &AppleMusicError::new_auth("HTTP 401 Unauthorized: Invalid developer token"),
+        );
+        assert_eq!(
+            report,
+            format!(
+                "music-library fetch failed (loading favorite artists): \
+                 HTTP 401 Unauthorized: Invalid developer token\
+                 {AUTH_RECOVERY_HINT}"
+            )
         );
     }
 
