@@ -302,6 +302,59 @@ fn a_mid_restore_play_persists_the_seed_rows_with_the_play_on_top() {
     assert_eq!(store.snapshots().len(), 1);
 }
 
+// A mid-restore play that replays an id the seed already names must not let
+// the pre-answer persist write that id twice: the composition folds the
+// seed's naming of it under the play's newest-first row instead of standing
+// it again, so the file never gains a duplicated `recently_played=` row.
+#[test]
+fn a_mid_restore_replay_of_a_seed_row_persists_it_once() {
+    let (mut player, _state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+
+    let mut saved = Settings::default();
+    saved.set_recently_played(vec!["song-3".to_string(), "song-1".to_string()]);
+    player.adopt_saved_settings(saved);
+
+    // The boot issues the restore's resolve, as `main`'s task chain does.
+    let _ = update(&mut player, Message::ResolveRecentlyPlayed);
+    let _ = update(&mut player, Message::Ignored);
+    assert_eq!(store.snapshots().len(), 0);
+
+    // A replay of the seed's OLDEST row (song-1) commits while the resolve
+    // is still in flight: the play's id now tops the composition, so the
+    // snapshot differs from the file and exactly one save happens — the
+    // seed's naming of song-1 folded under the play, not stood a second
+    // time (`song-1,song-3,song-1` would read as a doubled row).
+    let songs = stepping_songs();
+    player.played_songs.record(songs[0].clone());
+    let _ = update(&mut player, Message::Ignored);
+    let snapshots = store.snapshots();
+    assert_eq!(snapshots.len(), 1);
+    assert_eq!(
+        snapshots[0].recently_played(),
+        &["song-1".to_string(), "song-3".to_string()]
+    );
+    assert!(
+        snapshots[0]
+            .to_text()
+            .contains("recently_played=song-1,song-3")
+    );
+
+    // The reply answers both seed ids in save order: the replay drops back
+    // to its restored position and the re-recorded mid-flight play pins the
+    // composition at the list the pre-answer persist already wrote, so
+    // nothing more saves.
+    let _ = update(
+        &mut player,
+        Message::RecentlyPlayedResolved {
+            songs: vec![Some(songs[2].clone()), Some(songs[0].clone())],
+        },
+    );
+    let _ = update(&mut player, Message::Ignored);
+    assert_eq!(store.snapshots().len(), 1);
+}
+
 #[test]
 fn an_unchanged_token_writes_nothing() {
     let (mut player, _state) = test_player();
