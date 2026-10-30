@@ -776,16 +776,79 @@ fn toggle_autoscroll_reaches_the_saved_snapshot() {
 }
 
 #[test]
-fn launch_position_opens_at_the_saved_point_or_the_default() {
+fn launch_position_clamps_the_saved_point_or_uses_the_default() {
     use crate::ui::handlers::window::launch_position;
     assert!(matches!(
         launch_position(Some((10.0, 20.0))),
-        iced::window::Position::Specific(point) if point == iced::Point::new(10.0, 20.0)
+        iced::window::Position::SpecificWith(_)
     ));
     assert!(matches!(
         launch_position(None),
         iced::window::Position::Default
     ));
+}
+
+#[test]
+fn clamp_into_monitor_passes_an_in_bounds_point_through() {
+    use crate::ui::handlers::window::clamp_into_monitor;
+    let point = iced::Point::new(40.0, 60.0);
+    assert_eq!(
+        clamp_into_monitor(
+            point,
+            iced::Size::new(200.0, 100.0),
+            iced::Size::new(1280.0, 720.0)
+        ),
+        point
+    );
+}
+
+#[test]
+fn clamp_into_monitor_snaps_points_beyond_each_edge_independently() {
+    use crate::ui::handlers::window::clamp_into_monitor;
+    // x is past the right edge, y is fine: only x clamps.
+    assert_eq!(
+        clamp_into_monitor(
+            iced::Point::new(2000.0, 60.0),
+            iced::Size::new(200.0, 100.0),
+            iced::Size::new(1280.0, 720.0)
+        ),
+        iced::Point::new(1080.0, 60.0)
+    );
+    // y is past the bottom edge, x is fine: only y clamps.
+    assert_eq!(
+        clamp_into_monitor(
+            iced::Point::new(40.0, 2000.0),
+            iced::Size::new(200.0, 100.0),
+            iced::Size::new(1280.0, 720.0)
+        ),
+        iced::Point::new(40.0, 620.0)
+    );
+}
+
+#[test]
+fn clamp_into_monitor_snaps_a_negative_coordinate_to_zero() {
+    use crate::ui::handlers::window::clamp_into_monitor;
+    assert_eq!(
+        clamp_into_monitor(
+            iced::Point::new(-50.0, -1.0),
+            iced::Size::new(200.0, 100.0),
+            iced::Size::new(1280.0, 720.0)
+        ),
+        iced::Point::ORIGIN
+    );
+}
+
+#[test]
+fn clamp_into_monitor_pins_a_monitor_smaller_than_the_window_at_zero() {
+    use crate::ui::handlers::window::clamp_into_monitor;
+    assert_eq!(
+        clamp_into_monitor(
+            iced::Point::new(960.0, 540.0),
+            iced::Size::new(1280.0, 720.0),
+            iced::Size::new(800.0, 600.0)
+        ),
+        iced::Point::ORIGIN
+    );
 }
 
 fn saved_library_view(store: &MemorySettingsStore) -> crate::settings::library_view::LibraryView {

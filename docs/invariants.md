@@ -1218,8 +1218,11 @@ line falls back to shown or autoscrolling respectively. The window's screen posi
 fed by `window_moved_message` from iced's `Moved` window event, stores it and the update loop saves
 it as `window_position=<x>,<y>`, a line written only once a position is known. A missing line, or one
 that is not two finite numbers (`abc`, `10`, `NaN,5`, `inf,5`), leaves it unset and the window opens
-where the window system puts it; a set value is passed to `.position(...)` through `launch_position`
-without clamping to monitors (iced cannot query them before the window opens). Wayland reports no
+where the window system puts it; a set value is passed through `launch_position` as
+`Position::SpecificWith`, whose callback `clamp_into_monitor` clamps the point inside the monitor
+the window opens on at open time (each axis independently: beyond an edge snaps to monitor extent
+minus window extent, below zero snaps to zero, a monitor smaller than the window pins the axis at
+zero; the monitor's own origin is not queried). Wayland reports no
 moves, so no line is written there. The classic `A` key and Winamp's Ctrl+A reach
 the same `Message::ToggleAlwaysOnTop` arm through `shortcuts::message_for`, so they flip the flag
 and schedule the same window-level call as the on-screen A controls. The saved always-on-top level
@@ -1280,7 +1283,11 @@ arm those controls press.
 `session_ready_refetches_only_the_flat_list_showing`, `to_text_round_trips_every_field`,
 `window_position_round_trips_and_ignores_malformed_values`, `window_moved_reaches_the_saved_snapshot`,
 `saved_window_position_is_restored_on_boot`, `window_moved_message_maps_only_move_events`,
-`launch_position_opens_at_the_saved_point_or_the_default`,
+`launch_position_clamps_the_saved_point_or_uses_the_default`,
+`clamp_into_monitor_passes_an_in_bounds_point_through`,
+`clamp_into_monitor_snaps_points_beyond_each_edge_independently`,
+`clamp_into_monitor_snaps_a_negative_coordinate_to_zero`,
+`clamp_into_monitor_pins_a_monitor_smaller_than_the_window_at_zero`,
 `time_display_round_trips_both_words_and_ignores_unknown_values`,
 `visualizer_visibility_round_trips_and_ignores_malformed_values`,
 `panel_visibility_round_trips_and_ignores_malformed_values`,

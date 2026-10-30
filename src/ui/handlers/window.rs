@@ -19,13 +19,50 @@ pub(in crate::ui) fn window_moved(player: &mut WinampPlayer, point: iced::Point)
     Task::none()
 }
 
+/// The saved launch position, stashed once at boot so the plain `fn` pointer
+/// handed to `Position::SpecificWith` can reach it (a `fn` cannot close over
+/// it). `launch_position` performs the only write; an unset lock — only a
+/// test's default path — clamps the origin.
+static SAVED_LAUNCH_POSITION: std::sync::OnceLock<(f32, f32)> = std::sync::OnceLock::new();
+
+/// Clamp `point` so the window of `window` size opens fully inside the
+/// monitor of `monitor` size it opens on, per axis and independently: a
+/// point past an edge snaps to `monitor extent - window extent`, a negative
+/// coordinate snaps to `0`, and a monitor smaller than the window pins the
+/// axis at `0` (`.max(0.0)`).
+pub(in crate::ui) fn clamp_into_monitor(
+    point: iced::Point,
+    window: iced::Size,
+    monitor: iced::Size,
+) -> iced::Point {
+    iced::Point {
+        x: point.x.clamp(0.0, (monitor.width - window.width).max(0.0)),
+        y: point
+            .y
+            .clamp(0.0, (monitor.height - window.height).max(0.0)),
+    }
+}
+
+fn clamped_saved_position(window: iced::Size, monitor: iced::Size) -> iced::Point {
+    let (x, y) = SAVED_LAUNCH_POSITION.get().copied().unwrap_or((0.0, 0.0));
+    clamp_into_monitor(iced::Point::new(x, y), window, monitor)
+}
+
 /// Where the window opens: the saved screen position, or the window
-/// system's choice when none was saved. The position is not clamped to the
-/// monitors, since iced cannot query them before the window opens.
+/// system's choice when none was saved. The saved position is not handed to
+/// the window system verbatim — `Position::SpecificWith` clamps it inside
+/// the monitor the window opens on at creation time (see
+/// `clamp_into_monitor`), so a point saved for a monitor that is no longer
+/// there reopens on screen instead of hiding the window. The monitor's own
+/// origin is not queried: the clamp is anchored to whatever monitor the
+/// window system picks for the launch.
 pub(in crate::ui) fn launch_position(saved: Option<(f32, f32)>) -> iced::window::Position {
-    saved.map_or(iced::window::Position::Default, |(x, y)| {
-        iced::window::Position::Specific(iced::Point::new(x, y))
-    })
+    if let Some((x, y)) = saved {
+        let _ = SAVED_LAUNCH_POSITION.set((x, y));
+        iced::window::Position::SpecificWith(clamped_saved_position)
+    } else {
+        iced::window::Position::Default
+    }
 }
 
 /// The app window's id, resolved once at boot by `iced::window::latest()`:
