@@ -886,3 +886,27 @@ async fn get_recently_played_songs_returns_no_songs_for_an_empty_signed_in_resul
 
     assert!(songs.is_empty());
 }
+
+// The id lookup routes through the REST library when a session is stored, so
+// a signed-in user's restored last-played id resolves against their real
+// library rather than the sample one: the stub returns a song whose id is not
+// a sample id, so the hit can only have come from the REST collection, and a
+// sample id that the library does not carry answers `None`.
+#[tokio::test]
+async fn get_song_by_id_uses_the_rest_library_when_signed_in() {
+    let stub = StubTransport::returning(&rest_song_data());
+    let service = signed_in_service(&stub);
+
+    let found = service.get_song_by_id(REST_SONG_ID).await.unwrap();
+
+    assert_eq!(found, Some(rest_song()));
+    assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/songs");
+
+    // A signed-in library without that id stays empty rather than falling
+    // back to the sample songs.
+    let found = service.get_song_by_id("song-1").await.unwrap();
+    assert!(
+        found.is_none(),
+        "an id outside the signed-in library must not fall back to the sample songs: {found:?}"
+    );
+}

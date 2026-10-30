@@ -187,6 +187,36 @@ impl AppleMusicService {
         .await
     }
 
+    /// One song by id, looked up for a caller that holds a track id it has no
+    /// row for — the last-played track restored at launch above all. The
+    /// signed-in answer scans the whole-library songs collection, so it costs
+    /// the same paginated read the All Songs view pays; the signed-out answer
+    /// scans the sample library's flat song list. `None` means the id names
+    /// no song in the library — a stale id for a deleted track or foreign
+    /// import — and the caller treats it as nothing to replay rather than an
+    /// error.
+    ///
+    /// A blank `track_id` — empty or only whitespace — or one carrying a
+    /// terminal control character is rejected with an [`AppleMusicError`],
+    /// the track-query twin of [`AppleMusicService::get_songs_from_album`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when `track_id` is blank (empty or only
+    /// whitespace), carries a control character, or the signed-in songs
+    /// request fails.
+    pub async fn get_song_by_id(&self, track_id: &str) -> Result<Option<Song>, AppleMusicError> {
+        ensure_id_is_valid(track_id, IdKind::Track)?;
+        let id = track_id.to_string();
+        let songs = self
+            .browse(
+                |rest, session| rest.get_all_songs(session),
+                sample_all_songs,
+            )
+            .await?;
+        Ok(songs.into_iter().find(|song| song.id == id))
+    }
+
     /// Every album in the library: the signed-in user's whole Apple Music
     /// library when a session is stored, and every sample-library album
     /// otherwise.

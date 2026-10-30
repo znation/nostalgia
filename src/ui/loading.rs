@@ -138,6 +138,14 @@ pub(super) fn play_failure_report<E: std::fmt::Display>(track_id: &str, err: &E)
     format!("failed to play track {track_id:?}: {err}")
 }
 
+/// Formats the replay failure report: names the restored track whose id the
+/// library could not resolve and includes the underlying error, the replay
+/// twin of [`play_failure_report`] (and pure for the same reason — the
+/// stderr report is testable without capturing stderr).
+pub(super) fn replay_failure_report<E: std::fmt::Display>(track_id: &str, err: &E) -> String {
+    format!("failed to resolve track {track_id:?} for replay: {err}")
+}
+
 /// Formats the transport failure report: names the action that failed (e.g.
 /// "pause") and includes the underlying error, the transport twin of
 /// [`fetch_failure_report`] and [`play_failure_report`]. Pure, like the other

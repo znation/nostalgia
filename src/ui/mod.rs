@@ -327,6 +327,9 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             generation,
             committed,
         } => handlers::playback::track_played(player, generation, committed),
+        Message::ReplayResolved { track_id, song } => {
+            handlers::playback::replay_resolved(player, &track_id, song)
+        }
         Message::WindowIdResolved(id) => handlers::window::window_id_resolved(player, id),
         Message::WindowDragged => handlers::window::window_dragged(player),
         Message::MinimizeWindow => handlers::window::minimize_window(player),

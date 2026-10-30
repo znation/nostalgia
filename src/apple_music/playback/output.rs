@@ -72,6 +72,20 @@ impl AppleMusicService {
             .map_or(true, |transport| transport.loaded)
     }
 
+    /// Reports whether the transport remembers a preview URL a later Play can
+    /// restart a stopped preview from — the URL `stop` keeps — or `false`
+    /// before the first play. The UI's Play arm reads it, beside
+    /// [`Self::has_loaded_preview`], to tell a Play-after-Stop (restart the
+    /// remembered URL) from a relaunch's first Play with a restored track id
+    /// (resolve the id through the library seam instead). Like
+    /// [`Self::has_loaded_preview`] it takes only a free lock and reports
+    /// `true` across a held transition, whose completion re-evaluates it.
+    pub(crate) fn has_remembered_preview(&self) -> bool {
+        self.transport
+            .try_lock()
+            .map_or(true, |transport| transport.last_url.is_some())
+    }
+
     /// Reports the loaded preview's playback position, or `None` when no
     /// preview is loaded or the audio backend cannot answer.
     ///

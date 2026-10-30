@@ -12,9 +12,11 @@ use std::sync::atomic::Ordering;
 
 use iced::Task;
 
+use crate::library::Song;
 use crate::state::AppState;
 use crate::ui::loading::{
-    PLAY_TIMEOUT, RequestGeneration, play_failure_report, play_into, transport_into,
+    PLAY_TIMEOUT, RequestGeneration, play_failure_report, play_into, replay_failure_report,
+    transport_into,
 };
 use crate::ui::views;
 use crate::ui::{CurrentView, Message, WinampPlayer};
@@ -25,11 +27,23 @@ pub(in crate::ui) mod stepping;
 pub(in crate::ui) mod title_drag;
 
 /// The system media Play/Pause key: toggles the preview between playing and
-/// paused. A track with no loaded preview stops instead, since there is
-/// nothing to pause. The transport row's Play and Pause buttons use the
-/// explicit [`play`] and [`pause`] instead.
+/// paused. From stopped, it starts the service's remembered URL when one
+/// exists, resolving the restored last-played track through the service seam
+/// otherwise; a track with no loaded preview and no restore candidate stops
+/// instead, since there is nothing to pause. The transport row's Play and
+/// Pause buttons use the explicit [`play`] and [`pause`] instead.
 pub(in crate::ui) fn play_pause(player: &mut WinampPlayer) -> Task<Message> {
     fade::cancel_fade_out(player);
+    // The flag snapshot is advisory (see [`replay_candidate`]): a lock
+    // the service is holding means a transition is mid-write, so the plain
+    // toggle — which serializes under the same locks — is the safe branch.
+    let stopped = !player
+        .state
+        .try_lock()
+        .map_or(true, |state| state.is_playing);
+    if stopped {
+        return replay_from_stopped(player, "toggle play/pause");
+    }
     begin_position_transition(player);
     transport_into(
         &player.apple_music_service,
@@ -39,14 +53,70 @@ pub(in crate::ui) fn play_pause(player: &mut WinampPlayer) -> Task<Message> {
 }
 
 /// The transport row's Play button and the keyboard's X key: an explicit play rather than the media
-/// key's toggle. Play resumes (or restarts) the preview, and restarts a playing preview from its
-/// start.
+/// key's toggle. A loaded (or reloadable) preview resumes or restarts, and a playing preview restarts
+/// from its start. With neither a loaded preview nor the service's remembered URL — a fresh launch
+/// that restored the last-played track's id — the saved id is resolved through the service seam and
+/// replayed through [`begin_play`], so the Now Playing bar's track starts again from the beginning
+/// without needing its row on screen.
 pub(in crate::ui) fn play(player: &mut WinampPlayer) -> Task<Message> {
     fade::cancel_fade_out(player);
-    begin_position_transition(player);
-    transport_into(&player.apple_music_service, "play", |service| async move {
-        service.resume().await
-    })
+    replay_from_stopped(player, "play")
+}
+
+/// The decision behind both explicit Play arms: with the transport holding a
+/// preview loaded or remembering the URL `stop` kept, Play runs the
+/// service-side resume — begin a position transition first, so the polls wait
+/// out the transition. With neither, the transport has nothing to resume
+/// (the service's own "nothing to resume" branch would leave the flags
+/// alone), so the shared state's current track id is resolved through the
+/// service's library seam instead, and the reply replays it as a row press
+/// would. `context` names the caller in the transport failure report.
+fn replay_from_stopped(player: &mut WinampPlayer, context: &'static str) -> Task<Message> {
+    match replay_candidate(player) {
+        None => {
+            begin_position_transition(player);
+            transport_into(&player.apple_music_service, context, |service| async move {
+                service.resume().await
+            })
+        }
+        Some(track_id) => {
+            let service = player.apple_music_service.clone();
+            Task::perform(
+                {
+                    let track_id = track_id.clone();
+                    async move {
+                        match service.get_song_by_id(&track_id).await {
+                            Ok(song) => song,
+                            Err(error) => {
+                                eprintln!("{}", replay_failure_report(&track_id, &error));
+                                None
+                            }
+                        }
+                    }
+                },
+                move |song| Message::ReplayResolved { track_id, song },
+            )
+        }
+    }
+}
+
+/// The id Play would replay, when the transport cannot answer a resume: no
+/// preview is loaded and none is remembered, so the service's resume would
+/// find nothing to sound. Falls back to none — meaning take the plain
+/// transport path — when the shared state's lock is held, because a service
+/// transition mid-write may be about to load a preview or remember a URL;
+/// the transport path serializes its own decision under those locks.
+fn replay_candidate(player: &WinampPlayer) -> Option<String> {
+    if player.apple_music_service.has_loaded_preview()
+        || player.apple_music_service.has_remembered_preview()
+    {
+        return None;
+    }
+    player
+        .state
+        .try_lock()
+        .ok()
+        .and_then(|state| state.current_track.clone())
 }
 
 /// The transport row's Pause button and the keyboard's C key. Pause pauses a
@@ -127,7 +197,9 @@ pub(in crate::ui) fn toggle_visualizer(player: &mut WinampPlayer) -> Task<Messag
 /// different song now — ignore the stale press. An out-of-range index
 /// likewise names no track and is a no-op rather than a bogus play. `select`
 /// applies both checks. Once the song resolves, an enabled AUTO applies the
-/// preset named after its genre before the play request is issued.
+/// preset named after its genre before the play request is issued. The play
+/// half is [`begin_play`]'s body, shared with the relaunch replay so both
+/// paths record, reset, and start identically.
 pub(in crate::ui) fn track_selected(
     player: &mut WinampPlayer,
     epoch: u64,
@@ -141,10 +213,31 @@ pub(in crate::ui) fn track_selected(
     let Some(song) = selected else {
         return Task::none();
     };
+    begin_play(player, song.clone(), Some(index))
+}
+
+/// The shared play machinery behind both ways a song starts: a press on its
+/// row resolves it from the showing list first (its playlist number comes
+/// from the row), and the relaunch replay resolves it through the service's
+/// library seam instead (no row, so the record's number prefix stays empty);
+/// once the [`Song`] is known the two are identical. The record, the AUTO
+/// preset, the readout reset, and the guarded async play are all here so the
+/// two paths cannot drift.
+///
+/// `row` is the 0-based index of the row that named the song, when a row did:
+/// it supplies the record's `1. `-style playlist-number prefix. The Now
+/// Playing bar resolves its number, label, artist, and time from
+/// `known_tracks`, and the entry must survive a later browse to a different
+/// list (which replaces the visible song buffer). Recording once per play —
+/// rather than folding every song of every loaded list into the map — keeps
+/// the index proportional to songs actually played and takes the fold off
+/// the browse path. The number is the 1-based position of the row that
+/// selected the track, so re-playing the same id from another row or list
+/// refreshes it alongside the other cached fields rather than keeping the
+/// old number.
+fn begin_play(player: &mut WinampPlayer, song: Song, row: Option<usize>) -> Task<Message> {
     let track_id = song.id.clone();
     let preview_url = song.preview_url.clone();
-    // Cloned before the AUTO call, which borrows the whole player while
-    // `song` still borrows its list.
     let genre = song.genre.clone();
     // A newly selected song starts its title at character zero; the
     // previous song's scroll position must not carry over.
@@ -168,7 +261,10 @@ pub(in crate::ui) fn track_selected(
     // selected the track.
     player.known_tracks.insert(
         track_id.clone(),
-        views::KnownTrack::from_song(song, format!("{}. ", index + 1)),
+        views::KnownTrack::from_song(
+            &song,
+            row.map_or(String::new(), |index| format!("{}. ", index + 1)),
+        ),
     );
     // A selection mid-fade plays at the saved volume, not the faded one.
     fade::cancel_fade_out(player);
@@ -201,6 +297,42 @@ pub(in crate::ui) fn track_selected(
         },
         move |err| eprintln!("{}", play_failure_report(&id_for_report, err)),
     )
+}
+
+/// An id replay's reply: `song` is what the restored id resolved to (`None`
+/// when it names no song in the library, or the lookup failed — both were
+/// already logged), or the lookup was rejected. The reply is dropped when it
+/// no longer speaks for the boot restore: the resolved id must still be the
+/// shared state's current track, and nothing may be playing or loaded, so a
+/// track the user picked while the resolve was in flight cannot be knocked
+/// out by the replay. A clean reply replays the song through [`begin_play`]
+/// — the exact path a press on its row runs — so the restored track comes
+/// back playing from its beginning with its title in the Now Playing bar.
+pub(in crate::ui) fn replay_resolved(
+    player: &mut WinampPlayer,
+    track_id: &str,
+    song: Option<Song>,
+) -> Task<Message> {
+    // The reply's currency checks are advisory: a shared-state lock the
+    // service is holding means a transition is mid-write (a track is coming
+    // to play), so the reply is treated as superseded — the transition's own
+    // completion re-renders, and the next Play re-resolves. `try_lock` also
+    // keeps the handler off the blocking path, so an async test runtime may
+    // drive it.
+    let superseded = match player.state.try_lock() {
+        Ok(state) => state.current_track.as_deref() != Some(track_id) || state.is_playing,
+        Err(_) => true,
+    } || player.apple_music_service.has_loaded_preview();
+    if superseded {
+        return Task::none();
+    }
+    let Some(song) = song else {
+        // Nothing remembered the URL and the library does not know the id,
+        // so there is nothing to replay: the transport stays stopped.
+        eprintln!("nothing to replay: restored track {track_id:?} is not in the library");
+        return Task::none();
+    };
+    begin_play(player, song, None)
 }
 
 /// The play completion: it ends the transition the selection began, so the

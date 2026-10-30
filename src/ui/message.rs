@@ -367,11 +367,21 @@ pub(in crate::ui) enum Message {
     // no-op.
     Ignored,
     // The play's completion carries the generation its selection issued, so
-    // the arm can tell whether a newer selection has superseded it. Only the
-    // latest completion may prune the title index; a superseded one must not
-    // drop a still-pending selection's title. `committed` is whether the play
-    // itself succeeded: shared state's flags cannot stand in, because a Pause
-    // or Stop processed after the commit but before this message clears them.
+    // An id replay's reply: the library song the requested id resolved to, or
+    // `None` when it names no song (a stale restored id) or the lookup
+    // failed. The handler replays the song through the row-press machinery
+    // once it confirms the id is still the shared state's current track and
+    // nothing has come to play in between; otherwise the reply is dropped.
+    ReplayResolved {
+        track_id: String,
+        song: Option<Song>,
+    },
+    // A play's completion reply: `generation` tells the arm whether a newer
+    // selection has superseded it. Only the latest completion may prune the
+    // title index; a superseded one must not drop a still-pending selection's
+    // title. `committed` is whether the play itself succeeded: shared state's
+    // flags cannot stand in, because a Pause or Stop processed after the
+    // commit but before this message clears them.
     TrackPlayed {
         generation: u64,
         committed: bool,

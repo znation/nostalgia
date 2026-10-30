@@ -427,3 +427,51 @@ async fn get_recently_played_songs_returns_the_sample_songs_reversed() {
 
     assert_eq!(songs, expected);
 }
+
+// The id lookup the relaunch replay runs: the sample library answers by exact
+// id, carrying the whole song the row press would have had, and an id that
+// names no song is `None`, not an error — a stale restored id must degrade to
+// "nothing to replay".
+#[tokio::test]
+async fn get_song_by_id_finds_a_sample_song_by_its_exact_id() {
+    let service = test_service();
+    let expected = service
+        .get_all_songs()
+        .await
+        .unwrap()
+        .into_iter()
+        .find(|song| song.id == "song-4")
+        .expect("the sample library knows song-4");
+
+    let found = service.get_song_by_id("song-4").await.unwrap();
+
+    assert_eq!(found.as_ref().map(|song| song.id.as_str()), Some("song-4"));
+    assert_eq!(found, Some(expected));
+}
+
+// A blank id can never name a track, the same guard `play_track` and the
+// album query run.
+#[tokio::test]
+async fn get_song_by_id_rejects_a_blank_id() {
+    let service = test_service();
+
+    for id in ["", "   "] {
+        let error = service.get_song_by_id(id).await.unwrap_err();
+        assert!(
+            error.to_string().contains("track id"),
+            "the error must name the id: {error}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn get_song_by_id_answers_none_for_an_id_outside_the_library() {
+    let service = test_service();
+
+    let found = service.get_song_by_id("song-999").await.unwrap();
+
+    assert!(
+        found.is_none(),
+        "a stale id must resolve to none: {found:?}"
+    );
+}

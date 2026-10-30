@@ -218,7 +218,8 @@ mode there is no search box, so Ctrl+F does nothing. F5 refetches the library an
 Artists list, exactly like the `Reload` button. While the window is focused, the system media
 keys Play/Pause, Play, Pause, Stop, Next track, and Previous track drive the transport: Play,
 Pause, Stop, Next track, and Previous track match the on-screen controls, while Play/Pause
-toggles a loaded preview and stops a track with none. Previous — the button, the Z key, and the system Previous track key — restarts the
+toggles a loaded preview, starts a relaunched session's restored last-played track when nothing
+is loaded and the service remembers no URL, and otherwise stops a track with none. Previous — the button, the Z key, and the system Previous track key — restarts the
 loaded preview from its start once it has played at least three seconds, and steps back before
 that; with Shuffle on, Next picks a song not yet played this round (every song plays once before
 any repeats) and such an earlier Previous retraces the
@@ -269,7 +270,7 @@ choice, the window-shade mode, the window's last screen position, the last-playe
 Songs, All Albums, Recently Added, Recently Played, Playlists, Genres, Years, or Composers; a list opened from one of them
 saves that one) are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or
 `$HOME/.config/nostalgia/settings.ini`) and restored at the next launch; `NOSTALGIA_SETTINGS_PATH`
-overrides the path. The last-played track is restored at the next launch stopped: the Now Playing bar shows it, Play starts it again from the beginning, and the position within it is not remembered. The window reopens at its saved position without checking that a monitor is still there; delete the `window_position` line to reset an off-screen window. Wayland reports no window moves, so the position is not saved or restored there. A relative `XDG_CONFIG_HOME` is ignored (the XDG spec requires an absolute one), so the `$HOME/.config` location is used instead (or persistence is disabled when `$HOME` is unset). A missing or malformed entry falls back to its default (a `NaN` number counts
+overrides the path. The last-played track is restored at the next launch stopped: the Now Playing bar shows it, Play — the transport button, the X key, or the media play/pause key — starts it again from the beginning, and the position within it is not remembered. The window reopens at its saved position without checking that a monitor is still there; delete the `window_position` line to reset an off-screen window. Wayland reports no window moves, so the position is not saved or restored there. A relative `XDG_CONFIG_HOME` is ignored (the XDG spec requires an absolute one), so the `$HOME/.config` location is used instead (or persistence is disabled when `$HOME` is unset). A missing or malformed entry falls back to its default (a `NaN` number counts
 as malformed; a byte that is not UTF-8 spoils only its own line, and a leading UTF-8 BOM is
 ignored), and a settings file that exists but cannot be read falls back to defaults with one line
 on stderr naming the file; the player then refuses to save for the rest of that run, printing a

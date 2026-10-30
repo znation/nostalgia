@@ -5,6 +5,32 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### Play after a relaunch with a restored last-played track does nothing (found by the bugfix role 2026-10-29) — fixed 2026-10-29 by the bugfix role
+
+**Symptom.** The last-played-track persistence feature promised that "Play starts it again from
+the beginning" at the next launch (docs/usage.md), but the explicit Play (transport button, X key)
+and the media-key Play/Pause only called the service's resume, which does nothing when the fresh
+service has neither a loaded preview nor the URL `stop` remembers — exactly the state the boot
+restore leaves. Reproduce: restore a saved `current_track` id into a player over a fresh service
+and drive `Message::Play`; before the fix the transport stayed stopped and the audio backend saw
+no call.
+
+**Cause.** The replay needs the id resolved through a library seam the UI did not have, so the
+feature's promise was documented without a code path to keep it.
+
+**Fix.** `AppleMusicService::get_song_by_id` (REST aside: signed-in answers from the
+whole-library songs collection, signed-out from the sample list) resolves the id; Play and the
+stopped half of the media-key Play/Pause route through `replay_from_stopped`/`replay_candidate`,
+which resume normally whenever the transport can answer, and otherwise resolve the saved id and
+replay the returned song through `begin_play` — the row-press machinery, so the title is recorded
+and AUTO applies. A reply a newer selection superseded (checked through `try_lock`, so async test
+runtimes stay lock-free) or a stale id is dropped, leaving the transport stopped.
+
+**Validation gap:** no-observability — the broken Play left no test-visible trace (the service only
+printed a stdout line), and no test or invariant pinned the docs' promise, so the gap had to be
+closed by pinning the replay end-to-end, its superseded and stale-id drops, and the new seam
+(signed-in, signed-out, and guard) rather than reproducing an observed failure.
+
 ### A stale `PLANS.md.bak` copy of PLANS.md ships in the repository root (found by the bugfix role 2026-10-29) — fixed 2026-10-29 by the bugfix role
 
 - Symptom: `git ls-files` lists `PLANS.md.bak`, a stale snapshot of PLANS.md as it

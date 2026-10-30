@@ -936,7 +936,22 @@ not one of the UI-owned values: the id is held in `AppState` (`current_track`), 
 carries it straight from the snapshot, and the boot `apply_to` restores the track stopped with a
 blank elapsed readout, the state Stop leaves; a track change or stop rewrites the line on the
 next message's save. A missing or empty `current_track` line — or a stale id no longer in the
-library, which degrades through the existing id-fallback label — leaves no track. The readout mode, the visualizer's shown/hidden
+library, which degrades through the existing id-fallback label — leaves no track. The restored
+track is playable from no row: when the transport holds no preview and remembers no URL (a fresh
+launch), Play and the media-key play/pause resolve the saved id through the service seam
+(`get_song_by_id`) and replay it through the row-press machinery (`begin_play`), so it comes back
+playing from its beginning with its title recorded; a reply a newer selection superseded — or a
+stale id the library does not know, logged — is dropped, leaving the transport stopped. The
+section's tests pin only the snapshot round-trip; the replay at launch is pinned by
+`play_replays_the_track_restored_at_boot`,
+`play_pause_toggles_start_of_a_replay_from_stopped`,
+`a_replay_reply_a_newer_selection_superseded_is_dropped`, and
+`a_replay_of_a_stale_unresolvable_id_leaves_the_transport_stopped` (`src/ui/tests/transport_tests.rs`),
+with the seam itself pinned by `get_song_by_id_finds_a_sample_song_by_its_exact_id`,
+`get_song_by_id_answers_none_for_an_id_outside_the_library`,
+`get_song_by_id_rejects_a_blank_id` (`src/apple_music/tests/browse_sample.rs`), and
+`get_song_by_id_uses_the_rest_library_when_signed_in` (`src/apple_music/tests/browse_rest.rs`).
+The readout mode, the visualizer's shown/hidden
 choice, the two panel choices, the always-on-top choice, and the shade mode are the persisted
 values not held in `AppState`: they live on `WinampPlayer::time_display`,
 `WinampPlayer::visualizer_visible`, `WinampPlayer::eq_panel_visible`,

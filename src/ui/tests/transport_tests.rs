@@ -266,3 +266,144 @@ async fn track_selected_starts_playback_of_the_selected_track() {
     assert_eq!(state.current_track.as_deref(), Some("song-1"));
     assert!(state.is_playing);
 }
+
+// At launch with a restored last-played track — the state carries its id but
+// the service has neither a loaded preview nor a remembered URL — Play
+// resolves the saved id through the service seam and replays it through the
+// row-press machinery, exactly as a press on its row would: the state marks
+// it playing and the Now Playing index learns its title. A relaunch where
+// Play silently did nothing left the promise in docs/usage.md false.
+// The replayed song's genre matches no AUTO preset, so the row-press body
+// the reply drives stays lock-free enough for the async runtime — `song-1`'s
+// Rock would take `apply_auto_preset`'s shared-state read, and identical
+// behavior is already covered by the plain threading tests above.
+#[tokio::test]
+async fn play_replays_the_track_restored_at_boot() {
+    let (recording, mut player, state) = player_with_recording();
+    // The boot path restored this id; nothing has played since.
+    state.lock().await.current_track = Some("song-4".to_string());
+    assert!(!state.lock().await.is_playing);
+
+    let resolve_task = update(&mut player, Message::Play);
+    assert!(
+        !state.lock().await.is_playing,
+        "the resolve alone must not start playback"
+    );
+
+    // The resolve replies with the saved id's library song; feed the reply
+    // through update the way the runtime would.
+    let mut resolved = None;
+    drive_task(resolve_task, "boot replay resolve", |message| {
+        resolved = Some(message)
+    })
+    .await;
+    let Some(Message::ReplayResolved { track_id, song }) = resolved else {
+        panic!("the replay resolve did not reply with ReplayResolved");
+    };
+    assert_eq!(track_id, "song-4");
+    assert!(song.is_some(), "the sample library must know the saved id");
+
+    let task = update(&mut player, Message::ReplayResolved { track_id, song });
+    drive_task(task, "boot replay play", |message| match message {
+        Message::TrackPlayed { committed, .. } => assert!(committed),
+        other => panic!("unexpected replay task output: {other:?}"),
+    })
+    .await;
+
+    let state = state.lock().await;
+    assert_eq!(state.current_track.as_deref(), Some("song-4"));
+    assert!(state.is_playing, "the restored track must be playing");
+    assert_eq!(
+        player
+            .known_tracks
+            .get("song-4")
+            .map(|known| known.title.as_str()),
+        Some("B-side"),
+        "the replay must record the title the row press would have"
+    );
+    // The asset-less sample song commits without a preview, exactly as a
+    // press on its row does: the service stops the (empty) previous player
+    // and starts nothing.
+    assert_eq!(recording.calls(), &[AudioCall::Stop]);
+}
+
+// The media-key Play/Pause reaches the same replay from its stopped branch,
+// so the keyboard alone starts a relaunched session's restored track.
+#[tokio::test]
+async fn play_pause_toggles_start_of_a_replay_from_stopped() {
+    let (recording, mut player, state) = player_with_recording();
+    // `song-5`'s genre matches no AUTO preset, like the test above.
+    state.lock().await.current_track = Some("song-5".to_string());
+
+    let resolve_task = update(&mut player, Message::PlayPause);
+    let mut resolved = None;
+    drive_task(resolve_task, "boot replay resolve", |message| {
+        resolved = Some(message)
+    })
+    .await;
+    let Some(Message::ReplayResolved { track_id, song }) = resolved else {
+        panic!("the replay resolve did not reply with ReplayResolved");
+    };
+    assert_eq!(track_id, "song-5");
+
+    let task = update(&mut player, Message::ReplayResolved { track_id, song });
+    drive_task(task, "boot replay play", |message| match message {
+        Message::TrackPlayed { committed, .. } => assert!(committed),
+        other => panic!("unexpected replay task output: {other:?}"),
+    })
+    .await;
+
+    let state = state.lock().await;
+    assert_eq!(state.current_track.as_deref(), Some("song-5"));
+    assert!(state.is_playing);
+    assert_eq!(recording.calls(), &[AudioCall::Stop]);
+}
+
+// A resolve reply the boot path no longer owns is dropped: the restored id
+// must still be the shared state's current track, and nothing may be playing
+// or loaded when it lands, so a track the user picked while the resolve was
+// in flight cannot be knocked out by the replay.
+#[tokio::test]
+async fn a_replay_reply_a_newer_selection_superseded_is_dropped() {
+    let (_, mut player, state) = player_with_recording();
+    state.lock().await.current_track = Some("song-1".to_string());
+
+    let task = update(
+        &mut player,
+        Message::ReplayResolved {
+            track_id: "song-2".to_string(),
+            song: Some(sample_song()),
+        },
+    );
+    assert_no_task(task);
+
+    assert!(!state.lock().await.is_playing);
+}
+
+// A restored id that names no song in the library (a stale id from a
+// deleted track) leaves the transport stopped: the reply carries no song and
+// no remembered URL covers it, so there is nothing to replay.
+#[tokio::test]
+async fn a_replay_of_a_stale_unresolvable_id_leaves_the_transport_stopped() {
+    let (_, mut player, state) = player_with_recording();
+    state.lock().await.current_track = Some("gone-track".to_string());
+
+    let resolve_task = update(&mut player, Message::Play);
+    let mut resolved = None;
+    drive_task(resolve_task, "stale replay resolve", |message| {
+        resolved = Some(message)
+    })
+    .await;
+    let Some(Message::ReplayResolved { track_id, song }) = resolved else {
+        panic!("the replay resolve did not reply with ReplayResolved");
+    };
+    assert_eq!(track_id, "gone-track");
+    assert!(song.is_none(), "a stale id must not resolve");
+
+    let task = update(&mut player, Message::ReplayResolved { track_id, song });
+    assert_no_task(task);
+
+    let state = state.lock().await;
+    assert!(!state.is_playing);
+    assert_eq!(state.current_track.as_deref(), Some("gone-track"));
+}
