@@ -1,7 +1,8 @@
 use super::flat_lists_tests::{
     assert_back_returns_to_artists, assert_group_opens_its_songs_and_back_unwinds,
-    assert_navigation_clears_the_search, assert_show_fetches_the_list_and_switches_view,
-    assert_stale_group_press_does_nothing,
+    assert_loaded_stores_rows_with_song_count_labels, assert_navigation_clears_the_search,
+    assert_show_fetches_the_list_and_switches_view, assert_stale_group_press_does_nothing,
+    assert_view_footer_counts_and_totals,
 };
 use super::*;
 
@@ -42,16 +43,12 @@ async fn show_years_fetches_and_switches_view() {
 #[test]
 fn years_loaded_stores_rows_with_song_count_labels() {
     let player = player_with_years();
-
-    let names: Vec<&str> = player
-        .years
-        .items
-        .iter()
-        .map(|year| year.name.as_str())
-        .collect();
-    assert_eq!(names, ["2005", "Unknown"]);
-    assert_eq!(player.years.labels, ["2 songs - 5:05", "1 song - 2:05"]);
-    assert!(!player.years.loading);
+    assert_loaded_stores_rows_with_song_count_labels(
+        &player,
+        |player| &player.years,
+        &["2005", "Unknown"],
+        &["2 songs - 5:05", "1 song - 2:05"],
+    );
 }
 
 #[test]
@@ -92,9 +89,5 @@ fn a_stale_year_press_does_nothing() {
 #[test]
 fn years_view_footer_counts_years_and_totals_their_songs() {
     let player = player_with_years();
-    assert_eq!(player.current_view, CurrentView::Years);
-
-    let capture = captured_root_view_text_bounds(&player);
-    let texts: Vec<&str> = capture.texts().collect();
-    assert!(texts.contains(&"2 years - 7:10"), "{texts:?}");
+    assert_view_footer_counts_and_totals(&player, CurrentView::Years, "2 years - 7:10");
 }

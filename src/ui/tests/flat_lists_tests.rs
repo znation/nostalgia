@@ -1,3 +1,4 @@
+use super::super::{browse::BrowseList, song_groups::SongGroup};
 use super::*;
 
 /// Asserts a navigation button that hangs off the Artists list — All Songs,
@@ -102,6 +103,44 @@ pub(super) fn assert_stale_group_press_does_nothing(
 
     assert_view(&player, view);
     assert_eq!(player.songs.items.len(), 3);
+}
+
+/// Asserts that a Genres, Years, or Composers list loaded from its fetch
+/// stored the grouped rows — in `expected_names`, with `expected_labels` as
+/// each row's `n songs - m:ss` label — and cleared the list's loading flag.
+/// `list_of` extracts the `BrowseList<SongGroup>` the view under test keeps.
+/// Used by the three `*_loaded_stores_rows_with_song_count_labels` tests.
+pub(super) fn assert_loaded_stores_rows_with_song_count_labels(
+    player: &WinampPlayer,
+    list_of: impl Fn(&WinampPlayer) -> &BrowseList<SongGroup>,
+    expected_names: &[&str],
+    expected_labels: &[&str],
+) {
+    let list = list_of(player);
+
+    let names: Vec<&str> = list.items.iter().map(|row| row.name.as_str()).collect();
+    assert_eq!(names, expected_names);
+    assert_eq!(list.labels, expected_labels);
+    assert!(!list.loading);
+}
+
+/// Asserts that a fully populated `view` renders a footer naming how many
+/// rows it shows and their total length — `footer`, such as "2 genres - 7:10"
+/// — captured by laying the root view out. Used by the three
+/// `*_view_footer_counts_*_and_totals_their_songs` tests. The other views'
+/// footers are pinned by `view_tests` with different fixtures (Artists,
+/// Albums, Songs) or only through their empty wording (All Songs, All
+/// Albums, Playlists).
+pub(super) fn assert_view_footer_counts_and_totals(
+    player: &WinampPlayer,
+    view: CurrentView,
+    footer: &str,
+) {
+    assert_eq!(player.current_view, view);
+
+    let capture = captured_root_view_text_bounds(player);
+    let texts: Vec<&str> = capture.texts().collect();
+    assert!(texts.contains(&footer), "{texts:?}");
 }
 
 // The All Songs button fetches the whole library flat and shows it under its
@@ -507,16 +546,12 @@ async fn show_genres_fetches_and_switches_view() {
 #[test]
 fn genres_loaded_stores_rows_with_song_count_labels() {
     let player = player_with_genres();
-
-    let names: Vec<&str> = player
-        .genres
-        .items
-        .iter()
-        .map(|genre| genre.name.as_str())
-        .collect();
-    assert_eq!(names, ["Zydeco", "Unknown"]);
-    assert_eq!(player.genres.labels, ["2 songs - 5:05", "1 song - 2:05"]);
-    assert!(!player.genres.loading);
+    assert_loaded_stores_rows_with_song_count_labels(
+        &player,
+        |player| &player.genres,
+        &["Zydeco", "Unknown"],
+        &["2 songs - 5:05", "1 song - 2:05"],
+    );
 }
 
 #[test]
@@ -591,9 +626,5 @@ async fn a_track_selected_in_a_genre_plays_it() {
 #[test]
 fn genres_view_footer_counts_genres_and_totals_their_songs() {
     let player = player_with_genres();
-    assert_eq!(player.current_view, CurrentView::Genres);
-
-    let capture = captured_root_view_text_bounds(&player);
-    let texts: Vec<&str> = capture.texts().collect();
-    assert!(texts.contains(&"2 genres - 7:10"), "{texts:?}");
+    assert_view_footer_counts_and_totals(&player, CurrentView::Genres, "2 genres - 7:10");
 }
