@@ -250,7 +250,17 @@ alone; `AUTO: Off` never changes the curve. Clicking `+12 DB`, `0 DB`, or
 remembered for the next track. Setting
 `APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a browser-based MusicKit sign-in: browse and search
 queries then read your Apple Music library through the REST API, and fall back to the built-in
-sample library when it is unset. Playback plays the selected song's Apple Music preview through
+sample library when it is unset. The settings file also saves the last successful sign-in's token
+in a `music_kit_user_token=` line, and a later launch that has a saved token plus the environment
+variable reuses that sign-in — no browser, no sign-in page, and the first library fetch is already
+the signed-in one. A blank, malformed, or stale saved token (one Apple Music has stopped
+answering) is ignored or fails over exactly like the unset case: the sign-in page opens again on a
+stale or malformed one, a stale one's queries are answered by the sample library, and the saved
+line is left alone until a fresh browser sign-in overwrites it; a user who wants a fresh flow
+anyway deletes the `music_kit_user_token=` line (with the variable still set) and relaunches. The
+token is stored unencrypted in the settings file like the rest of its content — delete the line to
+force the browser flow — and the developer token itself is never saved: it keeps coming from the
+environment, so a saved-token relaunch with the variable unset skips sign-in as today. Playback plays the selected song's Apple Music preview through
 `rodio` when the library supplies one, and updates the UI state either way. Pause and Stop silence
 the preview through the audio backend; a pause with no loaded preview stops the transport instead,
 since there is nothing to pause. Play resumes a paused preview, restarts a stopped one from the
@@ -266,7 +276,8 @@ Repeat, Next, Previous, Ctrl+Z/Ctrl+B, and the jump rows still move you, and tur
 the normal end-of-song advance. The volume, balance, Repeat, Shuffle, and Manual playlist advance flags, the equalizer's on/off
 state, AUTO choice, curve, and preset, the elapsed/remaining readout choice, the visualizer's
 shown/hidden choice, the equalizer and library panels' shown/hidden choices, the always-on-top
-choice, the window-shade mode, the window's last screen position, the last-played track, and the library's top-level browse list (Artists, All
+choice, the window-shade mode, the window's last screen position, the last-played track, the saved
+MusicKit sign-in token, and the library's top-level browse list (Artists, All
 Songs, All Albums, Recently Added, Recently Played, Playlists, Genres, Years, or Composers; a list opened from one of them
 saves that one) are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or
 `$HOME/.config/nostalgia/settings.ini`) and restored at the next launch; `NOSTALGIA_SETTINGS_PATH`

@@ -900,7 +900,7 @@ The equalizer's EQ and AUTO buttons sink while on, through `eq_toggle` and `auto
 **Guarantee.** The values the user sets that outlive a track — volume, balance, Repeat, Shuffle, the
 equalizer's on/off state, AUTO choice, preamp, ten band gains, and selected preset, the large readout's
 elapsed/remaining choice, the visualizer's shown/hidden choice, the equalizer and library panels'
-shown/hidden choices, the LCD strip's always-on-top choice, the window's shade mode, the window's last screen position, the last-played track, and the library's top-level browse list — are
+shown/hidden choices, the LCD strip's always-on-top choice, the window's shade mode, the window's last screen position, the last-played track, the saved MusicKit sign-in's user token, and the library's top-level browse list — are
 loaded once before the first view is drawn and rewritten after any update that changes their snapshot, with the newest
 queued snapshot written once the worker is free: a burst of changes, such as a slider drag or key
 repeat, may collapse to its newest value instead of writing every intermediate one. An update that leaves the snapshot
@@ -988,7 +988,7 @@ Songs view as the list it was opened from), `persist_settings_if_changed` saves 
 `library_view=<key>`, and an unknown or missing line leaves Artists. At launch `init_ui` batches
 `handlers::browse::restore_view` with the boot task to open that list; when the startup sign-in
 stores a session, `Message::SessionReady` (`handlers::browse::session_ready`) refetches the artists
-list and any flat list showing (Genres included, saved as `genres`, as is a genre's Songs; Years likewise, saved as `years`, as is a year's Songs; Composers likewise, saved as `composers`, as is a composer's Songs), unless a search is active. The window's size is not persisted. Playback position, any browse level below the top-level list, and the search box are
+list and any flat list showing (Genres included, saved as `genres`, as is a genre's Songs; Years likewise, saved as `years`, as is a year's Songs; Composers likewise, saved as `composers`, as is a composer's Songs), unless a search is active. The saved MusicKit sign-in's user token is the ninth UI-owned value: it is not stored on the player at all — `persist_settings_if_changed` reads it from the shared `AppleMusicService`'s session (`session_user_token`) on every snapshot, so a browser sign-in's first persist after it lands records it with no dedicated save call, a no-session run stores none (no `music_kit_user_token` line at all, unlike `current_track`'s always-line), and a seeded launch's snapshot equals the saved one and rewrites nothing. The codec stores the value verbatim — a blank value or a missing line parses to no token, and the shape check (a non-empty, three-segment base64url JWT) happens at boot, not in the codec: a non-blank valid saved token plus the developer token seeds the session through `init_service`'s reseed arm (`seed_session` → `store_session`, the same insert site the browser flow uses), an invalid or blank one falls through to the browser flow with the saved line left alone, and the browser path's first save records the new token. The token is a bearer value stored in plaintext next to volume and the last-played id in the user's own XDG config file (the settled design; a keyring dependency was deliberately not added), and no log line, error message, or settings-file echo carries it — the developer token is never saved at all. The window's size is not persisted. Playback position, any browse level below the top-level list, and the search box are
 deliberately not persisted.
 
 **Enforced by.** `src/main.rs` resolves the path with
@@ -2439,6 +2439,11 @@ browser's `POST /token` callback behind it:
   platform chooses which kind to report) — does not end the flow: the accept loop retries it within
   the pass, up to `MAX_ACCEPTS_PER_PASS`, instead of returning it. Only a failure of the listener
   itself is returned.
+- The loopback listener the flow binds is only ever bound by the browser sign-in flow
+  (`authorize`), and the seeded relaunch never reaches it: `init_service`'s reseed arm validates
+  the saved token pair and stores the session outright, so a launch that reuses its saved
+  sign-in runs no listener, opens no browser, and answers no `POST /token`. The listener is
+  still ephemeral and loopback-only when the flow does run.
 
 **Enforced by.** `authorize_with_bounds` in `src/music_kit_auth.rs` keeps the accepted connections
 in a `Vec` of `PendingConnection`, which is defined in `src/music_kit_auth/server.rs`. The loop's

@@ -112,10 +112,12 @@ fn main() -> iced::Result {
     let saved = loaded.unwrap_or_else(|| settings::Settings::from_state(&initial_state));
     let state = Arc::new(Mutex::new(initial_state));
 
-    // Initialize the Apple Music service. The same service instance is
-    // handed to the UI, so the UI's clone shares the session the startup
-    // sign-in stores.
-    let service = apple_music::init_service(state.clone());
+    // Initialize the Apple Music service, reseeding a session from the saved
+    // sign-in's user token when the settings file carries one that is valid
+    // with this launch's developer token, and running the browser sign-in
+    // flow otherwise. The same service instance is handed to the UI, so the
+    // UI's clone shares the session the startup seed or sign-in stores.
+    let service = apple_music::init_service(state.clone(), saved.music_kit_user_token());
 
     println!("Winamp-style Apple Music Player started!");
 

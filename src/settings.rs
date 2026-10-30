@@ -4,10 +4,13 @@
 //! balance, Repeat and Shuffle flags, the equalizer's on/off and AUTO states, preamp, band gains,
 //! and selected preset, the Now Playing readout's elapsed/remaining mode, the visualizer's
 //! shown/hidden choice, the equalizer and library panels' shown/hidden choices, the always-on-top
-//! flag, and the window-shade mode, the window's last screen position, and the library's top-level
-//! browse list. All but the last eight live in [`AppState`]; the readout mode, visualizer choice,
-//! panel choices, always-on-top flag, shade mode, window position, and browse list live on the UI's
-//! `WinampPlayer`, so the player sets them on its snapshot before saving and restores them after
+//! flag, and the window-shade mode, the window's last screen position, the library's top-level
+//! browse list, and the saved `MusicKit` sign-in's user token. All but the last nine live in
+//! [`AppState`]; the readout mode, visualizer choice,
+//! panel choices, always-on-top flag, shade mode, window position, browse list, and sign-in token
+//! live on the UI's
+//! `WinampPlayer` (the token through its [`crate::apple_music::AppleMusicService`]), so the player sets them on its
+//! snapshot before saving and restores them after
 //! loading. The file-backed store lives in [`file_store`], the text format in the private `text`
 //! module, the writer seam in [`seam`], and [`writer::BackgroundWriter`] runs the blocking write on
 //! a worker thread in production.
@@ -31,20 +34,22 @@ use library_view::LibraryView;
 /// The persisted values the next launch restores: the mixer and equalizer
 /// subset of [`AppState`], the last-played track id, and the UI-owned readout
 /// mode, visualizer choice, equalizer and library panel choices,
-/// always-on-top flag, shade mode, window screen position, and top-level
-/// browse list.
+/// always-on-top flag, shade mode, window screen position, top-level
+/// browse list, and the saved `MusicKit` sign-in's user token.
 ///
 /// The fields are private; build a state-backed snapshot with [`Settings::from_state`] and restore
 /// it with [`Settings::apply_to`]. `time_display_remaining`, `visualizer_visible`,
-/// `eq_panel_visible`, `library_panel_visible`, `always_on_top`, `shade`, `window_position`, and
-/// `library_view` are not held in [`AppState`]: `from_state` leaves them elapsed, shown (all
-/// three), unpinned, unshaded, without a known position, and on Artists, and the player overwrites
-/// them from its own values before saving. `current_track` is the last-played
+/// `eq_panel_visible`, `library_panel_visible`, `always_on_top`, `shade`, `window_position`,
+/// `library_view`, and `music_kit_user_token` are not held in [`AppState`]: `from_state` leaves them elapsed, shown (all
+/// three), unpinned, unshaded, without a known position, on Artists, and without a token, and the
+/// player overwrites them from its own values (the token through its [`crate::apple_music::AppleMusicService`]) before
+/// saving. `current_track` is the last-played
 /// track id, held in [`AppState`]: the snapshot carries it straight from the
 /// state, and `apply_to` restores the track stopped with a blank elapsed
 /// readout, the state Stop leaves; the position within the track stays out
 /// of the file. `Default` mirrors [`AppState::default`] plus elapsed,
-/// shown, unpinned, and unshaded, so if one starting value changes the other must change with it.
+/// shown, unpinned, unshaded, and unsigned-in, so if one starting value changes the other must
+/// change with it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
     volume: f32,
@@ -66,6 +71,7 @@ pub struct Settings {
     shade: bool,
     window_position: Option<(f32, f32)>,
     library_view: LibraryView,
+    music_kit_user_token: Option<String>,
 }
 
 impl Default for Settings {
@@ -95,6 +101,7 @@ impl Default for Settings {
             shade: false,
             window_position: None,
             library_view: LibraryView::Artists,
+            music_kit_user_token: None,
         }
     }
 }
@@ -124,6 +131,7 @@ impl Settings {
             shade: false,
             window_position: None,
             library_view: LibraryView::Artists,
+            music_kit_user_token: None,
         }
     }
 
@@ -235,6 +243,23 @@ impl Settings {
         self.window_position = position;
     }
 
+    /// The saved `MusicKit` sign-in's user token, if the settings file carries
+    /// one. The player owns this value — it reads it back through its
+    /// [`crate::apple_music::AppleMusicService`] when saving and [`apply_to`](Self::apply_to)
+    /// deliberately leaves it alone — so the launch that follows can reseed the
+    /// session instead of re-running the browser flow.
+    #[must_use]
+    pub fn music_kit_user_token(&self) -> Option<&str> {
+        self.music_kit_user_token.as_deref()
+    }
+
+    /// Set the saved `MusicKit` sign-in's user token. The player calls this on
+    /// its fresh snapshot before saving; [`Self::apply_to`] deliberately
+    /// leaves the UI-owned value alone.
+    pub fn set_music_kit_user_token(&mut self, token: Option<String>) {
+        self.music_kit_user_token = token;
+    }
+
     /// The top-level browse list the library reopens on. The player owns this
     /// value, so it reads it back when saving and restores it from the loaded
     /// snapshot at boot.
@@ -318,6 +343,7 @@ mod tests {
         settings.set_always_on_top(true);
         settings.set_shaded(true);
         settings.set_window_position(Some((120.0, -40.5)));
+        settings.set_music_kit_user_token(Some("a.b.c".to_string()));
         assert_eq!(Settings::from_text(&settings.to_text()), settings);
         assert!(Settings::from_text(&settings.to_text()).time_display_remaining());
         assert!(!Settings::from_text(&settings.to_text()).visualizer_visible());
@@ -725,6 +751,46 @@ mod tests {
             Settings::from_text("current_track=a=b\n").current_track,
             Some("a=b".to_string()),
             "an id containing '=' must keep everything past the first '='"
+        );
+    }
+
+    #[test]
+    fn music_kit_user_token_round_trips_and_defaults_to_none() {
+        let none = Settings::default();
+        assert_eq!(none.music_kit_user_token(), None);
+        assert!(
+            !none.to_text().contains("music_kit_user_token"),
+            "an absent token writes no token line"
+        );
+        assert_eq!(
+            Settings::from_text(&none.to_text()).music_kit_user_token(),
+            None,
+            "a file with no token line must fall back to none"
+        );
+        assert_eq!(
+            Settings::from_text("volume=0.5\n").music_kit_user_token(),
+            None,
+            "a missing token line must fall back to none"
+        );
+        // An empty value means the line was saved blank (a hand-edited
+        // deletion, say): that is no token.
+        assert_eq!(
+            Settings::from_text("music_kit_user_token=\n").music_kit_user_token(),
+            None
+        );
+
+        let mut saved = none.clone();
+        saved.set_music_kit_user_token(Some("a.b.c".to_string()));
+        assert!(saved.to_text().contains("music_kit_user_token=a.b.c"));
+        assert_eq!(
+            Settings::from_text(&saved.to_text()).music_kit_user_token(),
+            Some("a.b.c")
+        );
+        // Formatting is not the codec's job (`seed_session` validates at
+        // boot), so unJWT-shaped text is stored verbatim.
+        assert_eq!(
+            Settings::from_text("music_kit_user_token=leftover\n").music_kit_user_token(),
+            Some("leftover")
         );
     }
 

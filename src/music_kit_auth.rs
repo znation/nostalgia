@@ -119,6 +119,31 @@ pub fn validate_developer_token(token: &str) -> Result<(), AppleMusicError> {
     }
 }
 
+/// Checks that a saved `MusicKit` user token is a three-segment, non-empty,
+/// base64url-shaped JWT before it seeds a session.
+///
+/// `MusicKit` JS mints user tokens that are JWT-shaped like developer tokens,
+/// so the accepted shape — and the accepted alphabet — is the same one
+/// [`jwt_shape_problem`] checks. A hand-edited settings line that broke the
+/// shape is the common case to reject, and the check runs before a seeded
+/// session is stored, so a malformed value can never reach the REST client.
+///
+/// # Errors
+///
+/// Returns an [`AppleMusicError`] when `token` is blank or not exactly three
+/// non-empty dot-separated segments of base64url characters. The message
+/// mirrors [`validate_developer_token`]'s — it names the defect without echoing
+/// the token, which is a secret, so a rejection never puts the value into a
+/// log; the session's redacting `Debug` stays the last word on any panic path.
+pub fn validate_user_token(token: &str) -> Result<(), AppleMusicError> {
+    match jwt_shape_problem(token) {
+        None => Ok(()),
+        Some(problem) => Err(AppleMusicError::new(format!(
+            "the user token must be a three-segment base64url JWT, but {problem}"
+        ))),
+    }
+}
+
 /// Runs the `MusicKit` loopback sign-in flow and returns the resulting session.
 ///
 /// `open_page` is called with the path of an owner-only bootstrap page that

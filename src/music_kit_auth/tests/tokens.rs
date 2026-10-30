@@ -46,6 +46,49 @@ fn validate_developer_token_does_not_echo_the_token() {
     assert!(!error.to_string().contains("topsecret"), "got {error}");
 }
 
+// The saved-token reseed validates the user token through the same shape
+// check the developer token goes through, so a hand-edited settings line is
+// rejected cleanly before a malformed value can reach the REST client. MusicKit
+// JS mints user tokens shaped exactly like developer tokens, so the accepted
+// shape is the same one — and the test rejects a hand-crafted value only on
+// structure, never on content Apple could change.
+#[test]
+fn validate_user_token_accepts_a_jwt_shape_and_rejects_malformed_values() {
+    assert!(validate_user_token("a.b.c").is_ok());
+    assert!(validate_user_token(SAMPLE_USER_TOKEN).is_ok());
+
+    for token in ["", " ", "a", "a.b", "a.b.c.d", "a..c", "a.b.c\"", "a.b.c+"] {
+        assert!(
+            validate_user_token(token).is_err(),
+            "expected {token:?} to be rejected"
+        );
+    }
+}
+
+#[test]
+fn validate_user_token_names_the_specific_defect_without_echoing_the_token() {
+    let cases = [
+        ("a.b", "exactly three dot-separated segments"),
+        ("a.b.c.d", "exactly three dot-separated segments"),
+        ("a..c", "one of its segments is empty"),
+        ("a.b.c\"", "outside the base64url alphabet"),
+        ("a.b.c+", "outside the base64url alphabet"),
+    ];
+    for (token, expected) in cases {
+        let error = validate_user_token(token).expect_err("a malformed token is rejected");
+        assert!(
+            error.to_string().contains(expected),
+            "expected {token:?} to report {expected:?}, got {error}"
+        );
+        // The user token is a secret like the developer token, so the
+        // message must not carry it either.
+        assert!(error.to_string().contains("the user token"));
+    }
+    let secret = "topsecret.payload.sig!";
+    let error = validate_user_token(secret).expect_err("a malformed token is rejected");
+    assert!(!error.to_string().contains("topsecret"), "got {error}");
+}
+
 #[test]
 fn percent_decode_decodes_form_escapes_and_leaves_bad_ones_literal() {
     // The callback body is form-urlencoded by the browser's `fetch`, so a

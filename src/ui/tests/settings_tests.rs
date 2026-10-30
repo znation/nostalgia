@@ -103,6 +103,60 @@ fn saved_current_track_survives_the_persist_round_trip() {
 }
 
 #[test]
+fn the_stored_sessions_token_reaches_the_saved_snapshot() {
+    let (mut player, _state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+
+    // The service holds a session only after a browser sign-in (or a test
+    // seed standing in for one); the save path reads the token out of that
+    // same session, so its change alone triggers the write — no other value
+    // moved.
+    player
+        .apple_music_service
+        .seed_session("ey1.dev.ey", "ey1.user.ey")
+        .unwrap();
+
+    let _ = update(&mut player, Message::Ignored);
+
+    let snapshots = store.snapshots();
+    assert_eq!(snapshots.len(), 1);
+    assert_eq!(snapshots[0].music_kit_user_token(), Some("ey1.user.ey"));
+}
+
+#[test]
+fn an_unchanged_token_writes_nothing() {
+    let (mut player, _state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+
+    player
+        .apple_music_service
+        .seed_session("ey1.dev.ey", "ey1.user.ey")
+        .unwrap();
+    let _ = update(&mut player, Message::Ignored);
+
+    // A seeded launch holds the same token its snapshot already saved, so a
+    // later poll message must not rewrite the file for the token's sake.
+    let _ = update(&mut player, Message::Ignored);
+    assert_eq!(store.snapshots().len(), 1);
+}
+
+#[test]
+fn a_sessionless_run_saves_no_token_line() {
+    let (mut player, _state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+
+    let _ = update(&mut player, Message::VolumeChange(0.8));
+
+    let snapshots = store.snapshots();
+    assert_eq!(snapshots.len(), 1);
+    assert_eq!(snapshots[0].music_kit_user_token(), None);
+    assert!(!snapshots[0].to_text().contains("music_kit_user_token"));
+}
+
+#[test]
 fn toggle_time_display_reaches_the_saved_snapshot() {
     let (mut player, _state) = test_player();
     let store = MemorySettingsStore::default();

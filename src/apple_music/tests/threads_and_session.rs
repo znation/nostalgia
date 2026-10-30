@@ -60,7 +60,7 @@ fn init_service_leaves_the_shared_state_untouched() {
         state.set_volume(0.7);
     }
 
-    let service = init_service(state.clone());
+    let service = init_service(state.clone(), None);
 
     assert!(service.session().is_none());
     let state = state.blocking_lock();
@@ -271,4 +271,78 @@ async fn off_thread_reports_a_thread_spawn_failure_as_a_seam_error() {
         result.unwrap_err().to_string(),
         "spawning the library request thread failed: no more threads"
     );
+}
+
+// The saved-token reseed: `seed_session` is the seam `init_service` calls with
+// the settings file's saved user token, so a run whose previous sign-in
+// succeeded boots into the signed-in library with no browser flow. The pair it
+// stores must have the exact shape the browser flow stores — same struct, and
+// the developer token trimmed at the boundary like `authorize` trims it — so
+// the REST client cannot tell a seeded launch from a signed-in one.
+
+#[test]
+fn seed_session_stores_a_valid_pair() {
+    let service = test_service();
+
+    service.seed_session(" ey1.dev.ey ", "ey1.user.ey").unwrap();
+
+    let stored = service.session().unwrap();
+    assert_eq!(stored.developer_token, "ey1.dev.ey");
+    assert_eq!(stored.user_token, "ey1.user.ey");
+}
+
+#[test]
+fn seed_session_rejects_a_malformed_user_token_without_storing() {
+    for user_token in ["", "   ", "not-a-jwt", "only.two"] {
+        let service = test_service();
+
+        let error = service.seed_session("ey1.dev.ey", user_token).unwrap_err();
+
+        assert_eq!(service.session(), None, "{user_token:?} must store none");
+        assert_eq!(service.session_user_token(), None);
+        assert!(error.to_string().contains("the user token"));
+    }
+}
+
+#[test]
+fn a_failed_seed_leaves_a_stored_session_unchanged() {
+    let service = test_service();
+    service.seed_session("ey1.dev.ey", "ey1.user.ey").unwrap();
+
+    let error = service.seed_session("ey1.dev.ey", "bad").unwrap_err();
+
+    assert_eq!(service.session_user_token().as_deref(), Some("ey1.user.ey"));
+    assert!(error.to_string().contains("the user token"));
+}
+
+#[test]
+fn session_user_token_answers_the_stored_token() {
+    let service = test_service();
+    assert_eq!(service.session_user_token(), None);
+
+    service.seed_session("ey1.dev.ey", "ey1.apple.ey").unwrap();
+
+    assert_eq!(
+        service.session_user_token().as_deref(),
+        Some("ey1.apple.ey")
+    );
+}
+
+#[test]
+fn seed_session_wakes_a_wait_for_session_waiter() {
+    use std::task::{Context, Poll};
+
+    let service = test_service();
+    let future = service.wait_for_session();
+    futures::pin_mut!(future);
+    let waker = futures::task::noop_waker();
+    let mut context = Context::from_waker(&waker);
+    assert!(future.as_mut().poll(&mut context).is_pending());
+
+    service.seed_session("ey1.dev.ey", "ey1.user.ey").unwrap();
+
+    assert!(matches!(
+        future.as_mut().poll(&mut context),
+        Poll::Ready(())
+    ));
 }

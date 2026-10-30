@@ -52,6 +52,13 @@ impl Settings {
             self.current_track.as_deref().unwrap_or("")
         ));
         text.push_str(&format!("library_view={}\n", self.library_view.key()));
+        // A conditional line, like `window_position` and unlike
+        // `current_track`'s always-line: an absent token's absence is itself
+        // the clear-the-line documentation, and a token that was never stored
+        // must not put an empty line into the file.
+        if let Some(token) = &self.music_kit_user_token {
+            text.push_str(&format!("music_kit_user_token={token}\n"));
+        }
         text
     }
 
@@ -101,6 +108,18 @@ impl Settings {
                 "eq_panel_visible" => parse_into(&mut settings.eq_panel_visible, value),
                 "library_panel_visible" => {
                     parse_into(&mut settings.library_panel_visible, value);
+                }
+                // An empty or missing value leaves no token; any other text is
+                // the token verbatim (`split_once` stops at the first `=`).
+                // The shape check is `seed_session`'s job at boot, so the
+                // codec stays value-blind, like every other string the file
+                // carries.
+                "music_kit_user_token" => {
+                    settings.music_kit_user_token = if value.is_empty() {
+                        None
+                    } else {
+                        Some(value.to_string())
+                    };
                 }
                 // A malformed value leaves the default unpinned window.
                 "always_on_top" => parse_into(&mut settings.always_on_top, value),

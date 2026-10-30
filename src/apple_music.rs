@@ -41,6 +41,8 @@ use threads::{browser_sign_in, start_sign_in, startup_token};
 
 pub use crate::music_error::AppleMusicError;
 
+use crate::music_kit_auth::{validate_developer_token, validate_user_token};
+
 /// The music-library service. It answers a browse query from the signed-in
 /// user's Apple Music library through the REST client once
 /// [`AppleMusicService::authenticate`] has stored a session, and from the
@@ -68,21 +70,38 @@ pub struct AppleMusicService {
     transport: Arc<tokio::sync::Mutex<TransportState>>,
 }
 
-/// Initializes the service and starts the `MusicKit` sign-in when a developer
-/// token is available.
+/// Initializes the service, reseeding a session from the saved sign-in when
+/// one is available and otherwise starting the `MusicKit` sign-in when a
+/// developer token is available.
 ///
 /// Builds the one [`AppleMusicService`] the app shares, reads
-/// `APPLE_MUSIC_DEVELOPER_TOKEN`, and — when it is set and non-blank — starts a
-/// named background thread that runs the blocking sign-in on a clone, so the UI
-/// thread never blocks. Returns the service so the caller hands that same
-/// instance to the UI: a clone shares the session handle, so the session stored
-/// at startup is visible through [`AppleMusicService::session`] on the UI's
-/// service. When the variable is unset, blank, or not valid UTF-8, sign-in is
-/// skipped and the sample library stays in use; the skip line names which of
-/// those three cases applies (see [`startup_token`]). A thread the OS refuses to
-/// start is logged rather than aborting the player, which then keeps the sample
-/// library (see [`start_sign_in`]).
-pub fn init_service(state: Arc<Mutex<AppState>>) -> AppleMusicService {
+/// `APPLE_MUSIC_DEVELOPER_TOKEN`, and when it is set and non-blank:
+///
+/// - with a saved user token from a previous successful sign-in
+///   (`saved_user_token`, read from the settings file by `main`), tries to reseed
+///   a session through [`AppleMusicService::seed_session`] instead of launching
+///   the browser flow. On success the sign-in is skipped — no thread, no loopback
+///   server, no browser — the skip line says the saved sign-in was reused, and
+///   because the seed lands before `init_ui` the boot fetch is the first
+///   signed-in one with no sample-library flash. On `Err` (a blank, malformed,
+///   or absent saved value) the flow falls back to the browser, leaving the
+///   saved value alone for a later success to overwrite; and
+/// - after the fallback, or when no saved token exists, starts a named
+///   background thread that runs the blocking sign-in on a clone, so the UI
+///   thread never blocks.
+///
+/// Returns the service so the caller hands that same instance to the UI: a
+/// clone shares the session handle, so the session stored at startup is
+/// visible through [`AppleMusicService::session`] on the UI's service. When
+/// the variable is unset, blank, or not valid UTF-8, sign-in is skipped, the
+/// saved token is left inert, and the sample library stays in use; the skip
+/// line names which of those three cases applies (see [`startup_token`]). A
+/// thread the OS refuses to start is logged rather than aborting the player,
+/// which then keeps the sample library (see [`start_sign_in`]).
+pub fn init_service(
+    state: Arc<Mutex<AppState>>,
+    saved_user_token: Option<&str>,
+) -> AppleMusicService {
     let service = AppleMusicService::new(state);
     let developer_token = match startup_token(std::env::var("APPLE_MUSIC_DEVELOPER_TOKEN")) {
         Ok(token) => token,
@@ -91,6 +110,12 @@ pub fn init_service(state: Arc<Mutex<AppState>>) -> AppleMusicService {
             return service;
         }
     };
+    if let Some(saved) = saved_user_token
+        && service.seed_session(&developer_token, saved).is_ok()
+    {
+        println!("Apple Music sign-in skipped: the saved sign-in was reused");
+        return service;
+    }
     start_sign_in(service.clone(), developer_token);
     service
 }
@@ -163,26 +188,68 @@ impl AppleMusicService {
     }
 
     /// [`authenticate`](Self::authenticate) with an injectable sign-in flow,
-    /// so tests can store a session without a browser. Stores the session the
-    /// flow returns under the mutex; a flow that returns `Err` propagates it
-    /// and leaves any previously stored session unchanged.
+    /// so tests can store a session without a browser. A flow that returns
+    /// `Err` propagates it and leaves any previously stored session unchanged;
+    /// a success is stored through [`Self::store_session`], so the two
+    /// session-arrival paths — the browser flow and the saved-token reseed —
+    /// share one insert site.
     pub(crate) fn authenticate_with(
         &self,
         developer_token: &str,
         authorize: &dyn Fn(&str) -> Result<MusicKitSession, AppleMusicError>,
     ) -> Result<(), AppleMusicError> {
         let session = authorize(developer_token)?;
-        {
-            let mut stored = self
-                .session
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            *stored = Some(session);
-        }
-        // Wake the UI's boot task, which awaits `wait_for_session` to re-issue
-        // its artists fetch once the startup sign-in completes. Notified only
-        // after the session is stored, so a woken waiter always observes it.
+        self.store_session(session);
+        Ok(())
+    }
+
+    /// Stores `session` under the mutex and wakes the UI's boot task, which
+    /// awaits `wait_for_session` to re-issue its artists fetch once the startup
+    /// sign-in completes — or resolves immediately when a seeded launch stored
+    /// its session before `init_ui` started. Notified only after the session
+    /// is stored, so a woken waiter always observes it. Both session-arrival
+    /// paths ([`authenticate_with`](Self::authenticate_with) and
+    /// [`seed_session`](Self::seed_session)) store through this method, so the
+    /// insert site and the wake-up stay single-sourced.
+    pub(crate) fn store_session(&self, session: MusicKitSession) {
+        let mut stored = self
+            .session
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *stored = Some(session);
         self.session_ready.notify_one();
+    }
+
+    /// Wraps a developer token and a saved user token into a
+    /// [`MusicKitSession`] — the same struct shape the browser flow returns —
+    /// validates both, and stores the session when both are valid.
+    ///
+    /// `init_service` calls this with the settings file's saved user token at
+    /// every launch that has `APPLE_MUSIC_DEVELOPER_TOKEN` set, so a run whose
+    /// previous sign-in succeeded boots straight into the signed-in library
+    /// with no browser detour. The developer token is trimmed here — the same
+    /// trim [`crate::music_kit_auth::authorize`] applies at its boundary — so
+    /// a value read from the environment with stray whitespace still seeds.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when either token fails its shape check
+    /// (see [`validate_developer_token`] and [`validate_user_token`] for the
+    /// defects each names). An `Err` stores and notifies nothing, leaving any
+    /// previously stored session unchanged, so a malformed saved value falls
+    /// back to the browser flow rather than poisoning the session seam.
+    pub fn seed_session(
+        &self,
+        developer_token: &str,
+        user_token: &str,
+    ) -> Result<(), AppleMusicError> {
+        let developer_token = developer_token.trim();
+        validate_developer_token(developer_token)?;
+        validate_user_token(user_token)?;
+        self.store_session(MusicKitSession {
+            developer_token: developer_token.to_string(),
+            user_token: user_token.to_string(),
+        });
         Ok(())
     }
 
@@ -212,6 +279,22 @@ impl AppleMusicService {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
+    }
+
+    /// The saved sign-in's user token, when a session is stored.
+    ///
+    /// The player reads this at save time to persist the token in the settings
+    /// file, so the next launch can reseed the session through
+    /// [`seed_session`](Self::seed_session) without the browser flow. It clones
+    /// the token out from under the mutex like [`session`](Self::session), and
+    /// nothing else ever reads it — the token is a secret, so no log line or
+    /// error message may carry it.
+    pub fn session_user_token(&self) -> Option<String> {
+        self.session
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_ref()
+            .map(|session| session.user_token.clone())
     }
 
     /// Resolves once a `MusicKit` session has been stored.
