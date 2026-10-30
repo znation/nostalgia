@@ -5,6 +5,25 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### The Save list panel's `Delete` shows `No such playlist` for a pasted line-break name instead of the save flow's `Use one line` — fixed 2026-10-29 by the bugfix role
+
+**Symptom.** With the Save list panel open, pasting a multi-line name into the box and pressing
+`Delete` showed the inline `No such playlist` note and removed nothing — misleading, since the
+panel does hold the name's first line as a saved list; the Save preset panel's `Delete` shows the
+correct inline `Use one line` note for the same input, and the save-list delete's own contract
+casts it as mirroring `save_list_submitted`'s refusals.
+
+**Reproduce.** Open the Save list panel, paste a name containing `\n` (e.g. `Morning\nDrive`),
+press `Delete`: the note read `No such playlist` instead of `Use one line`.
+
+**Cause.** `delete_list_submitted` (`src/ui/handlers/save_list.rs`) carried the empty and colon
+refusals of the save flow but omitted its line-break refusal, so a break in the name fell through
+to the saved-list lookup, matched nothing (the writer flattens line breaks, so no stored name can
+contain one), and reported `No such playlist`.
+
+**Validation gap:** none — the extended refusal test (`delete_list_submitted_refuses_blank_colon_line_break_and_unknown_names`)
+failed before the fix (`No such playlist` vs `Use one line`) and passed after.
+
 ### A pasted line break in a save-list name splits its `user_playlist=` settings row in two, injecting settings lines of its own (found by the bugfix role 2026-10-29) — fixed 2026-10-29 by the bugfix role
 
 The Save list naming panel's submit (`handlers::save_list::save_list_submitted`, landed after the

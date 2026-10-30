@@ -218,11 +218,11 @@ fn delete_list_submitted_removes_the_named_saved_list() {
 }
 
 // Deleting refuses inline and removes nothing: an empty box keeps the panel
-// open with `Type a name`, a colon shows `Use it without a colon`, and a
-// name no saved list carries shows `No such playlist` with the panel staying
-// open and the typed name kept.
+// open with `Type a name`, a colon shows `Use it without a colon`, a pasted
+// line break shows `Use one line`, and a name no saved list carries shows
+// `No such playlist` with the panel staying open and the typed name kept.
 #[test]
-fn delete_list_submitted_refuses_blank_colon_and_unknown_names() {
+fn delete_list_submitted_refuses_blank_colon_line_break_and_unknown_names() {
     let (mut player, _state) = player_showing_songs();
     player.saved_playlists = vec![crate::settings::SavedPlaylist {
         name: "Morning Drive".to_string(),
@@ -247,6 +247,18 @@ fn delete_list_submitted_refuses_blank_colon_and_unknown_names() {
     assert_eq!(
         player.save_list_note,
         Some(views::SAVE_LIST_COLON_NAME_NOTE)
+    );
+    assert_eq!(player.saved_playlists.len(), 1);
+
+    let _ = update(
+        &mut player,
+        Message::SaveListNameChanged("Morning\nDrive".to_string()),
+    );
+    let _ = update(&mut player, Message::DeleteListSubmitted);
+    assert!(player.save_list_open);
+    assert_eq!(
+        player.save_list_note,
+        Some(views::SAVE_LIST_LINE_BREAK_NAME_NOTE)
     );
     assert_eq!(player.saved_playlists.len(), 1);
 

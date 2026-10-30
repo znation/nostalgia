@@ -175,8 +175,10 @@ keeping the name as first saved, and the showing list is left showing. The panel
 `Save`, `Delete`, `Close`: the box's Enter keeps submitting `Save`, and deleting is the button only
 — typing a saved list's name (any case) and pressing `Delete` removes that list and its
 Playlists-view row, keeping every other saved list in stored order, and the shortened list survives
-relaunches. An unmatching name shows an inline `No such playlist` note and removes nothing (with
-the panel staying open, like every other refused name); deleting a list whose songs are showing
+relaunches, and a name carrying a line break (a multi-line paste can put one in the box) shows
+the same `Use one line` note the save flow uses. An unmatching name shows an inline `No such
+playlist` note and removes nothing (with the panel staying open, like every other refused name);
+deleting a list whose songs are showing
 changes nothing about the showing rows or playback — it touches only the saved list. The panel's
 backdrop, `Close` button, or Escape closes it without saving, and opening any other panel closes it too.
 The press changes nothing when the showing list is not a song list the shared songs buffer holds

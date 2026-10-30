@@ -2364,7 +2364,8 @@ showing song list by name, as ids only, in a `Settings::saved_playlists` entry:
 - `delete_list_submitted` (the panel's `Delete` button) removes the saved list matching the
   trimmed typed name case-insensitively, exactly that entry in stored position, and persists via
   the shared persist sweep; it refuses like the save flow — an empty name shows `Type a name`, a
-  name containing `:` shows `Use it without a colon` — each with no removal, a name no saved list
+  name containing `:` shows `Use it without a colon`, and a name carrying a `\n` or `\r` (a
+  multi-line paste) shows `Use one line` — each with no removal, a name no saved list
   carries shows `No such playlist` with the panel staying open and the typed name kept, and the
   button acts only while the panel is open. Deleting a list whose songs are currently showing
   touches only the saved list: the showing rows, the playing track, and the transport are
@@ -2398,7 +2399,7 @@ tests in `src/ui/tests/save_list_tests.rs`;
 `a_saved_song_list_reaches_the_saved_snapshot` and `saved_song_lists_are_restored_on_boot`
 (`src/ui/tests/settings_tests.rs`); `the_save_list_button_lays_out_in_the_nav_row`,
 `delete_list_submitted_removes_the_named_saved_list`,
-`delete_list_submitted_refuses_blank_colon_and_unknown_names`,
+`delete_list_submitted_refuses_blank_colon_line_break_and_unknown_names`,
 `delete_list_submitted_is_a_noop_with_the_panel_closed`, and
 `deleting_the_showing_saved_list_leaves_the_showing_rows_untouched`
 (`src/ui/tests/save_list_tests.rs`); the Save list overlay render tests

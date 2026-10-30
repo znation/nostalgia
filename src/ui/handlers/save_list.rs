@@ -137,8 +137,10 @@ pub(in crate::ui) fn save_list_submitted(player: &mut WinampPlayer) -> Task<Mess
 /// list matching the trimmed typed name and close the panel, mirroring
 /// [`save_list_submitted`]'s refusals and the Save preset panel's delete
 /// ([`crate::ui::handlers::mixer::delete_preset_submitted`]): an empty trimmed
-/// name keeps the panel open with `Type a name` and a name containing `:`
-/// shows `Use it without a colon` (the settings line's separator), each with
+/// name keeps the panel open with `Type a name`, a name containing `:`
+/// shows `Use it without a colon` (the settings line's separator), and a
+/// name carrying a line break (a multi-line paste can put one in the box)
+/// shows `Use one line`, each with
 /// no removal; a name case-insensitively matching a saved list removes
 /// exactly that entry in stored order from
 /// [`WinampPlayer::saved_playlists`], keeping every other list's position;
@@ -159,6 +161,13 @@ pub(in crate::ui) fn delete_list_submitted(player: &mut WinampPlayer) -> Task<Me
     }
     if name.contains(':') {
         player.save_list_note = Some(SAVE_LIST_COLON_NAME_NOTE);
+        return Task::none();
+    }
+    // A `\n` or `\r` in the name can never match a saved list — the writer
+    // flattens line breaks to spaces — but the note mirrors the save flow's
+    // `Use one line` instead of misleadingly reading `No such playlist`.
+    if name.contains(['\n', '\r']) {
+        player.save_list_note = Some(SAVE_LIST_LINE_BREAK_NAME_NOTE);
         return Task::none();
     }
     if let Some(index) = player
