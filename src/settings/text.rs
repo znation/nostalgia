@@ -82,11 +82,17 @@ impl Settings {
         // absence is the empty-list documentation.
         if !self.recently_played.is_empty() {
             text.push_str("recently_played=");
+            // A played id is seam text, and this file is line-based: an id
+            // carrying a line break would split its `recently_played=` row in
+            // two and let the id's tail be read as settings lines of its
+            // own, so the writer flattens line breaks to spaces, like the
+            // `eq_custom_preset=`/`user_playlist=` names above (the play
+            // seams have no naming panel to refuse at).
             for (position, id) in self.recently_played.iter().enumerate() {
                 if position > 0 {
                     text.push(',');
                 }
-                text.push_str(id);
+                text.push_str(id.replace(['\r', '\n'], " ").as_str());
             }
             text.push('\n');
         }
@@ -110,10 +116,19 @@ impl Settings {
         if let Some((x, y)) = self.window_position {
             text.push_str(&format!("window_position={x},{y}\n"));
         }
-        text.push_str(&format!(
-            "current_track={}\n",
-            self.current_track.as_deref().unwrap_or("")
-        ));
+        // The same line-based guard over the last-played id, from the same
+        // seams: a line break in it would split the `current_track=` row in
+        // two like a `recently_played=` row above, so the writer flattens it
+        // too.
+        text.push_str("current_track=");
+        text.push_str(
+            &self
+                .current_track
+                .as_deref()
+                .unwrap_or("")
+                .replace(['\r', '\n'], " "),
+        );
+        text.push('\n');
         text.push_str(&format!("library_view={}\n", self.library_view.key()));
         // A conditional line, like `window_position` and unlike
         // `current_track`'s always-line: an absent token's absence is itself

@@ -5,6 +5,31 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### A played song id carrying a line break splits its `recently_played=`/`current_track=` settings rows in two, injecting settings lines of its own (found by the bugfix role 2026-10-29) — fixed 2026-10-29 by the bugfix role
+
+**Symptom:** the two id rows the settings writer carries verbatim — `recently_played=` and
+`current_track=`, both fed the played song's id — had no `\r`/`\n` flatten, unlike their
+siblings `eq_custom_preset=` and `user_playlist=`, whose name writers flatten line breaks to
+spaces. An id carrying a line break (a seam answering with one, or any future producer of ids)
+split its row: the id's tail became a settings line of its own at the next load — an id like
+`song-7\neq_auto=on` could flip a visible setting, matching the two pasted line-break bugs of
+the same class already fixed this day (BUGS-FIXED.md's `user_playlist=` and `eq_custom_preset=`
+entries); the play seams have no naming panel to refuse at, so the writer guard is the only
+seam-side protection.
+
+**Reproduce:** `make test-one TEST=a_line_broken_played_id_writes_one_whole_settings_line` —
+before the fix the written text carried a body line starting `eq_auto=on` (also `shuffle=on`
+and `volume=1` tails), and the round-trip equality to the flattened snapshot failed; both pass
+after.
+
+**Cause:** `settings::text::to_text` pushed both rows' id values raw into the line-based
+`key=value` file. The fix flattens `\r`/`\n` to spaces in the `recently_played=` tokens and the
+`current_track=` value, mirroring the existing name-writer guards.
+
+**Validation gap:** none — the new codec test (`src/settings.rs`, written with the fix)
+reproduced the split write before the fix and passes after, in the same manner as the
+`user_playlist=` class fix's codec test; the class had no test in the existing suite.
+
 ### The Save list panel's `Delete` shows `No such playlist` for a pasted line-break name instead of the save flow's `Use one line` — fixed 2026-10-29 by the bugfix role
 
 **Symptom.** With the Save list panel open, pasting a multi-line name into the box and pressing

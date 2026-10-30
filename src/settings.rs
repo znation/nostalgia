@@ -913,6 +913,44 @@ mod tests {
         assert_eq!(Settings::from_text(&text), scrubbed);
     }
 
+    // The two id rows the writer carries — `recently_played=` and
+    // `current_track=` — hold the played song's id verbatim, and the file is
+    // line-based: an id carrying a line break (a seam answers with one, or a
+    // future producer of ids lets one through) would split its row in two and
+    // let the id's tail be read as settings lines of its own (`song-7\neq_auto=on`
+    // would even flip a visible setting). The writer therefore flattens
+    // line breaks to spaces there too, like the `eq_custom_preset=` and
+    // `user_playlist=` names above — the play seams have no naming panel to
+    // refuse at.
+    #[test]
+    fn a_line_broken_played_id_writes_one_whole_settings_line() {
+        let settings = Settings {
+            recently_played: vec![
+                String::from("song-7\neq_auto=on"),
+                String::from("song-8\rshuffle=on"),
+            ],
+            current_track: Some(String::from("song-9\nvolume=1")),
+            ..Settings::default()
+        };
+        let scrubbed = Settings {
+            recently_played: vec![
+                String::from("song-7 eq_auto=on"),
+                String::from("song-8 shuffle=on"),
+            ],
+            current_track: Some(String::from("song-9 volume=1")),
+            ..Settings::default()
+        };
+
+        // Two whole `recently_played=` tokens and one whole `current_track=`
+        // row; no injected settings line of any tail's own.
+        let text = settings.to_text();
+        assert!(!text.lines().any(|line| line.starts_with("eq_auto=on")));
+        assert!(!text.lines().any(|line| line.starts_with("shuffle=on")));
+        assert!(!text.lines().any(|line| line.starts_with("volume=1")));
+        assert_eq!(text, scrubbed.to_text());
+        assert_eq!(Settings::from_text(&text), scrubbed);
+    }
+
     #[test]
     fn from_text_reads_the_last_band_and_trims_around_the_equals_sign() {
         let last = equalizer::BAND_COUNT - 1;

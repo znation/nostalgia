@@ -311,7 +311,8 @@ answers — it shows the service seam's sample stand-in instead. A committed pla
 absent from the showing list feeds the play history only. The list is persisted in the settings
 file, one `recently_played=` line of ids newest first, written only when non-empty; a blank,
 whitespace-only, or empty-token line leaves the field and the other lines alone, and repeated
-valid lines replace the field. A relaunch restores it: with no stored session and a non-empty
+valid lines replace the field. An id carrying a `\r` or `\n` is written flattened to spaces,
+keeping the line-based file whole (the play seams have no naming panel to refuse at). A relaunch restores it: with no stored session and a non-empty
 seed, the boot resolves each saved id through the read-only `resolve_song` (in save order, the
 reply's rows lining up with the ids) and records only the answerable rows through the same
 `record` the play path uses — the cap and replay dedupe apply during the merge, and a play that
@@ -346,7 +347,8 @@ bumped) when the service holds no session and the list is non-empty, and fetches
 `played_songs_restore_records_oldest_first_and_dedupes_replays`,
 `played_songs_restore_keeps_a_play_committed_mid_restore_newest`,
 `played_songs_restore_honors_the_history_limit` (`src/ui/transport/history.rs`),
-`recently_played_line_round_trips_and_skips_the_malformed_values` (`src/settings.rs`),
+`recently_played_line_round_trips_and_skips_the_malformed_values`,
+`a_line_broken_played_id_writes_one_whole_settings_line` (both in `src/settings.rs`),
 `signed_out_recently_played_lists_this_runs_played_songs_newest_first`,
 `replaying_a_song_moves_its_row_to_the_newest_played_position`,
 `signed_in_recently_played_still_fetches_the_service_list`,
@@ -997,7 +999,8 @@ a new file takes the platform's default mode. The last-played track is a plain `
 not one of the UI-owned values: the id is held in `AppState` (`current_track`), `from_state`
 carries it straight from the snapshot, and the boot `apply_to` restores the track stopped with a
 blank elapsed readout, the state Stop leaves; a track change or stop rewrites the line on the
-next message's save. The restored id is resolved into a `known_tracks` entry at launch
+next message's save. The writer flattens a `\r`/`\n` in the saved id to spaces, keeping the
+line-based file whole, like the `recently_played=` ids above. The restored id is resolved into a `known_tracks` entry at launch
 (`Message::ResolveCurrentTrack` → `handlers::playback::resolve_current_track` and
 `current_track_resolved`; `AppleMusicService::resolve_song` answers a sample-library id
 immediately and an Apple Music id once a session is stored, through
