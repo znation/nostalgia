@@ -13,6 +13,7 @@
 use iced::Task;
 
 use crate::library::Song;
+use crate::ui::browse::BrowseList;
 use crate::ui::loading::fetch_level;
 use crate::ui::{CurrentView, Message, SAVED_PLAYLIST_ROW_ID, SongsOrigin, WinampPlayer};
 
@@ -308,4 +309,37 @@ pub(in crate::ui) fn composer_selected(
     };
     let songs = composer.songs.clone();
     show_group_songs(player, songs, SongsOrigin::Composer)
+}
+
+/// Ctrl+Up or Ctrl+Down was pressed: step the showing list's selection bar
+/// one row up or down (`down`), Winamp's playlist editor's selection keys,
+/// beside [`super::ordering::move_selected_row`]'s Alt row move. The rows
+/// stay where they are and no epoch is bumped — a selection step names the
+/// showing list itself, so there is no stale index to reject — and every
+/// list, view, search state, and playback state the showing one is left
+/// alone. A step that changes the selection scrolls the list only as far as
+/// needed to show it, like the row moves; a no-op step (nothing selected, an
+/// edge repeat, or a loading or failed list) schedules no task.
+pub(in crate::ui) fn move_browse_selection(player: &mut WinampPlayer, down: bool) -> Task<Message> {
+    let moved_to = match player.current_view {
+        CurrentView::Artists => step_in(&mut player.artists, down),
+        CurrentView::Albums => step_in(&mut player.albums, down),
+        CurrentView::Songs => step_in(&mut player.songs, down),
+        CurrentView::AllSongs => step_in(&mut player.all_songs, down),
+        CurrentView::AllAlbums => step_in(&mut player.all_albums, down),
+        CurrentView::RecentlyAdded => step_in(&mut player.recently_added, down),
+        CurrentView::RecentlyPlayed => step_in(&mut player.recently_played, down),
+        CurrentView::Playlists => step_in(&mut player.playlists, down),
+        CurrentView::Genres => step_in(&mut player.genres, down),
+        CurrentView::Years => step_in(&mut player.years, down),
+        CurrentView::Composers => step_in(&mut player.composers, down),
+    };
+    moved_to.map_or_else(Task::none, scroll::reveal_browse_row)
+}
+
+/// Steps `list`'s selection one row and returns its new index, or `None`
+/// when the selection did not change (`BrowseList::move_selection`'s
+/// no-op rules).
+fn step_in<T: Clone>(list: &mut BrowseList<T>, down: bool) -> Option<usize> {
+    list.move_selection(down)
 }

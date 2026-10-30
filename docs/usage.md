@@ -237,7 +237,11 @@ controls and a readout click), E shows or hides the equalizer panel exactly like
 beside the balance slider (Alt+E shows or hides the library section exactly like the `PL` button,
 and Alt+G the equalizer panel like `EQ`, as Winamp's Alt+E and Alt+G toggle its playlist editor and
 equalizer), and the up/down arrows nudge the volume while the left/right arrows
-seek five seconds back or forward. With NumLock on, keypad 4, 5, and 6 play the previous,
+seek five seconds back or forward. Ctrl+Up and Ctrl+Down step the browse selection bar one row up or down
+over the showing list, Winamp's playlist editor's selection keys, scrolling the list only as far as needed
+to keep the newly selected row in view; like the Alt+Up/Alt+Down row moves the step is a no-op with no
+selection, at the first or last row, or on a loading or failed list, and it reorders nothing, so reopening
+or backing out of the list still shows its library order. With NumLock on, keypad 4, 5, and 6 play the previous,
 current, and next song, 7 and 9 seek five seconds back or forward, and 8 and 2 nudge the volume,
 and 1 and 3 jump ten songs back or forward through the same list, stopping at its ends, like Winamp.
 Ctrl+Z plays the first song of the list Z and B step through

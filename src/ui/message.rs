@@ -312,6 +312,15 @@ pub(in crate::ui) enum Message {
     MoveSelectedRowToTop,
     // Alt+Shift+Down: like `MoveSelectedRowToTop`, all the way to the last row.
     MoveSelectedRowToBottom,
+    // Ctrl+Up: move the selection bar one row up over the showing list, the
+    // playlist editor's selection key. It reorders nothing — unlike
+    // `MoveSelectedRowUp` the rows stay put and the epoch is untouched — and
+    // is a no-op with nothing selected, at the first row, or on a loading or
+    // failed list (plan 2026-10-30: Ctrl+Up/Ctrl+Down selection keys).
+    MoveBrowseSelectionUp,
+    // Ctrl+Down: like `MoveBrowseSelectionUp`, one row down over the showing
+    // list, with the same no-op rules (the last row included).
+    MoveBrowseSelectionDown,
     // The browse view's Reload button: refetch the top-level artists list and
     // return to the Artists view, clearing an active search but not the search
     // box's typed text. It leaves playback and the other browse lists alone.

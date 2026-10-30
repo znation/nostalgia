@@ -261,7 +261,9 @@ fn numpad_shortcut(key: &Key, location: Location, modifiers: Modifiers) -> Optio
 /// (reverse the showing list), Ctrl+Shift+R (shuffle it), Ctrl+Shift+Delete (clear
 /// the showing songs list), Ctrl+J (flip the Jump to
 /// time panel), Ctrl+W (toggle window-shade mode), Ctrl+A and Ctrl+T (repeat
-/// the classic always-on-top and elapsed/remaining toggles), and Ctrl+F1 (open
+/// the classic always-on-top and elapsed/remaining toggles), Ctrl+Up and
+/// Ctrl+Down (step the browse selection bar one row up or down over the
+/// showing list, like the playlist editor's selection keys), and Ctrl+F1 (open
 /// the About panel), a
 /// Control, Alt, or
 /// Logo chord is left to the OS and window manager, so those modifiers yield
@@ -273,9 +275,11 @@ fn numpad_shortcut(key: &Key, location: Location, modifiers: Modifiers) -> Optio
 /// so top-row digits stay unbound here (Ctrl+Shift+1 is handled by
 /// [`playlist_sort_shortcut`]).
 fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
-    // Ctrl+F is the one Control chord the player claims. Alt or Logo held with
-    // it stays a window-manager chord, so only plain Control (plus optional
-    // Shift) reaches the search box.
+    // Ctrl+F is the one Control letter chord the player claims; Ctrl+Up and
+    // Ctrl+Down, matched below, are the Control arrow ones, and every other
+    // Control, Alt, or Logo chord is left to the OS and window manager. Alt
+    // or Logo held with the chord stays a window-manager chord, so only plain
+    // Control (plus optional Shift) reaches the search box.
     if modifiers.control()
         && !modifiers.alt()
         && !modifiers.logo()
@@ -328,6 +332,16 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
             // selected), claiming the Delete chord the plain-key gate withholds.
             Key::Named(key::Named::Delete) if modifiers.shift() => {
                 return Some(Message::RemoveAllBrowse);
+            }
+            // Ctrl+Up and Ctrl+Down step the browse selection bar over the
+            // showing list, Winamp's playlist editor's selection keys, beside
+            // the Alt+arrow row moves. Shift held with the chord maps the
+            // same way: the arrows carry no shift behavior anywhere.
+            Key::Named(key::Named::ArrowUp) => {
+                return Some(Message::MoveBrowseSelectionUp);
+            }
+            Key::Named(key::Named::ArrowDown) => {
+                return Some(Message::MoveBrowseSelectionDown);
             }
             Key::Named(key::Named::F1) => {
                 return Some(Message::ToggleAbout);
@@ -488,15 +502,26 @@ mod tests {
                 Some(Message::OptionsActivate)
             ));
         }
-        for modifiers in [Modifiers::CTRL, Modifiers::LOGO] {
-            for named in [
-                key::Named::ArrowUp,
-                key::Named::ArrowDown,
-                key::Named::Enter,
-            ] {
-                assert!(message_for_options(key_pressed(Key::Named(named), modifiers)).is_none());
-            }
+        // Ctrl+Up and Ctrl+Down step the browse selection through the
+        // fallback (`message_for`); Enter stays closed to the menu, and a
+        // Logo chord is left to the OS as before.
+        for named in [key::Named::ArrowUp, key::Named::ArrowDown] {
+            assert!(matches!(
+                message_for_options(key_pressed(Key::Named(named), Modifiers::CTRL)),
+                Some(Message::MoveBrowseSelectionUp | Message::MoveBrowseSelectionDown)
+            ));
         }
+        for named in [
+            key::Named::ArrowUp,
+            key::Named::ArrowDown,
+            key::Named::Enter,
+        ] {
+            assert!(message_for_options(key_pressed(Key::Named(named), Modifiers::LOGO)).is_none(),);
+        }
+        assert!(
+            message_for_options(key_pressed(Key::Named(key::Named::Enter), Modifiers::CTRL))
+                .is_none()
+        );
         assert!(matches!(
             message_for_options(key_pressed(Key::Character("x".into()), Modifiers::NONE)),
             Some(Message::Play)
@@ -816,8 +841,9 @@ mod tests {
     #[test]
     fn shortcut_ignores_chord_modifiers() {
         // Control, Alt, and Logo chords belong to the OS and window manager;
-        // Ctrl+F, Ctrl+Z, Ctrl+B, and Ctrl+R are the Control exceptions,
-        // pinned by their own tests; Z and B stay unbound with Alt or Logo.
+        // Ctrl+F, Ctrl+Z, Ctrl+B, Ctrl+R, and the Ctrl+arrow selection steps
+        // are the Control exceptions, pinned by their own tests; Z and B stay
+        // unbound with Alt or Logo.
         for modifiers in [Modifiers::ALT, Modifiers::LOGO] {
             for key in [Key::Character("z".into()), Key::Character("b".into())] {
                 assert!(
@@ -838,8 +864,10 @@ mod tests {
                 Key::Named(key::Named::PageUp),
                 Key::Named(key::Named::PageDown),
                 Key::Named(key::Named::F5),
-                Key::Named(key::Named::ArrowUp),
-                Key::Named(key::Named::ArrowDown),
+                // The up and down arrows are lifted out: Ctrl+Up and
+                // Ctrl+Down now step the browse selection under plain Ctrl
+                // (see the Ctrl-arrows test). ArrowLeft and ArrowRight, and
+                // the arrows under Alt or Logo, stay OS territory.
                 Key::Named(key::Named::ArrowLeft),
                 Key::Named(key::Named::ArrowRight),
                 Key::Named(key::Named::MediaPlayPause),
@@ -852,6 +880,18 @@ mod tests {
                 assert!(
                     shortcut(&key, modifiers).is_none(),
                     "{key:?} with {modifiers:?} must not map"
+                );
+            }
+        }
+        // The up and down arrows under Alt or Logo stay OS chord territory
+        // in `shortcut` (the Alt arrows map in `alt_arrow_shortcut`, pinned
+        // by its own test); their Ctrl chords are pinned by the
+        // selection-step test.
+        for modifiers in [Modifiers::ALT, Modifiers::LOGO] {
+            for named in [key::Named::ArrowUp, key::Named::ArrowDown] {
+                assert!(
+                    shortcut(&Key::Named(named), modifiers).is_none(),
+                    "Named({named:?}) with {modifiers:?} must stay unbound"
                 );
             }
         }
@@ -956,11 +996,19 @@ mod tests {
             message_for_jump_file(key_pressed(Key::Named(key::Named::ArrowUp), Modifiers::ALT)),
             Some(Message::MoveSelectedRowUp)
         ));
-        // A Control chord is left to the OS, as `message_for` leaves it.
-        assert!(
+        // Ctrl+Up and Ctrl+Down step the browse selection through the
+        // fallback (`message_for`); a Logo chord is left to the OS as before.
+        assert!(matches!(
             message_for_jump_file(key_pressed(
                 Key::Named(key::Named::ArrowUp),
                 Modifiers::CTRL
+            )),
+            Some(Message::MoveBrowseSelectionUp)
+        ));
+        assert!(
+            message_for_jump_file(key_pressed(
+                Key::Named(key::Named::ArrowUp),
+                Modifiers::LOGO
             ))
             .is_none()
         );
@@ -1146,6 +1194,37 @@ mod tests {
         }
         assert_maps!(Key::Named(key::Named::ArrowUp), Modifiers::NONE => Message::VolumeUp);
         assert_maps!(Key::Named(key::Named::ArrowDown), Modifiers::NONE => Message::VolumeDown);
+    }
+
+    #[test]
+    fn message_for_maps_ctrl_arrows_to_move_the_browse_selection() {
+        // Shift held with the chord maps the same way: the arrows carry no
+        // shift behavior anywhere.
+        for modifiers in [Modifiers::CTRL, Modifiers::CTRL | Modifiers::SHIFT] {
+            assert_maps!(
+                Key::Named(key::Named::ArrowUp), modifiers => Message::MoveBrowseSelectionUp
+            );
+            assert_maps!(
+                Key::Named(key::Named::ArrowDown), modifiers => Message::MoveBrowseSelectionDown
+            );
+        }
+        // The chord stays a window-manager one under Alt or Logo.
+        for modifiers in [
+            Modifiers::CTRL | Modifiers::ALT,
+            Modifiers::CTRL | Modifiers::LOGO,
+        ] {
+            for named in [key::Named::ArrowUp, key::Named::ArrowDown] {
+                assert_unbound!(Key::Named(named), modifiers);
+            }
+        }
+        // The plain arrows still nudge the volume and the Alt arrows still
+        // move the selected row.
+        assert_maps!(Key::Named(key::Named::ArrowUp), Modifiers::NONE => Message::VolumeUp);
+        assert_maps!(Key::Named(key::Named::ArrowDown), Modifiers::NONE => Message::VolumeDown);
+        assert_maps!(Key::Named(key::Named::ArrowUp), Modifiers::ALT => Message::MoveSelectedRowUp);
+        assert_maps!(
+            Key::Named(key::Named::ArrowDown), Modifiers::ALT => Message::MoveSelectedRowDown
+        );
     }
 
     #[test]

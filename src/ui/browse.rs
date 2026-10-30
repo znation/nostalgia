@@ -167,6 +167,35 @@ impl<T> BrowseList<T> {
         Some(already_selected)
     }
 
+    /// Moves the selection bar one row down (`down`) or up over the showing
+    /// list, the keyboard selection step Winamp's playlist editor offers on
+    /// its arrow keys.
+    ///
+    /// Unlike [`Self::select_row`] this is not an index-carrying press, so it
+    /// checks no epoch: a step relative to the selection names the showing
+    /// list itself, and the selection it leaves lives at the same rows the
+    /// next render paints. It returns the newly selected row's index, or
+    /// `None` when the selection did not change — a loading or failed list,
+    /// nothing selected, or a step that would leave the first (up) or last
+    /// (down) row keeps the selection where it was, mirroring
+    /// `move_selected`'s no-op rules without reordering anything.
+    pub(super) fn move_selection(&mut self, down: bool) -> Option<usize> {
+        if self.loading || self.error.is_some() {
+            return None;
+        }
+        let index = self.selected?;
+        let target = if down {
+            index + 1
+        } else {
+            index.saturating_sub(1)
+        };
+        if target == index || target >= self.items.len() {
+            return None;
+        }
+        self.selected = Some(target);
+        Some(target)
+    }
+
     /// The selected row, or `None` when nothing is selected. The view paints
     /// this row with the blue selection bar and white text.
     pub(super) fn selected(&self) -> Option<usize> {
@@ -292,6 +321,34 @@ mod tests {
         assert_eq!(list.selected(), Some(0));
         list.restore_library_order();
         assert_eq!(list.items, ["a", "b", "c"]);
+    }
+
+    // Ctrl+Up/Down's selection step cannot leave the list: at either edge the
+    // step is a no-op and the selection stays, and a loading or failed list or
+    // an empty selection is one too.
+    #[test]
+    fn move_selection_keeps_the_selection_at_the_edges_and_on_no_selection() {
+        let mut list = loaded(&["a", "b", "c"]);
+        list.selected = Some(0);
+        assert_eq!(list.move_selection(false), None);
+        assert_eq!(list.selected(), Some(0));
+        list.selected = Some(2);
+        assert_eq!(list.move_selection(true), None);
+        assert_eq!(list.selected(), Some(2));
+
+        list.selected = None;
+        assert_eq!(list.move_selection(true), None);
+        assert_eq!(list.move_selection(false), None);
+        assert_eq!(list.selected(), None);
+
+        list.selected = Some(1);
+        list.loading = true;
+        assert_eq!(list.move_selection(true), None);
+        assert_eq!(list.selected(), Some(1));
+        list.loading = false;
+        list.error = Some("fetch failed".to_string());
+        assert_eq!(list.move_selection(false), None);
+        assert_eq!(list.selected(), Some(1));
     }
 
     #[test]

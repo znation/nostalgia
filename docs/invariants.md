@@ -213,7 +213,10 @@ blue `theme::ROW_HIGHLIGHT` bar; a single press on any artist, album, song, or p
 it without changing the view, playing a song, or scheduling a fetch. Ordinary rows draw green text
 and keep the hover/press faces of the flat playlist row. The playing track's row draws white text,
 keeps its `▶` marker, and draws no bar unless it is also selected; a row that is both playing and
-selected keeps the bar and stays identifiable by its `▶` prefix. Only a matching epoch and an
+selected keeps the bar and stays identifiable by its `▶` prefix. Ctrl+Up and Ctrl+Down step the
+keyboard selection bar one row up or down over the showing list and reveal the newly selected row;
+the step reorders nothing, bumps no epoch, and is a no-op with nothing selected, at the list's
+first or last row, or on a loading or failed list. Only a matching epoch and an
 in-range index can select, so a press rendered from a replaced list is a no-op. A second press on
 the row that is already selected, the `Open` button, or a plain or Shift-held Enter key press
 dispatches the existing artist/album/track/playlist open action, so a double-click reaches the same
@@ -226,7 +229,17 @@ stored index then names a different row.
 
 **Enforced by.** `BrowseList::select_row` in `src/ui/browse.rs` validates the press through
 `BrowseList::select` and records it, returning `Some(true)` only for the second press on the
-selected row; `BrowseList::selected` exposes it to the view. `replace_rows`, `clear`, and `fail`
+selected row; `BrowseList::selected` exposes it to the view, and `BrowseList::move_selection`
+implements the keyboard step with its no-op rules. `shortcuts::shortcut` maps Ctrl+Up and
+Ctrl+Down (Shift held included) to `Message::MoveBrowseSelectionUp`/`MoveBrowseSelectionDown`
+while the plain arrows keep the volume nudge and the Alt arrows the row moves.
+`browse::selection::move_browse_selection` in `src/ui/handlers/browse/selection.rs` routes the two
+messages over the eleven views and schedules `scroll::reveal_browse_row` only when the selection
+changed; the tests `message_for_maps_ctrl_arrows_to_move_the_browse_selection`
+(`src/ui/shortcuts.rs`), `move_selection_keeps_the_selection_at_the_edges_and_on_no_selection`
+(`src/ui/browse.rs`), and the module `src/ui/tests/move_selection_tests.rs` pin the mapping, the
+step, the reveal, and the no-op rules.
+ `replace_rows`, `clear`, and `fail`
 in `src/ui/browse.rs`, and `sort_rows_by`, `reverse_rows`, `shuffle_rows`, and
 `restore_library_order` in `src/ui/browse/ordering.rs`, clear it with the rows or order they change.
 `browse::selection::select_row` and `browse::selection::open_selected` in
