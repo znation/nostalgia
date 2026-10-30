@@ -872,6 +872,48 @@ fn row_prefix_numbers_rows_and_puts_the_play_marker_first() {
     assert_eq!(row_prefix(0, true), "▶ 1. ");
 }
 
+// The pixel-font split's part 3/4 draws the browse rows in the vendored
+// pixel faces: the row text in Silkscreen (the letterform face,
+// `theme::ui_font`) and the playing row's `▶` marker in Tiny5 (the shape
+// face — Silkscreen's `▶` falls back to an anti-aliased shape). Serve
+// both faces through `headless_renderer`, lay out a playing row, and pin
+// the probed advances, so losing either face or its size fails here rather
+// than in a screenshot. Sizes are f32-noisy, so each compares within 0.01.
+#[test]
+fn a_playing_browse_row_draws_the_vendored_pixel_faces() {
+    let mut element = scrollable_list(
+        [(Cow::Borrowed("H"), Cow::Borrowed("3:30"), true)],
+        &CurrentView::Songs,
+        0,
+        None,
+        "No songs",
+    );
+    let renderer = layout_capture::headless_renderer();
+    let capture = layout_capture::capture_text(&mut element, &renderer);
+
+    let marker = capture.find("▶");
+    assert!(
+        (marker.width - 8.0).abs() < 0.01,
+        "the playing marker must draw Tiny5's ▶ at size 16 ({marker:?})"
+    );
+    let number = capture.find("1. ");
+    assert!(
+        (number.width - 24.0).abs() < 0.01,
+        "the row number must draw Silkscreen's advance at size 16 ({number:?})"
+    );
+    let title = capture.find("H");
+    assert!(
+        (title.width - 12.0).abs() < 0.01,
+        "the row title must draw Silkscreen's H advance at size 16 ({title:?})"
+    );
+    // The composed `row_prefix` reads `▶ 1. ` — one Tiny5 space (probed
+    // 4.0 at size 16) between the marker and the number.
+    assert!(
+        (number.x - marker.x - marker.width - 4.0).abs() < 0.01,
+        "the marker and number must sit one Tiny5 space apart: {marker:?} vs {number:?}"
+    );
+}
+
 fn summary_album(duration_ms: u64) -> Album {
     let mut album = sample_album();
     album.duration_ms = duration_ms;

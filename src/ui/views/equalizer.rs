@@ -74,20 +74,32 @@ pub(super) fn auto_label(auto: bool) -> &'static str {
 /// reflow the preset pick list beside it.
 pub(super) const AUTO_BUTTON_WIDTH: f32 = 96.0;
 
+/// The on-grid size the equalizer's dB-scale and band/preamp labels hand iced,
+/// in pixels: the out-of-grid 12 they replaced, rebased onto the 8-px grid the
+/// vendored faces shape crisply (only multiples of 8 are crisp), drawn in
+/// [`theme::ui_font`].
+const EQ_TEXT_SIZE: f32 = 16.0;
+
+/// The on-grid size of the preset pick list's closed label and items, the 12
+/// it replaced — [`theme::ui_font`] again.
+const PICK_LIST_TEXT_SIZE: f32 = 16.0;
+
 /// The equalizer on/off button: sunken while `enabled`, ordinary while off.
 pub(super) fn eq_toggle(enabled: bool) -> Button<'static, Message> {
-    toggle_button(eq_enabled_label(enabled), Message::ToggleEqualizer, enabled)
+    toggle_button(
+        eq_enabled_label(enabled),
+        theme::ui_font(),
+        Message::ToggleEqualizer,
+        enabled,
+    )
 }
 
 /// The AUTO button: sunken while `auto`, ordinary while off, pinned to [`AUTO_BUTTON_WIDTH`].
 pub(super) fn auto_toggle(auto: bool) -> Button<'static, Message> {
-    // Part 2/4 of the pixel-font split added the font parameter to the
-    // shared builder; the equalizer keeps the app's default face until part
-    // 3/4 converts this view, so it passes the current default explicitly.
     fixed_width_toggle_button(
         auto_label(auto),
         AUTO_BUTTON_WIDTH,
-        iced::Font::default(),
+        theme::ui_font(),
         Message::ToggleEqAuto,
         auto,
     )
@@ -180,7 +192,7 @@ pub(super) fn db_scale_column() -> Column<'static, Message> {
 
 /// One clickable dB scale label that sets every band to `gain`.
 fn scale_label(label: &'static str, gain: f32) -> MouseArea<'static, Message> {
-    MouseArea::new(Text::new(label).size(12))
+    MouseArea::new(Text::new(label).size(EQ_TEXT_SIZE).font(theme::ui_font()))
         .on_press(Message::EqBandsSetAll(gain))
         .interaction(Interaction::Pointer)
 }
@@ -213,7 +225,7 @@ fn eq_slider_column<'a>(
             )
             .on_scroll(on_scroll),
         )
-        .push(Text::new(label).size(12))
+        .push(Text::new(label).size(EQ_TEXT_SIZE).font(theme::ui_font()))
 }
 
 /// Builds the equalizer's preamp column: a [`VerticalSlider`] over the `Preamp` label, matching a
@@ -417,11 +429,29 @@ pub fn view_equalizer(
                             Message::EqPresetSelected,
                         )
                         .placeholder(preset_pick_list_label(preset))
-                        .text_size(12)
+                        .text_size(PICK_LIST_TEXT_SIZE)
+                        .font(theme::ui_font())
                         .style(|_theme, status| style::chrome_pick_list_style(status))
                         .menu_style(|_theme| style::preset_menu_style()),
                     ),
             )
             .push(sliders),
     )
+}
+
+/// The equalizer's text sizes are literals iced exposes no way to read back,
+/// so these tests pin them to the 8-px grid the vendored pixel faces render
+/// sharply — off-grid sizes blend instead (see the pixel-font split in
+/// `PLANS.md`).
+#[cfg(test)]
+mod size_pins {
+    use super::{EQ_TEXT_SIZE, PICK_LIST_TEXT_SIZE};
+
+    #[test]
+    fn equalizer_text_sizes_stay_on_the_pixel_grid() {
+        assert_eq!(EQ_TEXT_SIZE, 16.0);
+        assert_eq!(PICK_LIST_TEXT_SIZE, 16.0);
+        assert_eq!(EQ_TEXT_SIZE % 8.0, 0.0);
+        assert_eq!(PICK_LIST_TEXT_SIZE % 8.0, 0.0);
+    }
 }

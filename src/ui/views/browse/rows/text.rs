@@ -71,15 +71,34 @@ pub(in crate::ui::views) fn browse_placeholder<'a>(
 
 /// The prefix the browse list puts before a row's title: its 1-based
 /// position and a period, with a `▶ ` marker first when the row is the
-/// currently playing track. Pure, so the marker/number order is testable
-/// without an iced renderer and the composition lives in one place.
+/// currently playing track. The playing rows now build from
+/// [`ROW_MARKER`] and this function's number half so the marker can draw
+/// Tiny5 (see `rows.rs`'s `row_prefix_mark`), so this composition pins the
+/// marker/number order the widgets must keep reproducing. Pure, so the
+/// order is testable without an iced renderer.
+#[cfg(test)]
 pub(in crate::ui::views) fn row_prefix(position: usize, is_current: bool) -> String {
-    let number = position + 1;
+    let number = row_number_prefix(position);
     if is_current {
-        format!("▶ {number}. ")
+        format!("{ROW_MARKER} {number}")
     } else {
-        format!("{number}. ")
+        number
     }
+}
+
+/// The playing-row marker `row_prefix` (the test-fenced composition pin)
+/// composes first. Tiny5 covers `▶` at the
+/// on-grid size while Silkscreen does not (see `theme::shape_font`), so a playing
+/// row draws it as its own face in `rows.rs` rather than inside one string.
+pub(in crate::ui::views) const ROW_MARKER: &str = "▶";
+
+/// The prefix's number half — the part the row draws in the letterform face.
+/// `row_prefix` composes the same string, adding [`ROW_MARKER`] first when the
+/// row is playing; `rows.rs` builds a playing row from these pieces so the
+/// marker carries the shape face (`theme::shape_font`) and the number the
+/// letterform face (`theme::ui_font`).
+pub(in crate::ui::views) fn row_number_prefix(position: usize) -> String {
+    format!("{}. ", position + 1)
 }
 
 /// The browse row an artist becomes: its name, its album count (``"1 album"``,

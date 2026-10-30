@@ -27,7 +27,8 @@ pub(in crate::ui::views) mod text;
 pub(in crate::ui::views) use self::lazy::LazyRow;
 
 use self::text::{
-    album_list_summary, album_row, list_count_summary, row_prefix, song_list_summary, song_row,
+    ROW_MARKER, album_list_summary, album_row, list_count_summary, row_number_prefix,
+    song_list_summary, song_row,
 };
 
 /// The style for a browse row, colored by whether it is playing or selected.
@@ -68,15 +69,35 @@ pub const BROWSE_LIST_ID: &str = "nostalgia-browse-list";
 /// absolute offset.
 pub const BROWSE_LIST_PADDING: f32 = 20.0;
 
+/// The on-grid size the list hands iced for its prefix, title, and
+/// empty-marker text: the out-of-grid 18 it replaced, rebased onto the 8-px
+/// grid the vendored faces shape crisply (only multiples of 8 are crisp),
+/// drawn in [`theme::ui_font`].
+const ROW_TEXT_SIZE: f32 = 16.0;
+
+/// The on-grid size of a row's right-aligned secondary label, the 14 it
+/// replaced — [`theme::ui_font`] again, one grid step up.
+const ROW_LABEL_SIZE: f32 = 16.0;
+
+/// The on-grid size of a loaded list's footer line (the count, the running
+/// time), the 14 it replaced.
+const FOOTER_TEXT_SIZE: f32 = 16.0;
+
+/// The gap between a playing row's [`text::ROW_MARKER`] glyph and its number:
+/// a Tiny5 space's advance at [`ROW_TEXT_SIZE`], probed 4.0. The composed
+/// `row_prefix` string reads `▶ {n}. `, and the split widgets keep that
+/// spacing by measuring it instead of guessing one.
+const ROW_MARKER_GAP: f32 = 4.0;
+
 /// The vertical pitch between consecutive laid-out browse rows: the row
-/// button's padding plus its 18px text height. [`scrollable_list`] stacks the
+/// button's padding plus its 16px text height. [`scrollable_list`] stacks the
 /// rows in a plain [`Column`], flattens line breaks, and clips each title to
 /// its column, so each row is exactly this tall. Measured by
 /// `browse_row_height_matches_the_laid_out_row_pitch`, which lays out the root
 /// view with an overlong title and checks consecutive row prefixes land
 /// exactly this far apart, so a styling change cannot leave a stale constant
 /// behind.
-pub const BROWSE_ROW_HEIGHT: f32 = 33.4;
+pub const BROWSE_ROW_HEIGHT: f32 = 30.8;
 
 /// The distance one keyboard page scrolls the browse list: eight rows of the
 /// same pitch as [`BROWSE_ROW_HEIGHT`]. `Page Up` and `Page Down` scroll by
@@ -184,7 +205,11 @@ pub(in crate::ui::views) fn scrollable_list<'a>(
     }
 
     if is_empty {
-        column = column.push(Text::new(empty_label).size(18));
+        column = column.push(
+            Text::new(empty_label)
+                .size(ROW_TEXT_SIZE)
+                .font(theme::ui_font()),
+        );
     }
 
     Scrollable::new(column)
@@ -221,6 +246,36 @@ pub(in crate::ui::views) fn row_build_count() -> usize {
     ROW_BUILDS.with(std::cell::Cell::get)
 }
 
+/// The widgets a row's title leads with: a non-playing row draws its
+/// `{n}. ` number alone in the letterform face, while a playing row draws
+/// the [`text::ROW_MARKER`] glyph with [`theme::shape_font`] (the only face
+/// that covers `▶` crisply — Silkscreen's `▶` falls back to an anti-aliased
+/// shape), one [`ROW_MARKER_GAP`] space wide, then the same number.
+/// `text::row_prefix` (the test-fenced composition pin) composes the same
+/// strings; this builds them from the same pieces so the faces can differ.
+fn row_prefix_mark(position: usize, is_current: bool) -> Element<'static, Message> {
+    if is_current {
+        Row::new()
+            .push(
+                Text::new(ROW_MARKER)
+                    .size(ROW_TEXT_SIZE)
+                    .font(theme::shape_font()),
+            )
+            .push(spacer(ROW_MARKER_GAP))
+            .push(
+                Text::new(row_number_prefix(position))
+                    .size(ROW_TEXT_SIZE)
+                    .font(theme::ui_font()),
+            )
+            .into()
+    } else {
+        Text::new(row_number_prefix(position))
+            .size(ROW_TEXT_SIZE)
+            .font(theme::ui_font())
+            .into()
+    }
+}
+
 /// Builds one browse row button from its owned text and flags. `LazyRow`
 /// calls this only when the row's [`RowKey`] changes, so the strings are owned
 /// by the cached element and the row can outlive the view that first built it.
@@ -238,7 +293,7 @@ fn row_button(
     Button::new(
         Row::new()
             .width(Length::Fill)
-            .push(Text::new(row_prefix(position, is_current)).size(18))
+            .push(row_prefix_mark(position, is_current))
             // A wrapped title would make its row taller than
             // BROWSE_ROW_HEIGHT and break the absolute scroll offset.
             // The fill container clips a title wider than its column so
@@ -246,14 +301,15 @@ fn row_button(
             .push(
                 container(
                     Text::new(one_line_title(Cow::Owned(title)))
-                        .size(18)
+                        .size(ROW_TEXT_SIZE)
+                        .font(theme::ui_font())
                         .wrapping(Wrapping::None),
                 )
                 .width(Length::Fill)
                 .clip(true),
             )
             .push(spacer(10.0))
-            .push(Text::new(label).size(14)),
+            .push(Text::new(label).size(ROW_LABEL_SIZE).font(theme::ui_font())),
     )
     .width(Length::Fill)
     .on_press(Message::SelectRow {
@@ -314,7 +370,11 @@ pub(in crate::ui::views) fn with_footer<'a>(
 ) -> Element<'a, Message> {
     Column::new()
         .push(list)
-        .push(Text::new(footer).size(14))
+        .push(
+            Text::new(footer)
+                .size(FOOTER_TEXT_SIZE)
+                .font(theme::ui_font()),
+        )
         .width(Length::Fill)
         .height(Length::FillPortion(3))
         .into()
@@ -377,4 +437,23 @@ pub(in crate::ui::views) fn song_list<'a>(
         return list;
     }
     with_footer(list, song_list_summary(songs, selected))
+}
+
+/// The row text sizes are literals the builders consume and iced exposes no
+/// way to read back, so these tests pin them to the 8-px grid the vendored
+/// pixel faces render sharply — off-grid sizes blend instead (see the
+/// pixel-font split in `PLANS.md`).
+#[cfg(test)]
+mod size_pins {
+    use super::{FOOTER_TEXT_SIZE, ROW_LABEL_SIZE, ROW_TEXT_SIZE};
+
+    #[test]
+    fn browse_text_sizes_stay_on_the_pixel_grid() {
+        assert_eq!(ROW_TEXT_SIZE, 16.0);
+        assert_eq!(ROW_LABEL_SIZE, 16.0);
+        assert_eq!(FOOTER_TEXT_SIZE, 16.0);
+        for size in [ROW_TEXT_SIZE, ROW_LABEL_SIZE, FOOTER_TEXT_SIZE] {
+            assert_eq!(size % 8.0, 0.0, "size {size} must sit on the 8-px grid");
+        }
+    }
 }

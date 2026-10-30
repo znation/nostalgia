@@ -82,6 +82,15 @@ pub(in crate::ui) fn scroll_browse_to_playing_row(
     }
 }
 
+/// The rounding slack a reveal comparison gives a row's flush edge: the row
+/// pitch is not a f32-exact value (the pixel-font split's part 3/4 re-based
+/// the row text onto 16-px grid sizes, moving it to 30.8), so an edge that
+/// measurement puts exactly at the viewport's line can compare one ulp
+/// wider and schedule a scroll of that width. A real miss misses by a whole
+/// row — the pitch itself — so half a pixel of slack separates the edges
+/// the rule treats as flush from the misses it reveals.
+const REVEAL_SLACK: f32 = 0.5;
+
 /// The scroll offset that shows a row fully in a viewport of
 /// `viewport_height` currently scrolled to `scroll_top`, or `None` when the
 /// row is already fully visible. The row spans `row_height` pixels from
@@ -98,7 +107,7 @@ pub(in crate::ui) fn reveal_offset(
     let row_bottom = row_top + row_height;
     if row_top < scroll_top {
         Some(row_top)
-    } else if row_bottom > scroll_top + viewport_height {
+    } else if row_bottom > scroll_top + viewport_height + REVEAL_SLACK {
         Some(row_bottom - viewport_height)
     } else {
         None
@@ -215,7 +224,10 @@ mod tests {
 
     // Both edges are inclusive: a row whose top sits exactly at the scroll
     // offset, or whose bottom sits exactly at the viewport's bottom, is fully
-    // visible and must not nudge the list.
+    // visible and must not nudge the list. One ulp of rounding sits in the
+    // exact-edge comparisons once the pitch is not f32-exact, so these pins
+    // assert the reveal chooses the flush row's own edge — the row's top —
+    // over a whole-row miss, and [`REVEAL_SLACK`] rounds the edge itself out.
     #[test]
     fn a_row_flush_with_either_viewport_edge_needs_no_scroll() {
         let row_top = PAD + 3.0 * ROW;

@@ -5,6 +5,56 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
+### Re-base the browse list and equalizer text onto the pixel faces (part 3/4 of the pixel-font split, requires part 1/4 landed) (planned 2026-10-30 by the plan role) — done 2026-10-30 by the feature role
+
+**Goal.** The browse list's rows and footer and the equalizer's labels render in
+the vendored faces at on-grid sizes, matching the playlist-editor text of
+`winamp-screenshots/winamp-2.x-stack.png`. Independent of parts 2/4 and 4/4 except
+for part 1/4's seam, so a runner can take it alongside part 2/4.
+
+**Files touched.** `src/ui/views/browse/rows.rs`, `src/ui/views/equalizer.rs`,
+plus the test modules that capture their fragments (`views/tests/browse.rs`,
+`equalizer.rs`, and the `src/ui/tests/` readouts/browse modules that read their
+text bounds).
+
+**Approach.**
+
+1. Face swap: every `Text` in `rows.rs` and the equalizer's labels takes
+   `theme::ui_font()`; the playing row's `▶` prefix marker (`rows.rs`'s
+   `row_prefix`) takes `theme::shape_font()` (Tiny5 covers `▶`, probed crisp;
+   Silkscreen does not).
+2. Size re-base onto the grid, per the split's mapping (18→16, 14→16, 12→16):
+   `rows.rs`'s empty-label 18, row-prefix 18, and row label 18 → 16; the song-row
+   label 14 and footer 14 → 16; the equalizer's two label sites and the
+   `.text_size(12)` style → 16. Keep each row's fixed heights where the new
+   glyphs fit them; where a row overflows, re-derive the height from the run and
+   note the change (16px text in the current row boxes is expected to fit
+   because the rows already leave padding, but the tests decide).
+3. Re-derive the affected text-bound assertions as in part 2/4: relationships
+   keep their claims with re-measured numbers; metric-only pins re-measured.
+4. Compare against `winamp-screenshots/winamp-2.x-stack.png`'s playlist editor;
+   the summary names the comparison.
+
+**Acceptance criteria.**
+
+- Every text size `rows.rs`/`equalizer.rs` hand iced is a multiple of 8, pinned
+  by tests.
+- A capture test proves the face: a browse row label draws with Silkscreen's
+  advance and the playing `▶` marker with Tiny5's probed 8.0 px width at 16.
+- The playing-row marker swap keeps `row_prefix`'s pinned behavior tests
+  passing; `make check` passes.
+
+**As implemented (2026-10-30, the feature role).** The pitch re-derived: 16px
+rows lay out at 30.8 (33.4 before), so `BROWSE_ROW_HEIGHT` is 30.8 and the
+reveal helper in `src/ui/handlers/browse/scroll.rs` gained a half-pixel
+`REVEAL_SLACK` — the non-f32-exact pitch made a flush edge compare one ulp
+wider and schedule a pointless scroll — and the playing marker draws as two
+widgets (`text.rs` split `row_prefix` into `ROW_MARKER` +
+`row_number_prefix`; `row_prefix` itself became test-only, pinning the
+marker/number order). `toggle_button` (`src/ui/views/mod.rs`) now takes the
+font the equalizer passes, and `views/tests/equalizer.rs`'s reference header
+row mirrors it. Those files join the touched list.
+
 ### Re-base the main window's chrome — LCD, title bar and transport row — onto the pixel faces (part 2/4 of the pixel-font split, requires part 1/4 landed) (planned 2026-10-30 by the plan role) — done 2026-10-30 by the feature role
 
 **Goal.** The main window's every text — the LCD's elapsed readout, status row and

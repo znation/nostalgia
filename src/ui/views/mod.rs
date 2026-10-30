@@ -157,8 +157,9 @@ fn spacer(width: f32) -> Space {
 /// A button showing a single text label that emits `message` on press.
 ///
 /// The browse Back, Open, Top, Sort, Reload, Clear, All Songs, All Albums,
-/// Playlists, and Retry buttons call this directly; the equalizer panel's on/off
-/// button reaches it through [`toggle_button`];
+/// Playlists, and Retry buttons call this directly; the equalizer panel's
+/// on/off button reaches it through [`toggle_button`] with its own face
+/// (the pixel-font split's part 3/4);
 /// the transport row's seven buttons (Previous, Play, Pause, Stop, Next,
 /// Repeat, Shuffle), the five in each compact strip (the shade strip and the
 /// library footer), and the title bar's shade, minimize, and close buttons
@@ -199,10 +200,16 @@ fn fixed_width_button(
     text_button(label, font, message).width(Length::Fixed(width))
 }
 
-/// A [`labeled_button`] that sinks while `on` (see [`style::toggle_button_style`]), for a toggle
-/// whose width follows its label: the equalizer's `EQ: On/Off`.
-fn toggle_button(label: &'static str, message: Message, on: bool) -> Button<'static, Message> {
-    labeled_button(label, message)
+/// A [`text_button`] whose label draws with `font` and that sinks while `on`
+/// (see [`style::toggle_button_style`]), for a toggle whose width follows its
+/// label: the equalizer's `EQ: On/Off`.
+fn toggle_button(
+    label: &'static str,
+    font: iced::Font,
+    message: Message,
+    on: bool,
+) -> Button<'static, Message> {
+    text_button(label, font, message)
         .style(move |_theme, status| style::toggle_button_style(on, status))
 }
 

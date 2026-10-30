@@ -560,17 +560,17 @@ fn reference_header_row(
     // `PresetChoice::BuiltIn` for the pick list's selection, so the reference
     // row builds the same mapping over the static built-ins.
     let mut element: iced::Element<'static, Message> = iced::widget::Row::new()
-        .push(labeled_button(
+        .push(toggle_button(
             eq_enabled_label(false),
+            theme::ui_font(),
             Message::ToggleEqualizer,
+            false,
         ))
         .push(spacer(8.0))
         .push(fixed_width_button(
             auto_label(false),
             AUTO_BUTTON_WIDTH,
-            // The equalizer keeps the app's default face until part 3/4
-            // of the pixel-font split converts this view.
-            iced::Font::default(),
+            theme::ui_font(),
             Message::ToggleEqAuto,
         ))
         .push(spacer(8.0))
@@ -584,7 +584,8 @@ fn reference_header_row(
                 Message::EqPresetSelected,
             )
             .placeholder(placeholder)
-            .text_size(12)
+            .text_size(16.0)
+            .font(theme::ui_font())
             .style(|_theme, status| style::chrome_pick_list_style(status))
             .menu_style(|_theme| style::preset_menu_style()),
         )

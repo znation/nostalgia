@@ -1183,8 +1183,21 @@ fn root_view_draws_the_current_browse_levels_own_rows() {
                 );
             }
         }
+        // The playing row's `▶` marker is its own Tiny5 fragment (the pixel-
+        // font split's part 3/4), one space left of the number on the same
+        // text line. The transport and the shade strip draw `▶` glyphs too,
+        // but no fragment on a row's line — so the marker next to a number,
+        // not the lone fragment, marks a playing row.
+        let row_marked = capture.fragments().iter().any(|(text, bounds)| {
+            text == "▶"
+                && capture.fragments().iter().any(|(number, line)| {
+                    number == "1. "
+                        && (line.y - bounds.y).abs() < 0.01
+                        && line.x > bounds.x + bounds.width
+                })
+        });
         assert_eq!(
-            texts.iter().any(|text| text.starts_with("▶ ")),
+            row_marked,
             marked,
             "{level} marked the playing row: {:?}",
             capture.fragments()

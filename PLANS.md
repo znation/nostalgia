@@ -8,45 +8,6 @@ together was one run's worth of re-derived assertions too many). They cross-refe
 parts 2–4 each scope whole controls — a control's face, size and glyphs never land in
 different parts, so nothing is left half-converted between merges.
 
-### Re-base the browse list and equalizer text onto the pixel faces (part 3/4 of the pixel-font split, requires part 1/4 landed) (planned 2026-10-30 by the plan role)
-
-**Goal.** The browse list's rows and footer and the equalizer's labels render in
-the vendored faces at on-grid sizes, matching the playlist-editor text of
-`winamp-screenshots/winamp-2.x-stack.png`. Independent of parts 2/4 and 4/4 except
-for part 1/4's seam, so a runner can take it alongside part 2/4.
-
-**Files touched.** `src/ui/views/browse/rows.rs`, `src/ui/views/equalizer.rs`,
-plus the test modules that capture their fragments (`views/tests/browse.rs`,
-`equalizer.rs`, and the `src/ui/tests/` readouts/browse modules that read their
-text bounds).
-
-**Approach.**
-
-1. Face swap: every `Text` in `rows.rs` and the equalizer's labels takes
-   `theme::ui_font()`; the playing row's `▶` prefix marker (`rows.rs`'s
-   `row_prefix`) takes `theme::shape_font()` (Tiny5 covers `▶`, probed crisp;
-   Silkscreen does not).
-2. Size re-base onto the grid, per the split's mapping (18→16, 14→16, 12→16):
-   `rows.rs`'s empty-label 18, row-prefix 18, and row label 18 → 16; the song-row
-   label 14 and footer 14 → 16; the equalizer's two label sites and the
-   `.text_size(12)` style → 16. Keep each row's fixed heights where the new
-   glyphs fit them; where a row overflows, re-derive the height from the run and
-   note the change (16px text in the current row boxes is expected to fit
-   because the rows already leave padding, but the tests decide).
-3. Re-derive the affected text-bound assertions as in part 2/4: relationships
-   keep their claims with re-measured numbers; metric-only pins re-measured.
-4. Compare against `winamp-screenshots/winamp-2.x-stack.png`'s playlist editor;
-   the summary names the comparison.
-
-**Acceptance criteria.**
-
-- Every text size `rows.rs`/`equalizer.rs` hand iced is a multiple of 8, pinned
-  by tests.
-- A capture test proves the face: a browse row label draws with Silkscreen's
-  advance and the playing `▶` marker with Tiny5's probed 8.0 px width at 16.
-- The playing-row marker swap keeps `row_prefix`'s pinned behavior tests
-  passing; `make check` passes.
-
 ### Re-base the remaining panels, make the face the app's default, and sync the docs (part 4/4 of the pixel-font split, requires part 1/4 landed, requires part 2/4 landed, requires part 3/4 landed) (planned 2026-10-30 by the plan role)
 
 **Goal.** The small panels (about, file info, jump-to-file, jump-to-time, options,

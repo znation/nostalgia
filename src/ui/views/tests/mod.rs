@@ -45,8 +45,8 @@ use super::transport::{
 use super::{
     BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, EQ_STEP, TITLE_BAR_HEIGHT, VOLUME_MAX, VOLUME_MIN,
     VOLUME_STEP, balance_wheel_message, can_go_back, can_retry_artists, eq_band_wheel_message,
-    eq_preamp_wheel_message, fixed_width_button, format_track_time, labeled_button, seek_bar_value,
-    spacer, view_albums, view_all_albums, view_all_albums_button, view_all_songs,
+    eq_preamp_wheel_message, fixed_width_button, format_track_time, seek_bar_value, spacer,
+    toggle_button, view_albums, view_all_albums, view_all_albums_button, view_all_songs,
     view_all_songs_button, view_artists, view_back_button, view_browse_nav_buttons, view_equalizer,
     view_now_playing, view_open_button, view_playlists, view_playlists_button, view_retry_button,
     view_seek_bar, view_songs, view_title_band, view_title_bar, view_transport_controls,
