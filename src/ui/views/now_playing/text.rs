@@ -110,7 +110,9 @@ impl TimeDisplay {
 /// A track the Now Playing bar knows about: the playlist number prefix, title,
 /// and artist it renders and the formatted length it shows beside them.
 /// Recorded when a track is played, so the bar keeps naming and timing the
-/// playing track after the user browses to a different album.
+/// playing track after the user browses to a different album. The File info
+/// panel also builds an ephemeral entry for a song-list selection through
+/// [`KnownTrack::from_song`], never storing it in the played-tracks index.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnownTrack {
     /// The track's title, without the artist (the bar renders [`Self::artist`] separately).
@@ -152,6 +154,40 @@ pub struct KnownTrack {
     /// readout subtracts the playback position from; `0` means the source
     /// supplied no duration.
     pub duration_ms: u64,
+}
+
+impl KnownTrack {
+    /// Builds the entry a [`crate::library::Song`] maps to, so the two
+    /// construction sites — the play path (`handlers::playback::track_selected`,
+    /// which stores the entry in `known_tracks` and whose per-field mapping the
+    /// `known_tracks_record_the_played_songs_*` tests pin) and the File info
+    /// panel's selected-row resolver (`WinampPlayer::file_info_track`, which
+    /// builds an ephemeral entry) — cannot drift apart. Every field maps exactly
+    /// as `track_selected`'s original struct literal did.
+    ///
+    /// `number` is the caller-supplied `"<n>. "` playlist prefix: the play path
+    /// passes the 1-based position of the row that selected the track, while
+    /// the File info resolver passes `""` — the panel never renders the
+    /// playlist-number prefix. A display format line (`256 KBPS  44 KHZ
+    /// STEREO`) is not part of the entry: the panel draws it beside the entry,
+    /// from the loaded preview's `PlaybackFormat`, which an entry alone cannot
+    /// report.
+    pub fn from_song(song: &crate::library::Song, number: String) -> Self {
+        Self {
+            title: song.title.clone(),
+            artist: song.artist.clone(),
+            album: song.album.clone(),
+            year: song.year,
+            genre: song.genre.clone(),
+            track_number: song.track_number,
+            disc_number: song.disc_number,
+            composer: song.composer.clone(),
+            content_rating: song.content_rating,
+            number,
+            time: crate::ui::views::format_track_time(song.duration_ms),
+            duration_ms: song.duration_ms,
+        }
+    }
 }
 
 /// The Now Playing bar label: the title of `current_track` when `tracks` knows it; the raw id when

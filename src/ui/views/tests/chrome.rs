@@ -215,7 +215,7 @@ fn file_info_element(track: &KnownTrack, format: Option<PlaybackFormat>) -> Elem
         .width(Length::Fill)
         .height(Length::Fill)
         .into();
-    super::super::view_file_info_overlay(base, track, format)
+    super::super::view_file_info_overlay(base, track.clone(), format)
 }
 
 fn sample_known_track(artist: &str) -> KnownTrack {

@@ -162,22 +162,13 @@ pub(in crate::ui) fn track_selected(
     // selected the track, so re-playing the same id from another row or list
     // refreshes it alongside the other cached fields rather than keeping the
     // old number.
+    // The per-field mapping lives in `views::KnownTrack::from_song`, shared
+    // with the File info panel's selected-row resolver, so the two sites
+    // cannot drift apart; the number is the 1-based position of the row that
+    // selected the track.
     player.known_tracks.insert(
         track_id.clone(),
-        views::KnownTrack {
-            title: song.title.clone(),
-            artist: song.artist.clone(),
-            album: song.album.clone(),
-            year: song.year,
-            genre: song.genre.clone(),
-            track_number: song.track_number,
-            disc_number: song.disc_number,
-            composer: song.composer.clone(),
-            content_rating: song.content_rating,
-            number: format!("{}. ", index + 1),
-            time: views::format_track_time(song.duration_ms),
-            duration_ms: song.duration_ms,
-        },
+        views::KnownTrack::from_song(song, format!("{}. ", index + 1)),
     );
     // A selection mid-fade plays at the saved volume, not the faded one.
     fade::cancel_fade_out(player);

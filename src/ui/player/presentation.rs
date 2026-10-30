@@ -6,7 +6,7 @@
 use std::borrow::Cow;
 use std::time::Duration;
 
-use super::WinampPlayer;
+use super::{CurrentView, WinampPlayer};
 use crate::state::TransportMode;
 use crate::ui::views;
 
@@ -20,6 +20,48 @@ impl WinampPlayer {
     pub(in crate::ui) fn current_known_track(&self) -> Option<&views::KnownTrack> {
         let id = self.state.blocking_lock().current_track.clone()?;
         self.known_tracks.get(&id)
+    }
+
+    /// The track the File info panel names: the showing song list's selected
+    /// row when one is picked, otherwise the current loaded track with its
+    /// loaded preview's `playback_format` (which renders the panel's `Format:`
+    /// line). The view match mirrors the one `handlers::playback::track_selected`
+    /// resolves presses against: album songs (`CurrentView::Songs`), All Songs
+    /// (`CurrentView::AllSongs`), and Recently Played (`CurrentView::RecentlyPlayed`).
+    /// A selected row builds its entry with `views::KnownTrack::from_song(song,
+    /// String::new())` — an ephemeral value that is never stored into
+    /// `known_tracks`, with no `Format:` line because no preview is loaded for
+    /// it. Any other view, no selection, and an out-of-range index fall back to
+    /// `current_known_track`.
+    ///
+    /// No staleness re-check is needed for a stored selection:
+    /// `BrowseList::selected` already drops a selection whenever the rows are
+    /// replaced or reordered (`src/ui/browse.rs`), so an index it reports names
+    /// a row of this list's current contents.
+    pub(in crate::ui) fn file_info_track(
+        &self,
+    ) -> Option<(views::KnownTrack, Option<crate::audio::PlaybackFormat>)> {
+        let selected_song: Option<&crate::library::Song> = match self.current_view {
+            CurrentView::Songs => self
+                .songs
+                .selected()
+                .and_then(|index| self.songs.items.get(index)),
+            CurrentView::AllSongs => self
+                .all_songs
+                .selected()
+                .and_then(|index| self.all_songs.items.get(index)),
+            CurrentView::RecentlyPlayed => self
+                .recently_played
+                .selected()
+                .and_then(|index| self.recently_played.items.get(index)),
+            _ => None,
+        };
+        match selected_song {
+            Some(song) => Some((views::KnownTrack::from_song(song, String::new()), None)),
+            None => self
+                .current_known_track()
+                .map(|track| (track.clone(), self.playback_format)),
+        }
     }
 
     /// The title iced gives the application window. It follows the Now Playing

@@ -29,8 +29,8 @@ pub(super) fn apply_overlays<'a>(
             player.options_selected,
         )
     } else if player.file_info_visible && !player.shaded {
-        match player.current_known_track() {
-            Some(track) => views::view_file_info_overlay(base, track, player.playback_format),
+        match player.file_info_track() {
+            Some((track, format)) => views::view_file_info_overlay(base, track, format),
             None => base,
         }
     } else if player.jump_time_visible && !player.shaded {

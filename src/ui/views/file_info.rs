@@ -57,9 +57,15 @@ const FORMAT_LABEL: &str = "Format: ";
 /// after the length and only while the loaded preview reports one (`format` is `Some`) — the format
 /// line built from the LCD status row's prefix and channel label, for example
 /// `Format: 256 KBPS  44 KHZ STEREO`. No state or playback is touched here.
+///
+/// `track` is taken by value, not by reference, because one caller — the File info branch of
+/// `ui::view::overlay` — resolves an ephemeral selected-row entry on the spot; the element it
+/// returns borrows only `base`, so an owned entry built in its body lives exactly as long as the
+/// panel needs it. The current-track fallback path clones the recorded entry in, and the view
+/// tests clone their fixtures in.
 pub fn view_file_info_overlay<'a>(
     base: Element<'a, Message>,
-    track: &'a KnownTrack,
+    track: KnownTrack,
     format: Option<PlaybackFormat>,
 ) -> Element<'a, Message> {
     let mut content = Column::new()

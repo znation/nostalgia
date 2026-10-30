@@ -1928,15 +1928,22 @@ Keyboard access and the transient row highlight added 2026-10-26 by the feature 
   Alt held and Control, Shift, and Logo released to `Message::ToggleFileInfo`; Ctrl+Alt+3,
   Shift+Alt+3, Logo+Alt+3, keypad 3 with Alt, and a plain `3` map to nothing.
 - Pressing the LCD strip's `I` publishes the same `Message::ToggleFileInfo` as Alt+3 and goes
-  through the same `handlers::window::toggle_file_info` gate, so it does not open without a
-  known current track.
-- `handlers::window::toggle_file_info` flips `WinampPlayer::file_info_visible`. Opening needs a
-  current track found in `known_tracks` (`WinampPlayer::current_known_track`); without one the flag
-  stays false. Opening clears `about_visible` and `options_visible`, and opening About or Options
+  through the same `handlers::window::toggle_file_info` gate, so it does not open without either
+  a known current track or a selected song row.
+- `handlers::window::toggle_file_info` flips `WinampPlayer::file_info_visible`. Opening needs
+  either a current track found in `known_tracks` or a selected song row in the showing song list
+  (album songs, All Songs, or Recently Played), both resolved through
+  `WinampPlayer::file_info_track`: the row's entry is built by `KnownTrack::from_song(song,
+  String::new())` — an ephemeral entry never stored into `known_tracks` — and the current track
+  falls back to `WinampPlayer::current_known_track`. The `playback_format` part, which renders
+  the `Format:` line, is `Some` only under the current-track fallback. With neither source the
+  flag stays false. Opening clears `about_visible` and `options_visible`, and opening About or
+  Options
   clears `file_info_visible`.
   Opening while `shaded` holds first calls `toggle_window_shade` and returns that task.
 - A plain or Shift-held Escape press also closes it (see `## Transient panel dismissal`).
-- While the flag holds outside shade mode and the track resolves, `views::view_file_info_overlay`
+- While the flag holds outside shade mode and the resolution (`WinampPlayer::file_info_track`)
+  returns a track, `views::view_file_info_overlay`
   stacks `FILE INFO`, `Title: …`, `Artist: …` (left out for an empty artist), `Album: …` (left
   out for an empty album), `Year: …` (left out when `KnownTrack::year` is `None`), `Genre: …`
   (left out when `KnownTrack::genre` is empty), `Track #: …` (left out when
@@ -2003,7 +2010,11 @@ overlay branch of `ui::view::view`.
 `known_tracks_record_the_played_songs_track_number`, and
 `known_tracks_record_the_played_songs_disc_number`, and
 `known_tracks_record_the_played_songs_composer`, and
-`known_tracks_record_the_played_songs_content_rating` (`src/ui/tests/readouts_tests.rs`);
+`known_tracks_record_the_played_songs_content_rating`,
+`file_info_track_resolves_the_selected_song_row` and
+`file_info_track_falls_back_to_the_current_track_without_a_selection`
+(`src/ui/tests/readouts_tests.rs`); `file_info_overlay_names_the_selected_rows_song`
+(`src/ui/tests/view_tests.rs`);
 `songs_from_album_maps_the_content_rating` and
 `songs_from_album_maps_a_missing_blank_or_unknown_content_rating_to_none`
 (`src/apple_music/rest/tests/library.rs`); `song_round_trips_its_content_rating`,

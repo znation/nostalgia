@@ -303,6 +303,63 @@ fn file_info_panel_draws_each_metadata_line_only_when_the_track_has_it() {
     );
 }
 
+// A song-list selection determines what the File info panel names: the
+// selected row's song, with no `Format:` line because no preview is loaded
+// for it, not the playing track and its format line. The no-selection case
+// still names the loaded track exactly as it did before selections counted.
+#[test]
+fn file_info_overlay_names_the_selected_rows_song() {
+    let (mut player, state) = test_player();
+    seed_current_title(&mut player, &state, "Playing");
+    player.playback_format = Some(PlaybackFormat {
+        sample_rate_hz: 44_100,
+        channels: 2,
+        bitrate_kbps: Some(256),
+    });
+    seed_browse_lists(&mut player);
+    player.current_view = CurrentView::AllSongs;
+    player.file_info_visible = true;
+
+    let fallback = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = fallback.texts().collect();
+    assert!(
+        texts.contains(&"Title: Playing"),
+        "the panel must name the loaded track without a selection: {texts:?}"
+    );
+    assert!(
+        texts.contains(&"Format: 256 KBPS  44 KHZ STEREO"),
+        "the loaded track's panel must draw the format line: {texts:?}"
+    );
+
+    assert!(player.all_songs.select_row(0, 0).is_some());
+    let selected = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = selected.texts().collect();
+    assert!(
+        texts.contains(&"Title: Opening"),
+        "the panel must name the selected row's song: {texts:?}"
+    );
+    assert!(
+        texts.contains(&"Artist: The Sample Band"),
+        "the selected row's panel must draw its artist: {texts:?}"
+    );
+    assert!(
+        texts.iter().all(|text| !text.starts_with("Format:")),
+        "the selected row's panel must not draw a Format line: {texts:?}"
+    );
+
+    // Opening the panel for the row never plays it or touches the played
+    // track's recorded entry or the current track itself.
+    assert_eq!(
+        player.known_tracks["song-1"].title, "Playing",
+        "the recorded entry must stay untouched"
+    );
+    assert_eq!(
+        state.blocking_lock().current_track.as_deref(),
+        Some("song-1"),
+        "the current track must stay untouched"
+    );
+}
+
 #[test]
 fn title_bar_constructs_for_both_about_states() {
     // iced `Element`s expose no tree introspection, so the observable

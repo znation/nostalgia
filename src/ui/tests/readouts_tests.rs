@@ -1096,3 +1096,71 @@ fn known_tracks_record_the_played_songs_content_rating() {
         Some(crate::library::ContentRating::Clean)
     );
 }
+
+// The File info panel names the showing song list's selected row when one is
+// picked, not the current track: `WinampPlayer::file_info_track` resolves the
+// row through a shared `KnownTrack::from_song`, the same mapping
+// `track_selected` records the played track with.
+#[test]
+fn file_info_track_resolves_the_selected_song_row() {
+    let (mut player, state) = test_player();
+    let mut songs = stepping_songs();
+    songs[1].year = Some(1999);
+    let _ = update(&mut player, Message::AllSongsLoaded(songs));
+    player.current_view = CurrentView::AllSongs;
+    assert!(player.all_songs.select_row(1, 1).is_some());
+
+    // With no current track at all, the selection alone resolves the row's
+    // song; the entry is not the played-track record, so `number` is empty and
+    // no playback format comes back.
+    let (track, format) = player.file_info_track().expect("selected row resolves");
+    assert_eq!(track.title, "Two");
+    assert_eq!(track.artist, "The Sample Band");
+    assert_eq!(track.album, "First Record");
+    assert_eq!(track.year, Some(1999));
+    assert_eq!(track.time, "2:05");
+    assert_eq!(track.number, "");
+    assert_eq!(format, None);
+
+    // With a current track also loaded, the selection still wins.
+    state.blocking_lock().current_track = Some("song-1".to_string());
+    player
+        .known_tracks
+        .insert("song-1".to_string(), known_track("Playing", "", ""));
+    let (track, _) = player.file_info_track().expect("selected row resolves");
+    assert_eq!(track.title, "Two");
+}
+
+// Without a selected song row the resolver falls back to the current track's
+// `known_tracks` entry with its loaded `playback_format` — a group-list
+// selection (Genres) or no selection at all is no song row.
+#[test]
+fn file_info_track_falls_back_to_the_current_track_without_a_selection() {
+    let (mut player, state) = test_player();
+    seed_current_title(&mut player, &state, "Playing");
+    let format = PlaybackFormat {
+        sample_rate_hz: 44_100,
+        channels: 2,
+        bitrate_kbps: Some(256),
+    };
+    player.playback_format = Some(format);
+
+    // A selected row in the Genres group list is not a song row.
+    let _ = update(
+        &mut player,
+        Message::GenresLoaded(group_by_genre(vec![sample_song()])),
+    );
+    player.current_view = CurrentView::Genres;
+    assert!(player.genres.select_row(1, 0).is_some());
+    let (track, resolved) = player.file_info_track().expect("current track resolves");
+    assert_eq!(track.title, "Playing");
+    assert_eq!(resolved, Some(format));
+
+    // A song-list view with nothing selected likewise falls back to the
+    // current track.
+    let _ = update(&mut player, Message::AllSongsLoaded(stepping_songs()));
+    player.current_view = CurrentView::AllSongs;
+    let (track, resolved) = player.file_info_track().expect("current track resolves");
+    assert_eq!(track.title, "Playing");
+    assert_eq!(resolved, Some(format));
+}

@@ -7,7 +7,8 @@ project's summary, status, screenshots, and build instructions stay in
 
 Build and run with `cargo run`; the player opens an iced window showing the Now Playing bar (a
 small `O A I D V` strip down the LCD's left edge, whose `O` opens the options menu, whose `A`
-toggles always-on-top, whose `I` opens the File info panel, and whose `V` hides and restores the
+toggles always-on-top, whose `I` opens the File info panel (like Alt+3: for the selected song
+row, or the current track without one), and whose `V` hides and restores the
 visualizer while `D` stays decorative; each live letter is lit while its mode is on (`O` while
 the options menu is open, `A` for always-on-top, `I` while File info is open, `V` while the
 visualizer is shown) and dim otherwise, and `D` stays dim;
@@ -132,13 +133,18 @@ Winamp's playlist editor. Ctrl+R reverses the showing list's order the same
 one-shot way, like Winamp's playlist editor, and Ctrl+Shift+R shuffles it into a random order the
 same one-shot way. Alt+Up and Alt+Down move the selected row of the showing list one place up or
 down, the same one-shot way, keeping the row selected and scrolling the list only as far as needed
-to keep it in view. Alt+3 opens a transient File info panel naming the current track's title,
-artist, album, year, genre, track number, disc number, composer, content rating (`Rating: Explicit` or `Rating: Clean`), and length, like Winamp (the album, year, genre,
-track-number, disc-number, composer, and rating lines are left out
-when the source supplies none), plus a `Format:` line
+to keep it in view. Alt+3 opens a transient File info panel naming the showing song list's
+selected row's song when one is picked (the browsed album's or playlist's songs, a search-result
+list sharing that song list, All Songs, or Recently Played — the selection decides, not the
+playing track) and the current track otherwise — its title, artist, album, year, genre, track
+number, disc number, composer, content rating (`Rating: Explicit` or `Rating: Clean`), and
+length, like Winamp (the album, year, genre, track-number, disc-number, composer, and rating
+lines are left out when the source supplies none). A selected row's panel shows no `Format:`
+line, because no preview is loaded for it; a current track's panel adds the `Format:` line
 (`256 KBPS  44 KHZ STEREO`) while a loaded preview reports its format and `44 KHZ MONO` when it
-reports no bitrate; its `Close` button, a click on the backdrop, or Alt+3 again closes it, and it
-opens only while a track is current. Ctrl+J opens a transient Jump to time panel whose box opens holding the current position (`1:35`), selected so typing replaces it (empty when no position is known): type seconds
+reports no bitrate. Its `Close` button, a click on the backdrop, or Alt+3 again closes it, and it
+opens only with a song row selected in a showing song list or a current track. Opening it never
+plays the selected row and does not change the Now Playing bar, the marquee, or the window title. Ctrl+J opens a transient Jump to time panel whose box opens holding the current position (`1:35`), selected so typing replaces it (empty when no position is known): type seconds
 (`95`) or `M:SS` (`1:35`) and press Enter or `Jump` to seek the loaded preview there (clamped to its
 length) and close the panel; `Close`, a click on the backdrop, or Ctrl+J again closes it, and it
 opens only while a preview with a known length is loaded. Plain `J` opens a transient Jump to File
@@ -164,7 +170,9 @@ main-window menu, opens an `OPTIONS` menu over the player listing `Always on Top
 `Time: Remaining/Elapsed`, `Visualizer: Shown/Hidden`, `Equalizer: Shown/Hidden`,
 `Library: Shown/Hidden`, `Stop with fadeout`, `Stop after current: On/Off`, `Repeat: On/Off`, `Shuffle: On/Off`, `Manual playlist advance: On/Off`, `10 songs back`, `10 songs forward`, `Back 5 seconds`, `Fwd 5 seconds`, `Start of list`, `End of list`, `Jump to time`, `Jump to file`, `File info`, `About Nostalgia`, and `Close`, with each label reflecting the current
 state. Choosing a row applies that one toggle and closes the menu; `Stop with fadeout` fades out and stops exactly like Shift+V while a preview plays and stops like V while paused or stopped; `10 songs back` and `10 songs forward` jump ten songs back or forward exactly like keypad 1 and 3 (doing nothing beyond closing the menu with no song list showing); `Back 5 seconds` and `Fwd 5 seconds` seek five seconds back or forward exactly like the Left and Right arrows (scheduling no work, exactly like the arrows); `Start of list` and `End of list` jump to the first or last song of the list exactly like Ctrl+Z and Ctrl+B (only closing the menu with no song list showing); `Jump to time` and `Jump to file` open the Ctrl+J and J panels (doing nothing beyond closing
-the menu while that panel is unavailable); `File info` opens the Alt+3 File info panel (doing nothing beyond closing the menu while no track is current); `About Nostalgia` opens the
+the menu while that panel is unavailable); `File info` opens the Alt+3 File info panel for the showing song list's selected row when one
+is picked and for the current track otherwise (doing nothing beyond closing the menu when there
+is neither a song row selected nor a current track); `About Nostalgia` opens the
 About panel, and `Close`, a click on the backdrop, or Escape closes the menu. Opening it while the
 window is rolled up restores the window first, and the menu is not saved. Alt+O also closes it
 and works while the search box has focus, without changing the query. Opening highlights the

@@ -257,17 +257,17 @@ pub(in crate::ui) fn escape_pressed(player: &mut WinampPlayer) -> Task<Message> 
 }
 
 /// Alt+3 or the LCD strip's `I`: flip the transient File info panel. Opening
-/// needs a current track
-/// resolved in `known_tracks` (as `window_title` resolves it); without one the
-/// flag stays as it was. Opening closes the About and Options panels, and opening while
-/// shaded first restores the window exactly as [`toggle_about`] does. The flag
-/// is layout-only and not persisted.
+/// needs either a current track resolved in `known_tracks` or a selected song row
+/// in the showing song list (as `WinampPlayer::file_info_track` resolves them);
+/// with neither the flag stays as it was. Opening closes the About and Options
+/// panels, and opening while shaded first restores the window exactly as
+/// [`toggle_about`] does. The flag is layout-only and not persisted.
 pub(in crate::ui) fn toggle_file_info(player: &mut WinampPlayer) -> Task<Message> {
     if player.file_info_visible {
         player.file_info_visible = false;
         return Task::none();
     }
-    if player.current_known_track().is_none() {
+    if player.file_info_track().is_none() {
         return Task::none();
     }
     player.close_transient_panels();
