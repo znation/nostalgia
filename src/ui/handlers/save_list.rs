@@ -4,13 +4,17 @@
 //!
 //! Saving mirrors the equalizer's Save preset panel (see `handlers::mixer`),
 //! because the two are the same naming-panel shape over different payloads:
-//! the toggle closes every other transient panel, an empty or colon-bearing
-//! name is refused inline, and a same-name save replaces in place.
+//! the toggle closes every other transient panel, an empty or colon- or
+//! line-break-bearing name is refused inline, and a same-name save replaces
+//! in place.
 
 use iced::Task;
 
 use crate::settings::SavedPlaylist;
-use crate::ui::views::{SAVE_LIST_COLON_NAME_NOTE, SAVE_LIST_EMPTY_NAME_NOTE, SAVE_LIST_INPUT_ID};
+use crate::ui::views::{
+    SAVE_LIST_COLON_NAME_NOTE, SAVE_LIST_EMPTY_NAME_NOTE, SAVE_LIST_INPUT_ID,
+    SAVE_LIST_LINE_BREAK_NAME_NOTE,
+};
 use crate::ui::{CurrentView, Message, SongsOrigin, WinampPlayer};
 
 use super::browse::selection::show_group_songs;
@@ -72,8 +76,11 @@ pub(in crate::ui) fn save_list_name_changed(
 /// Enter or the panel's `Save` button: with the panel open, save the showing
 /// song list — its song ids in showing order — under the trimmed typed name
 /// and close the panel; an empty name keeps the panel open with the
-/// `Type a name` note, and a name containing `:` shows `Use it without a
-/// colon` (the settings line's separator). On success an existing save of the
+/// `Type a name` note, a name containing `:` shows `Use it without a
+/// colon` (the settings line's separator), and a name carrying a line
+/// break (a multi-line paste can put one in the box; typing cannot) shows
+/// `Use one line`, mirroring [`crate::ui::handlers::mixer`]'s save-preset
+/// refusals. On success an existing save of the
 /// same name (case-insensitive) is replaced in place — its ids update and
 /// its stored name as first saved stays — otherwise the list pushes onto the
 /// end of the saved lists. The showing list is untouched, exactly as
@@ -92,6 +99,15 @@ pub(in crate::ui) fn save_list_submitted(player: &mut WinampPlayer) -> Task<Mess
     }
     if name.contains(':') {
         player.save_list_note = Some(SAVE_LIST_COLON_NAME_NOTE);
+        return Task::none();
+    }
+    // A `\n` or `\r` in the name would split the row's
+    // `user_playlist=<name>:<ids>` line in two in the saved file and let
+    // the name's tail be read as settings lines of its own, so the save
+    // refuses it like a colon name (the file writer's flatten guard in
+    // `settings::text` stays as defense in depth over this seam).
+    if name.contains(['\n', '\r']) {
+        player.save_list_note = Some(SAVE_LIST_LINE_BREAK_NAME_NOTE);
         return Task::none();
     }
     let song_ids = player

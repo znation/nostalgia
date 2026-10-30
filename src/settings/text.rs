@@ -56,7 +56,14 @@ impl Settings {
         // malformed forms.
         for saved in &self.saved_playlists {
             text.push_str("user_playlist=");
-            text.push_str(&saved.name);
+            // A list's name is free text, but this file is line-based: a
+            // pasted line break in the name would split its row in two and
+            // let the name's tail be read as settings lines of its own, so
+            // the writer flattens line breaks to spaces, like the
+            // `eq_custom_preset=` name above. The naming panel refuses such
+            // a name outright; this guard covers any other producer of a
+            // saved list.
+            text.push_str(saved.name.replace(['\r', '\n'], " ").as_str());
             text.push(':');
             for (position, id) in saved.song_ids.iter().enumerate() {
                 if position > 0 {

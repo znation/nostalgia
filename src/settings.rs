@@ -764,6 +764,50 @@ mod tests {
         assert_eq!(Settings::from_text(&settings.to_text()), scrubbed);
     }
 
+    // The same line-based file shape holds for a saved list's name: a
+    // pasted line break in a `user_playlist=` name would split its row in
+    // two and let the name's tail be read as settings lines of its own (a
+    // name like `My List\neq_auto=on` would even flip a visible setting),
+    // so the writer flattens line breaks to spaces there too, and the
+    // naming panel refuses such a name outright.
+    #[test]
+    fn a_line_broken_playlist_name_writes_one_whole_settings_line() {
+        let mut settings = Settings::default();
+        settings.set_saved_playlists(vec![
+            SavedPlaylist {
+                name: String::from("My List\neq_auto=on"),
+                song_ids: vec![String::from("song-1")],
+            },
+            SavedPlaylist {
+                name: String::from("My\rList"),
+                song_ids: vec![String::from("song-2")],
+            },
+        ]);
+        let mut scrubbed = Settings::default();
+        scrubbed.set_saved_playlists(vec![
+            SavedPlaylist {
+                name: String::from("My List eq_auto=on"),
+                song_ids: vec![String::from("song-1")],
+            },
+            SavedPlaylist {
+                name: String::from("My List"),
+                song_ids: vec![String::from("song-2")],
+            },
+        ]);
+
+        // Two whole `user_playlist=` rows and no injected `eq_auto=on` line.
+        let text = settings.to_text();
+        let rows: Vec<&str> = text
+            .lines()
+            .filter(|line| line.starts_with("user_playlist="))
+            .collect();
+        assert_eq!(rows.len(), 2);
+        assert!(!text.lines().any(|line| line.starts_with("eq_auto=on")));
+        assert!(!Settings::from_text(&text).eq_auto);
+        assert_eq!(text, scrubbed.to_text());
+        assert_eq!(Settings::from_text(&text), scrubbed);
+    }
+
     #[test]
     fn from_text_reads_the_last_band_and_trims_around_the_equals_sign() {
         let last = equalizer::BAND_COUNT - 1;

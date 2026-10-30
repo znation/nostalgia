@@ -123,6 +123,18 @@ fn save_list_submitted_refuses_empty_colon_and_closed_panels() {
     );
     assert!(player.saved_playlists.is_empty());
 
+    let _ = update(
+        &mut player,
+        Message::SaveListNameChanged("My List\neq_auto=on".to_string()),
+    );
+    let _ = update(&mut player, Message::SaveListSubmitted);
+    assert!(player.save_list_open);
+    assert_eq!(
+        player.save_list_note,
+        Some(views::SAVE_LIST_LINE_BREAK_NAME_NOTE)
+    );
+    assert!(player.saved_playlists.is_empty());
+
     // A keystroke clears the note, so the next submit starts clean.
     let _ = update(
         &mut player,

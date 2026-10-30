@@ -24,6 +24,14 @@ pub const SAVE_LIST_EMPTY_NAME_NOTE: &str = "Type a name";
 /// colon as its separator.
 pub const SAVE_LIST_COLON_NAME_NOTE: &str = "Use it without a colon";
 
+/// The panel's note for a name carrying a line break: Enter refuses it
+/// (`Use one line`), because the settings file is line-based and a name
+/// a multi-line paste put in the box would split the saved list's
+/// `user_playlist=` row in two — the same refusal, and the same note word,
+/// the Save preset panel shows (its constant is named without the
+/// `SAVE_LIST_` prefix so the exports cannot collide).
+pub const SAVE_LIST_LINE_BREAK_NAME_NOTE: &str = "Use one line";
+
 /// Stacks the transient Save list panel over `base`.
 ///
 /// The panel is modal (see [`modal_overlay`]): `Close` and the backdrop each

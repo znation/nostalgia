@@ -5,6 +5,26 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### A pasted line break in a save-list name splits its `user_playlist=` settings row in two, injecting settings lines of its own (found by the bugfix role 2026-10-29) — fixed 2026-10-29 by the bugfix role
+
+The Save list naming panel's submit (`handlers::save_list::save_list_submitted`, landed after the
+equalizer's identical fix) refused only an empty and a colon-bearing name, and the settings
+writer wrote a `user_playlist=` name with no flatten — unlike its sibling `eq_custom_preset=`
+name, which both refuse and flatten. A multi-line paste in the name box (typing cannot put one
+in; the text input accepts pasted newlines) then split the row: `SaveListNameChanged("My
+List\neq_auto=on")` + `SaveListSubmitted` wrote `user_playlist=My List` followed by
+`eq_auto=on:<ids>` as a line of its own, so the tail was read as settings lines at the next
+launch and could flip visible settings. Reproduced before the fix by a new codec test (the
+written file carried 30 lines; the row's tail had become top-level settings text) and by a
+new panel test (the save went through silently). The panel now refuses a name containing
+`\n` or `\r` with the same `Use one line` note the Save preset panel shows, and the writer
+flattens `\r`/`\n` to spaces in a saved list's name as defense in depth, matching the preset
+name guard.
+
+**Validation gap:** no-repro — nothing in the existing suite drove a line-broken save-list
+name (its tests covered only empty and colon names), so it was confirmed only after writing
+the new codec and panel tests here, the closest-fit tag.
+
 ### A pasted line break in a save-preset name splits its settings row in two, injecting settings lines of its own (found by the bugfix role 2026-10-29) — fixed 2026-10-29 by the bugfix role
 
 **Symptom:** a preset name pasted into the equalizer's `Save preset…` naming panel could carry a

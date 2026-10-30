@@ -2325,8 +2325,11 @@ showing song list by name, as ids only, in a `Settings::saved_playlists` entry:
   save; a keystroke in the box clears the note. A save under a name equal case-insensitively to
   an existing one replaces that list's ids in place and keeps its stored name as first saved;
   otherwise the list pushes onto the end. The showing list is untouched by saving (Winamp's save
-  clears nothing in the playlist editor).
-- The persisted form is a `user_playlist=<name>:<id>,<id>,…` line per saved list; parsing skips
+  clears nothing in the playlist editor). A name carrying a `\n` or `\r` is refused the same
+  way, with `Use one line`, like the Save preset panel's line-break refusal.
+- The persisted form is a `user_playlist=<name>:<id>,<id>,…` line per saved list; the file is
+  line-based, so the writer flattens `\r`/`\n` to spaces in a saved list's name (the naming
+  panel refuses such a name outright; this covers any other producer). Parsing skips
   a line without a `:`, a blank name, or an empty id list, and keeps a whole list round-tripping
   through `to_text` → `from_text` untouched.
 - Every Playlists fetch that lands appends one sentinel row (`id: SAVED_PLAYLIST_ROW_ID`, the
@@ -2346,8 +2349,9 @@ user_playlist_selected, user_playlist_loaded}`, `handlers::browse::{selection::{
 switch_view}`, `handlers::browse::fetch::playlists_loaded`, and
 `browse::BrowseReply`'s re-check for `Message::UserPlaylistLoaded`.
 
-**Pinned by.** `user_playlist_lines_round_trip_and_skip_the_malformed_ones`
-(`src/settings.rs`); the save-list tests in `src/ui/tests/save_list_tests.rs`;
+**Pinned by.** `user_playlist_lines_round_trip_and_skip_the_malformed_ones` and
+`a_line_broken_playlist_name_writes_one_whole_settings_line` (`src/settings.rs`); the save-list
+tests in `src/ui/tests/save_list_tests.rs`;
 `a_saved_song_list_reaches_the_saved_snapshot` and `saved_song_lists_are_restored_on_boot`
 (`src/ui/tests/settings_tests.rs`); `the_save_list_button_lays_out_in_the_nav_row`
 (`src/ui/tests/save_list_tests.rs`); the Save list overlay render tests

@@ -167,8 +167,9 @@ while leaving the typed query in the search box. A `Save list` button beside `Re
 transient naming panel over the showing list, like Winamp's playlist editor's Save list button:
 type a name and press Enter (or the panel's `Save` button) to save the showing song list's song
 ids under that name in showing order — the rows themselves are not copied — with an empty box
-keeping the panel open with an inline `Type a name` note and a name containing `:` showing
-`Use it without a colon` (the settings line's separator is the colon; typing clears the note).
+keeping the panel open with an inline `Type a name` note, a name containing `:` showing
+`Use it without a colon` (the settings line's separator is the colon), and a name carrying a line
+break (a multi-line paste can put one in the box) showing `Use one line`; typing clears the note.
 Saving over an existing list's name (any case) keeps one saved list and replaces only its ids,
 keeping the name as first saved, and the showing list is left showing. The panel's backdrop,
 `Close` button, or Escape closes it without saving, and opening any other panel closes it too.
