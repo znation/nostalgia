@@ -224,7 +224,12 @@ pub(in crate::ui) fn options_choice(
     player.options_visible = false;
     match choice {
         OptionsChoice::AlwaysOnTop => toggle_always_on_top(player),
+        // The OPTIONS menu row is `Message::ToggleAutoscroll`'s only
+        // publisher, so the choice re-dispatches through the shared toggle
+        // message (like a browse reply does in `browse::fetch`) rather than
+        // reaching past `update`'s dispatch to the handler.
         OptionsChoice::TimeDisplay => super::playback::toggle_time_display(player),
+        OptionsChoice::Autoscroll => crate::ui::update(player, Message::ToggleAutoscroll),
         OptionsChoice::Visualizer => super::playback::toggle_visualizer(player),
         OptionsChoice::EqualizerPanel => toggle_equalizer_panel(player),
         OptionsChoice::LibraryPanel => toggle_library_panel(player),

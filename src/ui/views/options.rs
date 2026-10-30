@@ -1,5 +1,6 @@
 //! The transient options menu: a modal overlay listing the app's existing on/off choices plus the
-//! Manual playlist advance, Back 5 seconds, Fwd 5 seconds, Start of list, End of list, Jump to time, Jump to file, File info, and
+//! Autoscroll song name row, the Manual playlist advance, Back 5 seconds, Fwd 5 seconds, Start of
+//! list, End of list, Jump to time, Jump to file, File info, and
 //! About rows, each applying that choice and closing the menu like a Winamp menu item. Its
 //! highlight is layout-only and unpersisted.
 
@@ -30,6 +31,16 @@ pub(super) fn time_label(time_remaining: bool) -> &'static str {
         "Time: Remaining"
     } else {
         "Time: Elapsed"
+    }
+}
+
+/// The autoscroll row's label: `On` while the too-long Now Playing title
+/// scrolls on its own, `Off` while the automatic scroll is stopped.
+pub(super) fn autoscroll_label(autoscroll: bool) -> &'static str {
+    if autoscroll {
+        "Autoscroll song name: On"
+    } else {
+        "Autoscroll song name: Off"
     }
 }
 
@@ -104,6 +115,8 @@ pub struct OptionsState {
     pub always_on_top: bool,
     /// The large readout counts down instead of up.
     pub time_remaining: bool,
+    /// The too-long Now Playing title scrolls on its own.
+    pub autoscroll: bool,
     /// The LCD draws the spectrum bars.
     pub visualizer_visible: bool,
     /// The equalizer section is drawn.
@@ -125,6 +138,7 @@ pub(super) fn options_row_label(row: OptionsRow, state: OptionsState) -> &'stati
     match row {
         OptionsRow::AlwaysOnTop => always_on_top_label(state.always_on_top),
         OptionsRow::TimeDisplay => time_label(state.time_remaining),
+        OptionsRow::Autoscroll => autoscroll_label(state.autoscroll),
         OptionsRow::Visualizer => visualizer_label(state.visualizer_visible),
         OptionsRow::EqualizerPanel => equalizer_label(state.eq_panel_visible),
         OptionsRow::LibraryPanel => library_label(state.library_panel_visible),
@@ -223,6 +237,12 @@ mod tests {
     fn time_label_names_the_readout_mode() {
         assert_eq!(time_label(true), "Time: Remaining");
         assert_eq!(time_label(false), "Time: Elapsed");
+    }
+
+    #[test]
+    fn autoscroll_label_mirrors_the_flag() {
+        assert_eq!(autoscroll_label(true), "Autoscroll song name: On");
+        assert_eq!(autoscroll_label(false), "Autoscroll song name: Off");
     }
 
     #[test]

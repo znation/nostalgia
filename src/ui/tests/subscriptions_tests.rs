@@ -476,6 +476,38 @@ fn the_player_knows_when_the_now_playing_line_needs_the_marquee() {
     assert!(player.needs_marquee());
 }
 
+// Autoscroll off silences the marquee for the same too-long line that
+// scrolls while it is on, and the drag guards ahead of the flag keep their
+// seats: an in-progress scroll still pauses the tick either way.
+#[test]
+fn autoscroll_off_silences_the_marquee_and_the_drag_guard_wins() {
+    let (mut player, state) = test_player();
+    player.known_tracks.insert(
+        "song-2".to_string(),
+        known_track("A Title Too Long For The LCD", "The Sample Band", "2. "),
+    );
+    state.blocking_lock().current_track = Some("song-2".to_string());
+    assert!(player.needs_marquee());
+
+    player.marquee_autoscroll = false;
+    assert!(!player.needs_marquee());
+
+    // A hand scroll pauses the timer with autoscroll back on, too.
+    player.marquee_autoscroll = true;
+    let _ = update(&mut player, Message::TitleDragPressed);
+    assert!(!player.needs_marquee());
+    let _ = update(&mut player, Message::TitleDragReleased);
+    assert!(player.needs_marquee());
+
+    // The gate sits inside `needs_marquee`, so the whole LCD tick drops out
+    // with autoscroll off while no flash or fade is counting down — and a
+    // tick that does arrive only while the timer is subscribed leaves the
+    // stopped offset alone, so turning autoscroll back on resumes from there.
+    assert!(player.needs_lcd_tick());
+    player.marquee_autoscroll = false;
+    assert!(!player.needs_lcd_tick());
+}
+
 // A slow UI must not kill the timer: the futures channel holds
 // `buffer + senders` messages — two for its one sender — so after the receiver
 // lets two ticks queue, the next send finds it full. The sender must drop that

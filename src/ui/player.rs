@@ -217,6 +217,18 @@ pub(in crate::ui) struct WinampPlayer {
     /// the bars again draws the current ones. The choice is saved and restored
     /// by `persist_settings_if_changed` and `adopt_saved_settings`.
     pub(in crate::ui) visualizer_visible: bool,
+    /// Whether the Now Playing title scrolls on its own while it is too long
+    /// for the LCD's character budget. `Message::ToggleAutoscroll` (the
+    /// OPTIONS menu's Autoscroll song name row) flips it; while false,
+    /// [`Self::needs_marquee`] returns false so the marquee subscription
+    /// stays out and `MarqueeTick` leaves [`Self::marquee_offset`] where it
+    /// stopped — it does not reset — so turning autoscroll back on resumes
+    /// the scroll from the stopped offset. The hand-scroll
+    /// [`Self::title_drag`] and the LCD tick's mixer-flash and fade-out
+    /// duties are untouched. The choice is saved and restored by
+    /// `persist_settings_if_changed` and `adopt_saved_settings`, like
+    /// [`Self::visualizer_visible`].
+    pub(in crate::ui) marquee_autoscroll: bool,
     /// The transient "Stop after current" one-shot: `Message::ToggleStopAfterCurrent`
     /// (Ctrl+V) flips it, and a natural preview end that finds it set stops
     /// playback instead of advancing and clears it. False at launch and never
@@ -479,6 +491,7 @@ impl WinampPlayer {
             spectrum: None,
             spectrum_peaks: None,
             visualizer_visible: true,
+            marquee_autoscroll: true,
             stop_after_current: false,
             eq_panel_visible: true,
             library_panel_visible: true,
@@ -573,6 +586,7 @@ impl WinampPlayer {
         };
         snapshot.set_time_display_remaining(self.time_display == views::TimeDisplay::Remaining);
         snapshot.set_visualizer_visible(self.visualizer_visible);
+        snapshot.set_autoscroll(self.marquee_autoscroll);
         snapshot.set_eq_panel_visible(self.eq_panel_visible);
         snapshot.set_library_panel_visible(self.library_panel_visible);
         snapshot.set_always_on_top(self.always_on_top);
@@ -655,6 +669,7 @@ impl WinampPlayer {
             views::TimeDisplay::Elapsed
         };
         self.visualizer_visible = saved.visualizer_visible();
+        self.marquee_autoscroll = saved.autoscroll();
         self.eq_panel_visible = saved.eq_panel_visible();
         self.library_panel_visible = saved.library_panel_visible();
         self.always_on_top = saved.always_on_top();
@@ -682,6 +697,12 @@ impl WinampPlayer {
     /// resolves them, so the timer scrolls precisely the lines the bar windows.
     pub(in crate::ui) fn needs_marquee(&self) -> bool {
         if self.mixer_drag.is_some() || self.seek_preview.is_some() || self.title_drag.is_some() {
+            return false;
+        }
+        // Autoscroll off leaves the timer out for a too-long line as well;
+        // the roller keeps its stopped offset so turning the row back on
+        // resumes from there.
+        if !self.marquee_autoscroll {
             return false;
         }
         let state = self.state.blocking_lock();

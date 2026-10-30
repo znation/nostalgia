@@ -187,6 +187,16 @@ pub(in crate::ui) fn toggle_visualizer(player: &mut WinampPlayer) -> Task<Messag
     Task::none()
 }
 
+/// The OPTIONS menu's Autoscroll song name row: flips whether the Now Playing
+/// title scrolls on its own. Off stops the marquee advance (the stopped
+/// offset is kept, so turning it back on resumes from there) and leaves the
+/// hand-scroll title drag and the LCD tick's mixer-flash and fade-out duties
+/// untouched; it changes no playback state and schedules no work.
+pub(in crate::ui) fn toggle_autoscroll(player: &mut WinampPlayer) -> Task<Message> {
+    player.marquee_autoscroll = !player.marquee_autoscroll;
+    Task::none()
+}
+
 /// The play request: the message carries the pressed row's index plus the
 /// epoch of the list that rendered it. The Songs view draws from `songs`
 /// and the flat All Songs and Recently Played views draw from `all_songs` and

@@ -233,6 +233,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::TitleDragReleased => handlers::playback::title_drag::title_drag_released(player),
         Message::ToggleTimeDisplay => handlers::playback::toggle_time_display(player),
         Message::ToggleVisualizer => handlers::playback::toggle_visualizer(player),
+        Message::ToggleAutoscroll => handlers::playback::toggle_autoscroll(player),
         Message::TrackSelected { epoch, index } => {
             handlers::playback::track_selected(player, epoch, index)
         }

@@ -99,6 +99,7 @@ impl Settings {
             }
         ));
         text.push_str(&format!("visualizer_visible={}\n", self.visualizer_visible));
+        text.push_str(&format!("autoscroll={}\n", self.autoscroll));
         text.push_str(&format!("eq_panel_visible={}\n", self.eq_panel_visible));
         text.push_str(&format!(
             "library_panel_visible={}\n",
@@ -173,6 +174,8 @@ impl Settings {
                 "visualizer_visible" => {
                     parse_into(&mut settings.visualizer_visible, value);
                 }
+                // A malformed value leaves the default autoscrolling title.
+                "autoscroll" => parse_into(&mut settings.autoscroll, value),
                 // A malformed value leaves the default shown panel.
                 "eq_panel_visible" => parse_into(&mut settings.eq_panel_visible, value),
                 "library_panel_visible" => {

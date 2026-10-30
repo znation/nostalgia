@@ -101,6 +101,31 @@ fn toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum() {
 
 // The root view must apply the stored flag, not just expose `visible_spectrum`:
 // lay the real `view` out with a loaded spectrum and read the pixels in the
+// The OPTIONS menu's Autoscroll song name row flips the marquee autoscroll
+// flag alone: playback state, the stored offset, and the title drag are
+// untouched, and a too-long line's marquee need follows the flag.
+#[test]
+fn toggle_autoscroll_flips_the_flag_and_gates_needs_marquee() {
+    let (mut player, state) = test_player();
+    player.known_tracks.insert(
+        "song-1".to_string(),
+        views::KnownTrack {
+            album: "First Record".to_string(),
+            ..known_track("A Title Too Long For The Lcd", "The Sample Band", "1. ")
+        },
+    );
+    state.blocking_lock().current_track = Some("song-1".to_string());
+    assert!(player.needs_marquee());
+
+    assert_message_schedules_no_work(&mut player, Message::ToggleAutoscroll);
+    assert!(!player.marquee_autoscroll);
+    assert!(!player.needs_marquee());
+
+    let _ = update(&mut player, Message::ToggleAutoscroll);
+    assert!(player.marquee_autoscroll);
+    assert!(player.needs_marquee());
+}
+
 // LCD's visualizer row. Showing it paints a bright green bar; hiding it leaves
 // that row empty. Passing the raw spectrum through instead of the gated one
 // would keep the bars green here.
@@ -472,6 +497,7 @@ fn options_choice_applies_each_toggle_and_closes_the_panel() {
     for (index, choice) in [
         OptionsChoice::AlwaysOnTop,
         OptionsChoice::TimeDisplay,
+        OptionsChoice::Autoscroll,
         OptionsChoice::Visualizer,
         OptionsChoice::EqualizerPanel,
         OptionsChoice::LibraryPanel,
@@ -488,6 +514,7 @@ fn options_choice_applies_each_toggle_and_closes_the_panel() {
                     player.always_on_top,
                     player.time_display,
                     player.visualizer_visible,
+                    player.marquee_autoscroll,
                     player.eq_panel_visible,
                     player.library_panel_visible,
                     state.transport_mode(),
@@ -509,26 +536,42 @@ fn options_choice_applies_each_toggle_and_closes_the_panel() {
                 always_on_top,
                 time_display,
                 visualizer_visible,
+                marquee_autoscroll,
                 eq_panel_visible,
                 library_panel_visible,
             ) = (
                 player.always_on_top,
                 player.time_display,
                 player.visualizer_visible,
+                player.marquee_autoscroll,
                 player.eq_panel_visible,
                 player.library_panel_visible,
             );
             assert!(!player.options_visible, "{choice:?} must close the menu");
             let expected = match choice {
-                OptionsChoice::AlwaysOnTop => (!before.0, before.1, before.2, before.3, before.4),
-                OptionsChoice::TimeDisplay => {
-                    (before.0, before.1.toggled(), before.2, before.3, before.4)
+                OptionsChoice::AlwaysOnTop => {
+                    (!before.0, before.1, before.2, before.3, before.4, before.5)
                 }
-                OptionsChoice::Visualizer => (before.0, before.1, !before.2, before.3, before.4),
+                OptionsChoice::TimeDisplay => (
+                    before.0,
+                    before.1.toggled(),
+                    before.2,
+                    before.3,
+                    before.4,
+                    before.5,
+                ),
+                OptionsChoice::Autoscroll => {
+                    (before.0, before.1, before.2, !before.3, before.4, before.5)
+                }
+                OptionsChoice::Visualizer => {
+                    (before.0, before.1, !before.2, before.3, before.4, before.5)
+                }
                 OptionsChoice::EqualizerPanel => {
-                    (before.0, before.1, before.2, !before.3, before.4)
+                    (before.0, before.1, before.2, before.3, !before.4, before.5)
                 }
-                OptionsChoice::LibraryPanel => (before.0, before.1, before.2, before.3, !before.4),
+                OptionsChoice::LibraryPanel => {
+                    (before.0, before.1, before.2, before.3, before.4, !before.5)
+                }
                 OptionsChoice::FadeOutAndStop => {
                     unreachable!(
                         "covered by options_stop_with_fadeout_row_fades_or_stops_and_closes"
@@ -572,6 +615,7 @@ fn options_choice_applies_each_toggle_and_closes_the_panel() {
                     always_on_top,
                     time_display,
                     visualizer_visible,
+                    marquee_autoscroll,
                     eq_panel_visible,
                     library_panel_visible,
                 ),
@@ -584,7 +628,7 @@ fn options_choice_applies_each_toggle_and_closes_the_panel() {
             };
             assert_eq!(
                 after,
-                (before.5, before.6),
+                (before.6, before.7),
                 "{choice:?} must leave playback alone"
             );
         }

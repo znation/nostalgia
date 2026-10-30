@@ -1019,18 +1019,18 @@ with the seam itself pinned by `get_song_by_id_finds_a_sample_song_by_its_exact_
 `get_song_by_id_answers_none_for_an_id_outside_the_library`,
 `get_song_by_id_rejects_a_blank_id` (`src/apple_music/tests/browse_sample.rs`), and
 `get_song_by_id_uses_the_rest_library_when_signed_in` (`src/apple_music/tests/browse_rest.rs`).
-The readout mode, the visualizer's shown/hidden
-choice, the two panel choices, the always-on-top choice, and the shade mode are the persisted
+The readout mode, the visualizer's shown/hidden choice, the title's autoscroll choice, the two panel choices, the always-on-top choice, and the shade mode are the persisted
 values not held in `AppState`: they live on `WinampPlayer::time_display`,
-`WinampPlayer::visualizer_visible`, `WinampPlayer::eq_panel_visible`,
+`WinampPlayer::visualizer_visible`, `WinampPlayer::marquee_autoscroll`,
+`WinampPlayer::eq_panel_visible`,
 `WinampPlayer::library_panel_visible`, `WinampPlayer::always_on_top`, and
 `WinampPlayer::shaded`, `main` passes the loaded snapshot through to
 `WinampPlayer::adopt_saved_settings` (which restores them all before the first view), and
 `persist_settings_if_changed` copies them into the snapshot before comparing and saving. A missing
 or malformed `time_display` line falls back to elapsed, a missing or malformed `always_on_top` line
 falls back to unpinned, a missing or malformed `shade` line falls back to unshaded, and a missing
-or malformed `visualizer_visible`, `eq_panel_visible`, or `library_panel_visible` line falls back
-to shown. The window's screen position is the seventh UI-owned value
+or malformed `visualizer_visible`, `autoscroll`, `eq_panel_visible`, or `library_panel_visible`
+line falls back to shown or autoscrolling respectively. The window's screen position is the eighth UI-owned value
 (`WinampPlayer::window_position`, restored by `adopt_saved_settings`): `Message::WindowMoved`,
 fed by `window_moved_message` from iced's `Moved` window event, stores it and the update loop saves
 it as `window_position=<x>,<y>`, a line written only once a position is known. A missing line, or one
@@ -1063,11 +1063,14 @@ per key, and `apply_to` writes through `AppState::set_volume`, `set_balance`, `s
 `set_eq_band` before restoring a preset through `apply_eq_preset`. `ui::init_ui` attaches the
 store to `WinampPlayer` and restores the snapshot through
 `WinampPlayer::adopt_saved_settings`, which restores `time_display`, `visualizer_visible`,
-`eq_panel_visible`, `library_panel_visible`, `always_on_top`, and `shaded` and
+`marquee_autoscroll`, `eq_panel_visible`, `library_panel_visible`, `always_on_top`, and `shaded` and
 records the snapshot; `update` calls
 `WinampPlayer::persist_settings_if_changed` once after every message, and that method copies
-the six player-owned values into `Settings::from_state`, then compares that snapshot against the
-last one before calling `settings::seam::SettingsWriter::save`. Production wraps the store
+the seven player-owned values into `Settings::from_state`, then compares that snapshot against the
+last one before calling `settings::seam::SettingsWriter::save`. The autoscroll choice pinning lives
+in `saved_autoscroll_choice_is_restored_on_boot` and
+`toggle_autoscroll_reaches_the_saved_snapshot` (`src/ui/tests/settings_tests.rs`) and
+`autoscroll_round_trips_and_ignores_malformed_values` (`src/settings.rs`). Production wraps the store
 in `settings::writer::BackgroundWriter`, so that `save` stores the snapshot in a one-slot mailbox
 and wakes its worker instead of writing on the update thread; the worker writes the newest queued
 snapshot with the wrapped store's blocking `save`, and dropping the writer closes the mailbox,
@@ -1374,7 +1377,9 @@ its internal id, whenever the id is in the known-track index:
   `the_overlong_title_publishes_a_drag_press_and_a_fitting_one_does_not`,
   `the_marquee_pauses_while_the_title_is_dragged_and_resumes_from_there`,
   `a_new_selection_clears_a_title_drag`, and
-  `title_drag_listener_is_subscribed_only_while_dragging_and_maps_pointer_events`.
+  `title_drag_listener_is_subscribed_only_while_dragging_and_maps_pointer_events`. Autoscroll off
+  pinning lives in `autoscroll_off_silences_the_marquee_and_the_drag_guard_wins`
+  (`src/ui/tests/subscriptions_tests.rs`).
 - The LCD splits its time readouts: by default the large left-hand readout shows the backend's
   reported position as zero-padded `MM:SS` (for example `00:53`), and the right edge always shows
   the plain cached total (for example `3:30`). Clicking the large readout switches it to the track's
@@ -1527,7 +1532,12 @@ its internal id, whenever the id is in the known-track index:
 - The marquee timer is subscribed only while the line needs to scroll: `WinampPlayer::needs_marquee`
   measures the same number, label, and artist the bar renders, so a line that fits leaves the timer
   out (every message makes iced rebuild the whole visible screen, the library panel included while
-  it shows).
+  it shows), and the OPTIONS menu's `Autoscroll song name: Off` choice leaves it out for a too-long
+  line too: `marquee_autoscroll` false short-circuits `needs_marquee` ahead of the measure, so the
+  roller coasts to a stop at its last offset instead of resetting, and turning autoscroll back on
+  resumes the scroll from there. The hand-scroll title drag and the LCD tick's mixer-flash and
+  fade-out duties are untouched. The choice persists as `autoscroll=`; a missing or malformed line
+  falls back to autoscrolling.
 - The position poll is subscribed only while there is a position to refresh:
   `WinampPlayer::needs_position_poll` includes it while playback is running, the backend still holds
   a preview (paused, even before its first position reply, so a seek can still move it), or a stored
@@ -1941,19 +1951,21 @@ Jump to file rows, File info, About, and Close:
   not persisted; the menu adds no setting.
 - `views::view_options_overlay` stacks an `OPTIONS` panel over the otherwise unchanged normal-mode
   base through `views::modal::modal_overlay`. Its rows are `Always on Top: On/Off`, `Time:
-  Remaining/Elapsed`, `Visualizer: Shown/Hidden`, `Equalizer: Shown/Hidden`, `Library:
+  Remaining/Elapsed`, `Autoscroll song name: On/Off`, `Visualizer: Shown/Hidden`, `Equalizer: Shown/Hidden`, `Library:
   Shown/Hidden`, `Stop with fadeout`, `Stop after current: On/Off`, `Repeat: On/Off`, `Shuffle: On/Off`, `Manual playlist advance: On/Off`, `10 songs back`, `10 songs forward`, `Back 5
   seconds`, `Fwd 5 seconds`, `Start of list`, `End of list`, `Jump to time`, `Jump to file`, `File info`, `About Nostalgia`, and `Close`, with the labels resolved from the passed current
   state on every rebuild (the Stop with fadeout, Back 5 seconds, Fwd 5 seconds, Start of list, and End of list labels are fixed). Each choice row publishes `Message::OptionsChoice(..)`; the About row
   publishes `Message::ToggleAbout`; `Close`, the full-window backdrop, and Escape close the menu.
 - `handlers::window::options_choice` clears `options_visible` first, then dispatches to the
   existing `toggle_always_on_top`, `handlers::playback::toggle_time_display`,
-  `handlers::playback::toggle_visualizer`, `handlers::window::toggle_equalizer_panel`, or
+  `Message::ToggleAutoscroll` (re-dispatched through `update`, because the OPTIONS menu row is that
+  toggle's only publisher), `handlers::playback::toggle_visualizer`,
+  `handlers::window::toggle_equalizer_panel`, or
   `handlers::window::toggle_library_panel`, `handlers::playback::fade::fade_out_and_stop`,
   `handlers::playback::toggle_stop_after_current`, `handlers::playback::toggle_repeat`, `handlers::playback::toggle_shuffle`, `handlers::playback::toggle_manual_advance`, `handlers::playback::stepping::jump_ten_tracks` (back or forward, pinned by `options_ten_song_rows_jump_like_the_keypad`), `handlers::mixer::seek_backward` and `handlers::mixer::seek_forward` (the arrows' five-second step, pinned by `options_back_and_fwd_seconds_rows_seek_like_the_arrows`), `handlers::playback::stepping::jump_to_edge_track` (first or last song, pinned by `options_start_and_end_of_list_rows_jump_like_the_keys`), `handlers::jump::toggle_jump_time`, `handlers::jump::toggle_jump_file`, or `handlers::window::toggle_file_info` (pinned by `options_file_info_row_opens_the_panel_or_just_closes`) and returns its task, so each row's non-menu behavior is
   exactly that toggle's.
 - The overlay assembly in `src/ui/view/overlay.rs` wraps the base tree only while `options_visible &&
-  !shaded` holds and passes the current always-on-top, elapsed/remaining, visualizer, equalizer
+  !shaded` holds and passes the current always-on-top, elapsed/remaining, autoscroll, visualizer, equalizer
   panel, library panel, stop-after-current, repeat, shuffle, and manual-advance state (repeat, shuffle, and manual advance read from the shared state) through `views::OptionsState`; the shade branch never draws it.
 - A plain or Shift-held Escape press also closes it (see `## Transient panel dismissal`).
 
@@ -1962,7 +1974,8 @@ and `Message::OptionsChoice`; `handlers::window::toggle_options` and
 `handlers::window::options_choice`; `WinampPlayer::options_visible`; the LCD strip's `O`
 mapping and the transport row's `options_button`; the two `on_right_press` wrappers in `src/ui/view/normal.rs` and `src/ui/view/shade.rs`; and the normal-mode branch of
 `src/ui/view/overlay.rs`. `OptionsRow::ALL` and `OptionsRow::message` share row order and messages;
-`options_row_label` and `options_row_style` draw them. `options_shortcut` and
+`options_row_label` and `options_row_style` draw them. `handlers::playback::toggle_autoscroll`
+flips `WinampPlayer::marquee_autoscroll`. `options_shortcut` and
 `message_for_options` map the keys; `options_selection_up`, `options_selection_down`, and
 `options_activate` handle navigation. The subscription chooses Jump to File first, then the
 `options_open` mapper, then normal shortcuts.
@@ -1973,7 +1986,10 @@ mapping and the transport row's `options_button`; the two `on_right_press` wrapp
 (`src/ui/tests/subscriptions_tests.rs`);
 `message_for_options_maps_up_down_enter_and_falls_back` (`src/ui/shortcuts.rs`);
 `options_rows_map_to_mouse_messages_in_draw_order` (`src/ui/message.rs`);
-`options_row_style_highlights_selection_in_each_status` (`src/ui/views/options.rs`);
+`options_row_style_highlights_selection_in_each_status` and
+`autoscroll_label_mirrors_the_flag` (`src/ui/views/options.rs`);
+`toggle_autoscroll_flips_the_flag_and_gates_needs_marquee`
+(`src/ui/tests/panels_tests.rs`);
 `options_stop_with_fadeout_row_fades_or_stops_and_closes` (`src/ui/tests/fade_tests.rs`);
 `options_back_and_fwd_seconds_rows_seek_like_the_arrows` (`src/ui/tests/transport_tests.rs`);
 `options_jump_rows_open_their_panels_or_just_close` (`src/ui/tests/jump_tests.rs`);
@@ -2002,6 +2018,8 @@ label tests in `src/ui/views/options.rs` (including `stop_after_current_label_mi
 **History.** Added 2026-10-26 with the Winamp-style options menu; the menu is transient and
 unpersisted because every row reuses an existing toggle.
 Keyboard access and the transient row highlight added 2026-10-26 by the feature role.
+The `Autoscroll song name: On/Off` row, the persisted `WinampPlayer::marquee_autoscroll` flag,
+and the `autoscroll=` settings line added 2026-10-29 by the feature role.
 
 ## File info panel
 

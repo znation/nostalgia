@@ -18,6 +18,7 @@ pub(super) fn apply_overlays<'a>(
             views::OptionsState {
                 always_on_top: player.always_on_top,
                 time_remaining: player.time_display == views::TimeDisplay::Remaining,
+                autoscroll: player.marquee_autoscroll,
                 visualizer_visible: player.visualizer_visible,
                 eq_panel_visible: player.eq_panel_visible,
                 library_panel_visible: player.library_panel_visible,

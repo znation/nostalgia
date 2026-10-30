@@ -141,6 +141,12 @@ pub(in crate::ui) enum Message {
     // again. It flips only the LCD's display flag, changes no playback state,
     // and schedules no work; the stored spectrum and its poll keep running.
     ToggleVisualizer,
+    // The OPTIONS menu's Autoscroll song name row: stops or resumes the Now
+    // Playing title's automatic scrolling. It flips only the marquee
+    // autoscroll flag, changes no playback state, schedules no work, and
+    // leaves the hand-scroll title drag and the LCD's mixer-flash and
+    // fade-out tick duties alone.
+    ToggleAutoscroll,
     // The player row's EQ button: shows or hides the normal-mode equalizer
     // section. It flips only the panel-visibility flag — not the EQ's on/off
     // state, curve, or preset — and schedules no work.
@@ -566,6 +572,8 @@ pub(in crate::ui) enum OptionsChoice {
     AlwaysOnTop,
     /// Reuses [`Message::ToggleTimeDisplay`].
     TimeDisplay,
+    /// Reuses [`Message::ToggleAutoscroll`].
+    Autoscroll,
     /// Reuses [`Message::ToggleVisualizer`].
     Visualizer,
     /// Reuses [`Message::ToggleEqualizerPanel`].
@@ -608,6 +616,7 @@ pub(in crate::ui) enum OptionsChoice {
 pub(in crate::ui) enum OptionsRow {
     AlwaysOnTop,
     TimeDisplay,
+    Autoscroll,
     Visualizer,
     EqualizerPanel,
     LibraryPanel,
@@ -630,9 +639,10 @@ pub(in crate::ui) enum OptionsRow {
 }
 
 impl OptionsRow {
-    pub(in crate::ui) const ALL: [Self; 21] = [
+    pub(in crate::ui) const ALL: [Self; 22] = [
         Self::AlwaysOnTop,
         Self::TimeDisplay,
+        Self::Autoscroll,
         Self::Visualizer,
         Self::EqualizerPanel,
         Self::LibraryPanel,
@@ -658,6 +668,7 @@ impl OptionsRow {
         match self {
             Self::AlwaysOnTop => Message::OptionsChoice(OptionsChoice::AlwaysOnTop),
             Self::TimeDisplay => Message::OptionsChoice(OptionsChoice::TimeDisplay),
+            Self::Autoscroll => Message::OptionsChoice(OptionsChoice::Autoscroll),
             Self::Visualizer => Message::OptionsChoice(OptionsChoice::Visualizer),
             Self::EqualizerPanel => Message::OptionsChoice(OptionsChoice::EqualizerPanel),
             Self::LibraryPanel => Message::OptionsChoice(OptionsChoice::LibraryPanel),
@@ -693,6 +704,7 @@ mod options_tests {
             [
                 Message::OptionsChoice(OptionsChoice::AlwaysOnTop),
                 Message::OptionsChoice(OptionsChoice::TimeDisplay),
+                Message::OptionsChoice(OptionsChoice::Autoscroll),
                 Message::OptionsChoice(OptionsChoice::Visualizer),
                 Message::OptionsChoice(OptionsChoice::EqualizerPanel),
                 Message::OptionsChoice(OptionsChoice::LibraryPanel),

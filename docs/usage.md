@@ -194,9 +194,9 @@ rolled up restores the window first. The LCD's `O` letter, Alt+O, the lightning 
 end of the transport row, or a right-click anywhere on the player (title bar, LCD, seek strip,
 transport row, equalizer, or the rolled-up shade strip, but not the library), like Winamp's
 main-window menu, opens an `OPTIONS` menu over the player listing `Always on Top: On/Off`,
-`Time: Remaining/Elapsed`, `Visualizer: Shown/Hidden`, `Equalizer: Shown/Hidden`,
+`Time: Remaining/Elapsed`, `Autoscroll song name: On/Off`, `Visualizer: Shown/Hidden`, `Equalizer: Shown/Hidden`,
 `Library: Shown/Hidden`, `Stop with fadeout`, `Stop after current: On/Off`, `Repeat: On/Off`, `Shuffle: On/Off`, `Manual playlist advance: On/Off`, `10 songs back`, `10 songs forward`, `Back 5 seconds`, `Fwd 5 seconds`, `Start of list`, `End of list`, `Jump to time`, `Jump to file`, `File info`, `About Nostalgia`, and `Close`, with each label reflecting the current
-state. Choosing a row applies that one toggle and closes the menu; `Stop with fadeout` fades out and stops exactly like Shift+V while a preview plays and stops like V while paused or stopped; `10 songs back` and `10 songs forward` jump ten songs back or forward exactly like keypad 1 and 3 (doing nothing beyond closing the menu with no song list showing); `Back 5 seconds` and `Fwd 5 seconds` seek five seconds back or forward exactly like the Left and Right arrows (scheduling no work, exactly like the arrows); `Start of list` and `End of list` jump to the first or last song of the list exactly like Ctrl+Z and Ctrl+B (only closing the menu with no song list showing); `Jump to time` and `Jump to file` open the Ctrl+J and J panels (doing nothing beyond closing
+state. `Autoscroll song name: Off` stops a too-long title's automatic scrolling — the roller coasts to a stop at the offset it had, the hand drag still scrolls the title by holding the left button on it, and turning the row back on resumes the scroll from the stopped offset — while its LCD tick duties (the mixer-level readout flashes and the fade-out countdown) keep running. Choosing a row applies that one toggle and closes the menu; `Stop with fadeout` fades out and stops exactly like Shift+V while a preview plays and stops like V while paused or stopped; `10 songs back` and `10 songs forward` jump ten songs back or forward exactly like keypad 1 and 3 (doing nothing beyond closing the menu with no song list showing); `Back 5 seconds` and `Fwd 5 seconds` seek five seconds back or forward exactly like the Left and Right arrows (scheduling no work, exactly like the arrows); `Start of list` and `End of list` jump to the first or last song of the list exactly like Ctrl+Z and Ctrl+B (only closing the menu with no song list showing); `Jump to time` and `Jump to file` open the Ctrl+J and J panels (doing nothing beyond closing
 the menu while that panel is unavailable); `File info` opens the Alt+3 File info panel for the showing song list's selected row when one
 is picked and for the current track otherwise (doing nothing beyond closing the menu when there
 is neither a song row selected nor a current track); `About Nostalgia` opens the
@@ -325,7 +325,7 @@ the normal end-of-song advance. The volume, balance, Repeat, Shuffle, and Manual
 state, AUTO choice, curve, and preset, the equalizer's saved custom preset curves, the song lists saved through the browse
 `Save list` button (`user_playlist=<name>:<id>,<id>,…` lines, one per list), the songs you played
 while signed out (`recently_played=<id>,<id>,…` one line, ids newest first), the elapsed/remaining readout choice, the visualizer's
-shown/hidden choice, the equalizer and library panels' shown/hidden choices, the always-on-top
+shown/hidden choice, the autoscroll song-name choice, the equalizer and library panels' shown/hidden choices, the always-on-top
 choice, the window-shade mode, the window's last screen position, the last-played track, the saved
 MusicKit sign-in token, and the library's top-level browse list (Artists, All
 Songs, All Albums, Recently Added, Recently Played, Playlists, Genres, Years, or Composers; a list opened from one of them

@@ -740,6 +740,7 @@ fn options_overlay_element(all_on: bool) -> Element<'static, Message> {
     let state = super::super::OptionsState {
         always_on_top: all_on,
         time_remaining: all_on,
+        autoscroll: all_on,
         visualizer_visible: all_on,
         eq_panel_visible: all_on,
         library_panel_visible: all_on,
@@ -759,6 +760,7 @@ fn options_overlay_draws_each_row_with_its_state() {
             [
                 "Always on Top: Off",
                 "Time: Elapsed",
+                "Autoscroll song name: Off",
                 "Visualizer: Hidden",
                 "Equalizer: Hidden",
                 "Library: Hidden",
@@ -774,6 +776,7 @@ fn options_overlay_draws_each_row_with_its_state() {
             [
                 "Always on Top: On",
                 "Time: Remaining",
+                "Autoscroll song name: On",
                 "Visualizer: Shown",
                 "Equalizer: Shown",
                 "Library: Shown",
@@ -820,6 +823,7 @@ fn options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop() {
     for label in [
         "Always on Top: Off",
         "Time: Elapsed",
+        "Autoscroll song name: Off",
         "Visualizer: Hidden",
         "Equalizer: Hidden",
         "Library: Hidden",
@@ -869,6 +873,13 @@ fn options_overlay_publishes_each_choice_and_closes_from_close_and_backdrop() {
                     Message::OptionsChoice(OptionsChoice::TimeDisplay)
                 )),
                 "the time row must publish its choice: {messages:?}"
+            ),
+            "Autoscroll song name: Off" => assert!(
+                messages.iter().any(|message| matches!(
+                    message,
+                    Message::OptionsChoice(OptionsChoice::Autoscroll)
+                )),
+                "the autoscroll row must publish its choice: {messages:?}"
             ),
             "Visualizer: Hidden" => assert!(
                 messages.iter().any(|message| matches!(

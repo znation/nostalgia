@@ -46,15 +46,15 @@ pub struct SavedPlaylist {
 
 /// The persisted values the next launch restores: the mixer and equalizer
 /// subset of [`AppState`], the last-played track id, and the UI-owned readout
-/// mode, visualizer choice, equalizer and library panel choices,
+/// mode, visualizer, marquee autoscroll, equalizer and library panel choices,
 /// always-on-top flag, shade mode, window screen position, top-level
 /// browse list, and the saved `MusicKit` sign-in's user token.
 ///
 /// The fields are private; build a state-backed snapshot with [`Settings::from_state`] and restore
 /// it with [`Settings::apply_to`]. `time_display_remaining`, `visualizer_visible`,
-/// `eq_panel_visible`, `library_panel_visible`, `always_on_top`, `shade`, `window_position`,
-/// `library_view`, and `music_kit_user_token` are not held in [`AppState`]: `from_state` leaves them elapsed, shown (all
-/// three), unpinned, unshaded, without a known position, on Artists, and without a token, and the
+/// `autoscroll`, `eq_panel_visible`, `library_panel_visible`, `always_on_top`, `shade`, `window_position`,
+/// `library_view`, and `music_kit_user_token` are not held in [`AppState`]: `from_state` leaves them elapsed, shown and
+/// scrolling (all four), unpinned, unshaded, without a known position, on Artists, and without a token, and the
 /// player overwrites them from its own values (the token through its [`crate::apple_music::AppleMusicService`]) before
 /// saving. `current_track` is the last-played
 /// track id, held in [`AppState`]: the snapshot carries it straight from the
@@ -84,6 +84,7 @@ pub struct Settings {
     recently_played: Vec<String>,
     time_display_remaining: bool,
     visualizer_visible: bool,
+    autoscroll: bool,
     eq_panel_visible: bool,
     library_panel_visible: bool,
     always_on_top: bool,
@@ -97,7 +98,8 @@ impl Default for Settings {
     /// The same starting values as [`AppState::default`]: half volume, a
     /// centered balance, no track loaded, the toggles off, and the equalizer
     /// off with AUTO off, a flat curve, and no preset, plus the elapsed
-    /// readout mode, the shown visualizer and both panels, and an unpinned,
+    /// readout mode, the shown visualizer, an autoscrolling title, both
+    /// panels, and an unpinned,
     /// unshaded window. A missing or unreadable settings file starts here.
     fn default() -> Self {
         Self {
@@ -117,6 +119,7 @@ impl Default for Settings {
             recently_played: Vec::new(),
             time_display_remaining: false,
             visualizer_visible: true,
+            autoscroll: true,
             eq_panel_visible: true,
             library_panel_visible: true,
             always_on_top: false,
@@ -155,6 +158,7 @@ impl Settings {
             recently_played: Vec::new(),
             time_display_remaining: false,
             visualizer_visible: true,
+            autoscroll: true,
             eq_panel_visible: true,
             library_panel_visible: true,
             always_on_top: false,
@@ -194,6 +198,21 @@ impl Settings {
     /// deliberately leaves the UI-owned flag alone.
     pub fn set_visualizer_visible(&mut self, visible: bool) {
         self.visualizer_visible = visible;
+    }
+
+    /// Whether the Now Playing title scrolls on its own while it is too long
+    /// for the LCD. The player owns this value, so it reads it back when
+    /// saving and restores it from the loaded snapshot at boot.
+    #[must_use]
+    pub fn autoscroll(&self) -> bool {
+        self.autoscroll
+    }
+
+    /// Set whether the Now Playing title autoscrolls. The player calls this
+    /// on its fresh snapshot before saving; [`Self::apply_to`] deliberately
+    /// leaves the UI-owned flag alone.
+    pub fn set_autoscroll(&mut self, autoscroll: bool) {
+        self.autoscroll = autoscroll;
     }
 
     /// Whether the normal-mode equalizer panel is shown. The player owns this
@@ -422,6 +441,7 @@ mod tests {
         let mut settings = Settings::from_state(&state);
         settings.set_time_display_remaining(true);
         settings.set_visualizer_visible(false);
+        settings.set_autoscroll(false);
         settings.set_eq_panel_visible(false);
         settings.set_library_panel_visible(false);
         settings.set_always_on_top(true);
@@ -432,6 +452,7 @@ mod tests {
         assert_eq!(Settings::from_text(&settings.to_text()), settings);
         assert!(Settings::from_text(&settings.to_text()).time_display_remaining());
         assert!(!Settings::from_text(&settings.to_text()).visualizer_visible());
+        assert!(!Settings::from_text(&settings.to_text()).autoscroll());
         assert!(!Settings::from_text(&settings.to_text()).eq_panel_visible());
         assert!(!Settings::from_text(&settings.to_text()).library_panel_visible());
         assert!(Settings::from_text(&settings.to_text()).always_on_top());
@@ -485,6 +506,30 @@ mod tests {
         assert!(
             Settings::from_text("visualizer_visible=maybe\n").visualizer_visible(),
             "an unknown value must fall back to shown"
+        );
+    }
+
+    #[test]
+    fn autoscroll_round_trips_and_ignores_malformed_values() {
+        let scrolling = Settings::default();
+        assert!(scrolling.autoscroll());
+        assert!(Settings::from_text(&scrolling.to_text()).autoscroll());
+
+        let mut stopped = scrolling.clone();
+        stopped.set_autoscroll(false);
+        assert!(stopped.to_text().contains("autoscroll=false"));
+        assert!(
+            !Settings::from_text(&stopped.to_text()).autoscroll(),
+            "a stopped autoscroll must survive the round trip"
+        );
+
+        assert!(
+            Settings::from_text("autoscroll=true\n").autoscroll(),
+            "an explicit true must stay scrolling"
+        );
+        assert!(
+            Settings::from_text("autoscroll=sideways\n").autoscroll(),
+            "an unknown value must fall back to scrolling"
         );
     }
 
@@ -677,6 +722,7 @@ mod tests {
                     eq_preset=Unknown\n\
                     time_display=sideways\n\
                     visualizer_visible=maybe\n\
+                    autoscroll=maybe\n\
                     eq_panel_visible=maybe\n\
                     library_panel_visible=maybe\n\
                     always_on_top=yes\n\
