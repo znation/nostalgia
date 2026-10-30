@@ -33,11 +33,16 @@ pub const COLON_NAME_NOTE: &str = "Use it without a colon";
 /// let the name's tail be read as settings lines of its own.
 pub const LINE_BREAK_NAME_NOTE: &str = "Use one line";
 
+/// The panel's note for a name no saved custom matches: `Delete` with it
+/// keeps the panel open with this note and deletes nothing.
+pub const NO_SUCH_PRESET_NOTE: &str = "No such preset";
+
 /// Stacks the transient Save preset panel over `base`.
 ///
 /// The panel is modal (see [`modal_overlay`]): `Close` and the backdrop each
 /// publish [`Message::ToggleSavePreset`], while `Save` and Enter in the box
-/// publish [`Message::SavePresetSubmitted`]. The box shows the typed `name`
+/// publish [`Message::SavePresetSubmitted`] and `Delete` publishes
+/// [`Message::DeletePresetSubmitted`]. The box shows the typed `name`
 /// and `note`, an inline error the submit handler stored after a refused
 /// save; `None` draws no note, as on opening. No state or curve is touched
 /// here.
@@ -64,6 +69,7 @@ pub fn view_save_preset_overlay<'a>(
         Row::new()
             .spacing(10)
             .push(labeled_button("Save", Message::SavePresetSubmitted))
+            .push(labeled_button("Delete", Message::DeletePresetSubmitted))
             .push(labeled_button("Close", Message::ToggleSavePreset)),
     );
     modal_overlay(base, content, Message::ToggleSavePreset)

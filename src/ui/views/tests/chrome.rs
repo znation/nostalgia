@@ -591,6 +591,7 @@ fn save_preset_overlay_draws_its_heading_note_and_buttons() {
         "SAVE PRESET",
         super::super::EMPTY_NAME_NOTE,
         "Save",
+        "Delete",
         "Close",
     ] {
         assert!(
@@ -620,7 +621,36 @@ fn save_preset_overlay_without_a_note_draws_no_note() {
 #[test]
 fn save_preset_overlay_buttons_and_backdrop_publish_their_messages() {
     let mut renderer = layout_capture::headless_renderer();
-    for target in ["Close", "BACKDROP", "Save"] {
+    for target in ["Save", "Delete"] {
+        let mut element = save_preset_element();
+        let capture = layout_capture::capture_text(&mut element, &renderer);
+        let bounds = capture.find(target);
+        let point = iced::Point::new(bounds.center_x(), bounds.center_y());
+        let messages = layout_capture::click_at(element, &mut renderer, point);
+        if target == "Save" {
+            assert!(
+                matches!(messages.as_slice(), [Message::SavePresetSubmitted]),
+                "Save must publish one SavePresetSubmitted: {messages:?}"
+            );
+        } else {
+            assert!(
+                matches!(messages.as_slice(), [Message::DeletePresetSubmitted]),
+                "Delete must publish one DeletePresetSubmitted: {messages:?}"
+            );
+        }
+    }
+    // The `Delete` button sits between `Save` and `Close` in the row: its
+    // center lands between their centers.
+    let mut element = save_preset_element();
+    let capture = layout_capture::capture_text(&mut element, &renderer);
+    let save_x = capture.find("Save").center_x();
+    let delete_x = capture.find("Delete").center_x();
+    let close_x = capture.find("Close").center_x();
+    assert!(
+        save_x < delete_x && delete_x < close_x,
+        "the button row must read Save, Delete, Close: {save_x} {delete_x} {close_x}"
+    );
+    for target in ["Close", "BACKDROP"] {
         let mut element = save_preset_element();
         let capture = layout_capture::capture_text(&mut element, &renderer);
         let point = if target == "BACKDROP" {
@@ -630,17 +660,10 @@ fn save_preset_overlay_buttons_and_backdrop_publish_their_messages() {
             iced::Point::new(bounds.center_x(), bounds.center_y())
         };
         let messages = layout_capture::click_at(element, &mut renderer, point);
-        if target == "Save" {
-            assert!(
-                matches!(messages.as_slice(), [Message::SavePresetSubmitted]),
-                "Save must publish one SavePresetSubmitted: {messages:?}"
-            );
-        } else {
-            assert!(
-                matches!(messages.as_slice(), [Message::ToggleSavePreset]),
-                "{target} must publish one ToggleSavePreset: {messages:?}"
-            );
-        }
+        assert!(
+            matches!(messages.as_slice(), [Message::ToggleSavePreset]),
+            "{target} must publish one ToggleSavePreset: {messages:?}"
+        );
     }
 }
 

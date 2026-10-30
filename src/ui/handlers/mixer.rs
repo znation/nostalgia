@@ -15,7 +15,7 @@ use crate::ui::player::MIXER_FLASH_TICKS;
 use crate::ui::views;
 use crate::ui::views::{
     BUILT_IN_NAME_NOTE, COLON_NAME_NOTE, EMPTY_NAME_NOTE, LINE_BREAK_NAME_NOTE,
-    SAVE_PRESET_INPUT_ID,
+    NO_SUCH_PRESET_NOTE, SAVE_PRESET_INPUT_ID,
 };
 use crate::ui::{Message, WinampPlayer};
 
@@ -324,6 +324,59 @@ pub(in crate::ui) fn save_preset_submitted(player: &mut WinampPlayer) -> Task<Me
     }
     player.save_preset_open = false;
     player.save_preset_note = None;
+    Task::none()
+}
+
+/// The panel's `Delete` button: with the panel open, remove the saved custom
+/// preset matching the trimmed typed name and close the panel. The notes
+/// mirror [`save_preset_submitted`]'s refusals: an empty trimmed name keeps
+/// the panel open with `Type a name`, a name containing `:` shows `Use it
+/// without a colon`, a name carrying a line break shows `Use one line`, a
+/// name case-insensitively equal to a [`crate::equalizer::PRESETS`] built-in shows `Already a
+/// preset` and refuses the name (built-ins refuse deletion), and a name
+/// matching no saved custom shows `No such preset` while keeping the panel
+/// open. A matching custom is removed exactly, in stored order, from
+/// [`WinampPlayer::custom_eq_presets`], keeping every other preset's
+/// position. No dedicated write: the shared persist sweep stores the
+/// shortened list. Deleting a preset whose curve is applied touches only
+/// the saved list — the shared state keeps the applied curve, the closed
+/// pick-list label keeps reading `Custom`, and AUTO, `eq_preset=`, and the
+/// live sliders are untouched.
+pub(in crate::ui) fn delete_preset_submitted(player: &mut WinampPlayer) -> Task<Message> {
+    if !player.save_preset_open {
+        return Task::none();
+    }
+    let name = player.save_preset_name.trim();
+    if name.is_empty() {
+        player.save_preset_note = Some(EMPTY_NAME_NOTE);
+        return Task::none();
+    }
+    if name.contains(':') {
+        player.save_preset_note = Some(COLON_NAME_NOTE);
+        return Task::none();
+    }
+    if name.contains(['\n', '\r']) {
+        player.save_preset_note = Some(LINE_BREAK_NAME_NOTE);
+        return Task::none();
+    }
+    if crate::equalizer::PRESETS
+        .iter()
+        .any(|preset| preset.name.eq_ignore_ascii_case(name))
+    {
+        player.save_preset_note = Some(BUILT_IN_NAME_NOTE);
+        return Task::none();
+    }
+    if let Some(index) = player
+        .custom_eq_presets
+        .iter()
+        .position(|saved| saved.name.eq_ignore_ascii_case(name))
+    {
+        player.custom_eq_presets.remove(index);
+        player.save_preset_open = false;
+        player.save_preset_note = None;
+    } else {
+        player.save_preset_note = Some(NO_SUCH_PRESET_NOTE);
+    }
     Task::none()
 }
 

@@ -377,6 +377,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             handlers::mixer::save_preset_name_changed(player, text)
         }
         Message::SavePresetSubmitted => handlers::mixer::save_preset_submitted(player),
+        Message::DeletePresetSubmitted => handlers::mixer::delete_preset_submitted(player),
         Message::ToggleJumpFile => handlers::jump::toggle_jump_file(player),
         Message::JumpFileChanged(text) => handlers::jump::jump_file_changed(player, text),
         Message::JumpFileSubmitted => handlers::jump::jump_file_submitted(player),

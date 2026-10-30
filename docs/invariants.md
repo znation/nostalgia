@@ -2254,6 +2254,19 @@ name:
   the same name (case-insensitive) is replaced in place, its stored name kept, otherwise the
   curve pushes onto the end of the list. The saved curve is never applied by saving: the shared
   state keeps holding it, and the closed pick-list label keeps reading `Custom`.
+- `delete_preset_submitted` (the panel's `Delete` button) removes the saved custom matching
+  the trimmed typed name and closes the panel, refusing the same shapes as the save path: an
+  empty name keeps the panel open with `Type a name`, a name containing `:` shows `Use it
+  without a colon`, a line break shows `Use one line`, a name matching a built-in's
+  case-insensitively shows `Already a preset` and refuses the name (built-ins refuse
+  deletion), and a name matching no saved custom shows `No such preset` while keeping the
+  panel open. A matching custom is removed exactly, in stored order, from
+  `WinampPlayer::custom_eq_presets` — every other preset keeps its position — and reaches the
+  settings file through the same shared persist sweep as the shortened
+  `eq_custom_preset=` list. Deleting the currently applied custom's name touches only the
+  saved list: the shared state keeps the applied curve, the closed pick-list label keeps
+  reading `Custom`, and AUTO, `eq_preset=`, and the live sliders are untouched. The message
+  acts only while the panel is open and is not persisted.
 - The new or replaced list reaches the settings file through the shared
   `persist_settings_if_changed` sweep, as repeated `eq_custom_preset=<name>:<preamp>,<band>,…,<band>`
   lines; parsing skips a line without a `:`, a blank name, the wrong field count, or a
@@ -2262,13 +2275,14 @@ name:
   `Custom` and its curve restored through the `eq_preamp`/`eq_band_*` lines, the saved
   `eq_preset=` name never resolving to a custom.
 - `views::view_save_preset_overlay` stacks `SAVE PRESET`, the name box, the panel's inline note
-  when one is stored, and `Save` and `Close` buttons through `modal_overlay`. `Close` and the
-  backdrop each publish one `ToggleSavePreset`; `Save` and Enter publish `SavePresetSubmitted`.
+  when one is stored, and `Save`, `Delete`, and `Close` buttons through `modal_overlay`.
+  `Close` and the backdrop each publish one `ToggleSavePreset`; `Save` and Enter publish
+  `SavePresetSubmitted`; `Delete` publishes `DeletePresetSubmitted`.
   The shade branch never draws it.
 
 **Enforced by.** `equalizer::CustomPreset` and `equalizer::PresetChoice`,
 `handlers::mixer::{eq_preset_selected, toggle_save_preset, save_preset_name_changed,
-save_preset_submitted}`, `WinampPlayer::{custom_eq_presets, close_transient_panels,
+save_preset_submitted, delete_preset_submitted}`, `WinampPlayer::{custom_eq_presets, close_transient_panels,
 transient_panel_open, persist_settings_if_changed, adopt_saved_settings}`, `Settings`'s
 `eq_custom_presets` field and `settings::text`'s `eq_custom_preset` line handling, and
 `views::save_preset::view_save_preset_overlay`.
@@ -2280,7 +2294,11 @@ transient_panel_open, persist_settings_if_changed, adopt_saved_settings}`, `Sett
 `a_closed_save_panel_ignores_its_submit`,
 `save_preset_submitted_saves_the_applied_curve_under_the_typed_name`,
 `save_preset_submitted_refuses_empty_builtin_and_colon_names`, and
-`saving_over_an_existing_custom_replaces_only_its_curve` (`src/ui/tests/mixer_tests.rs`);
+`saving_over_an_existing_custom_replaces_only_its_curve`,
+`delete_preset_submitted_removes_the_named_custom_preset`,
+`delete_preset_submitted_refuses_empty_builtin_colon_and_unknown_names`,
+`delete_preset_submitted_is_a_no_op_with_the_panel_closed`, and
+`deleting_the_applied_custom_leaves_the_applied_curve_untouched` (`src/ui/tests/mixer_tests.rs`);
 `saving_a_preset_reaches_the_saved_snapshot` and
 `the_saved_custom_presets_are_adopted_at_launch` (`src/ui/tests/settings_tests.rs`);
 `eq_custom_preset_lines_round_trip_and_skip_the_malformed_ones` (`src/settings.rs`);
@@ -2288,6 +2306,7 @@ transient_panel_open, persist_settings_if_changed, adopt_saved_settings}`, `Sett
 (`src/ui/views/tests/equalizer.rs`);
 `save_preset_overlay_draws_its_heading_note_and_buttons` and
 `save_preset_overlay_buttons_and_backdrop_publish_their_messages`
+(pin the `Save`, `Delete`, `Close` row and each button's message)
 (`src/ui/views/tests/chrome.rs`); and
 `escape_closes_each_transient_panel_without_touching_anything_else`
 (`src/ui/tests/panels_tests.rs`) pins the Escape route.

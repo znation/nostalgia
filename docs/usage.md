@@ -274,7 +274,15 @@ preset` note and saves nothing, a name containing `:` shows `Use it without a co
 settings line's separator is the colon), and a name carrying a line break (a multi-line paste
 can put one in the box) shows `Use one line`; typing clears the note. Saving over an existing custom's
 name (any case) keeps one row and replaces only its curve, keeping the name as first saved. The
-pick list then offers the saved curves after the built-ins; choosing one applies its whole curve
+panel's button row reads `Save`, `Delete`, `Close`: the box's Enter keeps submitting `Save`, and
+deleting is the button only — typing a saved custom's name (any case) and pressing `Delete`
+removes that custom and its pick-list row, keeping every other saved custom in stored order, and
+the shortened list survives relaunches. A name no saved custom carries shows an inline `No such
+preset` note and removes nothing (with the panel staying open, like every other refused name);
+deleting the applied custom's name changes nothing about the playing curve or the `Custom`
+label — it touches only the saved list, and AUTO, `eq_preset=`, and the live sliders are
+untouched.
+The pick list then offers the saved curves after the built-ins; choosing one applies its whole curve
 (and the closed label reads `Custom` while it is applied, exactly as a hand-tuned curve does),
 and the saved list survives relaunches in the settings file; an applied custom relaunches with
 the label `Custom` and its curve restored, since the saved `eq_preset=` name keeps naming only

@@ -460,6 +460,12 @@ pub(in crate::ui) enum Message {
     // name (reprompting inline on an empty name, a built-in's name, or a
     // colon) and closes the panel.
     SavePresetSubmitted,
+    // The panel's `Delete` button: removes the saved custom preset matching
+    // the typed name (reprompting inline on an empty name, a built-in's name,
+    // a colon, or a name no saved custom carries) and closes the panel. Like
+    // the save row, it acts only while the Save preset panel is open and the
+    // flag is not persisted.
+    DeletePresetSubmitted,
     // The browse button row's `Save list` button: flips the naming panel for
     // the showing song list, when the shared songs list is showing, loaded,
     // and non-empty (the toggle is a no-op otherwise, like Sort's no-ops).
