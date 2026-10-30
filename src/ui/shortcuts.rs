@@ -250,7 +250,8 @@ fn numpad_shortcut(key: &Key, location: Location, modifiers: Modifiers) -> Optio
 /// back or forward, and the system media keys (Play/Pause, Play, Pause, Stop,
 /// Next track, and Previous track) drive the transport. Apart from Ctrl+F,
 /// Ctrl+Z (play the first song), Ctrl+B (play the last song), and Ctrl+R
-/// (reverse the showing list), Ctrl+Shift+R (shuffle it), Ctrl+J (flip the Jump to
+/// (reverse the showing list), Ctrl+Shift+R (shuffle it), Ctrl+Shift+Delete (clear
+/// the showing songs list), Ctrl+J (flip the Jump to
 /// time panel), Ctrl+W (toggle window-shade mode), Ctrl+A and Ctrl+T (repeat
 /// the classic always-on-top and elapsed/remaining toggles), and Ctrl+F1 (open
 /// the About panel), a
@@ -276,8 +277,9 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
     }
 
     // Ctrl+Z and Ctrl+B jump to the first and last song of the list Z and B step through, Ctrl+R
-    // reverses the showing list, Ctrl+Shift+R shuffles it, and Ctrl+W rolls the window up into
-    // shade mode and back, Ctrl+J flips the Jump to time panel, Ctrl+A and Ctrl+T repeat the
+    // reverses the showing list, Ctrl+Shift+R shuffles it, Ctrl+Shift+Delete clears the
+    // showing songs list, and Ctrl+W rolls the window up into shade mode and back,
+    // Ctrl+J flips the Jump to time panel, Ctrl+A and Ctrl+T repeat the
     // classic always-on-top and elapsed/remaining toggles, Ctrl+V arms Stop after current, and
     // Ctrl+F1 opens the About panel, under the same no-Alt, no-Logo rule as Ctrl+F.
     if modifiers.control() && !modifiers.alt() && !modifiers.logo() {
@@ -312,6 +314,12 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
             }
             Key::Character(character) if character.eq_ignore_ascii_case("v") => {
                 return Some(Message::ToggleStopAfterCurrent);
+            }
+            // Ctrl+Shift+Delete clears the showing songs list (Winamp's
+            // playlist editor's Remove all, beside plain Delete's Remove
+            // selected), claiming the Delete chord the plain-key gate withholds.
+            Key::Named(key::Named::Delete) if modifiers.shift() => {
+                return Some(Message::RemoveAllBrowse);
             }
             Key::Named(key::Named::F1) => {
                 return Some(Message::ToggleAbout);
@@ -583,18 +591,46 @@ mod tests {
 
     #[test]
     fn message_for_maps_delete_to_remove_selected() {
-        // Only plain Delete maps: unlike Backspace, a Shift+Delete chord stays
-        // unbound (see the mapping's own comment), and every chord modifier
-        // is a window-manager key on this gate.
+        // Only plain Delete maps in the plain-key match: a Shift+Delete chord
+        // is the Control block's clear (see
+        // `message_for_maps_ctrl_shift_delete_to_remove_all`), and every other
+        // chord modifier is a window-manager key on this gate.
         assert_maps!(Key::Named(key::Named::Delete), Modifiers::NONE => Message::RemoveSelectedBrowse);
         for modifiers in [
             Modifiers::SHIFT,
             Modifiers::CTRL,
             Modifiers::ALT,
             Modifiers::LOGO,
-            Modifiers::CTRL | Modifiers::SHIFT,
             Modifiers::ALT | Modifiers::SHIFT,
             Modifiers::LOGO | Modifiers::SHIFT,
+        ] {
+            assert_unbound!(Key::Named(key::Named::Delete), modifiers);
+        }
+    }
+
+    #[test]
+    fn message_for_maps_ctrl_shift_delete_to_remove_all() {
+        // Ctrl+Shift+Delete is the clear (Winamp's playlist editor's Remove
+        // all): it rides the Control block's no-Alt, no-Logo gate like
+        // Ctrl+R, and claims the Delete chord the plain-key gate withholds.
+        assert_maps!(
+            Key::Named(key::Named::Delete),
+            Modifiers::CTRL | Modifiers::SHIFT => Message::RemoveAllBrowse
+        );
+        // Every other modifier combination on Delete stays where Delete's own
+        // mapping or the gate put it: plain is Remove selected, and the rest
+        // (including a Control without Shift) is left to the window manager.
+        assert_maps!(Key::Named(key::Named::Delete), Modifiers::NONE => Message::RemoveSelectedBrowse);
+        for modifiers in [
+            Modifiers::SHIFT,
+            Modifiers::CTRL,
+            Modifiers::ALT,
+            Modifiers::LOGO,
+            Modifiers::ALT | Modifiers::SHIFT,
+            Modifiers::LOGO | Modifiers::SHIFT,
+            Modifiers::CTRL | Modifiers::ALT,
+            Modifiers::CTRL | Modifiers::LOGO,
+            Modifiers::CTRL | Modifiers::ALT | Modifiers::SHIFT,
         ] {
             assert_unbound!(Key::Named(key::Named::Delete), modifiers);
         }

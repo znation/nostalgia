@@ -550,6 +550,67 @@ mod tests {
     }
 
     #[test]
+    fn remove_all_rows_empties_the_buffers_drops_the_selection_and_bumps_the_epoch() {
+        let mut list = BrowseList::new(false);
+        list.store_with_row_text(
+            vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            |item| format!("title-{item}"),
+            |item| format!("label-{item}"),
+        );
+        // Sort first so there is a materialized permutation to drop and a
+        // selection into the reordered rows.
+        list.sort_rows_by(|item| item.clone());
+        assert_eq!(list.select_row(list.epoch, 2), Some(false));
+        assert!(list.library_positions.is_some());
+        let epoch = list.epoch;
+
+        assert!(list.remove_all_rows());
+
+        assert_eq!(list.titles, Vec::<String>::new());
+        assert_eq!(list.labels, Vec::<String>::new());
+        assert_eq!(list.selected(), None);
+        assert!(!list.loading);
+        assert_eq!(list.error, None);
+        // An emptied list is trivially back in library order: no permutation
+        // survives to be restored over nothing.
+        assert_eq!(list.library_positions, None);
+        assert_eq!(list.epoch, epoch.wrapping_add(1));
+    }
+
+    #[test]
+    fn remove_all_rows_twice_sees_the_second_clear_noop() {
+        let mut list = loaded(&["a", "b"]);
+        list.sort_rows_by(|item| item.clone());
+        assert!(list.remove_all_rows());
+        let epoch = list.epoch;
+
+        assert!(!list.remove_all_rows());
+
+        assert_eq!(list.epoch, epoch);
+        assert_eq!(list.items, Vec::<String>::new());
+    }
+
+    #[test]
+    fn remove_all_rows_is_a_noop_while_loading_or_failed() {
+        let mut list = loaded(&["a", "b"]);
+        list.selected = Some(1);
+        let epoch = list.epoch;
+
+        list.loading = true;
+        assert!(!list.remove_all_rows());
+        assert_eq!(list.items, ["a", "b"].map(String::from));
+        assert_eq!(list.selected(), Some(1));
+        assert_eq!(list.epoch, epoch);
+
+        list.loading = false;
+        list.error = Some("boom".to_string());
+        assert!(!list.remove_all_rows());
+        assert_eq!(list.items, ["a", "b"].map(String::from));
+        assert_eq!(list.selected(), Some(1));
+        assert_eq!(list.epoch, epoch);
+    }
+
+    #[test]
     fn remove_selected_row_is_a_noop_without_a_selection_while_loading_or_failed() {
         let mut list = loaded(&["a", "b"]);
         let epoch = list.epoch;

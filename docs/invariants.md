@@ -492,14 +492,40 @@ indexing past the shortened list. Rows still in library order keep `library_posi
 removal persists: a refetch of the list or reopening it rebuilds the rows from the library, and
 the settings file is never involved.
 
-**Enforced by.** `BrowseList::remove_selected_row` in `src/ui/browse/ordering.rs`,
-`browse::ordering::remove_selected` in `src/ui/handlers/browse/ordering.rs` (routed from
-`Message::RemoveSelectedBrowse` in the `update` dispatch table, guarding on `CurrentView::Songs`),
-and the plain-Delete arm of `shortcut` in `src/ui/shortcuts.rs` (which withholds the mapping from
-any modifier chord, Shift included, unlike the other named-key bindings on that gate).
+The widening sibling, Ctrl+Shift+Delete, is Winamp's playlist editor's "Remove all": it empties
+the showing **Songs** list in place — `items`, `titles`, and `labels` clear together, the
+selection drops, and `library_positions` returns to `None` (an emptied list is trivially in
+library order, so no permutation survives to be restored over nothing) — bumping only that list's
+epoch. It rides the Control block's no-Alt, no-Logo gate (`Message::RemoveAllBrowse`) and inherits
+the same localness and no-persistence rules as "Remove selected" above: the guard is the same
+`CurrentView::Songs` check, and it is a no-op returning `false` on an empty, loading, or failed
+list or on any non-Songs view.
+
+**Enforced by.** `BrowseList::remove_selected_row` and `BrowseList::remove_all_rows` in
+`src/ui/browse/ordering.rs`, `browse::ordering::remove_selected` and
+`browse::ordering::remove_all` in `src/ui/handlers/browse/ordering.rs` (routed from
+`Message::RemoveSelectedBrowse` and `Message::RemoveAllBrowse` in the `update` dispatch table,
+guarding on `CurrentView::Songs`), the plain-Delete arm of `shortcut` in `src/ui/shortcuts.rs`
+(which withholds the mapping from any modifier chord, Shift included, unlike the other named-key
+bindings on that gate), and the Ctrl+Shift+Delete arm of the Control block in `shortcut` (which
+withholds the clear from every other modifier combination, Control without Shift included).
 
 **Pinned by.**
 
+- `remove_all_rows_empties_the_buffers_drops_the_selection_and_bumps_the_epoch`
+  (in `src/ui/browse.rs`)
+- `remove_all_rows_twice_sees_the_second_clear_noop` (in `src/ui/browse.rs`)
+- `remove_all_rows_is_a_noop_while_loading_or_failed` (in `src/ui/browse.rs`)
+- `message_for_maps_ctrl_shift_delete_to_remove_all` (in `src/ui/shortcuts.rs`)
+- `remove_all_is_a_noop_outside_the_songs_view` (in `src/ui/tests/remove_all_tests.rs`)
+- `remove_all_clears_the_showing_songs_list_and_rejects_a_pre_clear_press`
+  (in `src/ui/tests/remove_all_tests.rs`)
+- `clearing_a_playing_list_leaves_playback_and_the_now_playing_line_alone`
+  (in `src/ui/tests/remove_all_tests.rs`)
+- `sort_then_clear_then_back_restores_the_parent_and_leaves_the_list_cleared`
+  (in `src/ui/tests/remove_all_tests.rs`)
+- `remove_all_on_an_emptied_loading_or_failed_list_is_a_noop`
+  (in `src/ui/tests/remove_all_tests.rs`)
 - `remove_selected_row_drops_the_selection_and_bumps_the_epoch` (in `src/ui/browse.rs`)
 - `remove_selected_row_drops_the_cached_text_with_the_row` (in `src/ui/browse.rs`)
 - `removing_a_sorted_row_restores_library_order_minus_it` (in `src/ui/browse.rs`)

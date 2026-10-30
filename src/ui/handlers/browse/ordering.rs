@@ -121,6 +121,23 @@ pub(in crate::ui) fn remove_selected(player: &mut WinampPlayer) -> Task<Message>
     Task::none()
 }
 
+/// Ctrl+Shift+Delete was pressed: clear the showing songs list.
+///
+/// Winamp's playlist editor's "Remove all" beside [`remove_selected`]'s
+/// "Remove selected": like [`remove_selected`] the edit is one-shot and local
+/// to the visible list, bumps its epoch, and is restricted to
+/// `CurrentView::Songs` so the artists, albums, and the other song lists can
+/// never be emptied, and playback, the played history, and the saved
+/// playlists are left alone (the playing track is not named by any
+/// browse-list index). Nothing persists; a refetch or reopening the list
+/// rebuilds the rows.
+pub(in crate::ui) fn remove_all(player: &mut WinampPlayer) -> Task<Message> {
+    if player.current_view == CurrentView::Songs {
+        player.songs.remove_all_rows();
+    }
+    Task::none()
+}
+
 /// Alt+Up or Alt+Down was pressed: move the showing list's selected row one
 /// place up or down (`down`). Like [`reverse_browse`] the reorder is one-shot
 /// and local to the visible list, and returning to a moved parent restores its

@@ -1,7 +1,8 @@
 //! The row-order operations of a [`BrowseList`]: Sort, reverse, shuffle, move
 //! one place, and the restore to library order, plus the permutation helpers
-//! they share — and [`BrowseList::remove_selected_row`], the one destructive
-//! sibling of the reorders, which drops the selected row instead of moving it.
+//! they share — and the destructive siblings [`BrowseList::remove_selected_row`]
+//! and [`BrowseList::remove_all_rows`], which drop the selected row or empty
+//! the list instead of moving its rows.
 //!
 //! Each reorder is one-shot over the loaded rows and their cached titles and
 //! labels: it bumps the list's epoch because a rendered row's index now names
@@ -214,6 +215,47 @@ impl<T> BrowseList<T> {
         }
         // The removed index named an entry that no longer exists.
         self.selected = None;
+        self.epoch = self.epoch.wrapping_add(1);
+        true
+    }
+
+    /// Empties the loaded rows in place, Winamp's playlist editor's "Remove
+    /// all" beside [`Self::remove_selected_row`]'s "Remove selected":
+    /// `items`, `titles`, and `labels` clear together in the same lockstep
+    /// [`Self::clear`] keeps (the caches' length follows `items` in every
+    /// transition), the selection is dropped because no index names a row any
+    /// more, and the epoch is bumped, so a row press rendered before the
+    /// clear is rejected.
+    ///
+    /// Like the reorders the clear is one-shot, but it is not a rewrite —
+    /// there is nothing to compose into [`Self::restore_library_order`]: an
+    /// emptied list is trivially back in library order, so
+    /// `library_positions` returns to `None` instead of packing a permutation
+    /// that would restore over nothing. A list that is loading or failed is
+    /// a no-op like [`Self::sort_rows_by`]'s guard, and so is an already
+    /// empty list; the guard rejects their `loading`/`error` set, so a
+    /// cleared list is simply neither loading nor failed. The request
+    /// generation is left alone, like the reorder one-shots: a later fetch
+    /// for this level keeps its own staleness protection (`clear()` before
+    /// `begin_fetch` still runs on navigation). The clear is local to this
+    /// list — the other lists, the current view, and playback are the
+    /// caller's concerns. Nothing persists: a refetch or reopening the list
+    /// rebuilds the rows.
+    ///
+    /// Returns whether anything was removed, like
+    /// [`Self::remove_selected_row`]'s observable change.
+    pub(in crate::ui) fn remove_all_rows(&mut self) -> bool {
+        if self.loading || self.error.is_some() || self.items.is_empty() {
+            return false;
+        }
+        self.items.clear();
+        self.titles.clear();
+        self.labels.clear();
+        // An emptied list is trivially in library order; no permutation
+        // survives to be restored over it.
+        self.library_positions = None;
+        self.selected = None;
+        // A rendered row's index now names an entry that no longer exists.
         self.epoch = self.epoch.wrapping_add(1);
         true
     }

@@ -272,6 +272,17 @@ pub(in crate::ui) enum Message {
     // handler bumps that list's epoch and leaves every other list and the
     // playback state alone.
     ReverseBrowse,
+    // Ctrl+Shift+Delete: clear the showing songs list, Winamp's playlist
+    // editor's "Remove all" beside `RemoveSelectedBrowse`'s "Remove
+    // selected". One-shot like Sort: the handler bumps that list's epoch so a
+    // press rendered before the clear is rejected, and is a no-op on an
+    // empty, loading, or failed list or on any view outside the shared songs
+    // buffer (where Sort is a reorder and this would empty a list the view
+    // did not compose). It leaves the other lists, the current view, the
+    // search state, playback, the played history, and the saved playlists
+    // alone, and changes no settings: nothing persists, a refetch or
+    // reopening the list rebuilds the rows.
+    RemoveAllBrowse,
     // Ctrl+Shift+R: shuffle the showing list's order, one-shot like Sort. The
     // handler bumps that list's epoch and leaves every other list and the
     // playback state alone.

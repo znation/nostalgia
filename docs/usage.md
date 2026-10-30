@@ -241,7 +241,10 @@ song. Ctrl+W rolls the window up into shade mode and back, like the title
 bar's shade button. Delete removes the selected song row from the showing songs list, like
 Winamp's playlist editor's Remove selected: a no-op with no selection or on any list the shared
 songs buffer does not show, and it rides the same plain-key gate Backspace does: chords keep
-their window-manager meaning, so even Shift does not reach it. Backspace steps the browse list back one level exactly like the
+their window-manager meaning, so even Shift does not reach it.
+Ctrl+Shift+Delete clears the showing song list (one-shot, like Sort; a no-op when the list is
+empty, loading, or failed, or on any list the shared songs buffer does not show, and it does
+nothing on the other views). Backspace steps the browse list back one level exactly like the
 `Back` button, and does nothing at the Artists list; Home snaps the browse list to its first row
 and End to its last, like `Top`, and Page Up and Page Down scroll it one page at a time in the
 matching direction; while the `Search library` box is focused it keeps Backspace,
