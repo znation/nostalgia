@@ -1,10 +1,12 @@
 //! The browse row-order edits: Sort, Reverse (Ctrl+R), Randomize
-//! (Ctrl+Shift+R), and the Alt+Up/Down selected-row move. Each is one-shot and
-//! local to the list the browse view shows: it bumps that list's epoch (a
-//! press rendered before the edit is rejected) and leaves every other list,
-//! the current view, the search state, and playback alone. Returning to an
-//! edited parent restores that list's library order, and reopening a list
-//! fetches it afresh, so no edit mode persists.
+//! (Ctrl+Shift+R), the Delete selected-row removal, and the Alt+Up/Down
+//! selected-row move. Each is one-shot and local to the list the browse view
+//! shows: it bumps that list's epoch (a press rendered before the edit is
+//! rejected) and leaves every other list, the current view, the search state,
+//! and playback alone. Returning to an edited parent restores that list's
+//! library order, and reopening a list fetches it afresh, so no edit mode
+//! persists — except the removal, which is destructive: a refetch or
+//! reopening rebuilds the removed row from the library.
 
 use iced::Task;
 
@@ -95,6 +97,26 @@ pub(in crate::ui) fn randomize_browse(player: &mut WinampPlayer) -> Task<Message
         CurrentView::Genres => player.genres.shuffle_rows(seed),
         CurrentView::Years => player.years.shuffle_rows(seed),
         CurrentView::Composers => player.composers.shuffle_rows(seed),
+    }
+    Task::none()
+}
+
+/// Delete was pressed: remove the showing songs list's selected row.
+///
+/// Like [`reverse_browse`] the edit is one-shot and local to the visible list:
+/// it bumps that list's epoch and clears its selection, and leaves every other
+/// list, the current view, the search state, playback, and the played history
+/// alone (the playing track is not named by any browse-list index). Unlike
+/// [`randomize_browse`] it is restricted to `CurrentView::Songs`: the songs
+/// view is Winamp's playlist-shaped artifact the row edits compose on, and a
+/// deletion on the artists, albums, or the other song lists would cut a row
+/// the user did not compose — so every other view is a no-op there, like
+/// Sort is a reorder rather than a deletion outside the songs buffer.
+/// Nothing persists; a refetch or reopening the list
+/// rebuilds the rows from the library.
+pub(in crate::ui) fn remove_selected(player: &mut WinampPlayer) -> Task<Message> {
+    if player.current_view == CurrentView::Songs {
+        player.songs.remove_selected_row();
     }
     Task::none()
 }

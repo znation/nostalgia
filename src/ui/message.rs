@@ -276,6 +276,16 @@ pub(in crate::ui) enum Message {
     // handler bumps that list's epoch and leaves every other list and the
     // playback state alone.
     RandomizeBrowse,
+    // Delete: remove the showing songs list's selected row, one-shot like
+    // Sort. The handler bumps that list's epoch so a press rendered before
+    // the removal is rejected, and is a no-op with no selection, on a loading
+    // or failed list, or on any view outside the shared songs buffer (where
+    // Sort is a reorder and this would cut a row the view did not compose).
+    // It leaves the other lists, the current view, the search state, playback,
+    // the played history, and the saved playlists alone, and changes no
+    // settings: nothing persists, a refetch or reopening the list rebuilds
+    // the rows.
+    RemoveSelectedBrowse,
     // Alt+Up: move the showing list's selected row one place up, one-shot like
     // Sort. The handler bumps that list's epoch, keeps the row selected, and
     // leaves every other list and the playback state alone.

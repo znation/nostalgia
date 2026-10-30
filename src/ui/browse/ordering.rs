@@ -1,6 +1,7 @@
 //! The row-order operations of a [`BrowseList`]: Sort, reverse, shuffle, move
 //! one place, and the restore to library order, plus the permutation helpers
-//! they share.
+//! they share — and [`BrowseList::remove_selected_row`], the one destructive
+//! sibling of the reorders, which drops the selected row instead of moving it.
 //!
 //! Each reorder is one-shot over the loaded rows and their cached titles and
 //! labels: it bumps the list's epoch because a rendered row's index now names
@@ -153,6 +154,68 @@ impl<T> BrowseList<T> {
         // press rendered from the old order.
         self.selected = Some(to);
         self.epoch = self.epoch.wrapping_add(1);
+    }
+
+    /// Removes the showing list's selected row: the row and its cached title
+    /// and label are dropped at the selected index, and the removal is
+    /// recorded for [`Self::restore_library_order`] so a later restore yields
+    /// library order *minus* the removed row rather than re-inserting it.
+    ///
+    /// One-shot like the reorders: the epoch is bumped because a row index
+    /// that survived the removal now names a different entry, so a press
+    /// rendered before the removal is rejected, and the selection is dropped
+    /// because no index names the removed row any more. The removal is local
+    /// to this list: the other lists, the current view, and playback are the
+    /// caller's concerns. For library order the removal must keep
+    /// `library_positions` a bijection over the remaining rows: entry `i` is
+    /// dropped (its library index `p` leaves the list), and every remaining
+    /// entry greater than `p` is decremented so the rest of the permutation
+    /// still names its own row's library index. A list whose rows are still
+    /// in library order keeps `library_positions: None` — there is no
+    /// permutation to adjust, and [`Self::restore_library_order`]'s no-op on
+    /// `None` already restores the shortened list.
+    ///
+    /// Returns whether anything was removed, like [`Self::move_selected`]'s
+    /// observable change: `false` with no selection, on a loading or failed
+    /// list, or on an empty list (also when an out-of-range selection is
+    /// somehow recorded; `select_row` keeps the index in range, so this is a
+    /// defensive guard, not a state the handlers can produce). A one-row list
+    /// with its only row selected is emptied, epoch and all.
+    pub(in crate::ui) fn remove_selected_row(&mut self) -> bool {
+        let Some(index) = self.selected else {
+            return false;
+        };
+        if self.loading || self.error.is_some() || index >= self.items.len() {
+            return false;
+        }
+        self.items.remove(index);
+        if !self.titles.is_empty() {
+            // The caches turn null when the rows carry their own text (the
+            // artists list), and their length follows `items` in every
+            // transition that populates them, so the same index drops
+            // wherever they are populated.
+            self.titles.remove(index);
+        }
+        if !self.labels.is_empty() {
+            self.labels.remove(index);
+        }
+        if let Some(mut positions) = self.library_positions.take() {
+            let removed = positions.remove(index);
+            for entry in positions.iter_mut() {
+                // The removed row's library index no longer exists; the
+                // surviving rows' own library indices shrink to stay a
+                // permutation of `0..len`, or the inverse
+                // `restore_library_order` builds would index past it.
+                if *entry > removed {
+                    *entry -= 1;
+                }
+            }
+            self.library_positions = Some(positions);
+        }
+        // The removed index named an entry that no longer exists.
+        self.selected = None;
+        self.epoch = self.epoch.wrapping_add(1);
+        true
     }
 
     /// Applies the permutation `order` computes from the rows, unless the list

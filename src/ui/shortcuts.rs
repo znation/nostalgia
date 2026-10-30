@@ -17,7 +17,8 @@ use super::Message;
 /// include R for Repeat, S for Shuffle, A for always-on-top, T for the
 /// elapsed/remaining readout, E for the equalizer panel's show/hide, Enter to
 /// open the selected browse row,
-/// Backspace to step the browse list back one level, Home and End to snap it
+/// Backspace to step the browse list back one level, Delete to remove the
+/// showing songs list's selected row, Home and End to snap it
 /// to its first and last rows, Page Up and Page Down to scroll it one page at
 /// a time, F5 to refetch the library and return to the Artists list, Ctrl+F
 /// to focus the `Search library` box, Ctrl+Z and Ctrl+B to play the first and
@@ -237,7 +238,10 @@ fn numpad_shortcut(key: &Key, location: Location, modifiers: Modifiers) -> Optio
 /// stop, B next, R repeat, S shuffle, A toggles always-on-top, T switches the
 /// large readout between elapsed and remaining time, E shows or hides the
 /// equalizer panel, Enter opens the selected browse row, Backspace steps the
-/// browse list back one level, Home and End
+/// browse list back one level, Delete removes the showing songs list's
+/// selected row (plain only: Shift, like the chord modifiers, stays out so
+/// Delete cannot ride a chord the user meant for the window manager), Home and
+/// End
 /// snap it to its first and last rows, Page Up and Page Down scroll it one page
 /// at a time, F5 refetches the library and returns to the Artists list, Ctrl+F
 /// focuses
@@ -353,6 +357,11 @@ fn shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
         }
         Key::Named(key::Named::Enter) => Some(Message::OpenSelected),
         Key::Named(key::Named::Backspace) => Some(Message::Back),
+        // Delete removes the showing songs list's selected row like Winamp's
+        // playlist editor's Remove selected. Plain only: every other named-key
+        // binding lets a Shift through with the no-chord gate, but a
+        // Shift+Delete chord would read as an edit command, not a remove.
+        Key::Named(key::Named::Delete) if !modifiers.shift() => Some(Message::RemoveSelectedBrowse),
         Key::Named(key::Named::Home) => Some(Message::ScrollBrowseToTop),
         Key::Named(key::Named::End) => Some(Message::ScrollBrowseToBottom),
         Key::Named(key::Named::PageDown) => Some(Message::ScrollBrowsePageDown),
@@ -569,6 +578,25 @@ mod tests {
     fn message_for_maps_backspace_to_back() {
         for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
             assert_maps!(Key::Named(key::Named::Backspace), modifiers => Message::Back);
+        }
+    }
+
+    #[test]
+    fn message_for_maps_delete_to_remove_selected() {
+        // Only plain Delete maps: unlike Backspace, a Shift+Delete chord stays
+        // unbound (see the mapping's own comment), and every chord modifier
+        // is a window-manager key on this gate.
+        assert_maps!(Key::Named(key::Named::Delete), Modifiers::NONE => Message::RemoveSelectedBrowse);
+        for modifiers in [
+            Modifiers::SHIFT,
+            Modifiers::CTRL,
+            Modifiers::ALT,
+            Modifiers::LOGO,
+            Modifiers::CTRL | Modifiers::SHIFT,
+            Modifiers::ALT | Modifiers::SHIFT,
+            Modifiers::LOGO | Modifiers::SHIFT,
+        ] {
+            assert_unbound!(Key::Named(key::Named::Delete), modifiers);
         }
     }
 

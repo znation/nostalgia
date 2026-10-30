@@ -474,6 +474,105 @@ mod tests {
     }
 
     #[test]
+    fn remove_selected_row_drops_the_selection_and_bumps_the_epoch() {
+        let mut list = loaded(&["a", "b", "c"]);
+        let epoch = list.epoch;
+        assert_eq!(list.select_row(epoch, 1), Some(false));
+
+        assert!(list.remove_selected_row());
+
+        assert_eq!(list.items, ["a", "c"]);
+        assert_eq!(list.selected(), None);
+        assert_eq!(list.epoch, epoch.wrapping_add(1));
+        // The rows were still in library order, so the removal left no
+        // materialized permutation to adjust.
+        assert_eq!(list.library_positions, None);
+
+        // A one-row list empties: the last row is removably there.
+        let mut list = loaded(&["only"]);
+        let epoch = list.epoch;
+        assert_eq!(list.select_row(epoch, 0), Some(false));
+        assert!(list.remove_selected_row());
+        assert!(list.items.is_empty());
+        assert_eq!(list.epoch, epoch.wrapping_add(1));
+    }
+
+    #[test]
+    fn remove_selected_row_drops_the_cached_text_with_the_row() {
+        let mut list = BrowseList::new(false);
+        list.store_with_row_text(
+            vec!["a".to_string(), "b".to_string(), "c".to_string()],
+            |item| format!("title-{item}"),
+            |item| format!("label-{item}"),
+        );
+        assert_eq!(list.select_row(list.epoch, 1), Some(false));
+
+        list.remove_selected_row();
+
+        assert_eq!(list.titles, ["title-a", "title-c"]);
+        assert_eq!(list.labels, ["label-a", "label-c"]);
+    }
+
+    #[test]
+    fn removing_a_sorted_row_restores_library_order_minus_it() {
+        // The removal must keep `library_positions` a permutation of the
+        // remaining rows: deleting a middle entry and then restoring has to
+        // yield the library order without the removed row, not a collapsed or
+        // out-of-bounds permutation.
+        let mut list = loaded(&["banana", "apple", "cherry"]);
+        list.sort_rows_by(|item| item.clone());
+        assert_eq!(list.items, ["apple", "banana", "cherry"]);
+        assert_eq!(list.selected(), None);
+        assert_eq!(list.select_row(list.epoch, 0), Some(false));
+
+        list.remove_selected_row();
+
+        assert_eq!(list.items, ["banana", "cherry"]);
+        list.restore_library_order();
+        assert_eq!(list.items, ["banana", "cherry"]);
+    }
+
+    #[test]
+    fn removing_from_an_unreordered_list_leaves_no_permutation_to_adjust() {
+        let mut list = loaded(&["a", "b", "c"]);
+        assert!(list.library_positions.is_none());
+        assert_eq!(list.select_row(list.epoch, 1), Some(false));
+
+        list.remove_selected_row();
+
+        assert_eq!(list.items, ["a", "c"]);
+        // The rows are still in library order, so no materialized permutation
+        // appears; restore's no-op on `None` already yields the shortened
+        // order.
+        assert!(list.library_positions.is_none());
+        list.restore_library_order();
+        assert_eq!(list.items, ["a", "c"]);
+    }
+
+    #[test]
+    fn remove_selected_row_is_a_noop_without_a_selection_while_loading_or_failed() {
+        let mut list = loaded(&["a", "b"]);
+        let epoch = list.epoch;
+        assert!(!list.remove_selected_row());
+        assert_eq!((list.items.len(), list.epoch), (2, epoch));
+
+        list.selected = Some(1);
+        list.loading = true;
+        assert!(!list.remove_selected_row());
+        assert_eq!(list.items, ["a", "b"]);
+        assert_eq!(list.selected(), Some(1));
+        assert_eq!(list.epoch, epoch);
+
+        list.loading = false;
+        list.error = Some("boom".to_string());
+        assert!(!list.remove_selected_row());
+        assert_eq!(list.items, ["a", "b"]);
+        assert_eq!(list.selected(), Some(1));
+        assert_eq!(list.epoch, epoch);
+        assert_eq!(list.library_positions, None);
+    }
+
+    #[test]
     fn sort_leaves_a_failed_list_holding_rows_untouched() {
         let mut list = loaded(&["b", "a"]);
         list.error = Some("boom".to_string());

@@ -139,7 +139,11 @@ Winamp's playlist editor. Ctrl+R reverses the showing list's order the same
 one-shot way, like Winamp's playlist editor, and Ctrl+Shift+R shuffles it into a random order the
 same one-shot way. Alt+Up and Alt+Down move the selected row of the showing list one place up or
 down, the same one-shot way, keeping the row selected and scrolling the list only as far as needed
-to keep it in view. Alt+3 opens a transient File info panel naming the showing song list's
+to keep it in view. Delete removes the selected song row from the showing list, the one-shot
+"Remove selected" of Winamp's playlist editor: the deletion touches only the showing list, the
+sorted order composes with it so Back-style restores still return library order minus the deleted
+row, and refetching the list or reopening it rebuilds the rows from the library. It is a no-op
+with no selection or on any list the shared songs buffer does not show. Alt+3 opens a transient File info panel naming the showing song list's
 selected row's song when one is picked (the browsed album's or playlist's songs, a search-result
 list sharing that song list, All Songs, or Recently Played — the selection decides, not the
 playing track) and the current track otherwise — its title, artist, album, year, genre, track
@@ -234,7 +238,10 @@ Ctrl+Z plays the first song of the list Z and B step through
 and Ctrl+B plays its last song. A Ctrl-held click on the Previous or Next button, in the
 transport row, the shade strip, or the library footer, does the same, while a plain click steps one
 song. Ctrl+W rolls the window up into shade mode and back, like the title
-bar's shade button. Backspace steps the browse list back one level exactly like the
+bar's shade button. Delete removes the selected song row from the showing songs list, like
+Winamp's playlist editor's Remove selected: a no-op with no selection or on any list the shared
+songs buffer does not show, and it rides the same plain-key gate Backspace does: chords keep
+their window-manager meaning, so even Shift does not reach it. Backspace steps the browse list back one level exactly like the
 `Back` button, and does nothing at the Artists list; Home snaps the browse list to its first row
 and End to its last, like `Top`, and Page Up and Page Down scroll it one page at a time in the
 matching direction; while the `Search library` box is focused it keeps Backspace,

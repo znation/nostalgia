@@ -471,6 +471,52 @@ draw beside Top.
 - `ctrl_shift_1_sorts_the_showing_list_from_the_keyboard`
   (the rest in `src/ui/tests/`)
 
+## Browse row removal
+
+**Guarantee.** Delete (the plain named key, with no Control, Alt, Logo, or Shift) removes the
+showing **Songs** list's selected row: the one destructive sibling of the row-order edits, and
+Winamp's playlist editor's "Remove selected" on the playlist-shaped list the songs view shows. The
+removal is one-shot and local to the shared songs buffer: it drops the row and its cached title
+and label, sets the selection to `None`, and bumps only that list's epoch, so a selection press
+rendered before the removal is rejected. The other lists, the current view, the search state,
+playback, the played history, and the saved playlists are left alone — the playing track is not
+named by any browse-list index, so deleting the row that is playing touches neither the Now
+Playing line nor the track itself. It is a no-op returning `false`: with no selection, on a
+loading or failed list, on an empty list (or a defensively out-of-range selection, which
+`select_row` never produced), and on every non-Songs view, where the handler routes nowhere (Sort
+on those views still reorders; nothing deletes their rows). For the library-order restore the
+removal keeps `library_positions` a bijection over the remaining rows: the selected entry is
+dropped and every surviving entry greater than its library index is decremented, so a later
+`restore_library_order` returns library order *minus* the removed row instead of collapsing or
+indexing past the shortened list. Rows still in library order keep `library_positions: None`. No
+removal persists: a refetch of the list or reopening it rebuilds the rows from the library, and
+the settings file is never involved.
+
+**Enforced by.** `BrowseList::remove_selected_row` in `src/ui/browse/ordering.rs`,
+`browse::ordering::remove_selected` in `src/ui/handlers/browse/ordering.rs` (routed from
+`Message::RemoveSelectedBrowse` in the `update` dispatch table, guarding on `CurrentView::Songs`),
+and the plain-Delete arm of `shortcut` in `src/ui/shortcuts.rs` (which withholds the mapping from
+any modifier chord, Shift included, unlike the other named-key bindings on that gate).
+
+**Pinned by.**
+
+- `remove_selected_row_drops_the_selection_and_bumps_the_epoch` (in `src/ui/browse.rs`)
+- `remove_selected_row_drops_the_cached_text_with_the_row` (in `src/ui/browse.rs`)
+- `removing_a_sorted_row_restores_library_order_minus_it` (in `src/ui/browse.rs`)
+- `removing_from_an_unreordered_list_leaves_no_permutation_to_adjust` (in `src/ui/browse.rs`)
+- `remove_selected_row_is_a_noop_without_a_selection_while_loading_or_failed`
+  (in `src/ui/browse.rs`)
+- `message_for_maps_delete_to_remove_selected` (in `src/ui/shortcuts.rs`)
+- `remove_selected_is_a_noop_outside_the_songs_view` (in `src/ui/tests/removal_tests.rs`)
+- `remove_selected_bumps_the_epoch_so_a_pre_removal_press_is_rejected`
+  (in `src/ui/tests/removal_tests.rs`)
+- `removing_a_playing_row_leaves_playback_and_the_now_playing_line_alone`
+  (in `src/ui/tests/removal_tests.rs`)
+- `sort_then_remove_then_restore_yields_library_order_minus_the_removed_row`
+  (in `src/ui/tests/removal_tests.rs`)
+- `remove_selected_without_a_selection_or_while_loading_or_failed_is_a_noop`
+  (in `src/ui/tests/removal_tests.rs`)
+
 ## Browse playing-row visibility
 
 **Guarantee.** When Next, Previous (including Shuffle's retrace of the tracks actually played),

@@ -1393,6 +1393,7 @@ mod randomize_tests;
 mod readouts_tests;
 mod recently_added_tests;
 mod recently_played_tests;
+mod removal_tests;
 mod reverse_tests;
 mod save_list_tests;
 mod scroll_tests;
