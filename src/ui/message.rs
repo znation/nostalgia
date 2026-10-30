@@ -331,6 +331,20 @@ pub(in crate::ui) enum Message {
         id: String,
         song: Option<Song>,
     },
+    // Restores the launch's saved signed-out Recently Played list: the
+    // handler resolves the ids the settings file restored through the
+    // service's read-only `resolve_song` and records only the answerable
+    // rows. Never issued with a stored session, which fetches the service's
+    // own Recently Played instead.
+    ResolveRecentlyPlayed,
+    // The reply to `ResolveRecentlyPlayed`, carrying each seeded id's song
+    // in the order the ids were saved (newest first) or `None` for an id
+    // the launch could not answer. Applied only while no session is stored:
+    // a sign-in racing the restore drops the restored rows, because the
+    // signed-in view fetches the service's own list.
+    RecentlyPlayedResolved {
+        songs: Vec<Option<Song>>,
+    },
     ArtistsLoaded(Vec<Artist>),
     AlbumsLoaded(Vec<Album>),
     SongsLoaded(Vec<Song>),

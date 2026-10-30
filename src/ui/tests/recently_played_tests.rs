@@ -269,6 +269,156 @@ fn signed_in_recently_played_still_fetches_the_service_list() {
     );
 }
 
+// The boot's seeded restore: `ResolveRecentlyPlayed` with nothing seeded
+// (no saved ids parsed) schedules no resolve, and with a stored session it
+// schedules none either — the signed-in view fetches the service's own list
+// and the seeded ids are dead.
+#[test]
+fn resolve_recently_played_is_a_no_op_with_a_session_or_nothing_restored() {
+    let (mut player, _state) = test_player();
+
+    assert_no_task(update(&mut player, Message::ResolveRecentlyPlayed));
+
+    // Seeded but signed in: still nothing to resolve.
+    player.recently_played_seeded = vec!["song-1".to_string()];
+    player
+        .apple_music_service
+        .authenticate_with("dev-token", &|_| Ok(sign_in_session()))
+        .expect("the stub sign-in must store its session");
+    assert_no_task(update(&mut player, Message::ResolveRecentlyPlayed));
+}
+
+// The seeded ids resolve one by one, in the order the settings file saved
+// them (newest first): the single task's reply carries each id's own song at
+// its own position, so the restore walk can line the rows up with the saved
+// order verbatim.
+#[tokio::test]
+async fn resolve_recently_played_resolves_each_seeded_id_in_order() {
+    let (mut player, _state) = test_player();
+    player.recently_played_seeded = vec!["song-3".to_string(), "song-1".to_string()];
+
+    let message = task_output(
+        update(&mut player, Message::ResolveRecentlyPlayed),
+        "resolve recently played",
+    )
+    .await;
+    let songs = match message {
+        Message::RecentlyPlayedResolved { songs } => songs,
+        other => panic!("unexpected resolve reply: {other:?}"),
+    };
+
+    assert_eq!(
+        songs
+            .iter()
+            .map(|song| song.as_ref().map(|song| song.id.as_str()))
+            .collect::<Vec<_>>(),
+        vec![Some("song-3"), Some("song-1")]
+    );
+}
+
+// The restore's answer funnels through `update`: the answered rows record
+// into the signed-out list in save order (newest first), which the view's
+// reopen shows and the next save writes back.
+#[tokio::test]
+async fn recently_played_resolved_stores_the_answered_rows_in_play_order() {
+    let (mut player, _state) = test_player();
+    player.recently_played_seeded = vec!["song-2".to_string(), "song-1".to_string()];
+
+    let message = task_output(
+        update(&mut player, Message::ResolveRecentlyPlayed),
+        "resolve recently played",
+    )
+    .await;
+    let songs = match message {
+        Message::RecentlyPlayedResolved { songs } => songs,
+        other => panic!("unexpected resolve reply: {other:?}"),
+    };
+    let _ = update(&mut player, Message::RecentlyPlayedResolved { songs });
+
+    assert_eq!(
+        player.played_songs.newest_first_ids(),
+        vec!["song-2".to_string(), "song-1".to_string()]
+    );
+}
+
+// An id the launch cannot answer contributes no row: the list is shorter
+// than the seed, so the next save drops the stale id, exactly like a saved
+// list's stale id disappears.
+#[test]
+fn recently_played_resolved_drops_unanswerable_ids() {
+    let (mut player, _state) = test_player();
+    let songs = stepping_songs();
+
+    let _ = update(
+        &mut player,
+        Message::RecentlyPlayedResolved {
+            songs: vec![Some(songs[1].clone()), None, None],
+        },
+    );
+
+    assert_eq!(
+        player.played_songs.newest_first_ids(),
+        vec!["song-2".to_string()]
+    );
+}
+
+// A sign-in racing the restore drops the restored rows: the reply landing
+// after a session was stored stores nothing, because the signed-in view
+// fetches the service's own list and the restored rows would be dead anyway.
+#[test]
+fn recently_played_resolved_skips_once_a_session_is_stored() {
+    let (mut player, _state) = test_player();
+    let songs = stepping_songs();
+    player
+        .apple_music_service
+        .authenticate_with("dev-token", &|_| Ok(sign_in_session()))
+        .expect("the stub sign-in must store its session");
+
+    let _ = update(
+        &mut player,
+        Message::RecentlyPlayedResolved {
+            songs: vec![Some(songs[0].clone())],
+        },
+    );
+
+    assert!(player.played_songs.is_empty());
+}
+
+// `boot` hands iced its batch with the signed-out list's restore behind the
+// last-played track's resolve: the same launch shape both depend on (the
+// saved snapshot adopted in the init closure before the tasks run), so a
+// regression that dropped `ResolveRecentlyPlayed` — or reordered it ahead
+// of its sibling — fails this by name.
+#[tokio::test]
+async fn boot_resolves_the_saved_recently_played_after_the_last_played_track() {
+    use futures::StreamExt;
+
+    let state = Arc::new(Mutex::new(AppState::default()));
+    let service =
+        AppleMusicService::with_transport(state.clone(), Box::new(StubTransport::returning("")));
+
+    let (_player, task) = boot(state, service);
+    let mut stream = iced_runtime::task::into_stream(task).expect("boot must schedule work");
+    let mut current_track = false;
+    let mut recently_played = false;
+    while !(current_track && recently_played) {
+        let action = await_or_timeout("boot", TASK_TIMEOUT, stream.next())
+            .await
+            .expect("boot must yield both resolve messages");
+        match &action {
+            iced_runtime::Action::Output(Message::ResolveCurrentTrack) => current_track = true,
+            iced_runtime::Action::Output(Message::ResolveRecentlyPlayed) => {
+                assert!(
+                    current_track,
+                    "the played list's resolve must follow the last-played track's"
+                );
+                recently_played = true;
+            }
+            _ => {}
+        }
+    }
+}
+
 // The stored played rows last until the session arrives: a sign-in while the
 // played list is showing refetches it, and the played rows drop.
 #[test]

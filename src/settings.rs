@@ -78,6 +78,10 @@ pub struct Settings {
     eq_preset: Option<Preset>,
     eq_custom_presets: Vec<CustomPreset>,
     saved_playlists: Vec<SavedPlaylist>,
+    /// The signed-out Recently Played list's song ids in play order, newest
+    /// first — the order the Recently Played view shows — so a relaunch
+    /// picks the list up where the last signed-out run left it.
+    recently_played: Vec<String>,
     time_display_remaining: bool,
     visualizer_visible: bool,
     eq_panel_visible: bool,
@@ -110,6 +114,7 @@ impl Default for Settings {
             eq_preset: None,
             eq_custom_presets: Vec::new(),
             saved_playlists: Vec::new(),
+            recently_played: Vec::new(),
             time_display_remaining: false,
             visualizer_visible: true,
             eq_panel_visible: true,
@@ -144,9 +149,10 @@ impl Settings {
             // player overwrites it before saving, like the UI-owned flags
             // below.
             eq_custom_presets: Vec::new(),
-            // The player's saved song lists: same UI-owned rule as the
-            // saved curves above.
+            // The player's saved song lists and played ids: same UI-owned
+            // rule as the saved curves above.
             saved_playlists: Vec::new(),
+            recently_played: Vec::new(),
             time_display_remaining: false,
             visualizer_visible: true,
             eq_panel_visible: true,
@@ -363,6 +369,25 @@ impl Settings {
     pub fn set_saved_playlists(&mut self, playlists: Vec<SavedPlaylist>) {
         self.saved_playlists = playlists;
     }
+
+    /// The signed-out Recently Played list's song ids, newest first — the
+    /// order the list is shown in. Ids arrived with by the player (an id the
+    /// library no longer answers is dropped at restore time) are kept
+    /// verbatim here, like a saved list's ids are. The player owns this
+    /// value, so it overwrites it on its fresh snapshot before saving and
+    /// restores it at boot like the other player-owned values;
+    /// [`Self::apply_to`] deliberately leaves it alone.
+    #[must_use]
+    pub fn recently_played(&self) -> &[String] {
+        &self.recently_played
+    }
+
+    /// Set the signed-out Recently Played list's ids, newest first. The
+    /// player calls this on its fresh snapshot before saving;
+    /// [`Self::apply_to`] deliberately leaves the list alone.
+    pub fn set_recently_played(&mut self, ids: Vec<String>) {
+        self.recently_played = ids;
+    }
 }
 
 #[cfg(test)]
@@ -403,6 +428,7 @@ mod tests {
         settings.set_shaded(true);
         settings.set_window_position(Some((120.0, -40.5)));
         settings.set_music_kit_user_token(Some("a.b.c".to_string()));
+        settings.set_recently_played(vec!["song-3".to_string(), "song-1".to_string()]);
         assert_eq!(Settings::from_text(&settings.to_text()), settings);
         assert!(Settings::from_text(&settings.to_text()).time_display_remaining());
         assert!(!Settings::from_text(&settings.to_text()).visualizer_visible());
@@ -704,6 +730,39 @@ mod tests {
         );
         // A default snapshot writes no saved-list lines at all.
         assert!(!Settings::default().to_text().contains("user_playlist"));
+    }
+
+    // The signed-out Recently Played list is one `recently_played=` line of
+    // ids only, no `:`-split name: trimmed tokens, empty ones dropped, order
+    // kept verbatim (newest first), stored only when at least one id
+    // survives. It is written only when non-empty, sits after the
+    // `user_playlist=` lines in the file, and must round-trip untouched —
+    // byte-for-byte id lists, order included.
+    #[test]
+    fn recently_played_line_round_trips_and_skips_the_malformed_values() {
+        let text = "user_playlist=Morning Drive:song-1\n\
+                    recently_played=song-2, song-1 ,\n\
+                    recently_played:no-equals-line\n\
+                    recently_played=\n";
+        let settings = Settings::from_text(text);
+        // The empty tokens disappear; the order the file carried stays; only
+        // the line with surviving ids is stored, and the blank line left the
+        // stored value alone.
+        assert_eq!(
+            settings.recently_played(),
+            &["song-2".to_string(), "song-1".to_string()]
+        );
+
+        assert_eq!(Settings::from_text(&settings.to_text()), settings);
+        let written = settings.to_text();
+        assert!(written.contains("recently_played=song-2,song-1\n"));
+        let playlist_line = written
+            .find("user_playlist=")
+            .expect("the same snapshot carries the saved playlists");
+        let played_line = written.find("recently_played=").unwrap();
+        assert!(playlist_line < played_line);
+        // A default snapshot writes no played-ids line at all.
+        assert!(!Settings::default().to_text().contains("recently_played"));
     }
 
     #[test]

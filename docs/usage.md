@@ -118,9 +118,9 @@ footer like any song list, and Back from them returns to Playlists), the fourth 
 recently added albums newest first (the sample library's albums in reverse order when
 signed out), whose rows open that album's songs, and the eighth lists the songs you played most recently
 first (while signed out, the songs whose plays committed this run, newest first — the sample
-library's songs in reverse order until something has played this run, and the same sample list
-again after a relaunch — and the service's own list once signed in), whose rows play like any
-other song row. Every open of the list recomputes it, like the other flat lists, so newly
+library's songs in reverse order until something has played this run, and the list saved in the
+settings file after a relaunch — and the service's own list once signed in), whose rows play like
+any other song row. Every open of the list recomputes it, like the other flat lists, so newly
 played songs take their spots at the top the next time you reopen it. `Genres` lists the library's genres by name, each with its song count and total playing time and any
 songs without a genre under `Unknown` last; opening a genre lists its songs, which play like any
 other song row. `Years` lists the library's release years oldest first, each with its song count and total playing time and
@@ -315,7 +315,8 @@ Shuffle), a song that plays to its end stops instead of advancing, whatever Repe
 Repeat, Next, Previous, Ctrl+Z/Ctrl+B, and the jump rows still move you, and turning it off restores
 the normal end-of-song advance. The volume, balance, Repeat, Shuffle, and Manual playlist advance flags, the equalizer's on/off
 state, AUTO choice, curve, and preset, the equalizer's saved custom preset curves, the song lists saved through the browse
-`Save list` button (`user_playlist=<name>:<id>,<id>,…` lines, one per list), the elapsed/remaining readout choice, the visualizer's
+`Save list` button (`user_playlist=<name>:<id>,<id>,…` lines, one per list), the songs you played
+while signed out (`recently_played=<id>,<id>,…` one line, ids newest first), the elapsed/remaining readout choice, the visualizer's
 shown/hidden choice, the equalizer and library panels' shown/hidden choices, the always-on-top
 choice, the window-shade mode, the window's last screen position, the last-played track, the saved
 MusicKit sign-in token, and the library's top-level browse list (Artists, All
@@ -325,7 +326,13 @@ saves that one) are saved to `$XDG_CONFIG_HOME/nostalgia/settings.ini` (or
 overrides the path. The saved song lists survive relaunches too: the Playlists view lists them
 again after the library's playlists, and opening one shows the saved order (ids the library no
 longer answers are dropped); a `user_playlist=` line without a `:`, with a blank name, or with an
-empty id list is skipped like every other malformed line, and the other lines still load. The last-played track is restored at the next launch stopped: the Now Playing bar shows it, names it by title and artist once the launch can find the song — immediately from the built-in sample library when the saved id is a sample-library id, and after signing in from your Apple Music library otherwise — while the saved id text shows until then, Play — the transport button, the X key, or the media play/pause key — starts it again from the beginning, and the position within it is not remembered. The window reopens at its saved position without checking that a monitor is still there; delete the `window_position` line to reset an off-screen window. Wayland reports no window moves, so the position is not saved or restored there. A relative `XDG_CONFIG_HOME` is ignored (the XDG spec requires an absolute one), so the `$HOME/.config` location is used instead (or persistence is disabled when `$HOME` is unset). A missing or malformed entry falls back to its default (a `NaN` number counts
+empty id list is skipped like every other malformed line, and the other lines still load. The signed-out Recently Played list is restored
+at the next launch too, instead of starting over from the sample stand-in: the saved ids are
+re-resolved at launch and the list reopens with those songs, ids the library no longer answers
+being dropped like a saved list's stale ids; with a saved sign-in session the view keeps fetching
+the service's own Recently Played list, and nothing is restored (a sign-in that races the
+restore's answer drops the restored rows the same way). A blank or all-empty `recently_played=`
+value is skipped like every other malformed line, and the other lines still load. The last-played track is restored at the next launch stopped: the Now Playing bar shows it, names it by title and artist once the launch can find the song — immediately from the built-in sample library when the saved id is a sample-library id, and after signing in from your Apple Music library otherwise — while the saved id text shows until then, Play — the transport button, the X key, or the media play/pause key — starts it again from the beginning, and the position within it is not remembered. The window reopens at its saved position without checking that a monitor is still there; delete the `window_position` line to reset an off-screen window. Wayland reports no window moves, so the position is not saved or restored there. A relative `XDG_CONFIG_HOME` is ignored (the XDG spec requires an absolute one), so the `$HOME/.config` location is used instead (or persistence is disabled when `$HOME` is unset). A missing or malformed entry falls back to its default (a `NaN` number counts
 as malformed; a byte that is not UTF-8 spoils only its own line, and a leading UTF-8 BOM is
 ignored), and a settings file that exists but cannot be read falls back to defaults with one line
 on stderr naming the file; the player then refuses to save for the rest of that run, printing a

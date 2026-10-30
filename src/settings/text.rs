@@ -73,6 +73,23 @@ impl Settings {
             }
             text.push('\n');
         }
+        // One line for the signed-out Recently Played list, beside the saved
+        // lists it shares the id-list shape with: ids only (an id is a
+        // catalog id or a `song-N`-shaped sample id), no name, so no `:`
+        // split, newest first — the order the view shows and the newest-first
+        // reply restores. A conditional line, like `window_position=` and
+        // unlike `current_track=`: an empty list writes no line, so its
+        // absence is the empty-list documentation.
+        if !self.recently_played.is_empty() {
+            text.push_str("recently_played=");
+            for (position, id) in self.recently_played.iter().enumerate() {
+                if position > 0 {
+                    text.push(',');
+                }
+                text.push_str(id);
+            }
+            text.push('\n');
+        }
         text.push_str(&format!(
             "time_display={}\n",
             if self.time_display_remaining {
@@ -140,6 +157,11 @@ impl Settings {
                 "eq_custom_preset" => settings.parse_eq_custom_preset(value),
                 "eq_preset" => settings.parse_eq_preset(value),
                 "user_playlist" => settings.parse_user_playlist(value),
+                // Ids only, no `:`-split name: blank or all-empty id tokens
+                // skip, and any surviving ids are stored verbatim, order
+                // kept. An empty or all-empty line leaves the default empty
+                // list.
+                "recently_played" => settings.parse_recently_played(value),
                 // Only the two written words are recognized; any other value
                 // leaves the default elapsed mode.
                 "time_display" => match value {
@@ -265,6 +287,27 @@ impl Settings {
             name: name.to_string(),
             song_ids,
         });
+    }
+
+    /// Apply a `recently_played` line as `<id>,<id>,…,<id>` — the signed-out
+    /// Recently Played list, newest first. There is no name, so no `:`
+    /// parsing: the value is comma-split like a saved list's ids, trimmed
+    /// tokens' empty ones dropped, and the field keeps only what yet
+    /// survived when at least one id survives. A line whose tokens are all
+    /// empty is skipped like the other malformed-value lines, leaving the
+    /// field (and the other lines) alone. Ids arrived with by the player (an
+    /// id the library no longer answers is dropped at restore time) are kept
+    /// verbatim here.
+    fn parse_recently_played(&mut self, value: &str) {
+        let ids: Vec<String> = value
+            .split(',')
+            .map(str::trim)
+            .filter(|id| !id.is_empty())
+            .map(str::to_string)
+            .collect();
+        if !ids.is_empty() {
+            self.recently_played = ids;
+        }
     }
 
     /// Apply an `eq_preset` line: empty clears the preset, a known name selects

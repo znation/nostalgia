@@ -408,6 +408,71 @@ pub(in crate::ui) fn current_track_resolved(
     Task::none()
 }
 
+/// Restores the launch's saved signed-out Recently Played list: what do the
+/// ids the snapshot's `recently_played=` line carried name?
+/// `adopt_saved_settings` seeded them into the player, but the songs they
+/// name live in the service, not the file: this resolves them one by one
+/// (a sample-library id answers immediately with no session and no network;
+/// an id no library holds answers `None`) and routes the answer to
+/// [`recently_played_resolved`].
+///
+/// A stored session schedules nothing: with a session the Recently Played
+/// view fetches the service's own list and the seeded ids' rows are
+/// dropped, so resolving them would only race the fetch. `session_ready`
+/// never re-issues this either, for the same reason — with a session stored
+/// the rows are dead anyway, and even a persistence sweep that fails to
+/// fire over them is harmless, because the seed holds snapshot parity and
+/// writes nothing. Nothing here plays, loads, or changes view state: the
+/// list stays put until the user opens Recently Played.
+///
+/// The resolves run sequentially inside one task, in save order, so the
+/// reply's rows line up with the seeded ids and a batch of sample-library
+/// ids costs no interleaving.
+pub(in crate::ui) fn resolve_recently_played(player: &mut WinampPlayer) -> Task<Message> {
+    if player.apple_music_service.session().is_some() {
+        return Task::none();
+    }
+    if player.recently_played_seeded.is_empty() {
+        return Task::none();
+    }
+    // A clone shares the session handle, like the fetch handlers' clones;
+    // the seed is owned by the handler, so the future copies it.
+    let service = player.apple_music_service.clone();
+    let ids = player.recently_played_seeded.clone();
+    Task::perform(
+        async move {
+            let mut songs = Vec::with_capacity(ids.len());
+            for id in &ids {
+                songs.push(service.resolve_song(id).await);
+            }
+            songs
+        },
+        |songs| Message::RecentlyPlayedResolved { songs },
+    )
+}
+
+/// Records the restored list: each answered id's song funnels through
+/// `PlayedSongs::record`, so a replay and the history cap are governed the
+/// same way a live play is, and an unanswerable id simply contributes no
+/// row — the next save shortens the list, exactly like a saved playlist's
+/// stale id disappears. A sign-in racing the restore (the reply lands after
+/// a session was stored) is skipped: the signed-in view fetches the
+/// service's own list and the restored rows would be dropped anyway.
+///
+/// Nothing else changes: no fetch, no view switch, no transport state — the
+/// list stays put until the user opens Recently Played, whose signed-out
+/// arm shows `newest_first`.
+pub(in crate::ui) fn recently_played_resolved(
+    player: &mut WinampPlayer,
+    songs: Vec<Option<Song>>,
+) -> Task<Message> {
+    if player.apple_music_service.session().is_some() {
+        return Task::none();
+    }
+    player.played_songs.restore(songs);
+    Task::none()
+}
+
 /// The play completion: it ends the transition the selection began, so the
 /// position poll may query the backend again. Only the current track's entry
 /// is ever read (see

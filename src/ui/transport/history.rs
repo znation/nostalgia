@@ -156,9 +156,10 @@ impl PlayHistory {
 /// replay never duplicates a song, and drops the oldest rows past
 /// [`HISTORY_LIMIT`], the same cap the play history keeps.
 /// [`Self::newest_first`] returns the rows most recent first, the order the
-/// Recently Played view shows. The list lives only for this run: it is not
-/// persisted, so a relaunch starts empty and the view falls back to the
-/// sample stand-in until a play commits.
+/// Recently Played view shows. The list is saved into the settings file
+/// (the `recently_played=` line, ids newest first, kept in parity with the
+/// player's `recently_played_seeded` seed until the rows change) and
+/// restored at the next launch instead of starting the run over empty.
 #[derive(Debug, Default)]
 pub(in crate::ui) struct PlayedSongs {
     items: Vec<Song>,
@@ -186,6 +187,32 @@ impl PlayedSongs {
     /// signed-out Recently Played open still shows the sample stand-in.
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
+    }
+
+    /// Returns the ids in [`Self::newest_first`]'s order — the order the
+    /// settings snapshot stores, and the parse-and-restore round trip keeps
+    /// verbatim.
+    pub(in crate::ui) fn newest_first_ids(&self) -> Vec<String> {
+        self.items
+            .iter()
+            .rev()
+            .map(|song| song.id.clone())
+            .collect()
+    }
+
+    /// Restores the launch's saved rows: `newest_first` carries each saved
+    /// id's song in save order (newest first) or `None` for an id the
+    /// library could not answer, and the walk runs oldest first so a replay
+    /// and the cap are governed by [`Self::record`] alone — a replayed id
+    /// dedupes to its newest position, and rows beyond [`HISTORY_LIMIT`]
+    /// fall off the front. A play that committed while the restore was in
+    /// flight keeps its row and its newest position the same way: the
+    /// restore's replay of it re-records it at the walk's newest-first
+    /// stage, exactly as the saved snapshot already had it.
+    pub(in crate::ui) fn restore(&mut self, newest_first: Vec<Option<Song>>) {
+        for song in newest_first.into_iter().rev().flatten() {
+            self.record(song);
+        }
     }
 }
 
@@ -287,6 +314,119 @@ mod tests {
         assert_eq!(
             played.items.iter().map(|song| &song.id).collect::<Vec<_>>(),
             vec![&"song-2".to_string(), &"song-1".to_string()]
+        );
+    }
+
+    #[test]
+    fn played_songs_newest_first_ids_lists_rows_newest_first() {
+        let songs = stepping_songs();
+        let mut played = PlayedSongs::default();
+        assert!(played.newest_first_ids().is_empty());
+        played.record(songs[0].clone());
+        played.record(songs[1].clone());
+        played.record(songs[2].clone());
+
+        assert_eq!(
+            played.newest_first_ids(),
+            vec![
+                "song-3".to_string(),
+                "song-2".to_string(),
+                "song-1".to_string()
+            ]
+        );
+    }
+
+    // The saved ids come in newest first, so the restore walks them oldest
+    // first: replayed ids dedupe through `record` instead of piling up, and
+    // an unanswerable id (`None`) simply contributes no row.
+    #[test]
+    fn played_songs_restore_records_oldest_first_and_dedupes_replays() {
+        let songs = stepping_songs();
+        let mut played = PlayedSongs::default();
+
+        // The saved list's ids, newest first: the launch could not answer
+        // the middle one and records the rest.
+        played.restore(vec![
+            Some(songs[2].clone()),
+            None,
+            Some(songs[0].clone()),
+            Some(songs[2].clone()),
+        ]);
+
+        assert_eq!(
+            played
+                .items
+                .iter()
+                .map(|song| song.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["song-1", "song-3"]
+        );
+        assert_eq!(
+            played.newest_first_ids(),
+            vec!["song-3".to_string(), "song-1".to_string()]
+        );
+    }
+
+    // A play that committed while the restore was in flight keeps its row
+    // and its newest position: the replayed current track is the saved
+    // snapshot's newest entry, so the walk re-records it last, exactly the
+    // position the committed play already held.
+    #[test]
+    fn played_songs_restore_keeps_a_play_committed_mid_restore_newest() {
+        let songs = stepping_songs();
+        let mut played = PlayedSongs::default();
+        // The last run's newest song replays while the restore is in flight.
+        played.record(songs[2].clone());
+
+        // The saved list, newest first: the walk re-records song-3 last.
+        played.restore(vec![
+            Some(songs[2].clone()),
+            Some(songs[1].clone()),
+            Some(songs[0].clone()),
+        ]);
+
+        assert_eq!(
+            played
+                .items
+                .iter()
+                .map(|song| song.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["song-1", "song-2", "song-3"]
+        );
+        assert_eq!(
+            played.newest_first_ids(),
+            vec![
+                "song-3".to_string(),
+                "song-2".to_string(),
+                "song-1".to_string()
+            ]
+        );
+    }
+
+    // The restored rows honor the same cap as live plays: more answered ids
+    // than HISTORY_LIMIT keeps exactly the newest HISTORY_LIMIT rows. The
+    // saved list's play order is song-0 … song-104, so the line carries
+    // song-104 … song-0 (newest first) and the walk re-records song-0 first.
+    #[test]
+    fn played_songs_restore_honors_the_history_limit() {
+        let songs = stepping_songs();
+        let mut played = PlayedSongs::default();
+        let restored: Vec<Option<Song>> = (0..HISTORY_LIMIT + 5)
+            .rev()
+            .map(|index| {
+                let mut song = songs[0].clone();
+                song.id = format!("song-{index}");
+                Some(song)
+            })
+            .collect();
+
+        played.restore(restored);
+
+        assert_eq!(played.items.len(), HISTORY_LIMIT);
+        assert_eq!(played.items.first().unwrap().id, "song-5");
+        assert_eq!(
+            played.items.last().unwrap().id,
+            format!("song-{}", HISTORY_LIMIT + 4)
         );
     }
 

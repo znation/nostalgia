@@ -177,6 +177,66 @@ fn saved_song_lists_are_restored_on_boot() {
     assert_eq!(player.saved_playlists[0].name, "Morning Drive");
 }
 
+// A launch with a saved signed-out Recently Played list seeds its ids bit
+// for bit, and the seed holds snapshot parity: the boot's persist saves
+// nothing back, so the whole-file write the first message would otherwise
+// schedule cannot erase the `recently_played=` line. When the resolve
+// answers, the rows write the (possibly shortened, here unanswerable
+// `song-9` drops) list back — like a stale saved-playlist id disappears.
+#[test]
+fn saved_recently_played_is_restored_on_boot_and_seeded_until_the_answer() {
+    let (mut player, _state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+
+    let mut saved = Settings::default();
+    saved.set_recently_played(vec![
+        "song-3".to_string(),
+        "song-9".to_string(),
+        "song-1".to_string(),
+    ]);
+    player.adopt_saved_settings(saved);
+    assert_eq!(
+        player.recently_played_seeded,
+        vec![
+            "song-3".to_string(),
+            "song-9".to_string(),
+            "song-1".to_string()
+        ]
+    );
+
+    // The boot's persist carries the seed, so the saved file and the
+    // snapshot compare equal and nothing is written.
+    let _ = update(&mut player, Message::Ignored);
+    assert_eq!(store.snapshots().len(), 0);
+
+    // The resolve answers: `song-9` is unanswerable, the rows land, and the
+    // next persist shortens the file's list to what the library names.
+    let songs = stepping_songs();
+    let _ = update(
+        &mut player,
+        Message::RecentlyPlayedResolved {
+            songs: vec![Some(songs[2].clone()), None, Some(songs[0].clone())],
+        },
+    );
+    let _ = update(&mut player, Message::Ignored);
+    let snapshots = store.snapshots();
+    assert_eq!(snapshots.len(), 1);
+    assert_eq!(
+        snapshots[0].recently_played(),
+        &["song-3".to_string(), "song-1".to_string()]
+    );
+    assert!(
+        snapshots[0]
+            .to_text()
+            .contains("recently_played=song-3,song-1")
+    );
+
+    // The written snapshot is now the remembered one; nothing more saves.
+    let _ = update(&mut player, Message::Ignored);
+    assert_eq!(store.snapshots().len(), 1);
+}
+
 #[test]
 fn an_unchanged_token_writes_nothing() {
     let (mut player, _state) = test_player();

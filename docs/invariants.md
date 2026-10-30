@@ -306,26 +306,60 @@ navigation shows the previous level's rows" in `BUGS-FIXED.md`.
 
 **Guarantee.** While no MusicKit session is stored, the Recently Played button shows the songs
 whose plays committed this run, newest first, numbered like every other song list, refreshed on
-every reopen; with nothing played yet — and always after a relaunch, the list is not persisted —
-it shows the service seam's sample stand-in instead. A committed play whose track is absent from
-the showing list feeds the play history only. Once a session is stored, the button fetches the
-service's own list as before, so a sign-in while the played list is showing refetches it and the
-played rows drop.
+every reopen; with nothing played yet — and after a relaunch until the saved list's restore
+answers — it shows the service seam's sample stand-in instead. A committed play whose track is
+absent from the showing list feeds the play history only. The list is persisted in the settings
+file, one `recently_played=` line of ids newest first, written only when non-empty; a blank,
+whitespace-only, or empty-token line leaves the field and the other lines alone, and repeated
+valid lines replace the field. A relaunch restores it: with no stored session and a non-empty
+seed, the boot resolves each saved id through the read-only `resolve_song` (in save order, the
+reply's rows lining up with the ids) and records only the answerable rows through the same
+`record` the play path uses — the cap and replay dedupe apply during the merge, and a play that
+committed while the restore was in flight keeps its row and its newest position. A relaunch with
+a stored session restores nothing, because the view fetches the service's own list; a sign-in
+racing the restore drops the restored rows and keeps the fetch. An id the launch cannot answer
+is dropped from the list at the next save, exactly like a saved playlist's stale id (and a
+restore whose every id went unanswerable stores nothing, so the seed keeps saving nothing too
+and the view falls back to the sample stand-in until a play commits). The seed holds snapshot
+parity until the restore answers, so the boot's persist rewrites nothing: a persisted line
+cannot be erased by any pre-answer save. `PlayHistory` (Shuffle's
+Previous) and `current_track=` (the last-played track) are separate: neither is touched by this
+restore, and once a session is stored any later sign-in path drops the restored rows.
 
 **Enforced by.** `transport::PlayedSongs::record` keeps one row per song id with the play
 history's `HISTORY_LIMIT` cap;
+`transport::PlayedSongs::restore` walks the saved-reply rows oldest first through `record`, so
+replays dedupe and the cap holds mid-restore;
 `handlers::playback::track_played`'s committed arm records only a track the showing list names;
-`handlers::browse::lists::show_recently_played` stores the run's rows (clear-then-store, epoch bumped)
-when the service holds no session and the list is non-empty, and fetches otherwise.
+`handlers::playback::resolve_recently_played` resolves the seed only when no session is stored
+and the seed is non-empty, and never re-issues at `session_ready`;
+`handlers::playback::recently_played_resolved` skips a restore whose session landed under it;
+`WinampPlayer::recently_played_seeded` feeds `persist_settings_if_changed` when the rows are
+empty (seed parity) and `PlayedSongs::newest_first_ids` when they are not, so a
+pre-answer persist cannot erase the saved line;
+`handlers::browse::lists::show_recently_played` stores the run's rows (clear-then-store, epoch
+bumped) when the service holds no session and the list is non-empty, and fetches otherwise.
 
 **Pinned by.** `played_songs_recording_a_song_again_moves_its_row_newest`,
-`played_songs_drops_the_oldest_past_the_limit`, `played_songs_newest_first_lists_rows_most_recent_first`
-(`src/ui/transport/history.rs`),
+`played_songs_drops_the_oldest_past_the_limit`, `played_songs_newest_first_lists_rows_most_recent_first`,
+`played_songs_newest_first_ids_lists_rows_newest_first`,
+`played_songs_restore_records_oldest_first_and_dedupes_replays`,
+`played_songs_restore_keeps_a_play_committed_mid_restore_newest`,
+`played_songs_restore_honors_the_history_limit` (`src/ui/transport/history.rs`),
+`recently_played_line_round_trips_and_skips_the_malformed_values` (`src/settings.rs`),
 `signed_out_recently_played_lists_this_runs_played_songs_newest_first`,
 `replaying_a_song_moves_its_row_to_the_newest_played_position`,
-`signed_in_recently_played_still_fetches_the_service_list`, and
+`signed_in_recently_played_still_fetches_the_service_list`,
+`resolve_recently_played_is_a_no_op_with_a_session_or_nothing_restored`,
+`resolve_recently_played_resolves_each_seeded_id_in_order`,
+`recently_played_resolved_stores_the_answered_rows_in_play_order`,
+`recently_played_resolved_drops_unanswerable_ids`,
+`recently_played_resolved_skips_once_a_session_is_stored`,
+`boot_resolves_the_saved_recently_played_after_the_last_played_track`, and
 `session_arrival_refetches_the_showing_played_list_and_drops_the_played_rows`
-(`src/ui/tests/recently_played_tests.rs`).
+(`src/ui/tests/recently_played_tests.rs`), and
+`saved_recently_played_is_restored_on_boot_and_seeded_until_the_answer`
+(`src/ui/tests/settings_tests.rs`).
 
 **History.** Added with the signed-out Recently Played run list, replacing the constant
 sample stand-in that kept showing however much you played.

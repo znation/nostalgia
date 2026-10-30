@@ -144,10 +144,22 @@ pub(in crate::ui) struct WinampPlayer {
     /// entry falls back to sequential stepping.
     pub(in crate::ui) play_history: transport::PlayHistory,
     /// The songs whose plays committed this run, for the signed-out
-    /// Recently Played list. A committed `TrackPlayed` records the song;
-    /// the list is not persisted, so a relaunch starts empty and the view
-    /// falls back to the sample stand-in until a play commits again.
+    /// Recently Played list. A committed `TrackPlayed` records the song; the
+    /// list saves back through `persist_settings_if_changed` (the
+    /// `recently_played=` line) and a launch's saved rows restore through
+    /// the boot's `ResolveRecentlyPlayed`. Between the boot and the restore's
+    /// answer this stays empty and `recently_played_seeded` below holds the
+    /// snapshot parity instead, so a persist before the answer cannot erase
+    /// the saved line.
     pub(in crate::ui) played_songs: transport::PlayedSongs,
+    /// The saved signed-out Recently Played list's ids, newest first, the
+    /// launch parsed and `adopt_saved_settings` seeded. They hold the
+    /// snapshot for `persist_settings_if_changed` until the rows exist:
+    /// with them saved, the first launch persist re-writes nothing, and an
+    /// unanswerable id drops out when the answer shortens the list — the
+    /// same class of guard that keeps a no-session run from erasing
+    /// `music_kit_user_token=`. Not touched by `apply_to`.
+    pub(in crate::ui) recently_played_seeded: Vec<String>,
     /// The songs played this Shuffle round, so a shuffled forward step
     /// plays each song of the showing list once before any repeats.
     pub(in crate::ui) shuffle_round: transport::ShuffleRound,
@@ -497,6 +509,7 @@ impl WinampPlayer {
             position_epoch: 0,
             pending_position_transitions: 0,
             plays_generation: Arc::new(AtomicU64::new(0)),
+            recently_played_seeded: Vec::new(),
             settings_store: None,
             saved_settings: Settings::default(),
         }
@@ -574,6 +587,17 @@ impl WinampPlayer {
         snapshot.set_library_view(self.library_view());
         snapshot.set_eq_custom_presets(self.custom_eq_presets.clone());
         snapshot.set_saved_playlists(self.saved_playlists.clone());
+        // The signed-out Recently Played rows while they are non-empty, or
+        // the launch's seed while they are not: the seed holds snapshot
+        // parity with the saved file until the boot restore answers, so the
+        // first persist writes nothing; a fully-answered restore then
+        // matches the seed again (no save), and partly-answered one
+        // shortens the file's list to what the library could still name.
+        snapshot.set_recently_played(if self.played_songs.is_empty() {
+            self.recently_played_seeded.clone()
+        } else {
+            self.played_songs.newest_first_ids()
+        });
         if snapshot == self.saved_settings {
             return;
         }
@@ -638,6 +662,7 @@ impl WinampPlayer {
         self.window_position = saved.window_position();
         self.custom_eq_presets = saved.eq_custom_presets().to_vec();
         self.saved_playlists = saved.saved_playlists().to_vec();
+        self.recently_played_seeded = saved.recently_played().to_vec();
         self.saved_settings = saved;
     }
 
