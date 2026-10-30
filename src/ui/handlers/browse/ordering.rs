@@ -161,12 +161,50 @@ pub(in crate::ui) fn move_selected_row(player: &mut WinampPlayer, down: bool) ->
     moved_to.map_or_else(Task::none, scroll::reveal_browse_row)
 }
 
+/// Alt+Shift+Up or Alt+Shift+Down was pressed: move the showing list's
+/// selected row all the way to its first or last row (`bottom`), the edge
+/// move of Winamp's Shift+Alt+arrow row move, beside [`move_selected_row`]'s
+/// one-place move. Like it the reorder is one-shot and local to the visible
+/// list, returning to a moved parent restores its library order, and the row
+/// stays selected at the edge; a move that changes the selection scrolls the
+/// list only as far as needed to show the moved row, and a no-op move (an
+/// edge-selection repeat included) schedules no task.
+pub(in crate::ui) fn move_selected_row_to_edge(
+    player: &mut WinampPlayer,
+    bottom: bool,
+) -> Task<Message> {
+    let moved_to = match player.current_view {
+        CurrentView::Artists => move_edge_in(&mut player.artists, bottom),
+        CurrentView::Albums => move_edge_in(&mut player.albums, bottom),
+        CurrentView::Songs => move_edge_in(&mut player.songs, bottom),
+        CurrentView::AllSongs => move_edge_in(&mut player.all_songs, bottom),
+        CurrentView::AllAlbums => move_edge_in(&mut player.all_albums, bottom),
+        CurrentView::RecentlyAdded => move_edge_in(&mut player.recently_added, bottom),
+        CurrentView::RecentlyPlayed => move_edge_in(&mut player.recently_played, bottom),
+        CurrentView::Playlists => move_edge_in(&mut player.playlists, bottom),
+        CurrentView::Genres => move_edge_in(&mut player.genres, bottom),
+        CurrentView::Years => move_edge_in(&mut player.years, bottom),
+        CurrentView::Composers => move_edge_in(&mut player.composers, bottom),
+    };
+    moved_to.map_or_else(Task::none, scroll::reveal_browse_row)
+}
+
 /// Moves `list`'s selected row and returns its new index, or `None` when the
 /// selection did not change (nothing selected, an edge, or a loading or
 /// failed list).
 fn move_in<T: Clone>(list: &mut BrowseList<T>, down: bool) -> Option<usize> {
     let before = list.selected();
     list.move_selected(down);
+    let after = list.selected();
+    if after == before { None } else { after }
+}
+
+/// The edge-move counterpart of [`move_in`]: moves `list`'s selected row all
+/// the way to an edge (`bottom` picks the last row) and returns its new
+/// index, or `None` when the selection did not change.
+fn move_edge_in<T: Clone>(list: &mut BrowseList<T>, bottom: bool) -> Option<usize> {
+    let before = list.selected();
+    list.move_selected_to_edge(bottom);
     let after = list.selected();
     if after == before { None } else { after }
 }

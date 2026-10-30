@@ -454,6 +454,131 @@ mod tests {
         );
     }
 
+    // The edge move swaps through the stretch between the row and the edge
+    // with the one-place move's exact pattern, so every buffer and the library
+    // permutation shift in step and the selection lands on the moved row.
+    #[test]
+    fn move_selected_to_edge_shifts_rows_cached_text_and_permutation_in_step() {
+        let mut list = BrowseList::new(false);
+        list.store_with_row_text(
+            vec![
+                "a".to_string(),
+                "b".to_string(),
+                "c".to_string(),
+                "d".to_string(),
+            ],
+            |item| format!("title-{item}"),
+            |item| format!("label-{item}"),
+        );
+        list.selected = Some(1);
+        let epoch = list.epoch;
+
+        list.move_selected_to_edge(false);
+
+        assert_eq!(list.items, ["b", "a", "c", "d"]);
+        assert_eq!(list.titles, ["title-b", "title-a", "title-c", "title-d"]);
+        assert_eq!(list.labels, ["label-b", "label-a", "label-c", "label-d"]);
+        assert_eq!(list.selected(), Some(0));
+        assert_eq!(list.library_positions, Some(vec![1, 0, 2, 3]));
+        assert_eq!(list.epoch, epoch.wrapping_add(1));
+
+        list.selected = Some(2);
+        list.move_selected_to_edge(true);
+        assert_eq!(list.items, ["b", "a", "d", "c"]);
+        assert_eq!(list.titles, ["title-b", "title-a", "title-d", "title-c"]);
+        assert_eq!(list.selected(), Some(3));
+        assert_eq!(list.library_positions, Some(vec![1, 0, 3, 2]));
+
+        list.restore_library_order();
+        assert_eq!(list.items, ["a", "b", "c", "d"]);
+    }
+
+    #[test]
+    fn move_selected_to_edge_is_a_noop_without_a_selection_at_an_edge_while_loading_or_failed() {
+        let mut list = loaded(&["a", "b", "c"]);
+        let epoch = list.epoch;
+        list.move_selected_to_edge(true);
+        assert_eq!((list.epoch, list.selected()), (epoch, None));
+        list.selected = Some(0);
+        list.move_selected_to_edge(false);
+        list.selected = Some(2);
+        list.move_selected_to_edge(true);
+        list.selected = Some(5);
+        list.move_selected_to_edge(false);
+        assert_eq!(list.items, ["a", "b", "c"]);
+        assert_eq!(list.library_positions, None);
+        assert_eq!(list.epoch, epoch);
+        list.selected = Some(1);
+        list.loading = true;
+        list.move_selected_to_edge(false);
+        list.loading = false;
+        list.error = Some("offline".to_string());
+        list.move_selected_to_edge(true);
+        assert_eq!(list.items, ["a", "b", "c"]);
+        assert_eq!((list.epoch, list.selected()), (epoch, Some(1)));
+    }
+
+    // A press whose row already sits at the target edge allocates and swaps
+    // nothing, so a held second press after the first is itself a no-op.
+    #[test]
+    fn move_selected_to_edge_repeats_noop_once_the_row_is_at_the_edge() {
+        let mut list = loaded(&["a", "b", "c", "d"]);
+        list.selected = Some(3);
+        list.move_selected_to_edge(false);
+        assert_eq!(list.items, ["d", "a", "b", "c"]);
+        list.selected = Some(0);
+        list.move_selected_to_edge(false);
+        let epoch = list.epoch;
+        let positions = list.library_positions.clone();
+        list.move_selected_to_edge(false);
+        assert_eq!(list.items, ["d", "a", "b", "c"]);
+        assert_eq!(list.library_positions, positions);
+        assert_eq!((list.epoch, list.selected()), (epoch, Some(0)));
+
+        // The same held-repeat no-op guards the bottom edge: the first press
+        // after the top move still moves, the repeat does not.
+        list.selected = Some(0);
+        list.move_selected_to_edge(true);
+        assert_eq!(list.items, ["a", "b", "c", "d"]);
+        let epoch = list.epoch;
+        list.move_selected_to_edge(true);
+        assert_eq!(list.items, ["a", "b", "c", "d"]);
+        assert_eq!((list.epoch, list.selected()), (epoch, Some(3)));
+    }
+
+    // Sort records a permutation and the edge move swaps into it, so the
+    // restore that Back performs returns to library order, and one more move
+    // afterwards still composes with the saved permutation.
+    #[test]
+    fn sort_then_edge_moves_restore_library_order_with_one_more_move_still_composing() {
+        let mut list = BrowseList::new(false);
+        list.store_with_row_text(
+            ["pear", "apple", "mango", "kiwi"]
+                .iter()
+                .map(|item| (*item).to_string())
+                .collect(),
+            |item| format!("title-{item}"),
+            |item| format!("label-{item}"),
+        );
+        list.sort_rows_by(|item| item.clone());
+        assert_eq!(list.items, ["apple", "kiwi", "mango", "pear"]);
+
+        list.selected = Some(2);
+        list.move_selected_to_edge(false);
+        assert_eq!(list.items, ["mango", "apple", "kiwi", "pear"]);
+        list.selected = Some(3);
+        list.move_selected_to_edge(false);
+        assert_eq!(list.items, ["pear", "mango", "apple", "kiwi"]);
+
+        // A neighbour swap composes with the saved permutation.
+        list.selected = Some(1);
+        list.move_selected(true);
+
+        list.restore_library_order();
+        assert_eq!(list.items, ["pear", "apple", "mango", "kiwi"]);
+        assert_eq!(list.selected(), None);
+    }
+
     #[test]
     fn move_selected_is_a_noop_without_a_selection_at_an_edge_or_while_loading() {
         let mut list = loaded(&["a", "b", "c"]);

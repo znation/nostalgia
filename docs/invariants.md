@@ -405,10 +405,24 @@ It is a no-op with no selection, at the edge the row would move past, or on a lo
 list. A move that changes the selection scrolls the list only far enough to show the moved row
 fully (and not at all when it is already visible); a no-op move schedules no task.
 
-**Enforced by.** `BrowseList::move_selected` in `src/ui/browse/ordering.rs`, `scroll::reveal_row_offset` and
-`scroll::reveal_browse_row` in `src/ui/handlers/browse/scroll.rs`, `browse::ordering::move_selected_row`
-in `src/ui/handlers/browse/ordering.rs` (routed from `Message::MoveSelectedRowUp` and
-`Message::MoveSelectedRowDown`), and `shortcuts::move_row_shortcut` in `src/ui/shortcuts.rs`.
+Alt+Shift+Up and Alt+Shift+Down (Shift added to the one-place move, Control and Logo still
+released) move the showing list's selected row all the way to its first or last row in one press.
+`BrowseList::move_selected_to_edge` walks the stretch between the row and the edge with the
+one-place move's exact swap pattern — `items`, cached titles and labels, and the saved library
+permutation shift in step, the identity permutation allocated once when it is `None` — so it
+composes with the restores Sort, reverse, and Shuffle use and a later
+`restore_library_order` returns every row to library order with nothing lost or duplicated. The
+selection stays on the moved row at the edge, and one press bumps the epoch once; a row already at
+the target edge, an empty selection, a selection outside the rows, or a loading or failed list
+changes nothing and bumps nothing, so a held-key repeat after the first press is a no-op. A move
+that changes the selection reveals the row like the one-place move.
+
+**Enforced by.** `BrowseList::move_selected` and `BrowseList::move_selected_to_edge` in
+`src/ui/browse/ordering.rs`, `scroll::reveal_row_offset` and `scroll::reveal_browse_row` in
+`src/ui/handlers/browse/scroll.rs`, `browse::ordering::move_selected_row` and
+`browse::ordering::move_selected_row_to_edge` in `src/ui/handlers/browse/ordering.rs` (routed from
+`Message::MoveSelectedRowUp`, `Message::MoveSelectedRowDown`, `Message::MoveSelectedRowToTop`, and
+`Message::MoveSelectedRowToBottom`), and `shortcuts::move_row_shortcut` in `src/ui/shortcuts.rs`.
 `BrowseList::reverse_rows` and the shared `BrowseList::apply_reorder` in
 `src/ui/browse/ordering.rs`, `browse::ordering::reverse_browse` in `src/ui/handlers/browse/ordering.rs` (routed from
 `Message::ReverseBrowse`), `BrowseList::shuffle_rows` and `browse::ordering::shuffled_order` (seeded by
@@ -431,9 +445,16 @@ draw beside Top.
 
 - `move_selected_swaps_with_the_neighbour_and_keeps_the_selection`
 - `move_selected_swaps_cached_text_and_still_restores_library_order`
+- `move_selected_to_edge_shifts_rows_cached_text_and_permutation_in_step`
+- `move_selected_to_edge_is_a_noop_without_a_selection_at_an_edge_while_loading_or_failed`
+- `move_selected_to_edge_repeats_noop_once_the_row_is_at_the_edge`
+- `sort_then_edge_moves_restore_library_order_with_one_more_move_still_composing`
 - `a_moved_artist_keeps_its_cached_album_label_and_back_restores_it`
 - `reordering_moves_rows_without_cloning_them`
 - `sort_walks_disjoint_cycles_and_keeps_cached_text_aligned`
+- `an_edge_move_carries_the_selected_row_to_each_edge`
+- `back_restores_library_order_after_a_sort_then_an_edge_move`
+- `an_edge_move_with_nothing_to_do_changes_nothing`
 - `move_selected_is_a_noop_without_a_selection_at_an_edge_or_while_loading`
 - `message_for_maps_alt_arrows_to_move_the_selected_row`
 - the tests in `src/ui/tests/move_row_tests.rs`

@@ -263,6 +263,12 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::RemoveSelectedBrowse => handlers::browse::ordering::remove_selected(player),
         Message::MoveSelectedRowUp => handlers::browse::ordering::move_selected_row(player, false),
         Message::MoveSelectedRowDown => handlers::browse::ordering::move_selected_row(player, true),
+        Message::MoveSelectedRowToTop => {
+            handlers::browse::ordering::move_selected_row_to_edge(player, false)
+        }
+        Message::MoveSelectedRowToBottom => {
+            handlers::browse::ordering::move_selected_row_to_edge(player, true)
+        }
         Message::ReloadLibrary => handlers::browse::lists::reload_library(player),
         Message::ShowAllSongs => handlers::browse::lists::show_all_songs(player),
         Message::ShowAllAlbums => handlers::browse::lists::show_all_albums(player),

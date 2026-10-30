@@ -290,3 +290,139 @@ fn a_move_on_a_loading_or_failed_list_changes_nothing() {
         assert_eq!(player.artists.epoch, epoch, "failed={failed}");
     }
 }
+
+// The edge move carries the selection all the way to the list's first or last
+// row in one press, keeping the row's cached title and label beside it and
+// the selection on the moved row.
+#[test]
+fn an_edge_move_carries_the_selected_row_to_each_edge() {
+    let (mut player, _state) = test_player();
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    player.current_view = CurrentView::Songs;
+    let old_epoch = player.songs.epoch;
+    let ids: Vec<String> = player.songs.items.iter().map(|s| s.id.clone()).collect();
+    let titles = player.songs.titles.clone();
+    select(&mut player, old_epoch, 2);
+
+    let _ = update(&mut player, Message::MoveSelectedRowToTop);
+
+    let got: Vec<String> = player.songs.items.iter().map(|s| s.id.clone()).collect();
+    assert_eq!(got, [ids[2].clone(), ids[0].clone(), ids[1].clone()]);
+    assert_eq!(
+        player.songs.titles,
+        [titles[2].clone(), titles[0].clone(), titles[1].clone()]
+    );
+    assert_eq!(player.songs.selected(), Some(0));
+    assert_ne!(player.songs.epoch, old_epoch);
+
+    let moved_epoch = player.songs.epoch;
+    select(&mut player, moved_epoch, 0);
+    let _ = update(&mut player, Message::MoveSelectedRowToBottom);
+    let got: Vec<String> = player.songs.items.iter().map(|s| s.id.clone()).collect();
+    assert_eq!(got, [ids[0].clone(), ids[1].clone(), ids[2].clone()]);
+    assert_eq!(player.songs.selected(), Some(2));
+    assert_ne!(player.songs.epoch, moved_epoch);
+}
+
+// A held-key repeat after an edge move presses a row already at the edge, so
+// the second message changes nothing.
+#[test]
+fn a_second_edge_move_after_the_first_changes_nothing() {
+    let (mut player, _state) = test_player();
+    let _ = update(
+        &mut player,
+        Message::ArtistsLoaded(vec![artist("a"), artist("b"), artist("c")]),
+    );
+    let epoch = player.artists.epoch;
+    select(&mut player, epoch, 1);
+    let _ = update(&mut player, Message::MoveSelectedRowToTop);
+    assert_eq!(artist_names(&player), ["b", "a", "c"]);
+
+    let _ = update(&mut player, Message::MoveSelectedRowToTop);
+
+    assert_eq!(artist_names(&player), ["b", "a", "c"]);
+    assert_eq!(player.artists.selected(), Some(0));
+}
+
+// Sort, an edge move, and Back's restore compose: the parent list returns to
+// library order with every row intact.
+#[test]
+fn back_restores_library_order_after_a_sort_then_an_edge_move() {
+    let mut player = player_in_albums();
+    let _ = update(
+        &mut player,
+        Message::ArtistsLoaded(vec![artist("banana"), artist("apple"), artist("cherry")]),
+    );
+    player.current_view = CurrentView::Artists;
+    let _ = update(&mut player, Message::SortBrowse);
+    assert_eq!(artist_names(&player), ["apple", "banana", "cherry"]);
+    // Sort bumps the epoch the selection must carry.
+    let epoch = player.artists.epoch;
+    select(&mut player, epoch, 2);
+    let _ = update(&mut player, Message::MoveSelectedRowToTop);
+    assert_eq!(artist_names(&player), ["cherry", "apple", "banana"]);
+    player.current_view = CurrentView::Albums;
+
+    let _ = update(&mut player, Message::Back);
+
+    assert_view(&player, CurrentView::Artists);
+    assert_eq!(artist_names(&player), ["banana", "apple", "cherry"]);
+}
+
+#[test]
+fn an_edge_move_leaves_the_view_and_the_other_lists_alone() {
+    let (mut player, _state) = test_player();
+    let _ = update(
+        &mut player,
+        Message::ArtistsLoaded(vec![artist("a"), artist("b"), artist("c")]),
+    );
+    let epoch = player.artists.epoch;
+    select(&mut player, epoch, 1);
+    let songs_epoch = player.songs.epoch;
+
+    let _ = update(&mut player, Message::MoveSelectedRowToTop);
+
+    assert_view(&player, CurrentView::Artists);
+    assert_eq!(player.songs.epoch, songs_epoch);
+    assert_eq!(artist_names(&player), ["b", "a", "c"]);
+}
+
+// Nothing selected, already at the target edge, loading, or failed: no edge
+// move changes anything or bumps the epoch, on either side.
+#[test]
+fn an_edge_move_with_nothing_to_do_changes_nothing() {
+    for edge_message in [
+        Message::MoveSelectedRowToTop,
+        Message::MoveSelectedRowToBottom,
+    ] {
+        let mut player = player_in_albums();
+        let _ = update(
+            &mut player,
+            Message::ArtistsLoaded(vec![artist("a"), artist("b"), artist("c")]),
+        );
+        player.current_view = CurrentView::Artists;
+        let epoch = player.artists.epoch;
+
+        assert_no_task(update(&mut player, edge_message)); // no selection
+        select(&mut player, epoch, 0);
+        let _ = update(&mut player, Message::MoveSelectedRowToTop);
+        assert_eq!(artist_names(&player), ["a", "b", "c"]);
+        assert_eq!(player.artists.epoch, epoch);
+        select(&mut player, epoch, 2);
+        let _ = update(&mut player, Message::MoveSelectedRowToBottom);
+        assert_eq!(artist_names(&player), ["a", "b", "c"]);
+        assert_eq!(player.artists.epoch, epoch);
+
+        select(&mut player, epoch, 1);
+        player.artists.loading = true;
+        let _ = update(&mut player, Message::MoveSelectedRowToTop);
+        player.artists.loading = false;
+        player.artists.error = Some("offline".to_string());
+        let _ = update(&mut player, Message::MoveSelectedRowToBottom);
+        assert_eq!(artist_names(&player), ["a", "b", "c"]);
+        assert_eq!(
+            (player.artists.epoch, player.artists.selected()),
+            (epoch, Some(1))
+        );
+    }
+}

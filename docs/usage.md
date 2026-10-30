@@ -139,7 +139,9 @@ Winamp's playlist editor. Ctrl+R reverses the showing list's order the same
 one-shot way, like Winamp's playlist editor, and Ctrl+Shift+R shuffles it into a random order the
 same one-shot way. Alt+Up and Alt+Down move the selected row of the showing list one place up or
 down, the same one-shot way, keeping the row selected and scrolling the list only as far as needed
-to keep it in view. Delete removes the selected song row from the showing list, the one-shot
+to keep it in view, and Alt+Shift+Up and Alt+Shift+Down move the selected row all the way to the
+first or last row of the showing list, with the same no-op rules (nothing selected, already at
+that edge, or a loading or failed list). Delete removes the selected song row from the showing list, the one-shot
 "Remove selected" of Winamp's playlist editor: the deletion touches only the showing list, the
 sorted order composes with it so Back-style restores still return library order minus the deleted
 row, and refetching the list or reopening it rebuilds the rows from the library. It is a no-op

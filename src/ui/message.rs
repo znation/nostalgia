@@ -303,6 +303,15 @@ pub(in crate::ui) enum Message {
     MoveSelectedRowUp,
     // Alt+Down: like `MoveSelectedRowUp`, one place down.
     MoveSelectedRowDown,
+    // Alt+Shift+Up: like `MoveSelectedRowUp`, all the way to the first row of
+    // the showing list, one-shot like Sort. The handler bumps that list's
+    // epoch, keeps the row selected at the edge, and leaves every other list
+    // and the playback state alone; it is a no-op with nothing selected, the
+    // row already there, or a loading or failed list, so a held-key repeat
+    // after the first press is a no-op.
+    MoveSelectedRowToTop,
+    // Alt+Shift+Down: like `MoveSelectedRowToTop`, all the way to the last row.
+    MoveSelectedRowToBottom,
     // The browse view's Reload button: refetch the top-level artists list and
     // return to the Artists view, clearing an active search but not the search
     // box's typed text. It leaves playback and the other browse lists alone.

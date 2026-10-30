@@ -1,5 +1,5 @@
-//! The row-order operations of a [`BrowseList`]: Sort, reverse, shuffle, move
-//! one place, and the restore to library order, plus the permutation helpers
+//! The row-order operations of a [`BrowseList`]: Sort, reverse, shuffle, move all the way to an edge,
+//! and the restore to library order, plus the permutation helpers
 //! they share — and the destructive siblings [`BrowseList::remove_selected_row`]
 //! and [`BrowseList::remove_all_rows`], which drop the selected row or empty
 //! the list instead of moving its rows.
@@ -153,6 +153,67 @@ impl<T> BrowseList<T> {
         }
         // The moved row is now at `to`, and the epoch bump invalidates every
         // press rendered from the old order.
+        self.selected = Some(to);
+        self.epoch = self.epoch.wrapping_add(1);
+    }
+
+    /// Moves the selected row all the way to the first row (`bottom` false) or
+    /// the last row, Winamp's Shift+Alt+Up/Down edge move beside
+    /// [`Self::move_selected`]'s one-place move. One-shot like
+    /// [`Self::move_selected`]: cached titles and labels follow the rows, the
+    /// epoch is bumped (once, for the whole crossing), the selection stays on
+    /// the moved row now at the edge, and the crossing composes with
+    /// [`Self::sort_rows_by`], [`Self::reverse_rows`], and
+    /// [`Self::shuffle_rows`] into the permutation
+    /// [`Self::restore_library_order`] undoes. With nothing selected, the
+    /// selected row already at the target edge, a selection outside the rows,
+    /// or the list loading or failed, nothing changes — so a held-key repeat
+    /// after the first press is itself a no-op.
+    ///
+    /// The crossing walks the stretch between the row and the edge one place
+    /// at a time with [`Self::move_selected`]'s exact swap pattern, so the
+    /// cached-titles-and-labels / library-permutation lockstep is kept by
+    /// construction: the identity permutation is allocated once before the
+    /// walk when it is `None`, like [`Self::move_selected`]'s on-demand
+    /// allocation, and swapped in step with `items` and the caches. The walk
+    /// is O(rows crossed) and one-shot, unlike the one-place move's O(1) per
+    /// repeat: a press already at the edge allocates and swaps nothing.
+    pub(in crate::ui) fn move_selected_to_edge(&mut self, bottom: bool) {
+        let Some(from) = self.selected else {
+            return;
+        };
+        let to = if bottom {
+            self.items.len().saturating_sub(1)
+        } else {
+            0
+        };
+        if self.loading || self.error.is_some() || from >= self.items.len() || from == to {
+            return;
+        }
+        // One allocation for the whole crossing, like [`Self::move_selected`]'s
+        // first move, then swapped in step through the walk.
+        let mut positions = self
+            .library_positions
+            .take()
+            .unwrap_or_else(|| (0..self.items.len()).collect());
+        let sign = if bottom { 1 } else { -1 };
+        let mut current = from as i64;
+        let target = to as i64;
+        while current != target {
+            let next = current + sign;
+            self.items.swap(current as usize, next as usize);
+            if !self.titles.is_empty() {
+                self.titles.swap(current as usize, next as usize);
+            }
+            if !self.labels.is_empty() {
+                self.labels.swap(current as usize, next as usize);
+            }
+            positions.swap(current as usize, next as usize);
+            current = next;
+        }
+        self.library_positions = Some(positions);
+        // The moved row is now at the edge, and the epoch bump invalidates
+        // every press rendered from the old order.
         self.selected = Some(to);
         self.epoch = self.epoch.wrapping_add(1);
     }

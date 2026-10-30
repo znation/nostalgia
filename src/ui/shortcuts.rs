@@ -39,7 +39,9 @@ use super::Message;
 /// key-to-message table lives here once and the subscription stays a plain
 /// `filter_map`. With `NumLock` on, the keypad digits 4, 5, 6, 7, 9, 8, and 2
 /// also drive the transport and volume (see [`numpad_shortcut`]), and Alt+Up
-/// and Alt+Down move the selected browse row (see [`move_row_shortcut`]).
+/// and Alt+Down move the selected browse row one place while Shift+Alt+Up and
+/// Shift+Alt+Down take it to the list's start or end
+/// (see [`move_row_shortcut`]).
 pub(super) fn message_for(event: Event) -> Option<Message> {
     match event {
         Event::KeyPressed {
@@ -192,15 +194,21 @@ fn panel_shortcut(physical_key: &key::Physical, modifiers: Modifiers) -> Option<
 }
 
 /// Alt+Up and Alt+Down move the selected browse row one place up or down, like
-/// Winamp's playlist editor. The logical arrow key is matched wherever it sits,
-/// and Control, Shift, and Logo must be released; plain arrows stay volume.
+/// Winamp's playlist editor, and Shift+Alt+Up and Shift+Alt+Down take it all
+/// the way to the list's first or last row. The logical arrow key is matched
+/// wherever it sits; Alt must be held with Control and Logo released, while
+/// Shift only widens the move; plain arrows stay volume.
 fn move_row_shortcut(key: &Key, modifiers: Modifiers) -> Option<Message> {
-    if !modifiers.alt() || modifiers.control() || modifiers.shift() || modifiers.logo() {
+    if !modifiers.alt() || modifiers.control() || modifiers.logo() {
         return None;
     }
-    match key {
-        Key::Named(key::Named::ArrowUp) => Some(Message::MoveSelectedRowUp),
-        Key::Named(key::Named::ArrowDown) => Some(Message::MoveSelectedRowDown),
+    match (key, modifiers.shift()) {
+        (Key::Named(key::Named::ArrowUp), false) => Some(Message::MoveSelectedRowUp),
+        (Key::Named(key::Named::ArrowDown), false) => Some(Message::MoveSelectedRowDown),
+        (Key::Named(key::Named::ArrowUp), true) => Some(Message::MoveSelectedRowToTop),
+        (Key::Named(key::Named::ArrowDown), true) => Some(Message::MoveSelectedRowToBottom),
+        // Shift+Alt+Left/Right stays unbound so a plain Shift+arrow keeps the
+        // volume and seek arms unclaimed.
         _ => None,
     }
 }
@@ -1113,9 +1121,23 @@ mod tests {
         assert_maps!(
             Key::Named(key::Named::ArrowDown), Modifiers::ALT => Message::MoveSelectedRowDown
         );
+        // Shift held too widens the one-place move to the list's edge.
+        assert_maps!(
+            Key::Named(key::Named::ArrowUp), Modifiers::ALT | Modifiers::SHIFT => Message::MoveSelectedRowToTop
+        );
+        assert_maps!(
+            Key::Named(key::Named::ArrowDown), Modifiers::ALT | Modifiers::SHIFT => Message::MoveSelectedRowToBottom
+        );
+        // Shift+Alt+Left/Right stays unbound so a plain Shift+arrow keeps the
+        // volume and seek arms unclaimed.
+        for named in [key::Named::ArrowLeft, key::Named::ArrowRight] {
+            assert_unbound!(Key::Named(named), Modifiers::ALT | Modifiers::SHIFT);
+        }
+        // Control+Alt and Alt+Logo remain OS-chord territory, with or without
+        // Shift.
         for modifiers in [
             Modifiers::ALT | Modifiers::CTRL,
-            Modifiers::ALT | Modifiers::SHIFT,
+            Modifiers::ALT | Modifiers::CTRL | Modifiers::SHIFT,
             Modifiers::ALT | Modifiers::LOGO,
         ] {
             for named in [key::Named::ArrowUp, key::Named::ArrowDown] {
