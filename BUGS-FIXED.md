@@ -5,6 +5,30 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### A persist before a relaunch's sign-in lands erases the saved `music_kit_user_token=` line from the settings file — fixed 2026-10-29 by the bugfix role
+
+**Symptom:** a launch that passes a saved token to `init_service` but whose session never arrives
+(sign-in skipped with the variable unset, still in flight, or failed) loses that token on the next
+persist: any changed knob rewrites the settings file with no `music_kit_user_token=` line, so the
+next launch has to re-run the browser flow even though a valid saved token existed. The save path's
+docs and docs/usage.md both promised the saved line is left alone until a fresh sign-in overwrites
+it.
+
+**Reproduce:** `make test-one TEST=a_sessionless_run_keeps_the_adopted_saved_token` — adopt a saved
+snapshot carrying a token on a sessionless player and send one volume message: before the fix the
+written snapshot's token was `None` instead of `Some("ey1.user.ey")`; after the fix it keeps the
+adopted value. `the_landed_sessions_token_replaces_the_adopted_one` covers the rotation case: a
+session that lands replaces an adopted stale token in the next write.
+
+**Cause:** `persist_settings_if_changed` set the snapshot's token straight from the service session
+(`session_user_token`), so a no-session run wrote `None` over the value the launch adopted. The fix
+falls back to the adopted token while no session is stored.
+
+**Validation gap:** unclear-invariant — the existing suite pinned the sessionless run's "stores
+none" behavior (a fresh-start run correctly stores none), so the erasure of an adopted token was
+green; the reconstructed guarantee (a sessionless persist keeps the adopted token until a session's
+token replaces it) is recorded in docs/invariants.md's settings section in the same change.
+
 ### Play after a relaunch with a restored last-played track does nothing (found by the bugfix role 2026-10-29) — fixed 2026-10-29 by the bugfix role
 
 **Symptom.** The last-played-track persistence feature promised that "Play starts it again from

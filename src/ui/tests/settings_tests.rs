@@ -143,6 +143,52 @@ fn an_unchanged_token_writes_nothing() {
 }
 
 #[test]
+fn a_sessionless_run_keeps_the_adopted_saved_token() {
+    let (mut player, _state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+
+    // A launch that passed a saved token to `init_service` but whose session
+    // never arrives — sign-in skipped with the variable unset, still in
+    // flight, or failed — must keep that token in every write it makes: the
+    // docs promise the saved line is left alone until a fresh sign-in
+    // overwrites it, so an ordinary persist before the sign-in lands cannot
+    // erase it.
+    let mut adopted = Settings::from_state(&player.state.blocking_lock());
+    adopted.set_music_kit_user_token(Some("ey1.user.ey".to_string()));
+    player.adopt_saved_settings(adopted);
+
+    let _ = update(&mut player, Message::VolumeChange(0.8));
+
+    let snapshots = store.snapshots();
+    assert_eq!(snapshots.len(), 1);
+    assert_eq!(snapshots[0].music_kit_user_token(), Some("ey1.user.ey"));
+}
+
+#[test]
+fn the_landed_sessions_token_replaces_the_adopted_one() {
+    let (mut player, _state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+
+    // A saved line from an earlier sign-in stays through session-less
+    // persists, and the session that finally lands replaces it in the next
+    // write, so a rotated token is never shadowed by the stale value.
+    let mut adopted = Settings::from_state(&player.state.blocking_lock());
+    adopted.set_music_kit_user_token(Some("old.user".to_string()));
+    player.adopt_saved_settings(adopted);
+    player
+        .apple_music_service
+        .seed_session("ey1.dev.ey", "ey1.user.ey")
+        .unwrap();
+    let _ = update(&mut player, Message::VolumeChange(0.8));
+
+    let snapshots = store.snapshots();
+    assert_eq!(snapshots.len(), 1);
+    assert_eq!(snapshots[0].music_kit_user_token(), Some("ey1.user.ey"));
+}
+
+#[test]
 fn a_sessionless_run_saves_no_token_line() {
     let (mut player, _state) = test_player();
     let store = MemorySettingsStore::default();

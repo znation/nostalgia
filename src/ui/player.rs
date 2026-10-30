@@ -467,8 +467,10 @@ impl WinampPlayer {
     /// position, and the saved `MusicKit` sign-in's user token — read from the
     /// service's session, so a browser sign-in's first persist after it lands
     /// records the token with no dedicated save call, while a no-session run
-    /// stores none and a seeded launch's snapshot equals the saved one and
-    /// rewrites nothing — so
+    /// keeps the token the launch adopted from the settings file (so a
+    /// persist before the sign-in lands, or after it fails or is skipped,
+    /// cannot erase the saved line) and a seeded launch's snapshot equals the
+    /// saved one and rewrites nothing — so
     /// a click on the LCD time, the strip's `V`, the LCD strip's `A`, or a shade
     /// toggle saves exactly one new snapshot.
     /// With no store attached (tests, and before `init_ui` attaches the
@@ -488,7 +490,12 @@ impl WinampPlayer {
         snapshot.set_always_on_top(self.always_on_top);
         snapshot.set_shaded(self.shaded);
         snapshot.set_window_position(self.window_position);
-        snapshot.set_music_kit_user_token(self.apple_music_service.session_user_token());
+        let token = self.apple_music_service.session_user_token().or_else(|| {
+            self.saved_settings
+                .music_kit_user_token()
+                .map(str::to_string)
+        });
+        snapshot.set_music_kit_user_token(token);
         snapshot.set_library_view(self.library_view());
         if snapshot == self.saved_settings {
             return;
@@ -537,7 +544,8 @@ impl WinampPlayer {
     /// only those seven UI-owned values. The saved browse list is left alone:
     /// `handlers::browse::restore_view` opens it as a task, and the saved
     /// sign-in token is left alone too: `main` passed it to `init_service` for
-    /// the seed, and the save path refreshes it from the service's session
+    /// the seed, and the save path refreshes it from the service's session —
+    /// a session-less persist keeps the adopted value until a session lands
     pub(in crate::ui) fn adopt_saved_settings(&mut self, saved: Settings) {
         self.time_display = if saved.time_display_remaining() {
             views::TimeDisplay::Remaining
