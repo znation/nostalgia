@@ -348,6 +348,76 @@ fn an_http_500_reply_classifies_as_other() {
     );
 }
 
+// [`http_response`] with a `Retry-After` header spliced in before the
+// `Content-Length`, for the 429 pins the rate-limit classification needs;
+// `None` omits the header entirely, pinning the no-header message.
+fn http_response_with_retry_after(retry_after: Option<&str>, body: &str) -> String {
+    let header = retry_after
+        .map(|value| format!("Retry-After: {value}\r\n"))
+        .unwrap_or_default();
+    format!(
+        "HTTP/1.1 429 Too Many Requests\r\nContent-Type: application/json\r\n{header}Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    )
+}
+
+// A 429 is Apple Music counting too many requests from this token — a
+// transient failure the user can clear by waiting and retrying, not by
+// signing in again. It is classified `Throttled` so the report can point at
+// the panel's Retry button, and a whole-number-of-seconds `Retry-After` is
+// echoed into the message so the report names how long to wait.
+#[test]
+fn an_http_429_reply_is_classified_as_throttled_with_the_retry_after() {
+    let body = r#"{"errors":[{"title":"Too Many Requests","detail":"Rate limit exceeded"}]}"#;
+    let addr = serve_one_response(&http_response_with_retry_after(Some("5"), body));
+
+    let url = format!("http://{addr}/me/library/artists");
+    let error = UreqTransport::new().get(&url, &rest_session()).unwrap_err();
+    assert_eq!(error.kind(), AppleMusicErrorKind::Throttled);
+    assert_eq!(
+        error.to_string(),
+        "HTTP 429 Too Many Requests: Rate limit exceeded (retry after 5 s)"
+    );
+}
+
+// A 429 whose reply names no `Retry-After` still classifies `Throttled`,
+// with the message byte-identical to what a plain failure would carry — the
+// parenthetical appears only when the header parsed.
+#[test]
+fn an_http_429_without_a_retry_after_classifies_as_throttled_without_the_parenthetical() {
+    let body = r#"{"errors":[{"title":"Too Many Requests","detail":"Rate limit exceeded"}]}"#;
+    let addr = serve_one_response(&http_response_with_retry_after(None, body));
+
+    let url = format!("http://{addr}/me/library/artists");
+    let error = UreqTransport::new().get(&url, &rest_session()).unwrap_err();
+    assert_eq!(error.kind(), AppleMusicErrorKind::Throttled);
+    assert_eq!(
+        error.to_string(),
+        "HTTP 429 Too Many Requests: Rate limit exceeded"
+    );
+}
+
+// A `Retry-After` this client cannot parse as a whole number of seconds —
+// HTTP dates are the other documented form — is ignored rather than echoed,
+// so the message never carries a value the transport itself cannot
+// interpret.
+#[test]
+fn a_malformed_retry_after_is_not_echoed_into_the_message() {
+    let body = r#"{"errors":[{"title":"Too Many Requests","detail":"Rate limit exceeded"}]}"#;
+    let addr = serve_one_response(&http_response_with_retry_after(
+        Some("Fri, 31 Dec 2100 23:59:59 GMT"),
+        body,
+    ));
+
+    let url = format!("http://{addr}/me/library/artists");
+    let error = UreqTransport::new().get(&url, &rest_session()).unwrap_err();
+    assert_eq!(error.kind(), AppleMusicErrorKind::Throttled);
+    assert_eq!(
+        error.to_string(),
+        "HTTP 429 Too Many Requests: Rate limit exceeded"
+    );
+}
+
 // `UreqTransport::get` has a second failure path the stalled-server test does
 // not reach: a response whose headers arrive but whose body cannot be read
 // whole. A server that declares a `Content-Length` and then closes the

@@ -2973,6 +2973,41 @@ and `fetch_failure_report` in `src/ui/loading.rs` (the hint, held in `AUTH_RECOV
 whose every signed-in fetch fails with a bare `HTTP 401/403` report, indistinguishable from any
 other REST failure.
 
+## REST rate limiting
+
+**Guarantee.** An Apple Music REST reply with HTTP status 429 — Apple Music counted too many
+requests from this token and asks the client to back off — is classified at the transport as
+`AppleMusicErrorKind::Throttled` with its message byte-identical to a plain failure's except
+that a `Retry-After` header naming a whole number of seconds is echoed into it as
+` (retry after N s)`; an absent, blank, or unparseable `Retry-After` (HTTP dates included) is
+ignored and leaves the message bare. Every other non-success status keeps its classification
+(401/403 → `Auth`, the rest → `Other`). The browse failure report appends the recovery hint
+naming the wait-and-retry recovery (the panel's Retry button); non-throttled failures report
+byte-identically to a plain failure's format, and the auth hint is not appended on top.
+
+**Enforced by.** `UreqTransport::request`'s non-success branch in
+`src/apple_music/rest/transport.rs` (the 429 → `AppleMusicError::new_throttled` classification
+and the `Retry-After` echo) and `fetch_failure_report` in `src/ui/loading.rs` (the hint, held
+in `THROTTLED_RECOVERY_HINT`).
+
+**Pinned by.**
+
+- `an_http_429_reply_is_classified_as_throttled_with_the_retry_after`
+  ((`src/apple_music/rest/tests/transport.rs`))
+- `an_http_429_without_a_retry_after_classifies_as_throttled_without_the_parenthetical`
+  ((`src/apple_music/rest/tests/transport.rs`))
+- `a_malformed_retry_after_is_not_echoed_into_the_message`
+  ((`src/apple_music/rest/tests/transport.rs`))
+- `an_http_500_reply_classifies_as_other` (`src/apple_music/rest/tests/transport.rs`)
+- `new_throttled_carries_the_throttled_kind_and_renders_bare` (`src/music_error.rs`)
+- `the_throttled_kind_survives_clone_and_equality` (`src/music_error.rs`)
+- `a_throttled_error_report_appends_the_retry_hint` (`src/ui/loading.rs`)
+
+**History.** Added 2026-10-30 by the feature role, landing the plan "Surface Apple Music's HTTP
+429 in the browse failure reports" — a throttled fetch reported a bare `HTTP 429`
+indistinguishable from a hard failure with no pointer at the Retry button the panel already
+owned.
+
 ## Preview download
 
 **Guarantee.** The preview download buffers at most `MAX_PREVIEW_BYTES + 1` bytes from either the

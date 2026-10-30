@@ -120,6 +120,15 @@ where
 const AUTH_RECOVERY_HINT: &str =
     "; Apple Music rejected the signed-in request — sign in again and restart the player";
 
+/// The recovery hint the browse failure report appends when the fetch's
+/// error is a rate limit — Apple Music answered a signed-in request with
+/// HTTP 429, meaning it counted too many requests from this token and asks
+/// the client to back off. The failure is transient, so the recovery is the
+/// browse panel's Retry button rather than a fresh sign-in. Wording pinned
+/// by a test, like [`AUTH_RECOVERY_HINT`].
+const THROTTLED_RECOVERY_HINT: &str =
+    "; Apple Music is rate-limiting these requests — wait a bit, then use the panel's Retry button";
+
 /// Formats the browse-fetch failure report: names the fetch that failed
 /// (e.g. "loading albums for artist \"The Sample Band\" (id \"artist-1\")")
 /// and includes the underlying
@@ -134,11 +143,17 @@ const AUTH_RECOVERY_HINT: &str =
 /// ([`AppleMusicErrorKind::Auth`], which the REST transport builds for an
 /// HTTP 401/403 reply) one hint line naming the recovery — signing in again
 /// — is appended, so a user whose token went stale is pointed at the fix;
+/// when the error is a rate limit ([`AppleMusicErrorKind::Throttled`], which
+/// the REST transport builds for an HTTP 429 reply, its `Retry-After` echoed
+/// into the message) one hint naming the recovery — waiting and retrying —
+/// is appended, so a throttled user is pointed at the panel's Retry button;
 /// every other error reports byte-identically to a plain failure's format.
 fn fetch_failure_report(context: &str, err: &AppleMusicError) -> String {
     let mut report = format!("music-library fetch failed ({context}): {err}");
     if err.kind() == AppleMusicErrorKind::Auth {
         report.push_str(AUTH_RECOVERY_HINT);
+    } else if err.kind() == AppleMusicErrorKind::Throttled {
+        report.push_str(THROTTLED_RECOVERY_HINT);
     }
     report
 }
@@ -412,6 +427,29 @@ mod tests {
                 "music-library fetch failed (loading favorite artists): \
                  HTTP 401 Unauthorized: Invalid developer token\
                  {AUTH_RECOVERY_HINT}"
+            )
+        );
+    }
+
+    // A rate limit (a 429 the transport classified as
+    // `AppleMusicErrorKind::Throttled`) is the other failure whose report
+    // names the recovery — waiting and retrying — because a throttle is
+    // transient and the message alone reads like a hard failure. The full
+    // format is pinned here too; the plain-error pin above already proves a
+    // non-throttled report carries no hint (`AppleMusicError::new` builds
+    // `Other`).
+    #[test]
+    fn a_throttled_error_report_appends_the_retry_hint() {
+        let report = fetch_failure_report(
+            "loading favorite artists",
+            &AppleMusicError::new_throttled("HTTP 429 Too Many Requests (retry after 5 s)"),
+        );
+        assert_eq!(
+            report,
+            format!(
+                "music-library fetch failed (loading favorite artists): \
+                 HTTP 429 Too Many Requests (retry after 5 s)\
+                 {THROTTLED_RECOVERY_HINT}"
             )
         );
     }

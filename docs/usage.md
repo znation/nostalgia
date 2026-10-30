@@ -327,7 +327,11 @@ stale or malformed one, and the saved line is left alone until a fresh browser s
 it. Once a stale token does seed a session, its queries are not answered by the sample library —
 they reach Apple Music and fail with a browse-panel failure report naming the rejected sign-in
 ("Apple Music rejected the signed-in request — sign in again and restart the player"), which a
-fresh browser sign-in overwrites. a user who wants a fresh flow
+fresh browser sign-in overwrites; a throttled query (Apple Music answering HTTP 429 after too
+many requests from your token — its report names the wait, `Apple Music is rate-limiting these
+requests — wait a bit, then use the panel's Retry button`, and echoes `Retry-After` when the
+reply carries one) stays signed in and only needs the browse panel's Retry button once the
+wait is over. a user who wants a fresh flow
 anyway deletes the `music_kit_user_token=` line (with the variable still set) and relaunches. The
 token is stored unencrypted in the settings file like the rest of its content
 (a brand-new settings file is created readable only by its owner, `0600` on

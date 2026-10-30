@@ -34,16 +34,22 @@ pub struct AppleMusicError {
 /// error so a consumer that knows what it can do about a failure — the UI's
 /// browse failure report, say — can read it without parsing the message.
 /// New constructors default to [`AppleMusicErrorKind::Other`]; only the REST
-/// transport's auth-rejection branch builds [`AppleMusicErrorKind::Auth`].
+/// transport's auth-rejection branch builds [`AppleMusicErrorKind::Auth`] and
+/// its 429 branch builds [`AppleMusicErrorKind::Throttled`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AppleMusicErrorKind {
     /// Apple Music rejected the request's authorization — a stale or revoked
     /// `MusicKit` user token, an expired developer token. The recovery is
     /// signing in again.
     Auth,
+    /// Apple Music counted too many requests from this token and answered
+    /// HTTP 429, asking the client to back off. The failure is transient: the
+    /// recovery is waiting a bit and retrying (the browse panel's Retry
+    /// button), not signing in again.
+    Throttled,
     /// Every other failure: a transport error, an unreadable or oversized
-    /// response body, a non-success status that is not an auth rejection, an
-    /// invalid id, a failed sign-in flow.
+    /// response body, a non-success status that is neither an auth rejection
+    /// nor a rate limit, an invalid id, a failed sign-in flow.
     Other,
 }
 
@@ -91,8 +97,25 @@ impl AppleMusicError {
         }
     }
 
+    /// Builds a failure whose [`Display`](std::fmt::Display) output is
+    /// `message` and whose [`kind`](AppleMusicError::kind) is
+    /// [`AppleMusicErrorKind::Throttled`] — the constructor the REST transport
+    /// uses for a 429 reply, where Apple Music counted too many requests from
+    /// this token and asks the client to back off. The message text is
+    /// unchanged from what a plain `new` would carry; only the kind differs,
+    /// so `Display`-based reports read the same and kind-aware consumers can
+    /// react.
+    #[must_use]
+    pub fn new_throttled(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            kind: AppleMusicErrorKind::Throttled,
+        }
+    }
+
     /// The failure's category. `Other` for every failure but a transport
-    /// 401/403 reply, which is [`AppleMusicErrorKind::Auth`].
+    /// 401/403 reply (which is [`AppleMusicErrorKind::Auth`]) and a transport
+    /// 429 reply (which is [`AppleMusicErrorKind::Throttled`]).
     #[must_use]
     pub fn kind(&self) -> AppleMusicErrorKind {
         self.kind.clone()
@@ -160,6 +183,49 @@ mod tests {
         let other = AppleMusicError::new("msg");
         assert_ne!(auth, other, "equal messages with different kinds differ");
         assert_ne!(auth.kind(), other.kind());
+    }
+
+    // The rate-limit twin of the auth pins below: the transport's 429 branch
+    // builds `new_throttled`, so the throttle kind is pinned alongside the
+    // other two, and `Display` stays bare so kind-aware reports read the same
+    // message a plain failure would.
+    #[test]
+    fn new_throttled_carries_the_throttled_kind_and_renders_bare() {
+        assert_eq!(
+            AppleMusicError::new_throttled("x").kind(),
+            AppleMusicErrorKind::Throttled
+        );
+        assert_eq!(AppleMusicError::new("x").kind(), AppleMusicErrorKind::Other);
+        assert_eq!(
+            AppleMusicError::new_throttled("HTTP 429").to_string(),
+            "HTTP 429"
+        );
+    }
+
+    // The throttle kind must survive the clone and equality the seam's
+    // callers rely on, and must be distinguishable from both the auth kind
+    // and the plain one.
+    #[test]
+    fn the_throttled_kind_survives_clone_and_equality() {
+        let throttled = AppleMusicError::new_throttled("msg");
+        assert_eq!(throttled, throttled.clone());
+        assert_eq!(throttled.clone().kind(), AppleMusicErrorKind::Throttled);
+        assert_eq!(
+            AppleMusicError::new_throttled("m"),
+            AppleMusicError::new_throttled("m")
+        );
+        let auth = AppleMusicError::new_auth("msg");
+        let other = AppleMusicError::new("msg");
+        assert_ne!(
+            throttled, auth,
+            "equal messages with different kinds differ"
+        );
+        assert_ne!(
+            throttled, other,
+            "equal messages with different kinds differ"
+        );
+        assert_ne!(throttled.kind(), auth.kind());
+        assert_ne!(throttled.kind(), other.kind());
     }
 
     // The kind is metadata, not message text: an auth-classified error's

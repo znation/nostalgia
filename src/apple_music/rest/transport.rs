@@ -180,12 +180,31 @@ impl UreqTransport {
             // message stays byte-identical to a plain failure's) so the UI's
             // report can hint at the recovery — signing in again — without
             // parsing the status text.
-            let message = match api_error_cause(&body) {
+            //
+            // A 429 is Apple Music counting too many requests from this
+            // token and asking the client to back off. It is classified as
+            // `Throttled` so the UI's report can point at the transient
+            // recovery — wait and retry — instead of leaving a throttle
+            // looking like a hard failure. The `Retry-After` header, when it
+            // names a whole number of seconds, is echoed into the message (`
+            // (retry after N s)`); an absent or unparseable one is ignored —
+            // nothing is invented from a value this client does not
+            // understand.
+            let retry_after = response
+                .headers()
+                .get("Retry-After")
+                .and_then(|value| value.to_str().ok())
+                .and_then(|value| value.trim().parse::<u64>().ok());
+            let mut message = match api_error_cause(&body) {
                 Some(cause) => format!("HTTP {status}: {cause}"),
                 None => format!("HTTP {status}"),
             };
+            if let Some(seconds) = retry_after {
+                message.push_str(&format!(" (retry after {seconds} s)"));
+            }
             Err(match status.as_u16() {
                 401 | 403 => AppleMusicError::new_auth(message),
+                429 => AppleMusicError::new_throttled(message),
                 _ => AppleMusicError::new(message),
             })
         }
