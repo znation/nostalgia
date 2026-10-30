@@ -5,7 +5,7 @@
 use std::time::Duration;
 
 use crate::audio::{PlaybackFormat, Spectrum};
-use crate::equalizer::Preset;
+use crate::equalizer::PresetChoice;
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::ui::composers::Composer;
 use crate::ui::genres::Genre;
@@ -159,7 +159,7 @@ pub(in crate::ui) enum Message {
     EqBandChange(usize, f32),
     // From a press on an equalizer dB scale label; carries that label's gain.
     EqBandsSetAll(f32),
-    EqPresetSelected(Preset),
+    EqPresetSelected(PresetChoice),
     NextTrack,
     PreviousTrack,
     // A click on the Next button: the last song while Control is held, otherwise one step forward.
@@ -448,6 +448,18 @@ pub(in crate::ui) enum Message {
     JumpTimeChanged(String),
     // Enter or the `Jump` button: seeks to the typed time and closes the panel.
     JumpTimeSubmitted,
+    // The preset pick list's `Save preset…` row: flips the transient Save
+    // preset panel. Opening it closes About, Options, File info, Jump to time,
+    // and Jump to File, and while shaded first restores the window, exactly
+    // like the other panel toggles. The flag is not persisted.
+    ToggleSavePreset,
+    // A keystroke in the Save preset box: stores the typed name and clears
+    // the panel's inline note.
+    SavePresetNameChanged(String),
+    // Enter or the `Save` button: saves the applied curve under the typed
+    // name (reprompting inline on an empty name, a built-in's name, or a
+    // colon) and closes the panel.
+    SavePresetSubmitted,
     // Plain J: flips the transient Jump to File panel. Opening needs a showing
     // song list (Songs or All Songs), closes About, Options, File info, and Jump
     // to time, and while shaded first restores the window. The flag is not
@@ -479,9 +491,10 @@ pub(in crate::ui) enum Message {
         index: usize,
     },
     // A plain or Shift-held Escape press while a transient panel is open:
-    // close the showing About, Options, File info, Jump to time, or Jump to
-    // File panel by clearing only those five visibility flags. No other state
-    // changes and no work is scheduled; with no panel open the arm is a no-op.
+    // close the showing About, Options, File info, Jump to time, Save preset,
+    // or Jump to File panel by clearing only those six visibility flags. No
+    // other state changes and no work is scheduled; with no panel open the
+    // arm is a no-op.
     EscapePressed,
     // The LCD strip's always-on-top toggle. The arm flips the flag and
     // schedules `iced::window::set_level` for the resolved window, which is a

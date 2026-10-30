@@ -496,6 +496,80 @@ fn jump_time_element() -> Element<'static, Message> {
     super::super::view_jump_time_overlay(base, "", std::time::Duration::from_secs(30))
 }
 
+fn save_preset_element() -> Element<'static, Message> {
+    let base: Element<'_, Message> = iced::widget::Space::new()
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into();
+    super::super::view_save_preset_overlay(base, "Very Fuzzed", Some(super::super::EMPTY_NAME_NOTE))
+}
+
+#[test]
+fn save_preset_overlay_draws_its_heading_note_and_buttons() {
+    // The box's own text is iced's, not an ordinary text draw, so the
+    // captured texts pin the heading, the stored inline note, and the
+    // buttons; the typed name is covered by `save_preset_name_changed` and
+    // the submit tests in `src/ui/tests/mixer_tests.rs`.
+    let mut element = save_preset_element();
+    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+    let texts: Vec<&str> = capture.texts().collect();
+    for expected in [
+        "SAVE PRESET",
+        super::super::EMPTY_NAME_NOTE,
+        "Save",
+        "Close",
+    ] {
+        assert!(
+            texts.contains(&expected),
+            "the Save preset overlay must draw {expected:?}: {texts:?}"
+        );
+    }
+}
+
+// A Save preset panel without a stored note draws none, so a just-opened
+// panel shows only the heading, the box, and the buttons.
+#[test]
+fn save_preset_overlay_without_a_note_draws_no_note() {
+    let base: Element<'_, Message> = iced::widget::Space::new()
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into();
+    let mut element = super::super::view_save_preset_overlay(base, "", None);
+    let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
+    let texts: Vec<&str> = capture.texts().collect();
+    assert!(
+        !texts.contains(&super::super::EMPTY_NAME_NOTE),
+        "a fresh panel must not pre-draw the empty-name note: {texts:?}"
+    );
+}
+
+#[test]
+fn save_preset_overlay_buttons_and_backdrop_publish_their_messages() {
+    let mut renderer = layout_capture::headless_renderer();
+    for target in ["Close", "BACKDROP", "Save"] {
+        let mut element = save_preset_element();
+        let capture = layout_capture::capture_text(&mut element, &renderer);
+        let point = if target == "BACKDROP" {
+            iced::Point::new(2.0, capture.size().height - 2.0)
+        } else {
+            let bounds = capture.find(target);
+            iced::Point::new(bounds.center_x(), bounds.center_y())
+        };
+        let messages = layout_capture::click_at(element, &mut renderer, point);
+        if target == "Save" {
+            assert!(
+                matches!(messages.as_slice(), [Message::SavePresetSubmitted]),
+                "Save must publish one SavePresetSubmitted: {messages:?}"
+            );
+        } else {
+            assert!(
+                matches!(messages.as_slice(), [Message::ToggleSavePreset]),
+                "{target} must publish one ToggleSavePreset: {messages:?}"
+            );
+        }
+    }
+}
+
 #[test]
 fn jump_time_overlay_draws_its_heading_length_and_buttons() {
     let mut element = jump_time_element();

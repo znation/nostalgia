@@ -64,6 +64,81 @@ impl std::fmt::Display for Preset {
     }
 }
 
+/// A named curve the player itself saved: a display name plus the same
+/// preamp-and-band shape as [`Preset`].
+///
+/// `Preset`'s own `name` is a `&'static str`, so a runtime-named curve gets
+/// its own type rather than a compile-time-name copy. `from_curve` clamps
+/// every gain at construction, so a stored curve — built from the shared
+/// state or parsed back from the settings file — can never leave
+/// [`GAIN_MIN_DB`]..=[`GAIN_MAX_DB`]. `Display` and `PartialEq` let iced's
+/// `PickList` render the name and the view code compare choices, like
+/// [`Preset`]; `Clone` because a `String` name cannot be `Copy`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CustomPreset {
+    /// The curve's display name, shown in the equalizer's pick list.
+    pub name: String,
+    /// The preamp gain in decibels, applied ahead of the bands.
+    pub preamp: f32,
+    /// The per-band gains in decibels, low frequency to high.
+    pub bands: [f32; BAND_COUNT],
+}
+
+impl CustomPreset {
+    /// Builds a custom preset named `name` with [`clamp_gain`] applied over
+    /// the preamp and every band, so a curve built from a hand-edited settings
+    /// line or a NaN slider value still stores only in-range gains.
+    #[must_use]
+    pub fn from_curve(name: String, preamp: f32, bands: [f32; BAND_COUNT]) -> Self {
+        Self {
+            name,
+            preamp: clamp_gain(preamp),
+            bands: bands.map(clamp_gain),
+        }
+    }
+}
+
+impl std::fmt::Display for CustomPreset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.name)
+    }
+}
+
+/// The preset pick list's top row: a save trigger, not a curve. Selecting it
+/// opens the transient Save preset naming panel instead of applying anything
+/// (see `crate::ui::handlers::mixer::eq_preset_selected`; `handlers` is a
+/// private `ui` module, so this is a plain path, not a link).
+pub const SAVE_PRESET_LABEL: &str = "Save preset\u{2026}";
+
+/// One equalizer pick-list item: the save row, a built-in curve, or a
+/// name the user saved.
+///
+/// `Display` renders each variant's row label — [`SAVE_PRESET_LABEL`] for
+/// `Save`, the curve's own name otherwise — and `PartialEq + Clone` match
+/// iced's `PickList` item requirements; no `Copy`, because [`CustomPreset`]
+/// holds a `String`. The `Preset`-taking state path
+/// ([`crate::state::AppState::apply_eq_preset`] and the mixer handlers') is
+/// unchanged: only the pick list's items and its message carry the choice.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PresetChoice {
+    /// The pick list's top row, which opens the Save preset naming panel.
+    Save,
+    /// One of the built-in [`PRESETS`] curves.
+    BuiltIn(Preset),
+    /// One of the player's saved [`CustomPreset`] curves.
+    Custom(CustomPreset),
+}
+
+impl std::fmt::Display for PresetChoice {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Save => f.write_str(SAVE_PRESET_LABEL),
+            Self::BuiltIn(preset) => write!(f, "{preset}"),
+            Self::Custom(preset) => write!(f, "{preset}"),
+        }
+    }
+}
+
 /// The Winamp 2.x equalizer preset curves, in base-skin order.
 ///
 /// The classic Winamp preset list, from Flat through Vocal, with the
@@ -208,8 +283,8 @@ pub fn clamp_gain(gain: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::{
-        BAND_COUNT, BAND_FREQUENCIES, BAND_HZ, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, clamp_gain,
-        preset_for_genre,
+        BAND_COUNT, BAND_FREQUENCIES, BAND_HZ, CustomPreset, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS,
+        PresetChoice, SAVE_PRESET_LABEL, clamp_gain, preset_for_genre,
     };
     use crate::test_support::rock_preset;
 
@@ -293,6 +368,45 @@ mod tests {
         // The shared clamp handles the NaN branch; this pins that
         // `clamp_gain` passes the flat fallback.
         assert_eq!(clamp_gain(f32::NAN), 0.0);
+    }
+
+    // `from_curve` is the single constructor for every custom preset, whatever
+    // source it came from — the shared state's stored gains or a hand-edited
+    // settings line — so a curve leaving it must already be clamped, even for
+    // input a slider or a settings file never produced.
+    #[test]
+    fn from_curve_clamps_the_whole_curve() {
+        let mut bands = [0.0; BAND_COUNT];
+        bands[0] = 13.0;
+        bands[1] = -13.0;
+        bands[2] = f32::NAN;
+        let preset = CustomPreset::from_curve(String::from("Fuzz"), 99.0, bands);
+        assert_eq!(preset.name, "Fuzz");
+        assert_eq!(preset.preamp, GAIN_MAX_DB);
+        assert_eq!(preset.bands[0], GAIN_MAX_DB);
+        assert_eq!(preset.bands[1], GAIN_MIN_DB);
+        assert_eq!(preset.bands[2], 0.0);
+    }
+
+    // The pick list draws every row through `Display`, so each variant must
+    // name its own row: the save sentinel, the built-in's name, or the saved
+    // custom's name.
+    #[test]
+    fn preset_choices_render_their_own_labels() {
+        assert_eq!(PresetChoice::Save.to_string(), SAVE_PRESET_LABEL);
+        assert_eq!(
+            PresetChoice::BuiltIn(PRESETS[0]).to_string(),
+            PRESETS[0].name
+        );
+        let custom = CustomPreset::from_curve(String::from("Very Fuzzed"), 0.0, [0.0; BAND_COUNT]);
+        assert_eq!(
+            PresetChoice::Custom(custom.clone()).to_string(),
+            "Very Fuzzed"
+        );
+        assert_eq!(
+            PresetChoice::Custom(custom.clone()),
+            PresetChoice::Custom(custom.clone())
+        );
     }
 
     // `PRESETS` is the equalizer's user-visible pick-list content: iced's

@@ -4,7 +4,7 @@
 
 use super::Settings;
 use super::library_view::LibraryView;
-use crate::equalizer;
+use crate::equalizer::{self, CustomPreset};
 
 impl Settings {
     /// Render the snapshot as the line-based `key=value` text the settings
@@ -23,6 +23,20 @@ impl Settings {
         text.push_str(&format!("eq_preamp={}\n", self.eq_preamp));
         for (band, gain) in self.eq_bands.iter().enumerate() {
             text.push_str(&format!("eq_band_{band}={gain}\n"));
+        }
+        // One line per saved custom curve, written before `eq_preset=` like
+        // the equalizer values it repeats. The gains use the same float
+        // format the `eq_preamp`/`eq_band_*` lines use.
+        for preset in &self.eq_custom_presets {
+            text.push_str("eq_custom_preset=");
+            text.push_str(&preset.name);
+            text.push(':');
+            text.push_str(&format!("{}", preset.preamp));
+            for gain in preset.bands {
+                text.push(',');
+                text.push_str(&format!("{gain}"));
+            }
+            text.push('\n');
         }
         text.push_str(&format!(
             "eq_preset={}\n",
@@ -92,6 +106,7 @@ impl Settings {
                 // A malformed value leaves the default AUTO off.
                 "eq_auto" => parse_into(&mut settings.eq_auto, value),
                 "eq_preamp" => parse_number_into(&mut settings.eq_preamp, value),
+                "eq_custom_preset" => settings.parse_eq_custom_preset(value),
                 "eq_preset" => settings.parse_eq_preset(value),
                 // Only the two written words are recognized; any other value
                 // leaves the default elapsed mode.
@@ -148,6 +163,47 @@ impl Settings {
             }
         }
         settings
+    }
+
+    /// Apply an `eq_custom_preset` line as `<name>:<preamp>,<band>,…,<band>`.
+    /// A line without a `:`, a blank name, a field count other than
+    /// `BAND_COUNT + 1`, or a malformed-or-NaN gain is skipped like the other
+    /// malformed-value lines; the text before the first `:` becomes the name
+    /// and `from_curve` clamps the gains it keeps. Repeated lines each push
+    /// one preset in file order, as `.bak`-free repeated keys behave today:
+    /// every valid line loads, and a name equal to an already-loaded one is a
+    /// later row, not a replacement (the player's own replace-on-save rule is
+    /// the naming panel's, not the file's).
+    fn parse_eq_custom_preset(&mut self, value: &str) {
+        let Some((name, curve)) = value.split_once(':') else {
+            return;
+        };
+        if name.is_empty() {
+            return;
+        }
+        let fields: Vec<&str> = curve.split(',').collect();
+        if fields.len() != equalizer::BAND_COUNT + 1 {
+            return;
+        }
+        let mut numbers = Vec::with_capacity(fields.len());
+        for field in &fields {
+            let Ok(number) = field.parse::<f32>() else {
+                return;
+            };
+            if number.is_nan() {
+                return;
+            }
+            numbers.push(number);
+        }
+        // The count check above makes the slice pattern and `try_from`
+        // below succeed; the `else { return }` is only the borrow checker's
+        // proof of that.
+        if let [gain, rest @ ..] = numbers.as_slice()
+            && let Ok(bands) = <[f32; equalizer::BAND_COUNT]>::try_from(rest)
+        {
+            self.eq_custom_presets
+                .push(CustomPreset::from_curve(name.to_string(), *gain, bands));
+        }
     }
 
     /// Apply an `eq_preset` line: empty clears the preset, a known name selects

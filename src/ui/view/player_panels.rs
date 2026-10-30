@@ -120,7 +120,12 @@ pub(super) fn view_player_panels(
         player_panels = player_panels
             .push(views::view_title_band("NOSTALGIA EQUALIZER"))
             .push(views::view_equalizer(
-                eq_enabled, eq_auto, eq_preamp, &eq_bands, eq_preset,
+                eq_enabled,
+                eq_auto,
+                eq_preamp,
+                &eq_bands,
+                eq_preset,
+                &player.custom_eq_presets,
             ));
     }
 

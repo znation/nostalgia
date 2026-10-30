@@ -27,7 +27,7 @@ pub mod seam;
 mod text;
 pub mod writer;
 
-use crate::equalizer::{self, Preset};
+use crate::equalizer::{self, CustomPreset, Preset};
 use crate::state::AppState;
 use library_view::LibraryView;
 
@@ -63,6 +63,7 @@ pub struct Settings {
     eq_preamp: f32,
     eq_bands: [f32; equalizer::BAND_COUNT],
     eq_preset: Option<Preset>,
+    eq_custom_presets: Vec<CustomPreset>,
     time_display_remaining: bool,
     visualizer_visible: bool,
     eq_panel_visible: bool,
@@ -93,6 +94,7 @@ impl Default for Settings {
             eq_preamp: 0.0,
             eq_bands: [0.0; equalizer::BAND_COUNT],
             eq_preset: None,
+            eq_custom_presets: Vec::new(),
             time_display_remaining: false,
             visualizer_visible: true,
             eq_panel_visible: true,
@@ -123,6 +125,10 @@ impl Settings {
             eq_preamp: state.eq_preamp(),
             eq_bands: state.eq_bands(),
             eq_preset: state.eq_preset(),
+            // The player's own saved list: `AppState` does not hold it, so the
+            // player overwrites it before saving, like the UI-owned flags
+            // below.
+            eq_custom_presets: Vec::new(),
             time_display_remaining: false,
             visualizer_visible: true,
             eq_panel_visible: true,
@@ -303,6 +309,26 @@ impl Settings {
         if let Some(preset) = self.eq_preset {
             state.apply_eq_preset(preset);
         }
+        // The saved customs deliberately apply nothing: the applied curve
+        // comes back through the `eq_preamp`/`eq_band_*` lines above, and the
+        // list only re-feeds the pick list through the player's restored
+        // value (`adopt_saved_settings`), exactly like the UI-owned flags
+        // `apply_to` leaves alone.
+    }
+
+    /// The player's saved custom equalizer curves, in stored order. The
+    /// player owns this value, so it overwrites it on its fresh snapshot
+    /// before saving and restores it from the loaded snapshot at boot.
+    #[must_use]
+    pub fn eq_custom_presets(&self) -> &[CustomPreset] {
+        &self.eq_custom_presets
+    }
+
+    /// Set the saved custom equalizer curves. The player calls this on its
+    /// fresh snapshot before saving; [`Self::apply_to`] deliberately leaves
+    /// the list alone.
+    pub fn set_eq_custom_presets(&mut self, presets: Vec<CustomPreset>) {
+        self.eq_custom_presets = presets;
     }
 }
 
@@ -612,6 +638,44 @@ mod tests {
 
         let kept = Settings::from_text("eq_preset=Rock\neq_preset=Unknown\n");
         assert_eq!(kept.eq_preset, Some(rock));
+    }
+
+    // The saved custom curves are a repeated `eq_custom_preset=` line in the
+    // same family as `eq_preamp`/`eq_band_*`: every valid line loads in file
+    // order, `from_curve` clamps out-of-range gains, and a line without a
+    // `:`, a blank name, the wrong field count, or a malformed-or-NaN gain
+    // is skipped without failing the load. The whole list must round-trip
+    // through `to_text` → `from_text` untouched.
+    #[test]
+    fn eq_custom_preset_lines_round_trip_and_skip_the_malformed_ones() {
+        let text = "eq_custom_preset=Very Fuzzed:2.5,1,2,3,4,5,6,7,8,9,10\n\
+                    eq_custom_preset:missing=separator\n\
+                    eq_custom_preset=:1,2,3,4,5,6,7,8,9,10,11\n\
+                    eq_custom_preset=Short:1,2,3\n\
+                    eq_custom_preset=NaN gain:0,1,2,3,4,5,6,7,8,9,NaN\n\
+                    eq_custom_preset=Clamped:99,-99,0,0,0,0,0,0,0,0,0\n";
+        let settings = Settings::from_text(text);
+        assert_eq!(settings.eq_custom_presets().len(), 2);
+        let fuzzed = &settings.eq_custom_presets()[0];
+        assert_eq!(fuzzed.name, "Very Fuzzed");
+        assert_eq!(fuzzed.preamp, 2.5);
+        assert_eq!(
+            fuzzed.bands,
+            [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
+        );
+        let clamped = &settings.eq_custom_presets()[1];
+        assert_eq!(clamped.name, "Clamped");
+        assert_eq!(clamped.preamp, equalizer::GAIN_MAX_DB);
+        assert_eq!(clamped.bands[0], equalizer::GAIN_MIN_DB);
+
+        assert_eq!(Settings::from_text(&settings.to_text()), settings);
+        assert!(
+            settings
+                .to_text()
+                .contains("eq_custom_preset=Very Fuzzed:2.5")
+        );
+        // A default snapshot writes no custom lines at all.
+        assert!(!Settings::default().to_text().contains("eq_custom_preset"));
     }
 
     #[test]

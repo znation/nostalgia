@@ -7,7 +7,7 @@ use super::views::{BROWSE_LIST_ID, BROWSE_PAGE_HEIGHT, BROWSE_SEARCH_ID, BROWSE_
 use super::years::{Year, group_by_year};
 use super::*;
 use crate::audio::{PlaybackFormat, Spectrum};
-use crate::equalizer::{BAND_COUNT, GAIN_MAX_DB, GAIN_MIN_DB};
+use crate::equalizer::{BAND_COUNT, CustomPreset, GAIN_MAX_DB, GAIN_MIN_DB, PresetChoice};
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::sample_library::sample_library;
 use crate::settings::Settings;

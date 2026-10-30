@@ -9,13 +9,17 @@
 use iced::Task;
 
 use crate::apple_music::{AppleMusicError, AppleMusicService};
-use crate::equalizer::{BAND_COUNT, Preset, preset_for_genre};
+use crate::equalizer::{BAND_COUNT, CustomPreset, PresetChoice, preset_for_genre};
 use crate::state::AppState;
 use crate::ui::player::MIXER_FLASH_TICKS;
 use crate::ui::views;
+use crate::ui::views::{
+    BUILT_IN_NAME_NOTE, COLON_NAME_NOTE, EMPTY_NAME_NOTE, SAVE_PRESET_INPUT_ID,
+};
 use crate::ui::{Message, WinampPlayer};
 
 use super::playback::preview::seek_by_failure_report;
+use super::window::toggle_window_shade;
 
 /// The volume slider's drag: sets the playback level.
 pub(in crate::ui) fn volume_change(player: &mut WinampPlayer, volume: f32) -> Task<Message> {
@@ -194,11 +198,120 @@ pub(in crate::ui) fn eq_bands_set_all(player: &mut WinampPlayer, gain: f32) -> T
 }
 
 /// A preset pick from the equalizer's preset list.
+///
+/// A built-in keeps today's whole-curve application verbatim; a saved custom
+/// applies its whole curve through the same `mutate_equalizer` path with the
+/// shared clamped setters, which leave the selection `None`, so the closed
+/// pick-list label keeps reading `Custom` for it; and the save row applies
+/// nothing — it opens the naming panel instead.
 pub(in crate::ui) fn eq_preset_selected(
     player: &mut WinampPlayer,
-    preset: Preset,
+    choice: PresetChoice,
 ) -> Task<Message> {
-    mutate_equalizer(player, |state| state.apply_eq_preset(preset))
+    match choice {
+        PresetChoice::BuiltIn(preset) => {
+            mutate_equalizer(player, |state| state.apply_eq_preset(preset))
+        }
+        PresetChoice::Custom(preset) => mutate_equalizer(player, |state| {
+            state.set_eq_preamp(preset.preamp);
+            for (band, gain) in preset.bands.iter().enumerate() {
+                state.set_eq_band(band, *gain);
+            }
+        }),
+        PresetChoice::Save => toggle_save_preset(player),
+    }
+}
+
+/// The pick list's `Save preset…` row or the panel's `Close` button: flip
+/// the transient Save preset panel. Opening it opens with an empty box and
+/// closes About, Options, File info, Jump to time, and Jump to File through
+/// [`WinampPlayer::close_transient_panels`], focuses and selects the name
+/// box, and while shaded first restores the window as [`toggle_save_preset`]'s
+/// panel openers do. Closing only clears the flag. The flag is layout-only
+/// and not persisted.
+pub(in crate::ui) fn toggle_save_preset(player: &mut WinampPlayer) -> Task<Message> {
+    if player.save_preset_open {
+        player.save_preset_open = false;
+        return Task::none();
+    }
+    player.close_transient_panels();
+    player.save_preset_open = true;
+    player.save_preset_name.clear();
+    player.save_preset_note = None;
+    let focus = Task::batch([
+        iced::widget::operation::focus(SAVE_PRESET_INPUT_ID),
+        iced::widget::operation::select_all(SAVE_PRESET_INPUT_ID),
+    ]);
+    if player.shaded {
+        Task::batch([toggle_window_shade(player), focus])
+    } else {
+        focus
+    }
+}
+
+/// A keystroke in the Save preset box: store the typed name and clear the
+/// panel's inline note, so the next submit re-asks from a clean slate.
+pub(in crate::ui) fn save_preset_name_changed(
+    player: &mut WinampPlayer,
+    text: String,
+) -> Task<Message> {
+    player.save_preset_name = text;
+    player.save_preset_note = None;
+    Task::none()
+}
+
+/// Enter or the panel's `Save` button: with the panel open, save the equalizer's
+/// applied curve — its stored preamp and band gains — under the trimmed
+/// typed name and close the panel; an empty name keeps the panel open with
+/// the `Type a name` note, a name that is a built-in's (any case) shows
+/// `Already a preset` and saves nothing, and a name containing `:` shows
+/// `Use it without a colon`. On success an existing save of the same name
+/// (case-insensitive) is replaced in place — its stored name as first saved
+/// stays, only the curve updates — otherwise the curve pushes onto the end
+/// of the saved list. The persist runs through the shared
+/// [`WinampPlayer::persist_settings_if_changed`] sweep after the message, so
+/// the saved file carries the new `eq_custom_preset=` line with no dedicated
+/// write here. The saved curve is not applied by saving: the shared state
+/// holds the identical curve already, and the closed pick-list label keeps
+/// reading `Custom` while it is live, exactly as a hand-tuned curve does.
+pub(in crate::ui) fn save_preset_submitted(player: &mut WinampPlayer) -> Task<Message> {
+    if !player.save_preset_open {
+        return Task::none();
+    }
+    let name = player.save_preset_name.trim();
+    if name.is_empty() {
+        player.save_preset_note = Some(EMPTY_NAME_NOTE);
+        return Task::none();
+    }
+    if name.contains(':') {
+        player.save_preset_note = Some(COLON_NAME_NOTE);
+        return Task::none();
+    }
+    if crate::equalizer::PRESETS
+        .iter()
+        .any(|preset| preset.name.eq_ignore_ascii_case(name))
+    {
+        player.save_preset_note = Some(BUILT_IN_NAME_NOTE);
+        return Task::none();
+    }
+    let (preamp, bands) = {
+        let state = player.state.blocking_lock();
+        (state.eq_preamp(), state.eq_bands())
+    };
+    let saved = CustomPreset::from_curve(name.to_string(), preamp, bands);
+    if let Some(existing) = player
+        .custom_eq_presets
+        .iter_mut()
+        .find(|existing| existing.name.eq_ignore_ascii_case(name))
+    {
+        existing.preamp = saved.preamp;
+        existing.bands = saved.bands;
+    } else {
+        player.custom_eq_presets.push(saved);
+    }
+    player.save_preset_open = false;
+    player.save_preset_note = None;
+    Task::none()
 }
 
 /// The shared-state setting a mixer handler writes and then forwards to the

@@ -12,8 +12,8 @@ use super::browse::{
 use super::equalizer::{
     AUTO_BUTTON_WIDTH, CUSTOM_PRESET_LABEL, EQ_SLIDER_HEIGHT, RESPONSE_CURVE_COLUMNS,
     RESPONSE_CURVE_GUIDE_THICKNESS, RESPONSE_CURVE_HEIGHT, RESPONSE_CURVE_LINE_HEIGHT, auto_label,
-    auto_toggle, eq_enabled_label, eq_toggle, preamp_slider_style, preset_pick_list_label,
-    response_curve_offsets, response_curve_row,
+    auto_toggle, eq_enabled_label, eq_toggle, preamp_slider_style, preset_choices,
+    preset_pick_list_label, response_curve_offsets, response_curve_row,
 };
 use super::mini_transport::{
     MINI_SEEK_ID, MINI_TRANSPORT_HEIGHT, MINI_VOLUME_ID, MINI_VOLUME_WIDTH, compact_readout_color,
@@ -55,7 +55,8 @@ use super::{
 };
 use crate::audio::{PlaybackFormat, Spectrum};
 use crate::equalizer::{
-    BAND_COUNT, BAND_FREQUENCIES, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, clamp_gain,
+    BAND_COUNT, BAND_FREQUENCIES, CustomPreset, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, PresetChoice,
+    clamp_gain,
 };
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::sample_library::sample_library;

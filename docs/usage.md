@@ -59,7 +59,8 @@ between the stored band gains above ten band
 sliders, with a vertical preamp slider and a `+12 dB` / `0 dB` / `-12 dB` scale to their left; the
 plot marks the 0 dB midline and the ten bands with dim guides behind the green trace, and its
 preset pick list names the applied preset and reads `Custom` when no preset is applied, whether
-on a fresh launch or after a slider move makes the curve your own),
+on a fresh launch or after a slider move makes the curve your own, and offers the `Save preset…`
+row and the curves saved through it after the built-ins),
 a lightning button at the end of the row,
 and a browse list whose song rows read `artist - title` (or the title alone when the source
 supplies no artist) and show each track's length at the right, whose album rows read
@@ -250,7 +251,19 @@ genre matches a preset name case-insensitively (say `rock` or `Rock`) applies th
 curve and names it in the pick list, while a blank or unmatched genre leaves the current curve
 alone; `AUTO: Off` never changes the curve. Clicking `+12 DB`, `0 DB`, or
 `-12 DB` sets all ten bands to that gain and leaves the preamp alone; the volume and balance are
-remembered for the next track. Setting
+remembered for the next track. The pick list's top row, `Save preset…`, opens a naming panel:
+type a name and press Enter (or the panel's `Save` button) to save the equalizer's applied curve
+— its stored preamp and band gains — under that name, and the panel's backdrop, `Close` button,
+Escape, or opening any other panel closes it. An empty name keeps the panel open with an inline
+`Type a name` note, a name already used by a built-in (any case) shows an inline `Already a
+preset` note and saves nothing, and a name containing `:` shows `Use it without a colon` (the
+settings line's separator is the colon); typing clears the note. Saving over an existing custom's
+name (any case) keeps one row and replaces only its curve, keeping the name as first saved. The
+pick list then offers the saved curves after the built-ins; choosing one applies its whole curve
+(and the closed label reads `Custom` while it is applied, exactly as a hand-tuned curve does),
+and the saved list survives relaunches in the settings file; an applied custom relaunches with
+the label `Custom` and its curve restored, since the saved `eq_preset=` name keeps naming only
+built-ins. Setting
 `APPLE_MUSIC_DEVELOPER_TOKEN` at launch starts a browser-based MusicKit sign-in: browse and search
 queries then read your Apple Music library through the REST API, and fall back to the built-in
 sample library when it is unset. The settings file also saves the last successful sign-in's token
@@ -277,7 +290,7 @@ options menu's `Manual playlist advance: On/Off` row, persisted in the settings 
 Shuffle), a song that plays to its end stops instead of advancing, whatever Repeat or Shuffle say;
 Repeat, Next, Previous, Ctrl+Z/Ctrl+B, and the jump rows still move you, and turning it off restores
 the normal end-of-song advance. The volume, balance, Repeat, Shuffle, and Manual playlist advance flags, the equalizer's on/off
-state, AUTO choice, curve, and preset, the elapsed/remaining readout choice, the visualizer's
+state, AUTO choice, curve, and preset, the equalizer's saved custom preset curves, the elapsed/remaining readout choice, the visualizer's
 shown/hidden choice, the equalizer and library panels' shown/hidden choices, the always-on-top
 choice, the window-shade mode, the window's last screen position, the last-played track, the saved
 MusicKit sign-in token, and the library's top-level browse list (Artists, All

@@ -28,7 +28,10 @@ fn repeat_and_equalizer_changes_reach_the_saved_snapshot() {
         Settings::from_state(&state.blocking_lock())
     );
 
-    let _ = update(&mut player, Message::EqPresetSelected(rock_preset()));
+    let _ = update(
+        &mut player,
+        Message::EqPresetSelected(PresetChoice::BuiltIn(rock_preset())),
+    );
     let current = {
         let state = state.blocking_lock();
         assert!(state.repeat);
@@ -661,4 +664,60 @@ fn session_ready_refetches_only_the_flat_list_showing() {
     let _ = update(&mut player, Message::SessionReady);
     assert_eq!(player.current_view, CurrentView::AllSongs);
     assert!(player.search_active);
+}
+
+// Saving a preset through the naming panel reaches the saved snapshot as an
+// `eq_custom_preset=` row: the player carries its `custom_eq_presets` list
+// onto the snapshot before `to_text`, so one save writes exactly one new
+// snapshot and the panel open/close and typing alone write none.
+#[test]
+fn saving_a_preset_reaches_the_saved_snapshot() {
+    let (mut player, state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+    let _ = update(
+        &mut player,
+        Message::EqPresetSelected(PresetChoice::BuiltIn(rock_preset())),
+    );
+
+    let _ = update(
+        &mut player,
+        Message::SavePresetNameChanged("Very Fuzzed".to_string()),
+    );
+    let _ = update(&mut player, Message::SavePresetSubmitted);
+
+    let expected = {
+        let state = state.blocking_lock();
+        let mut snapshot = Settings::from_state(&state);
+        snapshot.set_eq_custom_presets(player.custom_eq_presets.clone());
+        snapshot
+    };
+    assert_eq!(store.snapshots(), vec![expected]);
+
+    // Opening and closing the panel alone writes nothing.
+    let _ = update(&mut player, Message::ToggleSavePreset);
+    let _ = update(&mut player, Message::ToggleSavePreset);
+    assert_eq!(store.snapshots().len(), 1);
+}
+
+// A relaunch adopts the saved custom curves: `adopt_saved_settings` reads
+// them off the loaded snapshot, so the pick list offers them again.
+#[test]
+fn the_saved_custom_presets_are_adopted_at_launch() {
+    let (mut player, _state) = test_player();
+    let mut bands: [f32; BAND_COUNT] = [0.0; BAND_COUNT];
+    bands[0] = GAIN_MAX_DB;
+    let mut saved = Settings::default();
+    saved.set_eq_custom_presets(vec![CustomPreset::from_curve(
+        String::from("Very Fuzzed"),
+        2.5,
+        bands,
+    )]);
+
+    player.adopt_saved_settings(saved);
+
+    assert_eq!(player.custom_eq_presets.len(), 1);
+    assert_eq!(player.custom_eq_presets[0].name, "Very Fuzzed");
+    assert_eq!(player.custom_eq_presets[0].preamp, 2.5);
+    assert_eq!(player.custom_eq_presets[0].bands, bands);
 }

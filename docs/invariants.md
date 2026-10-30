@@ -2229,17 +2229,79 @@ jump-file branch of `ui::view::view`.
 `escape_closes_each_transient_panel_without_touching_anything_else`
 (`src/ui/tests/panels_tests.rs`) pin the Escape route.
 
+## Save preset panel
+
+**Guarantee.** The equalizer pick list's `Save preset…` row (`PresetChoice::Save`) flips a
+transient, unpersisted Save preset panel that saves the equalizer's applied curve under a typed
+name:
+
+- `handlers::mixer::eq_preset_selected` routes `PresetChoice::Save` to
+  `toggle_save_preset`, which flips `WinampPlayer::save_preset_open`. Opening closes `about_visible`,
+  `options_visible`, `file_info_visible`, `jump_time_visible`, and `jump_file_visible` through
+  `close_transient_panels`, focuses the name box, and while `shaded` holds first calls
+  `toggle_window_shade`. Opening any of those panels closes the Save preset panel, and the flag is
+  never persisted. A plain or Shift-held Escape press also closes it (see
+  `## Transient panel dismissal`). The built-in and custom picks apply curves instead and never
+  open the panel.
+- `save_preset_submitted` (Enter or the panel's `Save` button) saves nothing and keeps the panel
+  open with an inline note when the trimmed name is empty (`Type a name`), matches a built-in
+  preset's name case-insensitively (`Already a preset`), or contains `:` (`Use it without a
+  colon`, because the settings line's separator is the colon); a keystroke in the box clears the
+  note. On success it saves the applied curve — the shared state's stored preamp and band gains —
+  as a `CustomPreset` built through `from_curve`, which clamps every gain; an existing save of
+  the same name (case-insensitive) is replaced in place, its stored name kept, otherwise the
+  curve pushes onto the end of the list. The saved curve is never applied by saving: the shared
+  state keeps holding it, and the closed pick-list label keeps reading `Custom`.
+- The new or replaced list reaches the settings file through the shared
+  `persist_settings_if_changed` sweep, as repeated `eq_custom_preset=<name>:<preamp>,<band>,…,<band>`
+  lines; parsing skips a line without a `:`, a blank name, the wrong field count, or a
+  malformed-or-NaN gain, and `from_curve` clamps what a valid line keeps. A relaunch adopts the
+  list through `adopt_saved_settings`, and an applied custom relaunches with the closed label
+  `Custom` and its curve restored through the `eq_preamp`/`eq_band_*` lines, the saved
+  `eq_preset=` name never resolving to a custom.
+- `views::view_save_preset_overlay` stacks `SAVE PRESET`, the name box, the panel's inline note
+  when one is stored, and `Save` and `Close` buttons through `modal_overlay`. `Close` and the
+  backdrop each publish one `ToggleSavePreset`; `Save` and Enter publish `SavePresetSubmitted`.
+  The shade branch never draws it.
+
+**Enforced by.** `equalizer::CustomPreset` and `equalizer::PresetChoice`,
+`handlers::mixer::{eq_preset_selected, toggle_save_preset, save_preset_name_changed,
+save_preset_submitted}`, `WinampPlayer::{custom_eq_presets, close_transient_panels,
+transient_panel_open, persist_settings_if_changed, adopt_saved_settings}`, `Settings`'s
+`eq_custom_presets` field and `settings::text`'s `eq_custom_preset` line handling, and
+`views::save_preset::view_save_preset_overlay`.
+
+**Pinned by.** `from_curve_clamps_the_whole_curve` and
+`preset_choices_render_their_own_labels` (`src/equalizer.rs`);
+`a_custom_choice_applies_the_whole_curve_and_keeps_the_selection_none`,
+`the_save_row_opens_the_panel_and_closes_the_other_panels`,
+`a_closed_save_panel_ignores_its_submit`,
+`save_preset_submitted_saves_the_applied_curve_under_the_typed_name`,
+`save_preset_submitted_refuses_empty_builtin_and_colon_names`, and
+`saving_over_an_existing_custom_replaces_only_its_curve` (`src/ui/tests/mixer_tests.rs`);
+`saving_a_preset_reaches_the_saved_snapshot` and
+`the_saved_custom_presets_are_adopted_at_launch` (`src/ui/tests/settings_tests.rs`);
+`eq_custom_preset_lines_round_trip_and_skip_the_malformed_ones` (`src/settings.rs`);
+`preset_choices_list_save_then_the_builtins_then_the_saved_customs`
+(`src/ui/views/tests/equalizer.rs`);
+`save_preset_overlay_draws_its_heading_note_and_buttons` and
+`save_preset_overlay_buttons_and_backdrop_publish_their_messages`
+(`src/ui/views/tests/chrome.rs`); and
+`escape_closes_each_transient_panel_without_touching_anything_else`
+(`src/ui/tests/panels_tests.rs`) pins the Escape route.
+
 ## Transient panel dismissal
 
 **Guarantee.** A plain or Shift-held Escape press closes whichever transient panel is showing —
-About, Options, File info, Jump to time, or Jump to File — including while its filter or time box
-has focus. It changes only the five visibility flags; no query, selection, playback, transport,
+About, Options, File info, Jump to time, Save preset, or Jump to File — including while its
+filter, name, or time box
+has focus. It changes only the six visibility flags; no query, selection, playback, transport,
 mixer, browse, or settings state changes, no work is scheduled, and nothing is persisted. Escape
 with Control, Alt, or Logo held, and Escape releases, map to nothing. With no panel open the
 listener is not subscribed, so Escape stays unbound there and a focused `Search library` box keeps
 it for clearing its own focus; `Message::EscapePressed` is still a no-op.
 
-- `WinampPlayer::transient_panel_open` is the read side of the five flags
+- `WinampPlayer::transient_panel_open` is the read side of the six flags
   `WinampPlayer::close_transient_panels` clears, so the subscription gate and the closer share one
   set.
 - `ui::subscriptions::escape_key_message` maps the press through `iced::event::listen_with`, ignoring the

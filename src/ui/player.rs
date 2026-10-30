@@ -12,6 +12,7 @@ use tokio::sync::Mutex;
 
 use crate::apple_music::AppleMusicService;
 use crate::audio::{PlaybackFormat, Spectrum};
+use crate::equalizer::CustomPreset;
 use crate::library::{Album, Artist, Playlist, Song};
 use crate::settings::Settings;
 use crate::settings::library_view::LibraryView;
@@ -258,6 +259,28 @@ pub(in crate::ui) struct WinampPlayer {
     pub(in crate::ui) jump_file_visible: bool,
     /// The Jump to File panel's typed filter text, cleared each time it opens.
     pub(in crate::ui) jump_file_query: String,
+    /// Whether the transient Save preset panel is drawn over the normal-mode
+    /// tree. `Message::ToggleSavePreset` — the pick list's `Save preset…` row —
+    /// flips it; it is closed at launch and deliberately not persisted. At
+    /// most one of this and [`Self::about_visible`],
+    /// [`Self::options_visible`], [`Self::file_info_visible`],
+    /// [`Self::jump_time_visible`], and [`Self::jump_file_visible`] holds.
+    pub(in crate::ui) save_preset_open: bool,
+    /// The Save preset panel's typed name, cleared each time it opens.
+    pub(in crate::ui) save_preset_name: String,
+    /// The Save preset panel's inline note after a refused save (`Type a
+    /// name`, `Already a preset`, or `Use it without a colon`), cleared when
+    /// the panel opens or the name changes. Layout-only and not persisted.
+    pub(in crate::ui) save_preset_note: Option<&'static str>,
+    /// The equalizer curves saved through the Save preset panel, in saved
+    /// order. `SavePresetSubmitted` pushes one (replacing an existing save of
+    /// the same name); the settings file carries them through the snapshot's
+    /// `eq_custom_preset` lines, reloaded by [`Self::adopt_saved_settings`]
+    /// and re-saved by [`Self::persist_settings_if_changed`]. Not held in
+    /// [`AppState`]: an applied custom keeps the shared selection `None`, so
+    /// the closed pick-list label reads `Custom` exactly as a hand-tuned
+    /// curve does.
+    pub(in crate::ui) custom_eq_presets: Vec<CustomPreset>,
     /// The Jump to File panel's highlighted match, as the source index of the
     /// showing list. `None` means the first match, as on opening or after
     /// typing a new filter; Up and Down move it within the filtered matches.
@@ -420,6 +443,10 @@ impl WinampPlayer {
             file_info_visible: false,
             jump_time_visible: false,
             jump_time_query: String::new(),
+            save_preset_open: false,
+            save_preset_name: String::new(),
+            save_preset_note: None,
+            custom_eq_presets: Vec::new(),
             jump_file_visible: false,
             jump_file_query: String::new(),
             jump_file_selected: None,
@@ -438,28 +465,31 @@ impl WinampPlayer {
         }
     }
 
-    /// Close every transient panel — About, Options, File info, Jump to time,
-    /// and Jump to File — so that at most one is open (the invariant the
-    /// `*_visible` fields document). A toggle handler that opens its panel
-    /// calls this first, then sets its own flag, so the full set of panels
-    /// lives here instead of being listed again in each opener.
+    /// Close every transient panel — About, Options, File info, Jump to
+    /// time, Save preset, and Jump to File — so that at most one is open (the
+    /// invariant the `*_visible`/`save_preset_open` fields document). A
+    /// toggle handler that opens its panel calls this first, then sets its
+    /// own flag, so the full set of panels lives here instead of being listed
+    /// again in each opener.
     pub(in crate::ui) fn close_transient_panels(&mut self) {
         self.about_visible = false;
         self.options_visible = false;
         self.file_info_visible = false;
         self.jump_time_visible = false;
+        self.save_preset_open = false;
         self.jump_file_visible = false;
     }
 
-    /// Whether any transient panel — About, Options, File info, Jump to time,
-    /// or Jump to File — is open. The read side of the same five flags
-    /// [`Self::close_transient_panels`] clears, so the subscription gate and
-    /// the closer cannot drift.
+    /// Whether any transient panel — About, Options, File info, Jump to
+    /// time, Save preset, or Jump to File — is open. The read side of the
+    /// same six flags [`Self::close_transient_panels`] clears, so the
+    /// subscription gate and the closer cannot drift.
     pub(in crate::ui) fn transient_panel_open(&self) -> bool {
         self.about_visible
             || self.options_visible
             || self.file_info_visible
             || self.jump_time_visible
+            || self.save_preset_open
             || self.jump_file_visible
     }
 
@@ -503,6 +533,7 @@ impl WinampPlayer {
         });
         snapshot.set_music_kit_user_token(token);
         snapshot.set_library_view(self.library_view());
+        snapshot.set_eq_custom_presets(self.custom_eq_presets.clone());
         if snapshot == self.saved_settings {
             return;
         }
@@ -564,6 +595,7 @@ impl WinampPlayer {
         self.always_on_top = saved.always_on_top();
         self.shaded = saved.shaded();
         self.window_position = saved.window_position();
+        self.custom_eq_presets = saved.eq_custom_presets().to_vec();
         self.saved_settings = saved;
     }
 

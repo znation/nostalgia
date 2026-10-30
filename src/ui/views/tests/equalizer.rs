@@ -28,7 +28,7 @@ fn pressing_a_db_scale_label_sets_every_band_to_its_gain() {
         ("-12 DB", GAIN_MIN_DB),
     ] {
         let mut renderer = layout_capture::headless_renderer();
-        let mut element = view_equalizer(true, false, 0.0, &[0.0; BAND_COUNT], None);
+        let mut element = view_equalizer(true, false, 0.0, &[0.0; BAND_COUNT], None, &[]);
         let capture = layout_capture::capture_text(&mut element, &renderer);
         let text = capture.find(label);
         let messages = layout_capture::publish_at(
@@ -91,7 +91,7 @@ fn equalizer_wheel_messages_map_the_roll_direction_and_band() {
 #[test]
 fn equalizer_preamp_and_db_scale_sit_left_of_the_band_sliders() {
     let bands = [0.0; BAND_COUNT];
-    let mut element = view_equalizer(false, false, 0.0, &bands, None);
+    let mut element = view_equalizer(false, false, 0.0, &bands, None, &[]);
     let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
 
     let plus_twelve = capture.find("+12 DB");
@@ -148,7 +148,7 @@ fn equalizer_preamp_and_db_scale_sit_left_of_the_band_sliders() {
 #[test]
 fn equalizer_band_labels_leave_a_gap_between_frequencies() {
     let bands = [0.0; BAND_COUNT];
-    let mut element = view_equalizer(false, false, 0.0, &bands, None);
+    let mut element = view_equalizer(false, false, 0.0, &bands, None, &[]);
     let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
 
     let bounds: Vec<(&str, Rectangle)> = BAND_FREQUENCIES
@@ -465,7 +465,7 @@ fn auto_button_draws_its_state_and_publishes_toggle_eq_auto() {
     assert_eq!(auto_label(false), "AUTO: Off");
 
     for (auto, expected) in [(false, "AUTO: Off"), (true, "AUTO: On")] {
-        let mut element = view_equalizer(false, auto, 0.0, &[0.0; BAND_COUNT], None);
+        let mut element = view_equalizer(false, auto, 0.0, &[0.0; BAND_COUNT], None, &[]);
         let capture =
             layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
         let button = capture.find(expected);
@@ -508,7 +508,7 @@ fn equalizer_pick_list_shows_custom_for_a_hand_tuned_curve() {
 
     for preset in [None, Some(PRESETS[0])] {
         let mut renderer = layout_capture::headless_renderer();
-        let mut element = view_equalizer(false, false, 0.0, &[0.0; BAND_COUNT], preset);
+        let mut element = view_equalizer(false, false, 0.0, &[0.0; BAND_COUNT], preset, &[]);
         let (capture, pixels) = layout_capture::capture_text_and_pixels(
             &mut element,
             &mut renderer,
@@ -556,6 +556,9 @@ fn reference_header_row(
     selected: Option<crate::equalizer::Preset>,
     placeholder: &str,
 ) -> (layout_capture::TextCapture, layout_capture::PixelCapture) {
+    // `view_equalizer` maps the standing applied `Preset` onto
+    // `PresetChoice::BuiltIn` for the pick list's selection, so the reference
+    // row builds the same mapping over the static built-ins.
     let mut element: iced::Element<'static, Message> = iced::widget::Row::new()
         .push(labeled_button(
             eq_enabled_label(false),
@@ -569,15 +572,50 @@ fn reference_header_row(
         ))
         .push(spacer(8.0))
         .push(
-            iced::widget::PickList::new(PRESETS.as_slice(), selected, Message::EqPresetSelected)
-                .placeholder(placeholder)
-                .text_size(12)
-                .style(|_theme, status| style::chrome_pick_list_style(status))
-                .menu_style(|_theme| style::preset_menu_style()),
+            iced::widget::PickList::new(
+                // The reference row must build the same items the real
+                // panel does, so it reuses `preset_choices` over the
+                // static built-ins (no saved customs in this comparison).
+                crate::ui::views::equalizer::preset_choices(&[]),
+                selected.map(crate::equalizer::PresetChoice::BuiltIn),
+                Message::EqPresetSelected,
+            )
+            .placeholder(placeholder)
+            .text_size(12)
+            .style(|_theme, status| style::chrome_pick_list_style(status))
+            .menu_style(|_theme| style::preset_menu_style()),
         )
         .into();
     let mut renderer = layout_capture::headless_renderer();
     layout_capture::capture_text_and_pixels(&mut element, &mut renderer, &iced::Theme::Dark)
+}
+
+// The pick list's items are rebuilt every refresh: the `Save preset…` row
+// first, then the built-ins in [`PRESETS`] order, then the saved customs in
+// stored order — so a moment-old name is offered the moment it is saved.
+#[test]
+fn preset_choices_list_save_then_the_builtins_then_the_saved_customs() {
+    let custom = CustomPreset::from_curve(String::from("Very Fuzzed"), 0.0, [0.0; BAND_COUNT]);
+    let choices = preset_choices(std::slice::from_ref(&custom));
+    assert_eq!(choices.len(), PRESETS.len() + 2);
+    assert_eq!(choices[0], PresetChoice::Save);
+    for (choice, preset) in choices[1..].iter().zip(PRESETS.iter()) {
+        assert_eq!(choice, &PresetChoice::BuiltIn(*preset));
+    }
+    assert_eq!(
+        choices[PRESETS.len() + 1],
+        PresetChoice::Custom(custom),
+        "the saved customs must follow the built-ins in stored order"
+    );
+}
+
+// The items stay within one refresh-built `Vec` even when no custom is
+// saved, so a fresh launch offers the save row and built-ins only.
+#[test]
+fn preset_choices_without_customs_is_just_save_then_the_builtins() {
+    let choices = preset_choices(&[]);
+    assert_eq!(choices.len(), PRESETS.len() + 1);
+    assert_eq!(choices[0], PresetChoice::Save);
 }
 
 #[test]
@@ -592,7 +630,7 @@ fn equalizer_panel_constructs_for_both_states_and_gain_endpoints() {
         for gain in [GAIN_MIN_DB, 0.0, GAIN_MAX_DB] {
             for preset in [None, Some(PRESETS[0])] {
                 let bands = [gain; BAND_COUNT];
-                let _panel = view_equalizer(enabled, false, gain, &bands, preset);
+                let _panel = view_equalizer(enabled, false, gain, &bands, preset, &[]);
             }
         }
     }

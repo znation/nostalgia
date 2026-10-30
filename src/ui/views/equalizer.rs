@@ -11,7 +11,8 @@ use iced::{
 };
 
 use crate::equalizer::{
-    BAND_COUNT, BAND_FREQUENCIES, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, Preset, clamp_gain,
+    BAND_COUNT, BAND_FREQUENCIES, CustomPreset, GAIN_MAX_DB, GAIN_MIN_DB, PRESETS, Preset,
+    PresetChoice, clamp_gain,
 };
 use crate::ui::{Message, bevel, style, theme};
 
@@ -98,6 +99,21 @@ pub(super) const CUSTOM_PRESET_LABEL: &str = "Custom";
 /// no preset is selected.
 pub(super) fn preset_pick_list_label(preset: Option<Preset>) -> &'static str {
     preset.map_or(CUSTOM_PRESET_LABEL, |preset| preset.name)
+}
+
+/// Builds the pick list's items for one refresh: the `Save preset…` row
+/// first, then the built-ins in [`PRESETS`] order, then `customs` in stored
+/// order. Rebuilt every refresh — [`PRESETS`] is static, but a saved custom's
+/// row appears the moment the naming panel saves it — and pure so the order
+/// is testable without an iced `Element`. The closed label still resolves
+/// through [`preset_pick_list_label`] unchanged: it names only built-ins, so
+/// an applied custom keeps reading [`CUSTOM_PRESET_LABEL`].
+pub(super) fn preset_choices(customs: &[CustomPreset]) -> Vec<PresetChoice> {
+    let mut choices = Vec::with_capacity(PRESETS.len() + customs.len() + 1);
+    choices.push(PresetChoice::Save);
+    choices.extend(PRESETS.iter().copied().map(PresetChoice::BuiltIn));
+    choices.extend(customs.iter().cloned().map(PresetChoice::Custom));
+    choices
 }
 
 /// Resolves the response curve's segment offsets from the stored band gains.
@@ -315,7 +331,11 @@ where
 /// `enabled` is the shared EQ on/off flag shown on the button and toggled by pressing it; `auto` is
 /// the genre-matched preset flag shown on the AUTO button and toggled by pressing it; `preset` is
 /// the applied curve the pick list shows (or `None`, drawn as [`CUSTOM_PRESET_LABEL`]), and picking
-/// one emits [`Message::EqPresetSelected`]; `preamp` and `bands` are the stored gains the sliders
+/// one emits [`Message::EqPresetSelected`]; the pick list's items are rebuilt
+/// every refresh into a fresh `Vec<PresetChoice>` — the `Save preset…` row
+/// first, then the built-ins in [`PRESETS`] order, then the player's saved
+/// customs in stored order (see [`preset_choices`]). `preamp` and `bands` are
+/// the stored gains the sliders
 /// start from. Every slider spans `GAIN_MIN_DB..=GAIN_MAX_DB` in 1 dB steps and emits its own
 /// change message, so dragging one routes a clamped gain back into shared state. The response curve
 /// traces the stored `bands` whether the EQ is on or off, and each band slider's groove is tinted
@@ -328,6 +348,7 @@ pub fn view_equalizer(
     preamp: f32,
     bands: &[f32; BAND_COUNT],
     preset: Option<Preset>,
+    customs: &[CustomPreset],
 ) -> Element<'static, Message> {
     let mut bands_row = Row::new().spacing(BAND_ROW_SPACING);
     for (index, frequency) in BAND_FREQUENCIES.iter().enumerate() {
@@ -378,16 +399,23 @@ pub fn view_equalizer(
                     .push(auto_toggle(auto))
                     .push(spacer(8.0))
                     .push(
-                        // `PickList` stores its options by value, so passing the
-                        // `[Preset; 19]` array copies ~1.2 KB into the widget on
-                        // every rebuild; passing the slice borrows the static
-                        // array instead. The pick list only ever reads the options
-                        // through `Borrow<[Preset]>`, so the slice is equivalent.
-                        PickList::new(PRESETS.as_slice(), preset, Message::EqPresetSelected)
-                            .placeholder(preset_pick_list_label(preset))
-                            .text_size(12)
-                            .style(|_theme, status| style::chrome_pick_list_style(status))
-                            .menu_style(|_theme| style::preset_menu_style()),
+                        // The items are a fresh `Vec<PresetChoice>` per
+                        // refresh (see [`preset_choices`]): the save row, the
+                        // built-ins, and the saved customs. The selection stays
+                        // the standing applied `Preset` mapped onto the choice
+                        // enum, so the closed label resolves through
+                        // `preset_pick_list_label` unchanged — an applied
+                        // custom selects nothing there and keeps reading
+                        // `Custom`.
+                        PickList::new(
+                            preset_choices(customs),
+                            preset.map(PresetChoice::BuiltIn),
+                            Message::EqPresetSelected,
+                        )
+                        .placeholder(preset_pick_list_label(preset))
+                        .text_size(12)
+                        .style(|_theme, status| style::chrome_pick_list_style(status))
+                        .menu_style(|_theme| style::preset_menu_style()),
                     ),
             )
             .push(sliders),

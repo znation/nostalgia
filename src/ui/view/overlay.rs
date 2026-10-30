@@ -38,6 +38,8 @@ pub(super) fn apply_overlays<'a>(
             Some(length) => views::view_jump_time_overlay(base, &player.jump_time_query, length),
             None => base,
         }
+    } else if player.save_preset_open && !player.shaded {
+        views::view_save_preset_overlay(base, &player.save_preset_name, player.save_preset_note)
     } else if player.jump_file_visible && !player.shaded {
         match player.current_view {
             CurrentView::Songs => views::view_jump_file_overlay(

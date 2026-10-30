@@ -348,6 +348,7 @@ fn escape_closes_each_transient_panel_without_touching_anything_else() {
         Message::ToggleOptions,
         Message::ToggleFileInfo,
         Message::ToggleJumpTime,
+        Message::ToggleSavePreset,
         Message::ToggleJumpFile,
     ] {
         let _ = update(&mut player, toggle);
