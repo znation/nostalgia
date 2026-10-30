@@ -10,6 +10,17 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime};
 
+/// The mode (`st_mode` permission bits) a brand-new settings file is staged
+/// and published with. The file can carry the `MusicKit` sign-in's user token
+/// (`music_kit_user_token=`), so it must be readable by its owner alone —
+/// the same owner-only file the sign-in bootstrap directory gets — whatever
+/// the process umask is; the explicit set after the staged bytes are written
+/// is what makes the published file umask-proof.
+///
+/// [`set_staged_mode`]: fn@set_staged_mode
+#[cfg(unix)]
+const NEW_SETTINGS_FILE_MODE: u32 = 0o600;
+
 fn temporary_prefix(path: &Path) -> Option<String> {
     let file_name = path.file_name()?;
     Some(format!(".{}.tmp-", file_name.to_string_lossy()))
@@ -129,31 +140,89 @@ pub(super) fn write_atomically_syncing(
 ) -> io::Result<()> {
     // Resolve once so the directory synced is the one the rename happened in.
     let path = resolve_symlink(path);
-    write_atomically_with(&path, |temporary| {
-        let mut file = File::create(temporary)?;
+    write_atomically_with(&path, |file| {
         file.write_all(text.as_bytes())?;
-        sync(&file)
+        sync(file)?;
+        Ok(())
     })?;
     sync_directory(&path)
 }
 
+/// The target's mode (`st_mode` permission bits) resolved before the staged
+/// bytes are written: a metadata failure there fails the save instead of
+/// publishing it with the default mode. `None` when the target does not exist.
+#[cfg(unix)]
+fn existing_stage_mode(path: &Path) -> Option<std::fs::Permissions> {
+    std::fs::metadata(path).ok().map(|meta| meta.permissions())
+}
+#[cfg(not(unix))]
+fn existing_stage_mode(path: &Path) -> Option<std::fs::Permissions> {
+    let _ = path;
+    None
+}
+
+/// Create the staged replacement file already carrying the mode it will end
+/// up with — the existing target's mode, or owner-only for a new one — so no
+/// interval exists between the staging and the rename where the staged
+/// settings (which can carry the sign-in token) are readable beyond the mode
+/// the rename publishes them under.
+#[cfg(unix)]
+fn open_staged_file(temporary: &Path, existing: Option<std::fs::Permissions>) -> io::Result<File> {
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(
+            existing
+                .map(|permissions| permissions.mode())
+                .unwrap_or(NEW_SETTINGS_FILE_MODE),
+        )
+        .open(temporary)
+}
+/// On non-Unix platforms settings-file permission bits do not apply, so the
+/// staged file is created the default way.
+#[cfg(not(unix))]
+fn open_staged_file(temporary: &Path, existing: Option<std::fs::Permissions>) -> io::Result<File> {
+    let _ = existing;
+    File::create(temporary)
+}
+
+/// Keep the existing file's mode exactly, as writing in place would have:
+/// `open`'s mode argument is filtered by the process umask, so the staging
+/// mode alone could have dropped a pre-existing bit, and a brand-new file is
+/// made umask-proof against the default mode it would otherwise take.
+#[cfg(unix)]
+fn set_staged_mode(temporary: &Path, existing: Option<std::fs::Permissions>) -> io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    let mode = existing
+        .map(|permissions| permissions.mode())
+        .unwrap_or(NEW_SETTINGS_FILE_MODE);
+    std::fs::set_permissions(temporary, std::fs::Permissions::from_mode(mode))
+}
+#[cfg(not(unix))]
+fn set_staged_mode(temporary: &Path, existing: Option<std::fs::Permissions>) -> io::Result<()> {
+    let _ = (temporary, existing);
+    Ok(())
+}
+
 pub(super) fn write_atomically_with(
     path: &Path,
-    write_temporary: impl FnOnce(&Path) -> io::Result<()>,
+    write_temporary: impl FnOnce(&mut File) -> io::Result<()>,
 ) -> io::Result<()> {
     // Rename over the file a symlink points at, not over the link itself; a
     // dangling link or a missing file keeps the path as given.
     let resolved = resolve_symlink(path);
     let path = resolved.as_path();
     let temporary = temporary_sibling(path);
-    let result = write_temporary(&temporary)
-        .and_then(|()| {
-            // Keep the existing file's mode, as writing in place would have.
-            match std::fs::metadata(path) {
-                Ok(existing) => std::fs::set_permissions(&temporary, existing.permissions()),
-                Err(_) => Ok(()),
-            }
-        })
+    let existing = existing_stage_mode(path);
+    let staged = open_staged_file(&temporary, existing.clone());
+    let result = match staged {
+        Ok(mut file) => write_temporary(&mut file),
+        Err(error) => Err(error),
+    };
+    let result = result
+        .and_then(|()| set_staged_mode(&temporary, existing))
         .and_then(|()| std::fs::rename(&temporary, path));
     if result.is_err() {
         // Best effort: do not mask the write error with a cleanup error.
@@ -186,9 +255,9 @@ mod tests {
         let path = root.join("settings.ini");
         std::fs::write(&path, "volume=0.25\n").unwrap();
 
-        let error = write_atomically_with(&path, |temporary| {
+        let error = write_atomically_with(&path, |file| {
             // Model a disk filling up after the first few bytes.
-            std::fs::write(temporary, "volume=0.9\nre")?;
+            file.write_all(b"volume=0.9\nre")?;
             Err(io::Error::other("disk full"))
         })
         .unwrap_err();
@@ -196,6 +265,24 @@ mod tests {
         assert_eq!(error.to_string(), "disk full");
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "volume=0.25\n");
         assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    // A brand-new settings file is published owner-only, whatever the umask:
+    // the file can carry the `music_kit_user_token=` sign-in token, and its
+    // mode must not depend on the umask the save happened to run under.
+    #[cfg(unix)]
+    #[test]
+    fn a_new_settings_file_is_written_owner_only_whatever_the_umask() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = temporary_root("new-mode");
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("settings.ini");
+
+        write_atomically(&path, "volume=0.9\nmusic_kit_user_token=x.y.z\n").unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
         std::fs::remove_dir_all(&root).unwrap();
     }
 

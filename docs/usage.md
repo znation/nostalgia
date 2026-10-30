@@ -316,7 +316,9 @@ answering) is ignored or fails over exactly like the unset case: the sign-in pag
 stale or malformed one, a stale one's queries are answered by the sample library, and the saved
 line is left alone until a fresh browser sign-in overwrites it; a user who wants a fresh flow
 anyway deletes the `music_kit_user_token=` line (with the variable still set) and relaunches. The
-token is stored unencrypted in the settings file like the rest of its content — delete the line to
+token is stored unencrypted in the settings file like the rest of its content
+(a brand-new settings file is created readable only by its owner, `0600` on
+Unix, so the token is not exposed to other accounts on the machine) — delete the line to
 force the browser flow — and the developer token itself is never saved: it keeps coming from the
 environment, so a saved-token relaunch with the variable unset skips sign-in as today. Playback plays the selected song's Apple Music preview through
 `rodio` when the library supplies one, and updates the UI state either way. Pause and Stop silence

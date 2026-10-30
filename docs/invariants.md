@@ -1068,12 +1068,17 @@ unwritable file is logged
 rather than crashing the player. Each save stages the whole snapshot in
 a sibling temp file of the file it writes, flushes it to disk, gives the staged file the existing
 target's mode, and renames it over that target and then syncs its directory, so a failed,
-interrupted, or crashed write leaves the previous file intact instead of a truncated one; a failed
+interrupted, or crashed write leaves the previous file intact instead of a truncated one; the
+staged file is created with the mode it will end up with, so the staged bytes are never readable
+beyond the mode the rename publishes them under; a failed
 write or rename removes the temp file, and a load sweeps temp files a killed save left behind once
 they are old enough not to belong to an in-flight save. A symlinked settings file stays a link: the
 save, the directory sync, and the stale-temp sweep all follow it to the file and directory it points
-at, so the link is never replaced; a dangling link or a missing file is used as the path given, and
-a new file takes the platform's default mode. The last-played track is a plain `apply_to` field,
+at, so the link is never replaced; a dangling link or a missing file is used as the path given, and a brand-new file is created
+and published owner-only (`0o600` on Unix, whatever the umask): the settings file can carry
+the `music_kit_user_token=` sign-in token, so it is readable by its owner alone like the
+sign-in bootstrap files (`src/settings/atomic_write.rs`'s `open_staged_file` and
+`set_staged_mode`, test `a_new_settings_file_is_written_owner_only_whatever_the_umask`). The last-played track is a plain `apply_to` field,
 not one of the UI-owned values: the id is held in `AppState` (`current_track`), `from_state`
 carries it straight from the snapshot, and the boot `apply_to` restores the track stopped with a
 blank elapsed readout, the state Stop leaves; a track change or stop rewrites the line on the
