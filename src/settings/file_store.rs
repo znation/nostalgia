@@ -226,6 +226,48 @@ fn unreadable_settings_save_report(path: &Path) -> String {
     )
 }
 
+/// Creates `directory`, including any component above it that does not yet
+/// exist, owner-only on Unix: each directory it creates is made with `0o700`
+/// at creation, so its mode cannot gain group or world bits whatever the
+/// umask — the same owner-only dir the sign-in bootstrap page gets. Where
+/// directory modes do not apply it behaves like `create_dir_all`. An existing
+/// component is left exactly as it is: `create_dir_all` would not have changed
+/// its mode either.
+///
+/// The directory holds the settings file, whose content can carry the
+/// `MusicKit` sign-in token, and the sibling temp files a save stages before
+/// the rename. A settings directory created with the platform default mode is
+/// group- or world-writable under permissive umasks (a `002` umask alone
+/// yields `0775`), which would let another account sharing those rights plant
+/// a sibling at the save's temp name and read the staged token through it —
+/// the same exposure the settings file's own `0600` staging closed.
+///
+/// # Errors
+///
+/// Returns the error creating the tree failed with, reported by the
+/// [`SettingsWriter for FileStore`] save like `create_dir_all`'s was.
+#[cfg(unix)]
+fn create_owner_only_dir(directory: &Path) -> io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+
+    let mut builder = std::fs::DirBuilder::new();
+    builder.recursive(true);
+    builder.mode(SETTINGS_DIR_MODE);
+    builder.create(directory)
+}
+
+/// Directory permission bits do not apply on non-Unix platforms, so the tree
+/// is created the default-way like `create_dir_all` built it.
+#[cfg(not(unix))]
+fn create_owner_only_dir(directory: &Path) -> io::Result<()> {
+    std::fs::DirBuilder::new().recursive(true).create(directory)
+}
+
+/// The mode (`st_mode` permission bits) a settings directory the save creates
+/// is made with. See [`create_owner_only_dir`].
+#[cfg(unix)]
+const SETTINGS_DIR_MODE: u32 = 0o700;
+
 impl SettingsWriter for FileStore {
     fn save(&self, settings: &Settings) {
         let Some(path) = self.path.as_ref() else {
@@ -242,7 +284,7 @@ impl SettingsWriter for FileStore {
         if let Some(parent) = path
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty())
-            && let Err(error) = std::fs::create_dir_all(parent)
+            && let Err(error) = create_owner_only_dir(parent)
         {
             eprintln!(
                 "failed to create the settings directory {}: {error}",
@@ -693,6 +735,61 @@ mod tests {
 
         assert!(path.is_dir());
         assert_eq!(store.load(), None);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    // The settings directory the save creates (and the parent above it) must
+    // be owner-only, whatever the umask: a directory created with the default
+    // mode gains group and world bits under permissive umasks (`002` alone
+    // makes it group-writable), letting another account with those rights
+    // reach the token-bearing settings file and its staged temp files — the
+    // same exposure the file's own `0600` staging closes.
+    #[cfg(unix)]
+    #[test]
+    fn file_store_creates_a_missing_settings_directory_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = temporary_root("owner-only-dir");
+        let path = root.join("nostalgia").join("settings.ini");
+        let store = FileStore::at(path.clone());
+
+        store.save(&varied_settings());
+
+        for directory in [path.parent().unwrap(), root.as_path()] {
+            let mode = std::fs::metadata(directory).unwrap().permissions().mode();
+            assert_eq!(
+                mode & 0o777,
+                0o700,
+                "a created settings directory must be owner-only: {directory:?}"
+            );
+        }
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    // A directory that already exists must be left exactly where its owner put
+    // it: the save only needs to create the tree, never to tighten the modes
+    // of directories it did not create.
+    #[cfg(unix)]
+    #[test]
+    fn file_store_leaves_an_existing_settings_directory_mode_alone() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = temporary_root("existing-dir-mode");
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("settings.ini");
+        std::fs::create_dir(&path).unwrap();
+        let mut permissions = std::fs::metadata(&path).unwrap().permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&path, permissions.clone()).unwrap();
+        let store = FileStore::at(path.clone());
+
+        store.save(&varied_settings());
+
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            permissions.mode() & 0o777,
+            "an existing settings directory must keep its mode"
+        );
         std::fs::remove_dir_all(&root).unwrap();
     }
 

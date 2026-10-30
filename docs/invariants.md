@@ -1122,7 +1122,16 @@ at, so the link is never replaced; a dangling link or a missing file is used as 
 and published owner-only (`0o600` on Unix, whatever the umask): the settings file can carry
 the `music_kit_user_token=` sign-in token, so it is readable by its owner alone like the
 sign-in bootstrap files (`src/settings/atomic_write.rs`'s `open_staged_file` and
-`set_staged_mode`, test `a_new_settings_file_is_written_owner_only_whatever_the_umask`). The last-played track is a plain `apply_to` field,
+`set_staged_mode`, test
+`a_new_settings_file_is_written_owner_only_whatever_the_umask`). The settings
+directory the save has to create (and every component above it the save
+creates) is itself made owner-only at creation (`0o700` on Unix, whatever the
+umask — `src/settings/file_store.rs`'s `create_owner_only_dir`, tests
+`file_store_creates_a_missing_settings_directory_owner_only` and
+`file_store_leaves_an_existing_settings_directory_mode_alone`), so a permissive
+umask cannot make the directory holding the token-bearing file and its staged
+replacements group- or world-accessible; an existing directory's mode is left
+untouched. The last-played track is a plain `apply_to` field,
 not one of the UI-owned values: the id is held in `AppState` (`current_track`), `from_state`
 carries it straight from the snapshot, and the boot `apply_to` restores the track stopped with a
 blank elapsed readout, the state Stop leaves; a track change or stop rewrites the line on the

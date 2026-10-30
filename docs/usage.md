@@ -327,7 +327,9 @@ fresh browser sign-in overwrites. a user who wants a fresh flow
 anyway deletes the `music_kit_user_token=` line (with the variable still set) and relaunches. The
 token is stored unencrypted in the settings file like the rest of its content
 (a brand-new settings file is created readable only by its owner, `0600` on
-Unix, so the token is not exposed to other accounts on the machine) — delete the line to
+Unix, so the token is not exposed to other accounts on the machine, and the
+settings directory the player creates for it is made owner-only at creation
+too) — delete the line to
 force the browser flow — and the developer token itself is never saved: it keeps coming from the
 environment, so a saved-token relaunch with the variable unset skips sign-in as today. Playback plays the selected song's Apple Music preview through
 `rodio` when the library supplies one, and updates the UI state either way. Pause and Stop silence
