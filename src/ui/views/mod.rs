@@ -12,8 +12,8 @@
 //! song drill-down, the flat lists, and Playlists, with their list scaffolding
 //! in `browse::rows` and pure row wording and labels in `browse::rows::text`),
 //! `title_bar`, `shade` (the rolled-up
-//! transport strip), `mini_transport` (the compact row the shade strip and the
-//! library footer share), `now_playing` (the LCD well, title row, indicator strip, status row, and
+//! single-shade-bar view), `mini_transport` (the compact row the library footer builds and the
+//! shade bar re-specs at the title bar's smaller text sizes), `now_playing` (the LCD well, title row, indicator strip, status row, and
 //! visualizer row, with its pure label, time, and marquee resolution in
 //! `now_playing::text`), `seek_bar`, `transport`, and `equalizer`
 //! — while the chrome helpers, slider specs, and track-length formatting the

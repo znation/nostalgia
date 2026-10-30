@@ -26,7 +26,7 @@ pub const TITLE_BAR_HEIGHT: f32 = 12.0;
 /// on-grid size that leaves the glyphs and their 1px bevels inside the 12px
 /// bar. The shared [`super::fixed_width_button`] draws at the default size,
 /// which is sized for the taller transport and shade strips.
-const TITLE_BAR_BUTTON_GLYPH_SIZE: f32 = 8.0;
+pub(super) const TITLE_BAR_BUTTON_GLYPH_SIZE: f32 = 8.0;
 
 /// The title tape's height in px: the five ribbon rows the base skin draws
 /// between its tapes — gold face, white shine slat, dark groove, brushed
@@ -36,7 +36,7 @@ const TITLE_TAPE_HEIGHT: f32 = 5.0;
 /// A raised chrome button like [`super::fixed_width_button`], with its glyph
 /// at [`TITLE_BAR_BUTTON_GLYPH_SIZE`] so the window buttons fit inside
 /// [`TITLE_BAR_HEIGHT`].
-fn title_bar_glyph_button(
+pub(super) fn title_bar_glyph_button(
     glyph: &'static str,
     width: f32,
     font: iced::Font,

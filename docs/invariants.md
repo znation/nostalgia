@@ -1430,7 +1430,7 @@ position or no preview length) and every other player panel keep the volume nudg
 
 **Enforced by.** `seek_wheel_message` and the `MouseArea::on_scroll` around the slider in
 `view_seek_bar` (`src/ui/views/seek_bar.rs`), and the same wrapper inside `MINI_SEEK_ID` in
-`mini_transport_row_with_seek` (`src/ui/views/mini_transport.rs`).
+`views::shade::shade_drag_region` (`src/ui/views/shade.rs`).
 
 **Pinned by.** `seek_wheel_message_maps_a_vertical_roll_to_a_direction`,
 `seek_wheel_message_ignores_a_horizontal_only_roll` in `src/ui/views/tests/seek_wheel.rs`, and
@@ -1910,83 +1910,87 @@ rather than the panic unwinding the event loop.
   `ctrl_w_rolls_the_window_up_and_back`.
 
 - A launch whose settings say the window was shaded opens rolled up: `adopt_saved_settings`
-  restores `WinampPlayer::shaded` before the first view, so the root draws the title bar plus
-  strip; once `WindowIdResolved` lands, `window_id_resolved` schedules `iced::window::size`
+  restores `WinampPlayer::shaded` before the first view, so the root draws the shade bar;
+  once `WindowIdResolved` lands, `window_id_resolved` schedules `iced::window::size`
   (batched with a saved always-on-top level when both apply), and `WindowShadeMeasured` stores
   the launch size before resizing to `SHADED_HEIGHT`, so the first unshade restores it. An
   unshaded launch schedules no measurement, and the size itself stays
   unpersisted.
 
-- Shade mode builds exactly the title bar over the compact transport strip, and the window is
-  resized to that same height (`SHADED_HEIGHT = TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT`). The
-  strip keeps a fixed `SHADE_STRIP_HEIGHT`, which aliases the shared
-  `MINI_TRANSPORT_HEIGHT`, and normal mode builds no shade strip.
-- The strip shows Previous, Play, Pause, Stop, Next, the elapsed-over-total time readout, a seek
-  slider while a preview position and length are known, and a volume slider. Its five buttons
+- Shade mode builds exactly the title bar's single 14px shade bar, and the window is resized to
+  that same height (`SHADED_HEIGHT = TITLE_BAR_HEIGHT + 2.0`: the bar row plus the root view's two
+  1px window-edge rings). The bar reuses the title bar's own chrome row — no second strip row —
+  and normal mode builds no shade bar.
+- The bar shows Previous, Play, Pause, Stop, Next, the elapsed-over-total time readout, a seek
+  slider while a preview position and length are known, and a volume slider, sharing the row with
+  the `M`, shade, minimize, and close buttons. Its five buttons
   emit the same messages as their full transport-row twins
   (`Message::PreviousButton`, `Message::Play`, `Message::Pause`, `Message::StopButton`,
   `Message::NextButton`), each pinned to a fixed width so the row cannot reflow. The strip builds
   them from the shared compact row's `mini_transport_controls`, which projects the full row's
-  `transport_glyphs` spec, so the shade strip, the library footer, and the full row share the
-  same glyphs, order, widths, and messages; the row is playback-independent and always draws
-  both `▶` and `II`. Without a seek slider a fill spacer pushes the volume slider to the right
-  edge, after the left-aligned buttons and time readout.
+  `transport_glyphs` spec, so the shade bar, the library footer, and the full row share the
+  same glyphs, order, widths, and messages (the bar draws them at the title bar buttons' 8px
+  size so they fit the 12px row); the row is playback-independent and always draws both `▶` and
+  `II`. Without a seek slider a blank drag-region filler defines the chrome a double-click
+  restores from, and the volume slider sits left of the window buttons, pinned by
+  `views::shade::SHADE_VOLUME_RIGHT_INSET`.
 - The time readout joins the same `WinampPlayer::now_playing_elapsed` and
   `WinampPlayer::now_playing_time` strings the Now Playing bar draws as `<elapsed>/<total>`, so
   the elapsed/remaining choice and the track's total carry into shade mode. When the total is the
   `--:--` placeholder the readout is just the elapsed string, never `--:--/--:--`. The volume
   slider writes `Message::VolumeChange` and reads the shared volume.
-- While the backend reports both a playback position and a non-zero preview length, the strip
+- While the backend reports both a playback position and a non-zero preview length, the bar
   draws a seek slider between the time readout and the volume slider, over that preview length
   rather than the catalog track's length, with its thumb clamped into `0..=length`. It comes from
   `views::seek_bar::seek_slider`, the same constructor the Now Playing bar uses, so it emits only
   `Message::SeekPreviewChanged` while dragging and `Message::SeekPreviewReleased` on release: the
-  Now Playing bar's backend seek path. A held drag previews through the shaded readout because
-  the caller resolves the time string through `WinampPlayer::readout_position`. With no position,
-  no length, or a zero length, no seek slider is drawn and the row keeps the fill space that pins
-  the volume slider to the right edge. The library footer builds no seek slider.
+  Now Playing bar's backend seek path. The slider rides inside the bar's drag region, so a
+  pressed slider captures the drag and never moves the window or restores the window. A held
+  drag previews through the shaded readout because the caller resolves the time string through
+  `WinampPlayer::readout_position`. With no position, no length, or a zero length, no seek
+  slider is drawn. The library footer builds no seek slider.
 - While playing or paused, the time readout is a click target that publishes
   `Message::ToggleTimeDisplay`, flipping the same `WinampPlayer::time_display` mode the LCD uses;
   while stopped a single press publishes nothing and a double-click publishes only the no-op
   `Message::Ignored`, so a stopped press cannot silently switch the persisted mode. Because shade
   mode builds no LCD, this is the only time toggle available there. The shared row applies the
   LCD's own `views::now_playing::elapsed_readout_clickable` guard rather than a second rule.
-- A double-click on the strip's blank chrome publishes the same
-  `Message::ToggleWindowShade` as the title bar's double-click and the shade button, restoring the
-  window through `handlers::window::toggle_window_shade`; a single click publishes nothing. The
-  strip's five buttons, time readout, seek slider, and volume slider keep their own presses,
-  drags, toggles, and wheel behavior because `MouseArea` forwards events to its content first and
-  stops when the content captures them; the inert stopped readout swallows the double-click
-  through its own no-op handler instead of restoring, and the strip keeps `SHADE_STRIP_HEIGHT` and
-  its blue chrome.
+- A double-click on the bar's blank chrome (its drag region) publishes the same
+  `Message::ToggleWindowShade` as the shade button, restoring the window through
+  `handlers::window::toggle_window_shade`; a single click publishes `Message::WindowDragged` and
+  moves the window, like the title bar's drag region. The bar's five buttons, `M`, time readout,
+  seek slider, and volume slider keep their own presses, drags, toggles, and wheel behavior
+  because `MouseArea` forwards events to its content first and stops when the content captures
+  them; the inert stopped readout swallows the double-click through its own no-op handler instead
+  of restoring.
 - Opening the About panel while shaded restores the window first through the same
-  `handlers::window::toggle_window_shade`, so the shade tree stays the title bar plus strip and
+  `handlers::window::toggle_window_shade`, so the shade tree stays the single shade bar and
   never draws the panel.
 
-**Enforced by.** `views::shade::view_shade_strip` wraps
-`views::mini_transport::mini_transport_strip_with_seek` on the title bar's blue chrome in a
-`MouseArea::on_double_click(Message::ToggleWindowShade)` (the library footer keeps
-`mini_transport_strip`, which builds no seek slider);
+**Enforced by.** `views::shade::view_shade_strip` builds the title bar's own 12px chrome row
+(`views::title_bar::title_bar_glyph_button`s on `style::title_bar_style` behind
+`bevel::raised_panel`) with the shared compact spec's controls,
+`views::shade::shade_drag_region`'s `MouseArea::on_press(Message::WindowDragged)` and
+`on_double_click(Message::ToggleWindowShade)` carrying the seek slider inside itself;
 `views::mini_transport::mini_transport_controls` projects
 `views::transport::transport_glyphs` into the
 compact buttons; `views::mini_transport::mini_transport_readout` joins the elapsed and total
 strings and keeps a single time string when the total is unknown;
-`views::mini_transport::mini_transport_row_with_seek` tags its seek container
-`views::mini_transport::MINI_SEEK_ID` and builds the slider from
-`views::seek_bar::seek_slider`, which returns `None` unless `views::seek_bar::seek_bar_value`
-resolves a position and non-zero length; the shared
-`views::mini_transport::mini_transport_row_with_optional_seek` wraps the readout
+`views::shade` tags its seek container `views::mini_transport::MINI_SEEK_ID` and builds the
+slider from `views::seek_bar::seek_slider`, which returns `None` unless
+`views::seek_bar::seek_bar_value` resolves a position and non-zero length; the shared
+`views::mini_transport::mini_transport_row_with_optional_seek` wraps the library footer's readout
 in a `MouseArea::on_press(Message::ToggleTimeDisplay)` only when
-`views::now_playing::elapsed_readout_clickable` holds for the strip's mode, and wraps a stopped
-readout in `MouseArea::on_double_click(Message::Ignored)` so it captures the strip's restore press
-with a no-op; `views::mini_transport::mini_volume_spec` fixes the slider's shared range
-and `Message::VolumeChange`; `views::mini_transport::MINI_TRANSPORT_HEIGHT` owns the height, and
-`views::shade::SHADE_STRIP_HEIGHT` aliases it while `views::shade::SHADED_HEIGHT` adds the title
-bar; the shaded branch of `ui::view::view` stacks the bar and strip; and
-`handlers::window::resize_to_shade` resizes to `handlers::window::shade_target_size`, which reads
-`SHADED_HEIGHT`; `handlers::window::window_id_resolved` additionally schedules the launch-size
-query for a restored shade and batches it with the saved always-on-top level when both apply.
-`views::view_shade_strip` is re-exported by `src/ui/views/mod.rs`.
+`views::now_playing::elapsed_readout_clickable` holds for its mode, and wraps a stopped readout
+in `MouseArea::on_double_click(Message::Ignored)` so its press cannot reach a restore with a
+no-op (the shade bar's `views::shade::shade_readout` applies the same pair);
+`views::mini_transport::mini_volume_spec` fixes the slider's shared range
+and `Message::VolumeChange`; `views::mini_transport::MINI_TRANSPORT_HEIGHT` owns the library
+footer's height, and `views::shade::SHADED_HEIGHT` is the title bar row plus the two window-edge
+rings; `handlers::window::resize_to_shade` resizes to `handlers::window::shade_target_size`,
+which reads `SHADED_HEIGHT`; `handlers::window::window_id_resolved` additionally schedules the
+launch-size query for a restored shade and batches it with the saved always-on-top level when
+both apply. `views::view_shade_strip` is re-exported by `src/ui/views/mod.rs`.
 
 **Pinned by.** `transport_controls_draw_play_and_pause_in_every_playback_state`,
 `shade_controls_map_to_transport_messages_and_keep_fixed_widths`,
@@ -1999,7 +2003,7 @@ query for a restored shade and batches it with the saved always-on-top level whe
 `shade_strip_double_clicks_on_controls_do_not_restore_the_window`,
 `mini_transport_readout_appends_the_known_total`,
 `compact_readout_toggles_time_display_only_while_not_stopped`, and
-`view_shade_strip_keeps_its_fixed_height_for_both_playback_states` (`src/ui/views/tests/shade.rs`);
+`view_shade_strip_keeps_its_fixed_height_in_both_playback_states` (`src/ui/views/tests/shade.rs`);
 `shaded_root_view_is_the_title_bar_plus_the_strip`, `shade_strip_draws_only_while_shaded`,
 `shade_root_readout_previews_the_seek_drag`,
 `shade_target_size_is_the_title_bar_plus_the_strip`,
@@ -2014,7 +2018,11 @@ shade strip additionally draws the Now Playing bar's seek slider from `seek_bar:
 A double-click on the strip now restores the window, matching the title bar's double-click. Opening
 About now restores the window first, so the panel never draws in shade mode (2026-10-24). A saved
 shade mode now restores at boot: the rolled-up tree draws from the first view, the launch size is
-measured once the window id resolves, and the first unshade restores it (2026-10-26).
+measured once the window id resolves, and the first unshade restores it (2026-10-26). The
+separate strip row is gone: the shade view is now the title bar's own 12px row with the compact
+controls on it, so the whole rolled-up window is the base skin's 14px bar (the fix for the
+"rolled-up shade strip renders 52 px tall" bug), and the bar's drag region now moves the window
+like the title bar's (2026-10-30, bugfix role).
 
 ## About panel
 

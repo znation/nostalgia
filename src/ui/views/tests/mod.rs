@@ -36,7 +36,7 @@ use super::now_playing::{
     now_playing_number, now_playing_row, now_playing_time, transport_glyph, transport_glyph_color,
 };
 use super::seek_bar::seek_wheel_message;
-use super::shade::{SHADE_STRIP_HEIGHT, SHADED_HEIGHT, view_shade_strip};
+use super::shade::{SHADE_VOLUME_RIGHT_INSET, SHADED_HEIGHT, view_shade_strip};
 use super::title_bar::{TITLE_BAR_BUTTON_WIDTH, TITLE_BAR_LEFT_BUTTON_WIDTH};
 use super::transport::{
     EQ_PANEL_BUTTON_WIDTH, LIBRARY_PANEL_BUTTON_WIDTH, eq_panel_toggle, library_panel_toggle,

@@ -85,6 +85,7 @@ fn wheel_over_the_shade_seek_slider_seeks() {
             Cow::Borrowed("0:30"),
             Some(Duration::from_secs(10)),
             Some(Duration::from_secs(30)),
+            false,
         )
     };
     let mut renderer = layout_capture::headless_renderer();

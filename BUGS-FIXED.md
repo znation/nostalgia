@@ -5,6 +5,40 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### The rolled-up shade strip renders 52 px tall; the base skin's is 14 px (found by the reference-comparison pass 2026-10-29) — fixed 2026-10-30 by the bugfix role
+
+**Symptom.** `Ctrl+W` (or the title bar's shade button) rolls the window into a 52 px
+tall strip that keeps the full-height blue title band (23 px) plus a second blue row
+(y 24..51). The base skin's rolled-up strip is a single 14 px bar
+(`winamp-2.05-windowshade.gif`, whose two docked strips are each 275×14).
+
+**How to reproduce.** Launch the app, press Ctrl+W, and measure the window: it is
+1024×52 (captured as such for this pass). In `winamp-2.05-windowshade.gif` each rolled-up
+window is 14 px tall, with the marquee, time, and volume controls all inside that height.
+
+**Suspected cause.** `src/ui/views/shade.rs`'s `SHADED_HEIGHT = TITLE_BAR_HEIGHT +
+SHADE_STRIP_HEIGHT` (24 + 28 px) and its strip's `style::title_bar_style()` chrome: the
+strip was built at the app's own chrome scale — roughly twice the base skin's — rather
+than the base skin's single 14 px bar, and it paints a full 28 px blue band where the base
+skin keeps its controls on the one bar.
+
+**Fix.** Shade mode no longer stacks a second 28 px strip row under the title bar.
+`views::shade::view_shade_strip` now draws the title bar's own 12px chrome row with the
+compact transport's controls re-laid onto it — the shared compact spec's five buttons
+(`title_bar_glyph_button` at the title bar's 8px glyph size), an 8px elapsed-over-total
+readout, the seek slider riding inside a `WindowDragged`/`ToggleWindowShade` drag region,
+and the volume slider (`MINI_VOLUME_WIDTH`, pinned `SHADE_VOLUME_RIGHT_INSET` px in from
+the edge) — beside the `M`, shade, minimize, and close buttons. `SHADED_HEIGHT` is now
+`TITLE_BAR_HEIGHT + 2.0` = 14, the bar `winamp-2.05-windowshade.gif` draws; the drag
+region gains the window move the title bar had (pressed slider captures its drag, so the
+window does not move with it), and the app name/tape band makes way for the controls as
+the reference strip does.
+**Validation gap:** unclear-invariant — the pin held `SHADED_HEIGHT`'s old 24+28+2
+composition rather than the base skin's 14px bar (and nothing pinned that the compact
+controls must fit the bar), so the reconstructed guarantee — the rolled-up window is the
+title bar row framed by the two window-edge rings, with every strip control on it — is
+now in `docs/invariants.md`'s shade-mode section.
+
 ### The title band is 23 px tall, bright blue, with long tan tapes; the base skin's title bar is 12 px, dark navy, with white text (found by the reference-comparison pass 2026-10-29) — fixed 2026-10-30 by the bugfix role
 
 **Symptom.** Each section's band is 23 px tall (y 0..22 in the player section), filled

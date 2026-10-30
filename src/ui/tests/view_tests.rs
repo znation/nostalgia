@@ -175,7 +175,7 @@ fn view_constructs_when_the_window_is_shaded() {
     construct_view_in_every_browse_view(&mut player);
 
     // An About flag left set while shaded must not draw the panel: the shade
-    // branch is the title bar plus the strip whatever the flag says.
+    // branch is the single shade bar whatever the flag says.
     player.about_visible = true;
     construct_view_in_every_browse_view(&mut player);
     let shaded = captured_root_view_text_bounds(&player);
@@ -369,16 +369,18 @@ fn title_bar_constructs_for_both_about_states() {
     let _ = views::view_title_bar(true);
 }
 
-// `TITLE_BAR_HEIGHT` is the title bar band alone. The rolled-up window is
-// that band plus the compact transport strip: `views::SHADED_HEIGHT` owns the
-// sum, and both the shaded root view and `resize_to_shade` read it. The shade
-// tests above never read the value — they pass a literal 24.0 only as a stale
-// measurement argument — so a zero or oversized band could leave the
-// rolled-up window blank or push the strip out of view while every test
-// stayed green. Pin the user-visible band height.
+// `TITLE_BAR_HEIGHT` is the title bar row alone, and the rolled-up window is
+// that same 12px row framed by the root view's two 1px window-edge rings:
+// `views::SHADED_HEIGHT` owns the sum, and both the shaded root view and
+// `resize_to_shade` read it. The shade tests above never read the value —
+// they pass a stale literal only as a measurement argument — so a zero or
+// oversized band could leave the rolled-up window blank or push the bar's
+// controls out of view while every test stayed green. Pin the user-visible
+// row height.
 #[test]
 fn title_bar_height_pins_the_shade_strip() {
     assert_eq!(views::TITLE_BAR_HEIGHT, 12.0);
+    assert_eq!(views::SHADED_HEIGHT, 14.0);
 }
 
 // The base skin draws every window's outer edge as a dark near-black ring
@@ -537,9 +539,8 @@ fn shade_strip_draws_only_while_shaded() {
         shaded.fragments()
     );
     assert!(
-        shaded_previous[0].y >= views::TITLE_BAR_HEIGHT
-            && shaded_previous[0].y < views::SHADED_HEIGHT,
-        "shade mode's Previous glyph must sit inside the strip: {:?}",
+        shaded_previous[0].y >= 1.0 && shaded_previous[0].y < views::SHADED_HEIGHT,
+        "shade mode's Previous glyph must sit on the rolled-up single shade bar: {:?}",
         shaded.fragments()
     );
 }
@@ -959,7 +960,10 @@ fn root_view_draws_the_equalizer_and_library_title_bands_in_order() {
 }
 
 // The section bands are part of the normal column, not the rolled-up frame:
-// shade mode still draws the app bar but neither section label.
+// shade mode draws the base skin's single shade bar — the app bar's own chrome
+// with the compact transport on it instead of the tape-and-label band, so the
+// app name makes room for the controls, like the reference strip — and neither
+// section label.
 #[test]
 fn shaded_root_view_draws_no_section_title_bands() {
     let (mut player, _state) = test_player();
@@ -968,8 +972,16 @@ fn shaded_root_view_draws_no_section_title_bands() {
     let capture = captured_root_view_text_bounds(&player);
     let texts: Vec<&str> = capture.texts().collect();
     assert!(
-        texts.contains(&"NOSTALGIA"),
-        "the shaded app bar must still draw the app name: {texts:?}"
+        texts.contains(&"M"),
+        "the shaded bar must still draw the menu button: {texts:?}"
+    );
+    assert!(
+        texts.contains(&"◀◀"),
+        "the shaded bar must still draw the compact transport: {texts:?}"
+    );
+    assert!(
+        !texts.contains(&"NOSTALGIA"),
+        "the shaded bar must not draw the title tape and label: {texts:?}"
     );
     assert!(
         !texts.contains(&"NOSTALGIA EQUALIZER"),

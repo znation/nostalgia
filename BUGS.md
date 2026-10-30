@@ -63,21 +63,4 @@ used as the single well fill behind the whole display area. The browse list's we
 the same fill: its rows sit on (13,13,13) where the base skin's playlist editor sits on
 pure black — `winamp-2.x-stack.png` (200,300) reads (0,0,0).
 
-### The rolled-up shade strip renders 52 px tall; the base skin's is 14 px (found by the reference-comparison pass 2026-10-29)
-
-**Symptom.** `Ctrl+W` (or the title bar's shade button) rolls the window into a 52 px
-tall strip that keeps the full-height blue title band (23 px) plus a second blue row
-(y 24..51). The base skin's rolled-up strip is a single 14 px bar
-(`winamp-2.05-windowshade.gif`, whose two docked strips are each 275×14).
-
-**How to reproduce.** Launch the app, press Ctrl+W, and measure the window: it is
-1024×52 (captured as such for this pass). In `winamp-2.05-windowshade.gif` each rolled-up
-window is 14 px tall, with the marquee, time, and volume controls all inside that height.
-
-**Suspected cause.** `src/ui/views/shade.rs`'s `SHADED_HEIGHT = TITLE_BAR_HEIGHT +
-SHADE_STRIP_HEIGHT` (24 + 28 px) and its strip's `style::title_bar_style()` chrome: the
-strip was built at the app's own chrome scale — roughly twice the base skin's — rather
-than the base skin's single 14 px bar, and it paints a full 28 px blue band where the base
-skin keeps its controls on the one bar.
-
 ## Fixed

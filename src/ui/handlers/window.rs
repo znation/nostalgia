@@ -76,7 +76,7 @@ pub(in crate::ui) fn close_window(player: &mut WinampPlayer) -> Task<Message> {
 /// The title bar's shade toggle: double-clicking the drag region rolls the
 /// window up into shade mode, or restores it. Shading measures the window
 /// only until the pre-shade size is known; after that it rolls straight up to
-/// the title bar plus its compact transport strip. Unshading resizes back to
+/// the base skin's single 14px shade bar. Unshading resizes back to
 /// the captured size. `with_window_id`
 /// keeps both no-ops before the window id resolves, exactly like the other
 /// title-bar actions; the flag still flips so the view switches to the
@@ -323,8 +323,8 @@ fn with_window_id(
     }
 }
 
-/// Rolls the window up to the shade strip at `width`: the title bar plus the
-/// compact transport strip, keeping the window's current width so the
+/// Rolls the window up to the single shade bar at `width`, keeping the
+/// window's current width so the
 /// rolled-up window matches the one it replaces. Both shade paths — rolling
 /// straight up with a known size, and the first shade once its measurement
 /// lands — resize this way, so the expression lives here once. A no-op before
@@ -337,8 +337,8 @@ fn resize_to_shade(player: &WinampPlayer, width: f32) -> Task<Message> {
 }
 
 /// The size of the rolled-up window at `width`: keep the width and shrink the
-/// height to [`views::SHADED_HEIGHT`], the title bar plus the compact transport
-/// strip. Pure, so the resize target can be pinned by a test rather than only
+/// height to [`views::SHADED_HEIGHT`], the base skin's single 14px shade bar.
+/// Pure, so the resize target can be pinned by a test rather than only
 /// observing that [`resize_to_shade`] schedules some work.
 pub(in crate::ui) fn shade_target_size(width: f32) -> iced::Size {
     iced::Size::new(width, views::SHADED_HEIGHT)

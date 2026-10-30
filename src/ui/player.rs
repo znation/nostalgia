@@ -56,8 +56,8 @@ pub(in crate::ui) struct WinampPlayer {
     /// resolves, or if it fails) makes their window calls no-ops.
     pub(in crate::ui) window_id: Option<iced::window::Id>,
     /// Whether the window is rolled up into shade mode: `view` then renders
-    /// only the title bar and the compact transport strip, and the window is
-    /// resized to [`views::SHADED_HEIGHT`]. The choice is saved and restored by
+    /// only the title bar's single 14px shade bar, and the window is resized
+    /// to [`views::SHADED_HEIGHT`]. The choice is saved and restored by
     /// `persist_settings_if_changed` and `adopt_saved_settings`, so a launch
     /// whose settings say shaded draws the rolled-up tree from the first view.
     pub(in crate::ui) shaded: bool,

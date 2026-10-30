@@ -89,8 +89,7 @@ transport row, and equalizer stay drawn; the library is open on a first
 launch and then reopens as last left, the toggle changes no playback,
 equalizer, browse, or search state, and it does not resize the window. A
 compact transport strip sits beneath the browse list with Previous, Play, Pause, Stop, Next,
-an elapsed-over-total time readout, and a volume slider — the window-shade strip's controls
-without its seek slider. Play starts or resumes and Pause pauses, like the main row. The readout shows the elapsed (or remaining) time over the track's
+an elapsed-over-total time readout, and a volume slider. Play starts or resumes and Pause pauses, like the main row. The readout shows the elapsed (or remaining) time over the track's
 total (`00:53/3:30`) and shows just the elapsed string when no total is known, so the empty
 state reads the plain `--:--`.
 Each
@@ -217,9 +216,12 @@ clicks keep the same behavior. A
 plain or Shift-held Escape press closes whichever transient panel is open, like its `Close`
 button or the backdrop; with no panel open Escape keeps its existing behavior. Its
 shade button, a double-click on the bar, or a double-click on the rolled-up strip rolls the window
-up to the title bar plus a compact transport strip with Previous, Play, Pause, Stop, Next, the same
-elapsed-over-total time readout, a seek slider over the preview's own length, and a volume slider,
-where Play starts or resumes and Pause pauses, and back. Its `–` and `✕` buttons minimize and close. The window title (the name the desktop
+up to the base skin's single 14px shade bar — the title bar's own chrome with the compact transport
+on it, like the reference windowshade capture: the `M` menu button, Previous, Play, Pause, Stop,
+Next, the same elapsed-over-total time readout, a seek slider over the preview's own length, a
+volume slider, and the shade, minimize, and close buttons — where Play starts or resumes and Pause
+pauses, and back, by the shade button, a double-click on the bar's blank chrome, or `Ctrl+W` again.
+Pressing the bar's blank chrome moves the window, like the title bar does unshaded. Its `–` and `✕` buttons minimize and close. The window title (the name the desktop
 environment shows for the app) names the current track as
 `<number>Artist - Title - nostalgia` (omitting the number or artist when empty), ending in ` [Paused]` while paused and ` [Stopped]`
 while stopped, like Winamp's taskbar title. It keeps the interrupted track's name across Stop and

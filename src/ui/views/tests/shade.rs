@@ -65,24 +65,23 @@ fn shade_controls_map_to_transport_messages_and_keep_fixed_widths() {
     assert!(matches!(messages[4], Message::NextButton));
 }
 
-// The rolled-up window is exactly the title bar plus the strip, framed by
-// the root view's two 1px window-edge rings; both the view and
-// `resize_to_shade` read `SHADED_HEIGHT`, so pin its composition and its
-// positive, fixed size.
+// The rolled-up window is the base skin's single 14px shade bar
+// (`winamp-screenshots/winamp-2.05-windowshade.gif`, whose two docked strips
+// are each 275×14): the title bar's 12px bar framed by the root view's two
+// 1px window-edge rings. Both the view and `resize_to_shade` read
+// `SHADED_HEIGHT`, so pin its composition and its positive, fixed size.
 #[test]
 fn shade_height_pins_the_rolled_up_window() {
-    assert_eq!(SHADE_STRIP_HEIGHT, 28.0);
-    assert_eq!(
-        SHADED_HEIGHT,
-        super::TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT + 2.0
-    );
+    assert_eq!(SHADED_HEIGHT, 14.0);
+    assert_eq!(SHADED_HEIGHT, super::TITLE_BAR_HEIGHT + 2.0);
 }
 
-// Laying the strip out with the headless renderer resolves its fixed height
+// Laying the bar out with the headless renderer resolves its fixed height
 // for both playback states, so a browser or layout change cannot shrink the
-// rolled-up window to an empty band.
+// rolled-up window to an empty band or grow it past the title bar's 12px row
+// (the root view's two 1px rings frame it into `SHADED_HEIGHT`).
 #[test]
-fn view_shade_strip_keeps_its_fixed_height_for_both_playback_states() {
+fn view_shade_strip_keeps_its_fixed_height_in_both_playback_states() {
     let renderer = layout_capture::headless_renderer();
 
     for mode in [
@@ -98,21 +97,22 @@ fn view_shade_strip_keeps_its_fixed_height_for_both_playback_states() {
             Cow::Borrowed("3:30"),
             None,
             None,
+            false,
         );
         let (_, node) = layout_capture::layout_tree(&mut element, &renderer);
         assert_eq!(
             node.size().height,
-            SHADE_STRIP_HEIGHT,
-            "the strip must keep its fixed height in {mode:?} mode"
+            TITLE_BAR_HEIGHT,
+            "the bar must keep the title bar's row height in {mode:?} mode"
         );
     }
 }
 
 // The rolled-up window restores like the classic Winamp shade: a double-click
-// anywhere on the strip's blank chrome publishes one `ToggleWindowShade`, while
-// a single click stays inert. The center point lands in the fill spacer between
-// the readout and the right-edge volume slider, so the press does not hit a
-// control.
+// on the bar's blank chrome publishes one `ToggleWindowShade`, while a single
+// press stays inert (it moves the window). The center point lands in the blank
+// drag region between the readout and the volume slider, so the press does not
+// hit a control.
 #[test]
 fn shade_strip_double_click_restores_the_window() {
     let mut renderer = layout_capture::headless_renderer();
@@ -124,6 +124,7 @@ fn shade_strip_double_click_restores_the_window() {
         Cow::Borrowed("3:30"),
         None,
         None,
+        false,
     );
     let capture = layout_capture::capture_text(&mut element, &renderer);
     let center = iced::Point::new(capture.size().width / 2.0, capture.size().height / 2.0);
@@ -154,6 +155,7 @@ fn shade_strip_double_click_restores_the_window() {
             Cow::Borrowed("3:30"),
             None,
             None,
+            false,
         ),
         &mut renderer,
         &double_click,
@@ -195,6 +197,7 @@ fn shade_strip_double_clicks_on_controls_do_not_restore_the_window() {
             Cow::Borrowed("3:30"),
             Some(Duration::from_secs(10)),
             Some(Duration::from_secs(30)),
+            false,
         )
     };
     let mut renderer = layout_capture::headless_renderer();
@@ -279,19 +282,23 @@ fn shade_strip_shows_a_seek_slider_only_when_position_and_length_are_known() {
             Cow::Borrowed("3:30"),
             position,
             duration,
+            false,
         );
         let capture = layout_capture::capture_text(&mut element, &renderer);
         let (mut tree, node) = layout_capture::layout_tree(&mut element, &renderer);
         let mut controls = CapturedControls::default();
         layout_capture::apply_operation(&mut element, &renderer, &mut tree, &node, &mut controls);
 
+        // The whole bar must still resolve to its 12px row with a seek slider
+        // drawn, so the slider cannot push the row past the bar.
+        assert_eq!(node.size().height, TITLE_BAR_HEIGHT);
         let volume = controls
             .volume
             .unwrap_or_else(|| panic!("missing volume slider for {position:?}/{duration:?}"));
         assert_eq!(volume.width, MINI_VOLUME_WIDTH);
         assert!(
-            (volume.x + volume.width - (node.size().width - 6.0)).abs() < 0.5,
-            "the volume slider must stay at the right edge: {volume:?} in {:?}",
+            (volume.x + volume.width - (node.size().width - SHADE_VOLUME_RIGHT_INSET)).abs() < 0.5,
+            "the volume slider must sit at the window buttons' left edge: {volume:?} in {:?}",
             node.size()
         );
         match controls.seek {
@@ -339,6 +346,7 @@ fn captured_shade_strip(elapsed: &str, total: &str) -> (Vec<String>, Option<Rect
         Cow::Borrowed(total),
         None,
         None,
+        false,
     ))
 }
 
@@ -353,14 +361,17 @@ fn captured_library_strip(elapsed: &str, total: &str) -> (Vec<String>, Option<Re
 }
 
 /// Asserts a captured compact strip draws the `{time}/3:30` readout and seats
-/// its [`MINI_VOLUME_WIDTH`] volume slider 6px in from the right edge; `edge`
-/// names the strip in the failure message.
+/// its [`MINI_VOLUME_WIDTH`] volume slider `inset` px in from the container's
+/// right edge; `edge` names the strip in the failure message. The library
+/// footer's slider starts only its 6px padding from the edge; the shade bar's
+/// must leave room for the window buttons that share the bar.
 fn assert_readout_and_right_edge_volume(
     texts: &[String],
     slider: Option<Rectangle>,
     size: Size,
     time: &str,
     edge: &str,
+    inset: f32,
 ) {
     let expected = format!("{time}/3:30");
     assert!(
@@ -370,7 +381,7 @@ fn assert_readout_and_right_edge_volume(
     let slider = slider.unwrap_or_else(|| panic!("missing volume slider: {texts:?}"));
     assert_eq!(slider.width, MINI_VOLUME_WIDTH);
     assert!(
-        (slider.x + slider.width - (size.width - 6.0)).abs() < 0.5,
+        (slider.x + slider.width - (size.width - inset)).abs() < 0.5,
         "slider must sit at the {edge}'s right edge: {slider:?} in {size:?}"
     );
 }
@@ -411,6 +422,7 @@ fn compact_readout_toggles_time_display_only_while_not_stopped() {
                     Cow::Borrowed("3:30"),
                     None,
                     None,
+                    false,
                 ),
                 _ => view_library_strip(
                     mode,
@@ -459,7 +471,14 @@ fn compact_readout_toggles_time_display_only_while_not_stopped() {
 fn shade_strip_draws_the_time_readout_and_puts_the_volume_slider_at_the_right_edge() {
     for time in ["00:53", "-02:37"] {
         let (texts, slider, size) = captured_shade_strip(time, "3:30");
-        assert_readout_and_right_edge_volume(&texts, slider, size, time, "strip");
+        assert_readout_and_right_edge_volume(
+            &texts,
+            slider,
+            size,
+            time,
+            "strip",
+            SHADE_VOLUME_RIGHT_INSET,
+        );
     }
 }
 
@@ -518,7 +537,7 @@ fn library_strip_draws_the_five_controls_time_and_right_edge_volume() {
             .filter(|text| ["◀◀", "▶", "II", "■", "▶▶"].contains(text))
             .collect();
         assert_eq!(glyphs, vec!["◀◀", "▶", "II", "■", "▶▶"]);
-        assert_readout_and_right_edge_volume(&texts, slider, size, time, "footer");
+        assert_readout_and_right_edge_volume(&texts, slider, size, time, "footer", 6.0);
     }
 }
 
@@ -540,6 +559,7 @@ fn transport_controls_draw_play_and_pause_in_every_playback_state() {
             Cow::Borrowed("3:30"),
             None,
             None,
+            false,
         ));
         for glyph in ["▶", "II"] {
             assert!(
@@ -582,6 +602,7 @@ fn compact_readout_keeps_its_bounds_when_the_blink_hides_it() {
             Cow::Borrowed("3:30"),
             None,
             None,
+            false,
         ))
     };
     let (hidden_texts, hidden_volume, _) = capture(false);

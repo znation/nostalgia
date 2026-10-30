@@ -24,8 +24,9 @@ mod shade;
 /// and `PL` buttons toggle the two sections independently. Hiding the
 /// equalizer section or the library section moves the rest up into the freed
 /// height; nothing resizes the window. When the window is shaded,
-/// the tree is the title bar over the compact transport strip and the rest of
-/// the screen is dropped. The strip's time readout publishes the same
+/// the tree is the title bar's single 14px shade bar — its own chrome with
+/// the compact transport drawn on it — and the rest of the screen is dropped.
+/// The bar's time readout publishes the same
 /// [`Message::ToggleTimeDisplay`] as the hidden LCD's, so the elapsed/remaining
 /// choice stays switchable in shade mode. While [`WinampPlayer::about_visible`]
 /// or [`WinampPlayer::options_visible`] holds outside shade mode, the
@@ -45,7 +46,7 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
             .padding(1.0)
             // Shrink, not Fill: the shaded window is sized to
             // [`views::SHADED_HEIGHT`], exactly the tree content plus the
-            // outline's two rows, so the strip's bottom edge stays visible.
+            // outline's two rows, so the bar's bottom edge stays visible.
             .height(Length::Shrink)
             .style(|_theme| container::Style {
                 border: window_edge_border(theme::WINDOW_EDGE_OUTLINE),
