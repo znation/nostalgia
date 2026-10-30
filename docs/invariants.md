@@ -2437,9 +2437,11 @@ showing song list by name, as ids only, in a `Settings::saved_playlists` entry:
   button acts only while the panel is open. Deleting a list whose songs are currently showing
   touches only the saved list: the showing rows, the playing track, and the transport are
   untouched, like a removed preset's applied curve.
-- The persisted form is a `user_playlist=<name>:<id>,<id>,…` line per saved list; the file is
-  line-based, so the writer flattens `\r`/`\n` to spaces in a saved list's name (the naming
-  panel refuses such a name outright; this covers any other producer). Parsing skips
+- The persisted form is a `user_playlist=<name>:<id>,<id,…` line per saved list; the file is
+  line-based, so the writer flattens `\r`/`\n` to spaces in both a saved list's name and its
+  song ids (the naming panel refuses a line-break name outright; the ids are copied verbatim
+  from the showing list with no panel to refuse at, so the writer guard is their only
+  defense). Parsing skips
   a line without a `:`, a blank name, or an empty id list, and keeps a whole list round-tripping
   through `to_text` → `from_text` untouched.
 - Every Playlists fetch that lands appends one sentinel row (`id: SAVED_PLAYLIST_ROW_ID`, the
@@ -2460,8 +2462,9 @@ delete_list_submitted, user_playlist_selected, user_playlist_loaded}`,
 switch_view}`, `handlers::browse::fetch::playlists_loaded`, and
 `browse::BrowseReply`'s re-check for `Message::UserPlaylistLoaded`.
 
-**Pinned by.** `user_playlist_lines_round_trip_and_skip_the_malformed_ones` and
-`a_line_broken_playlist_name_writes_one_whole_settings_line` (`src/settings.rs`); the save-list
+**Pinned by.** `user_playlist_lines_round_trip_and_skip_the_malformed_ones`,
+`a_line_broken_playlist_name_writes_one_whole_settings_line`, and
+`a_line_broken_playlist_song_id_writes_one_whole_settings_line` (`src/settings.rs`); the save-list
 tests in `src/ui/tests/save_list_tests.rs`;
 `a_saved_song_list_reaches_the_saved_snapshot` and `saved_song_lists_are_restored_on_boot`
 (`src/ui/tests/settings_tests.rs`); `the_save_list_button_lays_out_in_the_nav_row`,

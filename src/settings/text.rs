@@ -65,11 +65,17 @@ impl Settings {
             // saved list.
             text.push_str(saved.name.replace(['\r', '\n'], " ").as_str());
             text.push(':');
+            // A list's ids are seam text, copied verbatim from the showing
+            // list by the save flow: one carrying a line break would split
+            // the row in two and let the id's tail be read as settings lines
+            // of its own, so the writer flattens line breaks to spaces, like
+            // the `recently_played=`/`current_track=` id rows below and the
+            // name above (the play seams have no naming panel to refuse at).
             for (position, id) in saved.song_ids.iter().enumerate() {
                 if position > 0 {
                     text.push(',');
                 }
-                text.push_str(id);
+                text.push_str(id.replace(['\r', '\n'], " ").as_str());
             }
             text.push('\n');
         }

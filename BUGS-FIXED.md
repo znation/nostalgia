@@ -5,6 +5,34 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### A line-break-bearing song id in a saved song list splits its `user_playlist=` settings row in two, injecting settings lines of its own — fixed 2026-10-29 by the bugfix role
+
+Found in the latent-bug hunt (there was no Open entry; the same played-id
+class was fixed for `recently_played=`/`current_track=` earlier today).
+
+**Symptom.** A saved list's song ids come verbatim from the showing list
+(`save_list.rs`), and an id is seam text like a played id: one carrying a
+line break would split the list's `user_playlist=<name>:<ids>` row in two
+in the settings file and let the id's tail be read as settings lines of
+its own (`song-7\neq_auto=on` would even flip a visible setting).
+
+**Reproduce.** Build a `Settings` with `SavedPlaylist { song_ids:
+vec!["song-7\neq_auto=on"] }` and call `to_text()`: before the fix the
+rendered text carries a bare `eq_auto=on` body line; see
+`a_line_broken_playlist_song_id_writes_one_whole_settings_line`
+(`src/settings.rs`).
+
+**Cause.** `settings/text.rs`'s `user_playlist=` writer flattened the
+list's name but pushed its song ids verbatim, unlike the sibling
+`recently_played=`/`current_track=` id rows.
+
+**Fix.** The writer flattens `\r`/`\n` to spaces in a saved list's song
+ids too; regression test added, `docs/invariants.md`'s saved-lists
+section names the id guard and its test.
+
+**Validation gap:** none — the added codec test reproduced and confirmed
+it before and after the fix.
+
 ### A played song id carrying a line break splits its `recently_played=`/`current_track=` settings rows in two, injecting settings lines of its own (found by the bugfix role 2026-10-29) — fixed 2026-10-29 by the bugfix role
 
 **Symptom:** the two id rows the settings writer carries verbatim — `recently_played=` and

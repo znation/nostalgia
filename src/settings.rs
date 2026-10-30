@@ -951,6 +951,54 @@ mod tests {
         assert_eq!(Settings::from_text(&text), scrubbed);
     }
 
+    // The same line-based file shape holds for a saved list's ids at the
+    // writer: the save flow copies them verbatim from the showing list
+    // (`save_list.rs`), and an id is seam text like a played id, so one
+    // carrying a line break would split the list's `user_playlist=` row in
+    // two and let the id's tail be read as settings lines of its own (an id
+    // like `song-7\neq_auto=on` would even flip a visible setting), so the
+    // writer flattens line breaks to spaces there too, like the
+    // `recently_played=` and `current_track=` id rows do.
+    #[test]
+    fn a_line_broken_playlist_song_id_writes_one_whole_settings_line() {
+        let mut settings = Settings::default();
+        settings.set_saved_playlists(vec![
+            SavedPlaylist {
+                name: String::from("My List"),
+                song_ids: vec![String::from("song-7\neq_auto=on")],
+            },
+            SavedPlaylist {
+                name: String::from("Other"),
+                song_ids: vec![String::from("song-8\rshuffle=on")],
+            },
+        ]);
+        let mut scrubbed = Settings::default();
+        scrubbed.set_saved_playlists(vec![
+            SavedPlaylist {
+                name: String::from("My List"),
+                song_ids: vec![String::from("song-7 eq_auto=on")],
+            },
+            SavedPlaylist {
+                name: String::from("Other"),
+                song_ids: vec![String::from("song-8 shuffle=on")],
+            },
+        ]);
+
+        // Two whole `user_playlist=` rows and no injected settings line of
+        // any tail's own.
+        let text = settings.to_text();
+        assert_eq!(
+            text.lines()
+                .filter(|line| line.starts_with("user_playlist="))
+                .count(),
+            2
+        );
+        assert!(!text.lines().any(|line| line.starts_with("eq_auto=on")));
+        assert!(!text.lines().any(|line| line.starts_with("shuffle=on")));
+        assert_eq!(text, scrubbed.to_text());
+        assert_eq!(Settings::from_text(&text), scrubbed);
+    }
+
     #[test]
     fn from_text_reads_the_last_band_and_trims_around_the_equals_sign() {
         let last = equalizer::BAND_COUNT - 1;
