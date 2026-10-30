@@ -97,6 +97,20 @@ pub const BUTTON_TEXT: Color = Color::from_rgb8(57, 57, 90);
 /// chrome takes this highlight instead.
 pub const BUTTON_EDGE_LIGHT: Color = Color::from_rgb8(239, 255, 255);
 
+/// The transport row's Repeat and Shuffle buttons carry a small square LED on
+/// their light metal face. This is its fill while the flag it marks is on: the
+/// mockups' lit LED (`docs/screenshots/transport.png` reads (0,232,0) inside
+/// the repeat button's LED in its Repeat-on panel, where the shuffle LED
+/// beside it stays dark), a dimmer stop than the pure [`LCD_GREEN`] the LCD
+/// readouts use, so a lit LED cannot read as an ordinary green readout.
+pub const LED_ON: Color = Color::from_rgb8(0, 232, 0);
+
+/// The square LED on the transport row's Repeat and Shuffle faces while the
+/// flag it marks is off: the mockups' unlit LED
+/// (`docs/screenshots/player.png` reads (16,20,15) inside the resting
+/// Shuffle button's LED), near-black against the [`BUTTON_FACE`] metal.
+pub const LED_OFF: Color = Color::from_rgb8(16, 20, 15);
+
 /// The near-black recess behind the green Now Playing title.
 pub const LCD_BACKGROUND: Color = Color::from_rgb(0.05, 0.05, 0.05);
 
@@ -248,6 +262,11 @@ mod tests {
         assert_eq!(BUTTON_FACE_PRESSED, Color::from_rgb8(167, 178, 191));
         assert_eq!(BUTTON_TEXT, Color::from_rgb8(57, 57, 90));
         assert_eq!(BUTTON_EDGE_LIGHT, Color::from_rgb8(239, 255, 255));
+        assert_eq!(LED_ON, Color::from_rgb8(0, 232, 0));
+        assert_eq!(LED_OFF, Color::from_rgb8(16, 20, 15));
+        // The LED must read as its own status marker, not as one of the LCD's
+        // pure green readouts used beside it on the same row.
+        assert_ne!(LED_ON, LCD_GREEN);
         // The light-metal convention the transport row is measured against: the
         // face and its bezel highlight are lighter than the engraved glyph color.
         const {
@@ -259,6 +278,16 @@ mod tests {
                 BUTTON_EDGE_LIGHT.r + BUTTON_EDGE_LIGHT.g + BUTTON_EDGE_LIGHT.b
                     > BUTTON_TEXT.r + BUTTON_TEXT.g + BUTTON_TEXT.b
             );
+            // The LED square's two states must stay distinguishable against
+            // the light metal face they sit on and the dark engraved glyph
+            // beside them: the dark square dimmer than the engraved color, so
+            // it cannot read as a third glyph, and the lit square brighter
+            // green than the face, so it cannot disappear into the metal.
+            const {
+                assert!(LED_OFF.r + LED_OFF.g + LED_OFF.b < LED_ON.r + LED_ON.g + LED_ON.b);
+                assert!(LED_OFF.g < BUTTON_TEXT.g);
+                assert!(LED_ON.g > BUTTON_FACE.g);
+            }
         }
         assert_eq!(VOLUME_SLIDER_FILL, Color::from_rgb(0.88, 0.49, 0.15));
         assert_eq!(BALANCE_SLIDER_FILL, Color::from_rgb(0.09, 0.57, 0.04));

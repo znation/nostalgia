@@ -59,7 +59,7 @@ pub(super) const RESPONSE_CURVE_GUIDE_THICKNESS: f32 = 1.0;
 
 /// The equalizer on/off button's label: "EQ: On" while the equalizer is engaged, "EQ: Off" when it
 /// is off. Pure so the label logic is testable without an iced `Element`, like
-/// [`repeat_label`](super::transport::repeat_label).
+/// the options menu's row label helpers ([`repeat_label`](super::options::repeat_label)).
 pub(super) fn eq_enabled_label(enabled: bool) -> &'static str {
     if enabled { "EQ: On" } else { "EQ: Off" }
 }

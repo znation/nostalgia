@@ -924,10 +924,13 @@ refresh does not re-join and reformat every row.
   `Stop`, `Next`). Play dispatches `Message::Play` and Pause `Message::Pause`, the same explicit
   calls as the X and C keys; no drawn glyph dispatches `Message::PlayPause`. The five glyph
   buttons are pinned to fixed widths 34, 30, 30, 30, and 34 px, and the row is playback-independent,
-  so it cannot reflow when playback starts. Repeat and Shuffle remain the `Repeat:
-  Off/On` and `Shuffle: Off/On` text toggles, pinned to 104 and 112 px, so their label swaps
-  cannot reflow it either; each draws the sunken `theme::BUTTON_FACE_PRESSED` chrome while on and
-  the raised `theme::BUTTON_FACE` while off. The shade strip and the library footer build their five buttons
+  so it cannot reflow when playback starts. Repeat and Shuffle are LED-marked toggles built by
+  `repeat_toggle`/`shuffle_toggle` through the shared `led_toggle` builder, pinned to 44 and 92 px
+  (their state swap is an LED color change, not a label, so it cannot reflow the row); each
+  carries a square `LED_SIZE` ⋅ `LED_SIZE` fill block — `theme::LED_ON` while on,
+  `theme::LED_OFF` while off — before its glyph (`↻` for Repeat) or engraved label (`SHUFFLE` for
+  Shuffle), while the chrome stays raised `theme::BUTTON_FACE` at rest in either state (pressing
+  still sinks it, through `style::chrome_button_style`). The shade strip and the library footer build their five buttons
   from the same glyph spec.
 - The main transport row's fixed-width `EQ` toggle follows the balance slider in every playback
   state and is sunken while the equalizer panel is shown, ordinary chrome while it is hidden.
@@ -985,7 +988,9 @@ refresh does not re-join and reformat every row.
 and Reload buttons into one `Row`. `views::view_transport_controls`,
 `views::transport::transport_buttons`, and `views::transport::transport_glyphs` in
 `src/ui/views/transport.rs` build the glyph row from `fixed_width_button`s, with Repeat and Shuffle
-built by `repeat_toggle`/`shuffle_toggle` through `fixed_width_toggle_button` (`src/ui/views/mod.rs`), and
+built by `repeat_toggle`/`shuffle_toggle` through the transport module's own `led_toggle` builder
+(`src/ui/views/transport.rs`), whose `led_square` fills the marker square from `theme::LED_ON`/
+`theme::LED_OFF` (`src/ui/theme.rs`), and
 `iced::widget::Tooltip`s; `views::transport::eq_panel_toggle` and
 `views::transport::library_panel_toggle` spec the EQ and PL toggles, which
 `views::transport::panel_toggle_button` builds and `style::toggle_button_style`
@@ -1061,7 +1066,11 @@ glyph split into separate Play and Pause buttons that dispatch the explicit mess
 keys use, leaving the row playback-independent (2026-10-26).
 Split root assembly into branch modules, retaining the shared LCD/footer snapshot and the
 outer OptionsShortcut wrapper (2026-10-26 by the feature role).
-Repeat and Shuffle sink while on, through `fixed_width_toggle_button` (2026-10-27).
+Repeat and Shuffle sink while on, through `fixed_width_toggle_button` (2026-10-27; superseded
+2026-10-30: the faces traded the `Repeat/Shuffle: On/Off` text labels for the base skin's square
+LED markers, lit `theme::LED_ON` while the flag is on, with the chrome raised at rest in either
+state — the options menu keeps its `Repeat: On/Off` and `Shuffle: On/Off` text rows through
+`repeat_label`/`shuffle_label`).
 The equalizer's EQ and AUTO buttons sink while on, through `eq_toggle` and `auto_toggle` (2026-10-27).
 
 ## Settings persistence

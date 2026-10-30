@@ -19,58 +19,31 @@ coordinates in `winamp-screenshots/winamp-2.x-stack.png` are relative to that fi
 its main window occupies y 0..115, the equalizer y 116..231, and the playlist
 y 232..347.
 
-### The whole chrome renders neutral gray where the base skin — and the repo's own mockups — are steel blue (found by the reference-comparison pass 2026-10-29)
+### The transport row omits the base skin's Eject button (found by the reference-comparison pass 2026-10-29)
 
-**Symptom.** Every chrome surface the app paints is a neutral gray: the window face is
-`#2E2E2E` (46,46,46), the wells are `#0D0D0D` (13,13,13), the button faces `#4C4C4C`
-(76,76,76), and the bevels `#8C8C8C` (140,140,140) and `#0D0D0D`. The base skin's chrome
-is steel blue: the face is `#181829` (24,24,41), the equalizer panel `#31315A` (49,49,90),
-the bevel highlights are blue-tinted (66,82,90) and (140,156,181), and the outer edge is
-a near-black (0,0,8) outline *outside* the light bevel. The repo's own mockups
-(`docs/screenshots/player.png`) are steel blue too: face (53,53,84)/(56,56,88), bevel
-highlight (98,98,118) — so the app matches neither the target nor its own design.
-
-**How to reproduce.** Run the app (`cargo run`; the window opens 1024×768 at 1:1), capture
-it with any screenshot tool, and sample: the window face at (600,120) reads (46,46,46);
-the top bevel at (200,0) reads (140,140,140). Against the reference: `winamp-2.x-stack.png`
-(3,30) reads (24,24,41), (0,30) reads (0,0,8), (1,30) reads (66,82,90), (271,13) reads
-(140,156,181), and its equalizer panel (20,180) reads (49,49,90). `docs/screenshots/player.png`
-(5,20) reads (53,53,84).
-
-**Suspected cause.** `src/ui/theme.rs`'s palette constants are documented as the Winamp
-2.x base skin (`WINDOW_BACKGROUND` "The dark gray window face", the module doc "The
-Winamp 2.x base-skin palette") but hold neutral grays: `WINDOW_BACKGROUND =
-Color::from_rgb(0.18, 0.18, 0.18)`, `LCD_BACKGROUND = Color::from_rgb(0.05, 0.05, 0.05)`,
-`BUTTON_FACE = Color::from_rgb(0.30, 0.30, 0.30)`, `PANEL_EDGE_LIGHT =
-Color::from_rgb(0.55, 0.55, 0.55)`, `PANEL_EDGE_DARK = Color::from_rgb(0.05, 0.05, 0.05)`.
-No constant in the module carries the base skin's (24,24,41)/(49,49,74) blues, and the
-window's outer edge is drawn as a light bevel only, with no dark outline outside it.
-
-**Direction.** Re-sample the base-skin faces and bevels from `winamp-screenshots/` (or
-from the mockups, which agree on hue) and replace the gray constants with them; keep the
-two-part outer border (dark outline outside the light bevel).
-
-### The transport row omits the base skin's Eject button and its LED-marked Shuffle/Repeat buttons (found by the reference-comparison pass 2026-10-29)
-
-**Symptom.** The app's transport row is Previous, Play, Pause, Stop, Next, then two wide
-text toggles reading `Repeat: Off` and `Shuffle: Off`, then the volume and balance
-sliders, `EQ`, `PL`, and the lightning button. The base skin's row is Previous, Play,
-Pause, Stop, Next, **Eject**, then a `SHUFFLE` button and a Repeat icon button, each with
-a green LED dot; `winamp-screenshots/README.md`'s 2.95 capture and the repo's own mockup
-(`docs/screenshots/player.png`) both show that row. The app has no Eject control at all,
-and its Repeat/Shuffle state is carried by the label text rather than an indicator LED.
+**Symptom.** The app's transport row is Previous, Play, Pause, Stop, Next, then the LED-marked
+Repeat and Shuffle toggles, then the volume and balance sliders, `EQ`, `PL`, and the lightning
+button. The base skin's row is Previous, Play, Pause, Stop, Next, **Eject**, then a `SHUFFLE`
+button and a Repeat icon button, each with a green LED dot — `winamp-screenshots/README.md`'s
+2.95 capture and the repo's own mockup (`docs/screenshots/player.png`) both show that row, with
+the eject button exactly between Next and Shuffle. The app has no Eject control at all. This
+entry's LED half (the toggles carrying their on/off state in label text instead of a square LED)
+was split off and fixed the same day — see the entry under `## Fixed`.
 
 **How to reproduce.** Run the app and read the transport row left to right (or compare
-`docs/screenshots/player.png`'s transport row with a fresh capture): no Eject glyph
-appears between Next and Repeat, and Repeat/Shuffle render as ~340 px wide text buttons
-at a 1024 px window width (measured at y 133..162: buttons at x 0..34, 54..84, 104..134,
-154..184, 204..234, then the text toggles from x 258).
+`docs/screenshots/player.png`'s transport row with a fresh capture): no Eject glyph appears
+between Next and Repeat.
 
 **Suspected cause.** The transport row's control list (`src/ui/views/transport.rs`, whose
-`transport_glyphs()` holds only the five playback glyphs, plus the Repeat/Shuffle text
-toggles beside it) was built from the app's own feature list — Repeat/Shuffle as text
-toggles are documented in `docs/usage.md` — and never carried the base skin's Eject button
-or per-toggle LED indicators.
+`transport_glyphs()` holds only the five playback glyphs, plus the Repeat/Shuffle LED toggles
+beside it) was built from the app's own feature list and never carried the base skin's Eject
+button, which has no behavior to wire to: Winamp's Eject opens Add File(s), and this app plays
+the Apple Music library and the sample library only.
+
+**Direction.** Waiting on the open question "What should the transport row's Eject button do
+when it is added?" (posted by bugfix 2026-10-30 in `QUESTIONS.md`); add the button only once
+that is answered, so a control never ships claiming behavior it does not have.
+
 
 ### The title band is 23 px tall, bright blue, with long tan tapes; the base skin's title bar is 12 px, dark navy, with white text (found by the reference-comparison pass 2026-10-29)
 

@@ -5,6 +5,38 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### The transport row's Repeat and Shuffle carry their on/off state in the label text; the base skin marks it with a square LED on each face (found by the reference-comparison pass 2026-10-29) — fixed 2026-10-30 by the bugfix role
+
+**Symptom.** The two toggles render as ~216 px of text toggles: `Repeat: Off`/`Repeat: On`
+(104 px) and `Shuffle: Off`/`Shuffle: On` (112 px), carrying the state in the label word, and
+sinking into the pressed face while on (the EQ/PL rule). The base skin's row keeps both faces
+raised at rest in either state and marks the state with a small square LED on each face:
+`docs/screenshots/player.png` reads (16,20,15) inside the resting Shuffle button's LED, and
+`docs/screenshots/transport.png` reads (0,232,0) inside the repeat button's lit LED in its
+Repeat-on panel while the shuffle LED beside it stays dark.
+
+**How to reproduce.** Press the Repeat or Shuffle button: the face's label swaps its On/Off
+word and the chrome sinks while on. In the mockups neither changes: the label is fixed and the
+LED square alone lights.
+
+**Suspected cause.** `transport.rs`'s `repeat_toggle`/`shuffle_toggle` built through
+`fixed_width_toggle_button` — the same sunken-while-on rule the EQ and PL panel toggles use —
+with `repeat_label()`/`shuffle_label()` wording, so the state had no pixel-level presentation
+at all.
+
+**Fixed.** The two toggles build through one transport-module `led_toggle` builder: raised
+`style::chrome_button_style` chrome at rest in either state, a solid fill square lit
+`theme::LED_ON` (0,232,0) while its flag is on and `theme::LED_OFF` (16,20,15) while off, before
+the repeat loop glyph (`↻`) for Repeat and the engraved `SHUFFLE` label for Shuffle, pinned to
+44 and 92 px so the state swap cannot reflow the row. `theme.rs` pins both LED values and their
+distinguishability bounds; `docs/usage.md`'s transport description and `docs/invariants.md`'s
+layout guarantee were updated in the same change, and the options menu keeps its
+`Repeat: On/Off`/`Shuffle: On/Off` text rows through the label helpers.
+
+**Validation gap:** no-observability — the state surfaced only as label text and sunken chrome,
+which no pixel-level test sampled; the pixel harness now reads the LED square and the raised
+face directly.
+
 ### Transport buttons draw dark faces with light glyphs, inverting the base skin's light metal buttons (found by the reference-comparison pass 2026-10-29) — fixed 2026-10-30 by the bugfix role
 
 **Symptom.** Every transport-row button (Previous, Play, Pause, Stop, Next, Repeat,

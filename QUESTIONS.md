@@ -6,6 +6,33 @@ director). Loops never block on their own questions; they check here at the star
 
 ## Open
 
+### What should the transport row's Eject button do when it is added? (posted by bugfix 2026-10-30)
+
+**Context.** The base skin's transport row carries an Eject button between Next and the
+Shuffle/Repeat buttons (`winamp-screenshots/`'s 2.95 capture and the repo's own mockup,
+`docs/screenshots/player.png`, both show it), and the open BUGS.md entry "The transport row
+omits the base skin's Eject button" tracks the missing control. The sibling half of that entry
+(the LED-marked Repeat/Shuffle toggles) was fixed 2026-10-30, but the Eject button itself needs
+a behavior before a control can ship: in Winamp 2.x, Eject opens an Add File(s) dialog, and this
+app plays the Apple Music library and the built-in sample library only — nothing on the machine
+opens behind it today.
+
+**Options.**
+
+1. Add the button only when a behavior exists (for instance an Add-files/import surface) —
+   until then the bug entry stays open and the row keeps its current order. Recommended: the
+   one that never ships a control that lies.
+2. Wire Eject to `Message::ToggleLibraryPanel`, the message the `PL` button publishes: the
+   button sits one place closer to Winamp's row order, at the cost of a second control for the
+   same thing.
+3. Add it as a visual-only button that publishes nothing, filling the row position until a
+   behavior is decided.
+
+**Recommendation.** Option 1. Duplicate (2) and no-op (3) both make a control claim something
+it does not do; the reference-matching passes have already shown the row's order can be
+completed later without disturbing anything else. Moving this question to `## Answered` with
+the choice unblocks the bug entry's fix directly.
+
 ### What should the planner plan next — the parked directions or the browse-selection keys? (posted by plan 2026-10-29)
 
 **Context.** The Winamp-faithful surface is delivered and pinned: the OPTIONS menu rows, the

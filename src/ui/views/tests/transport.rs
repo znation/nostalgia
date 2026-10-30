@@ -1,17 +1,5 @@
 use super::*;
 
-#[test]
-fn repeat_label_mirrors_repeat_state() {
-    assert_eq!(repeat_label(true), "Repeat: On");
-    assert_eq!(repeat_label(false), "Repeat: Off");
-}
-
-#[test]
-fn shuffle_label_mirrors_shuffle_state() {
-    assert_eq!(shuffle_label(true), "Shuffle: On");
-    assert_eq!(shuffle_label(false), "Shuffle: Off");
-}
-
 // The `view_*` builders are the code that runs on every frame, and no
 // other test reaches them: the row tests stop at the (title, label,
 // message) tuples and the `update` tests stop before the view layer, so
@@ -28,9 +16,11 @@ fn shuffle_label_mirrors_shuffle_state() {
 // fixed-width and that its width is independent of the repeat and shuffle
 // state; a zeroed, widened, or otherwise wrong width literal would clear it
 // while the glyph clipped or the row moved. Pin the face widths in row order:
-// Previous 34, Play 30, Pause 30, Stop 30, Next 34, Repeat 104, Shuffle 112.
-// Each is the width of that button's widest face, so a deliberate glyph or
-// width change must update this pin.
+// Previous 34, Play 30, Pause 30, Stop 30, Next 34, Repeat 44, Shuffle 92.
+// Each is the width of that button's widest face — for Repeat and Shuffle
+// that face now carries the LED square and the short engraved label (set
+// when the toggles traded their `On/Off` text for the base skin's LED
+// squares) — so a deliberate glyph or width change must update this pin.
 #[test]
 fn transport_buttons_keep_their_measured_face_widths() {
     let widths: Vec<Length> = transport_buttons(false, false)
@@ -45,8 +35,8 @@ fn transport_buttons_keep_their_measured_face_widths() {
             Length::Fixed(30.0),
             Length::Fixed(30.0),
             Length::Fixed(34.0),
-            Length::Fixed(104.0),
-            Length::Fixed(112.0),
+            Length::Fixed(44.0),
+            Length::Fixed(92.0),
         ]
     );
 }
@@ -279,40 +269,97 @@ fn transport_buttons_keep_a_fixed_width_across_label_changes() {
     }
 }
 
-// Repeat and Shuffle sink while on, like the EQ and PL toggles: the on button draws the pressed
-// face at rest and the off button the raised face.
+// The Repeat and Shuffle toggles do not sink at rest in either state: the
+// base skin marks their on/off state on the square LED each face carries,
+// and its chrome stays raised whether the flag is on or off — the groove
+// sinks only while the mouse holds the button down. Sample each whole face
+// through the pixel harness: at rest the face must read the raised metal in
+// both states, never the pressed face.
 #[test]
-fn repeat_and_shuffle_toggles_sink_while_on() {
-    let mut renderer = layout_capture::headless_renderer();
-    let mut faces = |mut element: Element<'_, Message, iced::Theme, iced::Renderer>| {
+fn repeat_and_shuffle_toggles_stay_raised_in_either_state() {
+    let raised_face = |mut element: Element<'_, Message, iced::Theme, iced::Renderer>| {
+        let mut renderer = layout_capture::headless_renderer();
         let (text, pixels) = layout_capture::capture_text_and_pixels(
             &mut element,
             &mut renderer,
             &iced::Theme::Dark,
         );
-        // Sample the left padding strip, clear of the 1px border and the glyphs: antialiased
-        // text blends the label color into the face and can land on the other face's color.
         let size = text.size();
-        let region = pixels.region(Rectangle::new(
-            iced::Point::new(2.0, 2.0),
-            Size::new(4.0, size.height - 4.0),
-        ));
+        let region = pixels.region(Rectangle::new(iced::Point::new(0.0, 0.0), size));
         (
-            region_has_color(&region, theme::BUTTON_FACE_PRESSED),
             region_has_color(&region, theme::BUTTON_FACE),
+            region_has_color(&region, theme::BUTTON_FACE_PRESSED),
         )
     };
-    for (name, on, off) in [
-        ("Repeat", repeat_toggle(true), repeat_toggle(false)),
-        ("Shuffle", shuffle_toggle(true), shuffle_toggle(false)),
-    ] {
-        assert_eq!(faces(on.into()), (true, false), "{name} on must sink");
-        assert_eq!(
-            faces(off.into()),
-            (false, true),
-            "{name} off must stay raised"
+    assert_eq!(
+        raised_face(repeat_toggle(true).into()),
+        (true, false),
+        "Repeat on must stay raised"
+    );
+    assert_eq!(
+        raised_face(repeat_toggle(false).into()),
+        (true, false),
+        "Repeat off must stay raised"
+    );
+    assert_eq!(
+        raised_face(shuffle_toggle(true).into()),
+        (true, false),
+        "Shuffle on must stay raised"
+    );
+    assert_eq!(
+        raised_face(shuffle_toggle(false).into()),
+        (true, false),
+        "Shuffle off must stay raised"
+    );
+}
+
+// The base skin marks Repeat and Shuffle with a small square LED on each
+// button face: `docs/screenshots/transport.png` reads (0,232,0) inside the
+// lit repeat LED in its Repeat-on panel, and `docs/screenshots/player.png`
+// reads (16,20,15) inside the resting Shuffle button's LED, so the state
+// lives in the LED, not the label or the chrome. Sample both toggles through
+// the pixel harness: the on button must paint the lit square and the off
+// button the dark one, and neither may show the other's LED color. The two
+// colors are written inline so this test exercises the pixels themselves
+// rather than constants that could drift with the style code.
+#[test]
+fn repeat_and_shuffle_paint_their_led_square_with_their_state() {
+    let led_on = iced::Color::from_rgb8(0, 232, 0);
+    let led_off = iced::Color::from_rgb8(16, 20, 15);
+    let leds = |mut element: Element<'_, Message, iced::Theme, iced::Renderer>| {
+        let mut renderer = layout_capture::headless_renderer();
+        let (text, pixels) = layout_capture::capture_text_and_pixels(
+            &mut element,
+            &mut renderer,
+            &iced::Theme::Dark,
         );
-    }
+        let size = text.size();
+        pixels.region(Rectangle::new(iced::Point::new(0.0, 0.0), size))
+    };
+    assert!(
+        region_has_color(&leds(repeat_toggle(true).into()), led_on),
+        "the Repeat toggle must paint its LED square lit while Repeat is on"
+    );
+    assert!(
+        region_has_color(&leds(repeat_toggle(false).into()), led_off),
+        "the Repeat toggle must paint its LED square dark while Repeat is off"
+    );
+    assert!(
+        !region_has_color(&leds(repeat_toggle(false).into()), led_on),
+        "the Repeat toggle's LED square must not read lit while Repeat is off"
+    );
+    assert!(
+        region_has_color(&leds(shuffle_toggle(true).into()), led_on),
+        "the Shuffle toggle must paint its LED square lit while Shuffle is on"
+    );
+    assert!(
+        region_has_color(&leds(shuffle_toggle(false).into()), led_off),
+        "the Shuffle toggle must paint its LED square dark while Shuffle is off"
+    );
+    assert!(
+        !region_has_color(&leds(shuffle_toggle(false).into()), led_on),
+        "the Shuffle toggle's LED square must not read lit while Shuffle is off"
+    );
 }
 
 // The base skin's transport buttons are light metal with the glyph engraved dark:
@@ -338,5 +385,94 @@ fn transport_button_face_renders_light_metal() {
     assert!(
         pixels.max_red_in(face) >= 150,
         "the transport button's resting face must read the light metal blue-gray, not a dark gray tile"
+    );
+}
+
+// The Repeat face is icon-only, so the pulse of the value is the loop glyph:
+// a font missing from the headless set measures no advance (`⟳` measured 0.0
+// and painted nothing) and would render an empty face between the LED square
+// and the pressed chrome. Measure the laid-out label: it must have a real
+// advance and actually paint inside its bounds.
+#[test]
+fn repeat_face_glyph_measures_and_paints_the_loop_icon() {
+    let mut renderer = layout_capture::headless_renderer();
+    let mut element: Element<'_, Message, iced::Theme, iced::Renderer> =
+        repeat_toggle(false).into();
+    let capture = layout_capture::capture_text(&mut element, &renderer);
+    let bounds = capture.find("↻");
+    assert!(
+        bounds.width >= 6.0,
+        "the repeat loop glyph must lay out with a real advance, got width {}",
+        bounds.width
+    );
+    let (_text, pixels) =
+        layout_capture::capture_text_and_pixels(&mut element, &mut renderer, &iced::Theme::Dark);
+    let size = capture.size();
+    let region = pixels.region(iced::Rectangle::new(iced::Point::new(0.0, 0.0), size));
+    let face = [
+        theme::BUTTON_FACE.r as u8,
+        theme::BUTTON_FACE.g as u8,
+        theme::BUTTON_FACE.b as u8,
+        255,
+    ];
+    assert!(
+        region.len() >= 4,
+        "the repeat face must lay out to a measurable area"
+    );
+    // The glyph bounds sit at the face's center, clear of the bevels, so
+    // pixels that are neither the metal face nor the LED square nor the bevel
+    // colors are glyph ink (including antialiased blends).
+    let bevel = [
+        theme::BUTTON_EDGE_LIGHT.r as u8,
+        theme::BUTTON_EDGE_LIGHT.g as u8,
+        theme::BUTTON_EDGE_LIGHT.b as u8,
+        255,
+    ];
+    let led = [
+        theme::LED_OFF.r as u8,
+        theme::LED_OFF.g as u8,
+        theme::LED_OFF.b as u8,
+        255,
+    ];
+    let press = [
+        theme::BUTTON_FACE_PRESSED.r as u8,
+        theme::BUTTON_FACE_PRESSED.g as u8,
+        theme::BUTTON_FACE_PRESSED.b as u8,
+        255,
+    ];
+    let count = region
+        .chunks_exact(4)
+        .filter(|p| **p != face && **p != bevel && **p != led && **p != press)
+        .count();
+    assert!(
+        count >= 4,
+        "the repeat loop glyph must paint inside its bounds, {count} ink pixels of {}",
+        region.len() / 4
+    );
+}
+
+// The pinned face width is only honest if the engraved label beside the LED
+// square actually fits inside it: a label wider than the pin minus the
+// padding, the LED square, and the gap wraps or clips, and the whole point
+// of the pin is that the face cannot reflow the row. Measure the laid-out
+// label: it must stay on one line inside the budget.
+#[test]
+fn shuffle_led_toggle_label_fits_its_pinned_face() {
+    let renderer = layout_capture::headless_renderer();
+    let mut element: Element<'_, Message, iced::Theme, iced::Renderer> =
+        shuffle_toggle(false).into();
+    let capture = layout_capture::capture_text(&mut element, &renderer);
+    let bounds = capture.find("SHUFFLE");
+    // The budget is the [`SHUFFLE_WIDTH`] pin minus the button's default
+    // 10px side padding and the LED square and its gap.
+    assert!(
+        bounds.width <= 58.0,
+        "the SHUFFLE label must fit the pinned face, got width {}",
+        bounds.width
+    );
+    assert!(
+        bounds.height < 30.0,
+        "the SHUFFLE label must stay on one line, got height {}",
+        bounds.height
     );
 }
