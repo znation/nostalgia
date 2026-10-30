@@ -166,3 +166,128 @@ fn move_selected_row_reorders_only_recently_played() {
     assert_eq!(player.recently_played.selected(), Some(1));
     assert!(player.songs.items.is_empty());
 }
+
+// Signed out (the test player's service stores no session), a committed play
+// feeds the signed-out list, and reopening Recently Played shows the songs
+// the run committed, newest first, instead of the sample stand-in. The stored
+// list schedules no fetch: its rows are already there.
+#[test]
+fn signed_out_recently_played_lists_this_runs_played_songs_newest_first() {
+    let (mut player, state) = test_player();
+    player.current_view = CurrentView::RecentlyPlayed;
+    let _ = update(&mut player, Message::RecentlyPlayedLoaded(stepping_songs()));
+    record_a_play(&mut player, &state, "song-1");
+    record_a_play(&mut player, &state, "song-3");
+
+    assert_message_schedules_no_work(&mut player, Message::ShowRecentlyPlayed);
+
+    assert_eq!(
+        titles(&player),
+        vec!["Three".to_string(), "One".to_string()]
+    );
+    assert_eq!(player.current_view, CurrentView::RecentlyPlayed);
+    assert!(!player.recently_played.loading);
+    assert_eq!(player.recently_played.error, None);
+}
+
+// Playing a song again keeps one row for it, moved to the newest position,
+// as the play history's dedup does.
+#[test]
+fn replaying_a_song_moves_its_row_to_the_newest_played_position() {
+    let (mut player, state) = test_player();
+    player.current_view = CurrentView::RecentlyPlayed;
+    let _ = update(&mut player, Message::RecentlyPlayedLoaded(stepping_songs()));
+    record_a_play(&mut player, &state, "song-1");
+    record_a_play(&mut player, &state, "song-2");
+    record_a_play(&mut player, &state, "song-1");
+
+    assert_message_schedules_no_work(&mut player, Message::ShowRecentlyPlayed);
+
+    // One row per id, with the replay newest and the middle play oldest.
+    assert_eq!(
+        player
+            .recently_played
+            .items
+            .iter()
+            .map(|song| &song.id)
+            .collect::<Vec<_>>(),
+        vec![&"song-1".to_string(), &"song-2".to_string()]
+    );
+}
+
+// A committed play whose track is absent from the showing list (say the
+// resolved-but-listed-nowhere restored track) feeds the play history only and
+// adds no played-list row.
+#[test]
+fn a_played_track_absent_from_the_showing_list_adds_no_played_row() {
+    let (mut player, state) = test_player();
+    player.current_view = CurrentView::RecentlyPlayed;
+    let _ = update(&mut player, Message::RecentlyPlayedLoaded(stepping_songs()));
+    record_a_play(&mut player, &state, "song-9");
+
+    // Nothing has played, so the storing branch is skipped and the fetch
+    // runs, as it always has.
+    assert!(player.played_songs.is_empty());
+    assert_message_schedules_work(&mut player, Message::ShowRecentlyPlayed);
+    assert!(player.recently_played.loading);
+}
+
+// With a stored session, reopening Recently Played ignores the played rows
+// and fetches the service's list as before: with a session stored, the
+// service's REST client answers, so the stub reply's rows replace the
+// played rows.
+#[test]
+fn signed_in_recently_played_still_fetches_the_service_list() {
+    // The recently-played reply the stub transport serves: one catalog song
+    // and one library song, the mapping the rest client's own tests pin. The
+    // reply's rows are recognizably not the played row ("One").
+    let reply = r#"{"data":[
+        {"id":"1234","type":"songs","attributes":{"name":"Opening","artistName":"The Sample Band","albumName":"First Record","durationInMillis":1000}},
+        {"id":"i.5","type":"library-songs","attributes":{"name":"Middle"}}
+    ]}"#;
+    let state = Arc::new(Mutex::new(AppState::default()));
+    let service =
+        AppleMusicService::with_transport(state.clone(), Box::new(StubTransport::returning(reply)));
+    service
+        .authenticate_with("dev-token", &|_| Ok(sign_in_session()))
+        .expect("the stub sign-in must store its session");
+    let mut player = WinampPlayer::new(state.clone(), service);
+    player.current_view = CurrentView::RecentlyPlayed;
+    let _ = update(&mut player, Message::RecentlyPlayedLoaded(stepping_songs()));
+    record_a_play(&mut player, &state, "song-1");
+    assert!(!player.played_songs.is_empty());
+
+    // A committed `TrackPlayed` locks the shared state, so the fetch reply
+    // runs on the executor instead of an async test's runtime.
+    let task = update(&mut player, Message::ShowRecentlyPlayed);
+    let message = futures::executor::block_on(task_output(task, "load recently played songs"));
+    let _ = update(&mut player, message);
+
+    assert_eq!(
+        titles(&player),
+        vec!["Opening".to_string(), "Middle".to_string()]
+    );
+}
+
+// The stored played rows last until the session arrives: a sign-in while the
+// played list is showing refetches it, and the played rows drop.
+#[test]
+fn session_arrival_refetches_the_showing_played_list_and_drops_the_played_rows() {
+    let (mut player, state) = test_player();
+    player.current_view = CurrentView::RecentlyPlayed;
+    let _ = update(&mut player, Message::RecentlyPlayedLoaded(stepping_songs()));
+    record_a_play(&mut player, &state, "song-1");
+    let _ = update(&mut player, Message::ShowRecentlyPlayed);
+    assert_eq!(titles(&player), vec!["One".to_string()]);
+
+    // The session arrives while the played list is showing.
+    player
+        .apple_music_service
+        .authenticate_with("dev-token", &|_| Ok(sign_in_session()))
+        .expect("the stub sign-in must store its session");
+    let _ = update(&mut player, Message::SessionReady);
+
+    // The refetch is in flight; the played rows are gone from the list.
+    assert!(player.recently_played.loading);
+    assert!(titles(&player).is_empty());
+}

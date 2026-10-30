@@ -16,6 +16,7 @@ mod history;
 mod round;
 
 pub use history::PlayHistory;
+pub(in crate::ui) use history::PlayedSongs;
 pub use round::ShuffleRound;
 
 /// The id of the song one step from `current` in `songs`, in the given

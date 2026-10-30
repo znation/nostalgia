@@ -424,10 +424,27 @@ pub(in crate::ui) fn show_all_albums(player: &mut WinampPlayer) -> Task<Message>
 
 /// The Artists view's Recently Played button: fetch the user's recently
 /// played songs, most recent first, and show them flat under the Recently
-/// Played view. Like All Songs, the list hangs off the artists list: leave an
-/// active search behind and let Back return to Artists.
+/// Played view. While no `MusicKit` session is stored and something played this
+/// run, the songs the run committed stand in for the fetch (see
+/// `WinampPlayer::played_songs`); with nothing played yet the signed-out
+/// list still fetches the service seam's sample stand-in. Like All Songs,
+/// the list hangs off the artists list: leave an active search behind and
+/// let Back return to Artists.
 pub(in crate::ui) fn show_recently_played(player: &mut WinampPlayer) -> Task<Message> {
     switch_view(player, CurrentView::RecentlyPlayed);
+    if player.apple_music_service.session().is_none() && !player.played_songs.is_empty() {
+        // The run's played rows replace the showing list immediately, with
+        // the same transition a fetched reply uses: clear the stale rows
+        // first, then store with the row text cached, so the epoch bump
+        // drops any press rendered from the old list and no fetch stays in
+        // flight for the media keys to play into.
+        player.recently_played.clear();
+        fetch::store_songs(
+            &mut player.recently_played,
+            player.played_songs.newest_first(),
+        );
+        return Task::none();
+    }
     // Clear the previous list before the new fetch lands, so a press
     // during the fetch cannot resolve against stale rows.
     fetch_at_top(fetch_level(

@@ -135,6 +135,11 @@ pub(in crate::ui) struct WinampPlayer {
     /// Previous retraces it, and a list that no longer shows the previous
     /// entry falls back to sequential stepping.
     pub(in crate::ui) play_history: transport::PlayHistory,
+    /// The songs whose plays committed this run, for the signed-out
+    /// Recently Played list. A committed `TrackPlayed` records the song;
+    /// the list is not persisted, so a relaunch starts empty and the view
+    /// falls back to the sample stand-in until a play commits again.
+    pub(in crate::ui) played_songs: transport::PlayedSongs,
     /// The songs played this Shuffle round, so a shuffled forward step
     /// plays each song of the showing list once before any repeats.
     pub(in crate::ui) shuffle_round: transport::ShuffleRound,
@@ -395,6 +400,7 @@ impl WinampPlayer {
             search_active: false,
             known_tracks: HashMap::new(),
             play_history: transport::PlayHistory::default(),
+            played_songs: transport::PlayedSongs::default(),
             shuffle_round: transport::ShuffleRound::default(),
             marquee_offset: 0,
             title_drag: None,

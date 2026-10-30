@@ -114,8 +114,11 @@ second opens a flat list of every album, whose rows open that album's songs, the
 flat list of every playlist, whose rows open that playlist's songs, the fourth lists the library's genres (described below), the fifth lists the library's release years (described below), the sixth lists the library's composers (described below), the seventh lists the library's
 recently added albums newest first (the sample library's albums in reverse order when
 signed out), whose rows open that album's songs, and the eighth lists the songs you played most recently
-first (the sample library's songs in reverse order when signed out), whose rows play like any
-other song row. `Genres` lists the library's genres by name, each with its song count and total playing time and any
+first (while signed out, the songs whose plays committed this run, newest first — the sample
+library's songs in reverse order until something has played this run, and the same sample list
+again after a relaunch — and the service's own list once signed in), whose rows play like any
+other song row. Every open of the list recomputes it, like the other flat lists, so newly
+played songs take their spots at the top the next time you reopen it. `Genres` lists the library's genres by name, each with its song count and total playing time and any
 songs without a genre under `Unknown` last; opening a genre lists its songs, which play like any
 other song row. `Years` lists the library's release years oldest first, each with its song count and total playing time and
 any songs without a year under `Unknown` last; opening a year lists its songs, which play like any

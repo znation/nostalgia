@@ -149,6 +149,46 @@ impl PlayHistory {
     }
 }
 
+/// The songs whose plays committed this run, in play order, for the
+/// signed-out Recently Played list.
+///
+/// [`Self::record`] moves a row whose id is already listed to the back, so a
+/// replay never duplicates a song, and drops the oldest rows past
+/// [`HISTORY_LIMIT`], the same cap the play history keeps.
+/// [`Self::newest_first`] returns the rows most recent first, the order the
+/// Recently Played view shows. The list lives only for this run: it is not
+/// persisted, so a relaunch starts empty and the view falls back to the
+/// sample stand-in until a play commits.
+#[derive(Debug, Default)]
+pub(in crate::ui) struct PlayedSongs {
+    items: Vec<Song>,
+}
+
+impl PlayedSongs {
+    /// Records `song` as the song whose playback just committed: drops an
+    /// earlier row with the same id and appends the new one at the back, so
+    /// the oldest row falls off the front beyond [`HISTORY_LIMIT`].
+    pub fn record(&mut self, song: Song) {
+        self.items.retain(|row| row.id != song.id);
+        self.items.push(song);
+        let excess = self.items.len().saturating_sub(HISTORY_LIMIT);
+        if excess > 0 {
+            self.items.drain(..excess);
+        }
+    }
+
+    /// Returns every recorded song, most recent first.
+    pub fn newest_first(&self) -> Vec<Song> {
+        self.items.iter().rev().cloned().collect()
+    }
+
+    /// Returns whether nothing has played (or been recorded) this run, so a
+    /// signed-out Recently Played open still shows the sample stand-in.
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,6 +250,75 @@ mod tests {
             ]
         );
         assert_eq!(history.cursor, Some(2));
+    }
+
+    // The signed-out Recently Played list shares PlayHistory's cap: more
+    // plays than HISTORY_LIMIT keeps exactly HISTORY_LIMIT rows, the oldest
+    // falling off the front.
+    #[test]
+    fn played_songs_drops_the_oldest_past_the_limit() {
+        let songs = stepping_songs();
+        let mut played = PlayedSongs::default();
+        for index in 0..HISTORY_LIMIT + 5 {
+            let mut song = songs[0].clone();
+            song.id = format!("song-{index}");
+            played.record(song);
+        }
+
+        assert_eq!(played.items.len(), HISTORY_LIMIT);
+        assert_eq!(played.items.first().unwrap().id, "song-5");
+        assert_eq!(
+            played.items.last().unwrap().id,
+            format!("song-{}", HISTORY_LIMIT + 4)
+        );
+    }
+
+    // Recording the same song again keeps one row for it, moved to the
+    // newest position, so a replay never duplicates a row.
+    #[test]
+    fn played_songs_recording_a_song_again_moves_its_row_newest() {
+        let songs = stepping_songs();
+        let mut played = PlayedSongs::default();
+        played.record(songs[0].clone());
+        played.record(songs[1].clone());
+
+        played.record(songs[0].clone());
+
+        assert_eq!(
+            played.items.iter().map(|song| &song.id).collect::<Vec<_>>(),
+            vec![&"song-2".to_string(), &"song-1".to_string()]
+        );
+    }
+
+    #[test]
+    fn played_songs_newest_first_lists_rows_most_recent_first() {
+        let songs = stepping_songs();
+        let mut played = PlayedSongs::default();
+        assert!(played.is_empty());
+        assert!(played.newest_first().is_empty());
+
+        played.record(songs[0].clone());
+        played.record(songs[1].clone());
+        played.record(songs[2].clone());
+
+        assert!(!played.is_empty());
+        assert_eq!(
+            played
+                .newest_first()
+                .iter()
+                .map(|song| song.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["song-3", "song-2", "song-1"]
+        );
+        // The recorded rows stay in play order behind the newest-first view.
+        assert_eq!(
+            played
+                .items
+                .iter()
+                .map(|song| song.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["song-1", "song-2", "song-3"]
+        );
     }
 
     #[test]

@@ -442,6 +442,14 @@ pub(in crate::ui) fn track_played(
                 _ => &player.songs.items,
             };
             player.shuffle_round.record(current, items);
+            // The committed play also feeds the signed-out Recently Played
+            // list — but only when the showing list can name the track's
+            // song. A committed play whose track is absent from the showing
+            // list (the resolved-but-listed-nowhere restored track) feeds
+            // the play history only, exactly as it does today.
+            if let Some(song) = items.iter().find(|song| song.id == current) {
+                player.played_songs.record(song.clone());
+            }
         } else if !committed {
             // A failed play leaves shared state naming the jump's
             // target (the backend leaves `current_track` set), so keep

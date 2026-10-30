@@ -302,6 +302,34 @@ that rendered it is still current: a press that outlived its list is a no-op.
 **History.** Reconstructed from "A browse reply is stored after a newer request was issued, so a
 navigation shows the previous level's rows" in `BUGS-FIXED.md`.
 
+## Signed-out Recently Played
+
+**Guarantee.** While no MusicKit session is stored, the Recently Played button shows the songs
+whose plays committed this run, newest first, numbered like every other song list, refreshed on
+every reopen; with nothing played yet — and always after a relaunch, the list is not persisted —
+it shows the service seam's sample stand-in instead. A committed play whose track is absent from
+the showing list feeds the play history only. Once a session is stored, the button fetches the
+service's own list as before, so a sign-in while the played list is showing refetches it and the
+played rows drop.
+
+**Enforced by.** `transport::PlayedSongs::record` keeps one row per song id with the play
+history's `HISTORY_LIMIT` cap;
+`handlers::playback::track_played`'s committed arm records only a track the showing list names;
+`handlers::browse::show_recently_played` stores the run's rows (clear-then-store, epoch bumped)
+when the service holds no session and the list is non-empty, and fetches otherwise.
+
+**Pinned by.** `played_songs_recording_a_song_again_moves_its_row_newest`,
+`played_songs_drops_the_oldest_past_the_limit`, `played_songs_newest_first_lists_rows_most_recent_first`
+(`src/ui/transport/history.rs`),
+`signed_out_recently_played_lists_this_runs_played_songs_newest_first`,
+`replaying_a_song_moves_its_row_to_the_newest_played_position`,
+`signed_in_recently_played_still_fetches_the_service_list`, and
+`session_arrival_refetches_the_showing_played_list_and_drops_the_played_rows`
+(`src/ui/tests/recently_played_tests.rs`).
+
+**History.** Added with the signed-out Recently Played run list, replacing the constant
+sample stand-in that kept showing however much you played.
+
 ## Browse row order
 
 **Guarantee.** The Sort button reorders only the browse list currently showing, ascending by each
