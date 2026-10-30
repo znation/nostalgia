@@ -7,9 +7,10 @@
 //! the track stepping and the edge and ten-song jumps in
 //! `playback::stepping`; the seek drag and release and the backend polls in
 //! `playback::preview`; the volume, balance, seek nudges, and equalizer audio
-//! controls in `mixer`; the browse hierarchy,
-//! the Back, Open, Top, Sort, and Reload navigation in `browse`; the library
-//! search with its Clear button in `browse::search`; the list's scroll
+//! controls in `mixer`; the browse row presses in `browse::selection`, the
+//! Artist-view lists and the Back/Reload navigation in `browse::lists`, and
+//! the row-order edits in `browse::ordering`; the library search with its
+//! Clear button in `browse::search`; the list's scroll
 //! operations in `browse::scroll`; the initial load and the fetch results in
 //! `browse::fetch`; and
 //! the custom title bar's window actions and panel visibility in `window`.

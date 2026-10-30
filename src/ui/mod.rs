@@ -77,7 +77,7 @@ pub fn init_ui(
             let (mut player, task) = boot(state.clone(), service.clone());
             player.settings_store = Some(Box::new(BackgroundWriter::new(store.clone())));
             player.adopt_saved_settings(saved.clone());
-            let restore = handlers::browse::restore_view(&mut player, saved.library_view());
+            let restore = handlers::browse::lists::restore_view(&mut player, saved.library_view());
             (player, Task::batch([task, restore]))
         },
         update,
@@ -139,8 +139,9 @@ fn boot(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> (WinampPlaye
 /// `handlers::playback::stepping`; the seek drag and release and the backend
 /// polls in `handlers::playback::preview`; the volume, balance, seek nudges, the
 /// equalizer, and the equalizer panel's show/hide toggle in `handlers::mixer`;
-/// the browse hierarchy, the Back, Open, Top, Sort, and Reload navigation in
-/// `handlers::browse`, the library search with its Clear button in
+/// the browse row presses in `handlers::browse::selection`, the Artist-view
+/// lists and Back in `handlers::browse::lists`, the row-order edits in
+/// `handlers::browse::ordering`, the library search with its Clear button in
 /// `handlers::browse::search`, the list's scroll operations in
 /// `handlers::browse::scroll`, and the initial load and fetch results in
 /// `handlers::browse::fetch`; and the custom title bar's window
@@ -227,53 +228,55 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::TrackSelected { epoch, index } => {
             handlers::playback::track_selected(player, epoch, index)
         }
-        Message::SelectRow { epoch, index } => handlers::browse::select_row(player, epoch, index),
+        Message::SelectRow { epoch, index } => {
+            handlers::browse::selection::select_row(player, epoch, index)
+        }
         Message::ArtistSelected { epoch, index } => {
-            handlers::browse::artist_selected(player, epoch, index)
+            handlers::browse::selection::artist_selected(player, epoch, index)
         }
         Message::AlbumSelected { epoch, index } => {
-            handlers::browse::album_selected(player, epoch, index)
+            handlers::browse::selection::album_selected(player, epoch, index)
         }
         Message::PlaylistSelected { epoch, index } => {
-            handlers::browse::playlist_selected(player, epoch, index)
+            handlers::browse::selection::playlist_selected(player, epoch, index)
         }
         // (the saved-list sentinel rows route inside `playlist_selected`)
-        Message::OpenSelected => handlers::browse::open_selected(player),
-        Message::Back => handlers::browse::back(player),
+        Message::OpenSelected => handlers::browse::selection::open_selected(player),
+        Message::Back => handlers::browse::lists::back(player),
         Message::ScrollBrowseToTop => handlers::browse::scroll::scroll_browse_to_top(),
         Message::ScrollBrowseToBottom => handlers::browse::scroll::scroll_browse_to_bottom(),
         Message::ScrollBrowsePageUp => handlers::browse::scroll::scroll_browse_page_up(),
         Message::ScrollBrowsePageDown => handlers::browse::scroll::scroll_browse_page_down(),
-        Message::SortBrowse => handlers::browse::sort_browse(player),
-        Message::ReverseBrowse => handlers::browse::reverse_browse(player),
-        Message::RandomizeBrowse => handlers::browse::randomize_browse(player),
-        Message::MoveSelectedRowUp => handlers::browse::move_selected_row(player, false),
-        Message::MoveSelectedRowDown => handlers::browse::move_selected_row(player, true),
-        Message::ReloadLibrary => handlers::browse::reload_library(player),
-        Message::ShowAllSongs => handlers::browse::show_all_songs(player),
-        Message::ShowAllAlbums => handlers::browse::show_all_albums(player),
-        Message::ShowRecentlyAdded => handlers::browse::show_recently_added(player),
-        Message::ShowRecentlyPlayed => handlers::browse::show_recently_played(player),
-        Message::ShowPlaylists => handlers::browse::show_playlists(player),
-        Message::ShowGenres => handlers::browse::show_genres(player),
+        Message::SortBrowse => handlers::browse::ordering::sort_browse(player),
+        Message::ReverseBrowse => handlers::browse::ordering::reverse_browse(player),
+        Message::RandomizeBrowse => handlers::browse::ordering::randomize_browse(player),
+        Message::MoveSelectedRowUp => handlers::browse::ordering::move_selected_row(player, false),
+        Message::MoveSelectedRowDown => handlers::browse::ordering::move_selected_row(player, true),
+        Message::ReloadLibrary => handlers::browse::lists::reload_library(player),
+        Message::ShowAllSongs => handlers::browse::lists::show_all_songs(player),
+        Message::ShowAllAlbums => handlers::browse::lists::show_all_albums(player),
+        Message::ShowRecentlyAdded => handlers::browse::lists::show_recently_added(player),
+        Message::ShowRecentlyPlayed => handlers::browse::lists::show_recently_played(player),
+        Message::ShowPlaylists => handlers::browse::lists::show_playlists(player),
+        Message::ShowGenres => handlers::browse::lists::show_genres(player),
         Message::GenreSelected { epoch, index } => {
-            handlers::browse::genre_selected(player, epoch, index)
+            handlers::browse::selection::genre_selected(player, epoch, index)
         }
         Message::GenresLoaded(genres) => handlers::browse::fetch::genres_loaded(player, genres),
         Message::GenresLoadFailed(report) => {
             handlers::browse::fetch::genres_load_failed(player, report)
         }
-        Message::ShowYears => handlers::browse::show_years(player),
+        Message::ShowYears => handlers::browse::lists::show_years(player),
         Message::YearSelected { epoch, index } => {
-            handlers::browse::year_selected(player, epoch, index)
+            handlers::browse::selection::year_selected(player, epoch, index)
         }
         Message::YearsLoaded(years) => handlers::browse::fetch::years_loaded(player, years),
         Message::YearsLoadFailed(report) => {
             handlers::browse::fetch::years_load_failed(player, report)
         }
-        Message::ShowComposers => handlers::browse::show_composers(player),
+        Message::ShowComposers => handlers::browse::lists::show_composers(player),
         Message::ComposerSelected { epoch, index } => {
-            handlers::browse::composer_selected(player, epoch, index)
+            handlers::browse::selection::composer_selected(player, epoch, index)
         }
         Message::ComposersLoaded(composers) => {
             handlers::browse::fetch::composers_loaded(player, composers)
@@ -286,7 +289,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::FocusSearch => handlers::browse::search::focus_search(),
         Message::ClearSearch => handlers::browse::search::clear_search(player),
         Message::LoadArtists => handlers::browse::fetch::load_artists(player),
-        Message::SessionReady => handlers::browse::session_ready(player),
+        Message::SessionReady => handlers::browse::lists::session_ready(player),
         Message::ResolveCurrentTrack => handlers::playback::resolve_current_track(player),
         Message::CurrentTrackResolved { id, song } => {
             handlers::playback::current_track_resolved(player, id, song)

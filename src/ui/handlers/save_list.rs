@@ -13,7 +13,8 @@ use crate::settings::SavedPlaylist;
 use crate::ui::views::{SAVE_LIST_COLON_NAME_NOTE, SAVE_LIST_EMPTY_NAME_NOTE, SAVE_LIST_INPUT_ID};
 use crate::ui::{CurrentView, Message, SongsOrigin, WinampPlayer};
 
-use super::browse::{show_group_songs, switch_view};
+use super::browse::selection::show_group_songs;
+use super::browse::switch_view;
 use super::window::toggle_window_shade;
 
 /// The browse button row's `Save list` button: flip the naming panel that

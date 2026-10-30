@@ -620,7 +620,7 @@ impl WinampPlayer {
     /// update loop's first comparison does not re-save it. The state-backed
     /// values were already applied to `AppState` by `main`, so this touches
     /// only those seven UI-owned values. The saved browse list is left alone:
-    /// `handlers::browse::restore_view` opens it as a task, and the saved
+    /// `handlers::browse::lists::restore_view` opens it as a task, and the saved
     /// sign-in token is left alone too: `main` passed it to `init_service` for
     /// the seed, and the save path refreshes it from the service's session —
     /// a session-less persist keeps the adopted value until a session lands

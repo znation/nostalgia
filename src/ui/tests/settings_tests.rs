@@ -645,27 +645,28 @@ fn restore_view_opens_the_saved_list() {
     use crate::settings::library_view::LibraryView;
 
     let (mut player, _state) = test_player();
-    let _ = crate::ui::handlers::browse::restore_view(&mut player, LibraryView::RecentlyAdded);
+    let _ =
+        crate::ui::handlers::browse::lists::restore_view(&mut player, LibraryView::RecentlyAdded);
     assert_eq!(player.current_view, CurrentView::RecentlyAdded);
-    let _ = crate::ui::handlers::browse::restore_view(&mut player, LibraryView::Artists);
+    let _ = crate::ui::handlers::browse::lists::restore_view(&mut player, LibraryView::Artists);
     assert_eq!(player.current_view, CurrentView::RecentlyAdded);
 
     let (mut player, _state) = test_player();
-    let _ = crate::ui::handlers::browse::restore_view(&mut player, LibraryView::Artists);
+    let _ = crate::ui::handlers::browse::lists::restore_view(&mut player, LibraryView::Artists);
     assert_eq!(player.current_view, CurrentView::Artists);
 
     let (mut player, _state) = test_player();
-    let _ = crate::ui::handlers::browse::restore_view(&mut player, LibraryView::Genres);
+    let _ = crate::ui::handlers::browse::lists::restore_view(&mut player, LibraryView::Genres);
     assert_eq!(player.current_view, CurrentView::Genres);
     assert!(player.genres.loading);
 
     let (mut player, _state) = test_player();
-    let _ = crate::ui::handlers::browse::restore_view(&mut player, LibraryView::Years);
+    let _ = crate::ui::handlers::browse::lists::restore_view(&mut player, LibraryView::Years);
     assert_eq!(player.current_view, CurrentView::Years);
     assert!(player.years.loading);
 
     let (mut player, _state) = test_player();
-    let _ = crate::ui::handlers::browse::restore_view(&mut player, LibraryView::Composers);
+    let _ = crate::ui::handlers::browse::lists::restore_view(&mut player, LibraryView::Composers);
     assert_eq!(player.current_view, CurrentView::Composers);
     assert!(player.composers.loading);
 }

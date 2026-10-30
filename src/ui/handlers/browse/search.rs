@@ -3,11 +3,12 @@
 //!
 //! The search replaces the shared songs buffer, so it uses the same
 //! clear-before-fetch path as the browse navigation in the parent [`super`]
-//! module and delegates its active Clear case to [`super::back`].
+//! module and delegates its active Clear case to [`super::lists::back`].
 
 use iced::Task;
 
-use super::{back, fetch_at_top, switch_view};
+use super::lists::back;
+use super::{fetch_at_top, switch_view};
 use crate::ui::loading::fetch_level;
 use crate::ui::views;
 use crate::ui::{CurrentView, Message, WinampPlayer};

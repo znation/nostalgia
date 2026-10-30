@@ -52,13 +52,13 @@ current browse level. A plain or Shift-held F5 key press takes the same `Message
 path as the Reload button, so it performs the same refresh; Ctrl/Alt/Logo chords with F5 stay
 unbound.
 
-**Enforced by.** The `Message::Back` handler — `browse::back` in `src/ui/handlers/browse.rs`,
+**Enforced by.** The `Message::Back` handler — `browse::lists::back` in `src/ui/handlers/browse/lists.rs`,
 routed from the `update` dispatch table in `src/ui/mod.rs` — checks `search_active` first, then
 matches on `current_view` and `songs_origin` to pick the one level up. `views::can_go_back` in
 `src/ui/views/browse.rs` (re-exported by `src/ui/views/mod.rs`) decides whether the Back button is
 shown; it returns false only for `CurrentView::Artists`. `shortcuts::message_for` in
 `src/ui/shortcuts.rs` maps Backspace to `Message::Back`, after its Control/Alt/Logo chord guard.
-`browse::reload_library` in `src/ui/handlers/browse.rs`, routed from `Message::ReloadLibrary`,
+`browse::lists::reload_library` in `src/ui/handlers/browse/lists.rs`, routed from `Message::ReloadLibrary`,
 clears the search flag and view and calls `fetch_at_top(fetch::load_artists(player))`;
 `views::browse::view_reload_button` in `src/ui/views/browse.rs` is pushed into the nav row by
 `views::view_browse_nav_buttons`. `shortcuts::shortcut` in `src/ui/shortcuts.rs` maps F5 to
@@ -155,7 +155,7 @@ playback. Shade mode builds no search row, so it has no Clear button.
 **Enforced by.** `Message::ClearSearch` in `src/ui/message.rs` is routed by `src/ui/mod.rs` to
 `browse::search::clear_search` in `src/ui/handlers/browse/search.rs`; that handler empties
 `search_query` and,
-only while `search_active` is set, delegates to `handlers::browse::back`, which is what makes the
+only while `search_active` is set, delegates to `handlers::browse::lists::back`, which is what makes the
 active case identical to the Back button. `views::browse::view_clear_search_button` renders the
 button and `views::browse::view_search_row` places it after the search box; `view_search_row` is
 re-exported by `src/ui/views/mod.rs`, and the view tests import the button and box builders from
@@ -226,8 +226,8 @@ stored index then names a different row.
 selected row; `BrowseList::selected` exposes it to the view. `replace_rows`, `clear`, and `fail`
 in `src/ui/browse.rs`, and `sort_rows_by`, `reverse_rows`, `shuffle_rows`, and
 `restore_library_order` in `src/ui/browse/ordering.rs`, clear it with the rows or order they change.
-`browse::select_row` and `browse::open_selected` in `src/ui/handlers/browse.rs` route the two
-messages and share `browse::open_row`, which emits the existing `ArtistSelected`,
+`browse::selection::select_row` and `browse::selection::open_selected` in
+`src/ui/handlers/browse/selection.rs` route the two messages and share `selection::open_row`, which emits the existing `ArtistSelected`,
 `AlbumSelected`, `TrackSelected`, or `PlaylistSelected` message; `shortcuts::message_for` maps a
 plain or Shift-held Enter key press to `Message::OpenSelected`. `style::playlist_row_style` in
 `src/ui/style.rs` paints an ordinary row's green text over the flat hover/press face ladder, and
@@ -315,7 +315,7 @@ played rows drop.
 **Enforced by.** `transport::PlayedSongs::record` keeps one row per song id with the play
 history's `HISTORY_LIMIT` cap;
 `handlers::playback::track_played`'s committed arm records only a track the showing list names;
-`handlers::browse::show_recently_played` stores the run's rows (clear-then-store, epoch bumped)
+`handlers::browse::lists::show_recently_played` stores the run's rows (clear-then-store, epoch bumped)
 when the service holds no session and the list is non-empty, and fetches otherwise.
 
 **Pinned by.** `played_songs_recording_a_song_again_moves_its_row_newest`,
@@ -364,13 +364,13 @@ list. A move that changes the selection scrolls the list only far enough to show
 fully (and not at all when it is already visible); a no-op move schedules no task.
 
 **Enforced by.** `BrowseList::move_selected` in `src/ui/browse/ordering.rs`, `scroll::reveal_row_offset` and
-`scroll::reveal_browse_row` in `src/ui/handlers/browse/scroll.rs`, `browse::move_selected_row`
-in `src/ui/handlers/browse.rs` (routed from `Message::MoveSelectedRowUp` and
+`scroll::reveal_browse_row` in `src/ui/handlers/browse/scroll.rs`, `browse::ordering::move_selected_row`
+in `src/ui/handlers/browse/ordering.rs` (routed from `Message::MoveSelectedRowUp` and
 `Message::MoveSelectedRowDown`), and `shortcuts::move_row_shortcut` in `src/ui/shortcuts.rs`.
 `BrowseList::reverse_rows` and the shared `BrowseList::apply_reorder` in
-`src/ui/browse/ordering.rs`, `browse::reverse_browse` in `src/ui/handlers/browse.rs` (routed from
+`src/ui/browse/ordering.rs`, `browse::ordering::reverse_browse` in `src/ui/handlers/browse/ordering.rs` (routed from
 `Message::ReverseBrowse`), `BrowseList::shuffle_rows` and `browse::ordering::shuffled_order` (seeded by
-`transport::shuffle_roll`) with `browse::randomize_browse` (routed from `Message::RandomizeBrowse`),
+`transport::shuffle_roll`) with `browse::ordering::randomize_browse` (routed from `Message::RandomizeBrowse`),
 the Ctrl+R and Ctrl+Shift+R arms of `shortcut`, and `shortcuts::playlist_sort_shortcut`
 (Ctrl+Shift+1), both in `src/ui/shortcuts.rs`. `BrowseList::sort_rows_by` in `src/ui/browse/ordering.rs`
 builds a stable index permutation from the lowercased row keys and reorders `items`, `titles`, and
@@ -378,9 +378,9 @@ builds a stable index permutation from the lowercased row keys and reorders `ite
 neither loading nor failed; it also records the cumulative permutation back to library order,
 and `BrowseList::restore_library_order` in `src/ui/browse/ordering.rs` inverts it so the rows
 (and their cached text) return to the order they were stored in, bumping the epoch as any index
-change must. `browse::sort_browse` in `src/ui/handlers/browse.rs` matches the current view onto
+change must. `browse::ordering::sort_browse` in `src/ui/handlers/browse/ordering.rs` matches the current view onto
 its list and key, routed from `Message::SortBrowse` in the `update` dispatch table;
-`browse::back` restores that order on the list Back returns to (those lists stay in memory while a
+`browse::lists::back` restores that order on the list Back returns to (those lists stay in memory while a
 child is open), and `views::view_browse_nav_buttons` in `src/ui/views/browse.rs` pushes
 `view_top_button`, `view_sort_button`, and `view_reload_button` into one `Row`, so Sort and Reload
 draw beside Top.
@@ -1014,8 +1014,8 @@ window up (see `## Window shade`). The library's top-level browse list is the ei
 the current view to a `settings::library_view::LibraryView` (an active search counts as Artists, a
 Songs view as the list it was opened from), `persist_settings_if_changed` saves it as
 `library_view=<key>`, and an unknown or missing line leaves Artists. At launch `init_ui` batches
-`handlers::browse::restore_view` with the boot task to open that list; when the startup sign-in
-stores a session, `Message::SessionReady` (`handlers::browse::session_ready`) refetches the artists
+`handlers::browse::lists::restore_view` with the boot task to open that list; when the startup sign-in
+stores a session, `Message::SessionReady` (`handlers::browse::lists::session_ready`) refetches the artists
 list and any flat list showing (Genres included, saved as `genres`, as is a genre's Songs; Years likewise, saved as `years`, as is a year's Songs; Composers likewise, saved as `composers`, as is a composer's Songs), unless a search is active. The saved MusicKit sign-in's user token is the ninth UI-owned value: it is not stored on the player at all — `persist_settings_if_changed` reads it from the shared `AppleMusicService`'s session (`session_user_token`) on every snapshot — falling back, while no session is stored, to the value the launch adopted from the settings file — so a browser sign-in's first persist after it lands records the session's token (replacing an adopted stale one) with no dedicated save call, a no-session run with no adopted token stores none (no `music_kit_user_token` line at all, unlike `current_track`'s always-line), a no-session run whose launch adopted a saved token keeps that token in every write (a persist before the sign-in lands, or after it fails or is skipped, cannot erase the saved line), and a seeded launch's snapshot equals the saved one and rewrites nothing. The codec stores the value verbatim — a blank value or a missing line parses to no token, and the shape check (a non-empty, three-segment base64url JWT) happens at boot, not in the codec: a non-blank valid saved token plus the developer token seeds the session through `init_service`'s reseed arm (`seed_session` → `store_session`, the same insert site the browser flow uses), an invalid or blank one falls through to the browser flow with the saved line left alone, and the browser path's first save records the new token. The token is a bearer value stored in plaintext next to volume and the last-played id in the user's own XDG config file (the settled design; a keyring dependency was deliberately not added), and no log line, error message, or settings-file echo carries it — the developer token is never saved at all. The window's size is not persisted. Playback position, any browse level below the top-level list, and the search box are
 deliberately not persisted.
 
@@ -2323,8 +2323,8 @@ showing song list by name, as ids only, in a `Settings::saved_playlists` entry:
 
 **Enforced by.** `Settings::saved_playlists` and `settings::text`'s `user_playlist` line
 handling, `handlers::save_list::{toggle_save_list, save_list_name_changed, save_list_submitted,
-user_playlist_selected, user_playlist_loaded}`, `handlers::browse::{playlist_selected,
-show_group_songs, switch_view}`, `handlers::browse::fetch::playlists_loaded`, and
+user_playlist_selected, user_playlist_loaded}`, `handlers::browse::{selection::{playlist_selected, show_group_songs},
+switch_view}`, `handlers::browse::fetch::playlists_loaded`, and
 `browse::BrowseReply`'s re-check for `Message::UserPlaylistLoaded`.
 
 **Pinned by.** `user_playlist_lines_round_trip_and_skip_the_malformed_ones`
