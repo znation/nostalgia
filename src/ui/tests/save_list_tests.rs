@@ -182,6 +182,144 @@ fn saving_the_same_name_again_replaces_the_saved_ids() {
     );
 }
 
+// The panel's `Delete` button removes the saved list matching the typed
+// name in any case, in its stored position: the other list keeps its stored
+// position and its ids.
+#[test]
+fn delete_list_submitted_removes_the_named_saved_list() {
+    let (mut player, _state) = player_showing_songs();
+    player.saved_playlists = vec![
+        crate::settings::SavedPlaylist {
+            name: "Morning Drive".to_string(),
+            song_ids: vec!["song-1".to_string()],
+        },
+        crate::settings::SavedPlaylist {
+            name: "Evening Drive".to_string(),
+            song_ids: vec!["song-2".to_string(), "song-3".to_string()],
+        },
+    ];
+    let _ = update(&mut player, Message::ToggleSaveList);
+    let _ = update(
+        &mut player,
+        Message::SaveListNameChanged("  MORNING drive ".to_string()),
+    );
+
+    let _ = update(&mut player, Message::DeleteListSubmitted);
+
+    assert!(!player.save_list_open);
+    assert_eq!(player.save_list_note, None);
+    assert_eq!(player.saved_playlists.len(), 1);
+    let kept = &player.saved_playlists[0];
+    assert_eq!(kept.name, "Evening Drive");
+    assert_eq!(
+        kept.song_ids,
+        vec!["song-2".to_string(), "song-3".to_string()]
+    );
+}
+
+// Deleting refuses inline and removes nothing: an empty box keeps the panel
+// open with `Type a name`, a colon shows `Use it without a colon`, and a
+// name no saved list carries shows `No such playlist` with the panel staying
+// open and the typed name kept.
+#[test]
+fn delete_list_submitted_refuses_blank_colon_and_unknown_names() {
+    let (mut player, _state) = player_showing_songs();
+    player.saved_playlists = vec![crate::settings::SavedPlaylist {
+        name: "Morning Drive".to_string(),
+        song_ids: vec!["song-1".to_string()],
+    }];
+    let _ = update(&mut player, Message::ToggleSaveList);
+
+    let _ = update(&mut player, Message::DeleteListSubmitted);
+    assert!(player.save_list_open);
+    assert_eq!(
+        player.save_list_note,
+        Some(views::SAVE_LIST_EMPTY_NAME_NOTE)
+    );
+    assert_eq!(player.saved_playlists.len(), 1);
+
+    let _ = update(
+        &mut player,
+        Message::SaveListNameChanged("A:name".to_string()),
+    );
+    let _ = update(&mut player, Message::DeleteListSubmitted);
+    assert!(player.save_list_open);
+    assert_eq!(
+        player.save_list_note,
+        Some(views::SAVE_LIST_COLON_NAME_NOTE)
+    );
+    assert_eq!(player.saved_playlists.len(), 1);
+
+    let _ = update(
+        &mut player,
+        Message::SaveListNameChanged("Nocturne".to_string()),
+    );
+    let _ = update(&mut player, Message::DeleteListSubmitted);
+    assert!(
+        player.save_list_open,
+        "an unknown name must keep the panel open"
+    );
+    assert_eq!(player.save_list_note, Some(views::SAVE_LIST_NO_SUCH_NOTE));
+    assert_eq!(player.save_list_name, "Nocturne");
+    assert_eq!(
+        player.saved_playlists[0].name, "Morning Drive",
+        "an unknown name must remove nothing"
+    );
+}
+
+// A closed panel ignores a delete: nothing is removed and the flag stays
+// closed.
+#[test]
+fn delete_list_submitted_is_a_noop_with_the_panel_closed() {
+    let (mut player, _state) = player_showing_songs();
+    player.saved_playlists = vec![crate::settings::SavedPlaylist {
+        name: "Morning Drive".to_string(),
+        song_ids: vec!["song-1".to_string()],
+    }];
+    player.save_list_name = "Morning Drive".to_string();
+    player.save_list_open = false;
+
+    let _ = update(&mut player, Message::DeleteListSubmitted);
+
+    assert!(!player.save_list_open);
+    assert_eq!(player.saved_playlists.len(), 1);
+}
+
+// Deleting the saved list whose songs are currently showing touches only
+// the saved list: the showing rows, the playing track, and the view stay
+// exactly as they were, like a removed preset's applied curve.
+#[test]
+fn deleting_the_showing_saved_list_leaves_the_showing_rows_untouched() {
+    let (mut player, _state) = player_showing_songs();
+    player.saved_playlists = vec![crate::settings::SavedPlaylist {
+        name: "Morning Drive".to_string(),
+        song_ids: numbered_songs(2).iter().map(|s| s.id.clone()).collect(),
+    }];
+    let showing_ids: Vec<String> = player
+        .songs
+        .items
+        .iter()
+        .map(|song| song.id.clone())
+        .collect();
+    let _ = update(&mut player, Message::ToggleSaveList);
+    let _ = update(
+        &mut player,
+        Message::SaveListNameChanged("Morning Drive".to_string()),
+    );
+
+    let _ = update(&mut player, Message::DeleteListSubmitted);
+
+    assert!(player.saved_playlists.is_empty());
+    assert!(player.current_view == CurrentView::Songs);
+    let still_showing: Vec<String> = player
+        .songs
+        .items
+        .iter()
+        .map(|song| song.id.clone())
+        .collect();
+    assert_eq!(still_showing, showing_ids, "the showing rows must stay");
+}
+
 // The Playlists fetch lands with one sentinel row appended per saved list,
 // after the library's rows, so they render with continued numbering and the
 // footer counts them.

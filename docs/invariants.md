@@ -2361,6 +2361,14 @@ showing song list by name, as ids only, in a `Settings::saved_playlists` entry:
   otherwise the list pushes onto the end. The showing list is untouched by saving (Winamp's save
   clears nothing in the playlist editor). A name carrying a `\n` or `\r` is refused the same
   way, with `Use one line`, like the Save preset panel's line-break refusal.
+- `delete_list_submitted` (the panel's `Delete` button) removes the saved list matching the
+  trimmed typed name case-insensitively, exactly that entry in stored position, and persists via
+  the shared persist sweep; it refuses like the save flow — an empty name shows `Type a name`, a
+  name containing `:` shows `Use it without a colon` — each with no removal, a name no saved list
+  carries shows `No such playlist` with the panel staying open and the typed name kept, and the
+  button acts only while the panel is open. Deleting a list whose songs are currently showing
+  touches only the saved list: the showing rows, the playing track, and the transport are
+  untouched, like a removed preset's applied curve.
 - The persisted form is a `user_playlist=<name>:<id>,<id>,…` line per saved list; the file is
   line-based, so the writer flattens `\r`/`\n` to spaces in a saved list's name (the naming
   panel refuses such a name outright; this covers any other producer). Parsing skips
@@ -2379,7 +2387,8 @@ showing song list by name, as ids only, in a `Settings::saved_playlists` entry:
 
 **Enforced by.** `Settings::saved_playlists` and `settings::text`'s `user_playlist` line
 handling, `handlers::save_list::{toggle_save_list, save_list_name_changed, save_list_submitted,
-user_playlist_selected, user_playlist_loaded}`, `handlers::browse::{selection::{playlist_selected, show_group_songs},
+delete_list_submitted, user_playlist_selected, user_playlist_loaded}`,
+`handlers::browse::{selection::{playlist_selected, show_group_songs},
 switch_view}`, `handlers::browse::fetch::playlists_loaded`, and
 `browse::BrowseReply`'s re-check for `Message::UserPlaylistLoaded`.
 
@@ -2387,7 +2396,11 @@ switch_view}`, `handlers::browse::fetch::playlists_loaded`, and
 `a_line_broken_playlist_name_writes_one_whole_settings_line` (`src/settings.rs`); the save-list
 tests in `src/ui/tests/save_list_tests.rs`;
 `a_saved_song_list_reaches_the_saved_snapshot` and `saved_song_lists_are_restored_on_boot`
-(`src/ui/tests/settings_tests.rs`); `the_save_list_button_lays_out_in_the_nav_row`
+(`src/ui/tests/settings_tests.rs`); `the_save_list_button_lays_out_in_the_nav_row`,
+`delete_list_submitted_removes_the_named_saved_list`,
+`delete_list_submitted_refuses_blank_colon_and_unknown_names`,
+`delete_list_submitted_is_a_noop_with_the_panel_closed`, and
+`deleting_the_showing_saved_list_leaves_the_showing_rows_untouched`
 (`src/ui/tests/save_list_tests.rs`); the Save list overlay render tests
 (`src/ui/views/tests/chrome.rs`).
 

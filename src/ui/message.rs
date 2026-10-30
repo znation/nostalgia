@@ -495,6 +495,12 @@ pub(in crate::ui) enum Message {
     // and closes the panel. Saving the same name (any case) again replaces
     // that list's ids in place.
     SaveListSubmitted,
+    // The panel's `Delete` button: removes the saved song list matching the
+    // typed name (reprompting inline on an empty name or a colon, and showing
+    // `No such playlist` for a name no saved list carries) and closes the
+    // panel. Like the save row, it acts only while the Save list panel is
+    // open and the flag is not persisted.
+    DeleteListSubmitted,
     // One resolved saved song list: the ids were resolved to songs through
     // `resolve_song` (ids the library no longer answers are already dropped)
     // and the songs are to be shown in the shared songs list under

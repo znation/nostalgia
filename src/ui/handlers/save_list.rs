@@ -13,7 +13,7 @@ use iced::Task;
 use crate::settings::SavedPlaylist;
 use crate::ui::views::{
     SAVE_LIST_COLON_NAME_NOTE, SAVE_LIST_EMPTY_NAME_NOTE, SAVE_LIST_INPUT_ID,
-    SAVE_LIST_LINE_BREAK_NAME_NOTE,
+    SAVE_LIST_LINE_BREAK_NAME_NOTE, SAVE_LIST_NO_SUCH_NOTE,
 };
 use crate::ui::{CurrentView, Message, SongsOrigin, WinampPlayer};
 
@@ -130,6 +130,48 @@ pub(in crate::ui) fn save_list_submitted(player: &mut WinampPlayer) -> Task<Mess
     }
     player.save_list_open = false;
     player.save_list_note = None;
+    Task::none()
+}
+
+/// The panel's `Delete` button: with the panel open, remove the saved song
+/// list matching the trimmed typed name and close the panel, mirroring
+/// [`save_list_submitted`]'s refusals and the Save preset panel's delete
+/// ([`crate::ui::handlers::mixer::delete_preset_submitted`]): an empty trimmed
+/// name keeps the panel open with `Type a name` and a name containing `:`
+/// shows `Use it without a colon` (the settings line's separator), each with
+/// no removal; a name case-insensitively matching a saved list removes
+/// exactly that entry in stored order from
+/// [`WinampPlayer::saved_playlists`], keeping every other list's position;
+/// a name matching no saved list shows `No such playlist` and keeps the
+/// panel open. No dedicated write: the shared persist sweep stores the
+/// shortened `user_playlist=` lines. Deleting a list whose songs are
+/// currently showing touches only the saved list — the showing rows, the
+/// playing track, and the transport are untouched, like a removed preset's
+/// applied curve.
+pub(in crate::ui) fn delete_list_submitted(player: &mut WinampPlayer) -> Task<Message> {
+    if !player.save_list_open {
+        return Task::none();
+    }
+    let name = player.save_list_name.trim();
+    if name.is_empty() {
+        player.save_list_note = Some(SAVE_LIST_EMPTY_NAME_NOTE);
+        return Task::none();
+    }
+    if name.contains(':') {
+        player.save_list_note = Some(SAVE_LIST_COLON_NAME_NOTE);
+        return Task::none();
+    }
+    if let Some(index) = player
+        .saved_playlists
+        .iter()
+        .position(|saved| saved.name.eq_ignore_ascii_case(name))
+    {
+        player.saved_playlists.remove(index);
+        player.save_list_open = false;
+        player.save_list_note = None;
+    } else {
+        player.save_list_note = Some(SAVE_LIST_NO_SUCH_NOTE);
+    }
     Task::none()
 }
 

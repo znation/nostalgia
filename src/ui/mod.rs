@@ -381,6 +381,7 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
             handlers::save_list::save_list_name_changed(player, text)
         }
         Message::SaveListSubmitted => handlers::save_list::save_list_submitted(player),
+        Message::DeleteListSubmitted => handlers::save_list::delete_list_submitted(player),
         Message::UserPlaylistLoaded(songs) => {
             handlers::save_list::user_playlist_loaded(player, songs)
         }

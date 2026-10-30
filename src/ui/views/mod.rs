@@ -78,7 +78,7 @@ pub use now_playing::{
 pub use options::{OptionsState, view_options_overlay};
 pub use save_list::{
     SAVE_LIST_COLON_NAME_NOTE, SAVE_LIST_EMPTY_NAME_NOTE, SAVE_LIST_INPUT_ID,
-    SAVE_LIST_LINE_BREAK_NAME_NOTE, view_save_list_overlay,
+    SAVE_LIST_LINE_BREAK_NAME_NOTE, SAVE_LIST_NO_SUCH_NOTE, view_save_list_overlay,
 };
 pub use save_preset::{
     BUILT_IN_NAME_NOTE, COLON_NAME_NOTE, EMPTY_NAME_NOTE, LINE_BREAK_NAME_NOTE,

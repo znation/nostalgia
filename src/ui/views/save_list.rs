@@ -32,11 +32,17 @@ pub const SAVE_LIST_COLON_NAME_NOTE: &str = "Use it without a colon";
 /// `SAVE_LIST_` prefix so the exports cannot collide).
 pub const SAVE_LIST_LINE_BREAK_NAME_NOTE: &str = "Use one line";
 
+/// The panel's note for a name no saved list matches: the `Delete` button
+/// keeps the panel open with this note and deletes nothing, like the Save
+/// preset panel's `No such preset` note.
+pub const SAVE_LIST_NO_SUCH_NOTE: &str = "No such playlist";
+
 /// Stacks the transient Save list panel over `base`.
 ///
 /// The panel is modal (see [`modal_overlay`]): `Close` and the backdrop each
 /// publish [`Message::ToggleSaveList`], while `Save` and Enter in the box
-/// publish [`Message::SaveListSubmitted`]. The box shows the typed `name` and
+/// publish [`Message::SaveListSubmitted`] and `Delete` publishes
+/// [`Message::DeleteListSubmitted`]. The box shows the typed `name` and
 /// `note`, an inline error the submit handler stored after a refused save;
 /// `None` draws no note, as on opening. No state or list is touched here.
 pub fn view_save_list_overlay<'a>(
@@ -62,6 +68,7 @@ pub fn view_save_list_overlay<'a>(
         Row::new()
             .spacing(10)
             .push(labeled_button("Save", Message::SaveListSubmitted))
+            .push(labeled_button("Delete", Message::DeleteListSubmitted))
             .push(labeled_button("Close", Message::ToggleSaveList)),
     );
     modal_overlay(base, content, Message::ToggleSaveList)
