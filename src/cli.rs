@@ -52,9 +52,18 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> CliAction {
 }
 
 /// The two-line error printed for an unrecognized argument.
+///
+/// The argument is the process's own command line, echoed to the terminal
+/// raw, so it is formatted with `Debug` — as the play path's `play_log_line`
+/// (`src/apple_music/playback/play.rs`) formats a track id —
+/// rather than `Display`: a control character (a newline
+/// forging a second output line, an escape sequence rewriting the
+/// terminal's state) or a Unicode format character (`\u{202e}`) in an
+/// argument would otherwise reach the stream as-is, while `Debug` renders
+/// it as its `\u{...}` escape.
 pub fn unrecognized_text(arg: &str) -> String {
     format!(
-        "nostalgia: unrecognized argument '{arg}'\nTry 'nostalgia --help' for more information."
+        "nostalgia: unrecognized argument {arg:?}\nTry 'nostalgia --help' for more information."
     )
 }
 
@@ -140,7 +149,25 @@ mod tests {
     #[test]
     fn unrecognized_text_names_the_argument_and_help() {
         let text = unrecognized_text("--bogus");
-        assert!(text.contains("'--bogus'"));
+        assert!(text.contains("--bogus"));
+        assert!(text.contains("nostalgia --help"));
+    }
+
+    // An argument echoing to the terminal is escaped like the play path's
+    // track id: a control character must not land in the stream raw, so a
+    // newline cannot forge a second output line and an escape sequence
+    // cannot rewrite the terminal's state. A Unicode format character
+    // (`\u{202e}`) is escaped too, as `char::is_control` never fires on the
+    // `Cf` category. The message stays two lines, and no raw byte escapes.
+    #[test]
+    fn unrecognized_text_escapes_control_and_format_characters() {
+        let text = unrecognized_text("evil\u{1b}]0;pwnd\u{7}\na \u{202e}b");
+        assert!(!text.contains('\u{1b}'));
+        assert!(!text.contains('\u{7}'));
+        assert!(!text.contains('\u{202e}'));
+        // The only newline is the one between the error line and the Try
+        // line, so the argument's own newline cannot forge an extra line.
+        assert_eq!(text.lines().count(), 2);
         assert!(text.contains("nostalgia --help"));
     }
 }
