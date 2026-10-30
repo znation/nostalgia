@@ -346,3 +346,101 @@ fn seed_session_wakes_a_wait_for_session_waiter() {
         Poll::Ready(())
     ));
 }
+
+// The sign-in failure route: `sign_in` hands the failure line to the service's
+// reporter instead of a direct `eprintln!`, which would leave the failure on
+// the operator's stderr where no check could ever read it.
+#[test]
+fn a_sign_in_failure_is_reported_through_the_reporter_seam() {
+    let (service, recorder) = test_service_with_reporter();
+
+    service.sign_in("dev-token", &|_| {
+        Err(AppleMusicError::new("the browser did not open"))
+    });
+
+    assert_eq!(
+        recorder.recorded(),
+        vec![(
+            ReportChannel::Stderr,
+            "Apple Music sign-in failed: the browser did not open".to_string(),
+        )]
+    );
+}
+
+// The thread-creation-refusal route: the same injectable spawner that drives
+// the auxiliary-error branch also drives the report through the service's
+// reporter, so the seam is pinned without making the OS refuse a thread.
+#[test]
+fn a_sign_in_thread_that_cannot_start_is_reported_through_the_reporter_seam() {
+    let (service, recorder) = test_service_with_reporter();
+
+    start_sign_in_with(service, "dev-token".to_string(), |_work| {
+        Err(AppleMusicError::new(
+            "spawning the sign-in thread failed: no more threads",
+        ))
+    })
+    .unwrap_err();
+
+    assert_eq!(
+        recorder.recorded(),
+        vec![(
+            ReportChannel::Stderr,
+            "Apple Music sign-in could not start: spawning the sign-in thread \
+             failed: no more threads; the sample library stays in use"
+                .to_string(),
+        )]
+    );
+}
+
+// The startup-skip route: the line naming why startup sign-in did not run is
+// recorded through the reporter instead of printed to stdout alone, and the
+// shared state is left exactly as the skip path expects. The environment read
+// and the reporter are injected, so the process environment is untouched.
+#[test]
+fn a_skipped_startup_sign_in_names_its_reason_through_the_reporter_seam() {
+    let recorder = Arc::new(RecordingReporter::new());
+    let state = Arc::new(Mutex::new(AppState::default()));
+
+    let service = init_service_with(
+        state,
+        Arc::new(crate::audio::SilentOutput) as Arc<dyn AudioOutput>,
+        Arc::clone(&recorder) as Arc<dyn super::Reporter>,
+        Err(std::env::VarError::NotPresent),
+        None,
+    );
+
+    assert!(service.session().is_none());
+    assert_eq!(
+        recorder.recorded(),
+        vec![(
+            ReportChannel::Stdout,
+            "Apple Music sign-in skipped: APPLE_MUSIC_DEVELOPER_TOKEN is not set".to_string(),
+        )]
+    );
+}
+
+// The saved-sign-in-reuse route: the reuse line is recorded through the
+// reporter, and the session the reusable seed stored is present on the
+// returned service.
+#[test]
+fn a_reused_saved_sign_in_is_reported_through_the_reporter_seam() {
+    let recorder = Arc::new(RecordingReporter::new());
+    let state = Arc::new(Mutex::new(AppState::default()));
+
+    let service = init_service_with(
+        state,
+        Arc::new(crate::audio::SilentOutput) as Arc<dyn AudioOutput>,
+        Arc::clone(&recorder) as Arc<dyn super::Reporter>,
+        Ok("ey1.dev.ey".to_string()),
+        Some("ey1.user.ey"),
+    );
+
+    assert!(service.session().is_some());
+    assert_eq!(
+        recorder.recorded(),
+        vec![(
+            ReportChannel::Stdout,
+            "Apple Music sign-in skipped: the saved sign-in was reused".to_string(),
+        )]
+    );
+}

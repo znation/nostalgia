@@ -3291,3 +3291,39 @@ menu and then fades while a preview plays or stops while paused or stopped.
   (`src/ui/tests/fade_tests.rs`)
 
 **History.** Added 2026-10-28 with the Shift+V fade-out plan.
+
+## Service failure reporting
+
+**Guarantee.** A service failure, skip, or dead end — a line the Apple Music service raises when
+it cannot do what was asked: a sign-in that fails at the flow or whose thread the OS refuses to
+start, a startup sign-in that is skipped (unset, blank, or non-UTF-8 token, or a reused saved
+sign-in), and a Play with no preview and no remembered URL — is handed to the shared `Reporter`
+seam at the point it is raised, instead of going through a `println!`/`eprintln!` only the
+operator could read. `ReportChannel` records the destination the direct calls had
+(`Stdout` for the progress skips, `Stderr` for the failures), and the production `StdReporter`
+keeps both, so operator output is unchanged; a test stub records the lines, so the next
+`no-observability` bug in this area is confirmable by a test instead of reconstructing nothing.
+The success-path progress lines ("session stored", the playback transitions) and the CLI and
+UI output are not service failures and stay direct calls.
+
+**Enforced by.** `ReportChannel`, the `Reporter` trait, `StdReporter`, and the `reporter` field
+on `AppleMusicService` in `src/apple_music.rs`; the report routes in `init_service_with` and
+`sign_in` (`src/apple_music.rs`), `start_sign_in_with` (`src/apple_music/threads.rs`), and
+`resume_locked` (`src/apple_music/playback.rs`). The recording stub lives in
+`src/test_support/reporter.rs`.
+
+**Pinned by.**
+
+- `a_sign_in_failure_is_reported_through_the_reporter_seam`
+  (`src/apple_music/tests/threads_and_session.rs`)
+- `a_sign_in_thread_that_cannot_start_is_reported_through_the_reporter_seam`
+  (`src/apple_music/tests/threads_and_session.rs`)
+- `a_skipped_startup_sign_in_names_its_reason_through_the_reporter_seam`
+  (`src/apple_music/tests/threads_and_session.rs`)
+- `a_reused_saved_sign_in_is_reported_through_the_reporter_seam`
+  (`src/apple_music/tests/threads_and_session.rs`)
+- `resume_with_nothing_to_resume_reports_through_the_reporter_seam`
+  (`src/apple_music/tests/transport.rs`)
+
+**History.** Added 2026-10-29 with the reporter-seam plan, after three `no-observability`
+validation gaps carried failures whose only trace was an operator line.

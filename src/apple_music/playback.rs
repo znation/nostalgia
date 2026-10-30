@@ -9,7 +9,7 @@ pub(super) mod play;
 
 use std::time::Duration;
 
-use super::{AppleMusicError, AppleMusicService};
+use super::{AppleMusicError, AppleMusicService, ReportChannel};
 
 /// The service's view of the audio backend: whether a preview is loaded and
 /// paused (ready for [`crate::audio::AudioOutput::resume`]), and the last
@@ -154,8 +154,10 @@ impl AppleMusicService {
             transport.loaded = true;
         } else {
             // No preview has ever played, so there is nothing to sound; Play
-            // leaves the transport stopped rather than claiming playback.
-            println!("Nothing to resume");
+            // leaves the transport stopped rather than claiming playback. The
+            // dead end is reported through the reporter seam, so a test records
+            // what a stdout-only `println!` would leave unread.
+            self.report(ReportChannel::Stdout, "Nothing to resume");
             return Ok(());
         }
         self.state.lock().await.play();

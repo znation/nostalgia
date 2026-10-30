@@ -1,6 +1,6 @@
 //! Background-thread seams for sign-in and blocking REST work.
 
-use super::{AppleMusicError, AppleMusicService};
+use super::{AppleMusicError, AppleMusicService, ReportChannel};
 use crate::music_kit_auth::{MusicKitSession, authorize, open_in_browser};
 
 /// The name the startup sign-in thread gets, so a panic in the blocking
@@ -21,23 +21,35 @@ pub(super) const SIGN_IN_THREAD_NAME: &str = "nostalgia-signin";
 /// uses the fallible `Builder::spawn` and this reports the refusal and returns.
 /// The player then keeps the sample library, as it does when no token is set.
 pub(super) fn start_sign_in(service: AppleMusicService, developer_token: String) {
-    if let Err(error) = start_sign_in_with(service, developer_token, spawn_sign_in_thread) {
-        eprintln!("Apple Music sign-in could not start: {error}; the sample library stays in use");
-    }
+    let _ = start_sign_in_with(service, developer_token, spawn_sign_in_thread);
 }
 
 /// [`start_sign_in`] with an injectable spawner, so a test can drive the
 /// thread-creation-failure branch without making the OS refuse a thread. The
-/// work is boxed because the seam carries a `FnOnce` value rather than a
-/// generic type the caller and the test stub would have to share.
+/// service's reporter — the same one the production default routes through —
+/// carries the failure line, so a test records what a direct `eprintln!` would
+/// only leave on stderr. The work is boxed because the seam carries a `FnOnce`
+/// value rather than a generic type the caller and the test stub would share.
 pub(super) fn start_sign_in_with(
     service: AppleMusicService,
     developer_token: String,
     spawn: impl FnOnce(Box<dyn FnOnce() + Send>) -> Result<(), AppleMusicError>,
 ) -> Result<(), AppleMusicError> {
-    spawn(Box::new(move || {
+    // A clone holds the reporter outside the closure, which takes the service.
+    let reported = service.clone();
+    let result = spawn(Box::new(move || {
         service.sign_in(&developer_token, &browser_sign_in);
-    }))
+    }));
+    if let Err(error) = &result {
+        reported.report(
+            ReportChannel::Stderr,
+            format!(
+                "Apple Music sign-in could not start: {error}; \
+                 the sample library stays in use"
+            ),
+        );
+    }
+    result
 }
 
 /// [`start_sign_in`]'s production spawner: the named [`SIGN_IN_THREAD_NAME`]

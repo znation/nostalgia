@@ -22,7 +22,9 @@
 //! ([`crate::music_kit_auth::MusicKitSession`]) obtained by [`init_service`]
 //! from `APPLE_MUSIC_DEVELOPER_TOKEN`; [`AppleMusicService::authenticate`]
 //! stores it and [`AppleMusicService::session`] hands it to the browse
-//! queries, which route through the REST client while it is stored.
+//! queries, which route through the REST client while it is stored, and report
+//! the sign-in failures, startup skips, and transport dead ends through an
+//! injectable [`Reporter`] so a test can record what production only prints.
 //! [`init_service`] returns the one service the app shares, so the session
 //! stored at startup is the session the UI later reads. Because the startup
 //! sign-in runs on a background thread, the first browse query can land before
@@ -42,6 +44,42 @@ use threads::{browser_sign_in, start_sign_in, startup_token};
 pub use crate::music_error::AppleMusicError;
 
 use crate::music_kit_auth::{validate_developer_token, validate_user_token};
+
+/// Where in production a service report goes. Reporting kept two destinations
+/// before the seam existed — `println!` for operator-visible progress and
+/// `eprintln!` for failures — and the default reporter preserves both.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ReportChannel {
+    /// Operator progress: `println!`.
+    Stdout,
+    /// Operator failure: `eprintln!`.
+    Stderr,
+}
+
+/// The seam a service report (a sign-in failure, a startup skip, or a
+/// transport dead end) is handed to at the point it is raised, so a failure
+/// that once left no trace any check could read (`no-observability`) is now
+/// test-visible. The production [`StdReporter`] writes to the operator's
+/// stdout or stderr exactly like the direct calls it replaced; a test stub
+/// records the lines instead.
+pub(crate) trait Reporter: Send + Sync {
+    /// Hands `line` to `channel`.
+    fn report(&self, channel: ReportChannel, line: String);
+}
+
+/// The production [`Reporter`]: stdout or stderr, exactly like the
+/// `println!`/`eprintln!` calls this seam replaced.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct StdReporter;
+
+impl Reporter for StdReporter {
+    fn report(&self, channel: ReportChannel, line: String) {
+        match channel {
+            ReportChannel::Stdout => println!("{line}"),
+            ReportChannel::Stderr => eprintln!("{line}"),
+        }
+    }
+}
 
 /// The music-library service. It answers a browse query from the signed-in
 /// user's Apple Music library through the REST client once
@@ -68,6 +106,10 @@ pub struct AppleMusicService {
     /// (a double-clicked Play/Pause) serialize instead of both reading the
     /// same flag.
     transport: Arc<tokio::sync::Mutex<TransportState>>,
+    /// The reporter every failure-path line the service or its threads raise
+    /// is handed to. The production [`StdReporter`] keeps the operator's
+    /// stdout and stderr; a test stub records what it is given.
+    reporter: Arc<dyn Reporter>,
 }
 
 /// Initializes the service, reseeding a session from the saved sign-in when
@@ -102,18 +144,52 @@ pub fn init_service(
     state: Arc<Mutex<AppState>>,
     saved_user_token: Option<&str>,
 ) -> AppleMusicService {
-    let service = AppleMusicService::new(state);
-    let developer_token = match startup_token(std::env::var("APPLE_MUSIC_DEVELOPER_TOKEN")) {
+    let output = audio::audio_with_fallback(|| {
+        audio::RodioOutput::new().map(|output| Arc::new(output) as Arc<dyn audio::AudioOutput>)
+    });
+    init_service_with(
+        state,
+        output,
+        Arc::new(StdReporter),
+        std::env::var("APPLE_MUSIC_DEVELOPER_TOKEN"),
+        saved_user_token,
+    )
+}
+
+/// [`init_service`] with the audio backend, the reporter, and the environment
+/// read injected, so a test records the skip and reuse lines the startup wiring
+/// raises without touching the process environment.
+#[allow(dead_code)]
+fn init_service_with(
+    state: Arc<Mutex<AppState>>,
+    audio: Arc<dyn audio::AudioOutput>,
+    reporter: Arc<dyn Reporter>,
+    developer_token: Result<String, std::env::VarError>,
+    saved_user_token: Option<&str>,
+) -> AppleMusicService {
+    let service = AppleMusicService::with_reporter(
+        state,
+        Box::new(rest::UreqTransport::new()),
+        audio,
+        reporter,
+    );
+    let developer_token = match startup_token(developer_token) {
         Ok(token) => token,
         Err(reason) => {
-            println!("Apple Music sign-in skipped: {reason}");
+            service.report(
+                ReportChannel::Stdout,
+                format!("Apple Music sign-in skipped: {reason}"),
+            );
             return service;
         }
     };
     if let Some(saved) = saved_user_token
         && service.seed_session(&developer_token, saved).is_ok()
     {
-        println!("Apple Music sign-in skipped: the saved sign-in was reused");
+        service.report(
+            ReportChannel::Stdout,
+            "Apple Music sign-in skipped: the saved sign-in was reused",
+        );
         return service;
     }
     start_sign_in(service.clone(), developer_token);
@@ -156,12 +232,26 @@ impl AppleMusicService {
         transport: Box<dyn rest::HttpTransport>,
         audio: Arc<dyn audio::AudioOutput>,
     ) -> Self {
+        Self::with_reporter(state, transport, audio, Arc::new(StdReporter))
+    }
+
+    /// [`with_audio`](Self::with_audio) with an injectable [`Reporter`], so a
+    /// test drives a failure path and records the line its default would only
+    /// print.
+    #[must_use]
+    pub(crate) fn with_reporter(
+        state: Arc<Mutex<AppState>>,
+        transport: Box<dyn rest::HttpTransport>,
+        audio: Arc<dyn audio::AudioOutput>,
+        reporter: Arc<dyn Reporter>,
+    ) -> Self {
         Self {
             session: Arc::new(std::sync::Mutex::new(None)),
             session_ready: Arc::new(tokio::sync::Notify::new()),
             rest: Arc::new(rest::RestLibrary::new(transport)),
             state,
             audio,
+            reporter,
             transport: Arc::new(tokio::sync::Mutex::new(TransportState {
                 loaded: false,
                 last_url: None,
@@ -254,7 +344,10 @@ impl AppleMusicService {
     }
 
     /// Runs `authorize` for `developer_token` on this service and logs whether
-    /// the session was stored.
+    /// the session was stored — through the [`Reporter`] seam, so a test can
+    /// record the failure line a direct `eprintln!` would leave on stdout only.
+    /// The success progress line stays a plain `println!`: it is not a failure
+    /// the seam exists for.
     ///
     /// This is the blocking body [`init_service`] runs on its own thread. It is
     /// kept synchronous and separate from the thread spawn so a test can drive
@@ -266,8 +359,21 @@ impl AppleMusicService {
     ) {
         match self.authenticate_with(developer_token, authorize) {
             Ok(()) => println!("Apple Music session stored"),
-            Err(error) => eprintln!("Apple Music sign-in failed: {error}"),
+            Err(error) => {
+                self.report(
+                    ReportChannel::Stderr,
+                    format!("Apple Music sign-in failed: {error}"),
+                );
+            }
         }
+    }
+
+    /// Hands a service report (a failure, a skip, or a dead end) to the
+    /// injected [`Reporter`] — the production default prints it, a test stub
+    /// records it — instead of a direct `println!`/`eprintln!` only the
+    /// operator would see.
+    pub(crate) fn report(&self, channel: ReportChannel, line: impl Into<String>) {
+        self.reporter.report(channel, line.into());
     }
 
     /// The stored `MusicKit` session, or `None` before a successful sign-in.

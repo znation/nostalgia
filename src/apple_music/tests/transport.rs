@@ -469,3 +469,21 @@ async fn next_and_previous_track_stubs_succeed_without_touching_state() {
 
     assert_playback_state(&state, Some("song-1"), true).await;
 }
+
+// Play with nothing loaded and no remembered preview URL is the dead end: the
+// transport stays stopped, and the dead-end line is handed to the reporter
+// rather than printed where only the operator can see it.
+#[tokio::test]
+async fn resume_with_nothing_to_resume_reports_through_the_reporter_seam() {
+    let (service, recorder) = test_service_with_reporter();
+    let state = service.state.clone();
+
+    service.resume().await.unwrap();
+
+    assert_eq!(
+        recorder.recorded(),
+        vec![(ReportChannel::Stdout, "Nothing to resume".to_string())]
+    );
+    assert_playback_state(&state, None, false).await;
+    assert_transport_mode(&state, TransportMode::Stopped).await;
+}

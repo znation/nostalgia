@@ -11,8 +11,9 @@ use crate::sample_library::sample_library;
 use crate::state::TransportMode;
 use crate::test_support::{
     AudioCall, EMPTY_DATA_BODY, FailingAudio, FailingCommand, PREVIEW_URL, RecordingAudio,
-    StubTransport, assert_call_urls, assert_ids, assert_preview_calls, assert_single_call,
-    record_call, rest_session, sample_album, sample_artist, sample_song, sign_in_session,
+    RecordingReporter, StubTransport, assert_call_urls, assert_ids, assert_preview_calls,
+    assert_single_call, record_call, rest_session, sample_album, sample_artist, sample_song,
+    sign_in_session,
 };
 use std::time::Duration;
 
@@ -24,6 +25,21 @@ fn test_service() -> AppleMusicService {
         Arc::new(Mutex::new(AppState::default())),
         Box::new(StubTransport::returning("")),
     )
+}
+
+/// A fresh service whose failure, skip, and dead-end lines go to a recording
+/// reporter instead of the production stdout/stderr default, plus the
+/// recorder, so a test asserts the exact line and channel the default would
+/// only print to the operator.
+fn test_service_with_reporter() -> (AppleMusicService, Arc<RecordingReporter>) {
+    let recorder = Arc::new(RecordingReporter::new());
+    let service = AppleMusicService::with_reporter(
+        Arc::new(Mutex::new(AppState::default())),
+        Box::new(StubTransport::returning("")),
+        Arc::new(crate::audio::SilentOutput) as Arc<dyn AudioOutput>,
+        Arc::clone(&recorder) as Arc<dyn super::Reporter>,
+    );
+    (service, recorder)
 }
 
 /// A fresh service plus a handle to the shared state it mutates, so a

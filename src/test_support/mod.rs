@@ -10,6 +10,7 @@
 //! - `transport`: the recording `HttpTransport` stub.
 //! - `audio`: the recording and failing `AudioOutput` fakes.
 //! - `loopback`: the loopback HTTP server fixtures and gzip builders.
+//! - `reporter`: the recording `Reporter` stub for the service's failure paths.
 //!
 //! They live in one named module rather than inside `library` so the data
 //! model module stays only the model; every item here is compiled only for
@@ -19,10 +20,12 @@ mod assertions;
 mod audio;
 mod fixtures;
 mod loopback;
+mod reporter;
 mod transport;
 
 pub(crate) use assertions::*;
 pub(crate) use audio::*;
 pub(crate) use fixtures::*;
 pub(crate) use loopback::*;
+pub(crate) use reporter::*;
 pub(crate) use transport::*;
