@@ -1220,6 +1220,45 @@ fn artist_names(player: &WinampPlayer) -> Vec<&str> {
         .collect()
 }
 
+/// The browse list's row height and inner padding, the two constants the
+/// row-move and selection-step scroll-into-view tests compute their expected
+/// reveal offsets from.
+const ROW: f32 = views::BROWSE_ROW_HEIGHT;
+const PAD: f32 = views::BROWSE_LIST_PADDING;
+
+/// A minimal [`Artist`] fixture: the name is also its id, and the album count
+/// is empty, which is all the row-move and selection-step fixtures need. The
+/// two move test files shared byte-identical copies of this builder, so it
+/// lives here once.
+fn artist(name: &str) -> Artist {
+    Artist {
+        id: name.to_string(),
+        name: name.to_string(),
+        album_count: 0,
+    }
+}
+
+/// A press naming `index` on the list `epoch` names, wired through `update`
+/// the way a rendered row press arrives. Shared by the Alt row-move and
+/// Ctrl-arrow selection-step fixtures.
+fn select(player: &mut WinampPlayer, epoch: u64, index: usize) {
+    let _ = update(player, Message::SelectRow { epoch, index });
+}
+
+/// A player whose Artists list holds twenty artists named `a00`..`a19` with
+/// row 10 selected — tall enough that a row at the selection can sit below or
+/// above a five-row viewport, which is what the row-move and selection-step
+/// scroll tests need. Both test files built this same fixture, so it lives
+/// here once.
+fn twenty_artists_with_row_ten_selected() -> WinampPlayer {
+    let (mut player, _state) = test_player();
+    let names: Vec<Artist> = (0..20).map(|i| artist(&format!("a{i:02}"))).collect();
+    let _ = update(&mut player, Message::ArtistsLoaded(names));
+    let epoch = player.artists.epoch;
+    select(&mut player, epoch, 10);
+    player
+}
+
 /// Plays song-1 (title "One", artist "The Sample Band") from the shared
 /// [`stepping_songs`] album — recording it in `known_tracks` — then browses to
 /// album-2's songs ([`second_album_songs`]), which replaces `songs`. Returns

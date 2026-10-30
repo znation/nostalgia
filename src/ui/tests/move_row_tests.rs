@@ -1,16 +1,7 @@
 use super::*;
 
-fn artist(name: &str) -> Artist {
-    Artist {
-        id: name.to_string(),
-        name: name.to_string(),
-        album_count: 0,
-    }
-}
-
-fn select(player: &mut WinampPlayer, epoch: u64, index: usize) {
-    let _ = update(player, Message::SelectRow { epoch, index });
-}
+// `artist`, `select`, and the `ROW`/`PAD` scroll-geometry constants are the
+// shared helpers in `super`.
 
 #[test]
 fn move_down_swaps_a_song_with_the_next_and_bumps_the_epoch() {
@@ -143,35 +134,21 @@ fn a_move_leaves_the_view_and_the_other_lists_alone() {
     assert_eq!(artist_names(&player), ["b", "a"]);
 }
 
-const ROW: f32 = views::BROWSE_ROW_HEIGHT;
-const PAD: f32 = views::BROWSE_LIST_PADDING;
-
-fn twenty_artists_with_row_ten_selected() -> WinampPlayer {
-    let (mut player, _state) = test_player();
-    let names: Vec<Artist> = (0..20).map(|i| artist(&format!("a{i:02}"))).collect();
-    let _ = update(&mut player, Message::ArtistsLoaded(names));
-    let epoch = player.artists.epoch;
-    select(&mut player, epoch, 10);
-    player
-}
+// `twenty_artists_with_row_ten_selected` is the shared fixture in `super`.
 
 #[tokio::test]
 async fn a_move_past_the_viewport_bottom_scrolls_the_row_into_view() {
     let mut player = twenty_artists_with_row_ten_selected();
     let task = update(&mut player, Message::MoveSelectedRowDown);
 
-    let effects =
-        browse_scroll_effects_at(task, "a move past the viewport bottom", 5.0 * ROW, 0.0).await;
-
-    assert_eq!(
-        effects.scrolled,
-        Some(
-            iced::advanced::widget::operation::scrollable::AbsoluteOffset {
-                x: None,
-                y: Some(PAD + 12.0 * ROW - 5.0 * ROW),
-            }
-        )
-    );
+    assert_task_reveals_browse_row(
+        task,
+        "a move past the viewport bottom",
+        5.0 * ROW,
+        0.0,
+        PAD + 12.0 * ROW - 5.0 * ROW,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -190,23 +167,14 @@ async fn a_move_above_the_viewport_top_scrolls_up_to_the_row() {
     let mut player = twenty_artists_with_row_ten_selected();
     let task = update(&mut player, Message::MoveSelectedRowUp);
 
-    let effects = browse_scroll_effects_at(
+    assert_task_reveals_browse_row(
         task,
         "a move above the viewport top",
         5.0 * ROW,
         PAD + 12.0 * ROW,
+        PAD + 9.0 * ROW,
     )
     .await;
-
-    assert_eq!(
-        effects.scrolled,
-        Some(
-            iced::advanced::widget::operation::scrollable::AbsoluteOffset {
-                x: None,
-                y: Some(PAD + 9.0 * ROW),
-            }
-        )
-    );
 }
 
 #[test]
