@@ -31,8 +31,17 @@ pub const TITLE_TAPE: Color = Color::from_rgb(0.93, 0.81, 0.48);
 /// read as a raised strip.
 pub const TITLE_TAPE_SHADOW: Color = Color::from_rgb(0.64, 0.58, 0.42);
 
-/// The playlist/LCD green, used for the Now Playing title.
-pub const LCD_GREEN: Color = Color::from_rgb(0.0, 1.0, 0.0);
+/// The playlist/LCD green, used for the Now Playing title, the browse rows,
+/// and the green readouts.
+///
+/// The base skin's ordinary green is its dimmer `(0,198,0)` stop, not pure
+/// `#00FF00`: every playlist-row glyph outside the current track samples
+/// `(0,198,0)` in `winamp-screenshots/winamp-2.x-stack.png` (e.g. at (28,254)),
+/// and the windowshade strip's marquee glyphs in
+/// `winamp-screenshots/winamp-2.05-windowshade.gif` sample the same. The
+/// mockups' `(0,248,0)`-ish stop was mistaken for the base skin's when this
+/// constant was first written; the reference captures are the ground truth.
+pub const LCD_GREEN: Color = Color::from_rgb8(0, 198, 0);
 
 /// The unlit LCD indicator color: a dark green for the channel label that is
 /// not the loaded preview's reported mode.
@@ -101,8 +110,9 @@ pub const BUTTON_EDGE_LIGHT: Color = Color::from_rgb8(239, 255, 255);
 /// their light metal face. This is its fill while the flag it marks is on: the
 /// mockups' lit LED (`docs/screenshots/transport.png` reads (0,232,0) inside
 /// the repeat button's LED in its Repeat-on panel, where the shuffle LED
-/// beside it stays dark), a dimmer stop than the pure [`LCD_GREEN`] the LCD
-/// readouts use, so a lit LED cannot read as an ordinary green readout.
+/// beside it stays dark), a brighter stop than the ordinary [`LCD_GREEN`]
+/// the LCD readouts use but not their former pure green, so a lit LED reads
+/// as its own status marker and not as an ordinary green readout.
 pub const LED_ON: Color = Color::from_rgb8(0, 232, 0);
 
 /// The square LED on the transport row's Repeat and Shuffle faces while the
@@ -287,7 +297,10 @@ mod tests {
         assert_eq!(TITLE_BLUE, Color::from_rgb(0.0, 0.0, 0.55));
         assert_eq!(TITLE_TAPE, Color::from_rgb(0.93, 0.81, 0.48));
         assert_eq!(TITLE_TAPE_SHADOW, Color::from_rgb(0.64, 0.58, 0.42));
-        assert_eq!(LCD_GREEN, Color::from_rgb(0.0, 1.0, 0.0));
+        // The green is the base skin's dimmer stop, not pure #00FF00: the
+        // 2.95 stack capture's playlist glyphs sample (0,198,0), as do the
+        // windowshade marquee's glyphs in `winamp-2.05-windowshade.gif`.
+        assert_eq!(LCD_GREEN, Color::from_rgb8(0, 198, 0));
         assert_eq!(LCD_GREEN_DIM, Color::from_rgb(0.0, 0.35, 0.0));
         assert_eq!(LCD_RED, Color::from_rgb(1.0, 0.1, 0.1));
         assert_eq!(PANEL_EDGE_LIGHT, Color::from_rgb8(98, 98, 118));
@@ -301,7 +314,7 @@ mod tests {
         assert_eq!(LED_ON, Color::from_rgb8(0, 232, 0));
         assert_eq!(LED_OFF, Color::from_rgb8(16, 20, 15));
         // The LED must read as its own status marker, not as one of the LCD's
-        // pure green readouts used beside it on the same row.
+        // green readouts used beside it on the same row.
         assert_ne!(LED_ON, LCD_GREEN);
         // The light-metal convention the transport row is measured against: the
         // face and its bezel highlight are lighter than the engraved glyph color.

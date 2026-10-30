@@ -21,7 +21,7 @@ fn channel_label_color_lights_only_the_reported_mode() {
     assert_eq!(channel_label_color(Some(1), "STEREO"), theme::LCD_GREEN_DIM);
     assert_eq!(channel_label_color(None, "MONO"), theme::LCD_GREEN_DIM);
     assert_eq!(channel_label_color(None, "STEREO"), theme::LCD_GREEN_DIM);
-    assert_eq!(theme::LCD_GREEN, iced::Color::from_rgb(0.0, 1.0, 0.0));
+    assert_eq!(theme::LCD_GREEN, iced::Color::from_rgb8(0, 198, 0));
     assert_eq!(theme::LCD_GREEN_DIM, iced::Color::from_rgb(0.0, 0.35, 0.0));
 }
 

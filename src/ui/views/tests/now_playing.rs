@@ -394,8 +394,16 @@ fn lcd_indicator_strip_lights_the_active_letters_and_dims_the_rest() {
     for lit in ["O", "A", "I", "V"] {
         let lit_green = lit_pixels.max_green_in(lit_capture.find(lit));
         let dim_green = lit_pixels.max_green_in(lit_capture.find("D"));
+        // A lit letter runs theme::LCD_GREEN, the base skin's ordinary (0,198,0)
+        // — not the pure #00FF00 this threshold was first tuned to — so the lit
+        // capture tops out at 181 and the gap over the (0,89,0)-dim letter is
+        // 94: bright enough to read, but no longer crossed at 100.
         assert!(
-            lit_green > dim_green + 100,
+            lit_green >= 170,
+            "{lit} must light with a bright green: {lit} green {lit_green}"
+        );
+        assert!(
+            lit_green > dim_green + 80,
             "{lit} must be lit and D dim: {lit} green {lit_green}, D green {dim_green}"
         );
     }

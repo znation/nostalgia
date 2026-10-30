@@ -84,23 +84,6 @@ used as the single well fill behind the whole display area. The browse list's we
 the same fill: its rows sit on (13,13,13) where the base skin's playlist editor sits on
 pure black — `winamp-2.x-stack.png` (200,300) reads (0,0,0).
 
-### The LCD and marquee green is pure `#00FF00`; the base skin's green is `#00C600` (found by the reference-comparison pass 2026-10-29)
-
-**Symptom.** The app's green — the Now Playing title, browse-list row text, footer
-readouts — is `#00FF00` (0,255,0). The base skin's ordinary green is (0,198,0) with a
-(0,214,0) lighter stop: in `winamp-2.x-stack.png` every playlist row glyph outside the
-current track is (0,198,0), and only the currently playing row uses (0,255,0); the shade
-strip's marquee glyphs in `winamp-2.05-windowshade.gif` are (0,198,0) as well. The app
-uses the bright green everywhere instead of reserving it for the current row.
-
-**How to reproduce.** Sample the app's Now Playing title (e.g. (57,45) of the player
-window) or a song row (e.g. (100,563) with All Songs open): both read (0,255,0). In
-`winamp-2.x-stack.png` a playlist row glyph (28,254) reads (0,198,0), as do the shade
-strip's marquee glyphs in `winamp-2.05-windowshade.gif`.
-
-**Suspected cause.** `theme.rs`'s `LCD_GREEN = Color::from_rgb(0.0, 1.0, 0.0)`; the
-mockups' brighter green (0,248,0) was taken as the base skin's, which is a stop dimmer.
-
 ### The browse-list selection bar is light sky blue; the playlist editor's is a deep saturated blue (found by the reference-comparison pass 2026-10-29)
 
 **Symptom.** A clicked row's bar is `#4080FF` (64,128,255) — a bright sky blue with the
