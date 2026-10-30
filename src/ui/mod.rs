@@ -27,19 +27,19 @@ pub(crate) mod layout_capture;
 mod loading;
 mod message;
 mod player;
+mod screen;
 mod shortcuts;
 mod song_groups;
 mod style;
 mod subscriptions;
 mod theme;
 mod transport;
-mod view;
 mod views;
 mod years;
 
 pub(in crate::ui) use message::{Message, OptionsChoice, OptionsRow};
 pub(in crate::ui) use player::{CurrentView, SAVED_PLAYLIST_ROW_ID, SongsOrigin, WinampPlayer};
-pub(in crate::ui) use view::view;
+pub(in crate::ui) use screen::view;
 
 use subscriptions::subscriptions;
 

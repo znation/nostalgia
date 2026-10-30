@@ -102,8 +102,8 @@ clears the search flag and view and calls `fetch_at_top(fetch::load_artists(play
 - `backspace_steps_back_from_albums` (`src/ui/tests/shortcuts_tests.rs`)
 - `reload_library_returns_to_artists_and_refetches_them` (`src/ui/tests/flat_lists_tests.rs`)
 - `f5_reloads_the_library_from_the_keyboard` (`src/ui/tests/shortcuts_tests.rs`)
-- `reload_button_is_shown_on_every_browse_level` (`src/ui/tests/view_tests.rs`)
-- `browse_nav_buttons_place_reload_beside_sort` (`src/ui/tests/view_tests.rs`)
+- `reload_button_is_shown_on_every_browse_level` (`src/ui/tests/screen_tests.rs`)
+- `browse_nav_buttons_place_reload_beside_sort` (`src/ui/tests/screen_tests.rs`)
 - `message_for_maps_backspace_to_back` (`src/ui/shortcuts.rs`)
 - `message_for_maps_f5_to_reload` (`src/ui/shortcuts.rs`)
 - `shortcut_ignores_chord_modifiers` (`src/ui/shortcuts.rs`)
@@ -158,7 +158,7 @@ only while `search_active` is set, delegates to `handlers::browse::lists::back`,
 active case identical to the Back button. `views::browse::view_clear_search_button` renders the
 button and `views::browse::view_search_row` places it after the search box; `view_search_row` is
 re-exported by `src/ui/views/mod.rs`, and the view tests import the button and box builders from
-`views::browse` directly. `src/ui/view/library.rs` builds that row where the bare search box used to sit.
+`views::browse` directly. `src/ui/screen/library.rs` builds that row where the bare search box used to sit.
 
 **Pinned by.**
 
@@ -268,7 +268,7 @@ and applies that style to each one, and `views::view_open_button` (re-exported b
 - `reverse_bumps_the_epoch_and_clears_the_selection` (`src/ui/tests/reverse_tests.rs`)
 - `randomize_bumps_the_epoch_clears_the_selection_and_keeps_every_row`
   ((`src/ui/tests/randomize_tests.rs`))
-- `browse_open_button_sits_above_the_browse_list` (`src/ui/tests/view_tests.rs`)
+- `browse_open_button_sits_above_the_browse_list` (`src/ui/tests/screen_tests.rs`)
 - `message_for_maps_enter_to_open_selected`
   (in `src/ui/shortcuts.rs`)
 - `browse_row_style_keeps_playing_rows_unbarred_with_white_text`
@@ -481,8 +481,8 @@ draw beside Top.
 - `move_selected_is_a_noop_without_a_selection_at_an_edge_or_while_loading`
 - `message_for_maps_alt_arrows_to_move_the_selected_row`
 - the tests in `src/ui/tests/move_row_tests.rs`
-- `browse_nav_buttons_place_sort_beside_top` (`src/ui/tests/view_tests.rs`)
-- `browse_nav_buttons_place_reload_beside_sort` (`src/ui/tests/view_tests.rs`)
+- `browse_nav_buttons_place_sort_beside_top` (`src/ui/tests/screen_tests.rs`)
+- `browse_nav_buttons_place_reload_beside_sort` (`src/ui/tests/screen_tests.rs`)
 - `sort_reorders_artists_case_insensitively` (`src/ui/tests/sort_tests.rs`)
 - `sort_reorders_artists_and_keeps_their_cached_labels_aligned` (`src/ui/tests/sort_tests.rs`)
 - `sort_is_stable_for_equal_keys_and_back_restores_them` (`src/ui/tests/sort_tests.rs`)
@@ -638,7 +638,7 @@ all follow the landed row.
 - `browse_row_height_matches_the_laid_out_row_pitch`
 - `a_hard_line_break_in_a_title_does_not_change_the_row_pitch`
 - `a_carriage_return_in_a_title_does_not_change_the_row_pitch`
-  (all three in `src/ui/tests/view_tests.rs`)
+  (all three in `src/ui/tests/screen_tests.rs`)
 - `next_and_previous_reveal_the_landed_row_only_when_it_leaves_the_viewport`
 - `edge_jumps_scroll_the_showing_song_list` (`src/ui/tests/stepping_tests.rs`)
 - `a_finished_preview_scrolls_the_song_list_to_the_advanced_row`
@@ -676,7 +676,7 @@ target the stable `views::BROWSE_LIST_ID` that every `views::browse::scrollable_
 
 - `scroll_browse_to_bottom_schedules_a_scroll_task` (`src/ui/tests/scroll_tests.rs`)
 - `scroll_browse_page_keys_schedule_page_sized_scrolls` (`src/ui/tests/scroll_tests.rs`)
-- `shade_mode_builds_no_browse_scroll_target` (`src/ui/tests/view_tests.rs`)
+- `shade_mode_builds_no_browse_scroll_target` (`src/ui/tests/screen_tests.rs`)
 - `toggle_library_panel_hides_and_restores_the_library_section` (`src/ui/tests/panels_tests.rs`)
 - `message_for_maps_home_and_end_to_browse_scroll` (`src/ui/shortcuts.rs`)
 - `message_for_maps_page_keys_to_browse_paging` (`src/ui/shortcuts.rs`)
@@ -868,7 +868,7 @@ The existing browse-row text, clipping, and right-edge tests in `src/ui/views/te
 the pitch tests
 (`browse_row_height_matches_the_laid_out_row_pitch`,
 `a_hard_line_break_in_a_title_does_not_change_the_row_pitch`,
-`a_carriage_return_in_a_title_does_not_change_the_row_pitch`) in `src/ui/tests/view_tests.rs` pin
+`a_carriage_return_in_a_title_does_not_change_the_row_pitch`) in `src/ui/tests/screen_tests.rs` pin
 the rendered result, not cache reuse.
 
 ## Browse album running times
@@ -1032,13 +1032,13 @@ align the curve with it;
 placeholder, which `style::chrome_pick_list_style` in `src/ui/style.rs` draws in `theme::TEXT`. The browse
 and transport layout tests lay out the whole root `view` through the test-only
 `src/ui/layout_capture.rs` harness; the equalizer layout test lays out `view_equalizer` directly.
-`view_library` in `src/ui/view/library.rs` matches on `CurrentView` and passes each arm that level's buffer, caches,
+`view_library` in `src/ui/screen/library.rs` matches on `CurrentView` and passes each arm that level's buffer, caches,
 and current-track id, and gates its Back, Retry, and flat-list buttons on `can_go_back`,
 `can_retry_artists`, and a `CurrentView::Artists` match. `views::view_title_band` and
 `views::title_bar::title_tape` in `src/ui/views/title_bar.rs` build the
 section bands and the app bar's tape/label row from `theme::TITLE_TAPE` and
-`theme::TITLE_TAPE_SHADOW`; `view_player_panels` in `src/ui/view/player_panels.rs` and `view_library` in
-`src/ui/view/library.rs` push their section bands into the normal-mode tree only. The harness records each drawn text fragment's absolute bounds with iced's headless
+`theme::TITLE_TAPE_SHADOW`; `view_player_panels` in `src/ui/screen/player_panels.rs` and `view_library` in
+`src/ui/screen/library.rs` push their section bands into the normal-mode tree only. The harness records each drawn text fragment's absolute bounds with iced's headless
 tiny-skia renderer.
 
 **Pinned by.** `browse_nav_buttons_place_sort_beside_top`,
@@ -1058,7 +1058,7 @@ tiny-skia renderer.
 `alt_e_toggles_the_library_panel_and_back`,
 `alt_e_in_shade_mode_leaves_the_library_panel_alone`,
 `alt_g_toggles_the_equalizer_panel`, and
-`shaded_root_view_draws_no_section_title_bands` (`src/ui/tests/view_tests.rs`), plus
+`shaded_root_view_draws_no_section_title_bands` (`src/ui/tests/screen_tests.rs`), plus
 `title_band_centers_its_label_at_the_title_bar_height` and
 `title_bar_centers_its_name_between_its_edge_controls` (`src/ui/views/tests/chrome.rs`) for the
 title bands and app bar, `transport_glyphs_match_the_mockup_order_and_widths`,
@@ -1469,7 +1469,7 @@ roll replaces it with that slider's readout, a mixer drag readout takes preceden
 **Enforced by.** `views::volume_wheel_message` and its `views::wheel_direction` sign mapping in
 `src/ui/views/mod.rs`, `Message::VolumeWheel` in `src/ui/message.rs`,
 `handlers::mixer::volume_wheel` in `src/ui/handlers/mixer.rs` (the zero/NaN no-op), and the two
-`MouseArea::on_scroll` wrappers in `src/ui/view/normal.rs` and `src/ui/view/shade.rs` (which also carry the options right-press), which the
+`MouseArea::on_scroll` wrappers in `src/ui/screen/normal.rs` and `src/ui/screen/shade.rs` (which also carry the options right-press), which the
 balance, preamp, and band wrappers nest inside; the flash is held by
 `WinampPlayer::mixer_flash_ticks` and counted down by `handlers::playback::marquee_tick`.
 
@@ -2067,7 +2067,7 @@ both apply. `views::view_shade_strip` is re-exported by `src/ui/views/mod.rs`.
 `shade_root_readout_previews_the_seek_drag`,
 `shade_target_size_is_the_title_bar_plus_the_strip`,
 `title_bar_height_pins_the_shade_strip`, and `root_view_footer_shows_elapsed_over_total`
-(`src/ui/tests/view_tests.rs`), `window_id_resolved_measures_a_restored_shade`
+(`src/ui/tests/screen_tests.rs`), `window_id_resolved_measures_a_restored_shade`
 (`src/ui/tests/window_tests.rs`), and `toggle_window_shade_reaches_the_saved_snapshot` and
 `saved_shade_is_restored_on_boot` (`src/ui/tests/settings_tests.rs`).
 
@@ -2101,7 +2101,7 @@ like the title bar's (2026-10-30, bugfix role).
   `CARGO_PKG_VERSION`), `ABOUT NOSTALGIA`, the mockup tagline, the active library source from
   `views::about::library_source_label`, and a `Close` button. The label reads `Library: Apple
   Music` when the service has a stored session and `Library: Sample library` otherwise, and the
-  overlay assembly in `src/ui/view/overlay.rs` passes the current `AppleMusicService::session()` result
+  overlay assembly in `src/ui/screen/overlay.rs` passes the current `AppleMusicService::session()` result
   on every rebuild, so a sign-in that lands while the panel is open updates it without a new
   message or stored UI state. `Close` and
   the full-window backdrop each publish one `Message::ToggleAbout`; a press on the panel's own
@@ -2111,8 +2111,8 @@ like the title bar's (2026-10-30, bugfix role).
 **Enforced by.** `views::title_bar::view_title_bar`, `views::about::view_about_overlay` and
 `views::about::library_source_label` (over
 `views::modal::modal_overlay`), the `AppleMusicService::session()` read in the overlay assembly
-in `src/ui/view/overlay.rs`, `Message::ToggleAbout`, `handlers::window::toggle_about`,
-`WinampPlayer::about_visible`, and the overlay selection in `src/ui/view/overlay.rs`,
+in `src/ui/screen/overlay.rs`, `Message::ToggleAbout`, `handlers::window::toggle_about`,
+`WinampPlayer::about_visible`, and the overlay selection in `src/ui/screen/overlay.rs`,
 which wraps the base tree only while `about_visible && !shaded` holds.
 
 **Pinned by.** `title_bar_m_button_publishes_toggle_about`,
@@ -2124,7 +2124,7 @@ and `library_source_label_names_the_signed_in_and_sample_libraries`
 and `toggle_about_while_shaded_restores_the_window_first` (`src/ui/tests/window_tests.rs`);
 `view_constructs_over_the_apps_full_input_space`, `view_constructs_when_the_window_is_shaded`,
 `about_panel_names_the_active_library_source`, and
-`title_bar_constructs_for_both_about_states` (`src/ui/tests/view_tests.rs`);
+`title_bar_constructs_for_both_about_states` (`src/ui/tests/screen_tests.rs`);
 `the_escape_listener_runs_only_while_a_transient_panel_is_open`,
 `escape_key_message_maps_escape_but_not_its_chords_or_other_keys`
 (`src/ui/tests/subscriptions_tests.rs`), and
@@ -2170,7 +2170,7 @@ Jump to file rows, File info, About, and Close:
   `handlers::window::toggle_library_panel`, `handlers::playback::fade::fade_out_and_stop`,
   `handlers::playback::toggle_stop_after_current`, `handlers::playback::toggle_repeat`, `handlers::playback::toggle_shuffle`, `handlers::playback::toggle_manual_advance`, `handlers::playback::stepping::jump_ten_tracks` (back or forward, pinned by `options_ten_song_rows_jump_like_the_keypad`), `handlers::mixer::seek_backward` and `handlers::mixer::seek_forward` (the arrows' five-second step, pinned by `options_back_and_fwd_seconds_rows_seek_like_the_arrows`), `handlers::playback::stepping::jump_to_edge_track` (first or last song, pinned by `options_start_and_end_of_list_rows_jump_like_the_keys`), `handlers::jump::toggle_jump_time`, `handlers::jump::toggle_jump_file`, or `handlers::window::toggle_file_info` (pinned by `options_file_info_row_opens_the_panel_or_just_closes`) and returns its task, so each row's non-menu behavior is
   exactly that toggle's.
-- The overlay assembly in `src/ui/view/overlay.rs` wraps the base tree only while `options_visible &&
+- The overlay assembly in `src/ui/screen/overlay.rs` wraps the base tree only while `options_visible &&
   !shaded` holds and passes the current always-on-top, elapsed/remaining, autoscroll, visualizer, equalizer
   panel, library panel, stop-after-current, repeat, shuffle, and manual-advance state (repeat, shuffle, and manual advance read from the shared state) through `views::OptionsState`; the shade branch never draws it.
 - A plain or Shift-held Escape press also closes it (see `## Transient panel dismissal`).
@@ -2178,8 +2178,8 @@ Jump to file rows, File info, About, and Close:
 **Enforced by.** `views::options::view_options_overlay`, its nine label helpers, and `Message::ToggleOptions`
 and `Message::OptionsChoice`; `handlers::window::toggle_options` and
 `handlers::window::options_choice`; `WinampPlayer::options_visible`; the LCD strip's `O`
-mapping and the transport row's `options_button`; the two `on_right_press` wrappers in `src/ui/view/normal.rs` and `src/ui/view/shade.rs`; and the normal-mode branch of
-`src/ui/view/overlay.rs`. `OptionsRow::ALL` and `OptionsRow::message` share row order and messages;
+mapping and the transport row's `options_button`; the two `on_right_press` wrappers in `src/ui/screen/normal.rs` and `src/ui/screen/shade.rs`; and the normal-mode branch of
+`src/ui/screen/overlay.rs`. `OptionsRow::ALL` and `OptionsRow::message` share row order and messages;
 `options_row_label` and `options_row_style` draw them. `handlers::playback::toggle_autoscroll`
 flips `WinampPlayer::marquee_autoscroll`. `options_shortcut` and
 `message_for_options` map the keys; `options_selection_up`, `options_selection_down`, and
@@ -2219,7 +2219,7 @@ label tests in `src/ui/views/options.rs` (including `stop_after_current_label_mi
 `right_press_on_the_library_does_not_toggle_options`, and
 `right_press_on_the_shade_strip_toggles_options` (`src/ui/tests/panels_tests.rs`); and
 `options_panel_draws_over_the_player_and_drops_out_in_shade_mode`
-(`src/ui/tests/view_tests.rs`).
+(`src/ui/tests/screen_tests.rs`).
 
 **History.** Added 2026-10-26 with the Winamp-style options menu; the menu is transient and
 unpersisted because every row reuses an existing toggle.
@@ -2287,7 +2287,7 @@ and the `autoscroll=` settings line added 2026-10-29 by the feature role.
 `views::now_playing::indicator::lcd_indicator_message`, `handlers::window::toggle_file_info`,
 `views::file_info::view_file_info_overlay`, `views::modal::modal_overlay`,
 `views::now_playing::format_playback_prefix`, `views::now_playing::channel_mode_label`, and the
-overlay branch of `ui::view::view`.
+overlay branch of `ui::screen::view`.
 
 **Pinned by.** `message_for_maps_alt_3_to_file_info` (`src/ui/shortcuts.rs`);
 `lcd_indicator_message_arms_o_a_i_and_v_and_leaves_d_inert` and
@@ -2321,7 +2321,7 @@ overlay branch of `ui::view::view`.
 `file_info_track_resolves_the_selected_song_row` and
 `file_info_track_falls_back_to_the_current_track_without_a_selection`
 (`src/ui/tests/readouts_tests.rs`); `file_info_overlay_names_the_selected_rows_song`
-(`src/ui/tests/view_tests.rs`);
+(`src/ui/tests/screen_tests.rs`);
 `songs_from_album_maps_the_content_rating` and
 `songs_from_album_maps_a_missing_blank_or_unknown_content_rating_to_none`
 (`src/apple_music/rest/tests/library.rs`); `song_round_trips_its_content_rating`,
@@ -2352,7 +2352,7 @@ and `song_track_number_defaults_to_none_when_the_payload_omits_it` (`src/library
 (`src/apple_music/rest/tests/library.rs`); `songs_carry_the_documented_genres` and
 `songs_carry_the_documented_track_numbers`
 (`src/sample_library.rs`); `file_info_panel_draws_the_loaded_previews_format` and
-`view_constructs_when_the_window_is_shaded` (`src/ui/tests/view_tests.rs`);
+`view_constructs_when_the_window_is_shaded` (`src/ui/tests/screen_tests.rs`);
 `the_escape_listener_runs_only_while_a_transient_panel_is_open`,
 `escape_key_message_maps_escape_but_not_its_chords_or_other_keys`
 (`src/ui/tests/subscriptions_tests.rs`), and
@@ -2382,7 +2382,7 @@ preview:
   `ToggleJumpTime`; `Jump` publishes `JumpTimeSubmitted`. The shade branch never draws it.
 
 **Enforced by.** `handlers::jump`, `handlers::playback::preview::seek_preview_to`,
-`views::jump_time::view_jump_time_overlay`, and the overlay branch of `ui::view::view`.
+`views::jump_time::view_jump_time_overlay`, and the overlay branch of `ui::screen::view`.
 
 **Pinned by.** `parses_seconds_and_minutes_seconds` and `rejects_malformed_times`
 (`src/ui/handlers/jump.rs`); `message_for_maps_ctrl_j_to_jump_time` (`src/ui/shortcuts.rs`); the
@@ -2391,7 +2391,7 @@ tests in `src/ui/tests/jump_time_tests.rs` (including `toggle_opens_holding_the_
 `submitting_the_prefilled_query_seeks_to_the_current_position`); `jump_time_overlay_draws_its_heading_length_and_buttons`
 and `jump_time_overlay_buttons_and_backdrop_publish_their_messages`
 (`src/ui/views/tests/chrome.rs`); `view_constructs_when_the_window_is_shaded`
-(`src/ui/tests/view_tests.rs`); `the_escape_listener_runs_only_while_a_transient_panel_is_open`,
+(`src/ui/tests/screen_tests.rs`); `the_escape_listener_runs_only_while_a_transient_panel_is_open`,
 `escape_key_message_maps_escape_but_not_its_chords_or_other_keys`
 (`src/ui/tests/subscriptions_tests.rs`), and
 `escape_closes_each_transient_panel_without_touching_anything_else`
@@ -2461,7 +2461,7 @@ and `jump_time_overlay_buttons_and_backdrop_publish_their_messages`
 **Enforced by.** `handlers::jump`, `handlers::browse`,
 `handlers::browse::scroll::reveal_offset`, `ui::subscriptions`,
 `shortcuts::message_for_jump_file`, `views::jump_file::view_jump_file_overlay`, and the
-jump-file branch of `ui::view::view`.
+jump-file branch of `ui::screen::view`.
 
 **Pinned by.** `matches_blank_all_case_insensitive_trimmed_in_order`,
 `matches_every_whitespace_separated_word_in_any_order`,
@@ -2701,7 +2701,7 @@ form.
 `album_list_summary_puts_the_selected_running_time_before_the_total`,
 `album_list_summary_marks_an_unknown_selected_running_time`,
 `album_list_summary_ignores_a_selection_past_the_list` (`src/ui/views/tests/browse.rs`), and
-`root_view_album_footer_shows_the_selected_running_time` (`src/ui/tests/view_tests.rs`).
+`root_view_album_footer_shows_the_selected_running_time` (`src/ui/tests/screen_tests.rs`).
 
 **History.** Added with the selected-running-time footer, like the song-list footer.
 
@@ -2742,7 +2742,7 @@ passes its `selected` argument to it.
 `list_summary_puts_the_selected_group_time_before_the_total`,
 `list_summary_marks_an_unknown_selected_group_time`,
 `list_summary_ignores_a_selection_past_the_list` (`src/ui/song_groups.rs`), and
-`root_view_genres_footer_shows_the_selected_group_time` (`src/ui/tests/view_tests.rs`).
+`root_view_genres_footer_shows_the_selected_group_time` (`src/ui/tests/screen_tests.rs`).
 
 **History.** Added with the selected-group-time footer, like the song-list footer.
 
@@ -2762,7 +2762,7 @@ artist with `0` albums, or an index past the list, gives the plain form.
 `artist_list_summary_keeps_the_plain_form_for_a_selected_artist_without_albums`,
 `artist_list_summary_ignores_a_selection_past_the_list` (`src/ui/views/tests/browse.rs`),
 `root_view_artists_footer_totals_the_album_counts`, and
-`root_view_artists_footer_shows_the_selected_album_count` (`src/ui/tests/view_tests.rs`).
+`root_view_artists_footer_shows_the_selected_album_count` (`src/ui/tests/screen_tests.rs`).
 
 **History.** Added with the selected-artist album count, like the song-list footer.
 
@@ -2805,7 +2805,7 @@ single time string when the total is unknown;
 `views::now_playing::elapsed_readout_clickable` holds for the strip's mode, and wraps a stopped
 readout in `MouseArea::on_double_click(Message::Ignored)` so it captures a press with a no-op;
 `views::mini_transport::MINI_TRANSPORT_HEIGHT`, `MINI_VOLUME_WIDTH`, and
-`MINI_VOLUME_ID` own the geometry and test seam. The normal branch of `ui::view::view` builds the
+`MINI_VOLUME_ID` own the geometry and test seam. The normal branch of `ui::screen::view` builds the
 library column, including the footer, and pushes it onto the screen only while
 `WinampPlayer::library_panel_visible` holds — hiding the panel skips building the whole column,
 so an unseen browse list of any length costs nothing per frame — with clones of the LCD's elapsed
@@ -2818,7 +2818,7 @@ and total strings; its shaded branch returns before that push.
 `main_transport_and_shade_strip_share_glyphs_order_and_widths` (`src/ui/views/tests/shade.rs`);
 `normal_root_view_draws_the_library_strip_beneath_the_browse_list`,
 `shade_strip_draws_only_while_shaded`, and `root_view_footer_shows_elapsed_over_total`
-(`src/ui/tests/view_tests.rs`); `toggle_library_panel_hides_and_restores_the_library_section`
+(`src/ui/tests/screen_tests.rs`); `toggle_library_panel_hides_and_restores_the_library_section`
 (`src/ui/tests/panels_tests.rs`).
 
 **History.** Added 2026-10-23 with the mockups' library-panel transport row; the shade strip was

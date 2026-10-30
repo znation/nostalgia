@@ -19,7 +19,7 @@
 //! [`Message::SeekPreviewChanged`]/[`Message::SeekPreviewReleased`] pair
 //! while the backend reports a position and a preview length. The readout
 //! and the seek slider's wheel rolls keep their own handlers, so the
-//! outer [`MouseArea`]'s volume-wheel roll (see `view::shade`, the screen
+//! outer [`MouseArea`]'s volume-wheel roll (see `screen::shade`, the screen
 //! assembly) reaches only the blank chrome around them.
 
 use std::borrow::Cow;
@@ -72,7 +72,7 @@ const SHADE_READOUT_SIZE: f32 = 8.0;
 
 /// The shade bar's `M` button, twin of the title bar's: sunken while the
 /// About panel holds, raised otherwise (the panel still opens only after the
-/// window restores — see `view::shade`).
+/// window restores — see `screen::shade`).
 fn shade_menu_button(about_visible: bool) -> Button<'static, Message> {
     Button::new(
         Text::new("M")

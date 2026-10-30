@@ -2,7 +2,7 @@
 //! mutates, its construction and settings persistence, and its timer
 //! predicates. It owns the shared `AppState` handle and the loaded browse
 //! lists; `presentation` resolves those into the Now Playing strings and
-//! readout the views draw, and the root screen assembly lives in `view`.
+//! readout the views draw, and the root screen assembly lives in `screen`.
 
 use std::collections::HashMap;
 use std::sync::{Arc, atomic::AtomicU64};

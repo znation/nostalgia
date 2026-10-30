@@ -51,7 +51,7 @@ fn alt_o_routes_captured_text_with_options_open_or_closed() {
         player.jump_file_visible = jump_file_open;
         let mut renderer = layout_capture::headless_renderer();
         let mut interface = iced_runtime::user_interface::UserInterface::build(
-            view::view(&player),
+            screen::view(&player),
             layout_capture::limits().max(),
             iced_runtime::user_interface::Cache::new(),
             &mut renderer,
@@ -135,7 +135,7 @@ fn options_navigation_routes_captured_search_keys_without_submitting() {
     let _ = update(&mut player, Message::ToggleOptions);
     let mut renderer = layout_capture::headless_renderer();
     let mut interface = iced_runtime::user_interface::UserInterface::build(
-        view::view(&player),
+        screen::view(&player),
         layout_capture::limits().max(),
         iced_runtime::user_interface::Cache::new(),
         &mut renderer,

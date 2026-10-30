@@ -128,7 +128,7 @@ pub(super) fn assert_loaded_stores_rows_with_song_count_labels(
 /// rows it shows and their total length — `footer`, such as "2 genres - 7:10"
 /// — captured by laying the root view out. Used by the three
 /// `*_view_footer_counts_*_and_totals_their_songs` tests. The other views'
-/// footers are pinned by `view_tests` with different fixtures (Artists,
+/// footers are pinned by `screen_tests` with different fixtures (Artists,
 /// Albums, Songs) or only through their empty wording (All Songs, All
 /// Albums, Playlists).
 pub(super) fn assert_view_footer_counts_and_totals(

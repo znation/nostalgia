@@ -59,7 +59,7 @@ const FORMAT_LABEL: &str = "Format: ";
 /// `Format: 256 KBPS  44 KHZ STEREO`. No state or playback is touched here.
 ///
 /// `track` is taken by value, not by reference, because one caller — the File info branch of
-/// `ui::view::overlay` — resolves an ephemeral selected-row entry on the spot; the element it
+/// `ui::screen::overlay` — resolves an ephemeral selected-row entry on the spot; the element it
 /// returns borrows only `base`, so an owned entry built in its body lives exactly as long as the
 /// panel needs it. The current-track fallback path clones the recorded entry in, and the view
 /// tests clone their fixtures in.
