@@ -220,9 +220,9 @@ pub fn playlist_row_style(status: button::Status) -> button::Style {
 
 /// The sunken-playlist-well style for the browse list's [`scrollable::Style`].
 ///
-/// The base skin's playlist editor is a near-black recess with a dark track scrollbar carrying a
+/// The base skin's playlist editor is a pure-black well with a dark track scrollbar carrying a
 /// raised chrome scroller. iced's [`scrollable::Style`] has no `Default`, so this builds every
-/// field: the `container` paints the [`theme::LCD_BACKGROUND`] well with the same dark-border +
+/// field: the `container` paints the [`theme::LCD_INSET_BLACK`] well with the same dark-border +
 /// light-offset sunken edge [`chrome_button_style`] uses for its pressed state, both rails sit in
 /// [`theme::WINDOW_BACKGROUND`] with a [`theme::BUTTON_FACE`] scroller bordered light, and the
 /// touch `auto_scroll` overlay matches the well. Classic Winamp scrollbars give no hover/drag
@@ -241,7 +241,7 @@ pub fn playlist_scrollable_style() -> scrollable::Style {
     scrollable::Style {
         container: container::Style {
             text_color: Some(theme::TEXT),
-            background: Some(theme::LCD_BACKGROUND.into()),
+            background: Some(theme::LCD_INSET_BLACK.into()),
             border: square_border(theme::PANEL_EDGE_DARK),
             shadow: square_shadow(theme::PANEL_EDGE_LIGHT),
             snap: false,
@@ -250,7 +250,7 @@ pub fn playlist_scrollable_style() -> scrollable::Style {
         horizontal_rail: rail,
         gap: None,
         auto_scroll: scrollable::AutoScroll {
-            background: Background::Color(theme::LCD_BACKGROUND),
+            background: Background::Color(theme::LCD_INSET_BLACK),
             border: square_border(theme::PANEL_EDGE_LIGHT),
             shadow: square_shadow(theme::PANEL_EDGE_DARK),
             icon: theme::TEXT,
@@ -537,7 +537,7 @@ mod tests {
 
         assert_eq!(
             style.container.background,
-            Some(Background::Color(theme::LCD_BACKGROUND))
+            Some(Background::Color(theme::LCD_INSET_BLACK))
         );
         assert_eq!(style.container.text_color, Some(theme::TEXT));
         assert_eq!(style.container.border.color, theme::PANEL_EDGE_DARK);
@@ -571,7 +571,7 @@ mod tests {
         // The touch auto-scroll overlay matches the well it scrolls.
         assert_eq!(
             style.auto_scroll.background,
-            Background::Color(theme::LCD_BACKGROUND)
+            Background::Color(theme::LCD_INSET_BLACK)
         );
         assert_eq!(style.auto_scroll.border.color, theme::PANEL_EDGE_LIGHT);
         assert_eq!(style.auto_scroll.icon, theme::TEXT);

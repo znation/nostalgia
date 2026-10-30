@@ -96,8 +96,41 @@ where
         .into()
 }
 
-/// Wraps `content` in a sunken LCD well: a full-width near-black recess behind
-/// the content with a few px of padding and the reversed (sunken) bevel.
+/// The [`Container`] style the display wells apply,
+/// with the fill color set. Pure, so each fill is testable without a
+/// renderer — iced exposes no way to introspect an inline style closure.
+pub(super) mod well_style {
+    use iced::widget::container;
+
+    use crate::ui::theme;
+
+    /// The display recess's style: the well fill is the window face color,
+    /// matching the base skin's display surface
+    /// (`winamp-2.x-stack.png` (16,20) and (30,40) read the face on it,
+    /// with (0,0,0) only inside its inset blocks).
+    pub(super) fn lcd_well_style() -> container::Style {
+        container::Style {
+            background: Some(theme::WINDOW_BACKGROUND.into()),
+            ..container::Style::default()
+        }
+    }
+
+    /// A display inset's style: the pure-black block fill the base skin
+    /// draws inside its display's visualizer and time blocks, and behind
+    /// its playlist editor.
+    pub(super) fn lcd_inset_style() -> container::Style {
+        container::Style {
+            background: Some(theme::LCD_INSET_BLACK.into()),
+            ..container::Style::default()
+        }
+    }
+}
+
+/// Wraps `content` in the base skin's display recess: a full-width
+/// face-colored well behind the content with a few px of padding and the
+/// reversed (sunken) bevel. The display's pure-black blocks — the time and
+/// visualizer sockets, and the playlist editor's well — are
+/// [`lcd_inset`] insets broken into this well.
 ///
 /// No text color is set, so the caller's caption keeps the theme text color
 /// and only the title's explicit green stays green.
@@ -105,12 +138,30 @@ pub fn lcd_well<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Mes
     let well = Container::new(content)
         .width(Length::Fill)
         .padding(4)
-        .style(|_theme| container::Style {
-            background: Some(theme::LCD_BACKGROUND.into()),
-            ..container::Style::default()
-        });
+        .style(|_theme| well_style::lcd_well_style());
 
     beveled(well.into(), false)
+}
+
+/// Wraps `content` in the base skin's pure-black display inset: a block
+/// cut into the face-colored [`lcd_well`], painted [`theme::LCD_INSET_BLACK`]
+/// at `width` (the visualizer block fills its row, the time block hugs its
+/// readout) with no padding, so the content keeps the bounds the block
+/// paints to.
+pub fn lcd_inset<'a, Theme, R>(
+    content: impl Into<Element<'a, Message, Theme, R>>,
+    width: Length,
+) -> Element<'a, Message, Theme, R>
+where
+    Theme: container::Catalog + 'a,
+    <Theme as container::Catalog>::Class<'a>: From<container::StyleFn<'a, Theme>>,
+    R: iced::advanced::Renderer + 'a,
+{
+    Container::new(content)
+        .width(width)
+        .padding(0)
+        .style(move |_theme| well_style::lcd_inset_style())
+        .into()
 }
 
 /// Wraps `content` in a raised chrome panel on the window face.
@@ -125,7 +176,7 @@ pub fn raised_panel<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a,
 mod tests {
     use super::*;
     use iced::{
-        Size,
+        Background, Size,
         advanced::{layout::Limits, widget::Tree},
         widget::Text,
     };
@@ -165,6 +216,26 @@ mod tests {
     #[test]
     fn lcd_well_constructs_with_intrinsic_height() {
         assert_intrinsic_height(lcd_well(Text::new("x")));
+    }
+
+    // The well and inset fills are the bugfix's base-skin contract: the
+    // display wells sit on the window face with pure-black blocks broken
+    // into them, not on one flat near-black field. The constants are pinned
+    // for value in `theme.rs`; a pure style function makes the fill each
+    // container actually requests observable here.
+    #[test]
+    fn lcd_well_fills_with_the_face_and_the_inset_with_pure_black() {
+        assert_eq!(
+            well_style::lcd_well_style().background,
+            Some(Background::Color(theme::WINDOW_BACKGROUND))
+        );
+        assert_eq!(
+            well_style::lcd_inset_style().background,
+            Some(Background::Color(theme::LCD_INSET_BLACK))
+        );
+        // The inset must read as a block cut into the face, so the two fills
+        // never meet.
+        assert_ne!(theme::WINDOW_BACKGROUND, theme::LCD_INSET_BLACK);
     }
 
     #[test]

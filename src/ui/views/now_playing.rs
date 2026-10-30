@@ -155,7 +155,10 @@ where
                 elapsed_visible,
                 mixer_readout,
             ))
-            .push(now_playing_visualizer_row(spectrum, peaks))
+            .push(bevel::lcd_inset(
+                now_playing_visualizer_row(spectrum, peaks),
+                Length::Fill,
+            ))
             .push(now_playing_status_row(format)),
     )
 }
@@ -280,7 +283,10 @@ where
         )
         .push({
             let color = elapsed_readout_color(mode, elapsed_visible, elapsed.as_ref());
-            let readout = MouseArea::new(lcd_elapsed_text(elapsed).color(color));
+            let readout = MouseArea::new(bevel::lcd_inset(
+                lcd_elapsed_text(elapsed).color(color),
+                Length::Shrink,
+            ));
             if elapsed_readout_clickable(mode) {
                 readout
                     .on_press(Message::ToggleTimeDisplay)

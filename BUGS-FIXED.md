@@ -5,6 +5,40 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### The display well is a flat near-black field; the base skin's display area is face-colored with black insets (found by the reference-comparison pass 2026-10-29) — fixed 2026-10-30 by the bugfix role
+
+**Symptom.** The app paints one uniform `#0D0D0D` (13,13,13) field behind the whole
+display area (indicator letters, elapsed readout, title, status row, visualizer). The base
+skin's display area is the window face color (24,24,41) with black (0,0,0) inset regions
+(the visualizer and time blocks) and (0,0,16) dark edging, so its display reads as
+insets cut into the face rather than one black panel.
+
+**How to reproduce.** Sample the app's display area: (300,30), (300,60) and (300,100) all
+read (13,13,13). In `winamp-2.x-stack.png` the same area reads the face color —
+(16,20) and (30,40) read (24,24,41) — with (0,0,0) appearing only inside the visualizer
+and readout blocks.
+
+**Suspected cause.** `theme.rs`'s `LCD_BACKGROUND = Color::from_rgb(0.05, 0.05, 0.05)`
+used as the single well fill behind the whole display area. The browse list's well reuses
+the same fill: its rows sit on (13,13,13) where the base skin's playlist editor sits on
+pure black — `winamp-2.x-stack.png` (200,300) reads (0,0,0).
+
+**Fix.** `bevel::lcd_well` now fills the display recess with the window
+face color, and the display's pure-black blocks are new `bevel::lcd_inset` insets broken
+into it — a `Length::Shrink` inset behind the elapsed readout (the time block) and a
+`Length::Fill` inset around the visualizer row (the visualizer block) — both filled with the
+new `theme::LCD_INSET_BLACK` (pure black). The browse list's well
+(`style::playlist_scrollable_style`) paints pure black too. The neutral `LCD_BACKGROUND`
+groove stays behind the seek bar, the equalizer preamp, and the equalizer response curve;
+the well's sunken bevel edging and every readout color are unchanged. The reconstructed
+guarantee is recorded as the "Display well" section of `docs/invariants.md`.
+
+**Validation gap:** unclear-invariant — the suite had pinned the flat `#0D0D0D` field itself
+as the recess contract (`LCD_BACKGROUND` darker than the window face), so confirming the fix
+required reconstructing which app rows are the base skin's display surface, blocks, and
+playlist well; the reconstructed guarantee is recorded as the "Display well" section in
+`docs/invariants.md`.
+
 ### The rolled-up shade strip renders 52 px tall; the base skin's is 14 px (found by the reference-comparison pass 2026-10-29) — fixed 2026-10-30 by the bugfix role
 
 **Symptom.** `Ctrl+W` (or the title bar's shade button) rolls the window into a 52 px

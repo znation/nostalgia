@@ -139,8 +139,19 @@ pub const LED_ON: Color = Color::from_rgb8(0, 232, 0);
 /// Shuffle button's LED), near-black against the [`BUTTON_FACE`] metal.
 pub const LED_OFF: Color = Color::from_rgb8(16, 20, 15);
 
-/// The near-black recess behind the green Now Playing title.
+/// The neutral near-black fill of the seek bar's groove and the equalizer
+/// preamp. Formerly the display area's recess (see
+/// [`LCD_INSET_BLACK`]): the base skin's display surface reads the window
+/// face, not this darker recess.
 pub const LCD_BACKGROUND: Color = Color::from_rgb(0.05, 0.05, 0.05);
+
+/// The base skin's pure-black display inset: the fill inside the display's
+/// visualizer and time blocks (`winamp-2.x-stack.png` reads (0,0,0) inside
+/// those blocks while its display surface reads the face), and the playlist
+/// editor's well ((200,300) reads (0,0,0)). Distinct from the neutral
+/// [`LCD_BACKGROUND`] groove: a groove is near-black against a
+/// face-colored well, an inset is pure black.
+pub const LCD_INSET_BLACK: Color = Color::from_rgb8(0, 0, 0);
 
 /// The transport and shade volume sliders' groove fill: the mockup's orange
 /// rail, distinct from the neutral [`LCD_BACKGROUND`] groove of the seek bar
@@ -260,17 +271,19 @@ mod tests {
     }
 
     // The palette tests above read the six palette slots. The row highlight,
-    // the playing row's white text, and the LCD well's recess are base-skin
-    // colors that inline style closures apply: `views::browse::rows::scrollable_list`
-    // and `bevel::lcd_well` read them where iced's `Element` API exposes no
-    // way to introspect. Their RGB values are the skin contract — a
-    // regression could turn the playlist selection bar or the recess into
-    // any other color and clear the whole suite. Pin all three, and that they
-    // keep their documented roles: the well is darker than the window face it
-    // recesses into, the selection bar stands apart from both, and the
-    // playing text stands apart from an ordinary row's green.
+    // the playing row's white text, and the LCD's pure-black display inset
+    // are base-skin colors that inline style closures apply:
+    // `views::browse::rows::scrollable_list` and `bevel::lcd_inset` read them
+    // where iced's `Element` API exposes no way to introspect. Their RGB
+    // values are the skin contract — a regression could turn the playlist
+    // selection bar or an inset into any other color and clear the whole
+    // suite. Pin all of them, and that they keep their documented roles: the
+    // display inset is pure black against the face-colored well it breaks,
+    // the selection bar stands apart from both, and the playing text stands
+    // apart from an ordinary row's green.
     #[test]
     fn panel_recess_and_row_highlight_keep_their_base_skin_colors() {
+        assert_eq!(LCD_INSET_BLACK, Color::from_rgb8(0, 0, 0));
         assert_eq!(LCD_BACKGROUND, Color::from_rgb(0.05, 0.05, 0.05));
         assert_eq!(ROW_HIGHLIGHT, Color::from_rgb8(0, 0, 188));
         assert_eq!(PLAYING_ROW_TEXT, Color::from_rgb(1.0, 1.0, 1.0));
@@ -278,18 +291,22 @@ mod tests {
         // an ordinary green row.
         assert_ne!(PLAYING_ROW_TEXT, LCD_GREEN);
 
-        // The recess reads as sunken only if it is darker than the face it
-        // sits in. Bound to locals so the comparison is a runtime check rather
-        // than the constant assertion clippy rejects.
-        let recess = LCD_BACKGROUND;
+        // An inset reads as a block cut into the face only if it is darker
+        // than the face-colored well it sits on, and pure black against the
+        // face is darker than the old near-black groove would be in either
+        // channel. Bound to locals so the comparison is a runtime check
+        // rather than the constant assertion clippy rejects.
+        let inset = LCD_INSET_BLACK;
         let face = WINDOW_BACKGROUND;
-        assert!(recess.r < face.r);
-        assert!(recess.g < face.g);
-        assert!(recess.b < face.b);
+        assert!(inset.r < face.r);
+        assert!(inset.g < face.g);
+        assert!(inset.b < face.b);
+        assert_ne!(inset, LCD_BACKGROUND);
 
-        // The selection bar must stand out from the window face and the well.
+        // The selection bar must stand out from the window face and the
+        // playlist well's black.
         assert_ne!(ROW_HIGHLIGHT, WINDOW_BACKGROUND);
-        assert_ne!(ROW_HIGHLIGHT, LCD_BACKGROUND);
+        assert_ne!(ROW_HIGHLIGHT, LCD_INSET_BLACK);
     }
 
     // The tests above read each palette slot against the named constant that
@@ -334,6 +351,12 @@ mod tests {
         assert_eq!(BUTTON_EDGE_LIGHT, Color::from_rgb8(239, 255, 255));
         assert_eq!(LED_ON, Color::from_rgb8(0, 232, 0));
         assert_eq!(LED_OFF, Color::from_rgb8(16, 20, 15));
+        // The display inset is pure black — the base skin's socket fill
+        // ((0,0,0) inside the visualizer and time blocks and the playlist
+        // editor's well) — not the groove's near-black, which is one notch
+        // up.
+        assert_eq!(LCD_INSET_BLACK, Color::from_rgb8(0, 0, 0));
+        assert_ne!(LCD_INSET_BLACK, LCD_BACKGROUND);
         // The LED must read as its own status marker, not as one of the LCD's
         // green readouts used beside it on the same row.
         assert_ne!(LED_ON, LCD_GREEN);

@@ -1081,6 +1081,36 @@ state — the options menu keeps its `Repeat: On/Off` and `Shuffle: On/Off` text
 `repeat_label`/`shuffle_label`).
 The equalizer's EQ and AUTO buttons sink while on, through `eq_toggle` and `auto_toggle` (2026-10-27).
 
+## Display well
+
+**Guarantee.** The LCD's display recess and the playlist editor's well paint the base skin's
+display surface, not one flat near-black field: `bevel::lcd_well` fills the LCD recess with the
+window face color (`theme::WINDOW_BACKGROUND`), and the display's pure-black blocks are
+`bevel::lcd_inset` insets broken into it — the elapsed readout's time block (a `Length::Shrink`
+inset hugging the readout inside `views::now_playing::now_playing_row`'s transport row) and the
+visualizer block (a `Length::Fill` inset around `now_playing_visualizer_row`), both filled with
+`theme::LCD_INSET_BLACK` (pure black). The browse list's well
+(`style::playlist_scrollable_style`) also paints `theme::LCD_INSET_BLACK`, like the base skin's
+playlist editor. The neutral `theme::LCD_BACKGROUND` groove is untouched and stays behind the
+seek bar, the equalizer preamp, and the equalizer response curve. The well's sunken bevel edges
+and every readout, bar, and text color are unchanged.
+
+**Enforced by.** `bevel::lcd_well` and `bevel::lcd_inset` over `bevel::well_style` in
+`src/ui/bevel.rs`; `views::now_playing` in `src/ui/views/now_playing.rs`;
+`style::playlist_scrollable_style` in `src/ui/style.rs`.
+
+**Pinned by.** `lcd_well_fills_with_the_face_and_the_inset_with_pure_black` and
+`lcd_well_constructs_with_intrinsic_height` (`src/ui/bevel.rs`),
+`panel_recess_and_row_highlight_keep_their_base_skin_colors` and
+`base_skin_colors_keep_their_documented_literal_values` (`src/ui/theme.rs`), and
+`playlist_scrollable_style_sinks_the_well_and_raises_the_scroller` (`src/ui/style.rs`).
+
+**History.** Reconstructed from "The display well is a flat near-black field; the base skin's
+display area is face-colored with black insets" in `BUGS-FIXED.md`. The suite previously pinned
+the flat `#0D0D0D` field itself as the recess contract, so confirming the fix meant
+reconstructing which app rows are the base skin's display surface, blocks, and playlist well
+(carrying a `unclear-invariant` validation gap).
+
 ## Settings persistence
 
 **Guarantee.** The values the user sets that outlive a track — volume, balance, Repeat, Shuffle, the

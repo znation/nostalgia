@@ -45,22 +45,5 @@ when it is added?" (posted by bugfix 2026-10-30 in `QUESTIONS.md`); add the butt
 that is answered, so a control never ships claiming behavior it does not have.
 
 
-### The display well is a flat near-black field; the base skin's display area is face-colored with black insets (found by the reference-comparison pass 2026-10-29)
-
-**Symptom.** The app paints one uniform `#0D0D0D` (13,13,13) field behind the whole
-display area (indicator letters, elapsed readout, title, status row, visualizer). The base
-skin's display area is the window face color (24,24,41) with black (0,0,0) inset regions
-(the visualizer and time blocks) and (0,0,16) dark edging, so its display reads as
-insets cut into the face rather than one black panel.
-
-**How to reproduce.** Sample the app's display area: (300,30), (300,60) and (300,100) all
-read (13,13,13). In `winamp-2.x-stack.png` the same area reads the face color —
-(16,20) and (30,40) read (24,24,41) — with (0,0,0) appearing only inside the visualizer
-and readout blocks.
-
-**Suspected cause.** `theme.rs`'s `LCD_BACKGROUND = Color::from_rgb(0.05, 0.05, 0.05)`
-used as the single well fill behind the whole display area. The browse list's well reuses
-the same fill: its rows sit on (13,13,13) where the base skin's playlist editor sits on
-pure black — `winamp-2.x-stack.png` (200,300) reads (0,0,0).
 
 ## Fixed
