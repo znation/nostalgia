@@ -1193,84 +1193,96 @@ fn root_view_draws_the_current_browse_levels_own_rows() {
 }
 
 // The Artists footer adds the total of the rows' album counts after the
-// artist count.
-#[test]
-fn root_view_artists_footer_totals_the_album_counts() {
+// artist count. The four count footer tests below differ only in which browse
+// list they seed and which footer they expect, so they share
+// `assert_root_view_draws_the_count_footer`.
+/// Builds a fresh player, lets `setup` seed one browse list (items, the
+/// cleared loading flag, `current_view`, and any row selection — selecting the
+/// list's epoch before capturing) and then captures the laid-out root view,
+/// asserting it draws exactly `footer`. Used by the four `root_view_*_footer`
+/// tests; the flat Genres/Years/Composers footers are pinned by
+/// `flat_lists_tests::assert_view_footer_counts_and_totals`, and the empty
+/// levels' missing footers by `an_empty_browse_level_draws_no_count_footer`.
+fn assert_root_view_draws_the_count_footer(setup: impl FnOnce(&mut WinampPlayer), footer: &str) {
     let (mut player, _state) = test_player();
-    let mut artist = sample_artist();
-    artist.album_count = 2;
-    player.artists.items = vec![artist];
-    player.artists.loading = false;
-    player.current_view = CurrentView::Artists;
+    setup(&mut player);
     let capture = captured_root_view_text_bounds(&player);
     assert!(
-        capture.texts().any(|text| text == "1 artist - 2 albums"),
-        "{:?}",
+        capture.texts().any(|text| text == footer),
+        "{footer:?} missing from the laid-out root: {:?}",
         capture.fragments()
+    );
+}
+
+#[test]
+fn root_view_artists_footer_totals_the_album_counts() {
+    assert_root_view_draws_the_count_footer(
+        |player| {
+            let mut artist = sample_artist();
+            artist.album_count = 2;
+            player.artists.items = vec![artist];
+            player.artists.loading = false;
+            player.current_view = CurrentView::Artists;
+        },
+        "1 artist - 2 albums",
     );
 }
 
 #[test]
 fn root_view_artists_footer_shows_the_selected_album_count() {
-    let (mut player, _state) = test_player();
-    let artists = [2, 3].map(|album_count| {
-        let mut artist = sample_artist();
-        artist.album_count = album_count;
-        artist
-    });
-    player.artists.items = artists.to_vec();
-    player.artists.loading = false;
-    player.current_view = CurrentView::Artists;
-    let epoch = player.artists.epoch;
-    player.artists.select_row(epoch, 1);
-    let capture = captured_root_view_text_bounds(&player);
-    assert!(
-        capture.texts().any(|text| text == "2 artists - 3/5 albums"),
-        "{:?}",
-        capture.fragments()
+    assert_root_view_draws_the_count_footer(
+        |player| {
+            let artists = [2, 3].map(|album_count| {
+                let mut artist = sample_artist();
+                artist.album_count = album_count;
+                artist
+            });
+            player.artists.items = artists.to_vec();
+            player.artists.loading = false;
+            let epoch = player.artists.epoch;
+            player.artists.select_row(epoch, 1);
+            player.current_view = CurrentView::Artists;
+        },
+        "2 artists - 3/5 albums",
     );
 }
 
 #[test]
 fn root_view_genres_footer_shows_the_selected_group_time() {
-    let (mut player, _state) = test_player();
-    let group = |name: &str, duration_ms| crate::ui::song_groups::SongGroup {
-        name: name.to_string(),
-        songs: vec![crate::library::Song {
-            duration_ms,
-            ..sample_song()
-        }],
-    };
-    player.genres.items = vec![group("Rock", 210_000), group("Jazz", 120_000)];
-    player.genres.loading = false;
-    player.current_view = CurrentView::Genres;
-    let epoch = player.genres.epoch;
-    player.genres.select_row(epoch, 0);
-    let capture = captured_root_view_text_bounds(&player);
-    assert!(
-        capture.texts().any(|text| text == "2 genres - 3:30/5:30"),
-        "{:?}",
-        capture.fragments()
+    assert_root_view_draws_the_count_footer(
+        |player| {
+            let group = |name: &str, duration_ms| crate::ui::song_groups::SongGroup {
+                name: name.to_string(),
+                songs: vec![crate::library::Song {
+                    duration_ms,
+                    ..sample_song()
+                }],
+            };
+            player.genres.items = vec![group("Rock", 210_000), group("Jazz", 120_000)];
+            player.genres.loading = false;
+            let epoch = player.genres.epoch;
+            player.genres.select_row(epoch, 0);
+            player.current_view = CurrentView::Genres;
+        },
+        "2 genres - 3:30/5:30",
     );
 }
 
 #[test]
 fn root_view_album_footer_shows_the_selected_running_time() {
-    let (mut player, _state) = test_player();
-    let mut first = sample_album();
-    first.duration_ms = 630_000;
-    let mut second = sample_album();
-    second.duration_ms = 210_000;
-    player.all_albums.items = vec![first, second];
-    player.all_albums.loading = false;
-    player.current_view = CurrentView::AllAlbums;
-    let epoch = player.all_albums.epoch;
-    player.all_albums.select_row(epoch, 1);
-    let capture = captured_root_view_text_bounds(&player);
-    assert!(
-        capture.texts().any(|text| text == "2 albums - 3:30/14:00"),
-        "{:?}",
-        capture.fragments()
+    assert_root_view_draws_the_count_footer(
+        |player| {
+            let mut first = sample_album();
+            first.duration_ms = 630_000;
+            let mut second = sample_album();
+            second.duration_ms = 210_000;
+            player.all_albums.items = vec![first, second];
+            player.all_albums.loading = false;
+            let epoch = player.all_albums.epoch;
+            player.all_albums.select_row(epoch, 1);
+            player.current_view = CurrentView::AllAlbums;
+        },
+        "2 albums - 3:30/14:00",
     );
 }
 
