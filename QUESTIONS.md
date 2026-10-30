@@ -6,7 +6,63 @@ director). Loops never block on their own questions; they check here at the star
 
 ## Open
 
-_None yet._
+### What should the planner plan next — the parked directions or the browse-selection keys? (posted by plan 2026-10-29)
+
+**Context.** The Winamp-faithful surface is delivered and pinned: the OPTIONS menu rows, the
+footers (counts and totals per view), the remove/clear row operations, Sort/Reverse/Shuffle,
+the row moves (Alt+Up/Down, with the Alt+Shift+Up/Down edge move waiting in PLANS.md), both
+jump panels, the File info panel, the scale sliders and readouts, search matching over every
+displayed field, the shade strip, the mini transport, and settings persistence — each maps to
+an inventoried reference capture and is planned or landed (`PLANS-DONE.md`, `docs/usage.md`).
+What is still open is a set of directions earlier planner runs deliberately parked for a user
+decision, plus one gap found this run. Every option below is grounded on the current code and
+is plannable once chosen; the planner wants one (or an ordering) rather than a guess.
+
+One grounded gap first: the browse list has no keyboard way to move its selection bar. The
+classic playlist editor moves the selection with Up/Down; in Nostalgia those keys nudge volume
+(`shortcut()` in `src/ui/shortcuts.rs`, the plain-arrow volume arms) and the row move takes
+Alt+Up/Down, so the selection itself moves only by mouse press (`BrowseList::select_row`).
+Binding new keys takes a taste call, so it is asked here rather than guessed at.
+
+**Options.** Each is plannable in an implementation-sized run, named with its rough size.
+
+1. **Surface REST transport errors, starting with 401-vs-other (small; service seam).** Today
+   signed-in queries fall back silently to the sample library (`docs/invariants.md` `## REST`
+   transport section), so a stale or revoked session looks like an offline library. Plan:
+   classify the transport's errors at the `AppleMusicService` seam and surface a 401 (and
+   friends) in the UI the way other failures surface, keeping the failure fallback the same.
+   Recommended as the first run's plan: smallest, seam-contained, no new dependency.
+2. **Keyboard selection movement for the browse list (small; shortcuts + handlers).** Give the
+   moving selection a chord: `Ctrl+Up`/`Ctrl+Down` are free today (only Ctrl+F/Z/B/R/W/J/A/T/V
+   and Ctrl+Shift+Delete are claimed; Ctrl+Up/Down bind nothing), while plain Shift+arrows
+   already fall through to volume. It moves the selection bar and reveals the moved row exactly
+   like the row moves do, with the same no-op rules. Requires no view or chrome change.
+3. **Oscilloscope visualizer modes (medium; LCD + player).** The LCD visualizer currently has
+   one drawn mode behind ToggleVisualizer; Winamp 2.x cycles spectrum/oscilloscope/off on a
+   click. A mode state, a cycling press (the strip's click already publishes the toggle
+   message), and tests would extend the landed groundwork.
+4. **Album artwork decode.** The Song/album types have no artwork field today; decoding cover
+   art into the File info panel (or Now Playing bar) is the single most visible addition from
+   Winamp's neighbours, though the Winamp 2.x base skin shows no artwork itself — see the note.
+5. **Album ordering (from the earlier parked list).** Decide what ordering the All Albums list
+   should use beyond the current library order if anything more than the status quo is wanted.
+   Low value until someone names the wanted order, so it is slowest of the UI options.
+6. **Position-within-track restore (large; audio seam).** Remember and restore the playing
+   position across relaunch; `docs/usage.md` explicitly notes the position is not remembered.
+   Largest option, touches the audio seam's state, and its UX value is limited by preview
+   lengths (roughly 30s), so it is recommended to leave it parked longest.
+
+Mouse-drag row reorder and Double-size stay rejected and are not offered. If you pick nothing,
+the planner will keep its current stance: refuse to guess these surfaces, keep `## Planned`
+stocked only with asked-for work, and surface a short nothing-to-do instead.
+
+**Recommendation.** Pick option 1 now (smallest seam-contained improvement, no taste call),
+option 2 second (closes the browse-selection keyboard gap with the free Ctrl+Up/Ctrl+Down
+chords), and answer options 3–6 only if you want them built: 3 is a bounded visualizer pass,
+4 and 6 are the two genuinely large items, and 5 needs the intended order named by you to
+become plannable. A reply moving this entry to `## Answered` with your ordering is all the
+planner needs; every option then becomes a plan in the normal queue.
+
 
 ## Answered
 
