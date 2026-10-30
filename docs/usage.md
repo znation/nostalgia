@@ -96,8 +96,9 @@ state reads the plain `--:--`.
 Each
 equalizer band slider's groove is tinted by that band's own gain, from green at `-12 dB` through
 yellow at `0 dB` to red at `+12 dB`; the preamp slider's groove is tinted the same way by the
-preamp gain. The app bar sets `NOSTALGIA` between gold tape strips, and
-the equalizer and browse sections are each introduced by a matching title band — `NOSTALGIA
+preamp gain. The 12px app bar paints the base skin's dark navy (`#212131`) and
+sets the white `NOSTALGIA` label between gold tape strips, and the equalizer
+and browse sections are each introduced by a matching 12px title band — `NOSTALGIA
 EQUALIZER` above the equalizer panel and `NOSTALGIA LIBRARY` above the browse list.
 Every browse list numbers its rows from 1 like a Winamp playlist and draws ordinary rows in green
 text, with the playing song marked by `▶` before its number and drawn in white without a bar. A

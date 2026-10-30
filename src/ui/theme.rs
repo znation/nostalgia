@@ -20,16 +20,33 @@ pub const WINDOW_BACKGROUND: Color = Color::from_rgb8(53, 53, 84);
 /// The light chrome text color used for captions and labels.
 pub const TEXT: Color = Color::from_rgb(0.87, 0.87, 0.87);
 
-/// Winamp's title-bar and selection blue.
+/// Winamp's selection blue (also the palette's primary accent).
 pub const TITLE_BLUE: Color = Color::from_rgb(0.0, 0.0, 0.55);
 
-/// The title tape's bright gold face, sampled from the mockups' tape strips
-/// that flank each title band's label.
-pub const TITLE_TAPE: Color = Color::from_rgb(0.93, 0.81, 0.48);
+/// The title bar's dark navy fill. `winamp-screenshots/winamp-2.x-stack.png`'s
+/// main-window bar is a navy dither around (33,33,49) ((60,3) reads that
+/// value) — nothing like the mockups' bright blue band this app painted
+/// before.
+pub const TITLE_BAR_FILL: Color = Color::from_rgb8(33, 33, 49);
 
-/// The title tape's darker bottom edge, the shadow that makes the gold face
-/// read as a raised strip.
-pub const TITLE_TAPE_SHADOW: Color = Color::from_rgb(0.64, 0.58, 0.42);
+/// The white the title bar's label draws in: the base skin's bar draws
+/// (255,255,255) text between its tapes (e.g. (120,6)), not the chrome's gray
+/// [`TEXT`]. The same white is the ribbon's shine slat, which rides the bar's
+/// own center row across the whole tape.
+pub const TITLE_TEXT: Color = Color::from_rgb8(255, 255, 255);
+
+/// The title tape's bright gold face, the base skin's ribbon gold sampled
+/// from `winamp-2.x-stack.png` ((25,5) reads (225,222,117) — a greener gold
+/// than the mockups' tan).
+pub const TITLE_TAPE: Color = Color::from_rgb8(225, 222, 117);
+
+/// The title tape's dark groove directly under the shine slat
+/// (`winamp-2.x-stack.png` (60,7) reads (47,44,33)).
+pub const TITLE_TAPE_SHADOW: Color = Color::from_rgb8(47, 44, 33);
+
+/// The title tape's brushed-gold lower face between the groove and the
+/// bottom gold row (`winamp-2.x-stack.png` (60,8) reads (142,143,72)).
+pub const TITLE_TAPE_BRUSHED: Color = Color::from_rgb8(142, 143, 72);
 
 /// The playlist/LCD green, used for the Now Playing title, the browse rows,
 /// and the green readouts.
@@ -288,8 +305,19 @@ mod tests {
         assert_eq!(WINDOW_BACKGROUND, Color::from_rgb8(53, 53, 84));
         assert_eq!(TEXT, Color::from_rgb(0.87, 0.87, 0.87));
         assert_eq!(TITLE_BLUE, Color::from_rgb(0.0, 0.0, 0.55));
-        assert_eq!(TITLE_TAPE, Color::from_rgb(0.93, 0.81, 0.48));
-        assert_eq!(TITLE_TAPE_SHADOW, Color::from_rgb(0.64, 0.58, 0.42));
+        // The title bar is the base skin's navy fill with a white label, not
+        // the mockups' bright blue band: `winamp-2.x-stack.png` (60,3) reads
+        // (33,33,49) on the bar and (120,6) reads white on the label.
+        assert_eq!(TITLE_BAR_FILL, Color::from_rgb8(33, 33, 49));
+        assert_eq!(TITLE_TEXT, Color::from_rgb8(255, 255, 255));
+        // The tape colors are the base skin's ribbon, not the mockups': the
+        // 2.95 stack capture draws the title-bar ribbon's gold face as
+        // (225,222,117) (e.g. at (25,5)), an olive groove directly under
+        // the white shine slat ((60,7) reads (47,44,33)), and a brushed-gold
+        // lower face ((60,8) reads (142,143,72)).
+        assert_eq!(TITLE_TAPE, Color::from_rgb8(225, 222, 117));
+        assert_eq!(TITLE_TAPE_SHADOW, Color::from_rgb8(47, 44, 33));
+        assert_eq!(TITLE_TAPE_BRUSHED, Color::from_rgb8(142, 143, 72));
         // The green is the base skin's dimmer stop, not pure #00FF00: the
         // 2.95 stack capture's playlist glyphs sample (0,198,0), as do the
         // windowshade marquee's glyphs in `winamp-2.05-windowshade.gif`.

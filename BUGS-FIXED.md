@@ -5,6 +5,47 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### The title band is 23 px tall, bright blue, with long tan tapes; the base skin's title bar is 12 px, dark navy, with white text (found by the reference-comparison pass 2026-10-29) — fixed 2026-10-30 by the bugfix role
+
+**Symptom.** Each section's band is 23 px tall (y 0..22 in the player section), filled
+`#00008C` (0,0,140), with a 7 px gold tape `#EDCE7A` (237,206,122) running x 24..442 and
+x 533..951 and a light-gray (222,222,222) label drawn on the blue between the tapes. The
+base skin's title bar is 12 px tall (y 0..11), filled (24,24,41)/(33,33,49), with a 5 px
+gold tape (225,222,117) running x 21..110 and x 159..238 and **white** (255,255,255) text
+between them; the tape's yellow is greener than the app's tan.
+
+**How to reproduce.** Sample the running app's band: (600,5) reads (0,0,140), (600,12)
+reads (237,206,122), and the band's last row is y=22. In `winamp-2.x-stack.png` the title
+bar ends at y=11, (60,3) reads (33,33,49), the tape at (40,6) reads (225,222,117), and the
+title text at (120,6) reads (255,255,255).
+
+**Suspected cause.** `theme.rs`'s `TITLE_BLUE = Color::from_rgb(0.0, 0.0, 0.55)`,
+`TITLE_TAPE = Color::from_rgb(0.93, 0.81, 0.48)`, `TITLE_TAPE_SHADOW`, and
+`src/ui/views/title_bar.rs`'s `TITLE_BAR_HEIGHT` (24 px, of which the band's own pixels are
+23) with `title_tape()`'s 8 px tape: the band was drawn from the mockups' proportions
+rather than the base skin's 12 px bar, and its label uses `TEXT` rather than the base
+skin's white.
+
+**Fix.** `src/ui/views/title_bar.rs` builds `TITLE_BAR_HEIGHT` = 12 px around a new
+5-row `title_tape()` sampled straight from `winamp-2.x-stack.png` rows 5..9 of the bar —
+gold (225,222,117), a white shine slat, the olive groove (47,44,33), the brushed-gold
+face (142,143,72), gold again — and draws the label at 8 px (the letterform face's crisp
+8px stock fits a 12px bar) in a new white `theme::TITLE_TEXT`; the band's fill is a new
+`theme::TITLE_BAR_FILL` (33,33,49), the navy `winamp-2.x-stack.png` (60,3) samples, not
+`TITLE_BLUE` — selection chrome keeps `TITLE_BLUE` untouched. The section bands share
+both changes, and the bar's window-button glyphs drop to an explicit 8px so the raised
+chrome buttons fit inside the shorter bar. A note on the tapes' length: the base skin's
+tapes are short because its window is 275 px wide; on this app's 1024 px window the same
+fill-width tapes stay long around an equally short label, unchanged by this fix.
+`docs/usage.md`'s app-bar and title-band wording now carries the 12px height, navy
+fill, and white label.
+
+**Validation gap:** real-run-needed — confirming the rendered band took the pass's 1:1
+X11 capture plus reference pixel sampling; the offline suite only pinned the old literal
+values, so it now pins the 12 px bar, the 5 px ribbon, the navy fill, the white label,
+and every new tape literal, and the existing layout-capture band test checks its height
+against `TITLE_BAR_HEIGHT` so a further drift fails without a run.
+
 ### The browse-list selection bar is light sky blue; the playlist editor's is a deep saturated blue (found by the reference-comparison pass 2026-10-29) — fixed 2026-10-30 by the bugfix role
 
 **Symptom.** A clicked row's bar is `#4080FF` (64,128,255) — a bright sky blue with the

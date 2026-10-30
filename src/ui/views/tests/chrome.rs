@@ -1094,10 +1094,11 @@ fn file_info_overlay_omits_the_content_rating_line_when_the_source_supplied_none
 // Silkscreen face at the on-grid 16px size. A fixed-width button reports its
 // content box rather than the text's advance, but the band's label is the one
 // chrome text iced hands its own shrink width, so the pin carries the family's
-// measured run: "NOSTALGIA" at 16 measures 100.0, the exact number part 1/4's
-// seam test pinned for the vendored face. A lost registration or a swapped
-// family (the system sans measured `H` at 11.856) moves the number, so the
-// regression fails here instead of silently reaping the chrome look.
+// measured run: "NOSTALGIA" at the band label's 8px size measures 50.0 — the
+// exact halving of the 100.0 the vendored face measured at the split's old
+// 16px mapping (see part 1/4's seam test). A lost registration or a swapped
+// family (the system sans measured `H` at 11.856 at 16px) moves the number,
+// so the regression fails here instead of silently reaping the chrome look.
 #[test]
 fn title_band_label_draws_the_silkscreen_face() {
     let renderer = layout_capture::headless_renderer();
@@ -1106,7 +1107,7 @@ fn title_band_label_draws_the_silkscreen_face() {
     let capture = layout_capture::capture_text(&mut band, &renderer);
     let label = capture.find("NOSTALGIA");
     assert_eq!(
-        label.width, 100.0,
+        label.width, 50.0,
         "the band label must draw in the vendored Silkscreen face: {label:?}"
     );
 }

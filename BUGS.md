@@ -45,27 +45,6 @@ when it is added?" (posted by bugfix 2026-10-30 in `QUESTIONS.md`); add the butt
 that is answered, so a control never ships claiming behavior it does not have.
 
 
-### The title band is 23 px tall, bright blue, with long tan tapes; the base skin's title bar is 12 px, dark navy, with white text (found by the reference-comparison pass 2026-10-29)
-
-**Symptom.** Each section's band is 23 px tall (y 0..22 in the player section), filled
-`#00008C` (0,0,140), with a 7 px gold tape `#EDCE7A` (237,206,122) running x 24..442 and
-x 533..951 and a light-gray (222,222,222) label drawn on the blue between the tapes. The
-base skin's title bar is 12 px tall (y 0..11), filled (24,24,41)/(33,33,49), with a 5 px
-gold tape (225,222,117) running x 21..110 and x 159..238 and **white** (255,255,255) text
-between them; the tape's yellow is greener than the app's tan.
-
-**How to reproduce.** Sample the running app's band: (600,5) reads (0,0,140), (600,12)
-reads (237,206,122), and the band's last row is y=22. In `winamp-2.x-stack.png` the title
-bar ends at y=11, (60,3) reads (33,33,49), the tape at (40,6) reads (225,222,117), and the
-title text at (120,6) reads (255,255,255).
-
-**Suspected cause.** `theme.rs`'s `TITLE_BLUE = Color::from_rgb(0.0, 0.0, 0.55)`,
-`TITLE_TAPE = Color::from_rgb(0.93, 0.81, 0.48)`, `TITLE_TAPE_SHADOW`, and
-`src/ui/views/title_bar.rs`'s `TITLE_BAR_HEIGHT` (24 px, of which the band's own pixels are
-23) with `title_tape()`'s 8 px tape: the band was drawn from the mockups' proportions
-rather than the base skin's 12 px bar, and its label uses `TEXT` rather than the base
-skin's white.
-
 ### The display well is a flat near-black field; the base skin's display area is face-colored with black insets (found by the reference-comparison pass 2026-10-29)
 
 **Symptom.** The app paints one uniform `#0D0D0D` (13,13,13) field behind the whole

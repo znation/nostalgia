@@ -378,7 +378,7 @@ fn title_bar_constructs_for_both_about_states() {
 // stayed green. Pin the user-visible band height.
 #[test]
 fn title_bar_height_pins_the_shade_strip() {
-    assert_eq!(views::TITLE_BAR_HEIGHT, 24.0);
+    assert_eq!(views::TITLE_BAR_HEIGHT, 12.0);
 }
 
 // The base skin draws every window's outer edge as a dark near-black ring

@@ -1,5 +1,5 @@
-//! The custom Winamp title bar and the mockups' decorative section bands: the
-//! gold title tape, the centered label between two tapes, the app bar's menu
+//! The custom Winamp title bar and the decorative section bands: the gold
+//! title tape, the centered label between two tapes, the app bar's menu
 //! button, and the shade, minimize, and close buttons.
 
 use iced::{
@@ -9,18 +9,48 @@ use iced::{
 
 use crate::ui::{Message, bevel, style, theme};
 
-use super::fixed_width_button;
-
 /// The custom title bar's app name.
 const TITLE_BAR_TEXT: &str = "NOSTALGIA";
 
 /// The band label's size in pixels: a multiple of 8, so the letterform face
-/// draws it crisp (the split's on-grid mapping, 14 → 16).
-const TITLE_BAR_LABEL_SIZE: f32 = 16.0;
+/// draws it crisp, and small enough for the letterform face's crisp 8px stock
+/// to fit inside the 12px bar.
+const TITLE_BAR_LABEL_SIZE: f32 = 8.0;
 
-/// The custom title bar's height in px: short, like the classic Winamp title
-/// bar, rather than the OS frame's.
-pub const TITLE_BAR_HEIGHT: f32 = 24.0;
+/// The custom title bar's height in px: the base skin's 12px title bar
+/// (`winamp-screenshots/winamp-2.x-stack.png`'s main-window bar occupies
+/// rows 0..11), not the mockups' doubled 24px band.
+pub const TITLE_BAR_HEIGHT: f32 = 12.0;
+
+/// The title bar button glyphs' size in px: a multiple of 8, and the largest
+/// on-grid size that leaves the glyphs and their 1px bevels inside the 12px
+/// bar. The shared [`super::fixed_width_button`] draws at the default size,
+/// which is sized for the taller transport and shade strips.
+const TITLE_BAR_BUTTON_GLYPH_SIZE: f32 = 8.0;
+
+/// The title tape's height in px: the five ribbon rows the base skin draws
+/// between its tapes — gold face, white shine slat, dark groove, brushed
+/// gold, gold face again (`winamp-2.x-stack.png` rows 5..9 of the bar).
+const TITLE_TAPE_HEIGHT: f32 = 5.0;
+
+/// A raised chrome button like [`super::fixed_width_button`], with its glyph
+/// at [`TITLE_BAR_BUTTON_GLYPH_SIZE`] so the window buttons fit inside
+/// [`TITLE_BAR_HEIGHT`].
+fn title_bar_glyph_button(
+    glyph: &'static str,
+    width: f32,
+    font: iced::Font,
+    message: Message,
+) -> Button<'static, Message> {
+    Button::new(
+        Text::new(glyph)
+            .font(font)
+            .size(TITLE_BAR_BUTTON_GLYPH_SIZE),
+    )
+    .on_press(message)
+    .width(Length::Fixed(width))
+    .style(|_theme, status| style::chrome_button_style(status))
+}
 
 /// Each title-bar button's pinned width, so its glyph cannot resize it and
 /// reflow the drag region beside it.
@@ -44,25 +74,20 @@ fn colored_strip(color: Color) -> Element<'static, Message> {
         .into()
 }
 
-/// An 8px-tall gold title tape: a light top rule, the [`theme::TITLE_TAPE`]
-/// face, and a [`theme::TITLE_TAPE_SHADOW`] bottom rule. It fills the width it
-/// is given and is vertically centered by the row that holds it, so a band's
-/// two tapes split the spare width around the label.
+/// [`TITLE_TAPE_HEIGHT`] tall gold title tape, the base skin's ribbon: its
+/// two [`theme::TITLE_TAPE`] gold faces sandwich the white shine slat and the
+/// dark groove under it, ending in the brushed-gold lower face. It fills the
+/// width it is given and is vertically centered by the row that holds it, so
+/// a band's two tapes split the spare width around the label.
 fn title_tape() -> Element<'static, Message> {
     Column::new()
         .width(Length::Fill)
-        .height(Length::Fixed(8.0))
-        .push(colored_strip(theme::TEXT))
-        .push(
-            Container::new(Space::new())
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .style(|_theme| container::Style {
-                    background: Some(theme::TITLE_TAPE.into()),
-                    ..container::Style::default()
-                }),
-        )
+        .height(Length::Fixed(TITLE_TAPE_HEIGHT))
+        .push(colored_strip(theme::TITLE_TAPE))
+        .push(colored_strip(theme::TITLE_TEXT))
         .push(colored_strip(theme::TITLE_TAPE_SHADOW))
+        .push(colored_strip(theme::TITLE_TAPE_BRUSHED))
+        .push(colored_strip(theme::TITLE_TAPE))
         .into()
 }
 
@@ -77,7 +102,7 @@ fn title_band_content(label: &'static str) -> Row<'static, Message> {
             Text::new(label)
                 .size(TITLE_BAR_LABEL_SIZE)
                 .font(theme::ui_font())
-                .color(theme::TEXT),
+                .color(theme::TITLE_TEXT),
         )
         .push(title_tape())
         .spacing(6)
@@ -87,9 +112,9 @@ fn title_band_content(label: &'static str) -> Row<'static, Message> {
         .height(Length::Fill)
 }
 
-/// A decorative section band in the mockups' title chrome: a raised
-/// [`theme::TITLE_BLUE`] panel carrying `label` centered between two gold
-/// tapes at [`TITLE_BAR_HEIGHT`].
+/// A decorative section band: a raised [`theme::TITLE_BAR_FILL`] panel
+/// carrying the white `label` centered between two gold tapes at
+/// [`TITLE_BAR_HEIGHT`].
 ///
 /// It deliberately has no buttons: this app is one real window whose controls
 /// live in the app bar, so a second set here would be clickable-looking dead
@@ -104,8 +129,8 @@ pub fn view_title_band(label: &'static str) -> Element<'static, Message> {
 }
 
 /// The custom Winamp title bar: the app name centered between gold tapes on a
-/// raised [`theme::TITLE_BLUE`] band, draggable to move the window, with the
-/// classic main-menu `M` button at the left and shade, minimize, and close
+/// raised [`theme::TITLE_BAR_FILL`] band, draggable to move the window, with
+/// the classic main-menu `M` button at the left and shade, minimize, and close
 /// buttons on the right. Double-clicking the band toggles the classic roll-up
 /// (shade) mode via [`Message::ToggleWindowShade`].
 ///
@@ -114,10 +139,10 @@ pub fn view_title_band(label: &'static str) -> Element<'static, Message> {
 /// window drag, while a double-click emits [`Message::ToggleWindowShade`].
 /// The M button toggles the About panel and is sunken while `about_visible`
 /// holds and raised otherwise; the shade, minimize, and close buttons are
-/// [`fixed_width_button`]s — the same raised chrome as the transport row —
-/// pinned so their glyphs cannot resize them. The bar paints
-/// [`style::title_bar_style`] and wraps it in [`bevel::raised_panel`], so it
-/// carries the base skin's raised bevel.
+/// [`title_bar_glyph_button`]s — the same raised chrome as the transport row,
+/// with glyphs sized for the 12px bar — pinned so their glyphs cannot resize
+/// them. The bar paints [`style::title_bar_style`] and wraps it in
+/// [`bevel::raised_panel`], so it carries the base skin's raised bevel.
 pub fn view_title_bar(about_visible: bool) -> Element<'static, Message> {
     let drag_region = MouseArea::new(
         Container::new(title_band_content(TITLE_BAR_TEXT))
@@ -127,17 +152,21 @@ pub fn view_title_bar(about_visible: bool) -> Element<'static, Message> {
     .on_press(Message::WindowDragged)
     .on_double_click(Message::ToggleWindowShade);
 
-    let menu_button = Button::new(Text::new("M").font(theme::ui_font()))
-        .on_press(Message::ToggleAbout)
-        .width(Length::Fixed(TITLE_BAR_LEFT_BUTTON_WIDTH))
-        .style(move |_theme, status| style::toggle_button_style(about_visible, status));
+    let menu_button = Button::new(
+        Text::new("M")
+            .font(theme::ui_font())
+            .size(TITLE_BAR_BUTTON_GLYPH_SIZE),
+    )
+    .on_press(Message::ToggleAbout)
+    .width(Length::Fixed(TITLE_BAR_LEFT_BUTTON_WIDTH))
+    .style(move |_theme, status| style::toggle_button_style(about_visible, status));
 
     bevel::raised_panel(
         Container::new(
             Row::new()
                 .push(menu_button)
                 .push(drag_region)
-                .push(fixed_width_button(
+                .push(title_bar_glyph_button(
                     // `▭` is uncovered by both embedded faces (see part 1/4's
                     // probe in `PLANS.md`); `□` is the closest covered
                     // substitute and draws crisp in Tiny5.
@@ -146,13 +175,13 @@ pub fn view_title_bar(about_visible: bool) -> Element<'static, Message> {
                     theme::shape_font(),
                     Message::ToggleWindowShade,
                 ))
-                .push(fixed_width_button(
+                .push(title_bar_glyph_button(
                     "–",
                     TITLE_BAR_BUTTON_WIDTH,
                     theme::shape_font(),
                     Message::MinimizeWindow,
                 ))
-                .push(fixed_width_button(
+                .push(title_bar_glyph_button(
                     "✕",
                     TITLE_BAR_BUTTON_WIDTH,
                     theme::shape_font(),
@@ -181,8 +210,21 @@ mod tests {
     // crisp — so pin each size as a multiple of 8 as well as its exact value.
     #[test]
     fn title_bar_text_sizes_stay_on_the_pixel_grid() {
-        assert_eq!(TITLE_BAR_LABEL_SIZE, 16.0);
+        assert_eq!(TITLE_BAR_LABEL_SIZE, 8.0);
         assert_eq!(TITLE_BAR_LABEL_SIZE % 8.0, 0.0);
+        assert_eq!(TITLE_BAR_BUTTON_GLYPH_SIZE, 8.0);
+        assert_eq!(TITLE_BAR_BUTTON_GLYPH_SIZE % 8.0, 0.0);
+    }
+
+    // The bar's own metrics are shapes the chrome draws with colored strips,
+    // not text a face lays out, so the multiple-of-8 rule above does not pin
+    // them: they are pinned straight to the reference rows instead. The 12px
+    // bar and its 5px ribbon are `winamp-2.x-stack.png` rows 0..11 with the
+    // ribbon on rows 5..9.
+    #[test]
+    fn title_bar_is_the_base_skins_twelve_px_bar_with_its_five_px_ribbon() {
+        assert_eq!(TITLE_BAR_HEIGHT, 12.0);
+        assert_eq!(TITLE_TAPE_HEIGHT, 5.0);
     }
 
     #[test]

@@ -72,16 +72,16 @@ fn chrome_face(hovered: bool, pressed: bool) -> Color {
     }
 }
 
-/// The flat base-skin title-bar fill: a solid [`theme::TITLE_BLUE`] band with
-/// the light [`theme::TEXT`] color for the app name.
+/// The flat base-skin title-bar fill: a solid [`theme::TITLE_BAR_FILL`] navy
+/// band with the white [`theme::TITLE_TEXT`] color for the app name.
 ///
 /// [`super::bevel::raised_panel`] composes with the window face and [`super::bevel::lcd_well`]
 /// paints its own background, but neither sets a text color; the title bar paints both its own
-/// opaque background and its own light text. Pure, so both fields are testable without a widget.
+/// opaque background and its own white text. Pure, so both fields are testable without a widget.
 pub fn title_bar_style() -> container::Style {
     container::Style {
-        background: Some(Background::Color(theme::TITLE_BLUE)),
-        text_color: Some(theme::TEXT),
+        background: Some(Background::Color(theme::TITLE_BAR_FILL)),
+        text_color: Some(theme::TITLE_TEXT),
         ..container::Style::default()
     }
 }
@@ -137,7 +137,8 @@ pub fn toggle_button_style(on: bool, status: button::Status) -> button::Style {
 /// reverses the edge to [`theme::PANEL_EDGE_DARK`], the same press the buttons use. iced's
 /// [`text_input::Style`] carries a single border color and no shadow, so the bevel's bottom-right
 /// dark half is not drawn. The placeholder uses the darker [`theme::PANEL_EDGE_LIGHT`] so an empty
-/// box reads as empty, and the selection uses the title-bar [`theme::TITLE_BLUE`]. Pure, so the
+/// box reads as empty, and the selection uses Winamp's selection blue
+/// [`theme::TITLE_BLUE`]. Pure, so the
 /// color rule is testable without building a widget.
 pub fn chrome_text_input_style(status: text_input::Status) -> text_input::Style {
     let focused = matches!(status, text_input::Status::Focused { .. });
@@ -180,8 +181,8 @@ pub fn chrome_pick_list_style(status: pick_list::Status) -> pick_list::Style {
 ///
 /// The dropdown is a [`theme::BUTTON_FACE`] metal panel with the dark 1px chrome outline; its
 /// options are the engraved [`theme::BUTTON_TEXT`] on that face, and the highlighted option uses
-/// the title-bar [`theme::TITLE_BLUE`] with light [`theme::TEXT`], matching Winamp's selection
-/// blue. No drop shadow, so the menu stays flat like the rest of the base-skin chrome. Pure, so
+/// Winamp's selection blue [`theme::TITLE_BLUE`] with light [`theme::TEXT`]. No drop shadow, so
+/// the menu stays flat like the rest of the base-skin chrome. Pure, so
 /// the color rule is testable without building a widget.
 pub fn preset_menu_style() -> menu::Style {
     menu::Style {
@@ -577,10 +578,13 @@ mod tests {
     }
 
     #[test]
-    fn title_bar_style_is_title_blue_with_light_text() {
+    fn title_bar_style_is_navy_with_white_text() {
         let style = title_bar_style();
-        assert_eq!(style.background, Some(Background::Color(theme::TITLE_BLUE)));
-        assert_eq!(style.text_color, Some(theme::TEXT));
+        assert_eq!(
+            style.background,
+            Some(Background::Color(theme::TITLE_BAR_FILL))
+        );
+        assert_eq!(style.text_color, Some(theme::TITLE_TEXT));
     }
 
     #[test]
