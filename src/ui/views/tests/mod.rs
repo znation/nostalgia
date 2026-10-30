@@ -6,8 +6,8 @@ use super::browse::rows::text::{
 };
 use super::browse::rows::{browse_row_style, row_build_count, scrollable_list};
 use super::browse::{
-    BROWSE_SEARCH_ID, BROWSE_VIEWS, view_clear_search_button, view_reload_button, view_search_box,
-    view_search_row,
+    BROWSE_SEARCH_ID, BROWSE_VIEWS, view_clear_search_button, view_reload_button,
+    view_save_list_button, view_search_box, view_search_row, view_sort_button, view_top_button,
 };
 use super::equalizer::{
     AUTO_BUTTON_WIDTH, CUSTOM_PRESET_LABEL, EQ_SLIDER_HEIGHT, RESPONSE_CURVE_COLUMNS,
@@ -199,6 +199,7 @@ mod chrome;
 mod equalizer;
 mod jump_file;
 mod lcd_display;
+mod nav_buttons;
 mod now_playing;
 mod seek_wheel;
 mod shade;
