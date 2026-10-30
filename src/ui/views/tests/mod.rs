@@ -43,14 +43,14 @@ use super::transport::{
     repeat_toggle, shuffle_toggle, transport_buttons, transport_glyphs,
 };
 use super::{
-    BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, EQ_STEP, TITLE_BAR_HEIGHT, VOLUME_MAX, VOLUME_MIN,
-    VOLUME_STEP, balance_wheel_message, can_go_back, can_retry_artists, eq_band_wheel_message,
-    eq_preamp_wheel_message, fixed_width_button, format_track_time, seek_bar_value, spacer,
-    toggle_button, view_albums, view_all_albums, view_all_albums_button, view_all_songs,
-    view_all_songs_button, view_artists, view_back_button, view_browse_nav_buttons, view_equalizer,
-    view_now_playing, view_open_button, view_playlists, view_playlists_button, view_retry_button,
-    view_seek_bar, view_songs, view_title_band, view_title_bar, view_transport_controls,
-    volume_wheel_message,
+    BALANCE_MAX, BALANCE_MIN, BALANCE_STEP, EQ_STEP, PANEL_TEXT_SIZE, TITLE_BAR_HEIGHT, VOLUME_MAX,
+    VOLUME_MIN, VOLUME_STEP, balance_wheel_message, can_go_back, can_retry_artists,
+    eq_band_wheel_message, eq_preamp_wheel_message, fixed_width_button, format_track_time,
+    seek_bar_value, spacer, toggle_button, view_albums, view_all_albums, view_all_albums_button,
+    view_all_songs, view_all_songs_button, view_artists, view_back_button, view_browse_nav_buttons,
+    view_equalizer, view_now_playing, view_open_button, view_playlists, view_playlists_button,
+    view_retry_button, view_seek_bar, view_songs, view_title_band, view_title_bar,
+    view_transport_controls, volume_wheel_message,
 };
 use crate::audio::{PlaybackFormat, Spectrum};
 use crate::equalizer::{
@@ -179,6 +179,19 @@ fn assert_slider_range_matches_clamp(clamp: fn(f32) -> f32, min: f32, max: f32, 
 fn region_has_color(region: &[u8], color: Color) -> bool {
     let [r, g, b, a] = color.into_rgba8();
     region.chunks_exact(4).any(|pixel| pixel == [r, g, b, a])
+}
+
+// The seven transient panels re-based their 18 px texts onto the 8-px grid the
+// vendored pixel faces draw crisp at (the pixel-font split's part 4/4); the
+// shared constant keeps the claim in one pin instead of ten literals.
+#[test]
+fn panel_text_size_is_on_the_pixel_grid() {
+    assert_eq!(PANEL_TEXT_SIZE, 16.0);
+    assert_eq!(
+        PANEL_TEXT_SIZE % 8.0,
+        0.0,
+        "the panels must draw at an 8-px grid size"
+    );
 }
 
 mod browse;

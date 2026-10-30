@@ -9,7 +9,7 @@ use iced::{
 use crate::ui::{Message, style, theme};
 
 use super::browse::rows::LazyRow;
-use super::{labeled_button, modal::modal_overlay};
+use super::{PANEL_TEXT_SIZE, labeled_button, modal::modal_overlay};
 
 /// The Jump to File box's widget id, so `J` can focus it on opening.
 pub const JUMP_FILE_INPUT_ID: &str = "nostalgia-jump-file";
@@ -149,7 +149,7 @@ fn match_rows(query: &str, titles: &[String], key: &MatchListKey) -> Column<'sta
     for index in matches {
         let label = jump_file_row_label(index, &titles[index]);
         rows = rows.push(
-            Button::new(Text::new(label).size(18))
+            Button::new(Text::new(label).size(PANEL_TEXT_SIZE))
                 .width(Length::Fill)
                 .height(Length::Fixed(JUMP_FILE_ROW_HEIGHT))
                 .on_press(Message::JumpFileRowSelected {
@@ -162,9 +162,17 @@ fn match_rows(query: &str, titles: &[String], key: &MatchListKey) -> Column<'sta
         );
     }
     if titles.is_empty() {
-        rows = rows.push(Text::new("No songs").size(18).color(theme::TEXT));
+        rows = rows.push(
+            Text::new("No songs")
+                .size(PANEL_TEXT_SIZE)
+                .color(theme::TEXT),
+        );
     } else if highlighted.is_none() {
-        rows = rows.push(Text::new("No matching songs").size(18).color(theme::TEXT));
+        rows = rows.push(
+            Text::new("No matching songs")
+                .size(PANEL_TEXT_SIZE)
+                .color(theme::TEXT),
+        );
     }
     rows
 }
@@ -211,7 +219,11 @@ pub fn view_jump_file_overlay<'a>(
     let content = Column::new()
         .spacing(10)
         .align_x(iced::alignment::Horizontal::Center)
-        .push(Text::new("JUMP TO FILE").size(18).color(theme::TITLE_TAPE))
+        .push(
+            Text::new("JUMP TO FILE")
+                .size(PANEL_TEXT_SIZE)
+                .color(theme::TITLE_TAPE),
+        )
         .push(input)
         .push(
             Scrollable::new(rows)

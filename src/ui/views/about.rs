@@ -9,7 +9,7 @@ use iced::{
 
 use crate::ui::{Message, theme};
 
-use super::{labeled_button, modal::modal_overlay};
+use super::{PANEL_TEXT_SIZE, labeled_button, modal::modal_overlay};
 
 /// The About panel's version line, prefixed so it reads as a version rather
 /// than a bare number.
@@ -43,7 +43,7 @@ pub fn view_about_overlay<'a>(base: Element<'a, Message>, signed_in: bool) -> El
         .align_x(iced::alignment::Horizontal::Center)
         .push(
             Text::new("ABOUT NOSTALGIA")
-                .size(18)
+                .size(PANEL_TEXT_SIZE)
                 .color(theme::TITLE_TAPE),
         )
         .push(Text::new(ABOUT_VERSION).color(theme::TEXT))

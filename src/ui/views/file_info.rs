@@ -11,7 +11,7 @@ use crate::audio::PlaybackFormat;
 use crate::ui::{Message, theme};
 
 use super::{
-    KnownTrack, labeled_button,
+    KnownTrack, PANEL_TEXT_SIZE, labeled_button,
     modal::modal_overlay,
     now_playing::{channel_mode_label, format_playback_prefix},
 };
@@ -71,7 +71,11 @@ pub fn view_file_info_overlay<'a>(
     let mut content = Column::new()
         .spacing(10)
         .align_x(iced::alignment::Horizontal::Center)
-        .push(Text::new("FILE INFO").size(18).color(theme::TITLE_TAPE))
+        .push(
+            Text::new("FILE INFO")
+                .size(PANEL_TEXT_SIZE)
+                .color(theme::TITLE_TAPE),
+        )
         .push(Text::new(format!("{TITLE_LABEL}{}", track.title)).color(theme::TEXT));
     if !track.artist.is_empty() {
         content =

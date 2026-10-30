@@ -35,7 +35,11 @@ pub fn view_jump_time_overlay<'a>(
     let content = Column::new()
         .spacing(10)
         .align_x(iced::alignment::Horizontal::Center)
-        .push(Text::new("JUMP TO TIME").size(18).color(theme::TITLE_TAPE))
+        .push(
+            Text::new("JUMP TO TIME")
+                .size(super::PANEL_TEXT_SIZE)
+                .color(theme::TITLE_TAPE),
+        )
         .push(
             Text::new(format!("Track length: {}", format_track_time(length_ms))).color(theme::TEXT),
         )

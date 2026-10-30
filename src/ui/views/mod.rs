@@ -228,6 +228,14 @@ fn fixed_width_toggle_button(
         .style(move |_theme, status| style::toggle_button_style(on, status))
 }
 
+/// The size the seven transient panels' headings (`ABOUT NOSTALGIA`, `FILE
+/// INFO`, `JUMP TO FILE`, `JUMP TO TIME`, `OPTIONS`, `SAVE LIST`, `SAVE
+/// PRESET`) and jump-file match rows draw at. The pixel-font split re-based
+/// the panels' 18 px texts onto the 8-px grid the vendored faces draw crisp
+/// at; named here so the grid claim is one testable pin instead of ten
+/// literals (the pin test in the `tests` submodule).
+pub(super) const PANEL_TEXT_SIZE: f32 = 16.0;
+
 /// The volume slider's silence floor, the same lower bound
 /// `state::clamp_volume` clamps to. Named here so the slider spec is a
 /// testable seam; the spec test in the `tests` submodule ties it to the clamp

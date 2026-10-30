@@ -16,7 +16,9 @@ use iced::advanced::{
     renderer::Headless,
     widget::{Id, Tree, operation::Operation},
 };
-use iced::{Element, Event, Font, Pixels, Point, Rectangle, Size};
+use iced::{Element, Event, Pixels, Point, Rectangle, Size};
+
+use super::theme;
 
 /// The bounds every captured tree is laid out in.
 pub(crate) fn limits() -> Limits {
@@ -30,7 +32,7 @@ pub(crate) fn limits() -> Limits {
 pub(crate) fn headless_renderer() -> iced::Renderer {
     load_vendored_fonts();
     futures::executor::block_on(<iced::Renderer as Headless>::new(
-        Font::default(),
+        theme::ui_font(),
         Pixels(16.0),
         Some("tiny-skia"),
     ))
@@ -40,8 +42,10 @@ pub(crate) fn headless_renderer() -> iced::Renderer {
 /// Registers the vendored pixel faces — the letterform and shape-glyph TTFs
 /// under `assets/fonts/` — in the process-wide [`font_system`] every headless
 /// capture resolves texts through, so a test can address either face with
-/// `iced::Font::with_name` without a per-test load. Name-less text keeps
-/// resolving to the system face, so existing captured numbers do not move.
+/// `iced::Font::with_name` without a per-test load. Name-less text resolves
+/// through [`headless_renderer`]'s default, which is [`theme::ui_font`] —
+/// the same face the app's `.default_font` draws — so the captured tests
+/// measure exactly what the app renders.
 /// Idempotent: the `OnceLock` runs it once, and `FontSystem::load_font`
 /// itself records its borrowed bytes by address and skips repeats.
 fn load_vendored_fonts() {
@@ -425,6 +429,26 @@ mod tests {
             .map(|rgba| [rgba[0], rgba[1], rgba[2], rgba[3]])
             .collect::<std::collections::HashSet<_>>();
         assert_eq!(colors.len(), 2, "glyph colors: {colors:?}");
+    }
+
+    /// The split's end-state proof: with no explicit font at all — the same
+    /// default the app's `.default_font(theme::ui_font())` and this renderer's
+    /// default seed — the text resolves to the letterform face, not the
+    /// system sans, and draws at Silkscreen's probed advance. A future
+    /// default-font regression fails here, not as a shifted number in a
+    /// geometry test elsewhere.
+    #[test]
+    fn headless_captures_resolve_unlabeled_text_to_the_letterform_face() {
+        let renderer = headless_renderer();
+        let mut word = text(
+            iced::widget::Text::new("NOSTALGIA")
+                .size(16.0)
+                .width(iced::Length::Shrink),
+        );
+        let word_capture = capture_text(&mut word, &renderer);
+
+        let word_bounds = word_capture.find("NOSTALGIA");
+        assert_eq!(word_bounds.width, 100.0);
     }
 
     /// A bare text shrunk to its measured face width.

@@ -54,7 +54,11 @@ pub fn view_save_preset_overlay<'a>(
     let mut content = Column::new()
         .spacing(10)
         .align_x(iced::alignment::Horizontal::Center)
-        .push(Text::new("SAVE PRESET").size(18).color(theme::TITLE_TAPE))
+        .push(
+            Text::new("SAVE PRESET")
+                .size(super::PANEL_TEXT_SIZE)
+                .color(theme::TITLE_TAPE),
+        )
         .push(
             TextInput::new("Preset name", name)
                 .id(SAVE_PRESET_INPUT_ID)

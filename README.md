@@ -58,6 +58,12 @@ indexed by window and version with their sources:
 
 ![Classic Winamp 2.05 main window](winamp-screenshots/winamp-2.05-main.jpg)
 
+The chrome's text renders in two embedded pixel faces: [Silkscreen](https://fonts.google.com/specimen/Silkscreen)
+for the letterforms and [Tiny5](https://fonts.google.com/specimen/Tiny5) for
+shape-glyph markers such as ▶ and II. Both are SIL Open Font License 1.1 (the
+full record — sources, copyright and the vendored bytes — lives in
+[assets/fonts/README.md](assets/fonts/README.md)).
+
 When a change touches anything visible, compare it against the closest of those captures (the
 windowshade strip, the docked stack, the equalizer states) before calling it done.
 

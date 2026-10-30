@@ -53,7 +53,11 @@ pub fn view_save_list_overlay<'a>(
     let mut content = Column::new()
         .spacing(10)
         .align_x(iced::alignment::Horizontal::Center)
-        .push(Text::new("SAVE LIST").size(18).color(theme::TITLE_TAPE))
+        .push(
+            Text::new("SAVE LIST")
+                .size(super::PANEL_TEXT_SIZE)
+                .color(theme::TITLE_TAPE),
+        )
         .push(
             TextInput::new("Playlist name", name)
                 .id(SAVE_LIST_INPUT_ID)

@@ -5,6 +5,67 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
+### Re-base the remaining panels, make the face the app's default, and sync the docs (part 4/4 of the pixel-font split, requires part 1/4 landed, requires part 2/4 landed, requires part 3/4 landed) (planned 2026-10-30 by the plan role) — done 2026-10-30 by the feature role
+
+**Goal.** The small panels (about, file info, jump-to-file, jump-to-time, options,
+save list, save preset) render in the face at on-grid sizes; the face becomes the
+app-wide default so no future text can silently fall back to the system sans; the
+docs record the embedded faces and licenses. Requires the earlier parts because the
+default-font switch re-styles every text that has no explicit font, which must not
+land while any scoped view is still unconverted.
+
+**Files touched.** `src/ui/views/{about,file_info,jump_file,jump_time,options,
+save_list,save_preset}.rs`, `src/ui/mod.rs` (the `.default_font` switch beside the
+part 1/4 registration), `src/ui/layout_capture.rs` (the renderer default),
+`README.md`, and any test module whose captured fragments move.
+
+**Approach.**
+
+1. Each of the seven panels face-swaps and re-bases its sizes per the split's
+   mapping (18→16 here for every site; `jump_file.rs`'s four, others one each).
+   The panel headings (`FILE INFO`, `JUMP TO FILE`, …) keep their tape-strip
+   styling; compare against `winamp-screenshots/winamp-2.x-stack.png`.
+2. `src/ui/mod.rs`: add `.default_font(theme::ui_font())` beside the
+   registration. `src/ui/layout_capture.rs`: pass `theme::ui_font()` as
+   `headless_renderer()`'s default font so captured tests resolve unlabeled text
+   the same way the app now does (the seam this run probed:
+   `Headless::new(Font::with_name("Tiny5"), ...)` resolved a `Font::default()`
+   text to the named family). After parts 1–3 no view relies on the default, so
+   the switch moves no captured number except any site a part missed — a capture
+   test for the default (below) is the check.
+3. Docs, same part: `README.md` names the two embedded faces and their license
+   beside the screenshot section (the license record lives at
+   `assets/fonts/README.md`); refresh `docs/screenshots/`'s captures if this
+   part's metrics move the chrome's look; update `docs/usage.md` only where a
+   control's described behavior changed (none is expected — the faces change
+   rendering, not bindings).
+
+**Acceptance criteria.**
+
+- A capture test renders `NOSTALGIA` at size 16 with no `.font()` and pins
+  Silkscreen's 100.0 px width, proving the app's default face is the embedded
+  one and the test renderer resolves the same; that test is the split's
+  end-state proof.
+- The seven panels' sizes are multiples of 8, pinned by tests; their captured
+  assertions re-derived per part 2/4's rule.
+- `README.md` names the faces and `OFL`; `make check` passes.
+
+**Recorded when done (2026-10-30, feature).** The ten 18-px literals (one
+heading per panel, three jump-file row sites) re-based to a shared
+`views::PANEL_TEXT_SIZE` (16.0), pinned on-grid by
+`views/tests/mod.rs::panel_text_size_is_on_the_pixel_grid` — no captured
+assertion moved (the suite's geometry tests are relationship claims, so no
+re-derivation was needed beyond the seam's own evidence). `headless_renderer`
+seeds `theme::ui_font()` as its default and the app builder adds
+`.default_font(theme::ui_font())` beside the part 1/4 `.font` registrations;
+`layout_capture.rs`'s new
+`headless_captures_resolve_unlabeled_text_to_the_letterform_face` pins the
+end-state proof (no-`.font()` `NOSTALGIA` at 16 = Silkscreen's 100.0 px).
+`docs/usage.md` needed no change — no control's described behavior moved —
+and no `docs/screenshots/` capture shows a panel, so none needed refreshing.
+Compare: `winamp-screenshots/winamp-2.x-stack.png` for the headings' tape-strip
+look, `winamp-2.95-stack.png` for the docked context.
+
 ### Re-base the browse list and equalizer text onto the pixel faces (part 3/4 of the pixel-font split, requires part 1/4 landed) (planned 2026-10-30 by the plan role) — done 2026-10-30 by the feature role
 
 **Goal.** The browse list's rows and footer and the equalizer's labels render in

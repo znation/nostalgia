@@ -187,7 +187,11 @@ pub fn view_options_overlay<'a>(
     let mut content = Column::new()
         .spacing(8)
         .align_x(iced::alignment::Horizontal::Center)
-        .push(Text::new("OPTIONS").size(18).color(theme::TITLE_TAPE));
+        .push(
+            Text::new("OPTIONS")
+                .size(super::PANEL_TEXT_SIZE)
+                .color(theme::TITLE_TAPE),
+        );
     for (index, row) in OptionsRow::ALL.into_iter().enumerate() {
         content = content.push(
             labeled_button(options_row_label(row, state), row.message())
