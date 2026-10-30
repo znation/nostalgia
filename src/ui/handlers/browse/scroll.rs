@@ -94,8 +94,12 @@ const REVEAL_SLACK: f32 = 0.5;
 /// The scroll offset that shows a row fully in a viewport of
 /// `viewport_height` currently scrolled to `scroll_top`, or `None` when the
 /// row is already fully visible. The row spans `row_height` pixels from
-/// `row_top`. The top edge is checked first, so a viewport shorter than one
-/// row shows the row's top. The browse list and the Jump to File list share
+/// `row_top`. A row scrolled above the viewport's top snaps to the row's
+/// top; a row starting inside the viewport but ending below it snaps to
+/// the viewport's bottom edge. So a viewport shorter than one row whose
+/// row starts inside it scrolls to the row's bottom, not its top — no
+/// caller passes such a viewport (both rows are smaller than the lists'
+/// viewport heights). The browse list and the Jump to File list share
 /// this minimal-reveal rule through [`reveal_row_offset`] and the Jump to
 /// File handler's `reveal_jump_file_row`.
 pub(in crate::ui) fn reveal_offset(
