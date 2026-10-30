@@ -381,6 +381,39 @@ fn title_bar_height_pins_the_shade_strip() {
     assert_eq!(views::TITLE_BAR_HEIGHT, 24.0);
 }
 
+// The base skin draws every window's outer edge as a dark near-black ring
+// *outside* a light bevel (the reference capture's left edge reads
+// (0,0,8) then the blue-tinted highlight), and the repo's own mockups draw
+// the same two-part border. The root view wraps the whole scene in those
+// two rings, so the laid-out and painted window must start with the dark
+// ring at its outermost pixel row and the light bevel one pixel inside —
+// sampled from a real paint, not a constant-to-constant assertion, so a
+// border that drops off the tree, inverts its edges, or insets the wrong
+// way fails.
+#[test]
+fn root_view_keeps_the_dark_outline_outside_the_light_bevel() {
+    use iced::{Point, Rectangle, Size};
+
+    let (player, _state) = test_player();
+    let mut renderer = layout_capture::headless_renderer();
+    let mut element = view(&player);
+    let (_text, pixels) = layout_capture::capture_text_and_pixels(
+        &mut element,
+        &mut renderer,
+        &theme::winamp_theme(),
+    );
+    let x = _text.size().width / 2.0;
+    let pixel =
+        |x: f32, y: f32| pixels.region(Rectangle::new(Point::new(x, y), Size::new(1.0, 1.0)));
+    // The outermost pixel is the dark outline the mockup draws outside the
+    // light bevel; the next pixel inside is the bevel's light edge. Both are
+    // sampled from `docs/screenshots/player.png`'s window edge. The samples
+    // sit at the top edge's midpoint because the rings' corner pixels blend
+    // under antialiasing.
+    assert_eq!(pixel(x, 0.0), [20, 20, 31, 255]);
+    assert_eq!(pixel(x, 1.0), [98, 98, 118, 255]);
+}
+
 // `resize_to_shade` sends `shade_target_size` to the window; pin the target
 // itself, because the `Task` it returns is opaque and the shade tests above
 // only see that some work was scheduled. A title-bar-only target would still

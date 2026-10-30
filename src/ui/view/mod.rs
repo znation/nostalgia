@@ -4,7 +4,9 @@
 //! construction itself lives in `views`.
 
 use super::{message::Message, player::WinampPlayer};
-use iced::Element;
+use crate::ui::theme;
+use iced::widget::{Container, container};
+use iced::{Border, Color, Element, Length};
 
 mod library;
 mod normal;
@@ -37,7 +39,29 @@ pub(in crate::ui) fn view(player: &WinampPlayer) -> Element<'_, Message> {
     } else {
         normal::view_normal(player)
     };
-    Element::new(options_shortcut::OptionsShortcut(overlay::apply_overlays(
-        base, player,
-    )))
+    Element::new(options_shortcut::OptionsShortcut(
+        Container::new(overlay::apply_overlays(base, player))
+            .width(Length::Fill)
+            .padding(1.0)
+            // Shrink, not Fill: the shaded window is sized to
+            // [`views::SHADED_HEIGHT`], exactly the tree content plus the
+            // outline's two rows, so the strip's bottom edge stays visible.
+            .height(Length::Shrink)
+            .style(|_theme| container::Style {
+                border: window_edge_border(theme::WINDOW_EDGE_OUTLINE),
+                ..container::Style::default()
+            })
+            .into(),
+    ))
+}
+
+/// A 1px square ring in `color`: the outer edge of the base skin's two-part
+/// window border (the dark [`theme::WINDOW_EDGE_OUTLINE`] ring outside the
+/// panels' light bevel).
+fn window_edge_border(color: Color) -> Border {
+    Border {
+        color,
+        width: 1.0,
+        radius: 0.0.into(),
+    }
 }

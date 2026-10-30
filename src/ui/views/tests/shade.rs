@@ -65,13 +65,17 @@ fn shade_controls_map_to_transport_messages_and_keep_fixed_widths() {
     assert!(matches!(messages[4], Message::NextButton));
 }
 
-// The rolled-up window is exactly the title bar plus the strip; both the
-// view and `resize_to_shade` read `SHADED_HEIGHT`, so pin its composition and
-// its positive, fixed size.
+// The rolled-up window is exactly the title bar plus the strip, framed by
+// the root view's two 1px window-edge rings; both the view and
+// `resize_to_shade` read `SHADED_HEIGHT`, so pin its composition and its
+// positive, fixed size.
 #[test]
 fn shade_height_pins_the_rolled_up_window() {
     assert_eq!(SHADE_STRIP_HEIGHT, 28.0);
-    assert_eq!(SHADED_HEIGHT, super::TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT);
+    assert_eq!(
+        SHADED_HEIGHT,
+        super::TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT + 2.0
+    );
 }
 
 // Laying the strip out with the headless renderer resolves its fixed height

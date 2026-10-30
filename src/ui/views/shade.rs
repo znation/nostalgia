@@ -33,10 +33,12 @@ use super::{
 /// keep the same geometry.
 pub(crate) const SHADE_STRIP_HEIGHT: f32 = MINI_TRANSPORT_HEIGHT;
 
-/// The whole rolled-up window's height: the title bar plus the strip. The
-/// view and `handlers::window::resize_to_shade` both read it, so the window
-/// they resize to cannot drift from the tree it shows.
-pub(crate) const SHADED_HEIGHT: f32 = TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT;
+/// The whole rolled-up window's height: the title bar plus the strip, plus
+/// the root view's two 1px window-edge rings (the dark outline above and
+/// below) the strip is framed by. The view and
+/// `handlers::window::resize_to_shade` both read it, so the window they
+/// resize to cannot drift from the tree it shows.
+pub(crate) const SHADED_HEIGHT: f32 = TITLE_BAR_HEIGHT + SHADE_STRIP_HEIGHT + 2.0;
 
 /// The shade-mode strip: the shared compact transport row on the title bar's
 /// blue chrome.

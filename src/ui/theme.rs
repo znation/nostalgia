@@ -11,8 +11,11 @@ use std::sync::OnceLock;
 
 use iced::{Color, Theme};
 
-/// The dark gray window face every panel is drawn on.
-pub const WINDOW_BACKGROUND: Color = Color::from_rgb(0.18, 0.18, 0.18);
+/// The steel-blue window face every panel is drawn on, sampled from the
+/// mockups' chrome face (`docs/screenshots/player.png` reads (53,53,84) at
+/// (5,20)), which matches the base-skin capture's hue (`winamp-2.x-stack.png`
+/// reads (24,24,41) on the face) at the mockup's flat-render brightness.
+pub const WINDOW_BACKGROUND: Color = Color::from_rgb8(53, 53, 84);
 
 /// The light chrome text color used for captions and labels.
 pub const TEXT: Color = Color::from_rgb(0.87, 0.87, 0.87);
@@ -48,12 +51,23 @@ pub const ROW_HIGHLIGHT: Color = Color::from_rgb(0.25, 0.5, 1.0);
 pub const PLAYING_ROW_TEXT: Color = Color::from_rgb(1.0, 1.0, 1.0);
 
 /// The light top/left edge of a raised panel bevel, and the dark bottom/right
-/// edge of a sunken one.
-pub const PANEL_EDGE_LIGHT: Color = Color::from_rgb(0.55, 0.55, 0.55);
+/// edge of a sunken one: the mockups' blue-tinted bevel highlight
+/// (`docs/screenshots/player.png` reads (98,98,118) on its window-edge
+/// bevel), which matches the base-skin capture's bevel hue
+/// (`winamp-2.x-stack.png` reads (140,156,181) at (271,13)) at the mockup's
+/// flat-render brightness.
+pub const PANEL_EDGE_LIGHT: Color = Color::from_rgb8(98, 98, 118);
 
 /// The dark bottom/right edge of a raised panel bevel, and the light top/left
-/// edge of a sunken one.
-pub const PANEL_EDGE_DARK: Color = Color::from_rgb(0.05, 0.05, 0.05);
+/// edge of a sunken one: the base-skin capture's blue-tinted dark bevel
+/// (`winamp-2.x-stack.png` reads (49,57,74) at (140,113), the main window's
+/// bottom edge).
+pub const PANEL_EDGE_DARK: Color = Color::from_rgb8(49, 57, 74);
+
+/// The near-black ring the base skin draws on every window edge *outside*
+/// the light bevel (`winamp-2.x-stack.png` reads (0,0,8) on the outline,
+/// `docs/screenshots/player.png` (20,20,31) at the same mockup edge).
+pub const WINDOW_EDGE_OUTLINE: Color = Color::from_rgb8(20, 20, 31);
 
 /// The raised chrome button face, lighter than [`WINDOW_BACKGROUND`] so the
 /// button reads as raised off the window face.
@@ -200,7 +214,7 @@ mod tests {
     // an accidental recolor is caught rather than shipped.
     #[test]
     fn base_skin_colors_keep_their_documented_literal_values() {
-        assert_eq!(WINDOW_BACKGROUND, Color::from_rgb(0.18, 0.18, 0.18));
+        assert_eq!(WINDOW_BACKGROUND, Color::from_rgb8(53, 53, 84));
         assert_eq!(TEXT, Color::from_rgb(0.87, 0.87, 0.87));
         assert_eq!(TITLE_BLUE, Color::from_rgb(0.0, 0.0, 0.55));
         assert_eq!(TITLE_TAPE, Color::from_rgb(0.93, 0.81, 0.48));
@@ -208,8 +222,9 @@ mod tests {
         assert_eq!(LCD_GREEN, Color::from_rgb(0.0, 1.0, 0.0));
         assert_eq!(LCD_GREEN_DIM, Color::from_rgb(0.0, 0.35, 0.0));
         assert_eq!(LCD_RED, Color::from_rgb(1.0, 0.1, 0.1));
-        assert_eq!(PANEL_EDGE_LIGHT, Color::from_rgb(0.55, 0.55, 0.55));
-        assert_eq!(PANEL_EDGE_DARK, Color::from_rgb(0.05, 0.05, 0.05));
+        assert_eq!(PANEL_EDGE_LIGHT, Color::from_rgb8(98, 98, 118));
+        assert_eq!(PANEL_EDGE_DARK, Color::from_rgb8(49, 57, 74));
+        assert_eq!(WINDOW_EDGE_OUTLINE, Color::from_rgb8(20, 20, 31));
         assert_eq!(BUTTON_FACE, Color::from_rgb(0.30, 0.30, 0.30));
         assert_eq!(BUTTON_FACE_HOVERED, Color::from_rgb(0.38, 0.38, 0.38));
         assert_eq!(BUTTON_FACE_PRESSED, Color::from_rgb(0.22, 0.22, 0.22));

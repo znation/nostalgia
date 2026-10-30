@@ -5,6 +5,56 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### The whole chrome renders neutral gray where the base skin — and the repo's own mockups — are steel blue (found by the reference-comparison pass 2026-10-29) — fixed 2026-10-30 by the bugfix role
+
+**Symptom.** Every chrome surface the app paints is a neutral gray: the window face is
+`#2E2E2E` (46,46,46), the wells are `#0D0D0D` (13,13,13), the button faces `#4C4C4C`
+(76,76,76), and the bevels `#8C8C8C` (140,140,140) and `#0D0D0D`. The base skin's chrome
+is steel blue: the face is `#181829` (24,24,41), the equalizer panel `#31315A` (49,49,90),
+the bevel highlights are blue-tinted (66,82,90) and (140,156,181), and the outer edge is
+a near-black (0,0,8) outline *outside* the light bevel. The repo's own mockups
+(`docs/screenshots/player.png`) are steel blue too: face (53,53,84)/(56,56,88), bevel
+highlight (98,98,118) — so the app matches neither the target nor its own design.
+
+**How to reproduce.** Run the app (`cargo run`; the window opens 1024×768 at 1:1), capture
+it with any screenshot tool, and sample: the window face at (600,120) reads (46,46,46);
+the top bevel at (200,0) reads (140,140,140). Against the reference: `winamp-2.x-stack.png`
+(3,30) reads (24,24,41), (0,30) reads (0,0,8), (1,30) reads (66,82,90), (271,13) reads
+(140,156,181), and its equalizer panel (20,180) reads (49,49,90). `docs/screenshots/player.png`
+(5,20) reads (53,53,84).
+
+**Suspected cause.** `src/ui/theme.rs`'s palette constants are documented as the Winamp
+2.x base skin (`WINDOW_BACKGROUND` "The dark gray window face", the module doc "The
+Winamp 2.x base-skin palette") but hold neutral grays: `WINDOW_BACKGROUND =
+Color::from_rgb(0.18, 0.18, 0.18)`, `LCD_BACKGROUND = Color::from_rgb(0.05, 0.05, 0.05)`,
+`BUTTON_FACE = Color::from_rgb(0.30, 0.30, 0.30)`, `PANEL_EDGE_LIGHT =
+Color::from_rgb(0.55, 0.55, 0.55)`, `PANEL_EDGE_DARK = Color::from_rgb(0.05, 0.05, 0.05)`.
+No constant in the module carries the base skin's (24,24,41)/(49,49,74) blues, and the
+window's outer edge is drawn as a light bevel only, with no dark outline outside it.
+
+**Direction.** Re-sample the base-skin faces and bevels from `winamp-screenshots/` (or
+from the mockups, which agree on hue) and replace the gray constants with them; keep the
+two-part outer border (dark outline outside the light bevel).
+
+**Fixed.** `src/ui/theme.rs` now carries the steel-blue chrome: `WINDOW_BACKGROUND` is the
+mockup's face (53,53,84), `PANEL_EDGE_LIGHT` the mockup's blue-tinted bevel highlight
+(98,98,118), `PANEL_EDGE_DARK` the base-skin capture's blue-tinted dark bevel (49,57,74),
+and a new `WINDOW_EDGE_OUTLINE` (20,20,31) names the mockup's near-black edge ring. The
+root view (`src/ui/view/mod.rs`) now wraps the whole scene in a 1px `WINDOW_EDGE_OUTLINE`
+ring that insets the content 1px, so the panels' light bevel sits inside the dark outline
+— the two-part outer border the entry named. The value chosen is the mockup's (face,
+bevel, outline) at the mockup's flat-render brightness, which agrees with the base-skin
+capture's hue on every surface; the capture's own pixels vary by region (JPEG-sourced),
+so the flat mockup values are the ones a flat renderer can hold. The two 1px rings also
+take two rows of the shaded window, so `SHADED_HEIGHT` grows by 2 (the entry's
+Button-face/glyph and display-well recolors stay with their own entries). Compared
+against `winamp-screenshots/winamp-2.x-stack.png` and `docs/screenshots/player.png`.
+
+**Validation gap:** real-run-needed — the gray chrome was only visible as painted window
+pixels; no offline test rendered the root view's pixels until this fix's
+`root_view_keeps_the_dark_outline_outside_the_light_bevel` headless capture, and the
+reference values themselves came from a bounded X11 capture run.
+
 ### A play committing while the signed-out Recently Played restore is in flight is persisted alone, erasing the saved list's rows until the reply lands (found by the bugfix role 2026-10-29) — fixed 2026-10-29 by the bugfix role
 
 Found in the latent-bug hunt (there was no Open entry).
