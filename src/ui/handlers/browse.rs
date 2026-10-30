@@ -678,6 +678,13 @@ pub(in crate::ui) fn restore_view(player: &mut WinampPlayer, view: LibraryView) 
 /// The startup sign-in stored a session: refetch the artists list, and a flat
 /// list showing now, so both replace their sample-library rows with the
 /// signed-in library. Albums, Songs, and search results stay as they are.
+///
+/// A saved Apple Music id for the restored last-played track can only be
+/// looked up with a session, so the sign-in also issues
+/// `resolve_current_track`: with a stored session the lookup at last reaches
+/// the signed-in library and the bar switches from the id to the title. Its
+/// own guard makes every later re-issue free, and a sample-library id was
+/// already resolved at boot.
 pub(in crate::ui) fn session_ready(player: &mut WinampPlayer) -> Task<Message> {
     let artists = fetch::load_artists(player);
     let flat = match player.current_view {
@@ -696,5 +703,9 @@ pub(in crate::ui) fn session_ready(player: &mut WinampPlayer) -> Task<Message> {
         }
         _ => Task::none(),
     };
-    Task::batch([artists, flat])
+    Task::batch([
+        artists,
+        flat,
+        super::playback::resolve_current_track(player),
+    ])
 }

@@ -113,6 +113,12 @@ fn boot(state: Arc<Mutex<AppState>>, service: AppleMusicService) -> (WinampPlaye
         WinampPlayer::new(state, service),
         Task::batch([
             Task::done(Message::LoadArtists),
+            // The last-played track the restored snapshot left in `current_track`
+            // is named, not just shown: resolving it records its title, artist,
+            // and rest into `known_tracks` so the bar and the window title name
+            // it instead of the raw id. The offline sample library answers
+            // immediately; an Apple Music id stays id-named until sign-in.
+            Task::done(Message::ResolveCurrentTrack),
             // The startup sign-in runs on a background thread, so the fetch
             // above can land before the session exists and answer from the
             // sample library. Refetch when a session arrives, replacing
@@ -280,6 +286,10 @@ fn update(player: &mut WinampPlayer, message: Message) -> Task<Message> {
         Message::ClearSearch => handlers::browse::search::clear_search(player),
         Message::LoadArtists => handlers::browse::fetch::load_artists(player),
         Message::SessionReady => handlers::browse::session_ready(player),
+        Message::ResolveCurrentTrack => handlers::playback::resolve_current_track(player),
+        Message::CurrentTrackResolved { id, song } => {
+            handlers::playback::current_track_resolved(player, id, song)
+        }
         Message::ArtistsLoaded(artists) => handlers::browse::fetch::artists_loaded(player, artists),
         Message::AlbumsLoaded(albums) => handlers::browse::fetch::albums_loaded(player, albums),
         Message::SongsLoaded(songs) => handlers::browse::fetch::songs_loaded(player, songs),

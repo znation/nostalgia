@@ -628,6 +628,60 @@ fn get_all_songs_maps_the_library_songs_collection() {
     assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/songs");
 }
 
+// One library song by id fetches the same `library-songs` resource shape at
+// the id-scoped endpoint: the URL pins the id in the path, and the mapped
+// song pins the fields the model reads, with the empty `album_id` a library
+// song carries.
+#[test]
+fn get_library_song_maps_the_single_resource() {
+    let stub = StubTransport::returning(
+        r#"{"data":[{"id":"song-1","attributes":{"name":"Opening","artistName":"The Sample Band","durationInMillis":210000,"previews":[{"url":"https://example.test/preview.m4a"}]}}]}"#,
+    );
+    let library = library_over(&stub);
+
+    let song = library.get_library_song(&rest_session(), "song-1").unwrap();
+
+    assert_eq!(
+        song,
+        Some(Song {
+            id: "song-1".to_string(),
+            title: "Opening".to_string(),
+            artist: "The Sample Band".to_string(),
+            album: String::new(),
+            year: None,
+            genre: String::new(),
+            track_number: None,
+            disc_number: None,
+            composer: String::new(),
+            content_rating: None,
+            album_id: String::new(),
+            duration_ms: 210_000,
+            preview_url: Some(PREVIEW_URL.to_string()),
+        })
+    );
+    assert_single_call(
+        &stub,
+        "https://api.music.apple.com/v1/me/library/songs/song-1",
+    );
+}
+
+// An unknown id — one that names no library song of this user's — answers as
+// `Ok(None)` rather than an error, because the id is merely unknown: the same
+// envelope the collection endpoints answer with for an empty library.
+#[test]
+fn get_library_song_reports_none_for_an_empty_collection() {
+    let stub = StubTransport::returning(EMPTY_DATA_BODY);
+    let library = library_over(&stub);
+
+    let song = library.get_library_song(&rest_session(), "song-9").unwrap();
+
+    assert_eq!(song, None);
+    assert_single_call(
+        &stub,
+        "https://api.music.apple.com/v1/me/library/songs/song-9",
+    );
+}
+
 // The album running times are grouped from the whole-library songs collection
 // by exact `(albumName, artistName)`, summing each album's songs. A resource
 // without a non-blank album name is skipped, an album missing from the map is

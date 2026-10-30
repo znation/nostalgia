@@ -935,7 +935,13 @@ a new file takes the platform's default mode. The last-played track is a plain `
 not one of the UI-owned values: the id is held in `AppState` (`current_track`), `from_state`
 carries it straight from the snapshot, and the boot `apply_to` restores the track stopped with a
 blank elapsed readout, the state Stop leaves; a track change or stop rewrites the line on the
-next message's save. A missing or empty `current_track` line — or a stale id no longer in the
+next message's save. The restored id is resolved into a `known_tracks` entry at launch
+(`Message::ResolveCurrentTrack` → `handlers::playback::resolve_current_track` and
+`current_track_resolved`; `AppleMusicService::resolve_song` answers a sample-library id
+immediately and an Apple Music id once a session is stored, through
+`rest::RestLibrary::get_library_song`; a failed fetch, an unknown id, or a track resolved
+another way leaves the state untouched and keeps the id-fallback label), and the entry records
+no playlist `number` and resets the marquee like `track_selected`'s does. A missing or empty `current_track` line — or a stale id no longer in the
 library, which degrades through the existing id-fallback label — leaves no track. The restored
 track is playable from no row: when the transport holds no preview and remembers no URL (a fresh
 launch), Play and the media-key play/pause resolve the saved id through the service seam

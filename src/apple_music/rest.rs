@@ -126,6 +126,32 @@ impl RestLibrary {
         self.fetch(&url, session, |resource| resource.into_song(""))
     }
 
+    /// One library song by id: the signed-in user's library song whose id is
+    /// `id`, or `None` when the collection answers empty (the id is known to
+    /// Apple Music but names no library song of this user's).
+    ///
+    /// This backs the UI's read-only resolution of the restored last-played
+    /// track id (see `AppleMusicService::resolve_song`); it is an ordinary
+    /// fetch, so a transport failure or a parse failure (a wrong id's 404
+    /// among them) surfaces as the [`AppleMusicError`] the caller folds to
+    /// `None`. A library song carries no album id, so the mapped [`Song`]
+    /// leaves `album_id` empty, exactly as [`RestLibrary::get_all_songs`]
+    /// maps a collection song.
+    ///
+    /// # Errors
+    ///
+    /// Returns an [`AppleMusicError`] when the request fails, the response is
+    /// not valid JSON, or the resource carries a blank id or no name.
+    pub fn get_library_song(
+        &self,
+        session: &MusicKitSession,
+        id: &str,
+    ) -> Result<Option<Song>, AppleMusicError> {
+        let url = format!("{API_BASE}/me/library/songs/{}", encode_path_segment(id));
+        let songs = self.fetch(&url, session, |resource| resource.into_song("").map(Some))?;
+        Ok(songs.into_iter().next().flatten())
+    }
+
     /// The summed duration of each album in the signed-in user's library,
     /// keyed by its exact `(album title, artist display name)` pair.
     ///

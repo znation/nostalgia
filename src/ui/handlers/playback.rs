@@ -335,6 +335,79 @@ pub(in crate::ui) fn replay_resolved(
     begin_play(player, song, None)
 }
 
+/// Zips the restored last-played track id into its title: what does the id
+/// the boot `apply_to` restored name? The relaunch starts with an empty
+/// `known_tracks` index, so the Now Playing bar and the window title degrade
+/// to the raw id until a name is recorded; this issues the service's
+/// read-only `resolve_song` (a sample-library id resolves immediately with no
+/// session and no network; an Apple Music id resolves once a session is
+/// stored) and routes the answer to [`current_track_resolved`].
+///
+/// Nothing here plays, loads, or changes transport state: the restored track
+/// stays stopped.
+///
+/// The `Some`-then-`contains_key` guard keeps the re-issues free that
+/// `session_ready` makes: once the track resolved, every later issue finds it
+/// in `known_tracks` and schedules nothing — and after a Replay, it keeps the
+/// `track_selected` entry with its playlist number. No current track at all
+/// schedules nothing too.
+pub(in crate::ui) fn resolve_current_track(player: &mut WinampPlayer) -> Task<Message> {
+    let Some(id) = player.state.blocking_lock().current_track.clone() else {
+        return Task::none();
+    };
+    if player.known_tracks.contains_key(&id) {
+        return Task::none();
+    }
+    // A clone shares the session handle, like the fetch handlers' clones.
+    let service = player.apple_music_service.clone();
+    // The future must own its inputs, so iced can run it after this handler
+    // returns: move the service clone into the async block and give the
+    // reply builder its own copy of the id.
+    let id_for_lookup = id.clone();
+    Task::perform(
+        async move { service.resolve_song(&id_for_lookup).await },
+        move |song| Message::CurrentTrackResolved {
+            id: id.clone(),
+            song,
+        },
+    )
+}
+
+/// Records the restored track's resolution: the reply carries the id it was
+/// issued for, and the handler answers only when that id is still the state's
+/// current track (re-checked under the lock, then dropped) and the resolution
+/// succeeded. Otherwise it changes nothing — a resolution can never overwrite
+/// an entry the user's own play recorded, and a failed or stale one simply
+/// leaves the id-fallback bar text standing.
+///
+/// The mapping is the play path's [`views::KnownTrack::from_song`] with a
+/// blank `number`: the restored track's row position in whatever past list
+/// selected it is not persisted. The blank-number entry resets the marquee
+/// the same fresh-line reset `track_selected` applies — the bar moves from a
+/// short id line to a long title line at the next message, and
+/// `WinampPlayer::needs_marquee` re-evaluates on that rebuild. The transport,
+/// the elapsed readout, `current_track`, and the play path are never touched:
+/// the restored track stays stopped.
+pub(in crate::ui) fn current_track_resolved(
+    player: &mut WinampPlayer,
+    id: String,
+    song: Option<Song>,
+) -> Task<Message> {
+    let Some(song) = song else {
+        return Task::none();
+    };
+    let still_current = player.state.blocking_lock().current_track.as_deref() == Some(id.as_str());
+    if !still_current {
+        return Task::none();
+    }
+    player
+        .known_tracks
+        .insert(id, views::KnownTrack::from_song(&song, String::new()));
+    player.marquee_offset = 0;
+    player.title_drag = None;
+    Task::none()
+}
+
 /// The play completion: it ends the transition the selection began, so the
 /// position poll may query the backend again. Only the current track's entry
 /// is ever read (see

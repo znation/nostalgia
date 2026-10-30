@@ -1164,3 +1164,96 @@ fn file_info_track_falls_back_to_the_current_track_without_a_selection() {
     assert_eq!(track.title, "Playing");
     assert_eq!(resolved, Some(format));
 }
+
+// A resolution for the current track records the restored song exactly as
+// `track_selected`'s play-path mapping does — but with a blank `number`,
+// since the restored track's row position in whatever past list selected it
+// is not persisted — and touches no transport state: the restored track
+// stays stopped.
+#[test]
+fn current_track_resolved_records_the_restored_track() {
+    let (mut player, state) = test_player();
+    state.blocking_lock().current_track = Some("song-1".to_string());
+    let song = sample_song();
+
+    let _ = update(
+        &mut player,
+        Message::CurrentTrackResolved {
+            id: "song-1".to_string(),
+            song: Some(song.clone()),
+        },
+    );
+
+    let track = player
+        .known_tracks
+        .get("song-1")
+        .expect("restored track recorded");
+    assert_eq!(track.title, song.title);
+    assert_eq!(track.artist, song.artist);
+    assert_eq!(track.album, song.album);
+    assert_eq!(track.year, song.year);
+    assert_eq!(track.genre, song.genre);
+    assert_eq!(track.time, views::format_track_time(song.duration_ms));
+    assert_eq!(track.number, "");
+    assert!(!state.blocking_lock().is_playing);
+    assert_eq!(
+        state.blocking_lock().current_track.as_deref(),
+        Some("song-1")
+    );
+}
+
+// A failed resolution (None) records nothing, and a resolution for an id the
+// state no longer points at is dropped: a user who picked another song in the
+// seconds before the answer must not be answered retroactively — the new
+// selection's own `track_selected` entry, number prefix included, stands.
+#[test]
+fn current_track_resolved_skips_a_stale_or_failed_resolution() {
+    let (mut player, state) = test_player();
+    state.blocking_lock().current_track = Some("song-1".to_string());
+
+    let _ = update(
+        &mut player,
+        Message::CurrentTrackResolved {
+            id: "song-1".to_string(),
+            song: None,
+        },
+    );
+    assert!(
+        player.known_tracks.is_empty(),
+        "a failed resolution records nothing"
+    );
+
+    // A stale resolution after a real selection: `song-1` owns its play-path
+    // entry, and a late answer for `song-9` is dropped.
+    let _ = update(&mut player, Message::SongsLoaded(stepping_songs()));
+    let _ = update(&mut player, Message::TrackSelected { epoch: 1, index: 0 });
+    let _ = update(
+        &mut player,
+        Message::CurrentTrackResolved {
+            id: "song-9".to_string(),
+            song: Some(sample_song()),
+        },
+    );
+    assert!(!player.known_tracks.contains_key("song-9"));
+    assert_eq!(
+        player
+            .known_tracks
+            .get("song-1")
+            .map(|track| track.number.as_str()),
+        Some("1. ")
+    );
+}
+
+// The boot and sign-in issues are free once the track resolved: an id already
+// in `known_tracks`, and no current track at all, schedule no follow-up work.
+#[test]
+fn resolve_current_track_skips_the_work_an_already_known_track_needs() {
+    let (mut player, state) = test_player();
+    seed_current_title(&mut player, &state, "Playing");
+    let task = super::handlers::playback::resolve_current_track(&mut player);
+    assert_no_task(task);
+
+    let (mut player, _state) = test_player();
+    let task = super::handlers::playback::resolve_current_track(&mut player);
+    assert_no_task(task);
+}

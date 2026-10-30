@@ -320,6 +320,17 @@ pub(in crate::ui) enum Message {
     // The startup sign-in stored a session: refetch the artists list and any
     // flat list showing, replacing sample rows with the signed-in library.
     SessionReady,
+    // Zips the restored last-played track's id into its title: what does the
+    // id the boot `apply_to` restored name? The handler issues the service's
+    // read-only `resolve_song`; the reply records the known-track entry.
+    ResolveCurrentTrack,
+    // The reply to `ResolveCurrentTrack`, carrying the id it was issued for so
+    // the handler can check the state still points at that track before it
+    // records anything; `song` is `None` when the id could not be resolved.
+    CurrentTrackResolved {
+        id: String,
+        song: Option<Song>,
+    },
     ArtistsLoaded(Vec<Artist>),
     AlbumsLoaded(Vec<Album>),
     SongsLoaded(Vec<Song>),

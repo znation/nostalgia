@@ -110,9 +110,11 @@ impl TimeDisplay {
 /// A track the Now Playing bar knows about: the playlist number prefix, title,
 /// and artist it renders and the formatted length it shows beside them.
 /// Recorded when a track is played, so the bar keeps naming and timing the
-/// playing track after the user browses to a different album. The File info
-/// panel also builds an ephemeral entry for a song-list selection through
-/// [`KnownTrack::from_song`], never storing it in the played-tracks index.
+/// playing track after the user browses to a different album, and recorded
+/// again at launch for the restored last-played track (which was never played
+/// this run). The File info panel also builds an ephemeral entry for a
+/// song-list selection through [`KnownTrack::from_song`], never storing it in
+/// the played-tracks index.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KnownTrack {
     /// The track's title, without the artist (the bar renders [`Self::artist`] separately).
@@ -157,10 +159,12 @@ pub struct KnownTrack {
 }
 
 impl KnownTrack {
-    /// Builds the entry a [`crate::library::Song`] maps to, so the two
+    /// Builds the entry a [`crate::library::Song`] maps to, so the three
     /// construction sites — the play path (`handlers::playback::track_selected`,
     /// which stores the entry in `known_tracks` and whose per-field mapping the
-    /// `known_tracks_record_the_played_songs_*` tests pin) and the File info
+    /// `known_tracks_record_the_played_songs_*` tests pin), the restored
+    /// track's launch resolution (`handlers::playback::current_track_resolved`,
+    /// which also stores it, with a blank `number`), and the File info
     /// panel's selected-row resolver (`WinampPlayer::file_info_track`, which
     /// builds an ephemeral entry) — cannot drift apart. Every field maps exactly
     /// as `track_selected`'s original struct literal did.

@@ -910,3 +910,79 @@ async fn get_song_by_id_uses_the_rest_library_when_signed_in() {
         "an id outside the signed-in library must not fall back to the sample songs: {found:?}"
     );
 }
+
+// A signed-in service resolves a non-sample id through the REST client: the
+// stub's song owns a non-sample id, so the answer can only have come from the
+// library lookup, and the URL pins the id-scoped endpoint.
+#[tokio::test]
+async fn resolve_song_uses_the_rest_library_when_signed_in() {
+    let stub = StubTransport::returning(&rest_song_data());
+    let service = signed_in_service(&stub);
+
+    let song = service.resolve_song(REST_SONG_ID).await;
+
+    assert_eq!(song, Some(rest_song()));
+    assert_single_call(
+        &stub,
+        "https://api.music.apple.com/v1/me/library/songs/rest-song",
+    );
+}
+
+// Without a session the sample library answers, and the transport is never
+// touched: the offline launch resolves a saved sample id with no network.
+#[tokio::test]
+async fn resolve_song_falls_back_to_the_sample_library_without_a_session() {
+    let stub = StubTransport::failing("must not be called");
+    let service = AppleMusicService::with_transport(
+        Arc::new(Mutex::new(AppState::default())),
+        Box::new(stub.clone()),
+    );
+
+    let song = service.resolve_song("song-2").await;
+
+    assert_eq!(song.as_ref().map(|song| song.id.as_str()), Some("song-2"));
+    assert!(stub.calls().is_empty());
+}
+
+// A sample id answers before the REST library would: sample ids and Apple
+// Music ids never collide, so a signed-in user launching offline-still gets
+// the sample song immediately, with no request.
+#[tokio::test]
+async fn resolve_song_answers_a_sample_id_before_the_rest_library_when_signed_in() {
+    let stub = StubTransport::returning(&rest_song_data());
+    let service = signed_in_service(&stub);
+
+    let song = service.resolve_song("song-1").await;
+
+    assert_eq!(song.as_ref().map(|song| song.id.as_str()), Some("song-1"));
+    assert!(stub.calls().is_empty());
+}
+
+// A failed fetch — a transport failure, such as being offline with a session
+// stored — folds to a quiet `None` rather than an error: resolution is a
+// read-only courtesy lookup, not a browse error surface.
+#[tokio::test]
+async fn resolve_song_returns_none_when_the_request_fails() {
+    let stub = StubTransport::failing("library song down");
+    let service = signed_in_service(&stub);
+
+    let song = service.resolve_song(REST_SONG_ID).await;
+
+    assert_eq!(song, None);
+}
+
+// A blank id, or one carrying a terminal control character, is rejected
+// before any library is consulted: no song carries such an id, so the answer
+// is `None` with no request.
+#[tokio::test]
+async fn resolve_song_rejects_a_blank_or_control_id_as_none() {
+    let stub = StubTransport::returning(&rest_song_data());
+    let service = signed_in_service(&stub);
+
+    let blank = service.resolve_song("   ").await;
+    let control = service.resolve_song("rest-song\u{0}").await;
+
+    assert_eq!(blank, None);
+    assert_eq!(control, None);
+    assert!(stub.calls().is_empty());
+}

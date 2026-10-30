@@ -217,6 +217,44 @@ impl AppleMusicService {
         Ok(songs.into_iter().find(|song| song.id == id))
     }
 
+    /// The song the given id names, as a read-only courtesy lookup for the
+    /// restored last-played track: it answers what the id is called so the
+    /// Now Playing bar can name the restored track without playing it.
+    ///
+    /// The answer order is deliberate. A blank `track_id` — empty or only
+    /// whitespace — or one carrying a terminal control character is rejected
+    /// (its [`ensure_id_is_valid`] rejection caught) as `None`, since no
+    /// library song has such an id. Then the sample library answers first: a
+    /// saved sample-library id is resolved immediately at launch, with no
+    /// session and no network, and sample ids (`"song-N"`) and Apple Music
+    /// ids never collide, so one rule covers both regimes. Finally, when a
+    /// session is stored, the id is looked up once through
+    /// [`rest::RestLibrary::get_library_song`], run on a worker thread through
+    /// `off_thread` like every other signed-in call; a failed or not-found
+    /// request folds to `None`. With no session and no sample match it
+    /// returns `None`.
+    ///
+    /// Errors are deliberately swallowed: this is a read-only courtesy
+    /// lookup, not a browse query, so a name the launch cannot fetch just
+    /// keeps today's id-fallback bar text and the browse Retry path stays
+    /// untouched. Resolution never panics, never returns a song for another
+    /// id, and never blocks iced's executor.
+    pub async fn resolve_song(&self, id: &str) -> Option<Song> {
+        if ensure_id_is_valid(id, IdKind::Track).is_err() {
+            return None;
+        }
+        if let Some(song) = sample_all_songs().into_iter().find(|song| song.id == id) {
+            return Some(song);
+        }
+        let session = self.session()?;
+        let rest = Arc::clone(&self.rest);
+        let id = id.to_string();
+        off_thread(move || rest.get_library_song(&session, &id))
+            .await
+            .ok()
+            .flatten()
+    }
+
     /// Every album in the library: the signed-in user's whole Apple Music
     /// library when a session is stored, and every sample-library album
     /// otherwise.
