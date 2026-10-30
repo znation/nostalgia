@@ -5,6 +5,34 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### The browse-list selection bar is light sky blue; the playlist editor's is a deep saturated blue (found by the reference-comparison pass 2026-10-29) — fixed 2026-10-30 by the bugfix role
+
+**Symptom.** A clicked row's bar is `#4080FF` (64,128,255) — a bright sky blue with the
+row's text turned white. The base skin's playlist selection bar is `#0000BC` (0,0,188),
+a deep blue; the repo's mockup (`docs/screenshots/library.png`) uses (0,0,198), agreeing
+with the reference. The app's bar is visibly lighter and more saturated than both.
+
+**How to reproduce.** Open All Songs in the running app, click any row, and sample the
+bar: (300,563) reads (64,128,255). In `winamp-2.x-stack.png` the playlist's selection bar
+(100,261) reads (0,0,188); in `docs/screenshots/library.png` the selection pixels are
+(0,0,198).
+
+**Suspected cause.** `theme.rs`'s `ROW_HIGHLIGHT = Color::from_rgb(0.25, 0.5, 1.0)`,
+documented as "echoing Winamp's playlist selection bar (a saturated blue)" — the value is
+a light sky blue, not the bar's deep blue.
+
+**Resolution.** `theme.rs`'s `ROW_HIGHLIGHT` is now `Color::from_rgb8(0, 0, 188)`, the
+base skin's ground-truth value (re-sampled this run: `winamp-2.x-stack.png` (100,261)
+reads srgb(0,0,188)); the mockup's (0,0,198) is one step off it. Only `theme.rs` held the
+literal — every test compares against the constant symbolically — and the literal pin
+test `panel_recess_and_row_highlight_keep_their_base_skin_colors` was updated first and
+watched fail on (0.25,0.5,1.0) (0,0,188's float form differs in r/g/b on every channel),
+then pass after the constant changed. `docs/usage.md`'s "blue bar" became "deep blue
+(#0000BC) bar" in the same change; no pixel-capture test pinned the old sky blue.
+Compared against `winamp-screenshots/winamp-2.x-stack.png` per the visible-change rule.
+
+**Validation gap:** none — the literal pin test reproduced and confirmed it.
+
 ### The LCD and marquee green is pure `#00FF00`; the base skin's green is `#00C600` (found by the reference-comparison pass 2026-10-29) — fixed 2026-10-30 by the bugfix role
 
 **Symptom.** The app's green — the Now Playing title, browse-list row text, footer

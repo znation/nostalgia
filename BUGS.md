@@ -84,22 +84,6 @@ used as the single well fill behind the whole display area. The browse list's we
 the same fill: its rows sit on (13,13,13) where the base skin's playlist editor sits on
 pure black — `winamp-2.x-stack.png` (200,300) reads (0,0,0).
 
-### The browse-list selection bar is light sky blue; the playlist editor's is a deep saturated blue (found by the reference-comparison pass 2026-10-29)
-
-**Symptom.** A clicked row's bar is `#4080FF` (64,128,255) — a bright sky blue with the
-row's text turned white. The base skin's playlist selection bar is `#0000BC` (0,0,188),
-a deep blue; the repo's mockup (`docs/screenshots/library.png`) uses (0,0,198), agreeing
-with the reference. The app's bar is visibly lighter and more saturated than both.
-
-**How to reproduce.** Open All Songs in the running app, click any row, and sample the
-bar: (300,563) reads (64,128,255). In `winamp-2.x-stack.png` the playlist's selection bar
-(100,261) reads (0,0,188); in `docs/screenshots/library.png` the selection pixels are
-(0,0,198).
-
-**Suspected cause.** `theme.rs`'s `ROW_HIGHLIGHT = Color::from_rgb(0.25, 0.5, 1.0)`,
-documented as "echoing Winamp's playlist selection bar (a saturated blue)" — the value is
-a light sky blue, not the bar's deep blue.
-
 ### The rolled-up shade strip renders 52 px tall; the base skin's is 14 px (found by the reference-comparison pass 2026-10-29)
 
 **Symptom.** `Ctrl+W` (or the title bar's shade button) rolls the window into a 52 px
