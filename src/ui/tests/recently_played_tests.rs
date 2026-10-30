@@ -362,6 +362,40 @@ fn recently_played_resolved_drops_unanswerable_ids() {
     );
 }
 
+// A play committed while the boot restore was in flight is newer than every
+// restored row — even when the snapshot does not name its song, so the walk
+// cannot re-record it at the top — and the restore must pin it back over
+// them, or the next save writes the run's newest play as the list's oldest.
+#[test]
+fn recently_played_resolved_keeps_a_play_committed_mid_restore_newest() {
+    let (mut player, state) = test_player();
+    let songs = stepping_songs();
+
+    // The user plays song-3 (the snapshot does not name it) while the
+    // seeded ids resolve; the answered rows line up with the seed
+    // (song-2 newest) exactly as the resolve walk produces them.
+    player.current_view = CurrentView::RecentlyPlayed;
+    let _ = update(&mut player, Message::RecentlyPlayedLoaded(songs.clone()));
+    record_a_play(&mut player, &state, "song-3");
+    player.recently_played_seeded = vec!["song-2".to_string(), "song-1".to_string()];
+
+    let _ = update(
+        &mut player,
+        Message::RecentlyPlayedResolved {
+            songs: vec![Some(songs[1].clone()), Some(songs[0].clone())],
+        },
+    );
+
+    assert_eq!(
+        player.played_songs.newest_first_ids(),
+        vec![
+            "song-3".to_string(),
+            "song-2".to_string(),
+            "song-1".to_string()
+        ]
+    );
+}
+
 // A sign-in racing the restore drops the restored rows: the reply landing
 // after a session was stored stores nothing, because the signed-in view
 // fetches the service's own list and the restored rows would be dead anyway.

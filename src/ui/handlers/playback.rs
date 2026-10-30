@@ -484,7 +484,24 @@ pub(in crate::ui) fn recently_played_resolved(
     if player.apple_music_service.session().is_some() {
         return Task::none();
     }
+    // A play that committed while the resolve was in flight is newer than
+    // every snapshot row, even when the snapshot does not name its song (so
+    // the restore walk cannot re-record it at the top the way it re-records
+    // the snapshot's newest row): the walk drops it to the list's oldest
+    // end, and the next save would write the run's newest play as the
+    // oldest. Snap the plays recorded since the boot back on top of the
+    // walk's answer, oldest first, so `record` keeps their own play order
+    // with the newest pinned last.
+    let mid_flight_plays = player
+        .played_songs
+        .newest_first()
+        .into_iter()
+        .rev()
+        .collect::<Vec<_>>();
     player.played_songs.restore(songs);
+    for song in mid_flight_plays {
+        player.played_songs.record(song);
+    }
     Task::none()
 }
 

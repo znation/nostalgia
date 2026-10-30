@@ -316,7 +316,9 @@ keeping the line-based file whole (the play seams have no naming panel to refuse
 seed, the boot resolves each saved id through the read-only `resolve_song` (in save order, the
 reply's rows lining up with the ids) and records only the answerable rows through the same
 `record` the play path uses — the cap and replay dedupe apply during the merge, and a play that
-committed while the restore was in flight keeps its row and its newest position. A relaunch with
+committed while the restore was in flight keeps its row and its newest position, even when the
+snapshot cannot name its song: the restore reply re-records every play recorded since the boot
+on top of the walk's answer, so a mid-restore play is not dropped below the restored rows. A relaunch with
 a stored session restores nothing, because the view fetches the service's own list; a sign-in
 racing the restore drops the restored rows and keeps the fetch. An id the launch cannot answer
 is dropped from the list at the next save, exactly like a saved playlist's stale id (and a
@@ -334,7 +336,10 @@ replays dedupe and the cap holds mid-restore;
 `handlers::playback::track_played`'s committed arm records only a track the showing list names;
 `handlers::playback::resolve_recently_played` resolves the seed only when no session is stored
 and the seed is non-empty, and never re-issues at `session_ready`;
-`handlers::playback::recently_played_resolved` skips a restore whose session landed under it;
+`handlers::playback::recently_played_resolved` skips a restore whose session landed under it,
+and re-records the mid-restore plays on top of the walk's answer (the resolve is the only
+non-live writer of the rows, so the rows standing before the reply are exactly the plays
+committed since the boot);
 `WinampPlayer::recently_played_seeded` feeds `persist_settings_if_changed` when the rows are
 empty (seed parity) and `PlayedSongs::newest_first_ids` when they are not, so a
 pre-answer persist cannot erase the saved line;
@@ -347,6 +352,7 @@ bumped) when the service holds no session and the list is non-empty, and fetches
 `played_songs_restore_records_oldest_first_and_dedupes_replays`,
 `played_songs_restore_keeps_a_play_committed_mid_restore_newest`,
 `played_songs_restore_honors_the_history_limit` (`src/ui/transport/history.rs`),
+`recently_played_resolved_keeps_a_play_committed_mid_restore_newest` (`src/ui/tests/recently_played_tests.rs`),
 `recently_played_line_round_trips_and_skips_the_malformed_values`,
 `a_line_broken_played_id_writes_one_whole_settings_line` (both in `src/settings.rs`),
 `signed_out_recently_played_lists_this_runs_played_songs_newest_first`,
