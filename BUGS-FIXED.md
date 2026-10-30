@@ -5,6 +5,52 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### A play committing while the signed-out Recently Played restore is in flight is persisted alone, erasing the saved list's rows until the reply lands (found by the bugfix role 2026-10-29) — fixed 2026-10-29 by the bugfix role
+
+Found in the latent-bug hunt (there was no Open entry).
+
+**Symptom.** While the boot resolve of `recently_played=` is in flight, a
+play that commits makes `played_songs` non-empty, and
+`persist_settings_if_changed` (which runs after every message) then writes
+the snapshot's `recently_played=` line from those plays alone — replacing
+the file's saved rows instead of keeping them, so a quit during the
+answer's window persists a shrunken list; the reply re-composes the list
+and the next save rewrites it whole, but the file's rows are gone in
+between, and the invariant doc promised no pre-answer save could erase
+that line.
+
+**Reproduce.** Seed a player from a saved snapshot with
+`recently_played=[song-3, song-1]`, send `Message::ResolveRecentlyPlayed`,
+record `song-2` into `played_songs`, and let a message trigger a persist:
+the saved snapshot carried `recently_played=song-2` only; see
+`a_mid_restore_play_persists_the_seed_rows_with_the_play_on_top`
+(`src/ui/tests/settings_tests.rs`), which failed this way before the fix.
+
+**Cause.** `persist_settings_if_changed` chose between two snapshot
+sources — `recently_played_seeded` (seed parity, rows empty) and
+`played_songs.newest_first_ids` (rows non-empty) — with no notion that a
+restore was still in flight: a mid-flight play was treated as the whole
+answer before the resolve had answered.
+
+**Fix.** `resolve_recently_played` sets a
+`recently_played_restore_pending` flag when it issues the resolve task and
+`recently_played_resolved` clears it whatever the reply holds; while it
+stands, the pre-answer persist composes the seed's rows underneath the
+mid-flight plays' ids (the composition the reply reproduces when every
+seed id still answers), so no pre-answer save erases a row the file
+already held; an id the answer drops falls out at the next save. The doc
+paragraph in `WinampPlayer`'s `persist_settings_if_changed` comment and
+`docs/invariants.md`'s "Signed-out Recently Played" section name the flag
+and its test.
+
+**Validation gap:** unclear-invariant (closest tag) — the invariant doc
+already asserted "a persisted line cannot be erased by any pre-answer
+save" but the code only honored it while the rows stood empty, so the
+actual persist-ordering guarantee had to be reconstructed against the
+resolve's reply composition; the reconstructed guarantee is pinned in
+docs/invariants.md's Signed-out Recently Played section in the same
+commit.
+
 ### A line-break-bearing song id in a saved song list splits its `user_playlist=` settings row in two, injecting settings lines of its own — fixed 2026-10-29 by the bugfix role
 
 Found in the latent-bug hunt (there was no Open entry; the same played-id

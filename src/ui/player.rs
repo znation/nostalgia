@@ -148,9 +148,10 @@ pub(in crate::ui) struct WinampPlayer {
     /// list saves back through `persist_settings_if_changed` (the
     /// `recently_played=` line) and a launch's saved rows restore through
     /// the boot's `ResolveRecentlyPlayed`. Between the boot and the restore's
-    /// answer this stays empty and `recently_played_seeded` below holds the
-    /// snapshot parity instead, so a persist before the answer cannot erase
-    /// the saved line.
+    /// answer this holds only the boot's mid-flight plays, and the
+    /// `recently_played_restore_pending` flag makes a pre-answer persist
+    /// compose the seed underneath them, so no persist before the answer
+    /// erases the saved line.
     pub(in crate::ui) played_songs: transport::PlayedSongs,
     /// The saved signed-out Recently Played list's ids, newest first, the
     /// launch parsed and `adopt_saved_settings` seeded. They hold the
@@ -160,6 +161,15 @@ pub(in crate::ui) struct WinampPlayer {
     /// same class of guard that keeps a no-session run from erasing
     /// `music_kit_user_token=`. Not touched by `apply_to`.
     pub(in crate::ui) recently_played_seeded: Vec<String>,
+    /// Whether the boot's restore of the saved signed-out Recently Played
+    /// list is still in flight: `resolve_recently_played` sets it when it
+    /// issues the resolve task, and `recently_played_resolved` clears it
+    /// whatever the reply holds. While it stands, a play committed since the
+    /// boot joins the seed in `persist_settings_if_changed`'s snapshot (the
+    /// play's ids on top of the seed's) — without that, the pre-answer save
+    /// would carry the play's rows alone and erase the seed's rows from the
+    /// file until the reply lands.
+    pub(in crate::ui) recently_played_restore_pending: bool,
     /// The songs played this Shuffle round, so a shuffled forward step
     /// plays each song of the showing list once before any repeats.
     pub(in crate::ui) shuffle_round: transport::ShuffleRound,
@@ -523,6 +533,7 @@ impl WinampPlayer {
             pending_position_transitions: 0,
             plays_generation: Arc::new(AtomicU64::new(0)),
             recently_played_seeded: Vec::new(),
+            recently_played_restore_pending: false,
             settings_store: None,
             saved_settings: Settings::default(),
         }
@@ -607,8 +618,32 @@ impl WinampPlayer {
         // first persist writes nothing; a fully-answered restore then
         // matches the seed again (no save), and partly-answered one
         // shortens the file's list to what the library could still name.
+        // While the boot restore is in flight, the rows standing are the
+        // boot's own mid-flight plays — the save's newest rows next — so the
+        // true composition once the answer lands (the walk's answered rows
+        // under the re-recorded plays) is unknown only in which of the seed
+        // ids will still answer. Keep them all until then, with the play's
+        // ids on top: no pre-answer save erases a row the file already held,
+        // and an id the answer drops falls out at the next save, like a
+        // stale saved-playlist id does.
         snapshot.set_recently_played(if self.played_songs.is_empty() {
             self.recently_played_seeded.clone()
+        } else if self.recently_played_restore_pending {
+            // The eventual reply composes exactly this list when every seed
+            // id still answers (a replay of a seeded row keeps that row's
+            // newest-first slot, so the seed must not stand twice): the
+            // mid-flight plays newest first, then the seed rows the plays do
+            // not already name. An id the answer drops falls out at the next
+            // save, like a stale saved-playlist id does.
+            let plays = self.played_songs.newest_first_ids();
+            let mut ids = plays.clone();
+            ids.extend(
+                self.recently_played_seeded
+                    .iter()
+                    .filter(|id| !plays.contains(id))
+                    .cloned(),
+            );
+            ids
         } else {
             self.played_songs.newest_first_ids()
         });

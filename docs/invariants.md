@@ -325,7 +325,9 @@ is dropped from the list at the next save, exactly like a saved playlist's stale
 restore whose every id went unanswerable stores nothing, so the seed keeps saving nothing too
 and the view falls back to the sample stand-in until a play commits). The seed holds snapshot
 parity until the restore answers, so the boot's persist rewrites nothing: a persisted line
-cannot be erased by any pre-answer save. `PlayHistory` (Shuffle's
+cannot be erased by any pre-answer save — even when a play commits while the resolve is still
+in flight, that save composes the seed's rows underneath the play's instead of writing the
+plays alone. `PlayHistory` (Shuffle's
 Previous) and `current_track=` (the last-played track) are separate: neither is touched by this
 restore, and once a session is stored any later sign-in path drops the restored rows.
 
@@ -341,8 +343,11 @@ and re-records the mid-restore plays on top of the walk's answer (the resolve is
 non-live writer of the rows, so the rows standing before the reply are exactly the plays
 committed since the boot);
 `WinampPlayer::recently_played_seeded` feeds `persist_settings_if_changed` when the rows are
-empty (seed parity) and `PlayedSongs::newest_first_ids` when they are not, so a
-pre-answer persist cannot erase the saved line;
+empty (seed parity); while `recently_played_restore_pending` stands — set at the resolve's
+issue, cleared whatever the reply holds — that persist composes the seed's rows underneath
+the mid-flight plays' ids (the composition the reply reproduces when every seed id still
+answers), so no pre-answer persist erases the saved line; and afterwards the persist carries
+`PlayedSongs::newest_first_ids`;
 `handlers::browse::lists::show_recently_played` stores the run's rows (clear-then-store, epoch
 bumped) when the service holds no session and the list is non-empty, and fetches otherwise.
 
@@ -363,6 +368,7 @@ bumped) when the service holds no session and the list is non-empty, and fetches
 `recently_played_resolved_stores_the_answered_rows_in_play_order`,
 `recently_played_resolved_drops_unanswerable_ids`,
 `recently_played_resolved_skips_once_a_session_is_stored`,
+`a_mid_restore_play_persists_the_seed_rows_with_the_play_on_top`
 `boot_resolves_the_saved_recently_played_after_the_last_played_track`, and
 `session_arrival_refetches_the_showing_played_list_and_drops_the_played_rows`
 (`src/ui/tests/recently_played_tests.rs`), and

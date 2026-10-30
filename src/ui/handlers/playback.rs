@@ -450,6 +450,11 @@ pub(in crate::ui) fn resolve_recently_played(player: &mut WinampPlayer) -> Task<
     if player.recently_played_seeded.is_empty() {
         return Task::none();
     }
+    // The restore is in flight from now: a persist before the reply composes
+    // the seed with any play committed since the boot, so the save cannot
+    // erase the seed's rows while the walk decides what it can answer. The
+    // reply clears the flag whatever it holds.
+    player.recently_played_restore_pending = true;
     // A clone shares the session handle, like the fetch handlers' clones;
     // the seed is owned by the handler, so the future copies it.
     let service = player.apple_music_service.clone();
@@ -481,6 +486,10 @@ pub(in crate::ui) fn recently_played_resolved(
     player: &mut WinampPlayer,
     songs: Vec<Option<Song>>,
 ) -> Task<Message> {
+    // One resolve, one flag: whatever this reply holds — an answer, no
+    // usable answer, or a skip because a session landed under it (then the
+    // view fetches the service's own list) — the boot restore is over.
+    player.recently_played_restore_pending = false;
     if player.apple_music_service.session().is_some() {
         return Task::none();
     }

@@ -237,6 +237,71 @@ fn saved_recently_played_is_restored_on_boot_and_seeded_until_the_answer() {
     assert_eq!(store.snapshots().len(), 1);
 }
 
+// A play that commits while the boot restore is in flight joins the seed in
+// the pre-answer persist: the save carries the seeded ids with the play's
+// newest-first ids on top, so a quit during the answer's window keeps every
+// row the previous file held plus the run's own play — and when the reply
+// then lands, the restored composition equals that remembered snapshot, so
+// no extra write happens.
+// A play that commits while the boot restore is in flight joins the seed in
+// the pre-answer persist: the save carries the seeded ids with the play's
+// newest-first ids on top, so a quit during the answer's window keeps every
+// row the previous file held plus the run's own play — and when the reply
+// then lands, the restored composition equals that remembered snapshot, so
+// no extra write happens.
+#[test]
+fn a_mid_restore_play_persists_the_seed_rows_with_the_play_on_top() {
+    let (mut player, _state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+
+    let mut saved = Settings::default();
+    saved.set_recently_played(vec!["song-3".to_string(), "song-1".to_string()]);
+    player.adopt_saved_settings(saved);
+
+    // The boot issues the restore's resolve, as `main`'s task chain does.
+    let _ = update(&mut player, Message::ResolveRecentlyPlayed);
+
+    // The boot's persist holds the seed: nothing is written yet.
+    let _ = update(&mut player, Message::Ignored);
+    assert_eq!(store.snapshots().len(), 0);
+
+    // A play commits while the resolve is still in flight.
+    let songs = stepping_songs();
+    player.played_songs.record(songs[1].clone());
+    let _ = update(&mut player, Message::Ignored);
+
+    // The pre-answer persist keeps the file whole: the play's ids on top of
+    // the seed, not a replace-with-one-row write that would erase the seed.
+    let snapshots = store.snapshots();
+    assert_eq!(snapshots.len(), 1);
+    assert_eq!(
+        snapshots[0].recently_played(),
+        &[
+            "song-2".to_string(),
+            "song-3".to_string(),
+            "song-1".to_string()
+        ]
+    );
+    assert!(
+        snapshots[0]
+            .to_text()
+            .contains("recently_played=song-2,song-3,song-1")
+    );
+
+    // The resolve answers in seed order (newest first, song-9-style
+    // unanswerable id absent here); the restored composition is the same
+    // list the pre-answer persist saved, so nothing more writes.
+    let _ = update(
+        &mut player,
+        Message::RecentlyPlayedResolved {
+            songs: vec![Some(songs[2].clone()), Some(songs[0].clone())],
+        },
+    );
+    let _ = update(&mut player, Message::Ignored);
+    assert_eq!(store.snapshots().len(), 1);
+}
+
 #[test]
 fn an_unchanged_token_writes_nothing() {
     let (mut player, _state) = test_player();
