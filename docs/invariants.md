@@ -376,7 +376,7 @@ bumped) when the service holds no session and the list is non-empty, and fetches
 `played_songs_restore_honors_the_history_limit` (`src/ui/transport/history.rs`),
 `recently_played_resolved_keeps_a_play_committed_mid_restore_newest` (`src/ui/tests/recently_played_tests.rs`),
 `recently_played_line_round_trips_and_skips_the_malformed_values`,
-`a_line_broken_played_id_writes_one_whole_settings_line` (both in `src/settings.rs`),
+`a_line_broken_played_id_writes_one_whole_settings_line` (both in `src/settings/tests.rs`),
 `signed_out_recently_played_lists_this_runs_played_songs_newest_first`,
 `replaying_a_song_moves_its_row_to_the_newest_played_position`,
 `signed_in_recently_played_still_fetches_the_service_list`,
@@ -1256,7 +1256,7 @@ the seven player-owned values into `Settings::from_state`, then compares that sn
 last one before calling `settings::seam::SettingsWriter::save`. The autoscroll choice pinning lives
 in `saved_autoscroll_choice_is_restored_on_boot` and
 `toggle_autoscroll_reaches_the_saved_snapshot` (`src/ui/tests/settings_tests.rs`) and
-`autoscroll_round_trips_and_ignores_malformed_values` (`src/settings.rs`). Production wraps the store
+`autoscroll_round_trips_and_ignores_malformed_values` (`src/settings/tests.rs`). Production wraps the store
 in `settings::writer::BackgroundWriter`, so that `save` stores the snapshot in a one-slot mailbox
 and wakes its worker instead of writing on the update thread; the worker writes the newest queued
 snapshot with the wrapped store's blocking `save`, and dropping the writer closes the mailbox,
@@ -2559,7 +2559,7 @@ transient_panel_open, persist_settings_if_changed, adopt_saved_settings}`, `Sett
 `deleting_the_applied_custom_leaves_the_applied_curve_untouched` (`src/ui/tests/mixer_tests.rs`);
 `saving_a_preset_reaches_the_saved_snapshot` and
 `the_saved_custom_presets_are_adopted_at_launch` (`src/ui/tests/settings_tests.rs`);
-`eq_custom_preset_lines_round_trip_and_skip_the_malformed_ones` (`src/settings.rs`);
+`eq_custom_preset_lines_round_trip_and_skip_the_malformed_ones` (`src/settings/tests.rs`);
 `preset_choices_list_save_then_the_builtins_then_the_saved_customs`
 (`src/ui/views/tests/equalizer.rs`);
 `save_preset_overlay_draws_its_heading_note_and_buttons` and
@@ -2621,7 +2621,7 @@ switch_view}`, `handlers::browse::fetch::playlists_loaded`, and
 
 **Pinned by.** `user_playlist_lines_round_trip_and_skip_the_malformed_ones`,
 `a_line_broken_playlist_name_writes_one_whole_settings_line`, and
-`a_line_broken_playlist_song_id_writes_one_whole_settings_line` (`src/settings.rs`); the save-list
+`a_line_broken_playlist_song_id_writes_one_whole_settings_line` (`src/settings/tests.rs`); the save-list
 tests in `src/ui/tests/save_list_tests.rs`;
 `a_saved_song_list_reaches_the_saved_snapshot` and `saved_song_lists_are_restored_on_boot`
 (`src/ui/tests/settings_tests.rs`); `the_save_list_button_lays_out_in_the_nav_row`,
