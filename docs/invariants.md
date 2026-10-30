@@ -98,13 +98,12 @@ clears the search flag and view and calls `fetch_at_top(fetch::load_artists(play
 - `sort_reorders_composers_by_name`
 - `names_compare_case_insensitively_and_trim`, `blank_composers_form_a_last_unknown_group`, `groups_are_ordered_by_name_not_first_appearance` (`src/ui/composers.rs`)
 - `album_selected_in_all_albums_loads_its_songs_and_back_returns_to_all_albums`
-- `back_leaves_an_active_search_for_the_artists_list`
-- `backspace_steps_back_from_albums`
-- `reload_library_returns_to_artists_and_refetches_them`
-- `f5_reloads_the_library_from_the_keyboard`
-- `reload_button_is_shown_on_every_browse_level`
-- `browse_nav_buttons_place_reload_beside_sort`
-  (all in `src/ui/tests/`)
+- `back_leaves_an_active_search_for_the_artists_list` (`src/ui/tests/search_tests.rs`)
+- `backspace_steps_back_from_albums` (`src/ui/tests/shortcuts_tests.rs`)
+- `reload_library_returns_to_artists_and_refetches_them` (`src/ui/tests/flat_lists_tests.rs`)
+- `f5_reloads_the_library_from_the_keyboard` (`src/ui/tests/shortcuts_tests.rs`)
+- `reload_button_is_shown_on_every_browse_level` (`src/ui/tests/view_tests.rs`)
+- `browse_nav_buttons_place_reload_beside_sort` (`src/ui/tests/view_tests.rs`)
 - `message_for_maps_backspace_to_back` (`src/ui/shortcuts.rs`)
 - `message_for_maps_f5_to_reload` (`src/ui/shortcuts.rs`)
 - `shortcut_ignores_chord_modifiers` (`src/ui/shortcuts.rs`)
@@ -190,10 +189,14 @@ fallback.
 
 **Pinned by.**
 
-- `search_songs_matches_the_sample_library_by_title_or_artist` (`src/apple_music/tests/browse_sample.rs`)
-- `search_songs_matches_the_sample_library_by_album_title` (`src/apple_music/tests/browse_sample.rs`)
-- `search_songs_matches_the_sample_library_by_genre_or_composer` (`src/apple_music/tests/browse_sample.rs`)
-- `search_songs_matches_the_sample_library_by_release_year` (`src/apple_music/tests/browse_sample.rs`)
+- `search_songs_matches_the_sample_library_by_title_or_artist`
+  ((`src/apple_music/tests/browse_sample.rs`))
+- `search_songs_matches_the_sample_library_by_album_title`
+  ((`src/apple_music/tests/browse_sample.rs`))
+- `search_songs_matches_the_sample_library_by_genre_or_composer`
+  ((`src/apple_music/tests/browse_sample.rs`))
+- `search_songs_matches_the_sample_library_by_release_year`
+  ((`src/apple_music/tests/browse_sample.rs`))
 - `search_songs_matches_every_word_across_fields` (`src/apple_music/tests/browse_sample.rs`)
 - `search_songs_rejects_a_blank_query` (`src/apple_music/tests/browse_sample.rs`)
 - `search_songs_uses_the_rest_library_when_signed_in` (`src/apple_music/tests/browse_rest.rs`)
@@ -243,26 +246,26 @@ and applies that style to each one, and `views::view_open_button` (re-exported b
 - `replacing_clearing_or_failing_rows_drops_the_selection`
 - `sorting_or_restoring_rows_drops_the_selection`
   (all in `src/ui/browse.rs`)
-- `a_single_row_press_selects_without_opening`
-- `a_second_press_on_the_selected_row_opens_it`
-- `open_selected_opens_the_selected_song`
-- `open_selected_with_nothing_selected_is_a_noop`
-- `enter_opens_the_selected_song`
-- `replacing_or_sorting_rows_clears_the_selection`
-- `reverse_bumps_the_epoch_and_clears_the_selection`
+- `a_single_row_press_selects_without_opening` (`src/ui/tests/browse_tests.rs`)
+- `a_second_press_on_the_selected_row_opens_it` (`src/ui/tests/browse_tests.rs`)
+- `open_selected_opens_the_selected_song` (`src/ui/tests/browse_tests.rs`)
+- `open_selected_with_nothing_selected_is_a_noop` (`src/ui/tests/browse_tests.rs`)
+- `enter_opens_the_selected_song` (`src/ui/tests/shortcuts_tests.rs`)
+- `replacing_or_sorting_rows_clears_the_selection` (`src/ui/tests/browse_tests.rs`)
+- `reverse_bumps_the_epoch_and_clears_the_selection` (`src/ui/tests/reverse_tests.rs`)
 - `randomize_bumps_the_epoch_clears_the_selection_and_keeps_every_row`
-- `browse_open_button_sits_above_the_browse_list`
-  (all in `src/ui/tests/`)
+  ((`src/ui/tests/randomize_tests.rs`))
+- `browse_open_button_sits_above_the_browse_list` (`src/ui/tests/view_tests.rs`)
 - `message_for_maps_enter_to_open_selected`
   (in `src/ui/shortcuts.rs`)
 - `browse_row_style_keeps_playing_rows_unbarred_with_white_text`
 - `browse_row_style_paints_only_the_selected_row_blue`
-  (all in `src/ui/views/tests/`)
+  (all in `src/ui/views/tests/browse.rs`)
 - `now_playing_bar_and_browse_action_buttons_construct`
 - `browse_open_button_constructs`
 - `browse_views_construct_over_the_loaded_library`
 - `browse_views_construct_over_an_empty_list`
-  (all in `src/ui/views/tests/`)
+  (all in `src/ui/views/tests/browse.rs`)
 
 ## Browse reply freshness
 
@@ -290,14 +293,15 @@ that rendered it is still current: a press that outlived its list is a no-op.
 
 **Pinned by.**
 
-- `a_slow_stale_browse_reply_does_not_overwrite_the_newer_list`
+- `a_slow_stale_browse_reply_does_not_overwrite_the_newer_list` (`src/ui/tests/loading_tests.rs`)
 - `a_slow_stale_browse_failure_does_not_overwrite_the_newer_list_or_error`
-- `a_reply_superseded_between_the_mapper_and_update_is_not_stored`
-- `a_stale_songs_reply_superseded_before_update_is_not_stored`
-- `a_stale_albums_reply_superseded_before_update_is_not_stored`
+  ((`src/ui/tests/loading_tests.rs`))
+- `a_reply_superseded_between_the_mapper_and_update_is_not_stored` (`src/ui/tests/loading_tests.rs`)
+- `a_stale_songs_reply_superseded_before_update_is_not_stored` (`src/ui/tests/loading_tests.rs`)
+- `a_stale_albums_reply_superseded_before_update_is_not_stored` (`src/ui/tests/loading_tests.rs`)
 - `stale_flat_list_replies_superseded_before_update_are_not_stored`
-- `selection_messages_with_a_stale_epoch_or_index_do_nothing`
-  (all in `src/ui/tests/`)
+  ((`src/ui/tests/loading_tests.rs`))
+- `selection_messages_with_a_stale_epoch_or_index_do_nothing` (`src/ui/tests/browse_tests.rs`)
 
 **History.** Reconstructed from "A browse reply is stored after a newer request was issued, so a
 navigation shows the previous level's rows" in `BUGS-FIXED.md`.
@@ -464,45 +468,48 @@ draw beside Top.
 - `move_selected_is_a_noop_without_a_selection_at_an_edge_or_while_loading`
 - `message_for_maps_alt_arrows_to_move_the_selected_row`
 - the tests in `src/ui/tests/move_row_tests.rs`
-- `browse_nav_buttons_place_sort_beside_top`
-- `browse_nav_buttons_place_reload_beside_sort`
-- `sort_reorders_artists_case_insensitively`
-- `sort_reorders_artists_and_keeps_their_cached_labels_aligned`
-- `sort_is_stable_for_equal_keys_and_back_restores_them`
-- `sort_reorders_albums_by_their_display_title`
-- `sort_reorders_playlists_by_name`
-- `sort_reorders_songs_and_keeps_their_cached_text_aligned`
-- `sort_reorders_all_songs_and_keeps_their_cached_text_aligned`
-- `sort_reorders_all_albums_by_their_display_title`
-- `sort_reorders_all_albums_and_keeps_their_cached_text_aligned`
-- `sort_bumps_the_epoch_so_a_pre_sort_press_is_rejected`
-- `sort_with_an_empty_or_loading_list_is_a_noop`
-- `sort_leaves_other_lists_view_search_and_playback_untouched`
-- `back_restores_a_sorted_artists_list_to_library_order`
-- `back_restores_sorted_artists_and_their_cached_album_labels`
-- `a_fresh_artists_reply_drops_the_saved_sort_permutation`
-- `back_from_songs_restores_a_sorted_albums_list_to_library_order`
+- `browse_nav_buttons_place_sort_beside_top` (`src/ui/tests/view_tests.rs`)
+- `browse_nav_buttons_place_reload_beside_sort` (`src/ui/tests/view_tests.rs`)
+- `sort_reorders_artists_case_insensitively` (`src/ui/tests/sort_tests.rs`)
+- `sort_reorders_artists_and_keeps_their_cached_labels_aligned` (`src/ui/tests/sort_tests.rs`)
+- `sort_is_stable_for_equal_keys_and_back_restores_them` (`src/ui/tests/sort_tests.rs`)
+- `sort_reorders_albums_by_their_display_title` (`src/ui/tests/sort_tests.rs`)
+- `sort_reorders_playlists_by_name` (`src/ui/tests/sort_tests.rs`)
+- `sort_reorders_songs_and_keeps_their_cached_text_aligned` (`src/ui/tests/sort_tests.rs`)
+- `sort_reorders_all_songs_and_keeps_their_cached_text_aligned` (`src/ui/tests/sort_tests.rs`)
+- `sort_reorders_all_albums_by_their_display_title` (`src/ui/tests/sort_tests.rs`)
+- `sort_reorders_all_albums_and_keeps_their_cached_text_aligned` (`src/ui/tests/sort_tests.rs`)
+- `sort_bumps_the_epoch_so_a_pre_sort_press_is_rejected` (`src/ui/tests/sort_tests.rs`)
+- `sort_with_an_empty_or_loading_list_is_a_noop` (`src/ui/tests/sort_tests.rs`)
+- `sort_leaves_other_lists_view_search_and_playback_untouched` (`src/ui/tests/sort_tests.rs`)
+- `back_restores_a_sorted_artists_list_to_library_order` (`src/ui/tests/sort_tests.rs`)
+- `back_restores_sorted_artists_and_their_cached_album_labels` (`src/ui/tests/sort_tests.rs`)
+- `a_fresh_artists_reply_drops_the_saved_sort_permutation` (`src/ui/tests/settings_tests.rs`)
+- `back_from_songs_restores_a_sorted_albums_list_to_library_order` (`src/ui/tests/sort_tests.rs`)
 - `back_from_all_albums_songs_restores_a_sorted_flat_list_to_library_order`
+  ((`src/ui/tests/sort_tests.rs`))
 - `back_from_a_playlists_songs_restores_a_sorted_list_to_library_order`
-- `reverse_flips_the_artists_list`
-- `reverse_flips_songs_and_keeps_their_cached_text_aligned`
-- `reverse_bumps_the_epoch_and_clears_the_selection`
-- `reverse_with_an_empty_or_loading_list_is_a_noop`
+  ((`src/ui/tests/sort_tests.rs`))
+- `reverse_flips_the_artists_list` (`src/ui/tests/reverse_tests.rs`)
+- `reverse_flips_songs_and_keeps_their_cached_text_aligned` (`src/ui/tests/reverse_tests.rs`)
+- `reverse_bumps_the_epoch_and_clears_the_selection` (`src/ui/tests/reverse_tests.rs`)
+- `reverse_with_an_empty_or_loading_list_is_a_noop` (`src/ui/tests/reverse_tests.rs`)
 - `back_restores_a_reversed_then_sorted_albums_list_to_library_order`
-- `reverse_leaves_other_lists_view_search_and_playback_untouched`
+  ((`src/ui/tests/reverse_tests.rs`))
+- `reverse_leaves_other_lists_view_search_and_playback_untouched` (`src/ui/tests/reverse_tests.rs`)
 - `message_for_maps_ctrl_r_to_reverse_the_list` (in `src/ui/shortcuts.rs`)
 - `message_for_maps_ctrl_shift_r_to_randomize_the_list` (in `src/ui/shortcuts.rs`)
-- `shuffled_order_is_a_deterministic_permutation`
-- `shuffled_order_pins_a_known_seed`
-- `shuffled_order_varies_with_the_seed`
-- `shuffle_rows_moves_songs_with_their_cached_text`
+- `shuffled_order_is_a_deterministic_permutation` (`src/ui/tests/randomize_tests.rs`)
+- `shuffled_order_pins_a_known_seed` (`src/ui/tests/randomize_tests.rs`)
+- `shuffled_order_varies_with_the_seed` (`src/ui/tests/randomize_tests.rs`)
+- `shuffle_rows_moves_songs_with_their_cached_text` (`src/ui/tests/randomize_tests.rs`)
 - `randomize_bumps_the_epoch_clears_the_selection_and_keeps_every_row`
-- `randomize_with_an_empty_or_loading_list_is_a_noop`
-- `back_restores_a_randomized_albums_list_to_library_order`
+  ((`src/ui/tests/randomize_tests.rs`))
+- `randomize_with_an_empty_or_loading_list_is_a_noop` (`src/ui/tests/randomize_tests.rs`)
+- `back_restores_a_randomized_albums_list_to_library_order` (`src/ui/tests/randomize_tests.rs`)
 - `message_for_maps_ctrl_shift_1_to_sort` (in `src/ui/shortcuts.rs`)
 - `ctrl_shift_1_needs_exactly_control_and_shift` (in `src/ui/shortcuts.rs`)
-- `ctrl_shift_1_sorts_the_showing_list_from_the_keyboard`
-  (the rest in `src/ui/tests/`)
+- `ctrl_shift_1_sorts_the_showing_list_from_the_keyboard` (`src/ui/tests/shortcuts_tests.rs`)
 
 ## Browse row removal
 
@@ -656,8 +663,8 @@ target the stable `views::BROWSE_LIST_ID` that every `views::browse::scrollable_
 
 - `scroll_browse_to_bottom_schedules_a_scroll_task` (`src/ui/tests/scroll_tests.rs`)
 - `scroll_browse_page_keys_schedule_page_sized_scrolls` (`src/ui/tests/scroll_tests.rs`)
-- `shade_mode_builds_no_browse_scroll_target` (`src/ui/tests/`)
-- `toggle_library_panel_hides_and_restores_the_library_section` (`src/ui/tests/`)
+- `shade_mode_builds_no_browse_scroll_target` (`src/ui/tests/view_tests.rs`)
+- `toggle_library_panel_hides_and_restores_the_library_section` (`src/ui/tests/panels_tests.rs`)
 - `message_for_maps_home_and_end_to_browse_scroll` (`src/ui/shortcuts.rs`)
 - `message_for_maps_page_keys_to_browse_paging` (`src/ui/shortcuts.rs`)
 - `shortcut_ignores_chord_modifiers` (`src/ui/shortcuts.rs`)
@@ -798,12 +805,12 @@ those labels through `BrowseList::store_with_labels`, so `artist_row` can borrow
 - `artist_row_prefers_the_lists_cached_album_count`
 - `album_count_label_singular_plural_and_none`
 - `artist_row_puts_its_album_count_at_the_right_edge`
-  (all in `src/ui/views/tests/`)
-- `artists_loaded_populates_list`
-- `sort_reorders_artists_and_keeps_their_cached_labels_aligned`
-- `back_restores_sorted_artists_and_their_cached_album_labels`
+  (all in `src/ui/views/tests/browse.rs`)
+- `artists_loaded_populates_list` (`src/ui/tests/browse_tests.rs`)
+- `sort_reorders_artists_and_keeps_their_cached_labels_aligned` (`src/ui/tests/sort_tests.rs`)
+- `back_restores_sorted_artists_and_their_cached_album_labels` (`src/ui/tests/sort_tests.rs`)
 - `a_moved_artist_keeps_its_cached_album_label_and_back_restores_it`
-  (all four in `src/ui/tests/`)
+  ((`src/ui/tests/move_row_tests.rs`))
 - `sample_library_artists_carry_their_album_counts`
   (in `src/sample_library.rs`)
 - `get_favorite_artists_uses_the_rest_library_when_signed_in`
@@ -890,11 +897,10 @@ refresh does not re-join and reformat every row.
 - `album_row_shows_the_release_year_before_the_running_time`
 - `album_row_shows_the_title_alone_when_the_artist_is_empty`
 - `album_row_shows_a_placeholder_when_the_duration_is_unknown`
-  (all in `src/ui/views/tests/`)
-- `albums_loaded_populates_list`
-- `all_albums_loaded_stores_the_flat_list`
-- `all_albums_loaded_caches_the_year_and_running_time_labels`
-  (both in `src/ui/tests/`)
+  (all in `src/ui/views/tests/browse.rs`)
+- `albums_loaded_populates_list` (`src/ui/tests/browse_tests.rs`)
+- `all_albums_loaded_stores_the_flat_list` (`src/ui/tests/flat_lists_tests.rs`)
+- `all_albums_loaded_caches_the_year_and_running_time_labels` (`src/ui/tests/flat_lists_tests.rs`)
 - `albums_carry_their_songs_total_durations`
   (in `src/sample_library.rs`)
 - `album_duration_is_not_serialized_and_defaults_to_zero`
@@ -1037,7 +1043,7 @@ tiny-skia renderer.
 `alt_e_toggles_the_library_panel_and_back`,
 `alt_e_in_shade_mode_leaves_the_library_panel_alone`,
 `alt_g_toggles_the_equalizer_panel`, and
-`shaded_root_view_draws_no_section_title_bands` (`src/ui/tests/`), plus
+`shaded_root_view_draws_no_section_title_bands` (`src/ui/tests/view_tests.rs`), plus
 `title_band_centers_its_label_at_the_title_bar_height` and
 `title_bar_centers_its_name_between_its_edge_controls` (`src/ui/views/tests/chrome.rs`) for the
 title bands and app bar, `transport_glyphs_match_the_mockup_order_and_widths`,
@@ -1269,9 +1275,9 @@ arm those controls press.
 `toggle_eq_auto_reaches_the_saved_snapshot`,
 `saved_eq_auto_is_restored_through_apply_to`,
 `window_level_selects_always_on_top`, and
-`window_id_resolved_applies_a_saved_always_on_top_level` (`src/ui/tests/`). The classic `A` key
-and Ctrl+A reaching the same arm are pinned by `a_toggles_always_on_top_from_the_keyboard`
-(`src/ui/tests/`) and `message_for_maps_ctrl_a_and_ctrl_t_to_the_classic_toggles`
+`window_id_resolved_applies_a_saved_always_on_top_level` (`src/ui/tests/settings_tests.rs`). The
+classic `A` key and Ctrl+A reaching the same arm are pinned by `a_toggles_always_on_top_from_the_keyboard`
+(`src/ui/shortcuts.rs`) and `message_for_maps_ctrl_a_and_ctrl_t_to_the_classic_toggles`
 (`src/ui/shortcuts.rs`).
 
 **History.** Added with the settings-persistence plan on 2026-10-23; the player previously kept
@@ -1626,7 +1632,7 @@ its internal id, whenever the id is in the known-track index:
   `src/ui/views/tests/now_playing.rs`;
   `toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum` in
   `src/ui/tests/panels_tests.rs`; `position_tick_blinks_the_elapsed_readout_only_while_paused` in
-  `src/ui/tests/`; and `toggle_playing_switches_between_playing_and_paused` and
+  `src/state.rs`; and `toggle_playing_switches_between_playing_and_paused` and
   `pause_sets_the_paused_mode_while_play_and_stop_clear_it` in `src/state.rs`; and
   `pause_stops_playing_but_keeps_current_track`,
   `pause_without_a_loaded_preview_leaves_the_transport_stopped`,
@@ -1763,11 +1769,10 @@ rather than the panic unwinding the event loop.
 - `now_playing_elapsed_remaining_counts_down_from_the_total`
 - `format_lcd_elapsed_pads_minutes_and_seconds`
 - `format_lcd_remaining_prefixes_a_minus_and_pads`
-  (all in `src/ui/views/tests/`)
-- `toggle_time_display_switches_to_remaining_and_persists`
-- `toggle_time_display_with_no_track_keeps_the_placeholder`
-- `t_toggles_the_time_display_from_the_keyboard`
-  (all in `src/ui/tests/`)
+  (all in `src/ui/views/tests/now_playing.rs`)
+- `toggle_time_display_switches_to_remaining_and_persists` (`src/ui/tests/panels_tests.rs`)
+- `toggle_time_display_with_no_track_keeps_the_placeholder` (`src/ui/tests/panels_tests.rs`)
+- `t_toggles_the_time_display_from_the_keyboard` (`src/ui/tests/shortcuts_tests.rs`)
 - `marquee_text_keeps_a_line_that_fits`
 - `marquee_text_windows_from_the_offset`
 - `marquee_text_wraps_through_the_separator_to_the_start`
@@ -1778,16 +1783,17 @@ rather than the panic unwinding the event loop.
 - `now_playing_row_draws_the_number_between_the_caption_and_the_artist`
 - `an_overlong_now_playing_line_windows_the_number_with_the_title`
 - `now_playing_row_draws_no_number_when_none_is_known`
-  (all in `src/ui/views/tests/`)
-- `now_playing_label_keeps_the_track_name_after_browsing_to_another_album` (`src/ui/tests/readouts_tests.rs`)
-- `window_title_names_the_current_track` (`src/ui/tests/`)
-- `window_title_marks_a_paused_or_stopped_track` (`src/ui/tests/`)
-- `now_playing_number_survives_browsing_to_another_album` (`src/ui/tests/`)
+  (all in `src/ui/views/tests/now_playing.rs`)
+- `now_playing_label_keeps_the_track_name_after_browsing_to_another_album`
+  ((`src/ui/tests/readouts_tests.rs`))
+- `window_title_names_the_current_track` (`src/ui/tests/window_tests.rs`)
+- `window_title_marks_a_paused_or_stopped_track` (`src/ui/tests/window_tests.rs`)
+- `now_playing_number_survives_browsing_to_another_album` (`src/ui/tests/readouts_tests.rs`)
 - `track_selected_records_the_selected_rows_number`
 - `replaying_a_track_from_another_row_updates_its_number`
 - `the_player_knows_when_the_now_playing_line_needs_the_marquee`
 - `now_playing_time_shows_the_played_tracks_duration_after_browsing_to_another_album`
-  (`src/ui/tests/`)
+  (`src/ui/tests/readouts_tests.rs`)
 - `now_playing_elapsed_shows_the_position_while_it_is_known`
 - `now_playing_elapsed_previews_the_seek_drag`
 - `pause_keeps_the_stored_elapsed_readout`
@@ -1806,8 +1812,10 @@ rather than the panic unwinding the event loop.
 - `a_refused_position_thread_reports_the_cause_and_the_loss`
 - `the_position_thread_is_named_nostalgia_position_poll`
 - `the_position_timer_runs_only_while_there_is_a_position_to_refresh`
-- `a_paused_preview_needs_the_position_poll_before_its_first_reply` (`src/ui/tests/`)
-- `play_track_without_a_preview_url_stops_the_previous_preview` (`src/apple_music/tests/play_track.rs`)
+- `a_paused_preview_needs_the_position_poll_before_its_first_reply`
+  ((`src/ui/tests/readouts_tests.rs`))
+- `play_track_without_a_preview_url_stops_the_previous_preview`
+  ((`src/apple_music/tests/play_track.rs`))
 - `position_query_reports_none_when_nothing_is_loaded`
 - `a_seek_is_reflected_by_the_next_position_query`
 - `a_pause_keeps_the_loaded_player_reporting_its_position`
@@ -1838,8 +1846,9 @@ rather than the panic unwinding the event loop.
 - `seek_preview_released_without_a_drag_does_nothing`
 - `seek_preview_released_invalidates_an_in_flight_position_reply`
 - `seek_preview_released_backend_failure_leaves_the_position_alone`
-- `position_tick_queries_position_and_duration` (`src/ui/tests/`)
-- `playback_duration_forwards_the_audio_output_duration` (`src/apple_music/tests/audio_forwarding.rs`)
+- `position_tick_queries_position_and_duration` (`src/ui/tests/readouts_tests.rs`)
+- `playback_duration_forwards_the_audio_output_duration`
+  ((`src/apple_music/tests/audio_forwarding.rs`))
 - `seek_output_to_forwards_an_absolute_position`
 - `seek_output_to_propagates_an_audio_backend_failure` (`src/apple_music/tests/audio_forwarding.rs`)
 - `silent_output_reports_no_playback_duration`
@@ -1861,24 +1870,29 @@ rather than the panic unwinding the event loop.
 - `visualizer_bar_heights_maps_a_nan_band_to_empty` (`src/ui/views/tests/lcd_display.rs`)
 - `visualizer_bar_segments_ramp_from_dark_green_to_orange` (`src/ui/views/tests/lcd_display.rs`)
 - `now_playing_content_keeps_the_visualizer_height_with_and_without_a_spectrum`
-- `now_playing_visualizer_row_keeps_its_height_without_a_spectrum` (`src/ui/views/tests/lcd_display.rs`)
-- `now_playing_visualizer_row_draws_one_fixed_width_bar_per_band` (`src/ui/views/tests/lcd_display.rs`)
-- `now_playing_visualizer_row_paints_its_ramp_from_green_to_orange` (`src/ui/views/tests/lcd_display.rs`)
+- `now_playing_visualizer_row_keeps_its_height_without_a_spectrum`
+  ((`src/ui/views/tests/lcd_display.rs`))
+- `now_playing_visualizer_row_draws_one_fixed_width_bar_per_band`
+  ((`src/ui/views/tests/lcd_display.rs`))
+- `now_playing_visualizer_row_paints_its_ramp_from_green_to_orange`
+  ((`src/ui/views/tests/lcd_display.rs`))
 - `spectrum_reply_stores_the_bars_and_lets_a_quieter_band_fall`
 - `spectrum_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped`
 - `stop_clears_the_spectrum_while_pause_keeps_it`
 - `spectrum_tick_queries_spectrum_and_carries_the_epoch`
-- `the_spectrum_timer_runs_only_while_playback_runs` (`src/ui/tests/`)
-- `a_refused_spectrum_thread_ends_the_tick_stream_instead_of_panicking` (`src/ui/tests/`)
-- `a_refused_spectrum_thread_reports_the_cause_and_the_loss` (`src/ui/tests/`)
-- `the_spectrum_thread_is_named_nostalgia_spectrum_poll` (`src/ui/tests/`)
-- `playback_spectrum_forwards_the_audio_output_spectrum` (`src/apple_music/tests/audio_forwarding.rs`)
+- `the_spectrum_timer_runs_only_while_playback_runs` (`src/ui/tests/subscriptions_tests.rs`)
+- `a_refused_spectrum_thread_ends_the_tick_stream_instead_of_panicking`
+  ((`src/ui/tests/subscriptions_tests.rs`))
+- `a_refused_spectrum_thread_reports_the_cause_and_the_loss` (`src/ui/tests/subscriptions_tests.rs`)
+- `the_spectrum_thread_is_named_nostalgia_spectrum_poll` (`src/ui/tests/subscriptions_tests.rs`)
+- `playback_spectrum_forwards_the_audio_output_spectrum`
+  ((`src/apple_music/tests/audio_forwarding.rs`))
 - `the_marquee_timer_runs_only_while_the_line_needs_to_scroll`
 - `the_player_knows_when_the_now_playing_line_needs_the_marquee`
-- `track_selected_resets_the_marquee_offset` (`src/ui/tests/`)
+- `track_selected_resets_the_marquee_offset` (`src/ui/tests/subscriptions_tests.rs`)
 - `a_refused_marquee_thread_ends_the_tick_stream_instead_of_panicking`
 - `a_refused_marquee_thread_reports_the_cause_and_the_loss`
-- `the_marquee_thread_is_named_nostalgia_marquee` (all in `src/ui/tests/`)
+- `the_marquee_thread_is_named_nostalgia_marquee` (all in `src/ui/tests/subscriptions_tests.rs`)
 - `dropping_the_receiver_ends_the_tick_thread` (`src/ui/subscriptions/ticks.rs`)
 
 **History.** Reconstructed from "Now Playing bar shows the track id instead of the song title" in
@@ -2855,9 +2869,12 @@ reads it through `take(MAX_RESPONSE_BYTES + 1)` and checks the decoded length be
 **Pinned by.**
 
 - `a_response_of_exactly_the_cap_is_accepted` (`src/apple_music/rest/tests/transport.rs`)
-- `a_compressed_response_larger_than_the_cap_is_rejected` (`src/apple_music/rest/tests/transport.rs`)
-- `a_response_with_more_wire_bytes_than_the_cap_is_rejected` (`src/apple_music/rest/tests/transport.rs`)
-- `a_text_response_with_invalid_utf8_keeps_the_lossy_replacement` (`src/apple_music/rest/tests/transport.rs`)
+- `a_compressed_response_larger_than_the_cap_is_rejected`
+  ((`src/apple_music/rest/tests/transport.rs`))
+- `a_response_with_more_wire_bytes_than_the_cap_is_rejected`
+  ((`src/apple_music/rest/tests/transport.rs`))
+- `a_text_response_with_invalid_utf8_keeps_the_lossy_replacement`
+  ((`src/apple_music/rest/tests/transport.rs`))
 
 **History.** Added 2026-10-23 after `Body::read_to_string()` was found to limit only wire bytes
 (its 10 MiB `MAX_BODY_SIZE` sits under `ureq`'s gzip decoder), leaving a compressed REST reply
@@ -2880,8 +2897,10 @@ and `fetch_failure_report` in `src/ui/loading.rs` (the hint, held in `AUTH_RECOV
 
 **Pinned by.**
 
-- `an_http_401_reply_is_classified_as_an_auth_error_with_todays_message` (`src/apple_music/rest/tests/transport.rs`)
-- `an_http_403_reply_is_classified_as_an_auth_error_with_todays_message` (`src/apple_music/rest/tests/transport.rs`)
+- `an_http_401_reply_is_classified_as_an_auth_error_with_todays_message`
+  ((`src/apple_music/rest/tests/transport.rs`))
+- `an_http_403_reply_is_classified_as_an_auth_error_with_todays_message`
+  ((`src/apple_music/rest/tests/transport.rs`))
 - `an_http_500_reply_classifies_as_other` (`src/apple_music/rest/tests/transport.rs`)
 - `new_auth_carries_the_auth_kind_and_new_the_other_kind` (`src/music_error.rs`)
 - `the_kind_survives_clone_and_equality` (`src/music_error.rs`)
@@ -2916,7 +2935,8 @@ bytes.
 - `a_compressed_preview_larger_than_the_cap_is_rejected` (`src/audio/tests/preview_download.rs`)
 - `a_preview_with_more_wire_bytes_than_the_cap_is_rejected` (`src/audio/tests/preview_download.rs`)
 - `a_preview_of_exactly_the_cap_reaches_the_decoder` (`src/audio/tests/preview_download.rs`)
-- `a_downloaded_preview_decodes_and_reports_its_encoded_length` (`src/audio/tests/preview_download.rs`)
+- `a_downloaded_preview_decodes_and_reports_its_encoded_length`
+  ((`src/audio/tests/preview_download.rs`))
 
 **History.** Added 2026-10-23 after the wire-byte cap was found to let a small gzip body expand
 past 10 MiB before decoding; the decoded-byte fix keeps the original wire cap alongside it. The
@@ -2938,9 +2958,12 @@ stores the body the download produced.
 
 **Pinned by.**
 
-- `preview_cache_replays_the_same_url_without_loading_it_again` (`src/audio/tests/preview_download.rs`)
-- `preview_cache_keeps_only_the_last_url_and_never_caches_a_failed_load` (`src/audio/tests/preview_download.rs`)
-- `a_cached_preview_replays_the_same_decodable_body_without_the_server` (`src/audio/tests/preview_download.rs`)
+- `preview_cache_replays_the_same_url_without_loading_it_again`
+  ((`src/audio/tests/preview_download.rs`))
+- `preview_cache_keeps_only_the_last_url_and_never_caches_a_failed_load`
+  ((`src/audio/tests/preview_download.rs`))
+- `a_cached_preview_replays_the_same_decodable_body_without_the_server`
+  ((`src/audio/tests/preview_download.rs`))
 
 ## Preview host guard
 
@@ -3034,34 +3057,42 @@ width, while `views::visible_spectrum` applies `WinampPlayer::visualizer_visible
 - `meter_window_keeps_the_newest_samples_in_play_order` (`src/audio/tests/sources.rs`)
 - `spectrum_query_returns_the_loaded_players_spectrum` (`src/audio/tests/worker.rs`)
 - `spectrum_query_reports_none_when_nothing_is_loaded` (`src/audio/tests/worker.rs`)
-- `loaded_player_reports_its_meter_but_an_unloaded_one_reports_nothing` (`src/audio/tests/worker.rs`)
+- `loaded_player_reports_its_meter_but_an_unloaded_one_reports_nothing`
+  ((`src/audio/tests/worker.rs`))
 - `append_records_the_appended_source_through_the_players_meter` (`src/audio/tests/worker.rs`)
 - `stop_removes_the_player_so_a_spectrum_query_reports_none` (`src/audio/tests/worker.rs`)
 - `silent_output_reports_no_spectrum` (`src/audio/tests/rodio_output.rs`)
 - `rodio_output_asks_the_worker_for_its_spectrum` (`src/audio/tests/rodio_output.rs`)
 - `rodio_output_reports_a_closed_worker_for_every_command` (`src/audio/tests/rodio_output.rs`)
-- `playback_spectrum_forwards_the_audio_output_spectrum` (`src/apple_music/tests/audio_forwarding.rs`)
+- `playback_spectrum_forwards_the_audio_output_spectrum`
+  ((`src/apple_music/tests/audio_forwarding.rs`))
 - `visualizer_bar_heights_scale_and_clamp_the_reported_bands`
 - `visualizer_bar_heights_maps_a_nan_band_to_empty` (`src/ui/views/tests/lcd_display.rs`)
 - `visualizer_bar_segments_ramp_from_dark_green_to_orange` (`src/ui/views/tests/lcd_display.rs`)
 - `now_playing_content_keeps_the_visualizer_height_with_and_without_a_spectrum`
-- `now_playing_visualizer_row_keeps_its_height_without_a_spectrum` (`src/ui/views/tests/lcd_display.rs`)
-- `now_playing_visualizer_row_draws_one_fixed_width_bar_per_band` (`src/ui/views/tests/lcd_display.rs`)
-- `now_playing_visualizer_row_paints_its_ramp_from_green_to_orange` (`src/ui/views/tests/lcd_display.rs`)
-- `visible_spectrum_hides_the_stored_bars_while_the_visualizer_is_off` (`src/ui/views/tests/now_playing.rs`)
+- `now_playing_visualizer_row_keeps_its_height_without_a_spectrum`
+  ((`src/ui/views/tests/lcd_display.rs`))
+- `now_playing_visualizer_row_draws_one_fixed_width_bar_per_band`
+  ((`src/ui/views/tests/lcd_display.rs`))
+- `now_playing_visualizer_row_paints_its_ramp_from_green_to_orange`
+  ((`src/ui/views/tests/lcd_display.rs`))
+- `visible_spectrum_hides_the_stored_bars_while_the_visualizer_is_off`
+  ((`src/ui/views/tests/now_playing.rs`))
 - `lcd_indicator_strip_publishes_options_on_o_always_on_top_on_a_visualizer_on_v_and_file_info_on_i`
   (`src/ui/views/tests/now_playing.rs`)
-- `toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum` (`src/ui/tests/panels_tests.rs`)
+- `toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum`
+  ((`src/ui/tests/panels_tests.rs`))
 - `hidden_visualizer_draws_no_bars_in_the_root_view` (`src/ui/tests/panels_tests.rs`)
-- `spectrum_tick_stream_emits_spectrum_ticks` (`src/ui/tests/`)
-- `a_refused_spectrum_thread_ends_the_tick_stream_instead_of_panicking` (`src/ui/tests/`)
-- `a_refused_spectrum_thread_reports_the_cause_and_the_loss` (`src/ui/tests/`)
-- `the_spectrum_thread_is_named_nostalgia_spectrum_poll` (`src/ui/tests/`)
+- `spectrum_tick_stream_emits_spectrum_ticks` (`src/ui/tests/subscriptions_tests.rs`)
+- `a_refused_spectrum_thread_ends_the_tick_stream_instead_of_panicking`
+  ((`src/ui/tests/subscriptions_tests.rs`))
+- `a_refused_spectrum_thread_reports_the_cause_and_the_loss` (`src/ui/tests/subscriptions_tests.rs`)
+- `the_spectrum_thread_is_named_nostalgia_spectrum_poll` (`src/ui/tests/subscriptions_tests.rs`)
 - `spectrum_reply_stores_the_bars_and_lets_a_quieter_band_fall`
 - `spectrum_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped`
 - `stop_clears_the_spectrum_while_pause_keeps_it`
 - `spectrum_tick_queries_spectrum_and_carries_the_epoch`
-- `the_spectrum_timer_runs_only_while_playback_runs` (`src/ui/tests/`)
+- `the_spectrum_timer_runs_only_while_playback_runs` (`src/ui/tests/subscriptions_tests.rs`)
 
 ## Preview end
 
@@ -3103,7 +3134,8 @@ same list/Shuffle/Repeat rules as Next, and the no-next-song case reuses `handle
 
 - `finished_query_returns_the_loaded_players_finished_state` (`src/audio/tests/worker.rs`)
 - `finished_query_reports_none_when_nothing_is_loaded` (`src/audio/tests/worker.rs`)
-- `rodio_player_reports_finished_only_after_its_appended_preview_drains` (`src/audio/tests/worker.rs`)
+- `rodio_player_reports_finished_only_after_its_appended_preview_drains`
+  ((`src/audio/tests/worker.rs`))
 - `a_paused_preview_reports_unfinished` (`src/audio/tests/worker.rs`)
 - `silent_output_reports_an_unfinished_preview` (`src/audio/tests/rodio_output.rs`)
 - `rodio_output_asks_the_worker_for_its_finished_state` (`src/audio/tests/rodio_output.rs`)
@@ -3112,15 +3144,16 @@ same list/Shuffle/Repeat rules as Next, and the no-next-song case reuses `handle
 - `stop_removes_the_player_so_a_finished_query_reports_none` (`src/audio/tests/worker.rs`)
 - `preview_finished_forwards_the_audio_output_state` (`src/apple_music/tests/audio_forwarding.rs`)
 - `position_tick_queries_preview_finished` (`src/ui/tests/readouts_tests.rs`)
-- `preview_end_advances_to_the_next_song` (`src/ui/tests/`)
-- `preview_end_in_all_songs_steps_the_flat_list` (`src/ui/tests/`)
-- `preview_end_wraps_to_the_first_song_with_repeat_on` (`src/ui/tests/`)
-- `preview_end_repeats_a_single_song_with_repeat_on` (`src/ui/tests/`)
-- `preview_end_at_the_last_song_stops_when_repeat_is_off` (`src/ui/tests/`)
-- `preview_end_with_shuffle_on_picks_the_other_song` (`src/ui/tests/`)
-- `preview_end_with_shuffle_on_a_single_song_stops` (`src/ui/tests/`)
-- `preview_end_while_paused_or_stopped_does_not_advance` (`src/ui/tests/`)
-- `preview_end_with_a_stale_epoch_or_pending_transition_is_dropped` (`src/ui/tests/`)
+- `preview_end_advances_to_the_next_song` (`src/ui/tests/stepping_tests.rs`)
+- `preview_end_in_all_songs_steps_the_flat_list` (`src/ui/tests/stepping_tests.rs`)
+- `preview_end_wraps_to_the_first_song_with_repeat_on` (`src/ui/tests/stepping_tests.rs`)
+- `preview_end_repeats_a_single_song_with_repeat_on` (`src/ui/tests/stepping_tests.rs`)
+- `preview_end_at_the_last_song_stops_when_repeat_is_off` (`src/ui/tests/stepping_tests.rs`)
+- `preview_end_with_shuffle_on_picks_the_other_song` (`src/ui/tests/stepping_tests.rs`)
+- `preview_end_with_shuffle_on_a_single_song_stops` (`src/ui/tests/stepping_tests.rs`)
+- `preview_end_while_paused_or_stopped_does_not_advance` (`src/ui/tests/stepping_tests.rs`)
+- `preview_end_with_a_stale_epoch_or_pending_transition_is_dropped`
+  ((`src/ui/tests/stepping_tests.rs`))
 - `preview_end_with_stop_after_current_stops_and_clears_it` (`src/ui/tests/stepping_tests.rs`)
 - `preview_end_after_stop_after_current_fired_advances_again` (`src/ui/tests/stepping_tests.rs`)
 - `stop_after_current_survives_a_dropped_finished_reply` (`src/ui/tests/stepping_tests.rs`)
@@ -3156,10 +3189,11 @@ in `src/ui/transport/history.rs` implements the recorded-play walk.
 - `track_played_ignores_a_failed_completion` (`src/ui/tests/stepping_tests.rs`)
 - `track_played_ignores_a_superseded_completion` (`src/ui/tests/stepping_tests.rs`)
 - `a_failed_history_jump_retries_the_target` (`src/ui/tests/stepping_tests.rs`)
-- `previous_with_shuffle_resumes_from_the_last_recorded_play_after_a_new_track` (`src/ui/tests/stepping_tests.rs`)
-- `track_selected_starts_playback_of_the_selected_track` (`src/ui/tests/`)
-- `play_into_maps_a_hanging_play_to_a_completed_message` (`src/ui/tests/`)
-- `play_into_reports_a_failed_play_and_still_completes` (`src/ui/tests/`)
+- `previous_with_shuffle_resumes_from_the_last_recorded_play_after_a_new_track`
+  ((`src/ui/tests/stepping_tests.rs`))
+- `track_selected_starts_playback_of_the_selected_track` (`src/ui/tests/transport_tests.rs`)
+- `play_into_maps_a_hanging_play_to_a_completed_message` (`src/ui/tests/loading_tests.rs`)
+- `play_into_reports_a_failed_play_and_still_completes` (`src/ui/tests/loading_tests.rs`)
 
 ## Shuffle rounds
 
@@ -3186,7 +3220,8 @@ stop at a round's end.
 - `preview_end_with_shuffle_on_plays_the_unplayed_song` (`src/ui/tests/stepping_tests.rs`)
 - `the_play_completing_a_round_ends_it` (`src/ui/transport/round.rs`)
 - `a_later_play_clears_the_round_end` (`src/ui/transport/round.rs`)
-- `preview_end_with_shuffle_on_and_repeat_off_stops_after_the_round` (`src/ui/tests/stepping_tests.rs`)
+- `preview_end_with_shuffle_on_and_repeat_off_stops_after_the_round`
+  ((`src/ui/tests/stepping_tests.rs`))
 - `preview_end_with_shuffle_and_repeat_on_starts_a_new_round` (`src/ui/tests/stepping_tests.rs`)
 - `next_with_shuffle_after_a_completed_round_keeps_playing` (`src/ui/tests/stepping_tests.rs`)
 
@@ -3213,10 +3248,12 @@ unchanged step paths.
 
 - `previous_restarts_the_preview_after_three_seconds` (`src/ui/tests/stepping_tests.rs`)
 - `previous_steps_before_the_restart_threshold` (`src/ui/tests/stepping_tests.rs`)
-- `previous_with_shuffle_restarts_after_the_threshold_instead_of_retracing` (`src/ui/tests/stepping_tests.rs`)
+- `previous_with_shuffle_restarts_after_the_threshold_instead_of_retracing`
+  ((`src/ui/tests/stepping_tests.rs`))
 - `a_failed_previous_restart_leaves_the_track_queued` (`src/ui/tests/stepping_tests.rs`)
 - `a_failed_restart_report_names_the_track_and_position` (`src/ui/tests/stepping_tests.rs`)
-- `a_failed_restart_report_without_a_track_names_the_loaded_preview` (`src/ui/tests/stepping_tests.rs`)
+- `a_failed_restart_report_without_a_track_names_the_loaded_preview`
+  ((`src/ui/tests/stepping_tests.rs`))
 
 **History.** Added 2026-10-24 with the Previous restart plan, matching classic Winamp's rule that a
 late Previous restarts the track already playing instead of stepping back.
