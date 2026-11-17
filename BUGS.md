@@ -44,6 +44,8 @@ the Apple Music library and the sample library only.
 when it is added?" (posted by bugfix 2026-10-30 in `QUESTIONS.md`); add the button only once
 that is answered, so a control never ships claiming behavior it does not have.
 
+**Refused 2026-11-17 by bugfix: the user answered in QUESTIONS.md to omit the Eject button entirely, so adding it would contradict that decision.**
+
 
 
 ## Fixed
