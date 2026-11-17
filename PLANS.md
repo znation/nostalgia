@@ -67,48 +67,4 @@ so no new tests; out of scope: any split of the topic files (`screen_tests.rs` a
 `readouts_tests.rs`, `mixer_tests.rs`, …), any helper body or signature change, any change
 to `crate::test_support`, and the settings test-move above (independent files).
 
-### Extract the root-view count-footer tests into a focused sibling module (planned 2026-11-17 by the plan role)
-
-**Goal.** Reduce the 1488-line `src/ui/tests/screen_tests.rs` by moving its cohesive
-count-footer test block to `src/ui/tests/count_footer_tests.rs`. Keep the footer
-fixtures and their private assertion helper together, separate from general screen layout.
-
-**Approach and files.** Move `assert_root_view_draws_the_count_footer`, its adjacent
-comments, and these tests verbatim into the new file, opening with `use super::*;`:
-
-- `root_view_artists_footer_totals_the_album_counts`
-- `root_view_artists_footer_shows_the_selected_album_count`
-- `root_view_genres_footer_shows_the_selected_group_time`
-- `root_view_album_footer_shows_the_selected_running_time`
-- `an_empty_browse_level_draws_no_count_footer`
-
-Register `mod count_footer_tests;` in `src/ui/tests/mod.rs`. Keep the helper private
-in its new module. Update the moved tests' path citations in `docs/invariants.md`
-under Album-list footer, Grouped-list footer, and Artists footer. Leave
-`root_view_footer_shows_elapsed_over_total` and other screen tests where they are:
-they exercise different concerns.
-
-**Dedupe and scope.** The new module does not exist; the named tests and local helper
-currently live in `screen_tests.rs`. Searches of PLANS.md and PLANS-DONE.md found
-footer behavior plans but no plan for this extraction. The waiting shared-helper
-move concerns the helper block in `mod.rs`, not this screen-local helper; these
-changes can merge in either order (both add a module declaration to the hub).
-This is one cohesive test-only move of roughly 140 lines, touching four files;
-no production behavior, fixture, assertion, or helper signature changes. No new
-tests, usage update, or screenshot comparison is needed because the rendered
-player and its controls do not change.
-
-**Acceptance criteria.**
-
-- The new file contains the five named tests with their original inputs and
-  assertions and the private helper; those definitions are absent from
-  `screen_tests.rs`, whose remaining tests retain their bodies.
-- Test discovery lists the moved tests under `ui::tests::count_footer_tests::`
-  with their original leaf names, and they pass, including the selected-count,
-  selected-duration, and empty-list cases.
-- The three invariant sections cite the new file for the moved tests; their
-  guarantees retain their wording.
-- `make check` passes with the sibling module registered, whether the waiting
-  shared-helper move has merged or not.
-
 ## Done

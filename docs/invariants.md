@@ -2701,7 +2701,7 @@ form.
 `album_list_summary_puts_the_selected_running_time_before_the_total`,
 `album_list_summary_marks_an_unknown_selected_running_time`,
 `album_list_summary_ignores_a_selection_past_the_list` (`src/ui/views/tests/browse.rs`), and
-`root_view_album_footer_shows_the_selected_running_time` (`src/ui/tests/screen_tests.rs`).
+`root_view_album_footer_shows_the_selected_running_time` (`src/ui/tests/count_footer_tests.rs`).
 
 **History.** Added with the selected-running-time footer, like the song-list footer.
 
@@ -2742,7 +2742,7 @@ passes its `selected` argument to it.
 `list_summary_puts_the_selected_group_time_before_the_total`,
 `list_summary_marks_an_unknown_selected_group_time`,
 `list_summary_ignores_a_selection_past_the_list` (`src/ui/song_groups.rs`), and
-`root_view_genres_footer_shows_the_selected_group_time` (`src/ui/tests/screen_tests.rs`).
+`root_view_genres_footer_shows_the_selected_group_time` (`src/ui/tests/count_footer_tests.rs`).
 
 **History.** Added with the selected-group-time footer, like the song-list footer.
 
@@ -2762,7 +2762,7 @@ artist with `0` albums, or an index past the list, gives the plain form.
 `artist_list_summary_keeps_the_plain_form_for_a_selected_artist_without_albums`,
 `artist_list_summary_ignores_a_selection_past_the_list` (`src/ui/views/tests/browse.rs`),
 `root_view_artists_footer_totals_the_album_counts`, and
-`root_view_artists_footer_shows_the_selected_album_count` (`src/ui/tests/screen_tests.rs`).
+`root_view_artists_footer_shows_the_selected_album_count` (`src/ui/tests/count_footer_tests.rs`).
 
 **History.** Added with the selected-artist album count, like the song-list footer.
 
