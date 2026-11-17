@@ -19,33 +19,4 @@ coordinates in `winamp-screenshots/winamp-2.x-stack.png` are relative to that fi
 its main window occupies y 0..115, the equalizer y 116..231, and the playlist
 y 232..347.
 
-### The transport row omits the base skin's Eject button (found by the reference-comparison pass 2026-10-29)
-
-**Symptom.** The app's transport row is Previous, Play, Pause, Stop, Next, then the LED-marked
-Repeat and Shuffle toggles, then the volume and balance sliders, `EQ`, `PL`, and the lightning
-button. The base skin's row is Previous, Play, Pause, Stop, Next, **Eject**, then a `SHUFFLE`
-button and a Repeat icon button, each with a green LED dot — `winamp-screenshots/README.md`'s
-2.95 capture and the repo's own mockup (`docs/screenshots/player.png`) both show that row, with
-the eject button exactly between Next and Shuffle. The app has no Eject control at all. This
-entry's LED half (the toggles carrying their on/off state in label text instead of a square LED)
-was split off and fixed the same day — see the entry under `## Fixed`.
-
-**How to reproduce.** Run the app and read the transport row left to right (or compare
-`docs/screenshots/player.png`'s transport row with a fresh capture): no Eject glyph appears
-between Next and Repeat.
-
-**Suspected cause.** The transport row's control list (`src/ui/views/transport.rs`, whose
-`transport_glyphs()` holds only the five playback glyphs, plus the Repeat/Shuffle LED toggles
-beside it) was built from the app's own feature list and never carried the base skin's Eject
-button, which has no behavior to wire to: Winamp's Eject opens Add File(s), and this app plays
-the Apple Music library and the sample library only.
-
-**Direction.** Waiting on the open question "What should the transport row's Eject button do
-when it is added?" (posted by bugfix 2026-10-30 in `QUESTIONS.md`); add the button only once
-that is answered, so a control never ships claiming behavior it does not have.
-
-**Refused 2026-11-17 by bugfix: the user answered in QUESTIONS.md to omit the Eject button entirely, so adding it would contradict that decision.**
-
-
-
 ## Fixed
