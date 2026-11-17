@@ -3411,7 +3411,9 @@ mixer_released}`, `eq_slider_column`'s `on_release`, `WinampPlayer::mixer_drag` 
   `seek_readout_shows_target_length_and_floored_percent`
   (`src/ui/views/now_playing/mixer_readout.rs`)
 - `now_playing_row_with_a_readout_replaces_the_title` (`src/ui/views/tests/now_playing.rs`)
-- `a_key_or_wheel_event_ends_a_mixer_readout` (`src/ui/tests/mixer_tests.rs`)
+- `a_key_or_wheel_event_ends_a_mixer_readout`,
+  `only_the_slider_navigation_keys_end_a_mixer_readout`
+  (`src/ui/tests/mixer_readout_input_tests.rs`)
 - `dragging_volume_shows_the_level_until_release`, `dragging_balance_shows_the_side`,
   `volume_keys_and_wheel_do_not_show_the_readout`, `the_marquee_pauses_during_a_mixer_drag`,
   `dragging_an_eq_band_shows_its_gain_until_release`, `dragging_the_preamp_shows_its_gain`,

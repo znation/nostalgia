@@ -5,6 +5,43 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
+### Extract mixer readout event-filter tests into a focused module (planned 2026-11-17 by the plan role) — done 2026-11-17 by the feature role
+
+**Goal.** Give the navigation-key and wheel dismissal contract a focused test
+home, reducing the responsibilities of `src/ui/tests/mixer_tests.rs`.
+Checked 2026-11-17: the tests below still live there; the archived volume-input
+and slider-wheel extractions cover different message-handling tests.
+
+**Approach and files.** Move these complete tests, preserving comments,
+attributes, inputs, and assertions, into a new
+`src/ui/tests/mixer_readout_input_tests.rs` with `use super::*;`:
+
+- `a_key_or_wheel_event_ends_a_mixer_readout`
+- `only_the_slider_navigation_keys_end_a_mixer_readout`
+
+Register the sibling in `src/ui/tests/mod.rs` and remove the old definitions.
+Update `docs/invariants.md`'s `Mixer drag readout` attribution for the first
+test and add the second test alongside it. Keep the shared fixtures and
+`subscriptions::mixer_key_message` / `subscriptions::mixer_wheel_message`
+in `src/ui/subscriptions/listeners.rs` unchanged. Drag rendering, marquee,
+volume-step, and slider-wheel tests remain in their existing modules.
+This is one cohesive event-filter extraction, with no product decision or
+visible behavior change; usage and screenshots need no update.
+
+**Acceptance criteria.**
+
+- Test discovery lists each named test once under
+  `ui::tests::mixer_readout_input_tests`, without a copy under
+  `ui::tests::mixer_tests`.
+- Given a volume drag readout, a captured ArrowUp press or captured wheel
+  event produces a dismissal message that clears `mixer_drag` when handled.
+- Arrow, Home, End, PageUp, and PageDown presses produce `MixerReleased`;
+  their releases, Enter/Space/Tab/Escape presses, typing `a`, and the tested
+  unrelated mouse events produce no message from the corresponding filter.
+- The diff preserves the moved test inputs and assertions and is limited to
+  relocation, module registration, and invariant attribution changes.
+  `make check` passes after extraction.
+
 ### Extract balance center-detent tests from the mixer module (planned 2026-11-17 by the plan role) — done 2026-11-17 by the feature role
 
 **Goal.** Give balance center-detent coverage a focused home and reduce the
