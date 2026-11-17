@@ -1527,7 +1527,8 @@ seeks (see `## Seek wheel`).
 `balance_wheel_nudges_by_one_step_and_ignores_zero_and_nan`,
 `eq_preamp_wheel_nudges_by_one_db_and_ignores_zero_and_nan`,
 `eq_band_wheel_nudges_only_its_band_and_ignores_zero_nan_and_an_out_of_range_index`,
-`slider_wheels_forward_their_new_values_to_the_audio_backend`,
+`slider_wheels_forward_their_new_values_to_the_audio_backend`
+(`src/ui/tests/mixer_backend_tests.rs`),
 `wheel_over_the_balance_slider_nudges_the_balance_not_the_volume`, the slider-wheel flash tests in
 `src/ui/tests/volume_flash_tests.rs`, and
 `wheel_over_the_preamp_and_every_band_nudges_that_slider_not_the_volume` in

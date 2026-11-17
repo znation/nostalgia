@@ -37,6 +37,7 @@ mod jump_file_tests;
 mod jump_tests;
 mod jump_time_tests;
 mod loading_tests;
+mod mixer_backend_tests;
 mod mixer_tests;
 mod move_row_tests;
 mod move_selection_tests;
