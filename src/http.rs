@@ -51,8 +51,8 @@ mod tests {
 
     #[test]
     fn agent_carries_timeout_max_redirects_and_status_as_ok() {
-        let config = config_with_timeout(Duration::from_secs(7));
-        // config is ureq::config::Config; inspect fields
+        let agent = agent_with_timeout(Duration::from_secs(7));
+        let config = agent.config();
         assert_eq!(config.timeouts().global, Some(Duration::from_secs(7)));
         assert_eq!(config.max_redirects(), 0);
         assert!(!config.http_status_as_error());
@@ -63,5 +63,7 @@ mod tests {
         let builder = config_builder_with_timeout(Duration::from_secs(3));
         let config = builder.build();
         assert_eq!(config.timeouts().global, Some(Duration::from_secs(3)));
+        assert_eq!(config.max_redirects(), 0);
+        assert!(!config.http_status_as_error());
     }
 }
