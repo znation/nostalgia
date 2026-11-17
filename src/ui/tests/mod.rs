@@ -40,6 +40,7 @@ mod jump_tests;
 mod jump_time_tests;
 mod loading_tests;
 mod mixer_backend_tests;
+mod mixer_drag_readout_tests;
 mod mixer_readout_input_tests;
 mod mixer_tests;
 mod move_row_tests;
