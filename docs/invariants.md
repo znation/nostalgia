@@ -3416,9 +3416,10 @@ mixer_released}`, `eq_slider_column`'s `on_release`, `WinampPlayer::mixer_drag` 
   `volume_keys_and_wheel_do_not_show_the_readout`, `the_marquee_pauses_during_a_mixer_drag`,
   `dragging_an_eq_band_shows_its_gain_until_release`, `dragging_the_preamp_shows_its_gain`,
   `eq_toggle_and_preset_do_not_show_the_readout`, `an_out_of_range_eq_band_shows_no_readout`,
-  `dragging_the_seek_slider_shows_the_target_until_release`,
-  `a_seek_drag_without_a_duration_shows_no_seek_text`, `the_marquee_pauses_during_a_seek_drag`
   (`src/ui/tests/mixer_tests.rs`)
+- `dragging_the_seek_slider_shows_the_target_until_release`,
+  `a_seek_drag_without_a_duration_shows_no_seek_text`, `the_marquee_pauses_during_a_seek_drag`
+  (`src/ui/tests/seek_drag_tests.rs`)
 
 **History.** Added 2026-10-24 with the mixer readout plan.
 
