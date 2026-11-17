@@ -30,9 +30,9 @@ pub(in crate::ui) mod title_drag;
 /// The system media Play/Pause key: toggles the preview between playing and
 /// paused. From stopped, it starts the service's remembered URL when one
 /// exists, resolving the restored last-played track through the service seam
-/// otherwise; a track with no loaded preview and no restore candidate stops
-/// instead, since there is nothing to pause. The transport row's Play and
-/// Pause buttons use the explicit [`play`] and [`pause`] instead.
+/// otherwise. When playing with no loaded preview, the toggle stops the
+/// transport instead, since there is nothing to pause. The transport row's
+/// Play and Pause buttons use the explicit [`play`] and [`pause`] instead.
 pub(in crate::ui) fn play_pause(player: &mut WinampPlayer) -> Task<Message> {
     fade::cancel_fade_out(player);
     // The flag snapshot is advisory (see [`replay_candidate`]): a lock
