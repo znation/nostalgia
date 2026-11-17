@@ -30,6 +30,7 @@ mod browse_tests;
 mod composers_tests;
 mod count_footer_tests;
 mod ctrl_click_tests;
+mod delete_preset_tests;
 mod fade_tests;
 mod flat_lists_tests;
 mod jump_file_tests;
