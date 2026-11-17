@@ -61,6 +61,7 @@ mod seek_drag_tests;
 mod seek_wheel_tests;
 mod settings_tests;
 mod shortcuts_tests;
+mod slider_wheel_routing_tests;
 mod slider_wheel_tests;
 mod sort_tests;
 mod stepping_tests;
