@@ -5,6 +5,50 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
+### Extract the title-drag tests from the mixer test module (planned 2026-11-17 by the plan role) — done 2026-11-17 by the feature role
+
+**Goal.** Give the hand-scrolled Now Playing title its own focused test module rather
+than keeping its tests among mixer controls. Checked 2026-11-17:
+`src/ui/tests/mixer_tests.rs` is 1,372 lines; the three title-drag tests below form a
+contiguous group between the mixer-marquee test and the custom-preset tests.
+`title_drag_tests.rs` does not exist. Searches of Planned and the finished-plan
+archive found no extraction entry; the original hand-scroll plan offered that file
+as a possible home, but the tests currently reside in `mixer_tests.rs`.
+
+**Approach and files touched.** Move these complete test functions, including their
+attributes and assertions, verbatim from `src/ui/tests/mixer_tests.rs` into a new
+`src/ui/tests/title_drag_tests.rs` with `use super::*;`:
+
+- `the_marquee_pauses_while_the_title_is_dragged_and_resumes_from_there`
+- `dragging_the_title_right_wraps_backward_and_a_second_drag_starts_from_there`
+- `a_new_selection_clears_a_title_drag`
+
+Register `mod title_drag_tests;` in `src/ui/tests/mod.rs`. The existing shared
+`test_player` and `seed_current_title` helpers already reach sibling modules through
+the test hub; leave their bodies and visibility alone. Leave
+`the_marquee_pauses_during_a_mixer_drag` in the mixer module. This is independent
+of the queued shared-helper move: preserve whatever helper imports exist when this
+plan is implemented.
+
+**Acceptance criteria.**
+
+- The new file contains the three named tests with their original bodies and leaf
+  names; the mixer file no longer contains those definitions. Its neighboring
+  mixer-marquee and custom-preset tests remain in place.
+- The registered sibling compiles and runs under `make check`. Its tests still
+  assert that press pauses the marquee, the first move anchors, a 30 px left move
+  advances three characters, release resumes at that offset, rightward movement
+  wraps backward, a second drag anchors afresh, and selecting a track clears a drag.
+- No production behavior or shared helper changes. The `Now Playing label`
+  guarantees and named-test citations in `docs/invariants.md` remain accurate;
+  update a path citation only if the implementation finds one naming a moved test.
+- `make check` passes after the move. No new behavioral tests, usage update, or
+  reference screenshot comparison is needed for this test-only reorganization.
+
+**Size.** Three test files including the hub, roughly eighty moved lines. Excludes
+other mixer tests, subscription tests, helper extraction, and production title-drag
+changes; there is no independently necessary second deliverable in this move.
+
 ### Extract the root-view count-footer tests into a focused sibling module (planned 2026-11-17 by the plan role) — done 2026-11-17 by the feature role
 
 **Goal.** Reduce the 1488-line `src/ui/tests/screen_tests.rs` by moving its cohesive

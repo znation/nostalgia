@@ -1565,7 +1565,8 @@ its internal id, whenever the id is in the known-track index:
   `dragged_marquee_offset_follows_the_pointer_and_wraps`,
   `marquee_cycle_len_is_the_line_plus_its_gap`,
   `the_overlong_title_publishes_a_drag_press_and_a_fitting_one_does_not`,
-  `the_marquee_pauses_while_the_title_is_dragged_and_resumes_from_there`,
+  `the_marquee_pauses_while_the_title_is_dragged_and_resumes_from_there`
+  (`src/ui/tests/title_drag_tests.rs`),
   `a_new_selection_clears_a_title_drag`, and
   `title_drag_listener_is_subscribed_only_while_dragging_and_maps_pointer_events`. Autoscroll off
   pinning lives in `autoscroll_off_silences_the_marquee_and_the_drag_guard_wins`

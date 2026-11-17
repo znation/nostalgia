@@ -57,6 +57,7 @@ mod shortcuts_tests;
 mod sort_tests;
 mod stepping_tests;
 mod subscriptions_tests;
+mod title_drag_tests;
 mod transport_tests;
 mod volume_flash_tests;
 mod window_tests;

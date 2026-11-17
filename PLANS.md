@@ -4,6 +4,8 @@
 
 ### Move `src/ui/tests/mod.rs`'s shared test helpers to `src/ui/tests/support.rs` (planned 2026-10-30 by the plan role)
 
+**Needs review 2026-11-17 by feature: plan defect — the helper extraction is already present in commit `8d7ed34ea` on main; this entry needs the plan role to retire or close it.**
+
 **Goal.** `src/ui/tests/mod.rs` measures 1451 lines and holds zero tests: after its import
 preamble the whole span is the shared helper block (48 top-level fns — `test_player`,
 `player_with_audio`, `player_stepping_from`, `drive_playback_finished`,
@@ -66,49 +68,5 @@ every helper compiles and is called exactly as before.
 so no new tests; out of scope: any split of the topic files (`screen_tests.rs` at 1488,
 `readouts_tests.rs`, `mixer_tests.rs`, …), any helper body or signature change, any change
 to `crate::test_support`, and the settings test-move above (independent files).
-
-### Extract the title-drag tests from the mixer test module (planned 2026-11-17 by the plan role)
-
-**Goal.** Give the hand-scrolled Now Playing title its own focused test module rather
-than keeping its tests among mixer controls. Checked 2026-11-17:
-`src/ui/tests/mixer_tests.rs` is 1,372 lines; the three title-drag tests below form a
-contiguous group between the mixer-marquee test and the custom-preset tests.
-`title_drag_tests.rs` does not exist. Searches of Planned and the finished-plan
-archive found no extraction entry; the original hand-scroll plan offered that file
-as a possible home, but the tests currently reside in `mixer_tests.rs`.
-
-**Approach and files touched.** Move these complete test functions, including their
-attributes and assertions, verbatim from `src/ui/tests/mixer_tests.rs` into a new
-`src/ui/tests/title_drag_tests.rs` with `use super::*;`:
-
-- `the_marquee_pauses_while_the_title_is_dragged_and_resumes_from_there`
-- `dragging_the_title_right_wraps_backward_and_a_second_drag_starts_from_there`
-- `a_new_selection_clears_a_title_drag`
-
-Register `mod title_drag_tests;` in `src/ui/tests/mod.rs`. The existing shared
-`test_player` and `seed_current_title` helpers already reach sibling modules through
-the test hub; leave their bodies and visibility alone. Leave
-`the_marquee_pauses_during_a_mixer_drag` in the mixer module. This is independent
-of the queued shared-helper move: preserve whatever helper imports exist when this
-plan is implemented.
-
-**Acceptance criteria.**
-
-- The new file contains the three named tests with their original bodies and leaf
-  names; the mixer file no longer contains those definitions. Its neighboring
-  mixer-marquee and custom-preset tests remain in place.
-- The registered sibling compiles and runs under `make check`. Its tests still
-  assert that press pauses the marquee, the first move anchors, a 30 px left move
-  advances three characters, release resumes at that offset, rightward movement
-  wraps backward, a second drag anchors afresh, and selecting a track clears a drag.
-- No production behavior or shared helper changes. The `Now Playing label`
-  guarantees and named-test citations in `docs/invariants.md` remain accurate;
-  update a path citation only if the implementation finds one naming a moved test.
-- `make check` passes after the move. No new behavioral tests, usage update, or
-  reference screenshot comparison is needed for this test-only reorganization.
-
-**Size.** Three test files including the hub, roughly eighty moved lines. Excludes
-other mixer tests, subscription tests, helper extraction, and production title-drag
-changes; there is no independently necessary second deliverable in this move.
 
 ## Done
