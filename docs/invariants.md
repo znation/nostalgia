@@ -3439,7 +3439,7 @@ never snapped.
 - `snap_balance_to_center_snaps_an_inward_move_near_center`,
   `snap_balance_to_center_never_snaps_an_outward_move` (`src/state.rs`)
 - `dragging_balance_into_the_middle_snaps_to_center`, `a_continuous_inward_balance_drag_stays_snapped`,
-  `a_balance_step_after_release_leaves_center` (`src/ui/tests/mixer_tests.rs`)
+  `a_balance_step_after_release_leaves_center` (`src/ui/tests/balance_detent_tests.rs`)
 
 **History.** Added 2026-10-24 with the balance center detent plan.
 

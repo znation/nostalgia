@@ -26,6 +26,7 @@ use std::time::Duration;
 mod support;
 use support::*;
 
+mod balance_detent_tests;
 mod browse_tests;
 mod composers_tests;
 mod count_footer_tests;
