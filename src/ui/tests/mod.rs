@@ -56,6 +56,7 @@ mod scroll_tests;
 mod search_tests;
 mod settings_tests;
 mod shortcuts_tests;
+mod slider_wheel_tests;
 mod sort_tests;
 mod stepping_tests;
 mod subscriptions_tests;
