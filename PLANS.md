@@ -1,7 +1,6 @@
 # Plans
 
 ## Planned
-_None yet._
 
 ### Move `src/ui/tests/mod.rs`'s shared test helpers to `src/ui/tests/support.rs` (planned 2026-10-30 by the plan role)
 
