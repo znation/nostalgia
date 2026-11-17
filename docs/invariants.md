@@ -1495,7 +1495,7 @@ position or no preview length) and every other player panel keep the volume nudg
 `seek_wheel_message_ignores_a_horizontal_only_roll` in `src/ui/views/tests/seek_wheel.rs`, and
 `wheel_over_the_shade_seek_slider_seeks` (also in `seek_wheel.rs`), plus
 `wheel_over_the_root_seek_slider_seeks_without_nudging_the_volume`
-and `wheel_over_a_blank_seek_strip_still_nudges_the_volume` in `src/ui/tests/mixer_tests.rs`.
+and `wheel_over_a_blank_seek_strip_still_nudges_the_volume` in `src/ui/tests/seek_wheel_tests.rs`.
 
 ## Slider wheel
 

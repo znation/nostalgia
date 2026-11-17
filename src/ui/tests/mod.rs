@@ -54,6 +54,7 @@ mod save_list_tests;
 mod screen_tests;
 mod scroll_tests;
 mod search_tests;
+mod seek_wheel_tests;
 mod settings_tests;
 mod shortcuts_tests;
 mod slider_wheel_tests;
