@@ -1415,7 +1415,7 @@ with `AUTO_BUTTON_WIDTH` in `src/ui/views/equalizer.rs`.
 **Pinned by.** `preset_for_genre_matches_trimmed_case_insensitive_names` in `src/equalizer.rs`,
 `toggle_eq_auto_flips_only_the_auto_flag_and_keeps_the_curve` in `src/state.rs`,
 `toggle_eq_auto_flips_only_the_auto_flag`,
-`auto_on_applies_a_genre_matched_preset_on_track_selection` in `src/ui/tests/mixer_tests.rs`, and
+`auto_on_applies_a_genre_matched_preset_on_track_selection` in `src/ui/tests/auto_preset_tests.rs`, and
 `auto_button_draws_its_state_and_publishes_toggle_eq_auto` in `src/ui/views/tests/equalizer.rs`.
 
 **History.** Added with the AUTO-toggle plan on 2026-10-26; the panel previously applied a preset
