@@ -1476,7 +1476,7 @@ balance, preamp, and band wrappers nest inside; the flash is held by
 **Pinned by.** `volume_wheel_message_maps_a_vertical_roll_to_a_direction` and
 `volume_wheel_message_zeroes_a_horizontal_only_roll` in `src/ui/views/tests/transport.rs`, plus
 `volume_wheel_nudges_by_one_slider_step_and_ignores_zero` and `volume_wheel_clamps_at_the_ends`
-in `src/ui/tests/mixer_tests.rs`, plus the tests in `src/ui/tests/volume_flash_tests.rs`.
+in `src/ui/tests/volume_input_tests.rs`, plus the tests in `src/ui/tests/volume_flash_tests.rs`.
 
 ## Seek wheel
 

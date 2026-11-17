@@ -63,5 +63,6 @@ mod subscriptions_tests;
 mod title_drag_tests;
 mod transport_tests;
 mod volume_flash_tests;
+mod volume_input_tests;
 mod window_tests;
 mod years_tests;
