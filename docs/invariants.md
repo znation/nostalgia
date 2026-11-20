@@ -2326,10 +2326,10 @@ overlay branch of `ui::screen::view`.
 `known_tracks_record_the_played_songs_track_number`, and
 `known_tracks_record_the_played_songs_disc_number`, and
 `known_tracks_record_the_played_songs_composer`, and
-`known_tracks_record_the_played_songs_content_rating`,
-`file_info_track_resolves_the_selected_song_row` and
+`known_tracks_record_the_played_songs_content_rating`
+(`src/ui/tests/readouts_tests.rs`); `file_info_track_resolves_the_selected_song_row` and
 `file_info_track_falls_back_to_the_current_track_without_a_selection`
-(`src/ui/tests/readouts_tests.rs`); `file_info_overlay_names_the_selected_rows_song`
+(`src/ui/tests/file_info_tests.rs`); `file_info_overlay_names_the_selected_rows_song`
 (`src/ui/tests/screen_tests.rs`);
 `songs_from_album_maps_the_content_rating` and
 `songs_from_album_maps_a_missing_blank_or_unknown_content_rating_to_none`

@@ -34,6 +34,7 @@ mod count_footer_tests;
 mod ctrl_click_tests;
 mod delete_preset_tests;
 mod fade_tests;
+mod file_info_tests;
 mod flat_lists_tests;
 mod jump_file_tests;
 mod jump_tests;
