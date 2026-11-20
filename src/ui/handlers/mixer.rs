@@ -1,10 +1,11 @@
 //! The mixer message handlers: the volume, the balance, the seek nudges, the
 //! equalizer.
 //!
-//! The volume, balance, and equalizer handlers write a clamped value into the
-//! shared state and forward the result to the audio backend, so a slider drag
-//! reaches the playing preview without restarting it. The seek nudge forwards
-//! a relative seek without touching shared state.
+//! The volume, balance, and equalizer handlers write a value into the shared
+//! state and forward the result to the audio backend, so a slider drag
+//! reaches the playing preview without restarting it; the level, balance, and
+//! gain writes clamp, and the on/off toggle flips its flag. The seek nudge
+//! forwards a relative seek without touching shared state.
 
 use iced::Task;
 
