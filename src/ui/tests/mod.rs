@@ -61,6 +61,7 @@ mod screen_tests;
 mod scroll_tests;
 mod search_tests;
 mod seek_drag_tests;
+mod seek_preview_tests;
 mod seek_wheel_tests;
 mod settings_tests;
 mod shortcuts_tests;

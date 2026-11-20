@@ -1905,10 +1905,15 @@ rather than the panic unwinding the event loop.
 - `playback_duration_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped`
 - `stop_and_track_selection_clear_the_playback_duration`
 - `seek_preview_changed_tracks_the_drag_without_touching_the_backend`
+  (`src/ui/tests/seek_preview_tests.rs`)
 - `seek_preview_released_seeks_once_to_the_dragged_position`
+  (`src/ui/tests/seek_preview_tests.rs`)
 - `seek_preview_released_without_a_drag_does_nothing`
+  (`src/ui/tests/seek_preview_tests.rs`)
 - `seek_preview_released_invalidates_an_in_flight_position_reply`
+  (`src/ui/tests/seek_preview_tests.rs`)
 - `seek_preview_released_backend_failure_leaves_the_position_alone`
+  (`src/ui/tests/seek_preview_tests.rs`)
 - `position_tick_queries_position_and_duration` (`src/ui/tests/readouts_tests.rs`)
 - `playback_duration_forwards_the_audio_output_duration`
   ((`src/apple_music/tests/audio_forwarding.rs`))
