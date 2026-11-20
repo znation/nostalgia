@@ -1,7 +1,8 @@
 use super::*;
 
 // The Home, End, Page Up, and Page Down keys all target the stable
-// `BROWSE_LIST_ID` (pinned by the message tests above), but shade mode builds
+// `BROWSE_LIST_ID` (pinned by the message tests in `src/ui/shortcuts.rs`),
+// but shade mode builds
 // no browse list. This lays out the real root view in both modes and records
 // every scrollable's id: the normal tree carries the browse target and the
 // shaded tree carries none, so the same key press has nothing to move.
