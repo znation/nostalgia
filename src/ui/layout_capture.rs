@@ -1,5 +1,5 @@
-//! Test-only harness for laying a widget tree out headlessly and reading the
-//! text fragments it would draw.
+//! Test-only harness for laying a widget tree out headlessly, reading the
+//! text fragments it would draw, and dispatching mouse events at a point.
 //!
 //! `iced`'s `Element` API gives no way to read the text a tree carries, so the
 //! harness lays the tree out under a fixed [`Limits`] and records every `text`
