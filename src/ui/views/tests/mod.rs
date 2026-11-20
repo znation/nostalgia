@@ -178,7 +178,7 @@ fn assert_slider_range_matches_clamp(clamp: fn(f32) -> f32, min: f32, max: f32, 
 /// Whether any pixel in `region` (RGBA bytes) is `color` at 8-bit channels.
 fn region_has_color(region: &[u8], color: Color) -> bool {
     let [r, g, b, a] = color.into_rgba8();
-    region.chunks_exact(4).any(|pixel| pixel == [r, g, b, a])
+    region.as_chunks::<4>().0.contains(&[r, g, b, a])
 }
 
 // The seven transient panels re-based their 18 px texts onto the 8-px grid the

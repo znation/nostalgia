@@ -441,7 +441,9 @@ fn repeat_face_glyph_measures_and_paints_the_loop_icon() {
         255,
     ];
     let count = region
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .filter(|p| **p != face && **p != bevel && **p != led && **p != press)
         .count();
     assert!(

@@ -78,7 +78,7 @@ pub(super) fn seek_slider(
     let (thumb, length) = seek_bar_value(position, duration)?;
     Some(
         Slider::new(0.0..=length, thumb, Message::SeekPreviewChanged)
-            .step(1.0)
+            .step(1.0_f32)
             .on_release(Message::SeekPreviewReleased)
             .width(Length::Fill)
             .style(|_theme, status| style::chrome_slider_style(status)),
