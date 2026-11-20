@@ -30,9 +30,9 @@ macro_rules! forward_source_reads {
 
 /// Forwards [`Iterator::size_hint`] to the wrapped source.
 ///
-/// The three sample adapters neither buffer nor filter their items, so the
-/// inner source's hint is exact for them; each `Iterator` impl calls this
-/// beside its own `next`.
+/// The three sample adapters map each inner sample to exactly one output
+/// sample without buffering or dropping any, so the inner source's hint is
+/// exact for them; each `Iterator` impl calls this beside its own `next`.
 macro_rules! forward_size_hint {
     () => {
         fn size_hint(&self) -> (usize, Option<usize>) {
