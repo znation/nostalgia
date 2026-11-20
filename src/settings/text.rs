@@ -7,6 +7,37 @@ use super::library_view::LibraryView;
 use crate::equalizer::{self, CustomPreset};
 use crate::settings::SavedPlaylist;
 
+/// The free-text form of a name or a seam id as the writer emits it: every
+/// line break flattened to a space.
+///
+/// The file is line-based, so a value carrying a line break would split its
+/// `key=value` row in two and let the value's tail be read as settings lines
+/// of its own (`song-7\neq_auto=on` would even flip a visible setting), so
+/// the writer flattens every line break and the value keeps one whole row.
+/// The naming panels (`save_preset.rs`, `save_list.rs`) refuse a line-broken
+/// name outright; this guard covers the producers that have no panel — the
+/// play and save seams' ids — and stays as defense in depth over those
+/// panels. The writer applies it to every free-text row it emits: the
+/// `eq_custom_preset=` and `user_playlist=` names, the `user_playlist=` and
+/// `recently_played=` id lists (through [`push_joined_ids`]), and
+/// `current_track=`.
+fn one_line(value: &str) -> String {
+    value.replace(['\r', '\n'], " ")
+}
+
+/// Pushes `ids` onto `text` joined with commas, each flattened through
+/// [`one_line`]: ids are seam text copied verbatim from the showing list or
+/// the play reply, and the seams have no naming panel to refuse a line-broken
+/// id at, so the writer flattens each one itself.
+fn push_joined_ids(text: &mut String, ids: &[String]) {
+    for (position, id) in ids.iter().enumerate() {
+        if position > 0 {
+            text.push(',');
+        }
+        text.push_str(&one_line(id));
+    }
+}
+
 impl Settings {
     /// Render the snapshot as the line-based `key=value` text the settings
     /// file holds. Floats use their shortest round-tripping `Display` form,
@@ -30,13 +61,10 @@ impl Settings {
         // format the `eq_preamp`/`eq_band_*` lines use.
         for preset in &self.eq_custom_presets {
             text.push_str("eq_custom_preset=");
-            // A preset name is free text, but this file is line-based: a
-            // pasted line break in the name would split its row in two and
-            // let the name's tail be read as settings lines of its own, so
-            // the writer flattens line breaks to spaces. The naming panel
-            // refuses such a name outright; this guard covers any other
-            // producer of a saved curve.
-            text.push_str(preset.name.replace(['\r', '\n'], " ").as_str());
+            // A preset name is free text; `one_line` keeps it on one whole
+            // row. The naming panel refuses a line-broken name outright;
+            // this guard covers any other producer of a saved curve.
+            text.push_str(&one_line(&preset.name));
             text.push(':');
             text.push_str(&format!("{}", preset.preamp));
             for gain in preset.bands {
@@ -56,27 +84,15 @@ impl Settings {
         // malformed forms.
         for saved in &self.saved_playlists {
             text.push_str("user_playlist=");
-            // A list's name is free text, but this file is line-based: a
-            // pasted line break in the name would split its row in two and
-            // let the name's tail be read as settings lines of its own, so
-            // the writer flattens line breaks to spaces, like the
-            // `eq_custom_preset=` name above. The naming panel refuses such
-            // a name outright; this guard covers any other producer of a
-            // saved list.
-            text.push_str(saved.name.replace(['\r', '\n'], " ").as_str());
+            // A list's name is free text; `one_line` keeps it on one whole
+            // row. The naming panel refuses a line-broken name outright;
+            // this guard covers any other producer of a saved list.
+            text.push_str(&one_line(&saved.name));
             text.push(':');
             // A list's ids are seam text, copied verbatim from the showing
-            // list by the save flow: one carrying a line break would split
-            // the row in two and let the id's tail be read as settings lines
-            // of its own, so the writer flattens line breaks to spaces, like
-            // the `recently_played=`/`current_track=` id rows below and the
-            // name above (the play seams have no naming panel to refuse at).
-            for (position, id) in saved.song_ids.iter().enumerate() {
-                if position > 0 {
-                    text.push(',');
-                }
-                text.push_str(id.replace(['\r', '\n'], " ").as_str());
-            }
+            // list by the save flow: `push_joined_ids` flattens each one,
+            // like the `recently_played=`/`current_track=` id rows below.
+            push_joined_ids(&mut text, &saved.song_ids);
             text.push('\n');
         }
         // One line for the signed-out Recently Played list, beside the saved
@@ -88,18 +104,10 @@ impl Settings {
         // absence is the empty-list documentation.
         if !self.recently_played.is_empty() {
             text.push_str("recently_played=");
-            // A played id is seam text, and this file is line-based: an id
-            // carrying a line break would split its `recently_played=` row in
-            // two and let the id's tail be read as settings lines of its
-            // own, so the writer flattens line breaks to spaces, like the
-            // `eq_custom_preset=`/`user_playlist=` names above (the play
-            // seams have no naming panel to refuse at).
-            for (position, id) in self.recently_played.iter().enumerate() {
-                if position > 0 {
-                    text.push(',');
-                }
-                text.push_str(id.replace(['\r', '\n'], " ").as_str());
-            }
+            // A played id is seam text: `push_joined_ids` flattens each one,
+            // like the `user_playlist=`/`current_track=` id rows around it
+            // (the play seams have no naming panel to refuse at).
+            push_joined_ids(&mut text, &self.recently_played);
             text.push('\n');
         }
         text.push_str(&format!(
@@ -123,17 +131,10 @@ impl Settings {
             text.push_str(&format!("window_position={x},{y}\n"));
         }
         // The same line-based guard over the last-played id, from the same
-        // seams: a line break in it would split the `current_track=` row in
-        // two like a `recently_played=` row above, so the writer flattens it
-        // too.
+        // seams: `one_line` keeps the `current_track=` row whole like the
+        // `recently_played=` row above.
         text.push_str("current_track=");
-        text.push_str(
-            &self
-                .current_track
-                .as_deref()
-                .unwrap_or("")
-                .replace(['\r', '\n'], " "),
-        );
+        text.push_str(&one_line(self.current_track.as_deref().unwrap_or("")));
         text.push('\n');
         text.push_str(&format!("library_view={}\n", self.library_view.key()));
         // A conditional line, like `window_position` and unlike
