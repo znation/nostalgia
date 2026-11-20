@@ -1695,7 +1695,7 @@ its internal id, whenever the id is in the known-track index:
   `src/ui/views/tests/now_playing.rs`;
   `toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum` in
   `src/ui/tests/panels_tests.rs`; `position_tick_blinks_the_elapsed_readout_only_while_paused` in
-  `src/state.rs`; and `toggle_playing_switches_between_playing_and_paused` and
+  `src/ui/tests/position_tick_tests.rs`; and `toggle_playing_switches_between_playing_and_paused` and
   `pause_sets_the_paused_mode_while_play_and_stop_clear_it` in `src/state.rs`; and
   `pause_stops_playing_but_keeps_current_track`,
   `pause_without_a_loaded_preview_leaves_the_transport_stopped`,
@@ -1867,16 +1867,23 @@ rather than the panic unwinding the event loop.
 - `position_poll_waits_for_a_stop_to_reach_the_backend`
 - `position_poll_waits_for_a_selected_tracks_play_to_settle`
 - `an_unrelated_transport_completion_keeps_the_poll_waiting`
-- `position_tick_schedules_a_query`
+- `position_tick_schedules_a_query` (`src/ui/tests/position_tick_tests.rs`)
 - `position_tick_skips_the_format_and_length_once_both_are_known`
+  (`src/ui/tests/position_tick_tests.rs`)
 - `position_tick_queries_only_the_missing_value`
+  (`src/ui/tests/position_tick_tests.rs`)
 - `position_tick_stream_emits_position_ticks`
+  (`src/ui/tests/subscriptions_tests.rs`)
 - `a_refused_position_thread_ends_the_tick_stream_instead_of_panicking`
+  (`src/ui/tests/subscriptions_tests.rs`)
 - `a_refused_position_thread_reports_the_cause_and_the_loss`
+  (`src/ui/tests/subscriptions_tests.rs`)
 - `the_position_thread_is_named_nostalgia_position_poll`
+  (`src/ui/tests/subscriptions_tests.rs`)
 - `the_position_timer_runs_only_while_there_is_a_position_to_refresh`
+  (`src/ui/tests/subscriptions_tests.rs`)
 - `a_paused_preview_needs_the_position_poll_before_its_first_reply`
-  ((`src/ui/tests/readouts_tests.rs`))
+  (`src/ui/tests/readouts_tests.rs`)
 - `play_track_without_a_preview_url_stops_the_previous_preview`
   ((`src/apple_music/tests/play_track.rs`))
 - `position_query_reports_none_when_nothing_is_loaded`
@@ -1914,7 +1921,8 @@ rather than the panic unwinding the event loop.
   (`src/ui/tests/seek_preview_tests.rs`)
 - `seek_preview_released_backend_failure_leaves_the_position_alone`
   (`src/ui/tests/seek_preview_tests.rs`)
-- `position_tick_queries_position_and_duration` (`src/ui/tests/readouts_tests.rs`)
+- `position_tick_queries_position_and_duration`
+  (`src/ui/tests/position_tick_tests.rs`)
 - `playback_duration_forwards_the_audio_output_duration`
   ((`src/apple_music/tests/audio_forwarding.rs`))
 - `seek_output_to_forwards_an_absolute_position`
@@ -1931,7 +1939,8 @@ rather than the panic unwinding the event loop.
 - `playback_format_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped`
 - `stop_clears_the_playback_format_while_pause_keeps_it`
 - `track_selected_clears_the_playback_format`
-- `position_tick_queries_position_and_format` (`src/ui/tests/readouts_tests.rs`)
+- `position_tick_queries_position_and_format`
+  (`src/ui/tests/position_tick_tests.rs`)
 - `marquee_tick_advances_the_offset`
 - `marquee_ticks_keep_ticking_when_the_receiver_falls_behind`
 - `visualizer_bar_heights_scale_and_clamp_the_reported_bands`
@@ -3263,7 +3272,8 @@ same list/Shuffle/Repeat rules as Next, and the no-next-song case reuses `handle
 - `rodio_output_reports_a_closed_worker_for_every_command` (`src/audio/tests/rodio_output.rs`)
 - `stop_removes_the_player_so_a_finished_query_reports_none` (`src/audio/tests/worker.rs`)
 - `preview_finished_forwards_the_audio_output_state` (`src/apple_music/tests/audio_forwarding.rs`)
-- `position_tick_queries_preview_finished` (`src/ui/tests/readouts_tests.rs`)
+- `position_tick_queries_preview_finished`
+  (`src/ui/tests/position_tick_tests.rs`)
 - `preview_end_advances_to_the_next_song` (`src/ui/tests/stepping_tests.rs`)
 - `preview_end_in_all_songs_steps_the_flat_list` (`src/ui/tests/stepping_tests.rs`)
 - `preview_end_wraps_to_the_first_song_with_repeat_on` (`src/ui/tests/stepping_tests.rs`)
