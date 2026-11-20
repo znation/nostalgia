@@ -308,6 +308,8 @@ fn rodio_output_reports_none_when_the_position_reply_times_out() {
         "position",
         |command| match command {
             Command::Position(reply) => {
+                // Keep the reply channel alive well past the seam's bound, as
+                // a worker busy installing a preview would.
                 std::thread::sleep(WORKER_QUERY_TIMEOUT * 10);
                 drop(reply);
             }
@@ -339,6 +341,8 @@ fn rodio_output_reports_none_when_the_duration_reply_times_out() {
         "duration",
         |command| match command {
             Command::Duration(reply) => {
+                // Keep the reply channel alive well past the seam's bound, as
+                // a worker busy installing a preview would.
                 std::thread::sleep(WORKER_QUERY_TIMEOUT * 10);
                 drop(reply);
             }
