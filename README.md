@@ -19,11 +19,13 @@ Nostalgia's own captures, not the target.
 ## Status
 
 <!-- tumwater:status:start -->
-Early skeleton (0.1.0): an iced (0.14) desktop clone of the Winamp 2.x UI, with a themed player
-(Now Playing LCD, transport, volume and balance, equalizer) and an artist → album → song browser
-with library search and flat All Songs, All Albums, Playlists, Genres, Years, Composers, Recently
-Added, and Recently Played views. Apple Music browse/search and preview playback sit behind injectable seams and fall back to
-the sample library and silence.
+A 0.1.0 iced (0.14) desktop clone of the Winamp 2.x UI: a themed player (Now Playing LCD,
+transport with Repeat and Shuffle, volume and balance, equalizer with named custom presets) and an
+artist → album → song browser with library search, saved user playlists, and flat All Songs, All
+Albums, Playlists, Genres, Years, Composers, Recently Added, and Recently Played views. A settings
+file persists the last-played track, the saved lists and presets, and a MusicKit sign-in across
+relaunches; Apple Music browse/search and preview playback sit behind injectable seams and fall
+back to the sample library and silence.
 Open work lives in PLANS.md, BUGS.md, and QUESTIONS.md.
 <!-- tumwater:status:end -->
 
