@@ -1945,8 +1945,10 @@ rather than the panic unwinding the event loop.
 - `now_playing_visualizer_row_paints_its_ramp_from_green_to_orange`
   ((`src/ui/views/tests/lcd_display.rs`))
 - `spectrum_reply_stores_the_bars_and_lets_a_quieter_band_fall`
+  (`src/ui/tests/spectrum_tests.rs`)
 - `spectrum_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped`
-- `stop_clears_the_spectrum_while_pause_keeps_it`
+  (`src/ui/tests/spectrum_tests.rs`)
+- `stop_clears_the_spectrum_while_pause_keeps_it` (`src/ui/tests/spectrum_tests.rs`)
 - `spectrum_tick_queries_spectrum_and_carries_the_epoch`
 - `the_spectrum_timer_runs_only_while_playback_runs` (`src/ui/tests/subscriptions_tests.rs`)
 - `a_refused_spectrum_thread_ends_the_tick_stream_instead_of_panicking`
@@ -3203,8 +3205,10 @@ width, while `views::visible_spectrum` applies `WinampPlayer::visualizer_visible
 - `a_refused_spectrum_thread_reports_the_cause_and_the_loss` (`src/ui/tests/subscriptions_tests.rs`)
 - `the_spectrum_thread_is_named_nostalgia_spectrum_poll` (`src/ui/tests/subscriptions_tests.rs`)
 - `spectrum_reply_stores_the_bars_and_lets_a_quieter_band_fall`
+  (`src/ui/tests/spectrum_tests.rs`)
 - `spectrum_reply_with_a_stale_epoch_or_a_pending_transition_is_dropped`
-- `stop_clears_the_spectrum_while_pause_keeps_it`
+  (`src/ui/tests/spectrum_tests.rs`)
+- `stop_clears_the_spectrum_while_pause_keeps_it` (`src/ui/tests/spectrum_tests.rs`)
 - `spectrum_tick_queries_spectrum_and_carries_the_epoch`
 - `the_spectrum_timer_runs_only_while_playback_runs` (`src/ui/tests/subscriptions_tests.rs`)
 

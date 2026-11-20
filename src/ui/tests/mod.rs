@@ -68,6 +68,7 @@ mod shortcuts_tests;
 mod slider_wheel_routing_tests;
 mod slider_wheel_tests;
 mod sort_tests;
+mod spectrum_tests;
 mod stepping_tests;
 mod subscriptions_tests;
 mod title_drag_tests;

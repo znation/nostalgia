@@ -6,6 +6,39 @@ pub(super) fn assert_curve_applied(state: &AppState, preset: crate::equalizer::P
     assert_eq!(state.eq_bands(), preset.bands);
 }
 
+/// Drives one poll-reply field through the guard every poll reply shares: a
+/// reply from before a settled Stop is dropped, a reply at the current epoch
+/// is dropped while a Pause is pending, and stored once the transition settles.
+/// `reply` wraps a value in the field's message, `get`/`set` read and write the
+/// field, `stale` is the replied value, and `kept` is the value already held.
+pub(super) fn assert_reply_dropped_while_stale_or_pending<T: Copy + PartialEq + std::fmt::Debug>(
+    reply: impl Fn(u64, T) -> Message,
+    get: impl Fn(&WinampPlayer) -> Option<T>,
+    set: impl Fn(&mut WinampPlayer, T),
+    stale: T,
+    kept: T,
+) {
+    let (mut player, _current_track) = play_song_1_then_browse_to_album_2();
+    let old_epoch = player.position_epoch;
+
+    let _ = update(&mut player, Message::Stop);
+    let _ = update(&mut player, Message::TransportSettled);
+    let _ = update(&mut player, reply(old_epoch, stale));
+    assert_eq!(get(&player), None);
+
+    // A pending transition drops even a reply at the current epoch.
+    let current_epoch = player.position_epoch;
+    set(&mut player, kept);
+    let _ = update(&mut player, Message::Pause);
+    let _ = update(&mut player, reply(current_epoch, stale));
+    assert_eq!(get(&player), Some(kept));
+
+    // Once the transition settles, the same reply is stored.
+    let _ = update(&mut player, Message::TransportSettled);
+    let _ = update(&mut player, reply(current_epoch, stale));
+    assert_eq!(get(&player), Some(stale));
+}
+
 /// A fresh player over its own shared state, so a test can inspect the
 /// same `AppState` the player mutates.
 pub(super) fn test_player() -> (WinampPlayer, Arc<Mutex<AppState>>) {
