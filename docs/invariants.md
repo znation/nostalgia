@@ -111,9 +111,9 @@ clears the search flag and view and calls `fetch_at_top(fetch::load_artists(play
 - `f5_reloads_the_library_from_the_keyboard` (in `src/ui/tests/shortcuts_tests.rs`)
 - `reload_button_is_shown_on_every_browse_level` (in `src/ui/tests/screen_tests.rs`)
 - `browse_nav_buttons_place_reload_beside_sort` (in `src/ui/tests/screen_tests.rs`)
-- `message_for_maps_backspace_to_back` (in `src/ui/shortcuts.rs`)
-- `message_for_maps_f5_to_reload` (in `src/ui/shortcuts.rs`)
-- `shortcut_ignores_chord_modifiers` (in `src/ui/shortcuts.rs`)
+- `message_for_maps_backspace_to_back` (in `src/ui/shortcuts/tests.rs`)
+- `message_for_maps_f5_to_reload` (in `src/ui/shortcuts/tests.rs`)
+- `shortcut_ignores_chord_modifiers` (in `src/ui/shortcuts/tests.rs`)
 - `back_button_is_available_only_below_the_artist_list` (in `src/ui/views/tests/browse.rs`)
 
 **History.** Reconstructed from "Browse view can only move forward — no way back from
@@ -142,7 +142,7 @@ Control/Alt/Logo chord guard, while leaving Alt+F and Logo+F to the window manag
 **Pinned by.**
 - `ctrl_f_focuses_the_search_box_and_changes_no_browse_state` (in `src/ui/tests/search_tests.rs`)
 - `ctrl_f_is_a_noop_in_shade_mode` (in `src/ui/tests/search_tests.rs`)
-- `message_for_maps_ctrl_f_to_focus_search` (in `src/ui/shortcuts.rs`)
+- `message_for_maps_ctrl_f_to_focus_search` (in `src/ui/shortcuts/tests.rs`)
 - `view_search_box_registers_its_focus_id` (in `src/ui/views/tests/browse.rs`)
 
 **History.** Added with the Ctrl+F keyboard affordance for the library search box.
@@ -235,7 +235,7 @@ while the plain arrows keep the volume nudge and the Alt arrows the row moves.
 `browse::selection::move_browse_selection` in `src/ui/handlers/browse/selection.rs` routes the two
 messages over the eleven views and schedules `scroll::reveal_browse_row` only when the selection
 changed; the tests `message_for_maps_ctrl_arrows_to_move_the_browse_selection`
-(`src/ui/shortcuts.rs`), `move_selection_keeps_the_selection_at_the_edges_and_on_no_selection`
+(`src/ui/shortcuts/tests.rs`), `move_selection_keeps_the_selection_at_the_edges_and_on_no_selection`
 (`src/ui/browse.rs`), and the module `src/ui/tests/move_selection_tests.rs` pin the mapping, the
 step, the reveal, and the no-op rules.
  `replace_rows`, `clear`, and `fail`
@@ -265,7 +265,7 @@ and applies that style to each one, and `views::view_open_button` (re-exported b
 - `reverse_bumps_the_epoch_and_clears_the_selection` (in `src/ui/tests/reverse_tests.rs`)
 - `randomize_bumps_the_epoch_clears_the_selection_and_keeps_every_row` (in `src/ui/tests/randomize_tests.rs`)
 - `browse_open_button_sits_above_the_browse_list` (in `src/ui/tests/screen_tests.rs`)
-- `message_for_maps_enter_to_open_selected` (in `src/ui/shortcuts.rs`)
+- `message_for_maps_enter_to_open_selected` (in `src/ui/shortcuts/tests.rs`)
 - `browse_row_style_keeps_playing_rows_unbarred_with_white_text` (in `src/ui/views/tests/browse.rs`)
 - `browse_row_style_paints_only_the_selected_row_blue` (in `src/ui/views/tests/browse.rs`)
 - `now_playing_bar_and_browse_action_buttons_construct` (in `src/ui/views/tests/browse.rs`)
@@ -468,7 +468,7 @@ draw beside Top.
 - `back_restores_library_order_after_a_sort_then_an_edge_move` (in `src/ui/tests/move_row_tests.rs`)
 - `an_edge_move_with_nothing_to_do_changes_nothing` (in `src/ui/tests/move_row_tests.rs`)
 - `move_selected_is_a_noop_without_a_selection_at_an_edge_or_while_loading` (in `src/ui/browse.rs`)
-- `message_for_maps_alt_arrows_to_move_the_selected_row` (in `src/ui/shortcuts.rs`)
+- `message_for_maps_alt_arrows_to_move_the_selected_row` (in `src/ui/shortcuts/tests.rs`)
 - `move_down_swaps_a_song_with_the_next_and_bumps_the_epoch` (in `src/ui/tests/move_row_tests.rs`)
 - `two_moves_up_carry_an_artist_up_two_places` (in `src/ui/tests/move_row_tests.rs`)
 - `back_restores_a_moved_artists_list_to_library_order` (in `src/ui/tests/move_row_tests.rs`)
@@ -508,8 +508,8 @@ draw beside Top.
 - `reverse_with_an_empty_or_loading_list_is_a_noop` (in `src/ui/tests/reverse_tests.rs`)
 - `back_restores_a_reversed_then_sorted_albums_list_to_library_order` (in `src/ui/tests/reverse_tests.rs`)
 - `reverse_leaves_other_lists_view_search_and_playback_untouched` (in `src/ui/tests/reverse_tests.rs`)
-- `message_for_maps_ctrl_r_to_reverse_the_list` (in `src/ui/shortcuts.rs`)
-- `message_for_maps_ctrl_shift_r_to_randomize_the_list` (in `src/ui/shortcuts.rs`)
+- `message_for_maps_ctrl_r_to_reverse_the_list` (in `src/ui/shortcuts/tests.rs`)
+- `message_for_maps_ctrl_shift_r_to_randomize_the_list` (in `src/ui/shortcuts/tests.rs`)
 - `shuffled_order_is_a_deterministic_permutation` (in `src/ui/tests/randomize_tests.rs`)
 - `shuffled_order_pins_a_known_seed` (in `src/ui/tests/randomize_tests.rs`)
 - `shuffled_order_varies_with_the_seed` (in `src/ui/tests/randomize_tests.rs`)
@@ -517,8 +517,8 @@ draw beside Top.
 - `randomize_bumps_the_epoch_clears_the_selection_and_keeps_every_row` (in `src/ui/tests/randomize_tests.rs`)
 - `randomize_with_an_empty_or_loading_list_is_a_noop` (in `src/ui/tests/randomize_tests.rs`)
 - `back_restores_a_randomized_albums_list_to_library_order` (in `src/ui/tests/randomize_tests.rs`)
-- `message_for_maps_ctrl_shift_1_to_sort` (in `src/ui/shortcuts.rs`)
-- `ctrl_shift_1_needs_exactly_control_and_shift` (in `src/ui/shortcuts.rs`)
+- `message_for_maps_ctrl_shift_1_to_sort` (in `src/ui/shortcuts/tests.rs`)
+- `ctrl_shift_1_needs_exactly_control_and_shift` (in `src/ui/shortcuts/tests.rs`)
 - `ctrl_shift_1_sorts_the_showing_list_from_the_keyboard` (in `src/ui/tests/shortcuts_tests.rs`)
 
 ## Browse row removal
@@ -564,7 +564,7 @@ withholds the clear from every other modifier combination, Control without Shift
 - `remove_all_rows_empties_the_buffers_drops_the_selection_and_bumps_the_epoch` (in `src/ui/browse.rs`)
 - `remove_all_rows_twice_sees_the_second_clear_noop` (in `src/ui/browse.rs`)
 - `remove_all_rows_is_a_noop_while_loading_or_failed` (in `src/ui/browse.rs`)
-- `message_for_maps_ctrl_shift_delete_to_remove_all` (in `src/ui/shortcuts.rs`)
+- `message_for_maps_ctrl_shift_delete_to_remove_all` (in `src/ui/shortcuts/tests.rs`)
 - `remove_all_is_a_noop_outside_the_songs_view` (in `src/ui/tests/remove_all_tests.rs`)
 - `remove_all_clears_the_showing_songs_list_and_rejects_a_pre_clear_press` (in `src/ui/tests/remove_all_tests.rs`)
 - `clearing_a_playing_list_leaves_playback_and_the_now_playing_line_alone` (in `src/ui/tests/remove_all_tests.rs`)
@@ -575,7 +575,7 @@ withholds the clear from every other modifier combination, Control without Shift
 - `removing_a_sorted_row_restores_library_order_minus_it` (in `src/ui/browse.rs`)
 - `removing_from_an_unreordered_list_leaves_no_permutation_to_adjust` (in `src/ui/browse.rs`)
 - `remove_selected_row_is_a_noop_without_a_selection_while_loading_or_failed` (in `src/ui/browse.rs`)
-- `message_for_maps_delete_to_remove_selected` (in `src/ui/shortcuts.rs`)
+- `message_for_maps_delete_to_remove_selected` (in `src/ui/shortcuts/tests.rs`)
 - `remove_selected_is_a_noop_outside_the_songs_view` (in `src/ui/tests/removal_tests.rs`)
 - `remove_selected_bumps_the_epoch_so_a_pre_removal_press_is_rejected` (in `src/ui/tests/removal_tests.rs`)
 - `removing_a_playing_row_leaves_playback_and_the_now_playing_line_alone` (in `src/ui/tests/removal_tests.rs`)
@@ -660,9 +660,9 @@ target the stable `views::BROWSE_LIST_ID` that every `views::browse::scrollable_
 - `scroll_browse_page_keys_schedule_page_sized_scrolls` (in `src/ui/tests/scroll_tests.rs`)
 - `shade_mode_builds_no_browse_scroll_target` (in `src/ui/tests/screen_tests.rs`)
 - `toggle_library_panel_hides_and_restores_the_library_section` (in `src/ui/tests/panels_tests.rs`)
-- `message_for_maps_home_and_end_to_browse_scroll` (in `src/ui/shortcuts.rs`)
-- `message_for_maps_page_keys_to_browse_paging` (in `src/ui/shortcuts.rs`)
-- `shortcut_ignores_chord_modifiers` (in `src/ui/shortcuts.rs`)
+- `message_for_maps_home_and_end_to_browse_scroll` (in `src/ui/shortcuts/tests.rs`)
+- `message_for_maps_page_keys_to_browse_paging` (in `src/ui/shortcuts/tests.rs`)
+- `shortcut_ignores_chord_modifiers` (in `src/ui/shortcuts/tests.rs`)
 
 **History.** Added with the Home and End keyboard scrolling alongside the existing Top button;
 extended with the Page Up and Page Down one-page scrolling.
@@ -683,9 +683,9 @@ dispatches. `Message::Pause` resumes a paused preview rather than keeping it pau
 variants to those messages after its Control/Alt/Logo chord guard.
 
 **Pinned by.**
-- `message_for_maps_media_keys_to_the_transport` (in `src/ui/shortcuts.rs`)
+- `message_for_maps_media_keys_to_the_transport` (in `src/ui/shortcuts/tests.rs`)
 - `media_play_pause_key_toggles_playback` (in `src/ui/tests/shortcuts_tests.rs`)
-- `shortcut_ignores_chord_modifiers` (in `src/ui/shortcuts.rs`)
+- `shortcut_ignores_chord_modifiers` (in `src/ui/shortcuts/tests.rs`)
 - `pause_while_paused_resumes_the_preview` (in `src/apple_music/tests/transport.rs`)
 
 **History.** Added with the system media-key transport bindings.
@@ -707,8 +707,8 @@ epoch from the showing list without reading shared state or touching the play hi
 `WinampPlayer::control_held`, which `Message::ModifiersHeld` (from `listeners::modifiers_message`) keeps current.
 
 **Pinned by.**
-- `message_for_maps_ctrl_z_and_ctrl_b_to_the_list_edges` (in `src/ui/shortcuts.rs`)
-- `shortcut_ignores_chord_modifiers` (in `src/ui/shortcuts.rs`)
+- `message_for_maps_ctrl_z_and_ctrl_b_to_the_list_edges` (in `src/ui/shortcuts/tests.rs`)
+- `shortcut_ignores_chord_modifiers` (in `src/ui/shortcuts/tests.rs`)
 - `first_track_selects_the_first_song` (in `src/ui/tests/stepping_tests.rs`)
 - `last_track_selects_the_last_song` (in `src/ui/tests/stepping_tests.rs`)
 - `edge_jumps_ignore_shuffle_and_repeat` (in `src/ui/tests/stepping_tests.rs`)
@@ -747,7 +747,7 @@ schedules the selection and scroll.
 - `jumps_ignore_shuffle_and_repeat` (in `src/ui/tests/jump_tests.rs`)
 - `jumps_with_no_songs_loaded_do_nothing` (in `src/ui/tests/jump_tests.rs`)
 - `jumps_in_all_songs_use_the_flat_list` (in `src/ui/tests/jump_tests.rs`)
-- `message_for_maps_the_numpad_transport_digits` (in `src/ui/shortcuts.rs`)
+- `message_for_maps_the_numpad_transport_digits` (in `src/ui/shortcuts/tests.rs`)
 
 **History.** Added with the keypad 1 / 3 ten-song jumps.
 
@@ -765,10 +765,10 @@ bindings.
 `Location::Numpad`, and `shortcuts::message_for` tries it before `shortcut`.
 
 **Pinned by.**
-- `message_for_maps_the_numpad_transport_digits` (in `src/ui/shortcuts.rs`)
-- `message_for_leaves_other_digits_unbound` (in `src/ui/shortcuts.rs`)
-- `message_for_ignores_numpad_chords` (in `src/ui/shortcuts.rs`)
-- `message_for_maps_numpad_arrows_like_the_arrow_keys` (in `src/ui/shortcuts.rs`)
+- `message_for_maps_the_numpad_transport_digits` (in `src/ui/shortcuts/tests.rs`)
+- `message_for_leaves_other_digits_unbound` (in `src/ui/shortcuts/tests.rs`)
+- `message_for_ignores_numpad_chords` (in `src/ui/shortcuts/tests.rs`)
+- `message_for_maps_numpad_arrows_like_the_arrow_keys` (in `src/ui/shortcuts/tests.rs`)
 
 **History.** Added with the Winamp numpad bindings.
 
@@ -1320,7 +1320,7 @@ arm those controls press.
 - `window_level_selects_always_on_top` (in `src/ui/tests/window_tests.rs`)
 - `window_id_resolved_applies_a_saved_always_on_top_level` (in `src/ui/tests/settings_tests.rs`)
 - `a_toggles_always_on_top_from_the_keyboard` (in `src/ui/tests/shortcuts_tests.rs`)
-- `message_for_maps_ctrl_a_and_ctrl_t_to_the_classic_toggles` (in `src/ui/shortcuts.rs`)
+- `message_for_maps_ctrl_a_and_ctrl_t_to_the_classic_toggles` (in `src/ui/shortcuts/tests.rs`)
 
 **History.** Added with the settings-persistence plan on 2026-10-23; the player previously kept
 these values in memory only and started every launch at `AppState::default()`. The readout's
@@ -2094,7 +2094,7 @@ which wraps the base tree only while `about_visible && !shaded` holds.
 - `about_overlay_draws_the_name_version_tagline_and_library_source` (in `src/ui/views/tests/chrome.rs`)
 - `about_overlay_closes_from_close_and_backdrop_but_ignores_its_chrome` (in `src/ui/views/tests/chrome.rs`)
 - `library_source_label_names_the_signed_in_and_sample_libraries` (in `src/ui/views/about.rs`)
-- `message_for_maps_ctrl_f1_to_about` (in `src/ui/shortcuts.rs`)
+- `message_for_maps_ctrl_f1_to_about` (in `src/ui/shortcuts/tests.rs`)
 - `toggle_about_shows_and_hides_the_panel_without_touching_playback` (in `src/ui/tests/window_tests.rs`)
 - `toggle_about_while_shaded_restores_the_window_first` (in `src/ui/tests/window_tests.rs`)
 - `view_constructs_over_the_apps_full_input_space` (in `src/ui/tests/screen_tests.rs`)
@@ -2161,10 +2161,10 @@ flips `WinampPlayer::marquee_autoscroll`. `options_shortcut` and
 `options_open` mapper, then normal shortcuts.
 
 **Pinned by.**
-- `options_shortcut_maps_alt_o_and_rejects_other_chords` (in `src/ui/shortcuts.rs`)
+- `options_shortcut_maps_alt_o_and_rejects_other_chords` (in `src/ui/shortcuts/tests.rs`)
 - `alt_o_routes_captured_text_with_options_open_or_closed` (in `src/ui/tests/subscriptions_tests.rs`)
 - `options_navigation_routes_captured_search_keys_without_submitting` (in `src/ui/tests/subscriptions_tests.rs`)
-- `message_for_options_maps_up_down_enter_and_falls_back` (in `src/ui/shortcuts.rs`)
+- `message_for_options_maps_up_down_enter_and_falls_back` (in `src/ui/shortcuts/tests.rs`)
 - `options_rows_map_to_mouse_messages_in_draw_order` (in `src/ui/message.rs`)
 - `options_row_style_highlights_selection_in_each_status` (in `src/ui/views/options.rs`)
 - `autoscroll_label_mirrors_the_flag` (in `src/ui/views/options.rs`)
@@ -2264,7 +2264,7 @@ and the `autoscroll=` settings line added 2026-10-29 by the feature role.
 overlay branch of `ui::screen::view`.
 
 **Pinned by.**
-- `message_for_maps_alt_3_to_file_info` (in `src/ui/shortcuts.rs`)
+- `message_for_maps_alt_3_to_file_info` (in `src/ui/shortcuts/tests.rs`)
 - `lcd_indicator_message_arms_o_a_i_and_v_and_leaves_d_inert` (in `src/ui/views/tests/now_playing.rs`)
 - `lcd_indicator_strip_publishes_options_on_o_always_on_top_on_a_visualizer_on_v_and_file_info_on_i` (in `src/ui/views/tests/now_playing.rs`)
 - `toggle_file_info_shows_and_hides_the_panel_without_touching_playback` (in `src/ui/tests/window_tests.rs`)
@@ -2363,7 +2363,7 @@ preview:
 **Pinned by.**
 - `parses_seconds_and_minutes_seconds` (in `src/ui/handlers/jump.rs`)
 - `rejects_malformed_times` (in `src/ui/handlers/jump.rs`)
-- `message_for_maps_ctrl_j_to_jump_time` (in `src/ui/shortcuts.rs`)
+- `message_for_maps_ctrl_j_to_jump_time` (in `src/ui/shortcuts/tests.rs`)
 - `toggle_opens_holding_the_current_position` (in `src/ui/tests/jump_time_tests.rs`)
 - `toggle_opens_holding_zero_at_the_start` (in `src/ui/tests/jump_time_tests.rs`)
 - `submitting_the_prefilled_query_seeks_to_the_current_position` (in `src/ui/tests/jump_time_tests.rs`)
@@ -2452,9 +2452,9 @@ jump-file branch of `ui::screen::view`.
 - `row_and_buttons_publish_their_messages` (in `src/ui/views/tests/jump_file.rs`)
 - `empty_and_no_match_lists_have_their_own_wording` (in `src/ui/views/tests/jump_file.rs`)
 - `the_match_list_reuses_its_rows_until_the_filter_or_highlight_changes` (in `src/ui/views/tests/jump_file.rs`)
-- `message_for_maps_j_to_jump_file` (in `src/ui/shortcuts.rs`)
-- `message_for_maps_ctrl_j_to_jump_time` (in `src/ui/shortcuts.rs`)
-- `message_for_jump_file_maps_up_and_down_and_falls_back` (in `src/ui/shortcuts.rs`)
+- `message_for_maps_j_to_jump_file` (in `src/ui/shortcuts/tests.rs`)
+- `message_for_maps_ctrl_j_to_jump_time` (in `src/ui/shortcuts/tests.rs`)
+- `message_for_jump_file_maps_up_and_down_and_falls_back` (in `src/ui/shortcuts/tests.rs`)
 - `submit_matches_the_artist_and_title_words_together` (in `src/ui/tests/jump_file_tests.rs`)
 - `page_up_and_down_move_the_highlight_by_one_page_and_clamp` (in `src/ui/tests/jump_file_tests.rs`)
 - `a_highlight_move_reveals_only_the_landed_row_in_the_match_list` (in `src/ui/tests/jump_file_tests.rs`)
@@ -3204,7 +3204,7 @@ same list/Shuffle/Repeat rules as Next, and the no-next-song case reuses `handle
 - `preview_end_after_stop_after_current_fired_advances_again` (in `src/ui/tests/stepping_tests.rs`)
 - `stop_after_current_survives_a_dropped_finished_reply` (in `src/ui/tests/stepping_tests.rs`)
 - `toggle_stop_after_current_flips_only_the_flag` (in `src/ui/tests/stepping_tests.rs`)
-- `message_for_maps_ctrl_v_to_stop_after_current` (in `src/ui/shortcuts.rs`)
+- `message_for_maps_ctrl_v_to_stop_after_current` (in `src/ui/shortcuts/tests.rs`)
 - `preview_end_with_manual_advance_stops_and_keeps_the_song` (in `src/ui/tests/stepping_tests.rs`)
 - `preview_end_with_manual_advance_overrides_repeat` (in `src/ui/tests/stepping_tests.rs`)
 - `preview_end_with_manual_advance_overrides_shuffle` (in `src/ui/tests/stepping_tests.rs`)
@@ -3396,7 +3396,7 @@ menu and then fades while a preview plays or stops while paused or stopped.
 **Enforced by.** `handlers::playback::fade` (including `fade::stop_button`), `listeners::modifiers_message`, and the hooks in `handlers::playback`.
 
 **Pinned by.**
-- `message_for_maps_shift_v_to_fade_out_and_stop` (in `src/ui/shortcuts.rs`)
+- `message_for_maps_shift_v_to_fade_out_and_stop` (in `src/ui/shortcuts/tests.rs`)
 - `a_full_fade_steps_the_volume_down_then_stops_and_restores_it` (in `src/ui/tests/fade_tests.rs`)
 - `fade_out_while_not_playing_acts_as_stop` (in `src/ui/tests/fade_tests.rs`)
 - `options_stop_with_fadeout_row_fades_or_stops_and_closes` (in `src/ui/tests/fade_tests.rs`)
