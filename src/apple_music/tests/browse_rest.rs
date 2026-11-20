@@ -606,16 +606,7 @@ async fn get_all_albums_fails_when_the_albums_request_fails() {
     let error = service.get_all_albums().await.unwrap_err();
 
     assert_eq!(error.to_string(), "albums down");
-    let calls = stub.calls();
-    assert_eq!(
-        calls.len(),
-        1,
-        "the songs request must not follow a failed albums request"
-    );
-    assert_eq!(
-        calls[0].0,
-        "https://api.music.apple.com/v1/me/library/albums"
-    );
+    assert_single_call(&stub, "https://api.music.apple.com/v1/me/library/albums");
 }
 
 #[tokio::test]
