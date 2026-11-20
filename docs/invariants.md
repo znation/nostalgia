@@ -1123,7 +1123,10 @@ cannot wait for a writer even when the path changes during load. The read is cap
 plus one detection byte so an oversized file is not loaded whole. An
 unwritable file is logged
 rather than crashing the player. Each save stages the whole snapshot in
-a sibling temp file of the file it writes, flushes it to disk, gives the staged file the existing
+a sibling temp file of the file it writes — opened exclusively, so an entry already sitting at a
+drawn sibling name (a killed save's stale temp, or one planted at the predictable name) is never
+truncated or written through, and the save retries with the next sibling name, giving up only
+after its bound of draws — flushes it to disk, gives the staged file the existing
 target's mode, and renames it over that target and then syncs its directory, so a failed,
 interrupted, or crashed write leaves the previous file intact instead of a truncated one; the
 staged file is created with the mode it will end up with, so the staged bytes are never readable
@@ -1286,6 +1289,8 @@ arm those controls press.
 - `staged_settings_are_synced_before_the_rename_and_a_failed_sync_keeps_the_old_file` (in `src/settings/atomic_write.rs`)
 - `saving_through_a_symlink_updates_its_target_and_keeps_mode` (in `src/settings/atomic_write.rs`)
 - `the_directory_sync_follows_a_symlink_to_the_target` (in `src/settings/atomic_write.rs`)
+- `a_planted_link_at_the_staged_sibling_name_is_never_followed` (in `src/settings/atomic_write.rs`)
+- `a_taken_staged_sibling_name_does_not_block_the_save` (in `src/settings/atomic_write.rs`)
 - `a_settings_file_that_could_not_be_read_is_not_overwritten` (in `src/settings/file_store.rs`)
 - `a_writer_clone_shares_the_failed_read_and_refuses_to_overwrite` (in `src/settings/file_store.rs`)
 - `a_missing_settings_file_still_allows_the_first_save` (in `src/settings/file_store.rs`)

@@ -1,7 +1,8 @@
 //! Crash-safe replacement of the settings file and cleanup of the temp files a
-//! killed save leaves behind: [`write_atomically`] stages a hidden sibling and
-//! renames it over the target, and [`sweep_stale_temporaries`] removes
-//! siblings old enough to be debris.
+//! killed save leaves behind: [`write_atomically`] stages a hidden sibling —
+//! opened exclusively, so whatever already sits at a drawn sibling name is
+//! never truncated or written through — and renames it over the target, and
+//! [`sweep_stale_temporaries`] removes siblings old enough to be debris.
 
 use std::ffi::OsString;
 use std::fs::File;
@@ -20,6 +21,17 @@ use std::time::{Duration, SystemTime};
 /// [`set_staged_mode`]: fn@set_staged_mode
 #[cfg(unix)]
 const NEW_SETTINGS_FILE_MODE: u32 = 0o600;
+
+/// The per-process counter [`temporary_sibling`] draws its suffix from. It
+/// sits at module scope so the tests can compute the sibling names a save
+/// will draw, rather than guessing them.
+static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
+
+/// How many sibling names a save may draw when each one is already taken
+/// before it gives the save up: a stale sibling from a killed save or a
+/// planted entry must not block the save, but the draw is bounded so a
+/// directory filled with siblings cannot spin the save forever.
+const MAX_STAGE_OPEN_ATTEMPTS: u32 = 4;
 
 fn temporary_prefix(path: &Path) -> Option<String> {
     let file_name = path.file_name()?;
@@ -85,7 +97,6 @@ fn resolve_symlink(path: &Path) -> PathBuf {
 /// per-process counter keep concurrent saves (and concurrent processes) from
 /// staging into the same file.
 fn temporary_sibling(path: &Path) -> PathBuf {
-    static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
     let mut name = OsString::from(".");
     if let Some(file_name) = path.file_name() {
         name.push(file_name);
@@ -161,18 +172,45 @@ fn existing_stage_mode(path: &Path) -> Option<std::fs::Permissions> {
     None
 }
 
+/// Opens the staged replacement file at a fresh sibling name, exclusively.
+/// The staged settings can carry the sign-in token, so whatever already sits
+/// at a drawn sibling name — a crashed save's leftover temp, or an entry a
+/// hostile local account planted at the predictable name — is never
+/// truncated or written through; drawing that name fails and the save
+/// retries with the next sibling (up to [`MAX_STAGE_OPEN_ATTEMPTS`] draws),
+/// so a stale temp does not block the save. A failure that is not a taken
+/// name is returned at once.
+fn open_staged_file_beside(
+    path: &Path,
+    existing: Option<std::fs::Permissions>,
+) -> io::Result<(PathBuf, File)> {
+    let mut last_taken_name = None;
+    for _ in 0..MAX_STAGE_OPEN_ATTEMPTS {
+        let temporary = temporary_sibling(path);
+        match open_staged_file(&temporary, existing.clone()) {
+            Ok(file) => return Ok((temporary, file)),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                last_taken_name = Some(error);
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Err(last_taken_name
+        .unwrap_or_else(|| io::Error::other("the staged replacement could not be opened")))
+}
+
 /// Create the staged replacement file already carrying the mode it will end
-/// up with — the existing target's mode, or owner-only for a new one — so no
-/// interval exists between the staging and the rename where the staged
-/// settings (which can carry the sign-in token) are readable beyond the mode
-/// the rename publishes them under.
+/// up with — the existing target's mode, or owner-only for a new one — and
+/// exclusively, so no interval exists between the staging and the rename
+/// where the staged settings (which can carry the sign-in token) are readable
+/// beyond the mode the rename publishes them under, and so an existing entry
+/// at the name is never followed.
 #[cfg(unix)]
 fn open_staged_file(temporary: &Path, existing: Option<std::fs::Permissions>) -> io::Result<File> {
     use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
     std::fs::OpenOptions::new()
         .write(true)
-        .create(true)
-        .truncate(true)
+        .create_new(true)
         .mode(
             existing
                 .map(|permissions| permissions.mode())
@@ -181,11 +219,11 @@ fn open_staged_file(temporary: &Path, existing: Option<std::fs::Permissions>) ->
         .open(temporary)
 }
 /// On non-Unix platforms settings-file permission bits do not apply, so the
-/// staged file is created the default way.
+/// staged file is created the default exclusive way.
 #[cfg(not(unix))]
 fn open_staged_file(temporary: &Path, existing: Option<std::fs::Permissions>) -> io::Result<File> {
     let _ = existing;
-    File::create(temporary)
+    File::create_new(temporary)
 }
 
 /// Keep the existing file's mode exactly, as writing in place would have:
@@ -214,14 +252,9 @@ pub(super) fn write_atomically_with(
     // dangling link or a missing file keeps the path as given.
     let resolved = resolve_symlink(path);
     let path = resolved.as_path();
-    let temporary = temporary_sibling(path);
     let existing = existing_stage_mode(path);
-    let staged = open_staged_file(&temporary, existing.clone());
-    let result = match staged {
-        Ok(mut file) => write_temporary(&mut file),
-        Err(error) => Err(error),
-    };
-    let result = result
+    let (temporary, mut staged) = open_staged_file_beside(path, existing.clone())?;
+    let result = write_temporary(&mut staged)
         .and_then(|()| set_staged_mode(&temporary, existing))
         .and_then(|()| std::fs::rename(&temporary, path));
     if result.is_err() {
@@ -283,6 +316,71 @@ mod tests {
         write_atomically(&path, "volume=0.9\nmusic_kit_user_token=x.y.z\n").unwrap();
         let mode = std::fs::metadata(&path).unwrap().permissions().mode();
         assert_eq!(mode & 0o777, 0o600);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// The suffix the next [`temporary_sibling`] call will draw, so a test can
+    /// plant an entry at a name the save under test will actually try.
+    fn next_stage_sibling_suffix() -> u64 {
+        NEXT_TEMP.load(Ordering::Relaxed)
+    }
+
+    // The staged sibling is opened exclusively: an entry planted at the
+    // predictable sibling name — here a symlink to another account's file — is
+    // never truncated or written through, so a save cannot be turned into a
+    // writer for a file its owner does not control. The links here cover every
+    // sibling name the save draws, so the save reports the taken-name error
+    // and the planted target keeps its bytes.
+    #[cfg(unix)]
+    #[test]
+    fn a_planted_link_at_the_staged_sibling_name_is_never_followed() {
+        use std::os::unix::fs::symlink;
+
+        let root = temporary_root("planted-link");
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("settings.ini");
+        let planted_target = root.join("planted-target");
+        std::fs::write(&planted_target, "planted bytes\n").unwrap();
+
+        let first = next_stage_sibling_suffix();
+        for suffix in first..first + u64::from(MAX_STAGE_OPEN_ATTEMPTS) {
+            let name = format!(".settings.ini.tmp-{}-{suffix}", std::process::id());
+            symlink(&planted_target, root.join(name)).unwrap();
+        }
+
+        let result = write_atomically_with(&path, |file| file.write_all(b"volume=0.9\n"));
+        match result {
+            Err(error) => assert_eq!(error.kind(), io::ErrorKind::AlreadyExists),
+            Ok(()) => assert_eq!(std::fs::read_to_string(&path).unwrap(), "volume=0.9\n"),
+        }
+        assert_eq!(
+            std::fs::read_to_string(&planted_target).unwrap(),
+            "planted bytes\n"
+        );
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    // A sibling name already taken by a regular file — a killed save's stale
+    // temp — must not block the save, and must not be reused: the save draws
+    // the next sibling and stages there, leaving the taken file's bytes alone
+    // until the stale-temp sweep removes it.
+    #[test]
+    fn a_taken_staged_sibling_name_does_not_block_the_save() {
+        let root = temporary_root("taken-sibling");
+        std::fs::create_dir_all(&root).unwrap();
+        let path = root.join("settings.ini");
+        let taken_name = format!(
+            ".settings.ini.tmp-{}-{}",
+            std::process::id(),
+            next_stage_sibling_suffix()
+        );
+        let taken = root.join(&taken_name);
+        std::fs::write(&taken, "taken\n").unwrap();
+
+        write_atomically(&path, "volume=0.9\n").unwrap();
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "volume=0.9\n");
+        assert_eq!(std::fs::read_to_string(&taken).unwrap(), "taken\n");
         std::fs::remove_dir_all(&root).unwrap();
     }
 
