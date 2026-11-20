@@ -1848,7 +1848,7 @@ rather than the panic unwinding the event loop.
 - `now_playing_row_draws_no_number_when_none_is_known`
   (all in `src/ui/views/tests/now_playing.rs`)
 - `now_playing_label_keeps_the_track_name_after_browsing_to_another_album`
-  ((`src/ui/tests/readouts_tests.rs`))
+  (`src/ui/tests/readouts_tests.rs`)
 - `window_title_names_the_current_track` (`src/ui/tests/window_tests.rs`)
 - `window_title_marks_a_paused_or_stopped_track` (`src/ui/tests/window_tests.rs`)
 - `now_playing_number_survives_browsing_to_another_album` (`src/ui/tests/readouts_tests.rs`)
@@ -1864,6 +1864,7 @@ rather than the panic unwinding the event loop.
 - `track_selected_clears_the_elapsed_readout`
 - `stop_clears_the_elapsed_readout`
 - `position_replies_store_and_stale_ones_are_dropped`
+  (`src/ui/tests/position_poll_tests.rs`)
 - `position_poll_waits_for_a_stop_to_reach_the_backend`
 - `position_poll_waits_for_a_selected_tracks_play_to_settle`
 - `an_unrelated_transport_completion_keeps_the_poll_waiting`

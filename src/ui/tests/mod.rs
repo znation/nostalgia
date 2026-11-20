@@ -48,6 +48,7 @@ mod move_row_tests;
 mod move_selection_tests;
 mod overlay_tests;
 mod panels_tests;
+mod position_poll_tests;
 mod position_tick_tests;
 mod randomize_tests;
 mod readouts_tests;
