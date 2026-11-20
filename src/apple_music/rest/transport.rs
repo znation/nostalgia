@@ -137,11 +137,26 @@ impl UreqTransport {
             Some(timeout) => request.config().timeout_global(Some(timeout)).build(),
             None => request,
         };
+        // `ureq`'s own messages ("io: connection refused", "host not found")
+        // name no target, so the URL is prefixed here: the UI's failure report
+        // names the fetch, not the endpoint, so a send failure that surfaced
+        // as "host not found" alone could not be traced to the request that
+        // made it, and the songs request of an album load would read
+        // identically to its albums request. The URL is escaped with
+        // `escape_debug` — matching the paging notices — because a followed
+        // `next` path is server-controlled (only its leading `/` is checked),
+        // so a control character in it renders as `\u{..}` instead of
+        // reaching the terminal raw.
         let mut response = request
             .header("Authorization", authorization.as_str())
             .header("Music-User-Token", session.user_token.as_str())
             .call()
-            .map_err(|error| AppleMusicError::new(error.to_string()))?;
+            .map_err(|error| {
+                AppleMusicError::new(format!(
+                    "the request to {} failed: {error}",
+                    url.escape_debug()
+                ))
+            })?;
 
         let status = response.status();
         let mut bytes = Vec::new();

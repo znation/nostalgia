@@ -444,6 +444,50 @@ fn a_truncated_response_body_reports_a_read_error() {
     );
 }
 
+// `ureq`'s send-failure messages ("io: connection refused", "host not found")
+// name no target, so the transport prefixes the failed request's URL: the
+// UI's report names the fetch, not the endpoint, so an unnamed failure could
+// not be traced to the request that made it. A port bound and then released
+// gives a connect that is reliably refused.
+#[test]
+fn a_failed_request_names_the_url_it_was_sending_to() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    drop(listener);
+    let transport = UreqTransport::new();
+    let url = format!("http://{addr}/albums");
+
+    let error = transport
+        .get(&url, &rest_session())
+        .unwrap_err()
+        .to_string();
+
+    assert!(error.contains(&url), "{error}");
+    assert!(error.contains("failed"), "{error}");
+}
+
+// A followed `next` path is server-controlled — only its leading `/` is
+// checked — so the URL in a send-failure report is `escape_debug`-escaped:
+// a control character in the path renders as `\u{..}` instead of reaching
+// the terminal raw, matching the paging notices' rule for
+// server-controlled text.
+#[test]
+fn a_control_character_in_a_failed_url_is_escaped_not_sent_raw() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap();
+    drop(listener);
+    let transport = UreqTransport::new();
+    let url = format!("http://{addr}/\u{1b}next");
+
+    let error = transport
+        .get(&url, &rest_session())
+        .unwrap_err()
+        .to_string();
+
+    assert!(error.contains("\\u{1b}"), "{error}");
+    assert!(!error.contains('\u{1b}'), "{error}");
+}
+
 // A REST reply is server-controlled data, and the REST agent deliberately
 // honors the environment proxy, so a hostile or compromised endpoint or proxy
 // can answer a query. `ureq`'s reader limit sits under its gzip decoder, so a

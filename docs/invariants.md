@@ -2902,6 +2902,10 @@ through `std::io::Read::take(MAX_RESPONSE_BYTES + 1)` bounds the decoded buffer 
 decoded length above the cap is rejected with a message naming the cap before the body becomes a
 `String`. A read that hits the wire limit keeps the `reading the response body failed:` prefix.
 `text/*` responses keep `ureq`'s lossy UTF-8 replacement, as `Body::read_to_string()` had.
+A request that fails to send names the URL it was sending to — `ureq`'s own messages name no
+target, and the UI's report names the fetch, not the endpoint, so the URL is what distinguishes
+an album load's songs request from its albums request — with the URL `escape_debug`-escaped,
+matching the paging notices, because a followed `next` path is server-controlled.
 
 **Enforced by.** `UreqTransport::request` in `src/apple_music/rest/transport.rs` calls
 `response.body_mut().with_config().limit(MAX_RESPONSE_BYTES + 1).lossy_utf8(true).reader()`, then
@@ -2913,6 +2917,8 @@ reads it through `take(MAX_RESPONSE_BYTES + 1)` and checks the decoded length be
 - `a_compressed_response_larger_than_the_cap_is_rejected` (in `src/apple_music/rest/tests/transport.rs`)
 - `a_response_with_more_wire_bytes_than_the_cap_is_rejected` (in `src/apple_music/rest/tests/transport.rs`)
 - `a_text_response_with_invalid_utf8_keeps_the_lossy_replacement` (in `src/apple_music/rest/tests/transport.rs`)
+- `a_failed_request_names_the_url_it_was_sending_to` (in `src/apple_music/rest/tests/transport.rs`)
+- `a_control_character_in_a_failed_url_is_escaped_not_sent_raw` (in `src/apple_music/rest/tests/transport.rs`)
 
 **History.** Added 2026-10-23 after `Body::read_to_string()` was found to limit only wire bytes
 (its 10 MiB `MAX_BODY_SIZE` sits under `ureq`'s gzip decoder), leaving a compressed REST reply
