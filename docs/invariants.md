@@ -3036,8 +3036,10 @@ exactly the cap reaches EOF instead of tripping the limit on its last byte, whil
 body still fails the read. Reading that reader through `std::io::Read::take(MAX_PREVIEW_BYTES +
 1)` stops a `Content-Encoding: gzip` response smaller than the cap from expanding the buffered
 preview past it; the decoded take rejects before the decoder when its extra byte is present. The
-decoded over-cap failure names the cap; other read failures, including one past the wire limit,
-keep the `reading the preview failed:` prefix.
+decoded over-cap failure names the cap; every download and decode failure — transport, status,
+read, over-cap, decode — also names the URL it was fetching, echoed raw because
+`preview_url_problem` rejects control characters before the fetch, so a failed play's stderr
+report says which asset failed and how.
 
 **Enforced by.** `download_preview` in `src/audio/preview.rs` calls
 `response.body_mut().with_config().limit(MAX_PREVIEW_BYTES + 1).reader()` for the wire limit, then

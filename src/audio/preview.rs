@@ -191,7 +191,7 @@ pub(super) fn download_and_decode(
     url: &str,
 ) -> Result<DecodedPreview, AppleMusicError> {
     let body = download_preview(agent, url)?;
-    decode_preview(body)
+    decode_preview(url, body)
 }
 
 /// [`download_and_decode`] through `cache`: when `url` names the body the
@@ -213,20 +213,29 @@ pub(super) fn download_and_decode_cached(
                 (preview, body)
             })
         },
-        decode_preview,
+        |body| decode_preview(url, body),
     )
 }
 
 /// Downloads `url` and returns its body without decoding, enforcing the wire
 /// and decoded body caps described on [`download_and_decode`].
+///
+/// Every failure names `url`, so a failed play's stderr report says which
+/// asset did not download rather than only that a download failed. `url` is
+/// echoed raw because the caller validated it through `preview_url_problem`
+/// (see [`crate::apple_music`]) before handing it to the audio backend, and
+/// that guard rejects control characters — the report can read as a human
+/// message, not as `Debug`-escaped bytes.
 fn download_preview(agent: &ureq::Agent, url: &str) -> Result<Arc<[u8]>, AppleMusicError> {
     let mut response = agent.get(url).call().map_err(|error| {
-        AppleMusicError::new(format!("downloading the preview failed: {error}"))
+        AppleMusicError::new(format!(
+            "downloading the preview from {url} failed: {error}"
+        ))
     })?;
     let status = response.status();
     if !status.is_success() {
         return Err(AppleMusicError::new(format!(
-            "the preview download returned HTTP {status}"
+            "the preview download from {url} returned HTTP {status}"
         )));
     }
     let mut bytes = Vec::new();
@@ -237,11 +246,13 @@ fn download_preview(agent: &ureq::Agent, url: &str) -> Result<Arc<[u8]>, AppleMu
         .reader()
         .take(MAX_PREVIEW_BYTES + 1)
         .read_to_end(&mut bytes)
-        .map_err(|error| AppleMusicError::new(format!("reading the preview failed: {error}")))?;
+        .map_err(|error| {
+            AppleMusicError::new(format!("reading the preview from {url} failed: {error}"))
+        })?;
     let encoded_bytes = u64::try_from(bytes.len()).unwrap_or(u64::MAX);
     if encoded_bytes > MAX_PREVIEW_BYTES {
         return Err(AppleMusicError::new(format!(
-            "the downloaded preview is larger than the {} MiB cap",
+            "the downloaded preview from {url} is larger than the {} MiB cap",
             MAX_PREVIEW_BYTES / (1024 * 1024)
         )));
     }
@@ -250,10 +261,17 @@ fn download_preview(agent: &ureq::Agent, url: &str) -> Result<Arc<[u8]>, AppleMu
 
 /// Decodes an encoded preview body, recording its length for the bitrate
 /// readout.
-fn decode_preview(body: Arc<[u8]>) -> Result<DecodedPreview, AppleMusicError> {
+///
+/// `url` names the asset the body came from, so a decode failure names it too —
+/// including a replay's cached body, whose URL is the only hint at which track's
+/// preview would not decode (see [`PreviewCache::load_or_decode`]). Like
+/// [`download_preview`]'s failures, the message echoes `url` raw: the caller
+/// validated it through `preview_url_problem` before the first fetch.
+fn decode_preview(url: &str, body: Arc<[u8]>) -> Result<DecodedPreview, AppleMusicError> {
     let encoded_bytes = u64::try_from(body.len()).unwrap_or(u64::MAX);
-    let source = rodio::Decoder::new_mp4(Cursor::new(Arc::clone(&body)))
-        .map_err(|error| AppleMusicError::new(format!("decoding the preview failed: {error}")))?;
+    let source = rodio::Decoder::new_mp4(Cursor::new(Arc::clone(&body))).map_err(|error| {
+        AppleMusicError::new(format!("decoding the preview from {url} failed: {error}"))
+    })?;
     Ok(DecodedPreview {
         source,
         encoded_bytes,

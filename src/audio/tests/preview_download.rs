@@ -25,9 +25,10 @@ fn a_compressed_preview_larger_than_the_cap_is_rejected() {
     let error = download_and_decode(&agent, &url)
         .err()
         .expect("an over-cap preview must not reach the decoder");
+    let message = error.to_string();
     assert!(
-        error.to_string().contains("larger than the 10 MiB cap"),
-        "unexpected error: {error}"
+        message.contains("larger than the 10 MiB cap") && message.contains(&url),
+        "unexpected error: {message}"
     );
 }
 
@@ -53,9 +54,10 @@ fn a_preview_with_more_wire_bytes_than_the_cap_is_rejected() {
     let error = download_and_decode(&agent, &url)
         .err()
         .expect("an over-cap wire body must not reach the decoder");
+    let message = error.to_string();
     assert!(
-        error.to_string().contains("reading the preview failed"),
-        "unexpected error: {error}"
+        message.contains("reading the preview from") && message.contains(&url),
+        "unexpected error: {message}"
     );
 }
 
@@ -80,9 +82,10 @@ fn a_preview_of_exactly_the_cap_reaches_the_decoder() {
     let error = download_and_decode(&agent, &url)
         .err()
         .expect("zero bytes are not a decodable preview");
+    let message = error.to_string();
     assert!(
-        error.to_string().contains("decoding the preview failed"),
-        "an exactly-at-cap preview must be read whole before decoding, got: {error}"
+        message.contains("decoding the preview from") && message.contains(&url),
+        "an exactly-at-cap preview must be read whole before decoding, got: {message}"
     );
 }
 
@@ -208,7 +211,7 @@ fn a_preview_download_with_an_error_status_is_reported() {
         .expect("a 404 preview must not decode");
     assert_eq!(
         error.to_string(),
-        "the preview download returned HTTP 404 Not Found"
+        format!("the preview download from {url} returned HTTP 404 Not Found")
     );
 }
 
@@ -237,6 +240,8 @@ fn a_redirecting_preview_is_not_followed() {
 
     let agent = agent_with_timeout(Duration::from_secs(2));
     let url = format!("http://{redirector_addr}/preview.m4a");
+    // The spawn moves `url`, so pin the expected report before the thread takes it.
+    let expected = format!("the preview download from {url} returned HTTP 302 Found");
     let (sender, receiver) = mpsc::channel();
     std::thread::spawn(move || {
         let _ = sender.send(download_and_decode(&agent, &url));
@@ -245,10 +250,7 @@ fn a_redirecting_preview_is_not_followed() {
         .recv_timeout(Duration::from_secs(5))
         .expect("the redirecting preview must return within its bound");
     let error = result.err().expect("a 302 preview must not decode");
-    assert_eq!(
-        error.to_string(),
-        "the preview download returned HTTP 302 Found"
-    );
+    assert_eq!(error.to_string(), expected);
 
     let followed = foreign_thread.join().unwrap().request;
     assert!(
@@ -275,9 +277,10 @@ fn a_truncated_preview_body_reports_a_read_error() {
     let error = download_and_decode(&agent, &url)
         .err()
         .expect("a truncated preview must not reach the decoder");
+    let message = error.to_string();
     assert!(
-        error.to_string().starts_with("reading the preview failed:"),
-        "unexpected error: {error}"
+        message.starts_with("reading the preview from ") && message.contains(&url),
+        "unexpected error: {message}"
     );
 }
 
@@ -295,9 +298,10 @@ fn a_preview_download_that_does_not_decode_is_reported() {
     let error = download_and_decode(&agent, &url)
         .err()
         .expect("garbage bytes must not decode as an MP4 preview");
+    let message = error.to_string();
     assert!(
-        error.to_string().contains("decoding the preview failed"),
-        "unexpected error: {error}"
+        message.contains("decoding the preview from") && message.contains(&url),
+        "unexpected error: {message}"
     );
 }
 
@@ -503,18 +507,18 @@ fn a_cached_fetch_does_not_replay_a_body_that_failed_to_decode() {
     let first = download_and_decode_cached(&cache, &agent, &url)
         .err()
         .expect("garbage bytes must not decode as an MP4 preview");
+    let first = first.to_string();
     assert!(
-        first.to_string().contains("decoding the preview failed"),
+        first.contains("decoding the preview from") && first.contains(&url),
         "unexpected error: {first}"
     );
 
     let second = download_and_decode_cached(&cache, &agent, &url)
         .err()
         .expect("the one-shot server is gone, so the retry must fail");
+    let second = second.to_string();
     assert!(
-        second
-            .to_string()
-            .contains("downloading the preview failed"),
+        second.contains("downloading the preview from") && second.contains(&url),
         "the retry should have gone back to the network, got: {second}"
     );
 }
