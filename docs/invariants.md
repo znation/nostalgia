@@ -495,6 +495,7 @@ draw beside Top.
 - `sort_reorders_all_albums_and_keeps_their_cached_text_aligned` (in `src/ui/tests/sort_tests.rs`)
 - `sort_bumps_the_epoch_so_a_pre_sort_press_is_rejected` (in `src/ui/tests/sort_tests.rs`)
 - `sort_with_an_empty_or_loading_list_is_a_noop` (in `src/ui/tests/sort_tests.rs`)
+- `sort_leaves_a_failed_list_holding_rows_untouched` (in `src/ui/browse.rs`)
 - `sort_leaves_other_lists_view_search_and_playback_untouched` (in `src/ui/tests/sort_tests.rs`)
 - `back_restores_a_sorted_artists_list_to_library_order` (in `src/ui/tests/sort_tests.rs`)
 - `back_restores_sorted_artists_and_their_cached_album_labels` (in `src/ui/tests/sort_tests.rs`)
@@ -581,6 +582,7 @@ withholds the clear from every other modifier combination, Control without Shift
 - `removing_a_playing_row_leaves_playback_and_the_now_playing_line_alone` (in `src/ui/tests/removal_tests.rs`)
 - `sort_then_remove_then_restore_yields_library_order_minus_the_removed_row` (in `src/ui/tests/removal_tests.rs`)
 - `remove_selected_without_a_selection_or_while_loading_or_failed_is_a_noop` (in `src/ui/tests/removal_tests.rs`)
+
 
 ## Browse playing-row visibility
 
