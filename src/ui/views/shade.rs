@@ -222,7 +222,7 @@ pub fn view_shade_strip<'a>(
     row = row.push(spacer(6.0));
     for (glyph, message) in [
         // `▭` is uncovered by both embedded faces (see part 1/4's probe in
-        // `PLANS.md`); `□` is the closest covered substitute and draws crisp
+        // `PLANS-DONE.md`); `□` is the closest covered substitute and draws crisp
         // in Tiny5.
         ("□", Message::ToggleWindowShade),
         ("–", Message::MinimizeWindow),

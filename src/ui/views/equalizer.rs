@@ -442,7 +442,7 @@ pub fn view_equalizer(
 /// The equalizer's text sizes are literals iced exposes no way to read back,
 /// so these tests pin them to the 8-px grid the vendored pixel faces render
 /// sharply — off-grid sizes blend instead (see the pixel-font split in
-/// `PLANS.md`).
+/// `PLANS-DONE.md`).
 #[cfg(test)]
 mod size_pins {
     use super::{EQ_TEXT_SIZE, PICK_LIST_TEXT_SIZE};

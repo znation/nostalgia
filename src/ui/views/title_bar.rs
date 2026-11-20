@@ -168,7 +168,7 @@ pub fn view_title_bar(about_visible: bool) -> Element<'static, Message> {
                 .push(drag_region)
                 .push(title_bar_glyph_button(
                     // `▭` is uncovered by both embedded faces (see part 1/4's
-                    // probe in `PLANS.md`); `□` is the closest covered
+                    // probe in `PLANS-DONE.md`); `□` is the closest covered
                     // substitute and draws crisp in Tiny5.
                     "□",
                     TITLE_BAR_BUTTON_WIDTH,

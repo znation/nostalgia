@@ -442,7 +442,7 @@ pub(in crate::ui::views) fn song_list<'a>(
 /// The row text sizes are literals the builders consume and iced exposes no
 /// way to read back, so these tests pin them to the 8-px grid the vendored
 /// pixel faces render sharply — off-grid sizes blend instead (see the
-/// pixel-font split in `PLANS.md`).
+/// pixel-font split in `PLANS-DONE.md`).
 #[cfg(test)]
 mod size_pins {
     use super::{FOOTER_TEXT_SIZE, ROW_LABEL_SIZE, ROW_TEXT_SIZE};

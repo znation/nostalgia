@@ -205,7 +205,7 @@ pub(super) const OPTIONS_BUTTON_WIDTH: f32 = 30.0;
 /// LCD strip's `O` through [`Message::ToggleOptions`].
 pub(super) fn options_button() -> Element<'static, Message> {
     // `⚡` is uncovered by both embedded faces (see part 1/4's probe in
-    // `PLANS.md`); `≡` is the closest covered substitute and draws crisp in
+    // `PLANS-DONE.md`); `≡` is the closest covered substitute and draws crisp in
     // Tiny5.
     fixed_width_button(
         "≡",
