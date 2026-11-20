@@ -2553,7 +2553,8 @@ transient_panel_open, persist_settings_if_changed, adopt_saved_settings}`, `Sett
 `the_save_row_opens_the_panel_and_closes_the_other_panels`,
 `a_closed_save_panel_ignores_its_submit`,
 `save_preset_submitted_saves_the_applied_curve_under_the_typed_name` and
-`saving_over_an_existing_custom_replaces_only_its_curve` (`src/ui/tests/mixer_tests.rs`);
+`saving_over_an_existing_custom_replaces_only_its_curve`
+(`src/ui/tests/save_preset_panel_tests.rs`);
 `save_preset_submitted_refuses_empty_builtin_and_colon_names` and
 `save_preset_submitted_refuses_a_name_with_a_line_break`
 (`src/ui/tests/save_preset_validation_tests.rs`);

@@ -1,5 +1,11 @@
 use super::*;
 
+/// Asserts the shared state holds `preset`'s preamp and band gains.
+pub(super) fn assert_curve_applied(state: &AppState, preset: crate::equalizer::Preset) {
+    assert_eq!(state.eq_preamp(), preset.preamp);
+    assert_eq!(state.eq_bands(), preset.bands);
+}
+
 /// A fresh player over its own shared state, so a test can inspect the
 /// same `AppState` the player mutates.
 pub(super) fn test_player() -> (WinampPlayer, Arc<Mutex<AppState>>) {

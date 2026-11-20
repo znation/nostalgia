@@ -55,6 +55,7 @@ mod removal_tests;
 mod remove_all_tests;
 mod reverse_tests;
 mod save_list_tests;
+mod save_preset_panel_tests;
 mod save_preset_validation_tests;
 mod screen_tests;
 mod scroll_tests;

@@ -605,7 +605,7 @@ fn save_preset_overlay_draws_its_heading_note_and_buttons() {
     // The box's own text is iced's, not an ordinary text draw, so the
     // captured texts pin the heading, the stored inline note, and the
     // buttons; the typed name is covered by `save_preset_name_changed` and
-    // the submit tests in `src/ui/tests/mixer_tests.rs` and
+    // the submit tests in `src/ui/tests/save_preset_panel_tests.rs` and
     // `src/ui/tests/save_preset_validation_tests.rs`.
     let mut element = save_preset_element();
     let capture = layout_capture::capture_text(&mut element, &layout_capture::headless_renderer());
