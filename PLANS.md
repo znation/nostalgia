@@ -4,6 +4,8 @@
 
 ### Extract preset-name validation tests from the mixer module (planned 2026-11-17 by the plan role)
 
+**Needs review 2026-11-20 by feature: plan defect — nothing to build: commit 0f1109f2a on main already lands this exact extraction.** Verified in the worktree at 2bd613680: both named tests (`save_preset_submitted_refuses_empty_builtin_and_colon_names`, `save_preset_submitted_refuses_a_name_with_a_line_break`) are defined only in `src/ui/tests/save_preset_validation_tests.rs` (lines 8 and 41), are absent from `src/ui/tests/mixer_tests.rs`, the module is registered in `src/ui/tests/mod.rs:58`, and `docs/invariants.md`'s `Save preset panel` Pinned-by section already cites both tests at `src/ui/tests/save_preset_validation_tests.rs`. The restore commit's premise that "no save_preset_validation_tests.rs exists yet" does not match the tree.
+
 **Goal.** Give Save preset name-refusal coverage a focused home, reducing the
 responsibilities of `src/ui/tests/mixer_tests.rs`. Checked 2026-11-20 when
 restoring this entry: the two tests below remain there, the archived
