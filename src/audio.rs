@@ -213,11 +213,11 @@ pub trait AudioOutput: Send + Sync {
     /// Reports whether the loaded preview has played to its end.
     ///
     /// Returns true when a loaded preview's source has played to the end, and
-    /// also (in the worker) for a selection whose download just failed, so the
-    /// transport moves on; that stops after a few failures in a row. Returns
-    /// false when no player is loaded (including after a Stop), while a paused
-    /// preview is still mid-asset, for the silent fallback, and when the backend
-    /// cannot answer within its bound. The
+    /// false while a paused preview is still mid-asset, for the silent
+    /// fallback, and when the backend cannot answer within its bound. Returns
+    /// false when no player is loaded (including after a Stop), except that
+    /// the worker reports a selection whose download just failed as ended, so
+    /// the transport moves on; that stops after a few failures in a row. The
     /// default keeps every existing implementor compiling without a finished
     /// state of its own.
     fn is_finished(&self) -> bool {

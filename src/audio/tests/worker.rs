@@ -555,6 +555,66 @@ fn finished_query_stops_reporting_failures_after_a_bounded_run() {
     assert_eq!(answers[5..], [None, None, None]);
 }
 
+// A download that succeeds starts the count over, so a failure later in the
+// session still reports the missing player as ended instead of inheriting an
+// exhausted budget from an earlier failing stretch.
+#[test]
+fn a_successful_play_resets_the_failed_fetch_count() {
+    let (sender, receiver) = mpsc::channel();
+    let fetches = Arc::new(AtomicUsize::new(0));
+    // Six failures exhaust the bound and the seventh download succeeds.
+    let fetch = move |_url: &str| -> Result<(), AppleMusicError> {
+        if fetches.fetch_add(1, Ordering::SeqCst) == 6 {
+            Ok(())
+        } else {
+            Err(AppleMusicError::new("the preview download failed"))
+        }
+    };
+    let (reply, replies) = mpsc::channel();
+    // The successful download's player factory queues the later failing Play
+    // and its finished query, so they land after that download drained the
+    // channel instead of superseding the preview it installs.
+    let players: Arc<Mutex<Vec<RecordingPlayer>>> = Arc::new(Mutex::new(Vec::new()));
+    let recorded = Arc::clone(&players);
+    let queued = Arc::new(Mutex::new(Some((sender.clone(), reply.clone()))));
+    let create_player = move || {
+        let player = RecordingPlayer::default();
+        recorded.lock().unwrap().push(player.clone());
+        if let Some((sender, reply)) = queued.lock().unwrap().take() {
+            sender.send(Command::Play("failing".to_string())).unwrap();
+            sender.send(Command::Finished(reply)).unwrap();
+        }
+        player
+    };
+    for _ in 0..6 {
+        sender.send(Command::Play("failing".to_string())).unwrap();
+        sender.send(Command::Finished(reply.clone())).unwrap();
+    }
+    sender.send(Command::Play("working".to_string())).unwrap();
+    sender.send(Command::Finished(reply.clone())).unwrap();
+    drop(sender);
+    drop(reply);
+    serve_commands(receiver, create_player, fetch);
+
+    let answers: Vec<Option<bool>> = replies.iter().collect();
+    assert_eq!(answers[..5], [Some(true); 5]);
+    assert_eq!(
+        answers[5], None,
+        "the sixth failure in a row is past the bound"
+    );
+    assert_eq!(players.lock().unwrap().len(), 1);
+    assert_eq!(
+        answers[6],
+        Some(false),
+        "a successful download answers from its installed player"
+    );
+    assert_eq!(
+        answers[7],
+        Some(true),
+        "a failure after a successful play reports ended again"
+    );
+}
+
 // With no player installed, a spectrum query reports `None` instead of
 // inventing bars for a preview that is not loaded.
 #[test]

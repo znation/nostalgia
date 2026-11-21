@@ -51,8 +51,11 @@ pub(in crate::audio) enum Command {
     /// Report the loaded preview's live spectrum on `reply` (`None` when none
     /// is loaded).
     Spectrum(Sender<Option<Spectrum>>),
-    /// Report whether the loaded preview has played to its end on `reply`
-    /// (`None` when none is loaded).
+    /// Report whether the loaded preview has played to its end on `reply`.
+    /// A loaded player answers its own finished state; with no player loaded
+    /// the answer is `None`, except for the first
+    /// [`MAX_CONSECUTIVE_FETCH_FAILURES`] failed downloads in a row after a
+    /// `Play`, where it is `Some(true)` so the UI moves on.
     Finished(Sender<Option<bool>>),
     /// Set the equalizer curve applied to the output.
     SetEqualizer(EqSnapshot),

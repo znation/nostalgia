@@ -3153,11 +3153,17 @@ width, while `views::visible_spectrum` applies `WinampPlayer::visualizer_visible
 
 ## Preview end
 
-**Guarantee.** The backend reports whether the loaded preview has played to its end, and only
-while a preview is loaded. A paused but unended preview, a stopped player, the silent fallback, a
-closed worker, and an unanswered query all report not finished, so the UI can never advance off a
-state that is not a completed preview. Reading the state changes no output and issues no audio
-command. The UI polls the finished state on the existing one-second position poll: a finished
+**Guarantee.** The backend reports whether the loaded preview has played to its end. A paused but
+unended preview, a stopped player, the silent fallback, a closed worker, and an unanswered query
+all report not finished, so the UI does not advance off a state that is not a completed preview.
+The one exception is a `Play` whose download fails: the worker has no player for a selection the UI
+already committed as playing, so it reports that missing player as finished for up to five failed
+downloads in a row. That lets the end-of-preview poll step past an unreachable preview instead of
+showing it as playing forever; the sixth consecutive failure reports not finished, so Repeat cannot
+re-download a failing list on every poll. A successful download or a `Stop` resets the count, and
+past the bound the UI stays on the last failing song until the user presses Stop or plays something
+else. Reading the state changes no output and issues no audio command. The UI polls the finished
+state on the existing one-second position poll: a finished
 preview while playing advances to the song Next would select from the showing list — sequential
 when Shuffle and Repeat are off, the first song when Repeat is on and the last is current, and a
 non-current song when Shuffle is on. With Shuffle off, Repeat wraps a one-song list back to
@@ -3179,6 +3185,10 @@ end.
 answers true only once the player holds a preview's format and `rodio::Player::empty` reports the
 queued source has drained; `RodioOutput::is_finished` bounds the worker's `Command::Finished` reply
 like the other backend queries, mapping a missing reply to false.
+`audio::player::worker::serve_commands` counts consecutive failed `Play` downloads in
+`failed_fetches` and answers `Command::Finished` with `Some(true)` while no player is loaded for up
+to `MAX_CONSECUTIVE_FETCH_FAILURES` of them, answering `None` past that bound and after a successful
+download or a `Stop`.
 `AppleMusicService::preview_finished` in `src/apple_music/playback/output.rs` forwards the backend's
 answer without touching shared state. `handlers::playback::preview::position_tick` schedules the
 finished query, `Message::PlaybackFinished` carries its reply, and
@@ -3190,6 +3200,9 @@ same list/Shuffle/Repeat rules as Next, and the no-next-song case reuses `handle
 **Pinned by.**
 - `finished_query_returns_the_loaded_players_finished_state` (in `src/audio/tests/worker.rs`)
 - `finished_query_reports_none_when_nothing_is_loaded` (in `src/audio/tests/worker.rs`)
+- `finished_query_reports_true_after_a_failed_download_until_stop` (in `src/audio/tests/worker.rs`)
+- `finished_query_stops_reporting_failures_after_a_bounded_run` (in `src/audio/tests/worker.rs`)
+- `a_successful_play_resets_the_failed_fetch_count` (in `src/audio/tests/worker.rs`)
 - `rodio_player_reports_finished_only_after_its_appended_preview_drains` (in `src/audio/tests/worker.rs`)
 - `a_paused_preview_reports_unfinished` (in `src/audio/tests/worker.rs`)
 - `silent_output_reports_an_unfinished_preview` (in `src/audio/tests/rodio_output.rs`)
