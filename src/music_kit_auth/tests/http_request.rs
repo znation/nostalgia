@@ -193,6 +193,18 @@ fn parse_http_request_accepts_identical_repeated_hosts() {
     assert_eq!(request.host.as_deref(), Some("127.0.0.1"));
 }
 
+#[test]
+fn parse_http_request_accepts_repeated_headers_with_matching_values() {
+    let raw = b"POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\nHost:  127.0.0.1 \r\nContent-Length: 4\r\nContent-Length:  4 \r\n\r\ntest";
+
+    let request = http::parse_http_request(raw)
+        .expect("matching repeated headers are valid")
+        .expect("the declared request body is complete");
+
+    assert_eq!(request.host.as_deref(), Some("127.0.0.1"));
+    assert_eq!(request.body, b"test");
+}
+
 // A request that has not arrived whole is *incomplete*, not refused: the
 // reader reports it as such so the sign-in server can keep the connection and
 // read the rest of it later. This is what lets one stalled client sit in the

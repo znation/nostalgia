@@ -2892,6 +2892,7 @@ reports a removal failure without failing the new sign-in.
 - `parse_http_request_rejects_conflicting_content_lengths` (in `src/music_kit_auth/tests/http_request.rs`)
 - `parse_http_request_rejects_conflicting_hosts` (in `src/music_kit_auth/tests/http_request.rs`)
 - `parse_http_request_accepts_identical_repeated_hosts` (in `src/music_kit_auth/tests/http_request.rs`)
+- `parse_http_request_accepts_repeated_headers_with_matching_values` (in `src/music_kit_auth/tests/http_request.rs`)
 - `the_bootstrap_sweep_removes_only_old_bootstrap_directories` (in `src/music_kit_auth/tests/bootstrap.rs`)
 - `the_bootstrap_sweep_skips_a_symlink_instead_of_following_it` (in `src/music_kit_auth/tests/bootstrap.rs`)
 - `the_bootstrap_sweep_escapes_a_hostile_directory_name_in_its_report` (in `src/music_kit_auth/tests/bootstrap.rs`)
