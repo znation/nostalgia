@@ -75,6 +75,8 @@ assertions, helper signatures, `docs/usage.md`, and screenshots are unchanged.
 
 ### Move the window-position and window-level tests from settings_tests.rs into window_tests.rs (planned 2026-11-20 by the plan role)
 
+**Needs review 2026-11-21 by feature: plan defect — the deliverable is already on main in commit `903cdb02`: all eight named tests are defined in `src/ui/tests/window_tests.rs`, absent from `settings_tests.rs`, and their invariant pins name the new file.**
+
 **Goal.** `src/ui/tests/settings_tests.rs` (848 lines) still holds eight tests
 of one topic — the window's saved position, its launch clamping, and the
 saved always-on-top level applied when the window id resolves — mixed in with
