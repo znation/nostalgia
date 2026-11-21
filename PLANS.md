@@ -71,4 +71,58 @@ assertions, helper signatures, `docs/usage.md`, and screenshots are unchanged.
 - `make check` passes, and no production code, support helper, or test
   assertion changes.
 
+### Move the transport glyph rendering tests into transport_tests.rs (planned 2026-11-20 by the plan role)
+
+**Goal.** Give the transport row's rendering tests a home in the focused
+`src/ui/tests/transport_tests.rs` module, which already owns the transport
+messages, instead of the 1350-line general `screen_tests.rs`. This is
+independent of the in-flight file-info move and the pending row-pitch move:
+the three tests sit together below the row-pitch block and above the title-band
+tests, and neither of those changes touches them.
+
+**Approach and files.** Move these three complete tests, with their comments
+and assertions unchanged, from `src/ui/tests/screen_tests.rs` into the existing
+`src/ui/tests/transport_tests.rs`:
+
+- `transport_row_keeps_play_and_pause_glyphs_fixed_across_playback_states`
+- `root_view_draws_the_transport_glyph_row`
+- `root_view_draws_the_glyph_for_the_shared_transport_mode`
+
+They form one contiguous block; every other `screen_tests.rs` test stays where
+it is. Keep `transport_tests.rs`'s `use super::*;` preamble and its existing
+transport-message tests in place; do not re-register a module in
+`src/ui/tests/mod.rs` (the receiving module is already listed). No helper
+moves: the block calls only `test_player` and
+`captured_root_view_text_bounds`, both reachable from any child of
+`src/ui/tests` through `support.rs` and `mod.rs`.
+
+In `docs/invariants.md`, retag the two `## UI layout` Pinned-by entries that
+name moved tests —
+`transport_row_keeps_play_and_pause_glyphs_fixed_across_playback_states` and
+`root_view_draws_the_transport_glyph_row` — from
+`src/ui/tests/screen_tests.rs` to `src/ui/tests/transport_tests.rs`. The
+shared-mode glyph test is not in that list. The pending row-pitch plan edits
+the browse visibility and caching sections, not `## UI layout`, so the two
+changes merge in either order.
+
+**Acceptance criteria.**
+
+- `src/ui/tests/transport_tests.rs` defines the three moved tests with their
+  original bodies, and `src/ui/tests/screen_tests.rs` no longer defines them;
+  its remaining tests and the receiving module's existing tests are unchanged.
+- Test discovery lists each moved test once under
+  `ui::tests::transport_tests` with its original leaf name, and
+  `make test-one TEST=transport_row_keeps_play_and_pause`,
+  `make test-one TEST=root_view_draws_the_transport_glyph_row`, and
+  `make test-one TEST=root_view_draws_the_glyph_for_the_shared_transport_mode`
+  each run the moved test from the new home.
+- Laid out in the root view, Play and Pause glyphs keep the same bounds when
+  playback starts, and Previous and Next share one row with Next to the right;
+  the LCD glyph reads `■` stopped, `▶` playing, `II` paused, and `■` again
+  after Stop.
+- Every Pinned-by entry naming a moved test in `docs/invariants.md` resolves to
+  `src/ui/tests/transport_tests.rs`.
+- `make check` passes; no behavior, fixture, assertion, or helper signature
+  changes.
+
 ## Done
