@@ -1,6 +1,130 @@
 use super::*;
 
 #[test]
+fn window_id_resolved_applies_a_saved_always_on_top_level() {
+    let (mut player, _state) = test_player();
+    player.always_on_top = true;
+    let id = iced::window::Id::unique();
+
+    assert_message_schedules_work(&mut player, Message::WindowIdResolved(Some(id)));
+    assert_eq!(player.window_id, Some(id));
+
+    player.always_on_top = false;
+    let id = iced::window::Id::unique();
+
+    assert_message_schedules_no_work(&mut player, Message::WindowIdResolved(Some(id)));
+    assert_eq!(player.window_id, Some(id));
+}
+
+#[test]
+fn window_moved_reaches_the_saved_snapshot() {
+    let (mut player, _state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+
+    let _ = update(
+        &mut player,
+        Message::WindowMoved(iced::Point::new(300.0, 200.0)),
+    );
+    let snapshots = store.snapshots();
+    assert_eq!(snapshots.len(), 1);
+    assert_eq!(snapshots[0].window_position(), Some((300.0, 200.0)));
+
+    let _ = update(
+        &mut player,
+        Message::WindowMoved(iced::Point::new(300.0, 200.0)),
+    );
+    assert_eq!(store.snapshots().len(), 1);
+}
+
+#[test]
+fn saved_window_position_is_restored_on_boot() {
+    let (mut player, _state) = test_player();
+    let mut moved = Settings::default();
+    moved.set_window_position(Some((10.0, -20.0)));
+
+    player.adopt_saved_settings(moved);
+    assert_eq!(player.window_position, Some((10.0, -20.0)));
+
+    player.adopt_saved_settings(Settings::default());
+    assert_eq!(player.window_position, None);
+}
+
+#[test]
+fn launch_position_clamps_the_saved_point_or_uses_the_default() {
+    use crate::ui::handlers::window::launch_position;
+    assert!(matches!(
+        launch_position(Some((10.0, 20.0))),
+        iced::window::Position::SpecificWith(_)
+    ));
+    assert!(matches!(
+        launch_position(None),
+        iced::window::Position::Default
+    ));
+}
+
+#[test]
+fn clamp_into_monitor_passes_an_in_bounds_point_through() {
+    use crate::ui::handlers::window::clamp_into_monitor;
+    let point = iced::Point::new(40.0, 60.0);
+    assert_eq!(
+        clamp_into_monitor(
+            point,
+            iced::Size::new(200.0, 100.0),
+            iced::Size::new(1280.0, 720.0)
+        ),
+        point
+    );
+}
+
+#[test]
+fn clamp_into_monitor_snaps_points_beyond_each_edge_independently() {
+    use crate::ui::handlers::window::clamp_into_monitor;
+    assert_eq!(
+        clamp_into_monitor(
+            iced::Point::new(2000.0, 60.0),
+            iced::Size::new(200.0, 100.0),
+            iced::Size::new(1280.0, 720.0)
+        ),
+        iced::Point::new(1080.0, 60.0)
+    );
+    assert_eq!(
+        clamp_into_monitor(
+            iced::Point::new(40.0, 2000.0),
+            iced::Size::new(200.0, 100.0),
+            iced::Size::new(1280.0, 720.0)
+        ),
+        iced::Point::new(40.0, 620.0)
+    );
+}
+
+#[test]
+fn clamp_into_monitor_snaps_a_negative_coordinate_to_zero() {
+    use crate::ui::handlers::window::clamp_into_monitor;
+    assert_eq!(
+        clamp_into_monitor(
+            iced::Point::new(-50.0, -1.0),
+            iced::Size::new(200.0, 100.0),
+            iced::Size::new(1280.0, 720.0)
+        ),
+        iced::Point::ORIGIN
+    );
+}
+
+#[test]
+fn clamp_into_monitor_pins_a_monitor_smaller_than_the_window_at_zero() {
+    use crate::ui::handlers::window::clamp_into_monitor;
+    assert_eq!(
+        clamp_into_monitor(
+            iced::Point::new(960.0, 540.0),
+            iced::Size::new(1280.0, 720.0),
+            iced::Size::new(800.0, 600.0)
+        ),
+        iced::Point::ORIGIN
+    );
+}
+
+#[test]
 fn window_id_resolved_stores_the_window_id() {
     let (mut player, _state) = test_player();
     assert_eq!(player.window_id, None);
