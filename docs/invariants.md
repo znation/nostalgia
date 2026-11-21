@@ -621,9 +621,9 @@ all follow the landed row.
 
 **Pinned by.**
 - `scrollable_list_clips_an_overlong_title_to_its_column` (in `src/ui/views/tests/browse.rs`)
-- `browse_row_height_matches_the_laid_out_row_pitch` (in `src/ui/tests/screen_tests.rs`)
-- `a_hard_line_break_in_a_title_does_not_change_the_row_pitch` (in `src/ui/tests/screen_tests.rs`)
-- `a_carriage_return_in_a_title_does_not_change_the_row_pitch` (in `src/ui/tests/screen_tests.rs`)
+- `browse_row_height_matches_the_laid_out_row_pitch` (in `src/ui/tests/row_pitch_tests.rs`)
+- `a_hard_line_break_in_a_title_does_not_change_the_row_pitch` (in `src/ui/tests/row_pitch_tests.rs`)
+- `a_carriage_return_in_a_title_does_not_change_the_row_pitch` (in `src/ui/tests/row_pitch_tests.rs`)
 - `next_and_previous_reveal_the_landed_row_only_when_it_leaves_the_viewport` (in `src/ui/tests/stepping_tests.rs`)
 - `edge_jumps_scroll_the_showing_song_list` (in `src/ui/tests/stepping_tests.rs`)
 - `a_finished_preview_scrolls_the_song_list_to_the_advanced_row` (in `src/ui/tests/stepping_tests.rs`)
@@ -844,9 +844,9 @@ size before its element is built, so `Column::push` sees the same hint the uncac
 - `switching_lists_at_the_same_epoch_rebuilds_cached_rows` (in `src/ui/views/tests/browse.rs`)
 - `reuses_the_element_until_the_dependency_changes` (in `src/ui/views/browse/rows/lazy.rs`)
 - `an_unbuilt_row_reports_a_full_width_content_height_hint` (in `src/ui/views/browse/rows/lazy.rs`)
-- `browse_row_height_matches_the_laid_out_row_pitch` (in `src/ui/tests/screen_tests.rs`)
-- `a_hard_line_break_in_a_title_does_not_change_the_row_pitch` (in `src/ui/tests/screen_tests.rs`)
-- `a_carriage_return_in_a_title_does_not_change_the_row_pitch` (in `src/ui/tests/screen_tests.rs`)
+- `browse_row_height_matches_the_laid_out_row_pitch` (in `src/ui/tests/row_pitch_tests.rs`)
+- `a_hard_line_break_in_a_title_does_not_change_the_row_pitch` (in `src/ui/tests/row_pitch_tests.rs`)
+- `a_carriage_return_in_a_title_does_not_change_the_row_pitch` (in `src/ui/tests/row_pitch_tests.rs`)
 
 ## Browse album running times
 

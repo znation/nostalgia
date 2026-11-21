@@ -2,7 +2,7 @@
 
 ## Planned
 
-### Extract the browse row-pitch tests from screen_tests.rs into a focused row_pitch_tests.rs module (planned 2026-11-20 by the plan role)
+### Extract the browse row-pitch tests from screen_tests.rs into a focused row_pitch_tests.rs module (planned 2026-11-20 by the plan role) — done 2026-11-20 by the feature role
 
 **Goal.** `src/ui/tests/screen_tests.rs` (1350 lines) still holds the four
 browse row-pitch tests and their two local helpers in the middle of general
