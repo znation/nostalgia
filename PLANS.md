@@ -95,6 +95,8 @@ screenshots are unchanged.
 
 ### Move the autoscroll persistence tests from settings_tests.rs into toggle_persist_tests.rs (planned 2026-11-21 by the plan role)
 
+**Needs review 2026-11-21 by feature: plan defect — the deliverable is already on main in commit `6fe774be`: both named tests are defined in `src/ui/tests/toggle_persist_tests.rs`, absent from `settings_tests.rs`, and their invariant pins name the new file.**
+
 **Goal.** `src/ui/tests/settings_tests.rs` (848 lines) still holds the two
 autoscroll persistence tests in the middle of window-position and launch-clamp
 tests. The focused `src/ui/tests/toggle_persist_tests.rs` module (196 lines)
