@@ -1,5 +1,154 @@
 use super::*;
 
+#[test]
+fn file_info_panel_draws_the_loaded_previews_format() {
+    let (mut player, state) = test_player();
+    seed_current_title(&mut player, &state, "Opening");
+    player.file_info_visible = true;
+    player.playback_format = Some(PlaybackFormat {
+        sample_rate_hz: 44_100,
+        channels: 2,
+        bitrate_kbps: Some(256),
+    });
+
+    let loaded = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = loaded.texts().collect();
+    assert!(
+        texts.contains(&"Format: 256 KBPS  44 KHZ STEREO"),
+        "the File info panel must draw the loaded preview's format: {texts:?}"
+    );
+
+    // Stop clears the format (see `handlers::playback::reset_position_readout`);
+    // the panel then keeps its other lines but drops the Format line.
+    player.playback_format = None;
+    let stopped = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = stopped.texts().collect();
+    assert!(
+        texts.contains(&"Title: Opening"),
+        "the panel must keep its title without a loaded preview: {texts:?}"
+    );
+    assert!(
+        texts.iter().all(|text| !text.starts_with("Format:")),
+        "the panel must drop the Format line once no preview is loaded: {texts:?}"
+    );
+}
+
+#[test]
+fn file_info_panel_draws_each_metadata_line_only_when_the_track_has_it() {
+    let (mut player, state) = test_player();
+    seed_current_title(&mut player, &state, "Opening");
+    player.file_info_visible = true;
+
+    let bare = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = bare.texts().collect();
+    assert!(texts.contains(&"Title: Opening"), "{texts:?}");
+    assert!(texts.contains(&"Length: 3:30"), "{texts:?}");
+    for label in [
+        "Artist:",
+        "Album:",
+        "Year:",
+        "Genre:",
+        "Track #:",
+        "Disc #:",
+        "Composer:",
+        "Rating:",
+    ] {
+        assert!(
+            texts.iter().all(|text| !text.starts_with(label)),
+            "a track with no {label} data must not draw that line: {texts:?}"
+        );
+    }
+
+    let track = player.known_tracks.get_mut("song-1").unwrap();
+    track.artist = "Band".to_string();
+    track.album = "Record".to_string();
+    track.year = Some(1999);
+    track.genre = "Rock".to_string();
+    track.track_number = Some(4);
+    track.disc_number = Some(2);
+    track.composer = "Writer".to_string();
+    track.content_rating = Some(crate::library::ContentRating::Explicit);
+    let full = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = full.texts().collect();
+    for line in [
+        "Artist: Band",
+        "Album: Record",
+        "Year: 1999",
+        "Genre: Rock",
+        "Track #: 4",
+        "Disc #: 2",
+        "Composer: Writer",
+        "Rating: Explicit",
+    ] {
+        assert!(texts.contains(&line), "missing {line:?}: {texts:?}");
+    }
+
+    let track = player.known_tracks.get_mut("song-1").unwrap();
+    track.content_rating = Some(crate::library::ContentRating::Clean);
+    let clean = captured_root_view_text_bounds(&player);
+    assert!(
+        clean.texts().any(|text| text == "Rating: Clean"),
+        "a Clean track must draw Rating: Clean"
+    );
+}
+
+// A song-list selection determines what the File info panel names: the
+// selected row's song, with no `Format:` line because no preview is loaded
+// for it, not the playing track and its format line. The no-selection case
+// still names the loaded track exactly as it did before selections counted.
+#[test]
+fn file_info_overlay_names_the_selected_rows_song() {
+    let (mut player, state) = test_player();
+    seed_current_title(&mut player, &state, "Playing");
+    player.playback_format = Some(PlaybackFormat {
+        sample_rate_hz: 44_100,
+        channels: 2,
+        bitrate_kbps: Some(256),
+    });
+    seed_browse_lists(&mut player);
+    player.current_view = CurrentView::AllSongs;
+    player.file_info_visible = true;
+
+    let fallback = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = fallback.texts().collect();
+    assert!(
+        texts.contains(&"Title: Playing"),
+        "the panel must name the loaded track without a selection: {texts:?}"
+    );
+    assert!(
+        texts.contains(&"Format: 256 KBPS  44 KHZ STEREO"),
+        "the loaded track's panel must draw the format line: {texts:?}"
+    );
+
+    assert!(player.all_songs.select_row(0, 0).is_some());
+    let selected = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = selected.texts().collect();
+    assert!(
+        texts.contains(&"Title: Opening"),
+        "the panel must name the selected row's song: {texts:?}"
+    );
+    assert!(
+        texts.contains(&"Artist: The Sample Band"),
+        "the selected row's panel must draw its artist: {texts:?}"
+    );
+    assert!(
+        texts.iter().all(|text| !text.starts_with("Format:")),
+        "the selected row's panel must not draw a Format line: {texts:?}"
+    );
+
+    // Opening the panel for the row never plays it or touches the played
+    // track's recorded entry or the current track itself.
+    assert_eq!(
+        player.known_tracks["song-1"].title, "Playing",
+        "the recorded entry must stay untouched"
+    );
+    assert_eq!(
+        state.blocking_lock().current_track.as_deref(),
+        Some("song-1"),
+        "the current track must stay untouched"
+    );
+}
+
 // The File info panel names the showing song list's selected row when one is
 // picked, not the current track: `WinampPlayer::file_info_track` resolves the
 // row through a shared `KnownTrack::from_song`, the same mapping
