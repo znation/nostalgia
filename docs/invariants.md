@@ -1229,8 +1229,8 @@ records the snapshot; `update` calls
 `WinampPlayer::persist_settings_if_changed` once after every message, and that method copies
 the seven player-owned values into `Settings::from_state`, then compares that snapshot against the
 last one before calling `settings::seam::SettingsWriter::save`. The autoscroll choice pinning lives
-in `saved_autoscroll_choice_is_restored_on_boot` and
-`toggle_autoscroll_reaches_the_saved_snapshot` (`src/ui/tests/settings_tests.rs`) and
+in `saved_autoscroll_choice_is_restored_on_boot` (`src/ui/tests/toggle_persist_tests.rs`) and
+`toggle_autoscroll_reaches_the_saved_snapshot` (`src/ui/tests/toggle_persist_tests.rs`) and
 `autoscroll_round_trips_and_ignores_malformed_values` (`src/settings/tests.rs`). Production wraps the store
 in `settings::writer::BackgroundWriter`, so that `save` stores the snapshot in a one-slot mailbox
 and wakes its worker instead of writing on the update thread; the worker writes the newest queued

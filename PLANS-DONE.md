@@ -5,6 +5,48 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
+### Move the autoscroll persistence tests from settings_tests.rs into toggle_persist_tests.rs (planned 2026-11-21 by the plan role) — done 2026-11-21 by the feature role
+
+**Goal.** `src/ui/tests/settings_tests.rs` (848 lines) still holds the two
+autoscroll persistence tests in the middle of window-position and launch-clamp
+tests. The focused `src/ui/tests/toggle_persist_tests.rs` module (196 lines)
+already owns exactly this topic — one toggle/save pair and one restore pair per
+persisted UI choice (`toggle_time_display_reaches_the_saved_snapshot` /
+`saved_time_display_mode_is_restored_on_boot`, the same shape for the
+visualizer, the panels, always-on-top, and shade) — so the autoscroll pair
+belongs beside them. This follows the pending window-position move into
+`window_tests.rs` (which shrinks the same file from the other end) and the
+merged toggle extraction that created the receiving module.
+
+**Approach and files.** Move these two complete tests, with their bodies and
+messages unchanged, from `src/ui/tests/settings_tests.rs` into the existing
+`src/ui/tests/toggle_persist_tests.rs`:
+
+- `saved_autoscroll_choice_is_restored_on_boot`
+- `toggle_autoscroll_reaches_the_saved_snapshot`
+
+The pair is contiguous in `settings_tests.rs` (between
+`saved_window_position_is_restored_on_boot` and
+`launch_position_clamps_the_saved_point_or_uses_the_default`) and every other
+`settings_tests.rs` test stays. Do not register a new module in `src/ui/tests/mod.rs` —
+`toggle_persist_tests` is already listed. No helper moves: the pair calls only
+`test_player`, `update`, `Message::ToggleAutoscroll`, `MemorySettingsStore`, and
+`Settings`, all already used by the receiving module's existing tests through
+its `use super::*;` preamble. Keep `settings_tests.rs`'s preamble unchanged.
+
+In `docs/invariants.md` `## Settings persistence`, retag the autoscroll
+sentence's two test paths to `src/ui/tests/toggle_persist_tests.rs`, leaving
+`autoscroll_round_trips_and_ignores_malformed_values` (`src/settings/tests.rs`)
+untouched.
+
+**Dedupe and scope.** The two tests previously lived in `settings_tests.rs`;
+this change moves their existing assertions without changing production
+behavior or `docs/usage.md`.
+
+**Acceptance criteria.** The two tests are discovered once under
+`ui::tests::toggle_persist_tests`; the invariant points to their new module;
+`make check` passes.
+
 ### Extract the browse row-pitch tests from screen_tests.rs into a focused row_pitch_tests.rs module (planned 2026-11-20 by the plan role) — done 2026-11-20 by the feature role — retired 2026-11-21 by the plan role
 
 **Retired 2026-11-21 by the plan role: the deliverable already exists — commit `9cedae34a` (landed 2026-11-20) created `src/ui/tests/row_pitch_tests.rs` defining both helpers (`capture_songs_list_with_first_title`, `assert_first_song_row_pitch`) and all four named tests, registered the module in `src/ui/tests/mod.rs`, removed the block from `src/ui/tests/screen_tests.rs`, and retargeted the six `docs/invariants.md` pins; checked in this worktree that `row_pitch_tests.rs` defines all of those names, that `screen_tests.rs` defines none of them, and that the pins under `## Browse playing-row visibility` and `## Browse row caching` cite `src/ui/tests/row_pitch_tests.rs`.**

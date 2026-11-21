@@ -502,34 +502,6 @@ fn a_fresh_artists_reply_drops_the_saved_sort_permutation() {
     );
 }
 
-#[test]
-fn saved_autoscroll_choice_is_restored_on_boot() {
-    let (mut player, _state) = test_player();
-    assert!(player.marquee_autoscroll);
-    let mut stopped = Settings::default();
-    stopped.set_autoscroll(false);
-
-    player.adopt_saved_settings(stopped);
-    assert!(!player.marquee_autoscroll);
-
-    player.adopt_saved_settings(Settings::default());
-    assert!(player.marquee_autoscroll);
-}
-
-#[test]
-fn toggle_autoscroll_reaches_the_saved_snapshot() {
-    let (mut player, _state) = test_player();
-    let store = MemorySettingsStore::default();
-    player.settings_store = Some(Box::new(store.clone()));
-
-    let _ = update(&mut player, Message::ToggleAutoscroll);
-    assert!(!player.marquee_autoscroll);
-    assert!(
-        !store.snapshots().last().expect("a snapshot").autoscroll(),
-        "the autoscroll choice must reach the saved snapshot"
-    );
-}
-
 fn saved_library_view(store: &MemorySettingsStore) -> crate::settings::library_view::LibraryView {
     store
         .snapshots()

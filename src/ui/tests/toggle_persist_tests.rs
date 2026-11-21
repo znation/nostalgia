@@ -194,3 +194,31 @@ fn shaded_eq_toggle_saves_nothing() {
     assert!(player.eq_panel_visible);
     assert!(store.snapshots().is_empty());
 }
+
+#[test]
+fn saved_autoscroll_choice_is_restored_on_boot() {
+    let (mut player, _state) = test_player();
+    assert!(player.marquee_autoscroll);
+    let mut stopped = Settings::default();
+    stopped.set_autoscroll(false);
+
+    player.adopt_saved_settings(stopped);
+    assert!(!player.marquee_autoscroll);
+
+    player.adopt_saved_settings(Settings::default());
+    assert!(player.marquee_autoscroll);
+}
+
+#[test]
+fn toggle_autoscroll_reaches_the_saved_snapshot() {
+    let (mut player, _state) = test_player();
+    let store = MemorySettingsStore::default();
+    player.settings_store = Some(Box::new(store.clone()));
+
+    let _ = update(&mut player, Message::ToggleAutoscroll);
+    assert!(!player.marquee_autoscroll);
+    assert!(
+        !store.snapshots().last().expect("a snapshot").autoscroll(),
+        "the autoscroll choice must reach the saved snapshot"
+    );
+}
