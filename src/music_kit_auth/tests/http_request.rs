@@ -177,14 +177,20 @@ fn parse_http_request_rejects_conflicting_content_lengths() {
 }
 
 #[test]
-fn parse_http_request_rejects_conflicting_host_headers() {
-    let raw = b"GET / HTTP/1.1\r\nHost: attacker.example\r\nHost: 127.0.0.1\r\n\r\n";
+fn parse_http_request_rejects_conflicting_hosts() {
+    let raw = b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nHost: attacker.example\r\n\r\n";
 
-    let error = http::parse_http_request(raw)
-        .err()
-        .expect("conflicting Host headers must be refused");
-    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
-    assert_eq!(error.to_string(), "conflicting Host headers");
+    assert_request_parse_error(raw, "conflicting Host headers");
+}
+
+#[test]
+fn parse_http_request_accepts_identical_repeated_hosts() {
+    let raw = b"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nHost: 127.0.0.1 \r\n\r\n";
+    let request = http::parse_http_request(raw)
+        .expect("identical Host fields are valid")
+        .expect("the request is complete");
+
+    assert_eq!(request.host.as_deref(), Some("127.0.0.1"));
 }
 
 // A request that has not arrived whole is *incomplete*, not refused: the
