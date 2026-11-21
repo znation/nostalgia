@@ -5,6 +5,34 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Done
 
+### Move AppState's inline tests into state/tests.rs (planned 2026-11-20 by the organize role) — done 2026-11-21 by the feature role
+
+**Goal.** Give the shared state module a focused production file and test module. `src/state.rs`
+contains about 412 lines of production definitions followed by a roughly 500-line inline test
+module; the tests account for more than half of the file and obscure the state API when reading
+its implementation.
+
+**Approach and files.** Move the complete `#[cfg(test)] mod tests` from `src/state.rs` to
+`src/state/tests.rs`, with `#[cfg(test)] mod tests;` at the end of `state.rs`. Preserve the test
+bodies and helper organization. Update the five `Pinned-by` test citations in `docs/invariants.md`
+that name tests in `src/state.rs` to name `src/state/tests.rs`; keep production-function
+citations to `src/state.rs` in place. The path attribute/module should follow the existing
+`src/ui/shortcuts.rs` and `src/ui/shortcuts/tests.rs` pattern.
+
+**Cost removed.** Readers currently pass through hundreds of state behavior tests to reach
+other production code or the end of the module; a sibling test file makes the implementation
+and its contract tests independently navigable.
+
+**Acceptance criteria.**
+
+- `src/state.rs` contains the unchanged production implementation and a test module declaration;
+  `src/state/tests.rs` contains the moved module contents and compiles under the existing test
+  configuration.
+- The five state-test pins in `docs/invariants.md` resolve to `src/state/tests.rs`, while
+  production pins remain on `src/state.rs`.
+- Grep finds no stale moved test path in source or markdown, and `make check` passes.
+- No behavior, assertion, or usage documentation changes.
+
 ### Move the transport glyph rendering tests into transport_tests.rs (planned 2026-11-20 by the plan role) — done 2026-11-20 by the feature role
 
 **Goal.** Give the transport row's rendering tests a home in the focused

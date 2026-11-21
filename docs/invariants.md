@@ -1377,7 +1377,7 @@ flag and the LCD readout untouched, and forwards the curve to the audio backend.
 `handlers::mixer::eq_bands_set_all`, and `AppState::set_all_eq_bands`.
 
 **Pinned by.**
-- `set_all_eq_bands_clamps_every_band_and_clears_the_preset` (in `src/state.rs`)
+- `set_all_eq_bands_clamps_every_band_and_clears_the_preset` (in `src/state/tests.rs`)
 - `eq_scale_click_sets_every_band_and_keeps_the_preamp` (in `src/ui/tests/mixer_tests.rs`)
 - `pressing_a_db_scale_label_sets_every_band_to_its_gain` (in `src/ui/views/tests/equalizer.rs`)
 
@@ -1398,7 +1398,7 @@ with `AUTO_BUTTON_WIDTH` in `src/ui/views/equalizer.rs`.
 
 **Pinned by.**
 - `preset_for_genre_matches_trimmed_case_insensitive_names` (in `src/equalizer.rs`)
-- `toggle_eq_auto_flips_only_the_auto_flag_and_keeps_the_curve` (in `src/state.rs`)
+- `toggle_eq_auto_flips_only_the_auto_flag_and_keeps_the_curve` (in `src/state/tests.rs`)
 - `toggle_eq_auto_flips_only_the_auto_flag` (in `src/ui/tests/auto_preset_tests.rs`)
 - `auto_on_applies_a_genre_matched_preset_on_track_selection` (in `src/ui/tests/auto_preset_tests.rs`)
 - `auto_button_draws_its_state_and_publishes_toggle_eq_auto` (in `src/ui/views/tests/equalizer.rs`)
@@ -1682,7 +1682,7 @@ its internal id, whenever the id is in the known-track index:
   `toggle_visualizer_hides_and_shows_the_bars_without_clearing_the_spectrum` in
   `src/ui/tests/panels_tests.rs`; `position_tick_blinks_the_elapsed_readout_only_while_paused` in
   `src/ui/tests/position_tick_tests.rs`; and `toggle_playing_switches_between_playing_and_paused` and
-  `pause_sets_the_paused_mode_while_play_and_stop_clear_it` in `src/state.rs`; and
+  `pause_sets_the_paused_mode_while_play_and_stop_clear_it` in `src/state/tests.rs`; and
   `pause_stops_playing_but_keeps_current_track`,
   `pause_without_a_loaded_preview_leaves_the_transport_stopped`,
   `toggle_without_a_loaded_preview_stops_the_transport`,
@@ -3394,8 +3394,8 @@ never snapped.
 **Enforced by.** `state::snap_balance_to_center` and `handlers::mixer::balance_change`.
 
 **Pinned by.**
-- `snap_balance_to_center_snaps_an_inward_move_near_center` (in `src/state.rs`)
-- `snap_balance_to_center_never_snaps_an_outward_move` (in `src/state.rs`)
+- `snap_balance_to_center_snaps_an_inward_move_near_center` (in `src/state/tests.rs`)
+- `snap_balance_to_center_never_snaps_an_outward_move` (in `src/state/tests.rs`)
 - `dragging_balance_into_the_middle_snaps_to_center` (in `src/ui/tests/balance_detent_tests.rs`)
 - `a_continuous_inward_balance_drag_stays_snapped` (in `src/ui/tests/balance_detent_tests.rs`)
 - `a_balance_step_after_release_leaves_center` (in `src/ui/tests/balance_detent_tests.rs`)
