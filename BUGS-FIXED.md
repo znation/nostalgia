@@ -7,10 +7,9 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ### Conflicting repeated Host headers can overwrite the loopback boundary (found by the bugfix role 2026-11-21) — fixed 2026-11-21 by the bugfix role
 
-The loopback HTTP parser overwrote an earlier `Host` field with the last one, allowing an
-ambiguous request to choose which value the sign-in route checked. A parser test with `Host:
-127.0.0.1` followed by `Host: attacker.example` reproduced the acceptance before the fix; it is
-now rejected. Identical trimmed repeats remain accepted.
+The loopback HTTP parser rejects conflicting `Host` values, preventing an ambiguous request from
+choosing which value the sign-in route checks. The regression test covers `127.0.0.1` followed by
+`attacker.example`.
 
 **Validation gap:** unclear-invariant — the parser's boundary guarantee had not covered repeated Host fields; the reconstructed rule is now recorded in `docs/invariants.md`.
 
