@@ -54,6 +54,12 @@ fn song_list(player: &WinampPlayer) -> Option<(&[String], u64)> {
     }
 }
 
+/// Close Jump to File and discard its current highlight.
+fn close_jump_file(player: &mut WinampPlayer) {
+    player.jump_file_visible = false;
+    player.jump_file_selected = None;
+}
+
 /// Ctrl+J: flip the transient Jump to time panel. Opening needs a loaded
 /// preview with a known length; without one the flag stays as it was. Opening
 /// fills the query with the current position (`M:SS`, or clears it when there is
@@ -120,8 +126,7 @@ pub(in crate::ui) fn jump_time_submitted(player: &mut WinampPlayer) -> Task<Mess
 /// only clears the flag. The flag is layout-only and not persisted.
 pub(in crate::ui) fn toggle_jump_file(player: &mut WinampPlayer) -> Task<Message> {
     if player.jump_file_visible {
-        player.jump_file_visible = false;
-        player.jump_file_selected = None;
+        close_jump_file(player);
         return Task::none();
     }
     if song_list(player).is_none() {
@@ -267,8 +272,7 @@ pub(in crate::ui) fn jump_file_submitted(player: &mut WinampPlayer) -> Task<Mess
     let Some((epoch, index)) = target else {
         return Task::none();
     };
-    player.jump_file_visible = false;
-    player.jump_file_selected = None;
+    close_jump_file(player);
     Task::done(Message::TrackSelected { epoch, index })
 }
 
