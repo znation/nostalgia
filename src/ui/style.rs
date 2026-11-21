@@ -276,8 +276,10 @@ mod tests {
 
     #[test]
     fn mix_channel_returns_each_stop_exactly_and_blends_between() {
-        // Awkward fractions that a lerp written as `start + (end - start) * t`
-        // would not return exactly at t = 1.
+        // The endpoint form returns each stop exactly, so equality (not a
+        // tolerance) is enough. A lerp written as `start + (end - start) * t`
+        // would miss the midpoint case: it rounds `0.6 - 0.2` up before
+        // halving, landing on 0.40000004 rather than 0.4.
         assert_eq!(mix_channel(0.1, 0.7, 0.0), 0.1);
         assert_eq!(mix_channel(0.1, 0.7, 1.0), 0.7);
         assert_eq!(mix_channel(0.2, 0.6, 0.5), 0.4);
