@@ -172,15 +172,19 @@ pub(super) fn parse_http_request(buffer: &[u8]) -> io::Result<Option<HttpRequest
         None => (target.to_string(), None),
     };
 
-    let mut content_length = 0usize;
+    let mut content_length = None;
     let mut host = None;
     for line in lines {
         if let Some((name, value)) = line.split_once(':') {
             if name.eq_ignore_ascii_case("content-length") {
-                content_length = value
+                let parsed = value
                     .trim()
                     .parse()
                     .map_err(|_| refused("the Content-Length is not a number"))?;
+                if content_length.is_some_and(|previous| previous != parsed) {
+                    return Err(refused("conflicting Content-Length headers"));
+                }
+                content_length = Some(parsed);
             } else if name.eq_ignore_ascii_case("host") {
                 host = Some(value.trim().to_string());
             }
@@ -191,7 +195,7 @@ pub(super) fn parse_http_request(buffer: &[u8]) -> io::Result<Option<HttpRequest
     // rejects a `Content-Length` that would overflow `usize`, and the cap check
     // rejects one larger than the buffer. Neither path allocates.
     let body_start = header_end;
-    let body_end = match body_start.checked_add(content_length) {
+    let body_end = match body_start.checked_add(content_length.unwrap_or(0)) {
         Some(end) if end <= MAX_REQUEST_BYTES => end,
         _ => return Err(refused("the declared body is larger than the cap")),
     };

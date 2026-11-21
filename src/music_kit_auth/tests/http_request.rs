@@ -165,6 +165,17 @@ fn parse_http_request_rejects_a_malformed_content_length() {
     assert_eq!(error.to_string(), "the Content-Length is not a number");
 }
 
+#[test]
+fn parse_http_request_rejects_conflicting_content_lengths() {
+    let raw = b"POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 4\r\nContent-Length: 5\r\n\r\nhello";
+
+    let error = http::parse_http_request(raw)
+        .err()
+        .expect("conflicting body lengths must be refused");
+    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    assert_eq!(error.to_string(), "conflicting Content-Length headers");
+}
+
 // A request that has not arrived whole is *incomplete*, not refused: the
 // reader reports it as such so the sign-in server can keep the connection and
 // read the rest of it later. This is what lets one stalled client sit in the

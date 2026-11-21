@@ -2867,7 +2867,8 @@ failure; its `accept_error_is_transient` check retries `Interrupted`, `Connectio
 and parses the request from the bytes received so far, so polling a silent peer reports "nothing
 yet" instead of waiting for it; `serve_pending` drops a connection whose budget is spent.
 The request parser refuses a malformed `Content-Length` instead of treating an ambiguous body
-boundary as an empty body.
+boundary as an empty body, and refuses repeated `Content-Length` headers when they declare
+different body sizes.
 `BootstrapPage::write` in `src/music_kit_auth/bootstrap.rs` calls `sweep_stale_bootstrap_dirs`
 before creating the new owner-only directory; the sweep reads one
 level of the temp dir, removes only aged directories whose names carry `BOOTSTRAP_DIR_PREFIX`, and
@@ -2886,6 +2887,7 @@ reports a removal failure without failing the new sign-in.
 - `the_reader_preserves_a_partial_body_between_polls` (in `src/music_kit_auth/tests/http_request.rs`)
 - `the_reader_finds_a_header_terminator_split_across_polls` (in `src/music_kit_auth/tests/http_request.rs`)
 - `parse_http_request_rejects_a_malformed_content_length` (in `src/music_kit_auth/tests/http_request.rs`)
+- `parse_http_request_rejects_conflicting_content_lengths` (in `src/music_kit_auth/tests/http_request.rs`)
 - `the_bootstrap_sweep_removes_only_old_bootstrap_directories` (in `src/music_kit_auth/tests/bootstrap.rs`)
 - `the_bootstrap_sweep_skips_a_symlink_instead_of_following_it` (in `src/music_kit_auth/tests/bootstrap.rs`)
 - `the_bootstrap_sweep_escapes_a_hostile_directory_name_in_its_report` (in `src/music_kit_auth/tests/bootstrap.rs`)

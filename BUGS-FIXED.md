@@ -5,6 +5,16 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### The loopback HTTP parser accepts conflicting Content-Length headers (found by the bugfix role 2026-11-21) — fixed 2026-11-21 by the bugfix role
+
+Two `Content-Length` headers with different values are accepted, and the later value silently
+chooses the callback body boundary. Reproduce with a POST request containing lengths 4 then 5 and
+body `hello`; the parser returns a request instead of rejecting the ambiguous boundary. The parser
+now rejects conflicting lengths, and the regression test pins the error.
+
+**Validation gap:** none — the regression test reproduced the acceptance before the fix and
+confirmed rejection after it.
+
 ### The display well is a flat near-black field; the base skin's display area is face-colored with black insets (found by the reference-comparison pass 2026-10-29) — fixed 2026-10-30 by the bugfix role
 
 **Symptom.** The app paints one uniform `#0D0D0D` (13,13,13) field behind the whole

@@ -19,4 +19,6 @@ coordinates in `winamp-screenshots/winamp-2.x-stack.png` are relative to that fi
 its main window occupies y 0..115, the equalizer y 116..231, and the playlist
 y 232..347.
 
+_None yet._
+
 ## Fixed
