@@ -194,6 +194,11 @@ mod tests {
     }
 
     #[test]
+    fn empty_input_produces_no_groups() {
+        assert!(by_genre(Vec::new()).is_empty());
+    }
+
+    #[test]
     fn row_label_pluralizes_and_totals_the_playing_time() {
         let groups = by_genre(vec![song("1", "a"), song("2", "b"), song("3", "b")]);
 
