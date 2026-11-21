@@ -278,9 +278,10 @@ fn spawn_opener_names_the_missing_program_in_its_error() {
 // The success path of `spawn_opener` is what every real sign-in takes, yet the
 // tests above only reach its failure branch. It must run the program with the
 // arguments exactly as given — the bootstrap path can contain spaces, so it
-// must arrive as one argument, never split by a shell — and return Ok without
-// waiting for the opener. A `sh` stand-in writes the arguments it received to a
-// file, which the test polls for.
+// must arrive as one argument, never split by a shell — and return Ok. A `sh`
+// stand-in writes the arguments it received to a file, which the test polls
+// for. (That it does not wait on the child is not observable here, and is
+// covered by `reap_in_background_reaps_the_child` instead.)
 #[cfg(unix)]
 #[test]
 fn spawn_opener_runs_the_program_with_each_argument_intact() {
