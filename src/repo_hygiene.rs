@@ -123,6 +123,23 @@ mod tests {
         );
     }
 
+    /// A list entry with trailing text is malformed even when its name and path look valid.
+    #[test]
+    fn the_pinned_by_scan_rejects_trailing_text_in_an_entry() {
+        let doc = concat!(
+            "**Pinned by.**\n",
+            "\n",
+            "- `stale_flat_list_replies_superseded_before_update_are_not_stored` (in `src/ui/tests/loading_tests.rs`) trailing\n",
+            "\n",
+            "## Next section\n",
+        );
+        let violations = pinned_by_violations(Path::new(env!("CARGO_MANIFEST_DIR")), doc);
+        assert!(
+            violations.iter().any(|v| v.contains("entry does not read")),
+            "expected the malformed entry to be flagged, got: {violations:?}"
+        );
+    }
+
     /// Walk the `**Pinned by.**` lists of `doc` and report every entry that does
     /// not resolve against the repository rooted at `root`: a list line not
     /// shaped ``- `name` (in `path`)``, a name its cited file does not define, or
