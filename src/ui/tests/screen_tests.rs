@@ -212,6 +212,57 @@ fn view_constructs_when_the_window_is_shaded() {
     );
 }
 
+// The File info panel is wired through the root `view`, not just the panel
+// builder: the chrome test builds the overlay directly and the handler test
+// only flips the flag, so both would pass if the root branch were wrong. Lay
+// out the real tree with a known current track, then make that id unknown and
+// show the unresolved fallback drops the panel again.
+#[test]
+fn root_view_draws_the_file_info_panel_for_a_known_current_track() {
+    let (mut player, state) = test_player();
+    player.known_tracks.insert(
+        "song-1".to_string(),
+        views::KnownTrack {
+            title: "Opening".to_string(),
+            artist: "The Sample Band".to_string(),
+            album: String::new(),
+            year: None,
+            genre: String::new(),
+            track_number: None,
+            disc_number: None,
+            composer: String::new(),
+            content_rating: None,
+            number: "1. ".to_string(),
+            time: "3:30".to_string(),
+            duration_ms: 210_000,
+        },
+    );
+    state.blocking_lock().current_track = Some("song-1".to_string());
+    player.file_info_visible = true;
+
+    let shown = captured_root_view_text_bounds(&player);
+    let texts: Vec<&str> = shown.texts().collect();
+    for expected in [
+        "FILE INFO",
+        "Title: Opening",
+        "Artist: The Sample Band",
+        "Length: 3:30",
+    ] {
+        assert!(
+            texts.contains(&expected),
+            "the root view must draw the File info {expected:?}: {texts:?}"
+        );
+    }
+
+    state.blocking_lock().current_track = Some("missing".to_string());
+    let unresolved = captured_root_view_text_bounds(&player);
+    assert!(
+        unresolved.texts().all(|text| text != "FILE INFO"),
+        "an unresolved current track must draw the plain base: {:?}",
+        unresolved.texts().collect::<Vec<_>>()
+    );
+}
+
 #[test]
 fn title_bar_constructs_for_both_about_states() {
     // iced `Element`s expose no tree introspection, so the observable

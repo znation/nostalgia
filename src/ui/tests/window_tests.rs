@@ -260,6 +260,7 @@ fn toggle_file_info_shows_and_hides_the_panel_without_touching_playback() {
 
     assert_eq!(playback_snapshot(&state), playback_before);
     assert_eq!(browse_snapshot(&player), browse_before);
+    assert_eq!(player.current_view, CurrentView::Artists);
 }
 
 #[test]

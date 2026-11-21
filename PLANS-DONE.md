@@ -9991,8 +9991,9 @@ normal-mode screen that closes from a `Close` button, from a backdrop click, or 
 
 **Files touched.** `src/ui/views/modal.rs` (new), `src/ui/views/file_info.rs` (new),
 `src/ui/views/about.rs`, `src/ui/views/mod.rs`, `src/ui/message.rs`, `src/ui/mod.rs`,
-`src/ui/player.rs`, `src/ui/handlers/window.rs`, `src/ui/view.rs`, `src/ui/shortcuts.rs`, tests in
-`src/ui/views/tests/chrome.rs`, `src/ui/tests/window_tests.rs`, and the inline shortcut tests,
+`src/ui/player.rs`, `src/ui/player/presentation.rs`, `src/ui/handlers/window.rs`, `src/ui/view.rs`,
+`src/ui/shortcuts.rs`, tests in `src/ui/views/tests/chrome.rs`, `src/ui/tests/window_tests.rs`,
+`src/ui/tests/view_tests.rs`, and the inline shortcut tests,
 `README.md` (the keys paragraph), and `docs/invariants.md` (a new `## File info panel` section
 after `## About panel`).
 

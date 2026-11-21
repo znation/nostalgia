@@ -2333,6 +2333,7 @@ overlay branch of `ui::screen::view`.
 - `songs_carry_the_documented_track_numbers` (in `src/sample_library.rs`)
 - `file_info_panel_draws_the_loaded_previews_format` (in `src/ui/tests/file_info_tests.rs`)
 - `view_constructs_when_the_window_is_shaded` (in `src/ui/tests/screen_tests.rs`)
+- `root_view_draws_the_file_info_panel_for_a_known_current_track` (in `src/ui/tests/screen_tests.rs`)
 - `the_escape_listener_runs_only_while_a_transient_panel_is_open` (in `src/ui/tests/subscriptions_tests.rs`)
 - `escape_key_message_maps_escape_but_not_its_chords_or_other_keys` (in `src/ui/tests/subscriptions_tests.rs`)
 - `escape_closes_each_transient_panel_without_touching_anything_else` (in `src/ui/tests/panels_tests.rs`)
