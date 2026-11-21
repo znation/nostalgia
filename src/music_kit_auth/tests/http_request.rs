@@ -151,26 +151,18 @@ fn parse_http_request_rejects_text_after_the_http_version() {
     );
 }
 
-// A `Content-Length` that does not parse as a number is treated as no body
-// (the `parse().unwrap_or(0)` branch), so the request is still returned with
-// an empty body rather than aborting the flow or reading an unbounded body.
-// Pin that: propagating the parse error instead would reject the request, and
-// reading to the deadline would hang it, so either regression fails here.
+// A malformed `Content-Length` is rejected explicitly, rather than silently
+// treating a request with an ambiguous body boundary as bodyless.
 #[test]
-fn parse_http_request_treats_a_malformed_content_length_as_no_body() {
+fn parse_http_request_rejects_a_malformed_content_length() {
     let raw =
         b"POST /token HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: not-a-number\r\n\r\nbody";
 
-    let request = http::parse_http_request(raw)
-        .expect("a malformed Content-Length is not an I/O error")
-        .expect("a malformed Content-Length is treated as no body, not refused");
-    assert_eq!(request.method, "POST");
-    assert_eq!(request.path, "/token");
-    assert!(
-        request.body.is_empty(),
-        "the malformed length must not read a body, got {:?}",
-        request.body
-    );
+    let error = http::parse_http_request(raw)
+        .err()
+        .expect("a malformed Content-Length must be refused");
+    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    assert_eq!(error.to_string(), "the Content-Length is not a number");
 }
 
 // A request that has not arrived whole is *incomplete*, not refused: the

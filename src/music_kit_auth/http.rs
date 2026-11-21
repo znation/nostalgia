@@ -177,9 +177,10 @@ pub(super) fn parse_http_request(buffer: &[u8]) -> io::Result<Option<HttpRequest
     for line in lines {
         if let Some((name, value)) = line.split_once(':') {
             if name.eq_ignore_ascii_case("content-length") {
-                // A malformed length is treated as no body; the callback then
-                // fails its own validation rather than being read unbounded.
-                content_length = value.trim().parse().unwrap_or(0);
+                content_length = value
+                    .trim()
+                    .parse()
+                    .map_err(|_| refused("the Content-Length is not a number"))?;
             } else if name.eq_ignore_ascii_case("host") {
                 host = Some(value.trim().to_string());
             }
