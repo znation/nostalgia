@@ -176,6 +176,17 @@ fn parse_http_request_rejects_conflicting_content_lengths() {
     assert_eq!(error.to_string(), "conflicting Content-Length headers");
 }
 
+#[test]
+fn parse_http_request_rejects_conflicting_host_headers() {
+    let raw = b"GET / HTTP/1.1\r\nHost: attacker.example\r\nHost: 127.0.0.1\r\n\r\n";
+
+    let error = http::parse_http_request(raw)
+        .err()
+        .expect("conflicting Host headers must be refused");
+    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    assert_eq!(error.to_string(), "conflicting Host headers");
+}
+
 // A request that has not arrived whole is *incomplete*, not refused: the
 // reader reports it as such so the sign-in server can keep the connection and
 // read the rest of it later. This is what lets one stalled client sit in the

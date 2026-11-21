@@ -186,7 +186,11 @@ pub(super) fn parse_http_request(buffer: &[u8]) -> io::Result<Option<HttpRequest
                 }
                 content_length = Some(parsed);
             } else if name.eq_ignore_ascii_case("host") {
-                host = Some(value.trim().to_string());
+                let parsed = value.trim().to_string();
+                if host.as_ref().is_some_and(|previous| previous != &parsed) {
+                    return Err(refused("conflicting Host headers"));
+                }
+                host = Some(parsed);
             }
         }
     }

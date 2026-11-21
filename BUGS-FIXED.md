@@ -5,6 +5,16 @@ only grows: search it with grep, or read one entry by its line range. Never read
 
 ## Fixed
 
+### The loopback sign-in parser accepts conflicting Host headers — fixed 2026-11-21 by the bugfix role
+
+**Symptom.** A request with `Host: attacker.example` followed by `Host: 127.0.0.1` is parsed as a request for the loopback host because the parser overwrites the first value. The sign-in server uses Host as its guard for serving a page that embeds the developer token.
+
+**Reproduce.** `parse_http_request_rejects_conflicting_host_headers` supplies the contradictory headers and expects an invalid-data error. Before the fix it failed because the parser returned a request.
+
+**Cause.** Repeated Host fields were stored by overwriting the prior value, unlike conflicting Content-Length fields.
+
+**Validation gap:** unclear-invariant — the need to preserve Host guard semantics across repeated headers was not recorded; captured in the Sign-in server invariant and pinned by `parse_http_request_rejects_conflicting_host_headers`.
+
 ### The loopback HTTP parser accepts conflicting Content-Length headers (found by the bugfix role 2026-11-21) — fixed 2026-11-21 by the bugfix role
 
 Two `Content-Length` headers with different values are accepted, and the later value silently
