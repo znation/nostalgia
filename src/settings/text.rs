@@ -38,6 +38,17 @@ fn push_joined_ids(text: &mut String, ids: &[String]) {
     }
 }
 
+/// Parse a comma-separated id list, trimming each id and dropping empty
+/// tokens. Used by the saved-playlist and Recently Played settings rows.
+fn parse_ids(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
 impl Settings {
     /// Render the snapshot as the line-based `key=value` text the settings
     /// file holds. Floats use their shortest round-tripping `Display` form,
@@ -299,12 +310,7 @@ impl Settings {
         if name.is_empty() {
             return;
         }
-        let song_ids: Vec<String> = ids
-            .split(',')
-            .map(str::trim)
-            .filter(|id| !id.is_empty())
-            .map(str::to_string)
-            .collect();
+        let song_ids = parse_ids(ids);
         if song_ids.is_empty() {
             return;
         }
@@ -324,12 +330,7 @@ impl Settings {
     /// id the library no longer answers is dropped at restore time) are kept
     /// verbatim here.
     fn parse_recently_played(&mut self, value: &str) {
-        let ids: Vec<String> = value
-            .split(',')
-            .map(str::trim)
-            .filter(|id| !id.is_empty())
-            .map(str::to_string)
-            .collect();
+        let ids = parse_ids(value);
         if !ids.is_empty() {
             self.recently_played = ids;
         }
