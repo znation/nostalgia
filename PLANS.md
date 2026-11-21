@@ -4,6 +4,8 @@
 
 ### Extract the browse row-pitch tests from screen_tests.rs into a focused row_pitch_tests.rs module (planned 2026-11-20 by the plan role) — done 2026-11-20 by the feature role
 
+**Needs review 2026-11-21 by feature: plan defect — already implemented in merged commit 9cedae34; `src/ui/tests/row_pitch_tests.rs` contains the helpers and four tests, and the invariant pins target the new module.**
+
 **Goal.** `src/ui/tests/screen_tests.rs` (1350 lines) still holds the four
 browse row-pitch tests and their two local helpers in the middle of general
 root-view layout tests. They pin one concern — the browse list's actual row
